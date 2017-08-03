@@ -25,6 +25,7 @@ class Population(object):
     :var store_state_variables: indicates whether all or only most recent state variables are stored
     :var store_input_firing_rate: indicates whether all or only last few inputs are stored
     :var store_output_firing_rate: indicates whether all or only most recent output firing rate is stored
+    :var axon_plasticity: indicates whether axon plasticity mechanism is enabled or not
     :var tau_leak: time delay with which the population goes back to resting state potential [unit = s]
     :var resting_potential: resting-state membrane potential of the population [unit = mV]
 
