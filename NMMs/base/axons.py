@@ -38,7 +38,7 @@ class Axon(object):
         ##########################
 
         assert max_firing_rate >= 0
-        assert sigmoid_steepness >= 0
+        assert sigmoid_steepness > 0
 
         ##############################
         # initialize axon parameters #
