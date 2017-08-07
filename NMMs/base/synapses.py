@@ -7,8 +7,7 @@ import numpy as np
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
-
-class Synapse(object):
+class Synapse:
     """
     Basic class for synapses. Includes a method to calculate synaptic current based on firing rate input.
     
