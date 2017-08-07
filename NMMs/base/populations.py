@@ -3,8 +3,8 @@ Includes basic population class and functions to instantiate synapses or axons a
 parameters of an object instance.
 """
 
-import synapses as syn
-import axons as ax
+import NMMs.base.synapses as syn
+import NMMs.base.axons as ax
 import numpy as np
 
 __author__ = "Richard Gast, Daniel Rose"
@@ -32,8 +32,8 @@ class Population(object):
 
     """
 
-    def __init__(self, synapses, axon='JansenRit', init_state=(0, 0), step_size=0.0001, synaptic_kernel_length=100,
-                 tau_leak=0.016, resting_potential=-75.0, synapse_params=None, axon_params=None,
+    def __init__(self, synapses, axon='JansenRit', init_state=(0., 0), step_size=0.0001, synaptic_kernel_length=100,
+                 tau_leak=0.016, resting_potential=-0.075, synapse_params=None, axon_params=None,
                  store_state_variables=False, store_input_firing_rate=False, store_output_firing_rate=False):
         """
         Initializes a single neural mass.

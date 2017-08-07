@@ -19,7 +19,7 @@ class Synapse(object):
     """
 
     def __init__(self, efficiency, tau_decay, tau_rise, step_size, kernel_length, conductivity_based=False,
-                 reversal_potential=-70.0, synapse_type=None):
+                 reversal_potential=-0.075, synapse_type=None):
         """
         Initializes a standard synapse exponential synapse kernel defined by 3 parameters.
 
@@ -35,7 +35,7 @@ class Synapse(object):
         :param conductivity_based: if true, synaptic input will be translated into synaptic current indirectly via
                a change in synaptic conductivity. Else translation to synaptic current will be direct.
         :param reversal_potential: scalar, determines the reversal potential of the synapse. Only necessary for
-               conductivity based synapses [unit = mV] (default = 0).
+               conductivity based synapses [unit = V] (default = -0.075).
         :param synapse_type: if not None, will be treated as type of synapse (should be character string)
 
         """

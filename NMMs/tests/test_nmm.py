@@ -5,7 +5,7 @@ updated after each alteration of axons.py.
 
 import unittest
 import numpy as np
-import nmm_network
+from NMMs.base.nmm_network import *
 from matplotlib.pyplot import *
 
 __author__ = "Richard Gast & Konstantin Weise"
@@ -27,9 +27,9 @@ class TestNMM(unittest.TestCase):
         ################################################################################################################
 
         # simulations parameters
-        simulation_time = 1     # s
-        cutoff_time = 0        # s
-        step_size = 5.0e-4      # s
+        simulation_time = 1.0     # s
+        cutoff_time = 0.0         # s
+        step_size = 5.0e-4        # s
         store_step = 1
 
         # populations
@@ -48,31 +48,32 @@ class TestNMM(unittest.TestCase):
 
         connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
 
-        ampa_dict = {'efficacy': 1.273 * 3e-13,     # A
-                     'tau_decay': 0.006,            # s
-                     'tau_rise': 0.0006,            # s
+        ampa_dict = {'efficiency': 1.273 * 3e-5,     # A
+                     'tau_decay': 0.006,              # s
+                     'tau_rise': 0.0006,              # s
                      'conductivity_based': False}
 
-        gaba_a_dict = {'efficacy': 1.273 * -1e-12,  # A
-                       'tau_decay': 0.02,           # s
-                       'tau_rise': 0.0004,          # s
+        gaba_a_dict = {'efficiency': 1.273 * -1e-4,  # A
+                       'tau_decay': 0.02,             # s
+                       'tau_rise': 0.0004,            # s
                        'conductivity_based': False}
 
         synapse_params = [ampa_dict, gaba_a_dict]
 
         # axon
-        axon_dict = {'max_firing_rate' : 5,                   # 1
-                     'membrane_potential_threshold' : -0.069, # V
-                     'sigmoid_steepness' : 556}               # 1/V
+        axon_dict = {'max_firing_rate' : 5.,                     # 1
+                     'membrane_potential_threshold' : -0.069,    # V
+                     'sigmoid_steepness' : 555.56}               # 1/V
         axon_params = [axon_dict for i in range(N)]
 
         distances = np.zeros((N, N))
+        velocities = float('inf')
 
         init_states = np.zeros((N, n_synapses))
 
         # synaptic inputs
-        start_stim = 300.0*1e3  # s
-        len_stim = 50.0*1e3     # s
+        start_stim = 0.3        # s
+        len_stim = 0.05         # s
         mag_stim = 300.0        # 1/s
 
         synaptic_inputs = np.zeros((int(simulation_time/step_size),N,n_synapses))
@@ -80,14 +81,15 @@ class TestNMM(unittest.TestCase):
 
         # initialize
         ################################################################################################################
-        nmm = nmm_network.NeuralMassModel(connections = connections,
-                                          population_labels = population_labels,
-                                          step_size = step_size,
-                                          synaptic_kernel_length = synaptic_kernel_length,
-                                          distances = distances,
-                                          synapse_params = synapse_params,
-                                          axon_params = axon_params,
-                                          init_states = init_states)
+        nmm = NeuralMassModel(connections = connections,
+                              population_labels = population_labels,
+                              step_size = step_size,
+                              synaptic_kernel_length = synaptic_kernel_length,
+                              distances = distances,
+                              velocities = velocities,
+                              synapse_params = synapse_params,
+                              axon_params = axon_params,
+                              init_states = init_states)
 
         # run
         ################################################################################################################
@@ -99,9 +101,8 @@ class TestNMM(unittest.TestCase):
         # plot
         ################################################################################################################
         figure()
-        plot(np.squeeze(nmm.states))
+        plot(nmm.neural_mass_states.T)
         show()
-
         print('done!')
 
 if __name__ == '__main__':

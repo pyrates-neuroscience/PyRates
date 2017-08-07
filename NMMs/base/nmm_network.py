@@ -3,7 +3,7 @@ Includes a basic neural mass model class.
 """
 
 import numpy as np
-import populations as pop
+import NMMs.base.populations as pop
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -97,7 +97,7 @@ class NeuralMassModel(object):
         assert type(synaptic_kernel_length) is int
         if distances is not None:
             assert type(distances) is np.ndarray
-        if (distances or positions is not None) and (velocities is None):
+        if (distances is not None or positions is not None) and (velocities is None):
             raise ValueError('Velocities need to be specified to calculate information propagation delays.')
 
         ##########################
@@ -116,7 +116,7 @@ class NeuralMassModel(object):
         if synapses:
             self.synapse_types = synapses
         elif synapse_params:
-            self.synapse_types = ['custom' for i in range(len(self.n_synapses))]
+            self.synapse_types = ['custom' for i in range(self.n_synapses)]
         else:
             self.synapse_types = ['JansenRit_excitatory', 'JansenRit_inhibitory']
 
@@ -142,14 +142,16 @@ class NeuralMassModel(object):
         # initialize populations #
         ##########################
 
-        if not init_states:
+        if init_states is None:
             init_states = np.zeros((self.N, 2))
 
         for i in range(self.N):
 
             # check and extract  synapses that exist at respective population
             self.active_synapses[i, :] = (np.sum(connections[i, :, :], axis=0) != 0).squeeze()
-            idx = np.asarray(self.active_synapses[i, :].nonzero(), dtype=int).squeeze()
+            idx = np.asarray(self.active_synapses[i, :].nonzero(), dtype=int)
+            if len(idx) == 1:
+                idx = idx[0]
             synapses_tmp = [self.synapse_types[j] for j in idx]
             synapse_params_tmp = [synapse_params[j] for j in idx]
 
@@ -241,7 +243,7 @@ class NeuralMassModel(object):
         assert synaptic_inputs.shape[0] >= time_steps
         assert synaptic_inputs.shape[1] == self.N
         assert synaptic_inputs.shape[2] == self.n_synapses
-        if any([synaptic_inputs[i][self.active_synapses == 0] for i in range(time_steps)]) > 0:
+        if any([np.sum(synaptic_inputs[i][self.active_synapses == 0]) for i in range(time_steps)]) > 0:
             raise ValueError('Cannot pass synaptic input to non-existent synapses!')
         if extrinsic_current:
             assert extrinsic_current.shape[0] >= time_steps
@@ -279,10 +281,11 @@ class NeuralMassModel(object):
                 # update all state variables
                 if extrinsic_current:
                     self.neural_masses[i].state_update(synaptic_inputs[n, i, self.active_synapses[i, :]] +
-                                                       network_input[i, :], extrinsic_current[n, i])
+                                                       network_input[i, self.active_synapses[i, :]],
+                                                       extrinsic_current[n, i])
                 else:
                     self.neural_masses[i].state_update(synaptic_inputs[n, i, self.active_synapses[i, :]] +
-                                                       network_input[i, :])
+                                                       network_input[i, self.active_synapses[i, :]])
 
                 # update firing-rate look-up
                 firing_rates_lookup[i, firing_rates_lookup_idx] = self.neural_masses[i].output_firing_rate[-1]
