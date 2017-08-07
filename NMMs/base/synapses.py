@@ -134,9 +134,9 @@ class Synapse(object):
         #########################
 
         if len(x) < len(self.synaptic_kernel):
-            kernel_value = x @ self.synaptic_kernel[-len(x):]
+            kernel_value = np.dot(x, self.synaptic_kernel[-len(x):])
         else:
-            kernel_value = x[-len(self.synaptic_kernel):] @ self.synaptic_kernel
+            kernel_value = np.dot(x[-len(self.synaptic_kernel):], self.synaptic_kernel)
 
         ##############################
         # calculate synaptic current #

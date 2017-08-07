@@ -4,7 +4,7 @@ after each alteration of synapses.py.
 """
 
 import sys
-sys.path.append('/home/rgast/Documents/GitRepo/CBSMPG/NMMs/neural-mass-models/base/')
+sys.path.append('../base/')
 import synapses as syn
 import numpy as np
 
@@ -43,14 +43,14 @@ def synaptic_kernel_value_test(t, efficiency=1., tau_decay=0.01, tau_rise=0.001,
     ######################
 
     step_size = 0.001
-    kernel_threshold = 1e-4
-    synapse_instance = syn.Synapse(efficiency, tau_decay, tau_rise, step_size, kernel_threshold, conductivity_based)
+    kernel_length = 1000
+    synapse_instance = syn.Synapse(efficiency, tau_decay, tau_rise, step_size, kernel_length, conductivity_based)
 
     #########################################
     # evaluate membrane potential at time t #
     #########################################
 
-    kernel_value = synapse_instance.evaluate_kernel(t)
+    kernel_value = synapse_instance.evaluate_kernel(build_kernel=False, t=t)
 
     return kernel_value if not synaptic_kernel_target else kernel_value == synaptic_kernel_target
 
@@ -77,12 +77,6 @@ def synaptic_kernel_test(step_size, kernel_threshold, efficiency=1., tau_decay=0
     ######################
 
     synapse_instance = syn.Synapse(efficiency, tau_decay, tau_rise, step_size, kernel_threshold, conductivity_based)
-
-    #########################
-    # build synaptic kernel #
-    #########################
-
-    synapse_instance.build_kernel()
 
     return synapse_instance.synaptic_kernel
 
@@ -166,16 +160,12 @@ assert all(synaptic_kernel_value_test(t, efficiency=efficiency)) <= 0
 #########################
 
 # tests whether higher time resolution leads to longer kernel
-kernel_threshold_1 = 1e-4
+kernel_threshold_1 = 1000
 step_size_1 = 0.001
 step_size_2 = 0.0001
-assert len(synaptic_kernel_test(step_size_1, kernel_threshold_1)) < \
-       len(synaptic_kernel_test(step_size_2, kernel_threshold_1))
 
 # tests whether lower kernel value threshold leads to longer kernel
-kernel_threshold_2 = 1e-5
-assert len(synaptic_kernel_test(step_size_1, kernel_threshold_1)) < \
-       len(synaptic_kernel_test(step_size_1, kernel_threshold_2))
+kernel_threshold_2 = 10000
 
 # tests whether kernel has a single extremum or not
 kernel_diff = np.diff(synaptic_kernel_test(step_size_1, kernel_threshold_1))
