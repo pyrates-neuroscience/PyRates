@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-sys.path.append('/home/rgast/Documents/GitRepo/CBSMPG/NMMs/neural-mass-models/base/')
+sys.path.append('../base')
 import nmm_network as nmm
 from matplotlib.pyplot import *
 
@@ -15,23 +15,24 @@ connections[:, 0:2, 1] = 0
 populations = ['JansenRitExcitatoryPopulation', 'JansenRitExcitatoryPopulation', 'JansenRitInhibitoryPopulation']
 synapses = ['AMPA_current', 'GABAA_current']
 axons = ['Knoesche', 'Knoesche', 'Knoesche']
-velocities = [2, 2, 2]
+velocities = np.array([2, 2, 2])
 step_size = 0.001
-kernel_threshold = 1e-5
+kernel_length = 1000
 stimulation_time = 3
 
 ######################
 # initialize network #
 ######################
 
-NMM = nmm.NeuralMassModel(populations, connections, synapses=synapses, axons=axons, positions=positions,
-                          velocities=velocities, step_size=step_size, kernel_threshold=kernel_threshold)
+NMM = nmm.NeuralMassModel(connections, population_labels=populations, synapses=synapses, axons=axons,
+                          positions=positions, velocities=velocities, step_size=step_size,
+                          synaptic_kernel_length=kernel_length)
 
 ############################################
 # simulate population behavior under input #
 ############################################
 
-synaptic_input = np.random.rand(3, 2, np.int(stimulation_time / step_size)) * 200
+synaptic_input = np.random.rand(np.int(stimulation_time / step_size), 3, 2) * 200
 
 NMM.run(synaptic_input, stimulation_time, verbose=True)
 states = NMM.neural_mass_states
@@ -41,5 +42,5 @@ states = NMM.neural_mass_states
 ###########################
 
 figure()
-plot(np.squeeze(states[0, 0, :]))
+plot(np.squeeze(states[0, :]))
 show()
