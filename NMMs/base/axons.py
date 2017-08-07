@@ -68,15 +68,15 @@ class KnoescheAxon(Axon):
     Specific parametrization of generic axon, following the code of Thomas Knoesche
     """
 
-    def __init__(self, max_firing_rate=5, membrane_potential_threshold=-0.069, sigmoid_steepness=0.0018):
+    def __init__(self, max_firing_rate=5, membrane_potential_threshold=-69.0, sigmoid_steepness=0.56):
         """
         Initializes basic axon with Thomas Knoesche's sigmoid parameters.
 
         :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = firing rate] (default = 5).
         :param membrane_potential_threshold: scalar, determines value for which sigmoidal transfer function value is 0.5
-               [unit = mV] (default = -0.069).
+               [unit = mV] (default = -69).
         :param sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function [unit = 1/mV]
-               (default = 0.0018).
+               (default = 0.56).
 
         """
 
