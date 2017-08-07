@@ -40,11 +40,11 @@ class NeuralMassModel(object):
                of the N populations for each of the n_synapses synapses.
         :param population_labels: Can be list of character strings indicating the type of each neural mass in network
                (default = None).
-        :param synapses: Can be list of strings, indicating which pre-defined synapse types the third axis of the
+        :param synapses: Can be list of n_synapses strings, indicating which pre-defined synapse types the third axis of the
                connections matrix resembles. If None, connections.shape[2] has to be 2, where the first entry is the
                default excitatory synapse as defined in Jansen & Rit (1995) and the second is the default inhibitory one
                (default = None).
-        :param axons: Can be list of strings, indicating which pre-defined axon type to use for each population in the
+        :param axons: Can be list of N strings, indicating which pre-defined axon type to use for each population in the
                network. Set either single list entry to None or parameter to None to not use custom axons
                (default = None).
         :param step_size: scalar, determining the time step-size with which the network simulation will progress
@@ -54,7 +54,7 @@ class NeuralMassModel(object):
         :param distances: N x N array resembling the distance between every pair of neural masses. Can be None if
                network should not have delays or if population positions are used instead [unit = mm] (default = None).
         :param positions: N x 3 array, including the (x,y,z) coordinates of each neural mass. Will be used to compute
-               distances if distances were not passed (default = None).
+               euclidean distances if distances were not passed (default = None).
         :param velocities: Can be
                            1) a scalar determining the global velocity
                            2) an N x N array with a velocity for each connection in the network
@@ -82,7 +82,7 @@ class NeuralMassModel(object):
         ##########################
         # check input parameters #
         ##########################
-
+        # TODO: exceptions
         assert type(connections) is np.ndarray
         assert connections.shape[0] == connections.shape[1]
         assert len(connections.shape) == 3
