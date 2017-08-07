@@ -1,5 +1,6 @@
 """
-Definition of neural populations or neural mass that can have a number of properties.
+Includes basic population class and functions to instantiate synapses or axons as well as a function to update
+parameters of an object instance.
 """
 
 import synapses as syn
@@ -31,26 +32,26 @@ class Population(object):
 
     """
 
-    def __init__(self, synapses, axon='JansenRit', init_state=(0, 0), step_size=0.0001, kernel_length=100,
+    def __init__(self, synapses, axon='JansenRit', init_state=(0, 0), step_size=0.0001, synaptic_kernel_length=100,
                  tau_leak=0.001, resting_potential=-70.0, synapse_params=None, axon_params=None,
                  store_state_variables=False, store_input_firing_rate=False, store_output_firing_rate=False):
         """
         Initializes a single neural mass.
 
-        :param synapses: character string that indicates synapse type (see pre-implemented synapse sub-classes)
+        :param synapses: list of character strings that indicate synapse type (see pre-implemented synapse sub-classes)
         :param axon: character string that indicates axon type (see pre-implemented axon sub-classes)
         :param init_state: vector of length 2, containing initial state of neural mass, i.e. membrane potential
                [unit = mV] & firing rate [unit = firing rate] (default = (0,0)).
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s] (default = 0.1).
-        :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
+        :param synaptic_kernel_length: scalar that indicates number of bins the kernel should be evaluated for
                [unit = time-steps] (default = 100).
         :param tau_leak: scalar, time-scale with which the membrane potential of the population goes back to resting
                potential [unit = s] (default = 0.001).
         :param resting_potential: scalar, membrane potential at which no synaptic currents flow if no input arrives at
                population [unit = mV] (default = -70.0).
-        :param synapse_params: dictionary containing parameters for custom synapse type. For parameter explanation
-               see synapse class (default = None).
+        :param synapse_params: list of dictionaries containing parameters for custom synapse type. For parameter
+               explanation see synapse class (default = None).
         :param axon_params: dictionary containing parameters for custom axon type. For parameter explanation see
                axon class (default = None).
         :param store_state_variables: If false, old state variables will be erased after each state-update
@@ -76,16 +77,19 @@ class Population(object):
 
         self.synapses = list()
         self.state_variables = list()
-        self.state_variables.append(init_state[0])
         self.input_firing_rate = list()
-        self.input_firing_rate.append(np.zeros(len(synapses)))
         self.output_firing_rate = list()
-        self.output_firing_rate.append(init_state[1])
         self.store_state_variables = store_state_variables
         self.store_input_firing_rate = store_input_firing_rate
         self.store_output_firing_rate = store_output_firing_rate
         self.tau_leak = tau_leak
         self.resting_potential = resting_potential
+        self.step_size = step_size
+
+        # set initial state and firing rate values
+        self.state_variables.append(init_state[0])
+        self.input_firing_rate.append(np.zeros(len(synapses)))
+        self.output_firing_rate.append(init_state[1])
 
         ####################################
         # set axonal plasticity parameters #
@@ -98,7 +102,6 @@ class Population(object):
                 # if axon timescale tau is in axon parameters, set relevant parameters for axon plasticity
                 self.axon_plasticity = True
                 self.tau_axon = axon_params['tau']
-                self.step_size = step_size
                 if 'firing_rate_target' in axon_params:
                     self.firing_rate_target = axon_params['firing_rate_target']
                 else:
@@ -125,12 +128,12 @@ class Population(object):
         if not synapse_params:
 
             for i in range(len(synapses)):
-                self.synapses.append(set_synapse(synapses[i], step_size, kernel_length))
+                self.synapses.append(set_synapse(synapses[i], step_size, synaptic_kernel_length))
 
         else:
 
             for i in range(len(synapse_params)):
-                self.synapses.append(set_synapse(synapses[i], step_size, kernel_length, synapse_params[i]))
+                self.synapses.append(set_synapse(synapses[i], step_size, synaptic_kernel_length, synapse_params[i]))
 
         ############
         # set axon #
@@ -172,23 +175,23 @@ class Population(object):
         for i in range(len(self.synapses)):
 
             if self.synapses[i].conductivity_based:
-                synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i], states[0])
+                synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i], states)
             else:
                 synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i])
 
         synaptic_current = np.sum(synaptic_currents)
 
         # calculate leak current
-        leak_current = (self.resting_potential - states[0]) / self.tau_leak
+        leak_current = (self.resting_potential - states) / self.tau_leak
 
         # update membrane potential
-        membrane_potential = states[0] + self.step_size * (synaptic_current + leak_current + extrinsic_current)
+        membrane_potential = states + self.step_size * (synaptic_current + leak_current + extrinsic_current)
 
         ##############################
         # update average firing rate #
         ##############################
 
-        firing_rate = self.axon.compute_firing_rate(states[0])
+        firing_rate = self.axon.compute_firing_rate(states)
 
         #################################################
         # update state variables and output firing rate #
@@ -282,11 +285,7 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
         for p in param_list:
             syn_instance = update_param(p, synapse_params, syn_instance)
 
-    #########################
-    # build synaptic kernel #
-    #########################
-
-    syn_instance.build_kernel()
+    syn_instance.synaptic_kernel = syn_instance.evaluate_kernel(build_kernel=True)
 
     return syn_instance
 

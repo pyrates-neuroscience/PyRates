@@ -6,7 +6,7 @@ updated after each alteration of axons.py.
 from unittest import TestCase
 import numpy as np
 import sys
-sys.path.append('/home/rgast/Documents/GitRepo/CBSMPG/NMMs/neural-mass-models/base/')
+sys.path.append('../base')
 import axons as ax
 
 __author__ = "Richard Gast"
@@ -95,9 +95,11 @@ class TestAxon(TestCase):
         # perform tests #
         #################
 
-        self.assertEqual(firing_rate_1, 0.5*max_firing_rate)
+        self.assertEqual(firing_rate_1, 0.6*max_firing_rate)
         self.assertLess(firing_rate_1, firing_rate_2)
         self.assertGreater(firing_rate_1, firing_rate_3)
+
+        print('Successfully tested correct axon response to different membrane potential values!')
 
     def test_maximum_firing_rate(self):
         """

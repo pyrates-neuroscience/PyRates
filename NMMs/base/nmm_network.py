@@ -106,6 +106,7 @@ class NeuralMassModel(object):
         self.C = connections
         self.n_synapses = connections.shape[2]
         self.step_size = step_size
+        self.active_synapses = np.zeros((self.N, self.n_synapses), dtype=bool)
 
         # set up synapse labels
         if synapses:
@@ -142,15 +143,18 @@ class NeuralMassModel(object):
 
         for i in range(self.N):
 
-            # check which synapses exist at respective population
-            synapse_idx = np.array(np.where(np.sum(connections[i, :, :], axis=0) != 0), dtype=int).squeeze()
+            # check and extract  synapses that exist at respective population
+            self.active_synapses[i, :] = (np.sum(connections[i, :, :], axis=0) != 0).squeeze()
+            idx = np.asarray(self.active_synapses[i, :].nonzero(), dtype=int).squeeze()
+            synapses_tmp = [self.synapse_types[j] for j in idx]
+            synapse_params_tmp = [synapse_params[j] for j in idx]
 
             # pass only those synapses next to other parameters to population class
-            self.neural_masses.append(pop.Population(positions[i], synapses=self.synapse_types[synapse_idx],
+            self.neural_masses.append(pop.Population(synapses=synapses_tmp,
                                                      axon=axons[i], init_state=init_states[i], step_size=step_size,
                                                      synaptic_kernel_length=synaptic_kernel_length,
                                                      axon_params=axon_params[i],
-                                                     synapse_params=synapse_params[synapse_idx]))
+                                                     synapse_params=synapse_params_tmp))
 
         ##################################
         # set inter-population distances #
@@ -232,7 +236,9 @@ class NeuralMassModel(object):
 
         assert synaptic_inputs.shape[0] >= time_steps
         assert synaptic_inputs.shape[1] == self.N
-        assert synaptic_inputs.shape[2] == self.C.shape[2]
+        assert synaptic_inputs.shape[2] == self.n_synapses
+        if any([synaptic_inputs[i][self.active_synapses == 0] for i in range(time_steps)]) > 0:
+            raise ValueError('Cannot pass synaptic input to non-existent synapses!')
         if extrinsic_current:
             assert extrinsic_current.shape[0] >= time_steps
             assert extrinsic_current.shape[1] == self.N
@@ -252,7 +258,7 @@ class NeuralMassModel(object):
         # simulate network #
         ####################
 
-        self.neural_mass_states = np.zeros((self.N, np.int((time_steps - cutoff) / store_step) + 1))
+        self.neural_mass_states = np.zeros((self.N, (time_steps - cutoff) // store_step + 1))
         n_store = 0
 
         for n in range(time_steps):
@@ -268,18 +274,20 @@ class NeuralMassModel(object):
 
                 # update all state variables
                 if extrinsic_current:
-                    self.neural_masses[i].state_update(synaptic_inputs[n, i, :] + network_input[i, :],
-                                                       extrinsic_current[n, i])
+                    self.neural_masses[i].state_update(synaptic_inputs[n, i, self.active_synapses[i, :]] +
+                                                       network_input[i, :], extrinsic_current[n, i])
                 else:
-                    self.neural_masses[i].state_update(synaptic_inputs[n, i] + network_input[i])
+                    self.neural_masses[i].state_update(synaptic_inputs[n, i, self.active_synapses[i, :]] +
+                                                       network_input[i, :])
 
                 # update firing-rate look-up
                 firing_rates_lookup[i, firing_rates_lookup_idx] = self.neural_masses[i].output_firing_rate[-1]
 
                 # store state-variables
                 if n > cutoff and np.mod(n, store_step) == 0:
-                    self.neural_mass_states[i, :, n_store] = np.asarray(self.neural_masses[i].state_col[-1])
-                    n_store += 1
+                    self.neural_mass_states[i, n_store] = np.asarray(self.neural_masses[i].state_variables[-1])
+                    if i == self.N-1:
+                        n_store += 1
 
             # display simulation progress
             if verbose and np.mod(n, time_steps//100) == 0:
@@ -314,7 +322,7 @@ class NeuralMassModel(object):
             # get delayed firing rates from all populations at each possible velocity
             firing_rate_delayed = np.array([firing_rate_lookup[i, D[i, j]] for j in range(self.N)])
 
-            if 'velocity_distributions' in self:
+            if hasattr(self, 'velocity_distributions'):
 
                 # get velocity distribution for each connection to population i
                 velocities = np.array(self.velocity_distributions[self.velocity_distribution_indices[i, :]]).squeeze()
@@ -323,7 +331,7 @@ class NeuralMassModel(object):
                 firing_rate_delayed = np.sum(firing_rate_delayed * velocities, axis=1)
 
             # apply connection weights to delayed firing rates
-            network_input[i, :] = self.C[i, :].T @ firing_rate_delayed
+            network_input[i, :] = self.C[i, :, self.active_synapses[i, :]] @ firing_rate_delayed
 
         return network_input
 
@@ -367,6 +375,6 @@ def get_euclidean_distances(positions):
         differences = np.tile(positions[i, :], (n, 1)) - positions
 
         # calculate the square root of the sum of the squared differences for each pair of positions
-        D[i, :] = np.sqrt(differences @ differences.T)
+        D[i, :] = np.sqrt(np.sum(differences**2, axis=1))
 
     return D

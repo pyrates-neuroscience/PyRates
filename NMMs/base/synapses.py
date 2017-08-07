@@ -50,6 +50,18 @@ class Synapse(object):
         assert step_size >= 0 and type(step_size) is float
         assert kernel_length > 0 and type(kernel_length) is int
 
+        ##################
+        # set parameters #
+        ##################
+
+        self.efficiency = efficiency
+        self.tau_decay = tau_decay
+        self.tau_rise = tau_rise
+        self.conductivity_based = conductivity_based
+        self.reversal_potential = reversal_potential
+        self.step_size = step_size
+        self.kernel_length = kernel_length
+
         ####################
         # set synapse type #
         ####################
@@ -71,9 +83,39 @@ class Synapse(object):
         # build synaptic kernel #
         #########################
 
-        time_points = np.arange(kernel_length - 1, 0, -1)
-        time_points = time_points * step_size
-        self.synaptic_kernel = evaluate_kernel(time_points, efficiency, tau_decay, tau_rise)
+        self.synaptic_kernel = self.evaluate_kernel(build_kernel=True)
+
+    def evaluate_kernel(self, build_kernel, t=0.):
+        """
+        Computes value of synaptic kernel at specific time point
+
+        :param build_kernel: if true, kernel will be evaluated at kernel_length timepoints. Else, t needs to be provided
+               and kernel will be evaluated at t.
+        :param t: scalar or vector, time(s) at which to evaluate kernel [unit = s] (default = 0.).
+
+        :return: scalar or vector, synaptic kernel value at each t [unit = mA or mS/m]
+
+        """
+
+        #########################
+        # check input parameter #
+        #########################
+
+        if type(t) is float:
+            assert t >= 0
+        else:
+            assert all(t) >= 0
+
+        ############################################################
+        # check whether to build kernel or just evaluate its value #
+        ############################################################
+
+        if build_kernel:
+
+            t = np.arange(self.kernel_length - 1, 0, -1)
+            t = t * self.step_size
+
+        return self.efficiency * (np.exp(-t / self.tau_decay) - np.exp(-t / self.tau_rise))
 
     def get_synaptic_current(self, x, membrane_potential=None):
         """
@@ -106,34 +148,6 @@ class Synapse(object):
             synaptic_current = kernel_value * (self.reversal_potential - membrane_potential)
 
         return synaptic_current
-
-
-def evaluate_kernel(t, efficiency, tau_decay, tau_rise):
-    """
-    Computes value of synaptic kernel at specific time point
-
-    :param t: scalar, determines time point at which synaptic kernel value should be evaluated [unit = s]
-    :param efficiency: scalar, real-valued, defines strength and effect (excitatory vs inhibitory) of synapse
-           [unit = mA or mS/m]
-    :param tau_decay: scalar, positive & real-valued, lumped time delay constant that determines how steep
-           the exponential synaptic kernel decays [unit = s]
-    :param tau_rise: scalar, positive & real-valued, lumped time delay constant that determines how steep the
-           exponential synaptic kernel rises [unit = s]
-
-    :return: scalar, synaptic kernel value [unit = mA or mS/m]
-
-    """
-
-    #########################
-    # check input parameter #
-    #########################
-
-    if type(t) is float:
-        assert t >= 0
-    else:
-        assert all(t) >= 0
-
-    return efficiency * (np.exp(-t / tau_decay) - np.exp(-t / tau_rise))
 
 
 class AMPACurrentSynapse(Synapse):
