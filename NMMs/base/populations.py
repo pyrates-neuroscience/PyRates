@@ -33,7 +33,7 @@ class Population(object):
     """
 
     def __init__(self, synapses, axon='JansenRit', init_state=(0, 0), step_size=0.0001, synaptic_kernel_length=100,
-                 tau_leak=0.001, resting_potential=-70.0, synapse_params=None, axon_params=None,
+                 tau_leak=0.0001, resting_potential=-70.0, synapse_params=None, axon_params=None,
                  store_state_variables=False, store_input_firing_rate=False, store_output_firing_rate=False):
         """
         Initializes a single neural mass.

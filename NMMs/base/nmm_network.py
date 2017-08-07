@@ -82,7 +82,7 @@ class NeuralMassModel(object):
         ##########################
         # check input parameters #
         ##########################
-        # TODO: exceptionss
+        # TODO: exceptions
         assert type(connections) is np.ndarray
         assert connections.shape[0] == connections.shape[1]
         assert len(connections.shape) == 3
@@ -100,11 +100,11 @@ class NeuralMassModel(object):
         # set network parameters #
         ##########################
 
-        self.N = connections.shape[0]
+        self.N = int(connections.shape[0])
         self.neural_mass_labels = population_labels if population_labels else [str(i) for i in range(self.N)]
         self.neural_masses = list()
         self.C = connections
-        self.n_synapses = connections.shape[2]
+        self.n_synapses = int(connections.shape[2])
         self.step_size = step_size
         self.active_synapses = np.zeros((self.N, self.n_synapses), dtype=bool)
 
@@ -331,7 +331,7 @@ class NeuralMassModel(object):
                 firing_rate_delayed = np.sum(firing_rate_delayed * velocities, axis=1)
 
             # apply connection weights to delayed firing rates
-            network_input[i, :] = self.C[i, :, self.active_synapses[i, :]] @ firing_rate_delayed
+            network_input[i, :] = np.dot(self.C[i, :, self.active_synapses[i, :]],firing_rate_delayed)
 
         return network_input
 

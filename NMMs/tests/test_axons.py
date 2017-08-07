@@ -3,7 +3,7 @@ Includes a class with test functions for the axon class and a number of tests us
 updated after each alteration of axons.py.
 """
 
-from unittest import TestCase
+import unittest
 import numpy as np
 import sys
 sys.path.append('../base')
@@ -52,7 +52,7 @@ def get_axon_firing_rate(membrane_potential, max_firing_rate=1., membrane_potent
 # axon class test functions #
 #############################
 
-class TestAxon(TestCase):
+class TestAxon(unittest.TestCase):
     """
     Test class that includes test functions for the Axon class of axons.py.
     """
@@ -95,7 +95,7 @@ class TestAxon(TestCase):
         # perform tests #
         #################
 
-        self.assertEqual(firing_rate_1, 0.6*max_firing_rate)
+        self.assertEqual(firing_rate_1, 0.5*max_firing_rate)
         self.assertLess(firing_rate_1, firing_rate_2)
         self.assertGreater(firing_rate_1, firing_rate_3)
 
@@ -226,3 +226,5 @@ class TestAxon(TestCase):
                           membrane_potential_threshold=membrane_potential_threshold,
                           sigmoid_steepness=0.)
 
+if __name__ == '__main__':
+    unittest.main()
