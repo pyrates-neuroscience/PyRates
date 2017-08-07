@@ -38,6 +38,10 @@ class NeuralMassModel(object):
 
         :param connections: N x N x n_synapses array resembling the number of synaptic contacts between every pair
                of the N populations for each of the n_synapses synapses.
+               example: 3 populations, 2 synapses
+               [ 1<-1, 1<-2, 1<-3 ]             [ 1<-1, 1<-2, 1<-3 ]
+               [ 2<-1, 2<-2, 2<-3 ] [ 0 ]       [ 2<-1, 2<-2, 2<-3 ] [ 1 ]
+               [ 3<-1, 3<-2, 3<-3 ]             [ 3<-1, 3<-2, 3<-3 ]
         :param population_labels: Can be list of character strings indicating the type of each neural mass in network
                (default = None).
         :param synapses: Can be list of n_synapses strings, indicating which pre-defined synapse types the third axis of the
