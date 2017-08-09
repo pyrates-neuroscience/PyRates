@@ -1,24 +1,368 @@
 """
-Includes a class with test functions for the axon class and a number of tests using that function. Should be run or
-updated after each alteration of axons.py.
+Includes unit tests for all classes included in NMMs/base.
 """
 
 import unittest
 import numpy as np
-from NMMs.base.nmm_network import *
+from NMMs.base import nmm_network, populations, synapses, axons
 from matplotlib.pyplot import *
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"
 
-class TestNMM(unittest.TestCase):
+# TODO: move axon tests to this file
+# TODO: generate text file with results of Thomas' implementation and load it for assertion in test_0_input
+# TODO: build synapse and population tests
+
+##############
+# unit tests #
+##############
+
+
+class TestNMMs(unittest.TestCase):
     """
-    Test class that includes test functions for the Axon class of axons.py.
+    Test class that includes unit tests for all components of NMM network.
     """
 
-    def test_0_input(self):
+    def test_0_JR_axon(self):
+        """
+        Tests whether axon with standard parametrization from Jansen & Rit (1995) shows expected behavior to input in
+        form of various membrane potentials.
         """
 
+        # axon parameters
+        #################
+
+        max_firing_rate = 5.                    # unit = 1
+        membrane_potential_threshold = -0.069   # unit = V
+        sigmoid_steepness = 555.56              # unit = 1/V
+
+        # initialize axon
+        #################
+
+        axon = axons.Axon(max_firing_rate=max_firing_rate,
+                          membrane_potential_threshold=membrane_potential_threshold,
+                          sigmoid_steepness=sigmoid_steepness)
+
+        # define inputs (unit = V)
+        ##########################
+
+        membrane_potential_1 = membrane_potential_threshold
+        membrane_potential_2 = membrane_potential_threshold - 0.01
+        membrane_potential_3 = membrane_potential_threshold + 0.01
+        membrane_potential_4 = membrane_potential_threshold - 0.1
+        membrane_potential_5 = membrane_potential_threshold + 0.1
+
+        # get firing rates
+        ##################
+
+        firing_rate_1 = axon.compute_firing_rate(membrane_potential_1)
+        firing_rate_2 = axon.compute_firing_rate(membrane_potential_2)
+        firing_rate_3 = axon.compute_firing_rate(membrane_potential_3)
+        firing_rate_4 = axon.compute_firing_rate(membrane_potential_4)
+        firing_rate_5 = axon.compute_firing_rate(membrane_potential_5)
+
+        # perform unit tests
+        #################################################################################
+
+        print('-----------------')
+        print('| Test I - Axon |')
+        print('-----------------')
+
+        print('I.1 test whether output firing rate at membrane potential threshold is indeed 0.5 scaled by the max '
+              'firing rate.')
+        self.assertEqual(firing_rate_1, 0.5 * max_firing_rate)
+        print('I.1 done!')
+
+        print('I.2 test whether output firing rate gets smaller for lower membrane potential and the other way around.')
+        self.assertLess(firing_rate_2, firing_rate_1)
+        self.assertGreater(firing_rate_3, firing_rate_1)
+        print('I.2 done!')
+
+        print('I.3 test whether equal amounts of hyperpolarization and depolarization lead to equal changes in membrane'
+              ' potential.')
+        self.assertAlmostEqual(np.abs(firing_rate_1 - firing_rate_2), np.abs(firing_rate_1 - firing_rate_3), places=4)
+        print('I.3 done!')
+
+        print('I.4 test whether extreme depolarization leads to almost zero firing rate.')
+        self.assertAlmostEqual(firing_rate_4, 0., places=2)
+        print('I.4 done!')
+
+        print('I.5 test whether extreme hyperpolarization leads to almost max firing rate')
+        self.assertAlmostEqual(firing_rate_5, max_firing_rate, places=2)
+        print('I.5 done!')
+
+    def test_1_AMPA_synapse(self):
+        """
+        Tests whether synapse with standard AMPA parametrization from Thomas Knoesche shows expected behavior for
+        various firing rate inputs.
+        """
+
+        # synapse parameters
+        ####################
+
+        efficiency = 1.273 * 3e-13                        # unit = A
+        tau_decay = 0.006                                 # unit = s
+        tau_rise = 0.0006                                 # unit = s
+        step_size = 5.e-4                                 # unit = s
+        synaptic_kernel_length = int(0.05 / step_size)    # unit = 1
+        conductivity_based = False
+
+        # initialize synapse
+        ####################
+
+        synapse = synapses.Synapse(efficiency=efficiency,
+                                   tau_decay=tau_decay,
+                                   tau_rise=tau_rise,
+                                   step_size=step_size,
+                                   kernel_length=synaptic_kernel_length,
+                                   conductivity_based=conductivity_based)
+
+        # define firing rate inputs
+        ###########################
+
+        firing_rates_1 = np.zeros(synaptic_kernel_length)
+        firing_rates_2 = np.ones(synaptic_kernel_length) * 300.0
+        firing_rates_3 = np.zeros(3*synaptic_kernel_length)
+        firing_rates_3[synaptic_kernel_length:2*synaptic_kernel_length] = 300.0
+
+        # calculate synaptic currents
+        #############################
+
+        synaptic_current_1 = synapse.get_synaptic_current(firing_rates_1)
+        synaptic_current_2 = synapse.get_synaptic_current(firing_rates_2)
+
+        # get synaptic current at each incoming firing rate of firing_rates_3
+        idx = np.arange(1, len(firing_rates_3))
+        synaptic_current_3 = np.array([synapse.get_synaptic_current(firing_rates_3[0:i]) for i in idx])
+
+        # perform unit tests
+        ####################
+
+        print('--------------------------')
+        print('| Test II - AMPA Synapse |')
+        print('--------------------------')
+
+        print('II.1 test whether zero input to AMPA synapse leads to zero synaptic current.')
+        self.assertEqual(synaptic_current_1, 0.)
+        print('II.1 done!')
+
+        print('II.2 test whether increased input to AMPA synapse leads to increased synaptic current.')
+        self.assertGreater(synaptic_current_2, synaptic_current_1)
+        print('II.2 done!')
+
+        print('II.3 test whether synaptic current response to step-function input has a single maximum.')
+        pairwise_difference = np.diff(synaptic_current_3)
+        response_rise = np.where(pairwise_difference > 0.)
+        response_decay = np.where(pairwise_difference < 0.)
+        self.assertTrue((np.diff(response_rise) == 1).all())
+        self.assertTrue((np.diff(response_decay) == 1).all())
+        print('II.3 done!')
+
+        print('')
+
+    def test_2_GABAA_synapse(self):
+        """
+        Tests whether synapse with standard GABAA parametrization from Thomas Knoesche shows expected behavior for
+        various firing rate inputs.
+        """
+
+        # synapse parameters
+        ####################
+
+        efficiency = 1.273 * -1e-12                       # unit = A
+        tau_decay = 0.02                                  # unit = s
+        tau_rise = 0.0004                                 # unit = s
+        step_size = 5.e-4                                 # unit = s
+        synaptic_kernel_length = int(0.05 / step_size)    # unit = 1
+        conductivity_based = False
+
+        # initialize synapse
+        ####################
+
+        synapse = synapses.Synapse(efficiency=efficiency,
+                                   tau_decay=tau_decay,
+                                   tau_rise=tau_rise,
+                                   step_size=step_size,
+                                   kernel_length=synaptic_kernel_length,
+                                   conductivity_based=conductivity_based)
+
+        # define firing rate inputs
+        ###########################
+
+        firing_rates_1 = np.zeros(synaptic_kernel_length)
+        firing_rates_2 = np.ones(synaptic_kernel_length) * 300.0
+        firing_rates_3 = np.zeros(3*synaptic_kernel_length)
+        firing_rates_3[synaptic_kernel_length:2*synaptic_kernel_length] = 300.0
+
+        # calculate synaptic currents
+        #############################
+
+        synaptic_current_1 = synapse.get_synaptic_current(firing_rates_1)
+        synaptic_current_2 = synapse.get_synaptic_current(firing_rates_2)
+
+        # get synaptic current at each incoming firing rate of firing_rates_3
+        idx = np.arange(1, len(firing_rates_3))
+        synaptic_current_3 = np.array([synapse.get_synaptic_current(firing_rates_3[0:i]) for i in idx])
+
+        # perform unit tests
+        ####################
+
+        print('----------------------------')
+        print('| Test III - GABAA Synapse |')
+        print('----------------------------')
+
+        print('III.1 test whether zero input to GABAA synapse leads to zero synaptic current.')
+        self.assertEqual(synaptic_current_1, 0.)
+        print('III.1 done!')
+
+        print('III.2 test whether increased input to GABAA synapse leads to decreased synaptic current.')
+        self.assertLess(synaptic_current_2, synaptic_current_1)
+        print('III.2 done!')
+
+        print('III.3 test whether synaptic current response to step-function input has a single minimum.')
+        pairwise_difference = np.diff(synaptic_current_3)
+        response_rise = np.where(pairwise_difference > 0.)
+        response_decay = np.where(pairwise_difference < 0.)
+        self.assertTrue((np.diff(response_rise) == 1).all())
+        self.assertTrue((np.diff(response_decay) == 1).all())
+        print('III.3 done!')
+
+        print('')
+
+    def test_3_AMPA_conductivity_synapse(self):
+        """
+        Tests whether conductivity based AMPA synapse shows expected behavior.
+        """
+
+        # synapse parameters
+        ####################
+
+        efficiency = 1.273 * 7.2e-10                    # unit = S
+        tau_decay = 0.0015                              # unit = s
+        tau_rise = 0.000009                             # unit = s
+        step_size = 5.e-4                               # unit = s
+        synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
+        conductivity_based = True
+
+        # initialize synapse
+        ####################
+
+        synapse = synapses.Synapse(efficiency=efficiency,
+                                   tau_decay=tau_decay,
+                                   tau_rise=tau_rise,
+                                   step_size=step_size,
+                                   kernel_length=synaptic_kernel_length,
+                                   conductivity_based=conductivity_based)
+
+        # define firing rate inputs
+        ###########################
+
+        firing_rates_1 = np.zeros(synaptic_kernel_length)
+        firing_rates_2 = np.ones(synaptic_kernel_length) * 300.0
+        firing_rates_3 = np.zeros(3 * synaptic_kernel_length)
+        firing_rates_3[synaptic_kernel_length:2 * synaptic_kernel_length] = 300.0
+
+        # calculate synaptic currents
+        #############################
+
+        synaptic_current_1 = synapse.get_synaptic_current(firing_rates_1)
+        synaptic_current_2 = synapse.get_synaptic_current(firing_rates_2)
+
+        # get synaptic current at each incoming firing rate of firing_rates_3
+        idx = np.arange(1, len(firing_rates_3))
+        synaptic_current_3 = np.array([synapse.get_synaptic_current(firing_rates_3[0:i]) for i in idx])
+
+        # perform unit tests
+        ####################
+
+        print('--------------------------------------')
+        print('| Test IV - AMPA Conductance Synapse |')
+        print('--------------------------------------')
+
+        print('IV.1 test whether zero input to AMPA conductance synapse leads to zero synaptic current.')
+        self.assertEqual(synaptic_current_1, 0.)
+        print('IV.1 done!')
+
+        print('IV.2 test whether increased input to AMPA conductance synapse leads to increased synaptic current.')
+        self.assertGreater(synaptic_current_2, synaptic_current_1)
+        print('IV.2 done!')
+
+        print('IV.3 test whether synaptic current response to step-function input has a single minimum.')
+        pairwise_difference = np.diff(synaptic_current_3)
+        response_rise = np.where(pairwise_difference > 0.)
+        response_decay = np.where(pairwise_difference < 0.)
+        self.assertTrue((np.diff(response_rise) == 1).all())
+        self.assertTrue((np.diff(response_decay) == 1).all())
+        print('IV.3 done!')
+
+    def test_4_population_init(self):
+        """
+        Tests whether synapses and axon of initialized population show expected behavior.
+        """
+
+        # population parameters
+        #######################
+
+        synapse_types = ['AMPA_current', 'GABAA_current']
+        axon = 'JansenRit'
+        init_state = (-0.07, 0.5)
+        step_size = 5.e-4
+        synaptic_kernel_length = int(0.05/step_size)
+        tau_leak = 0.016
+        resting_potential = -0.07
+
+        # initialize population, synapses and axon
+        pop = populations.Population(synapses=synapse_types,
+                                     axon=axon,
+                                     init_state=init_state,
+                                     step_size=step_size,
+                                     synaptic_kernel_length=synaptic_kernel_length,
+                                     tau_leak=tau_leak,
+                                     resting_potential=resting_potential)
+        syn1 = synapses.AMPACurrentSynapse(step_size=step_size,
+                                           kernel_length=synaptic_kernel_length)
+        syn2 = synapses.GABAACurrentSynapse(step_size=step_size,
+                                            kernel_length=synaptic_kernel_length)
+        axon = axons.JansenRitAxon()
+
+        # define firing rate input and membrane potential
+        #################################################
+
+        firing_rate = np.zeros(synaptic_kernel_length) + 300.0
+        membrane_potential = -0.06
+
+        # calculate population, synapse and axon response
+        #################################################
+
+        pop_syn1_response = pop.synapses[0].get_synaptic_current(firing_rate)
+        pop_syn2_response = pop.synapses[1].get_synaptic_current(firing_rate)
+        syn1_response = syn1.get_synaptic_current(firing_rate)
+        syn2_response = syn2.get_synaptic_current(firing_rate)
+
+        pop_ax_response = pop.axon.compute_firing_rate(membrane_potential)
+        ax_reponse = axon.compute_firing_rate(membrane_potential)
+
+        # perform unit tests
+        ####################
+
+        print('----------------------------')
+        print('| Test V - Population Init |')
+        print('----------------------------')
+
+        print('V.1 test whether population synapses show expected response to firing rate input')
+        self.assertEqual(pop_syn1_response, syn1_response)
+        self.assertEqual(pop_syn2_response, syn2_response)
+        print('V.1 done!')
+
+        print('V.2 test whether population axon shows expected reponse to membrane potential input')
+        self.assertEqual(pop_ax_response, ax_reponse)
+        print('V.2 done!')
+
+    def test_5_JR_circuit(self):
+        """
+        Tests whether current implementation shows same behavior as explicit JR-implementation of Thomas Knoesche given
+        the same parameters.
         """
 
         print('Running Jansen Rit NMM test ...')
@@ -44,7 +388,7 @@ class TestNMM(unittest.TestCase):
         connections[:, :, 0] = [[0, 0.8 * 135, 0], [135, 0, 0], [0.25 * 135, 0, 0]]
 
         # GABA-A connections (inhibitory)
-        synaptic_kernel_length = 100 # in time steps
+        synaptic_kernel_length = 100  # in time steps
 
         connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
 
@@ -70,33 +414,34 @@ class TestNMM(unittest.TestCase):
         velocities = float('inf')
 
         init_states = np.zeros((N, n_synapses))
+        init_states[:, 0] = -0.075
 
         # synaptic inputs
-        start_stim = 0.3        # s
+        start_stim = 0.01        # s
         len_stim = 0.05         # s
         mag_stim = 300.0        # 1/s
 
-        synaptic_inputs = np.zeros((int(simulation_time/step_size),N,n_synapses))
-        synaptic_inputs[int(start_stim/step_size):int(start_stim/step_size+len_stim/step_size),:,0] = mag_stim
+        synaptic_inputs = np.zeros((int(simulation_time/step_size), N, n_synapses))
+        synaptic_inputs[int(start_stim/step_size):int(start_stim/step_size+len_stim/step_size), 1, 0] = mag_stim
 
         # initialize
         ################################################################################################################
-        nmm = NeuralMassModel(connections = connections,
-                              population_labels = population_labels,
-                              step_size = step_size,
-                              synaptic_kernel_length = synaptic_kernel_length,
-                              distances = distances,
-                              velocities = velocities,
-                              synapse_params = synapse_params,
-                              axon_params = axon_params,
-                              init_states = init_states)
+        nmm = nmm_network.NeuralMassModel(connections=connections,
+                                          population_labels=population_labels,
+                                          step_size=step_size,
+                                          synaptic_kernel_length=synaptic_kernel_length,
+                                          distances=distances,
+                                          velocities=velocities,
+                                          synapse_params=synapse_params,
+                                          axon_params=axon_params,
+                                          init_states=init_states)
 
         # run
         ################################################################################################################
-        nmm.run(synaptic_inputs = synaptic_inputs,
-                simulation_time = simulation_time,
-                cutoff_time = cutoff_time,
-                store_step = store_step)
+        nmm.run(synaptic_inputs=synaptic_inputs,
+                simulation_time=simulation_time,
+                cutoff_time=cutoff_time,
+                store_step=store_step)
 
         # plot
         ################################################################################################################
@@ -104,6 +449,16 @@ class TestNMM(unittest.TestCase):
         plot(nmm.neural_mass_states.T)
         show()
         print('done!')
+
+
+############################
+# functions for unit tests #
+############################
+
+
+##################
+# run unit tests #
+##################
 
 if __name__ == '__main__':
     unittest.main()

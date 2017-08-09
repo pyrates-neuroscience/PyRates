@@ -155,7 +155,7 @@ class AMPACurrentSynapse(Synapse):
     This defines an current-based synapse with AMPA neuroreceptor
     """
 
-    def __init__(self, step_size, kernel_length, efficiency=1.273*3e-3, tau_decay=0.006, tau_rise=0.0006):
+    def __init__(self, step_size, kernel_length, efficiency=1.273*3e-13, tau_decay=0.006, tau_rise=0.0006):
         """
         Initializes a current-based synapse with parameters resembling an AMPA receptor.
 
@@ -175,7 +175,7 @@ class GABAACurrentSynapse(Synapse):
     This defines a current-based synapse with GABA_A neuroreceptor.
     """
 
-    def __init__(self, step_size, kernel_length, efficiency=1.273*(-1e-2), tau_decay=0.02, tau_rise=0.0004):
+    def __init__(self, step_size, kernel_length, efficiency=1.273*(-1e-12), tau_decay=0.02, tau_rise=0.0004):
         """
         Initializes a current-based synapse with parameters resembling an GABA_A receptor.
 

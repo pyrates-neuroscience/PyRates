@@ -338,7 +338,7 @@ class NeuralMassModel(object):
                 firing_rate_delayed = np.sum(firing_rate_delayed * velocities, axis=1)
 
             # apply connection weights to delayed firing rates
-            network_input[i, :] = np.dot(self.C[i, :, self.active_synapses[i, :]],firing_rate_delayed)
+            network_input[i, :] = np.dot(self.C[i, :].T, firing_rate_delayed)
 
         return network_input
 
