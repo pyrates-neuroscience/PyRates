@@ -9,7 +9,7 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
-class NeuralMassModel(object):
+class NeuralMassModel:
     """
     Basic neural mass model class. Initializes a number of delay-coupled neural masses that are characterized by a
     number of synapses and an axon.
