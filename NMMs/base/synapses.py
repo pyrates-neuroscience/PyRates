@@ -3,9 +3,13 @@ Includes basic synapse class, pre-parametrized sub-classes and an exponential ke
 """
 
 import numpy as np
+from scipy.integrate import trapz
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
+
+# TODO: find out reversal potentials for conductance based synapses
+
 
 class Synapse:
     """
@@ -14,23 +18,30 @@ class Synapse:
     :var synapse_type: string, indicates type of synapse
     :var synaptic_kernel: vector including weights for a certain number of time-steps after a synaptic input has
          arrived, determining how strong that input affects the synapse at each time-step.
+    :var efficiency: scalar, determines strength of the synaptic response to input.
+    :var tau_decay: scalar, determines time-scale with which synaptic response to previous input decays.
+    :var tau_rise: scalar, determines time-scale with which synaptic response to previous input increases.
+    :var step_size: scalar, determines length of time-interval between time-steps.
+    :var kernel_length: scalar, determines length of the synaptic response kernel.
+    :var reversal_potential: scalar, determines reversal potential for that specific synapse.
                               
     """
 
     def __init__(self, efficiency, tau_decay, tau_rise, step_size, kernel_length, conductivity_based=False,
                  reversal_potential=-0.075, synapse_type=None):
         """
-        Initializes a standard synapse exponential synapse kernel defined by 3 parameters.
+        Initializes a standard double-exponential synapse kernel defined by 3 parameters.
 
         :param efficiency: scalar, real-valued, defines strength and effect (excitatory vs inhibitory) of synapse
+               [unit = A or S].
         :param tau_decay: scalar, positive & real-valued, lumped time delay constant that determines how steep
-               the exponential synaptic kernel decays
+               the exponential synaptic kernel decays [unit = s].
         :param tau_rise: scalar, positive & real-valued, lumped time delay constant that determines how steep the
-               exponential synaptic kernel rises
+               exponential synaptic kernel rises [unit = s].
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s].
         :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
-               [unit = time-steps].
+               [unit = 1].
         :param conductivity_based: if true, synaptic input will be translated into synaptic current indirectly via
                a change in synaptic conductivity. Else translation to synaptic current will be direct.
         :param reversal_potential: scalar, determines the reversal potential of the synapse. Only necessary for
@@ -92,7 +103,7 @@ class Synapse:
                and kernel will be evaluated at t.
         :param t: scalar or vector, time(s) at which to evaluate kernel [unit = s] (default = 0.).
 
-        :return: scalar or vector, synaptic kernel value at each t [unit = mA or mS/m]
+        :return: scalar or vector, synaptic kernel value at each t [unit = A or S]
 
         """
 
@@ -111,7 +122,7 @@ class Synapse:
 
         if build_kernel:
 
-            t = np.arange(self.kernel_length - 1, 0, -1)
+            t = np.arange(self.kernel_length-1, -1, -1)
             t = t * self.step_size
 
         return self.efficiency * (np.exp(-t / self.tau_decay) - np.exp(-t / self.tau_rise))
@@ -120,22 +131,29 @@ class Synapse:
         """
         Applies synaptic kernel to input vector (should resemble incoming firing rate).
 
-        :param x: vector of values, kernel should be applied to [unit = firing rate].
+        :param x: vector of values, kernel should be applied to [unit = 1/s].
         :param membrane_potential: scalar, determines membrane potential of post-synapse. Only to be used for
-               conductivity based synapses [unit = mV] (default = None).
+               conductivity based synapses [unit = V] (default = None).
 
-        :return: resulting synaptic current [mA]
+        :return: resulting synaptic current [unit = A]
 
         """
+
+        assert all(x) >= 0
+        assert membrane_potential is None or type(membrane_potential) is float
 
         #########################
         # apply synaptic kernel #
         #########################
 
+        # multiply firing rate input with kernel
         if len(x) < len(self.synaptic_kernel):
-            kernel_value = np.dot(x, self.synaptic_kernel[-len(x):])
+            kernel_value = x * self.synaptic_kernel[-len(x):]
         else:
-            kernel_value = np.dot(x[-len(self.synaptic_kernel):], self.synaptic_kernel)
+            kernel_value = x[-len(self.synaptic_kernel):] * self.synaptic_kernel
+
+        # integrate over time
+        kernel_value = trapz(kernel_value, dx=self.step_size)
 
         ##############################
         # calculate synaptic current #
@@ -151,7 +169,7 @@ class Synapse:
 
 class AMPACurrentSynapse(Synapse):
     """
-    This defines an current-based synapse with AMPA neuroreceptor
+    This defines a current-based synapse with AMPA neuroreceptor.
     """
 
     def __init__(self, step_size, kernel_length, efficiency=1.273*3e-13, tau_decay=0.006, tau_rise=0.0006):
@@ -161,11 +179,15 @@ class AMPACurrentSynapse(Synapse):
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s].
         :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
-               [unit = time-steps].
+               [unit = 1].
 
         """
 
-        super(AMPACurrentSynapse, self).__init__(efficiency, tau_decay, tau_rise, step_size, kernel_length,
+        super(AMPACurrentSynapse, self).__init__(efficiency=efficiency,
+                                                 tau_decay=tau_decay,
+                                                 tau_rise=tau_rise,
+                                                 step_size=step_size,
+                                                 kernel_length=kernel_length,
                                                  synapse_type='AMPA_current')
 
 
@@ -181,9 +203,65 @@ class GABAACurrentSynapse(Synapse):
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s].
         :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
-               [unit = time-steps].
+               [unit = 1].
 
         """
 
-        super(GABAACurrentSynapse, self).__init__(efficiency, tau_decay, tau_rise, step_size, kernel_length,
+        super(GABAACurrentSynapse, self).__init__(efficiency=efficiency,
+                                                  tau_decay=tau_decay,
+                                                  tau_rise=tau_rise,
+                                                  step_size=step_size,
+                                                  kernel_length=kernel_length,
                                                   synapse_type='GABAA_current')
+
+
+class AMPAConductanceSynapse(Synapse):
+    """
+    This defines a conductivity-based synapse with AMPA neuroreceptor.
+    """
+
+    def __init__(self, step_size, kernel_length, efficiency=1.273*7.2e-10, tau_decay=0.0015, tau_rise=0.000009,
+                 reversal_potential=-0.075):
+        """
+        Initializes a current-based synapse with parameters resembling an GABA_A receptor.
+
+        :param step_size: scalar, size of the time step for which the population state will be updated according
+               to euler formalism [unit = s].
+        :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
+               [unit = 1].
+
+        """
+
+        super(AMPAConductanceSynapse, self).__init__(efficiency=efficiency,
+                                                     tau_decay=tau_decay,
+                                                     tau_rise=tau_rise,
+                                                     step_size=step_size,
+                                                     kernel_length=kernel_length,
+                                                     reversal_potential=reversal_potential,
+                                                     synapse_type='AMPA_conductance')
+
+
+class GABAAConductanceSynapse(Synapse):
+    """
+    This defines a conductivity-based synapse with GABA_A neuroreceptor.
+    """
+
+    def __init__(self, step_size, kernel_length, efficiency=1.358*(-4e-11), tau_decay=0.02, tau_rise=0.0004,
+                 reversal_potential=-0.075):
+        """
+        Initializes a current-based synapse with parameters resembling an GABA_A receptor.
+
+        :param step_size: scalar, size of the time step for which the population state will be updated according
+               to euler formalism [unit = s].
+        :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
+               [unit = 1].
+
+        """
+
+        super(GABAAConductanceSynapse, self).__init__(efficiency=efficiency,
+                                                      tau_decay=tau_decay,
+                                                      tau_rise=tau_rise,
+                                                      step_size=step_size,
+                                                      kernel_length=kernel_length,
+                                                      reversal_potential=reversal_potential,
+                                                      synapse_type='GABAA_current')

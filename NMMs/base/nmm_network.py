@@ -30,13 +30,14 @@ class NeuralMassModel:
 
     """
 
-    def __init__(self, connections, population_labels=None, synapses=None, axons=None, step_size=0.001,
-                 synaptic_kernel_length=100, distances=None, positions=None, velocities=None, synapse_params=None,
-                 axon_params=None, init_states=None):
+    def __init__(self, connections, population_labels=None, synapses=None, axons=None,
+                 population_resting_potentials=-0.075, population_leak_taus=0.016, population_capacitance=1e-12,
+                 step_size=0.001, synaptic_kernel_length=100, distances=None, positions=None, velocities=None,
+                 synapse_params=None, axon_params=None, init_states=None):
         """
         Initializes a network of neural masses.
 
-        :param connections: N x N x n_synapses array resembling the number of synaptic contacts between every pair
+        :param connections: N x N x n_synapses array representing the number of synaptic contacts between every pair
                of the N populations for each of the n_synapses synapses.
                example: 3 populations, 2 synapses
                [ 1<-1, 1<-2, 1<-3 ]             [ 1<-1, 1<-2, 1<-3 ]
@@ -44,18 +45,24 @@ class NeuralMassModel:
                [ 3<-1, 3<-2, 3<-3 ]             [ 3<-1, 3<-2, 3<-3 ]
         :param population_labels: Can be list of character strings indicating the type of each neural mass in network
                (default = None).
-        :param synapses: Can be list of n_synapses strings, indicating which pre-defined synapse types the third axis of the
-               connections matrix resembles. If None, connections.shape[2] has to be 2, where the first entry is the
-               default excitatory synapse as defined in Jansen & Rit (1995) and the second is the default inhibitory one
-               (default = None).
+        :param synapses: Can be list of n_synapses strings, indicating which pre-defined synapse types the third axis of
+               the connections matrix represents. If None, connections.shape[2] has to be 2, where the first entry is
+               the default excitatory synapse as defined in Jansen & Rit (1995) and the second is the default inhibitory
+               one (default = None).
         :param axons: Can be list of N strings, indicating which pre-defined axon type to use for each population in the
                network. Set either single list entry to None or parameter to None to not use custom axons
                (default = None).
+        :param population_resting_potentials: Can be scalar, indicating the resting membrane potential of all
+               populations or vector with a single resting potential for each population [unit = V] (default = -0.075).
+        :param population_leak_taus: Can be scalar, indicating the leak current time-scale of all populations or
+               vector with a single leak tau for each population [unit = s] (default = 0.016).
+        :param population_capacitance: Can be scalar, indicating the membrane capacitance of all populations or vector
+               with a single membrane capacitance for each population [unit = ] (default = 1e-12).
         :param step_size: scalar, determining the time step-size with which the network simulation will progress
                [unit = s] (default = 0.001).
         :param synaptic_kernel_length: integer, determining the length of the synaptic kernel in terms of bins, where
                the distance between two bins is always equal to the step-size [unit = time-steps] (default = 100).
-        :param distances: N x N array resembling the distance between every pair of neural masses. Can be None if
+        :param distances: N x N array representing the distance between every pair of neural masses. Can be None if
                network should not have delays or if population positions are used instead [unit = mm] (default = None).
         :param positions: N x 3 array, including the (x,y,z) coordinates of each neural mass. Will be used to compute
                euclidean distances if distances were not passed (default = None).
@@ -91,10 +98,11 @@ class NeuralMassModel:
         assert connections.shape[0] == connections.shape[1]
         assert len(connections.shape) == 3
         assert type(population_labels) is list or population_labels is None
-        assert step_size >= 0.
-        assert type(step_size) is float
+        assert type(population_resting_potentials) is float or np.ndarray
+        assert type(population_leak_taus) is float or np.ndarray
+        assert type(population_capacitance) is float or np.ndarray
+        assert step_size > 0.
         assert synaptic_kernel_length > 0
-        assert type(synaptic_kernel_length) is int
         if distances is not None:
             assert type(distances) is np.ndarray
         if (distances is not None or positions is not None) and (velocities is None):
@@ -130,13 +138,20 @@ class NeuralMassModel:
         if synapse_params and len(synapse_params) != self.n_synapses:
             raise ValueError('If used, synapse_params has to be a list with a dictionary for each synapse type.')
 
-        ############################################################
-        # make population specific parameters set to none iterable #
-        ############################################################
+        ################################################
+        # make population specific parameters iterable #
+        ################################################
 
         axons = check_nones(axons, self.N)
         synapse_params = check_nones(synapse_params, self.n_synapses)
         axon_params = check_nones(axon_params, self.N)
+
+        if type(population_resting_potentials) is float:
+            population_resting_potentials = [population_resting_potentials for i in range(self.N)]
+        if type(population_leak_taus) is float:
+            population_leak_taus = [population_leak_taus for i in range(self.N)]
+        if type(population_capacitance) is float:
+            population_capacitance = [population_capacitance for i in range(self.N)]
 
         ##########################
         # initialize populations #
@@ -147,7 +162,7 @@ class NeuralMassModel:
 
         for i in range(self.N):
 
-            # check and extract  synapses that exist at respective population
+            # check and extract synapses that exist at respective population
             self.active_synapses[i, :] = (np.sum(connections[i, :, :], axis=0) != 0).squeeze()
             idx = np.asarray(self.active_synapses[i, :].nonzero(), dtype=int)
             if len(idx) == 1:
@@ -157,8 +172,13 @@ class NeuralMassModel:
 
             # pass only those synapses next to other parameters to population class
             self.neural_masses.append(pop.Population(synapses=synapses_tmp,
-                                                     axon=axons[i], init_state=init_states[i], step_size=step_size,
+                                                     axon=axons[i],
+                                                     init_state=init_states[i],
+                                                     step_size=step_size,
                                                      synaptic_kernel_length=synaptic_kernel_length,
+                                                     resting_potential=population_resting_potentials[i],
+                                                     tau_leak=population_leak_taus[i],
+                                                     membrane_capacitance=population_capacitance[i],
                                                      axon_params=axon_params[i],
                                                      synapse_params=synapse_params_tmp))
 
@@ -211,19 +231,20 @@ class NeuralMassModel:
 
             raise ValueError('Wrong input type for velocities')
 
-    def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, cutoff_time=0., store_step=1, verbose=False):
+    def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, cutoff_time=0., store_step=1,
+            verbose=False):
         """
         Simulates neural mass network.
 
         :param synaptic_inputs: n_timesteps x N x n_synapses array including the extrinsic synaptic input to each neural
-               mass over the time course of the simulation [unit = firing rate].
+               mass over the time course of the simulation [unit = 1/s].
         :param simulation_time: scalar, indicating the total time the network behavior is to be simulated [unit = s].
         :param extrinsic_current: n_timesteps x N array including all extrinsic currents applied to each neural
-               mass over the time course of the simulation [unit = mA] (default = None).
+               mass over the time course of the simulation [unit = A] (default = None).
         :param cutoff_time: scalar, indicating the initial time period of the simulation that will not be stored
                [unit = s] (default = 0).
         :param store_step: integer, indicating which simulated time steps will be stored. If store_step = n, every n'th
-               step will be stored [unit = time-step] (default = 1).
+               step will be stored [unit = 1] (default = 1).
         :param verbose: if true, relative progress of simulation will be displayed (default = False).
 
         """
@@ -278,14 +299,16 @@ class NeuralMassModel:
             # update state of each neural mass according to input and store relevant state variables
             for i in range(self.N):
 
+                # calculate synaptic input
+                synaptic_input = synaptic_inputs[n, i, self.active_synapses[i, :]] + \
+                                 network_input[i, self.active_synapses[i, :]]
+
                 # update all state variables
                 if extrinsic_current:
-                    self.neural_masses[i].state_update(synaptic_inputs[n, i, self.active_synapses[i, :]] +
-                                                       network_input[i, self.active_synapses[i, :]],
-                                                       extrinsic_current[n, i])
+                    self.neural_masses[i].state_update(synaptic_input=synaptic_input,
+                                                       extrinsic_current=extrinsic_current[n, i])
                 else:
-                    self.neural_masses[i].state_update(synaptic_inputs[n, i, self.active_synapses[i, :]] +
-                                                       network_input[i, self.active_synapses[i, :]])
+                    self.neural_masses[i].state_update(synaptic_input=synaptic_input)
 
                 # update firing-rate look-up
                 firing_rates_lookup[i, firing_rates_lookup_idx] = self.neural_masses[i].output_firing_rate[-1]
@@ -307,10 +330,10 @@ class NeuralMassModel:
         :param D: N x N x n_velocities delay matrix, where n_velocities is the number of possible
                velocities for each connection pair [unit = s].
         :param firing_rate_lookup: N x buffer_size matrix with collected firing rates from previous time-steps
-               [unit = firing rate].
+               [unit = 1/s].
 
         :return: network input: N x n_synapses matrix. Delayed, weighted network input to each synapse of each neural
-                 mass [unit: firing rate].
+                 mass [unit: 1/s].
 
         """
 
@@ -327,7 +350,7 @@ class NeuralMassModel:
         for i in range(self.N):
 
             # get delayed firing rates from all populations at each possible velocity
-            firing_rate_delayed = np.array([firing_rate_lookup[i, D[i, j]] for j in range(self.N)])
+            firing_rate_delayed = np.array([firing_rate_lookup[j, D[i, j]] for j in range(self.N)])
 
             if hasattr(self, 'velocity_distributions'):
 

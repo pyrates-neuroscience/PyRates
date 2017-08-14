@@ -25,10 +25,10 @@ class Axon:
         Initializes basic axon that transforms average membrane potential into average firing rate
         via a sigmoidal transfer function.
 
-        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = firing rate]
+        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = 1/s]
         :param membrane_potential_threshold: scalar, determines value for which sigmoidal transfer function value is 0.5
-               [unit = mV].
-        :param sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function [unit = 1/mV]
+               [unit = V].
+        :param sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function [unit = 1/V]
         :param axon_type: if not None, will be treated as type of axon (should be character string)
 
         """
@@ -38,6 +38,7 @@ class Axon:
         ##########################
 
         assert max_firing_rate >= 0
+        assert type(membrane_potential_threshold) is float
         assert sigmoid_steepness > 0
 
         ##############################
@@ -54,9 +55,9 @@ class Axon:
         Method that computes average firing rate based on sigmoidal transfer function with previously set parameters
 
         :param membrane_potential: scalar, resembles current average membrane potential that is to be transferred into
-               an average firing rate
+               an average firing rate [unit = V].
 
-        :return: scalar, average firing rate at axon
+        :return: scalar, average firing rate at axon [unit = 1/s]
 
         """
 
@@ -72,7 +73,7 @@ class KnoescheAxon(Axon):
         """
         Initializes basic axon with Thomas Knoesche's sigmoid parameters.
 
-        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = firing rate] (default = 5).
+        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = 1/s] (default = 5).
         :param membrane_potential_threshold: scalar, determines value for which sigmoidal transfer function value is 0.5
                [unit = V] (default = -0.069).
         :param sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function [unit = 1/V]
@@ -80,7 +81,9 @@ class KnoescheAxon(Axon):
 
         """
 
-        super(KnoescheAxon, self).__init__(max_firing_rate, membrane_potential_threshold, sigmoid_steepness,
+        super(KnoescheAxon, self).__init__(max_firing_rate=max_firing_rate,
+                                           membrane_potential_threshold=membrane_potential_threshold,
+                                           sigmoid_steepness=sigmoid_steepness,
                                            axon_type='Knoesche')
 
 
@@ -93,7 +96,7 @@ class JansenRitAxon(Axon):
         """
         Initializes basic axon with Jansen & Rit's sigmoid parameters.
 
-        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = firing rate] (default = 5).
+        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = 1/s] (default = 5).
         :param membrane_potential_threshold: scalar, determines value for which sigmoidal transfer function value is 0.5
                [unit = V] (default = 0.06).
         :param sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function [unit = 1/V]
@@ -101,5 +104,7 @@ class JansenRitAxon(Axon):
 
         """
 
-        super(JansenRitAxon, self).__init__(max_firing_rate, membrane_potential_threshold, sigmoid_steepness,
+        super(JansenRitAxon, self).__init__(max_firing_rate=max_firing_rate,
+                                            membrane_potential_threshold=membrane_potential_threshold,
+                                            sigmoid_steepness=sigmoid_steepness,
                                             axon_type='JansenRit')

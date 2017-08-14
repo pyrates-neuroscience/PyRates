@@ -20,36 +20,37 @@ class Population:
 
     :var synapses: list of synapse names.
     :var state_variables: list of state variable vectors collected over updates with the following entries:
-            [0] - membrane potential
-    :var input_firing_rate: list of input firing rates collected over updates
-    :var output_firing_rate: list of output firing rates collected over updates
+            [0] - membrane potential [unit = V]
+    :var input_firing_rate: list of input firing rates collected over updates [unit = 1/s]
+    :var output_firing_rate: list of output firing rates collected over updates [unit = 1/s]
     :var store_state_variables: indicates whether all or only most recent state variables are stored
     :var store_input_firing_rate: indicates whether all or only last few inputs are stored
     :var store_output_firing_rate: indicates whether all or only most recent output firing rate is stored
     :var axon_plasticity: indicates whether axon plasticity mechanism is enabled or not
     :var tau_leak: time delay with which the population goes back to resting state potential [unit = s]
-    :var resting_potential: resting-state membrane potential of the population [unit = mV]
+    :var resting_potential: resting-state membrane potential of the population [unit = V]
 
     """
 
     def __init__(self, synapses, axon='JansenRit', init_state=(0., 0), step_size=0.0001, synaptic_kernel_length=100,
-                 tau_leak=0.016, resting_potential=-0.070, synapse_params=None, axon_params=None,
-                 store_state_variables=False, store_input_firing_rate=False, store_output_firing_rate=False):
+                 tau_leak=0.016, resting_potential=-0.075, membrane_capacitance=1e-12, synapse_params=None,
+                 axon_params=None, store_state_variables=False, store_input_firing_rate=False,
+                 store_output_firing_rate=False):
         """
         Initializes a single neural mass.
 
         :param synapses: list of character strings that indicate synapse type (see pre-implemented synapse sub-classes)
         :param axon: character string that indicates axon type (see pre-implemented axon sub-classes)
         :param init_state: vector of length 2, containing initial state of neural mass, i.e. membrane potential
-               [unit = mV] & firing rate [unit = firing rate] (default = (0,0)).
+               [unit = V] & firing rate [unit = 1/s] (default = (0,0)).
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s] (default = 0.1).
         :param synaptic_kernel_length: scalar that indicates number of bins the kernel should be evaluated for
-               [unit = time-steps] (default = 100).
+               [unit = 1] (default = 100).
         :param tau_leak: scalar, time-scale with which the membrane potential of the population goes back to resting
                potential [unit = s] (default = 0.001).
         :param resting_potential: scalar, membrane potential at which no synaptic currents flow if no input arrives at
-               population [unit = mV] (default = -70.0).
+               population [unit = V] (default = -0.07).
         :param synapse_params: list of dictionaries containing parameters for custom synapse type. For parameter
                explanation see synapse class (default = None).
         :param axon_params: dictionary containing parameters for custom axon type. For parameter explanation see
@@ -67,9 +68,17 @@ class Population:
         # check input parameters #
         ##########################
 
-        assert len(init_state) == 2
-        assert init_state[1] >= 0
         assert type(synapses) is list
+        assert type(axon) is str
+        assert len(init_state) == 2
+        assert init_state[1] >= 0 and type(init_state[0]) is float
+        assert step_size > 0
+        assert synaptic_kernel_length > 0
+        assert tau_leak > 0
+        assert type(resting_potential) is float
+        assert membrane_capacitance > 0
+        assert synapse_params is None or type(synapse_params) is list
+        assert axon_params is None or type(axon_params) is dict
 
         #############################
         # set population parameters #
@@ -85,10 +94,10 @@ class Population:
         self.tau_leak = tau_leak
         self.resting_potential = resting_potential
         self.step_size = step_size
+        self.membrane_capacitance = membrane_capacitance
 
         # set initial state and firing rate values
         self.state_variables.append(init_state[0])
-        self.input_firing_rate.append(np.zeros(len(synapses)))
         self.output_firing_rate.append(init_state[1])
 
         ####################################
@@ -105,7 +114,7 @@ class Population:
                 if 'firing_rate_target' in axon_params:
                     self.firing_rate_target = axon_params['firing_rate_target']
                 else:
-                    self.firing_rate_target = 0.5
+                    self.firing_rate_target = 2.5
 
             else:
 
@@ -145,8 +154,8 @@ class Population:
         """
         Updates state according to current synapse and axon parametrization.
 
-        :param synaptic_input: vector, average firing rate arriving at each synapse [unit = firing rate].
-        :param extrinsic_current: extrinsic current added to membrane potential change [unit = mA] (default = 0).
+        :param synaptic_input: vector, average firing rate arriving at each synapse [unit = 1/s].
+        :param extrinsic_current: extrinsic current added to membrane potential change [unit = A] (default = 0).
 
         """
 
@@ -156,7 +165,7 @@ class Population:
 
         assert all(synaptic_input) >= 0
         assert len(synaptic_input) == len(self.synapses)
-        assert type(extrinsic_current)
+        assert type(extrinsic_current) is float or np.float64
 
         #############################################
         # get input firing rate and state variables #
@@ -164,41 +173,50 @@ class Population:
 
         self.input_firing_rate.append(synaptic_input)
         inputs = np.asarray(self.input_firing_rate)
-        states = self.state_variables[-1]
+        membrane_potential = self.state_variables[-1]
 
-        #####################################
-        # update average membrane potential #
-        #####################################
+        ######################################
+        # compute average membrane potential #
+        ######################################
 
         # calculate synaptic currents for each synapse
         synaptic_currents = np.zeros(len(self.synapses))
         for i in range(len(self.synapses)):
 
             if self.synapses[i].conductivity_based:
-                synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i], states)
+                synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i], membrane_potential)
             else:
                 synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i])
 
+        # sum over all synapses
         synaptic_current = np.sum(synaptic_currents)
 
         # calculate leak current
-        leak_current = (self.resting_potential - states) / self.tau_leak
+        leak_current = (self.resting_potential - membrane_potential) * self.membrane_capacitance / self.tau_leak
 
         # update membrane potential
-        membrane_potential = states + self.step_size * (synaptic_current + leak_current + extrinsic_current)
+        delta_membrane_potential = (synaptic_current + leak_current + extrinsic_current) / self.membrane_capacitance
+        membrane_potential = membrane_potential + self.step_size * delta_membrane_potential
 
-        ##############################
-        # update average firing rate #
-        ##############################
+        ###############################
+        # compute average firing rate #
+        ###############################
 
-        firing_rate = self.axon.compute_firing_rate(states)
+        firing_rate = self.axon.compute_firing_rate(membrane_potential)
 
-        #################################################
-        # update state variables and output firing rate #
-        #################################################
+        ###########################################
+        # update state variables and firing rates #
+        ###########################################
 
         self.state_variables.append(membrane_potential)
         self.output_firing_rate.append(firing_rate)
+
+        if not self.store_output_firing_rate:
+            self.output_firing_rate.pop(0)
+        if not self.store_state_variables:
+            self.state_variables.pop(0)
+        if not self.store_input_firing_rate and len(self.input_firing_rate) > len(self.synapses[0].synaptic_kernel):
+            self.input_firing_rate.pop(0)
 
         ###################################
         # update axonal transfer function #
@@ -223,9 +241,9 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
 
     :param synapse: character string that indicates synapse type (see pre-implemented synapse sub-classes)
     :param step_size: scalar, size of the time step for which the population state will be updated according
-           to euler formalism [unit = ms] (default = 0.1).
+           to euler formalism [unit = s].
     :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
-           [unit = time-steps] (default = 100).
+           [unit = 1].
     :param synapse_params: dictionary containing parameters for custom synapse type. For parameter explanation see
            synapse class (default = None).
 
@@ -255,14 +273,6 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
     elif synapse == 'GABAA_current':
 
         syn_instance = syn.GABAACurrentSynapse(step_size, kernel_length)
-
-    elif synapse == 'JansenRit_excitatory':
-
-        syn_instance = syn.JansenRitExcitatorySynapse(step_size, kernel_length)
-
-    elif synapse == 'JansenRit_inhibitory':
-
-        syn_instance = syn.JansenRitInhibitorySynapse(step_size, kernel_length)
 
     elif synapse_params:
 

@@ -359,7 +359,82 @@ class TestNMMs(unittest.TestCase):
         self.assertEqual(pop_ax_response, ax_reponse)
         print('V.2 done!')
 
-    def test_5_JR_circuit(self):
+    def test_5_population_dynamics(self):
+        """
+        Tests whether population develops as expected over time given some input.
+        """
+
+        # set population parameters
+        ###########################
+
+        synapse_types = ['AMPA_current', 'GABAA_current']
+        axon = 'Knoesche'
+        step_size = 5e-4                                    # unit = s
+        synaptic_kernel_length = int(0.05 / step_size)      # unit = 1
+        tau_leak = 0.016                                    # unit = s
+        resting_potential = -0.075                          # unit = V
+        membrane_capacitance = 1e-12                        # unit = q/V
+        init_state = (resting_potential, 0)                 # unit = (V, 1/s)
+
+        # define population input
+        #########################
+
+        synaptic_inputs = np.zeros((4, 2, 5*synaptic_kernel_length))
+        synaptic_inputs[1, 0, :] = 300.0
+        synaptic_inputs[2, 1, :] = 300.0
+        synaptic_inputs[3, 0, 0:synaptic_kernel_length] = 300.0
+
+        extrinsic_inputs = np.zeros((2, 5*synaptic_kernel_length), dtype=float)
+        extrinsic_inputs[1, 0:synaptic_kernel_length] = 1e-14
+
+        # for each combination of inputs calculate state vector of population instance
+        ##############################################################################
+
+        states = np.zeros((synaptic_inputs.shape[0], extrinsic_inputs.shape[0], extrinsic_inputs.shape[1]))
+        for i in range(synaptic_inputs.shape[0]):
+            for j in range(extrinsic_inputs.shape[0]):
+                pop = populations.Population(synapses=synapse_types,
+                                             axon=axon,
+                                             init_state=init_state,
+                                             step_size=step_size,
+                                             synaptic_kernel_length=synaptic_kernel_length,
+                                             tau_leak=tau_leak,
+                                             resting_potential=resting_potential,
+                                             membrane_capacitance=membrane_capacitance)
+                for k in range(synaptic_inputs.shape[2]):
+                    pop.state_update(synaptic_input=synaptic_inputs[i, :, k],
+                                     extrinsic_current=extrinsic_inputs[j, k])
+                    states[i, j, k] = pop.state_variables[-1]
+
+        # perform unit tests
+        ####################
+
+        print('---------------------------------')
+        print('| Test VI - Population Dynamics |')
+        print('---------------------------------')
+
+        print('VI.1 test whether resulting membrane potential for zero input is equal to resting potential')
+        self.assertAlmostEqual(states[0, 0, -1], resting_potential, places=2)
+        print('VI.1 done!')
+
+        print('VI.2 test whether constant excitatory synaptic input leads to increased membrane potential')
+        self.assertGreater(states[1, 0, -1], resting_potential)
+        print('VI.2 done!')
+
+        print('VI.3 test whether constant inhibitory input leads to decreased membrane potential')
+        self.assertLess(states[2, 0, -1], resting_potential)
+        print('VI.3 done!')
+
+        print('VI.4 test whether extrinsic current leads to expected change in membrane potential')
+        self.assertAlmostEqual(states[0, 1, 0], init_state[0] + step_size * (1e-14/membrane_capacitance), places=4)
+        print('VI.4 done!')
+
+        print('VI.5 test whether membrane potential goes back to resting potential after step-function input')
+        self.assertAlmostEqual(states[3, 0, -1], resting_potential, places=4)
+        self.assertAlmostEqual(states[0, 1, -1], resting_potential, places=4)
+        print('VI.5 done!')
+
+    def test_6_JR_circuit(self):
         """
         Tests whether current implementation shows same behavior as explicit JR-implementation of Thomas Knoesche given
         the same parameters.
@@ -385,39 +460,37 @@ class TestNMMs(unittest.TestCase):
         connections = np.zeros((N, N, n_synapses))
 
         # AMPA connections (excitatory)
-        connections[:, :, 0] = [[0, 0.8 * 135, 0], [135, 0, 0], [0.25 * 135, 0, 0]]
+        connections[:, :, 0] = [[0, 0.8 * 135, 0], [1.0 * 135, 0, 0], [0.25 * 135, 0, 0]]
 
         # GABA-A connections (inhibitory)
-        synaptic_kernel_length = 100  # in time steps
-
         connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
 
-        ampa_dict = {'efficiency': 1.273 * 3e-5,     # A
+        ampa_dict = {'efficiency': 1.273 * 3e-13,     # A
                      'tau_decay': 0.006,              # s
                      'tau_rise': 0.0006,              # s
                      'conductivity_based': False}
 
-        gaba_a_dict = {'efficiency': 1.273 * -1e-4,  # A
-                       'tau_decay': 0.02,             # s
-                       'tau_rise': 0.0004,            # s
+        gaba_a_dict = {'efficiency': 1.273 * -1e-12,    # A
+                       'tau_decay': 0.02,               # s
+                       'tau_rise': 0.0004,              # s
                        'conductivity_based': False}
 
         synapse_params = [ampa_dict, gaba_a_dict]
+        synaptic_kernel_length = 100                  # in time steps
 
         # axon
-        axon_dict = {'max_firing_rate' : 5.,                     # 1
-                     'membrane_potential_threshold' : -0.069,    # V
-                     'sigmoid_steepness' : 555.56}               # 1/V
+        axon_dict = {'max_firing_rate': 5.,                     # 1/s
+                     'membrane_potential_threshold': -0.069,    # V
+                     'sigmoid_steepness': 555.56}               # 1/V
         axon_params = [axon_dict for i in range(N)]
 
         distances = np.zeros((N, N))
         velocities = float('inf')
 
         init_states = np.zeros((N, n_synapses))
-        init_states[:, 0] = -0.075
 
         # synaptic inputs
-        start_stim = 0.01        # s
+        start_stim = 0.3        # s
         len_stim = 0.05         # s
         mag_stim = 300.0        # 1/s
 
@@ -426,6 +499,7 @@ class TestNMMs(unittest.TestCase):
 
         # initialize
         ################################################################################################################
+
         nmm = nmm_network.NeuralMassModel(connections=connections,
                                           population_labels=population_labels,
                                           step_size=step_size,
@@ -438,6 +512,7 @@ class TestNMMs(unittest.TestCase):
 
         # run
         ################################################################################################################
+
         nmm.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time,
                 cutoff_time=cutoff_time,
@@ -445,8 +520,10 @@ class TestNMMs(unittest.TestCase):
 
         # plot
         ################################################################################################################
+
         figure()
         plot(nmm.neural_mass_states.T)
+        legend(('PCs', 'EINs', 'IINs'))
         show()
         print('done!')
 
