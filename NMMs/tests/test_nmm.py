@@ -6,6 +6,7 @@ import unittest
 import numpy as np
 from NMMs.base import nmm_network, populations, synapses, axons
 from matplotlib.pyplot import *
+import pickle
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"
@@ -434,71 +435,73 @@ class TestNMMs(unittest.TestCase):
         self.assertAlmostEqual(states[0, 1, -1], resting_potential, places=4)
         print('VI.5 done!')
 
-    def test_6_JR_circuit(self):
+    def test_6_JR_circuit_I(self):
         """
-        Tests whether current implementation shows same behavior as explicit JR-implementation of Thomas Knoesche given
-        the same parameters.
+        Tests whether current implementation shows expected behavior when standard Jansen-Rit circuit is fed with step-
+        function input targeted onto the excitatory interneurons.
         """
-
-        print('Running Jansen Rit NMM test ...')
 
         # set parameters
-        ################################################################################################################
+        ################
 
-        # simulations parameters
-        simulation_time = 1.0     # s
-        cutoff_time = 0.0         # s
-        step_size = 5.0e-4        # s
-        store_step = 1
+        with open('JR_parameters_I.pickle', 'rb') as f:
+            connections, population_labels, step_size, synaptic_kernel_length, distances, velocities, synapse_params, \
+            axon_params, init_states, synaptic_inputs, simulation_time, cutoff_time, store_step = pickle.load(f)
 
-        # populations
-        population_labels = ['PC', 'EIN', 'IIN']
-        N = len(population_labels)
-        n_synapses = 2
+        # # simulations parameters
+        # simulation_time = 1.0     # s
+        # cutoff_time = 0.0         # s
+        # step_size = 5.0e-4        # s
+        # store_step = 1
+        #
+        # # populations
+        # population_labels = ['PC', 'EIN', 'IIN']
+        # N = len(population_labels)
+        # n_synapses = 2
+        #
+        # # synapses
+        # connections = np.zeros((N, N, n_synapses))
+        #
+        # # AMPA connections (excitatory)
+        # connections[:, :, 0] = [[0, 0.8 * 135, 0], [1.0 * 135, 0, 0], [0.25 * 135, 0, 0]]
+        #
+        # # GABA-A connections (inhibitory)
+        # connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
+        #
+        # ampa_dict = {'efficiency': 1.273 * 3e-13,     # A
+        #              'tau_decay': 0.006,              # s
+        #              'tau_rise': 0.0006,              # s
+        #              'conductivity_based': False}
+        #
+        # gaba_a_dict = {'efficiency': 1.273 * -1e-12,    # A
+        #                'tau_decay': 0.02,               # s
+        #                'tau_rise': 0.0004,              # s
+        #                'conductivity_based': False}
+        #
+        # synapse_params = [ampa_dict, gaba_a_dict]
+        # synaptic_kernel_length = 100                  # in time steps
+        #
+        # # axon
+        # axon_dict = {'max_firing_rate': 5.,                     # 1/s
+        #              'membrane_potential_threshold': -0.069,    # V
+        #              'sigmoid_steepness': 555.56}               # 1/V
+        # axon_params = [axon_dict for i in range(N)]
+        #
+        # distances = np.zeros((N, N))
+        # velocities = float('inf')
+        #
+        # init_states = np.zeros((N, n_synapses))
+        #
+        # # synaptic inputs
+        # start_stim = 0.3        # s
+        # len_stim = 0.05         # s
+        # mag_stim = 300.0        # 1/s
+        #
+        # synaptic_inputs = np.zeros((int(simulation_time/step_size), N, n_synapses))
+        # synaptic_inputs[int(start_stim/step_size):int(start_stim/step_size+len_stim/step_size), 1, 0] = mag_stim
 
-        # synapses
-        connections = np.zeros((N, N, n_synapses))
-
-        # AMPA connections (excitatory)
-        connections[:, :, 0] = [[0, 0.8 * 135, 0], [1.0 * 135, 0, 0], [0.25 * 135, 0, 0]]
-
-        # GABA-A connections (inhibitory)
-        connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
-
-        ampa_dict = {'efficiency': 1.273 * 3e-13,     # A
-                     'tau_decay': 0.006,              # s
-                     'tau_rise': 0.0006,              # s
-                     'conductivity_based': False}
-
-        gaba_a_dict = {'efficiency': 1.273 * -1e-12,    # A
-                       'tau_decay': 0.02,               # s
-                       'tau_rise': 0.0004,              # s
-                       'conductivity_based': False}
-
-        synapse_params = [ampa_dict, gaba_a_dict]
-        synaptic_kernel_length = 100                  # in time steps
-
-        # axon
-        axon_dict = {'max_firing_rate': 5.,                     # 1/s
-                     'membrane_potential_threshold': -0.069,    # V
-                     'sigmoid_steepness': 555.56}               # 1/V
-        axon_params = [axon_dict for i in range(N)]
-
-        distances = np.zeros((N, N))
-        velocities = float('inf')
-
-        init_states = np.zeros((N, n_synapses))
-
-        # synaptic inputs
-        start_stim = 0.3        # s
-        len_stim = 0.05         # s
-        mag_stim = 300.0        # 1/s
-
-        synaptic_inputs = np.zeros((int(simulation_time/step_size), N, n_synapses))
-        synaptic_inputs[int(start_stim/step_size):int(start_stim/step_size+len_stim/step_size), 1, 0] = mag_stim
-
-        # initialize
-        ################################################################################################################
+        # initialize neural mass network
+        ################################
 
         nmm = nmm_network.NeuralMassModel(connections=connections,
                                           population_labels=population_labels,
@@ -510,27 +513,140 @@ class TestNMMs(unittest.TestCase):
                                           axon_params=axon_params,
                                           init_states=init_states)
 
-        # run
-        ################################################################################################################
+        # run network simulation
+        ########################
+
+        print('---------------------------------')
+        print('| Test VII - Jansen-Rit Circuit |')
+        print('---------------------------------')
 
         nmm.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time,
                 cutoff_time=cutoff_time,
                 store_step=store_step)
 
-        # plot
-        ################################################################################################################
+        states = tuple(map(tuple, nmm.neural_mass_states))
 
-        figure()
-        plot(nmm.neural_mass_states.T)
-        legend(('PCs', 'EINs', 'IINs'))
-        show()
-        print('done!')
+        # load target data
+        ###################
 
+        with open('JR_results_I.pickle', 'rb') as f:
+            target_states = pickle.load(f)
+        target_states = tuple(map(tuple, target_states))
 
-############################
-# functions for unit tests #
-############################
+        # perform unit test
+        ###################
+
+        print('VII.1 test response to step-function input to EINs')
+        self.assertTupleEqual(states, target_states)
+        print('VII.1 done!')
+
+    def test_7_JR_circuit_II(self):
+        """
+        Tests whether current implementation shows expected behavior when standard Jansen-Rit circuit is fed with step-
+        function input to the excitatory interneurons plus constant input to the pyramidal cells.
+        """
+
+        # set parameters
+        ################
+
+        with open('JR_parameters_II.pickle', 'rb') as f:
+            connections, population_labels, step_size, synaptic_kernel_length, distances, velocities, synapse_params, \
+            axon_params, init_states, synaptic_inputs, simulation_time, cutoff_time, store_step = pickle.load(f)
+
+        # # simulations parameters
+        # simulation_time = 1.0     # s
+        # cutoff_time = 0.0         # s
+        # step_size = 5.0e-4        # s
+        # store_step = 1
+        #
+        # # populations
+        # population_labels = ['PC', 'EIN', 'IIN']
+        # N = len(population_labels)
+        # n_synapses = 2
+        #
+        # # synapses
+        # connections = np.zeros((N, N, n_synapses))
+        #
+        # # AMPA connections (excitatory)
+        # connections[:, :, 0] = [[0, 0.8 * 135, 0], [1.0 * 135, 0, 0], [0.25 * 135, 0, 0]]
+        #
+        # # GABA-A connections (inhibitory)
+        # connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
+        #
+        # ampa_dict = {'efficiency': 1.273 * 3e-13,     # A
+        #              'tau_decay': 0.006,              # s
+        #              'tau_rise': 0.0006,              # s
+        #              'conductivity_based': False}
+        #
+        # gaba_a_dict = {'efficiency': 1.273 * -1e-12,    # A
+        #                'tau_decay': 0.02,               # s
+        #                'tau_rise': 0.0004,              # s
+        #                'conductivity_based': False}
+        #
+        # synapse_params = [ampa_dict, gaba_a_dict]
+        # synaptic_kernel_length = 100                  # in time steps
+        #
+        # # axon
+        # axon_dict = {'max_firing_rate': 5.,                     # 1/s
+        #              'membrane_potential_threshold': -0.069,    # V
+        #              'sigmoid_steepness': 555.56}               # 1/V
+        # axon_params = [axon_dict for i in range(N)]
+        #
+        # distances = np.zeros((N, N))
+        # velocities = float('inf')
+        #
+        # init_states = np.zeros((N, n_synapses))
+        #
+        # # synaptic inputs
+        # start_stim = 0.3        # s
+        # len_stim = 0.05         # s
+        # mag_stim = 300.0        # 1/s
+        #
+        # synaptic_inputs = np.zeros((int(simulation_time/step_size), N, n_synapses))
+        # synaptic_inputs[int(start_stim/step_size):int(start_stim/step_size+len_stim/step_size), 1, 0] = mag_stim
+        # synaptic_inputs[:, 0, 0] = mag_stim/3.
+
+        # initialize neural mass network
+        ################################
+
+        nmm = nmm_network.NeuralMassModel(connections=connections,
+                                          population_labels=population_labels,
+                                          step_size=step_size,
+                                          synaptic_kernel_length=synaptic_kernel_length,
+                                          distances=distances,
+                                          velocities=velocities,
+                                          synapse_params=synapse_params,
+                                          axon_params=axon_params,
+                                          init_states=init_states)
+
+        # run network simulation
+        ########################
+
+        print('---------------------------------')
+        print('| Test VII - Jansen-Rit Circuit |')
+        print('---------------------------------')
+
+        nmm.run(synaptic_inputs=synaptic_inputs,
+                simulation_time=simulation_time,
+                cutoff_time=cutoff_time,
+                store_step=store_step)
+
+        states = tuple(map(tuple, nmm.neural_mass_states))
+
+        # load target data
+        ###################
+
+        with open('JR_results_II.pickle', 'rb') as f:
+            target_states = pickle.load(f)
+        target_states = tuple(map(tuple, target_states))
+
+        # perform unit test
+        ###################
+
+        print('VII.2 test response to step-function input to EINs plus constant input to PCs')
+        self.assertTupleEqual(states, target_states)
+        print('VII.2 done!')
 
 
 ##################

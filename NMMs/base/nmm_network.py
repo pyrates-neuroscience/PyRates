@@ -93,7 +93,7 @@ class NeuralMassModel:
         ##########################
         # check input parameters #
         ##########################
-        # TODO: exceptions
+
         assert type(connections) is np.ndarray
         assert connections.shape[0] == connections.shape[1]
         assert len(connections.shape) == 3

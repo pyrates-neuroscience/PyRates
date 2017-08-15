@@ -69,9 +69,9 @@ class Population:
         ##########################
 
         assert type(synapses) is list
-        assert type(axon) is str
+        assert type(axon) is str or axon is None
         assert len(init_state) == 2
-        assert init_state[1] >= 0 and type(init_state[0]) is float
+        assert init_state[1] >= 0 and (type(init_state[0]) is float or np.float64)
         assert step_size > 0
         assert synaptic_kernel_length > 0
         assert tau_leak > 0
