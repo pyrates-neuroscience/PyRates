@@ -4,6 +4,7 @@ Includes basic synapse class, pre-parametrized sub-classes and an exponential ke
 
 import numpy as np
 from scipy.integrate import trapz
+from matplotlib.pyplot import *
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -166,6 +167,35 @@ class Synapse:
 
         return synaptic_current
 
+    def plot_synaptic_kernel(self, create_plot=True, fig=None):
+        """
+        Creates plot of synaptic kernel over time.
+
+        :param create_plot: If false, no plot will be shown (default = True).
+        :param fig: figure handle, can be passed optionally (default = None).
+
+        :return: figure handle
+
+        """
+
+        ##################################
+        # plot synaptic kernel over time #
+        ##################################
+
+        if fig is None:
+            fig = figure('Synaptic Kernel')
+
+        hold('on')
+        plot(self.synaptic_kernel[-1:0:-1])
+        hold('off')
+        xlabel('time-steps')
+        ylabel('synaptic conductivity [S]') if self.conductivity_based else ylabel('synaptic current [A]')
+        title('Impulse Response Function')
+
+        if create_plot:
+            fig.show()
+
+        return fig
 
 class AMPACurrentSynapse(Synapse):
     """

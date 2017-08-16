@@ -3,6 +3,7 @@ Includes basic axon class and pre-parametrized axon subclasses
 """
 
 import numpy as np
+from matplotlib.pyplot import *
 
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
@@ -62,6 +63,91 @@ class Axon:
         """
 
         return self.max_firing_rate / (1 + np.exp(self.sigmoid_steepness * (self.membrane_potential_threshold - membrane_potential)))
+
+    def plot_transfer_function(self, membrane_potentials=None, epsilon=1e-4, bin_size=0.001, create_plot=True,
+                               fig=None):
+        """
+        Creates figure of the sigmoidal function transforming membrane potentials into output firing rates.
+
+        :param membrane_potentials: Can be vector of membrane potentials for which to plot the function value
+               [unit = V] (default = None).
+        :param epsilon: scalar, determines min/max function value to plot, if membrane_potentials were not passed.
+               Min = 0 + epsilon, max = max_firing_rate - epsilon [unit = 1/s] (default = 1e-4).
+        :param bin_size: scalar, determines the size of the steps between the membrane potentials at which the firing
+               rate is evaluated. Only necessary if no membrane potentials are passed [unit = V] (default = 0.001).
+        :param create_plot: If false, plot will not be shown (default = True).
+        :param fig: figure handle that can be passed optionally (default = None).
+
+        :return: figure handle
+
+        """
+
+        ##########################
+        # check input parameters #
+        ##########################
+
+        assert membrane_potentials is None or type(membrane_potentials) is np.ndarray
+        assert epsilon >= 0
+        assert bin_size >= 0
+
+        ##########################
+        # calculate firing rates #
+        ##########################
+
+        if membrane_potentials is None:
+
+            # start at membrane potential threshold and successively calculate the firing rate & reduce the membrane
+            # potential until the firing rate is smaller or equal to epsilon
+            membrane_potential = list()
+            membrane_potential.append(self.membrane_potential_threshold)
+            firing_rates = list()
+            firing_rates.append(self.compute_firing_rate(membrane_potential[-1]))
+            while firing_rates[-1] >= epsilon:
+                membrane_potential.append(membrane_potential[-1] - bin_size)
+                firing_rates.append(self.compute_firing_rate(membrane_potential[-1]))
+            firing_rates_1 = np.array(firing_rates)
+            firing_rates_1 = np.flipud(firing_rates_1)
+            membrane_potential_1 = np.array(membrane_potential)
+            membrane_potential_1 = np.flipud(membrane_potential_1)
+
+            # start at membrane potential threshold and successively calculate the firing rate & increase the membrane
+            # potential until the firing rate is greater or equal to max_firing_rate - epsilon
+            membrane_potential = list()
+            membrane_potential.append(self.membrane_potential_threshold + bin_size)
+            firing_rates = list()
+            firing_rates.append(self.compute_firing_rate(membrane_potential[-1]))
+            while firing_rates[-1] <= self.max_firing_rate - epsilon:
+                membrane_potential.append(membrane_potential[-1] + bin_size)
+                firing_rates.append(self.compute_firing_rate(membrane_potential[-1]))
+            firing_rates_2 = np.array(firing_rates)
+            membrane_potential_2 = np.array(membrane_potential)
+
+            # concatenate the resulting membrane potentials and firing rates
+            firing_rates = np.concatenate((firing_rates_1, firing_rates_2))
+            membrane_potentials = np.concatenate((membrane_potential_1, membrane_potential_2))
+
+        else:
+
+            firing_rates = self.compute_firing_rate(membrane_potentials)
+
+        ##############################################
+        # plot firing rates over membrane potentials #
+        ##############################################
+
+        if fig is None:
+            fig = figure('Axonal Transfer Function')
+
+        hold('on')
+        plot(membrane_potentials, firing_rates)
+        hold('off')
+        xlabel('membrane potential [V]')
+        ylabel('firing rate [Hz]')
+        title('Wave-To-Pulse Function')
+
+        if create_plot:
+            fig.show()
+
+        return fig
 
 
 class KnoescheAxon(Axon):

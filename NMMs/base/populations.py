@@ -6,6 +6,7 @@ parameters of an object instance.
 import NMMs.base.synapses as syn
 import NMMs.base.axons as ax
 import numpy as np
+from matplotlib.pyplot import *
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -232,6 +233,52 @@ class Population:
         ###########################
 
         # TODO: implement differential equation that adapts synaptic efficiencies
+
+
+    def plot_synaptic_kernels(self, synapse_idx=None, create_plot=True, fig=None):
+        """
+        Creates plot of all specified synapses over time.
+
+        :param synapse_idx: Can be list of synapse indices, specifying for which synapses to plot the kernels
+               (default = None).
+        :param create_plot: If false, no plot will be shown (default = True).
+        :param fig: figure handle, can be passed optionally (default = None).
+
+        :return: figure handle
+
+        """
+
+        ####################
+        # check parameters #
+        ####################
+
+        assert synapse_idx is None or type(synapse_idx) is list
+
+        #############################
+        # check positional argument #
+        #############################
+
+        if synapse_idx is None:
+            synapse_idx = range(len(self.synapses))
+
+        #########################
+        # plot synaptic kernels #
+        #########################
+
+        if fig is None:
+            fig = figure('Synaptic Kernel Functions')
+
+        synapse_types = list()
+        for i in synapse_idx:
+            fig = self.synapses[i].plot_synaptic_kernel(create_plot=False, fig=fig)
+            synapse_types.append(self.synapses[i].synapse_type)
+
+        legend(synapse_types)
+
+        if create_plot:
+            fig.show()
+
+        return fig
 
 
 def set_synapse(synapse, step_size, kernel_length, synapse_params=None):

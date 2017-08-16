@@ -4,6 +4,7 @@ Includes a basic neural mass model class.
 
 import numpy as np
 import NMMs.base.populations as pop
+from matplotlib.pyplot import *
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -364,6 +365,59 @@ class NeuralMassModel:
             network_input[i, :] = np.dot(self.C[i, :].T, firing_rate_delayed)
 
         return network_input
+
+    def plot_neural_mass_states(self, neural_mass_idx=None, time_window=None, create_plot=True):
+        """
+        Creates figure with neural mass states over time.
+
+        :param neural_mass_idx: Can be list of neural mass indices, indicating for which populations to plot the states.
+               (default = None).
+        :param time_window: Can be array with start and end time of plotting window [unit = s] (default = None).
+        :param create_plot: If false, plot will not be shown
+
+        :return: figure handle
+
+        """
+
+        ##########################
+        # check input parameters #
+        ##########################
+
+        assert neural_mass_idx is None or type(neural_mass_idx) is list
+        assert time_window is None or type(time_window) is np.ndarray
+
+        ##############################
+        # check positional arguments #
+        ##############################
+
+        if neural_mass_idx is None:
+            neural_mass_idx = range(self.N)
+
+        if time_window is None:
+            time_window = np.array([0, self.neural_mass_states.shape[1]])
+        time_window = np.array(time_window / self.step_size, dtype=int)
+
+        #####################################
+        # plot neural mass states over time #
+        #####################################
+
+        fig = figure('Neural Mass States')
+        hold('on')
+
+        legend_labels = []
+        for i in neural_mass_idx:
+            plot(self.neural_mass_states[i, time_window[0]:time_window[1]])
+            legend_labels.append(self.neural_mass_labels[i])
+
+        hold('off')
+        legend(legend_labels)
+        ylabel('membrane potential [V]')
+        xlabel('timesteps')
+
+        if create_plot:
+            fig.show()
+
+        return fig
 
 
 def check_nones(param, n):

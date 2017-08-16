@@ -5,15 +5,11 @@ Includes unit tests for all classes included in NMMs/base.
 import unittest
 import numpy as np
 from NMMs.base import nmm_network, populations, synapses, axons
-from matplotlib.pyplot import *
 import pickle
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"
 
-# TODO: move axon tests to this file
-# TODO: generate text file with results of Thomas' implementation and load it for assertion in test_0_input
-# TODO: build synapse and population tests
 
 ##############
 # unit tests #
@@ -356,7 +352,7 @@ class TestNMMs(unittest.TestCase):
         self.assertEqual(pop_syn2_response, syn2_response)
         print('V.1 done!')
 
-        print('V.2 test whether population axon shows expected reponse to membrane potential input')
+        print('V.2 test whether population axon shows expected response to membrane potential input')
         self.assertEqual(pop_ax_response, ax_reponse)
         print('V.2 done!')
 
