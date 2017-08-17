@@ -31,7 +31,7 @@ class NeuralMassModel:
 
     """
 
-    def __init__(self, connections, population_labels=None, synapses=None, axons=None,
+    def __init__(self, connections, population_labels=None, population_types=None, synapses=None, axons=None,
                  population_resting_potentials=-0.075, population_leak_taus=0.016, population_capacitance=1e-12,
                  step_size=0.001, synaptic_kernel_length=100, distances=None, positions=None, velocities=None,
                  synapse_params=None, axon_params=None, init_states=None):
@@ -44,8 +44,10 @@ class NeuralMassModel:
                [ 1<-1, 1<-2, 1<-3 ]             [ 1<-1, 1<-2, 1<-3 ]
                [ 2<-1, 2<-2, 2<-3 ] [ 0 ]       [ 2<-1, 2<-2, 2<-3 ] [ 1 ]
                [ 3<-1, 3<-2, 3<-3 ]             [ 3<-1, 3<-2, 3<-3 ]
-        :param population_labels: Can be list of character strings indicating the type of each neural mass in network
+        :param population_labels: Can be list of character strings indicating the name of each neural mass in network
                (default = None).
+        :param population_types: Can be list of character strings indicating the type of each neural mass in network.
+               Has to be one of the pre-implemented population types (default = None).
         :param synapses: Can be list of n_synapses strings, indicating which pre-defined synapse types the third axis of
                the connections matrix represents. If None, connections.shape[2] has to be 2, where the first entry is
                the default excitatory synapse as defined in Jansen & Rit (1995) and the second is the default inhibitory
@@ -99,6 +101,7 @@ class NeuralMassModel:
         assert connections.shape[0] == connections.shape[1]
         assert len(connections.shape) == 3
         assert type(population_labels) is list or population_labels is None
+        assert type(population_types) is list or population_types is None
         assert type(population_resting_potentials) is float or np.ndarray
         assert type(population_leak_taus) is float or np.ndarray
         assert type(population_capacitance) is float or np.ndarray
@@ -143,6 +146,7 @@ class NeuralMassModel:
         # make population specific parameters iterable #
         ################################################
 
+        population_types = check_nones(population_types, self.N)
         axons = check_nones(axons, self.N)
         synapse_params = check_nones(synapse_params, self.n_synapses)
         axon_params = check_nones(axon_params, self.N)
@@ -171,8 +175,9 @@ class NeuralMassModel:
             synapses_tmp = [self.synapse_types[j] for j in idx]
             synapse_params_tmp = [synapse_params[j] for j in idx]
 
-            # pass only those synapses next to other parameters to population class
-            self.neural_masses.append(pop.Population(synapses=synapses_tmp,
+            # pass parameters to function that initializes the population
+            self.neural_masses.append(set_population(population_type=population_types[i],
+                                                     synapses=synapses_tmp,
                                                      axon=axons[i],
                                                      init_state=init_states[i],
                                                      step_size=step_size,
@@ -435,6 +440,71 @@ def check_nones(param, n):
     assert n > 0
 
     return [None for i in range(n)] if param is None else param
+
+
+def set_population(population_type, synapses, axon, init_state, step_size, synaptic_kernel_length, resting_potential,
+                   tau_leak, membrane_capacitance, axon_params, synapse_params):
+    """
+    Instantiates a population. For detailed parameter description, see population class.
+
+    :param population_type: Can be character string, indicating which pre-implemented population sub-class to use or None,
+           if custom population is to be initialized.
+
+    :return population instance
+
+    """
+
+    if population_type == 'JansenRitPyramidalCells':
+
+        pop_instance = pop.JansenRitPyramidalCells(init_state=init_state,
+                                                   step_size=step_size,
+                                                   synaptic_kernel_length=synaptic_kernel_length,
+                                                   resting_potential=resting_potential,
+                                                   tau_leak=tau_leak,
+                                                   membrane_capacitance=membrane_capacitance,
+                                                   axon_params=axon_params,
+                                                   synapse_params=synapse_params)
+
+    elif population_type == 'JansenRitExcitatoryInterneurons':
+
+        pop_instance = pop.JansenRitExcitatoryInterneurons(init_state=init_state,
+                                                           step_size=step_size,
+                                                           synaptic_kernel_length=synaptic_kernel_length,
+                                                           resting_potential=resting_potential,
+                                                           tau_leak=tau_leak,
+                                                           membrane_capacitance=membrane_capacitance,
+                                                           axon_params=axon_params,
+                                                           synapse_params=synapse_params)
+
+    elif population_type == 'JansenRitInhibitoryInterneurons':
+
+        pop_instance = pop.JansenRitInhibitoryInterneurons(init_state=init_state,
+                                                           step_size=step_size,
+                                                           synaptic_kernel_length=synaptic_kernel_length,
+                                                           resting_potential=resting_potential,
+                                                           tau_leak=tau_leak,
+                                                           membrane_capacitance=membrane_capacitance,
+                                                           axon_params=axon_params,
+                                                           synapse_params=synapse_params)
+
+    elif population_type is None:
+
+        pop_instance = pop.Population(synapses=synapses,
+                                      axon=axon,
+                                      init_state=init_state,
+                                      step_size=step_size,
+                                      synaptic_kernel_length=synaptic_kernel_length,
+                                      resting_potential=resting_potential,
+                                      tau_leak=tau_leak,
+                                      membrane_capacitance=membrane_capacitance,
+                                      axon_params=axon_params,
+                                      synapse_params=synapse_params)
+
+    else:
+
+        raise ValueError('Invalid population type!')
+
+    return pop_instance
 
 
 def get_euclidean_distances(positions):
