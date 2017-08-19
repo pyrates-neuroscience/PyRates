@@ -521,14 +521,15 @@ class TestNMMs(unittest.TestCase):
                 cutoff_time=cutoff_time,
                 store_step=store_step)
 
-        states = tuple(map(tuple, nmm.neural_mass_states))
+        time_steps = len(nmm.neural_mass_states)
+        states = tuple(map(tuple, np.array(nmm.neural_mass_states).T))
 
         # load target data
         ###################
 
         with open('JR_results_I.pickle', 'rb') as f:
             target_states = pickle.load(f)
-        target_states = tuple(map(tuple, target_states))
+        target_states = tuple(map(tuple, target_states[:, 0:time_steps]))
 
         # perform unit test
         ###################
@@ -628,14 +629,15 @@ class TestNMMs(unittest.TestCase):
                 cutoff_time=cutoff_time,
                 store_step=store_step)
 
-        states = tuple(map(tuple, nmm.neural_mass_states))
+        time_steps = len(nmm.neural_mass_states)
+        states = tuple(map(tuple, np.array(nmm.neural_mass_states).T))
 
         # load target data
         ###################
 
         with open('JR_results_II.pickle', 'rb') as f:
             target_states = pickle.load(f)
-        target_states = tuple(map(tuple, target_states))
+        target_states = tuple(map(tuple, target_states[:, 0:time_steps]))
 
         # perform unit test
         ###################

@@ -119,10 +119,12 @@ class NeuralMassModel:
         self.N = int(connections.shape[0])
         self.neural_mass_labels = population_labels if population_labels else [str(i) for i in range(self.N)]
         self.neural_masses = list()
+        self.neural_mass_states = list()
         self.C = connections
         self.n_synapses = int(connections.shape[2])
         self.step_size = step_size
         self.active_synapses = np.zeros((self.N, self.n_synapses), dtype=bool)
+        self.time_steps_old = 0
 
         # set up synapse labels
         if synapses:
@@ -237,8 +239,18 @@ class NeuralMassModel:
 
             raise ValueError('Wrong input type for velocities')
 
+        # transform propagation delays from seconds into time-steps
+        self.D = np.array(self.D / self.step_size, dtype=int)
+
+        ###########################
+        # initialize delay buffer #
+        ###########################
+
+        self.firing_rates_lookup = np.zeros((self.N, np.max(self.D) + 1))
+        self.firing_rates_lookup[:, 0] = np.array([self.neural_masses[i].output_firing_rate[-1] for i in range(self.N)])
+
     def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, cutoff_time=0., store_step=1,
-            verbose=False):
+            verbose=False, continue_run=False):
         """
         Simulates neural mass network.
 
@@ -252,6 +264,8 @@ class NeuralMassModel:
         :param store_step: integer, indicating which simulated time steps will be stored. If store_step = n, every n'th
                step will be stored [unit = 1] (default = 1).
         :param verbose: if true, relative progress of simulation will be displayed (default = False).
+        :param continue_run: if true, old run will be continued, if false, new simulation will be started
+               (default = False).
 
         """
 
@@ -261,7 +275,6 @@ class NeuralMassModel:
 
         time_steps = np.int(simulation_time / self.step_size)
         cutoff = np.int(cutoff_time / self.step_size)
-        D = np.array(self.D / self.step_size, dtype=int)
 
         ####################
         # check parameters #
@@ -280,27 +293,28 @@ class NeuralMassModel:
         assert store_step >= 1
         assert type(store_step) is int
 
-        #####################################################################
-        # initialize previous firing rate look-up matrix for network delays #
-        #####################################################################
+        ################################################
+        # check whether to start new simulation or not #
+        ################################################
 
-        firing_rates_lookup = np.zeros((self.N, np.max(D) + 1))
-        firing_rates_lookup[:, 0] = np.array([self.neural_masses[i].output_firing_rate[-1] for i in range(self.N)])
+        if continue_run:
+            time_steps += self.time_steps_old
+        else:
+            self.firing_rates_lookup[:] = 0
 
         ####################
         # simulate network #
         ####################
 
-        self.neural_mass_states = np.zeros((self.N, (time_steps - cutoff) // store_step + 1))
-        n_store = 0
-
-        for n in range(time_steps):
+        for n in range(self.time_steps_old, time_steps):
 
             # check at which position in firing rate look-up we are
-            firing_rates_lookup_idx = np.mod(n, firing_rates_lookup.shape[1])
+            firing_rates_lookup_idx = np.mod(n, self.firing_rates_lookup.shape[1])
 
             # get delayed input arriving at each neural mass
-            network_input = self.get_delayed_input(D, firing_rates_lookup)
+            network_input = self.get_delayed_input()
+
+            neural_mass_states = np.zeros(self.N)
 
             # update state of each neural mass according to input and store relevant state variables
             for i in range(self.N):
@@ -317,35 +331,30 @@ class NeuralMassModel:
                     self.neural_masses[i].state_update(synaptic_input=synaptic_input)
 
                 # update firing-rate look-up
-                firing_rates_lookup[i, firing_rates_lookup_idx] = self.neural_masses[i].output_firing_rate[-1]
+                self.firing_rates_lookup[i, firing_rates_lookup_idx] = self.neural_masses[i].output_firing_rate[-1]
 
-                # store state-variables
-                if n > cutoff and np.mod(n, store_step) == 0:
-                    self.neural_mass_states[i, n_store] = np.asarray(self.neural_masses[i].state_variables[-1])
-                    if i == self.N-1:
-                        n_store += 1
+                # store membrane potential
+                neural_mass_states[i] = np.asarray(self.neural_masses[i].state_variables[-1])
+
+            # store state-variables
+            if n > cutoff and np.mod(n, store_step) == 0:
+                self.neural_mass_states.append(neural_mass_states)
 
             # display simulation progress
             if verbose and np.mod(n, time_steps//100) == 0:
                 print('simulation process: ', (np.float(n)/np.float(time_steps)) * 100., ' %')
 
-    def get_delayed_input(self, D, firing_rate_lookup):
+        # save simulation time
+        self.time_steps_old = time_steps
+
+    def get_delayed_input(self):
         """
         Applies network delays to receive inputs arriving at each neural mass
-
-        :param D: N x N x n_velocities delay matrix, where n_velocities is the number of possible
-               velocities for each connection pair [unit = s].
-        :param firing_rate_lookup: N x buffer_size matrix with collected firing rates from previous time-steps
-               [unit = 1/s].
 
         :return: network input: N x n_synapses matrix. Delayed, weighted network input to each synapse of each neural
                  mass [unit: 1/s].
 
         """
-
-        assert D.shape[0] == self.N
-        assert D.shape[0] == D.shape[1]
-        assert firing_rate_lookup.shape[0] == D.shape[0]
 
         #####################################
         # collect input to each neural mass #
@@ -356,7 +365,7 @@ class NeuralMassModel:
         for i in range(self.N):
 
             # get delayed firing rates from all populations at each possible velocity
-            firing_rate_delayed = np.array([firing_rate_lookup[j, D[i, j]] for j in range(self.N)])
+            firing_rate_delayed = np.array([self.firing_rates_lookup[j, self.D[i, j]] for j in range(self.N)])
 
             if hasattr(self, 'velocity_distributions'):
 
@@ -423,6 +432,313 @@ class NeuralMassModel:
             fig.show()
 
         return fig
+
+
+class JansenRitCircuit(NeuralMassModel):
+    """
+    Basic Jansen-Rit circuit as defined in Jansen & Rit (1995).
+
+    :var N: integer that indicates number of populations in network.
+    :var n_synapses: number of different synapse types expressed in the network
+    :var synapse_types: list with names of the different synapse types in the network.
+    :var C: N x N x n_synapses connectivity matrix.
+    :var D: N x N x n_velocities delay matrix, where n_velocities is the number of possible velocities for each
+         connection. If n_velocities > 1, there will be a field velocity_distributions on self including multiple
+         probability distributions over the n velocities and a field velocity_distribution_indices with an N x N
+         matrix including an index to a single distribution for each connection.
+    :var neural_mass_labels: list with the names of the different populations.
+    :var neural_masses: list with the population object instances.
+    :var neural_mass_states: N x n_time_steps matrix, including the average membrane potential of each population at
+         each time-step.
+    :var step_size: scalar, indicating the size of the time-steps made during the simulation.
+
+    """
+
+    def __init__(self, population_resting_potentials=-0.075, population_leak_taus=0.016, population_capacitance=1e-12,
+                 step_size=0.001, synaptic_kernel_length=100, distances=None, positions=None, velocities=None,
+                 synapse_params=None, axon_params=None, init_states=None):
+        """
+        Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory interneurons.
+        For detailed parameter description see super class.
+        """
+
+        ##################
+        # set parameters #
+        ##################
+
+        populations = ['JansenRitPyramidalCells',
+                       'JansenRitExcitatoryInterneurons',
+                       'JansenRitInhibitoryInterneurons']
+        population_labels = ['PCs', 'EINs', 'IINs']
+        N = 3                                               # PCs, EINs, IIns
+        n_synapses = 2                                      # AMPA and GABAA
+
+        ###################
+        # set connections #
+        ###################
+
+        connections = np.zeros((N, N, n_synapses))
+        C = 135
+
+        # AMPA connections (excitatory)
+        connections[:, :, 0] = [[0, 0.8 * C, 0], [1.0 * C, 0, 0], [0.25 * C, 0, 0]]
+
+        # GABA-A connections (inhibitory)
+        connections[:, :, 1] = [[0, 0, 0.25 * C], [0, 0, 0], [0, 0, 0]]
+
+        ###################
+        # call super init #
+        ###################
+
+        super(JansenRitCircuit, self).__init__(connections=connections,
+                                               population_types=populations,
+                                               population_labels=population_labels,
+                                               population_resting_potentials=population_resting_potentials,
+                                               population_leak_taus=population_leak_taus,
+                                               population_capacitance=population_capacitance,
+                                               step_size=step_size,
+                                               synaptic_kernel_length=synaptic_kernel_length,
+                                               distances=distances,
+                                               positions=positions,
+                                               velocities=velocities,
+                                               synapse_params=synapse_params,
+                                               axon_params=axon_params,
+                                               init_states=init_states)
+
+
+class NeuralMassNetwork(NeuralMassModel):
+    """
+    Large-scale neural mass network, consisting of multiple local neural mass circuits.
+    """
+
+    def __init__(self, connections, input_populations=None, output_populations=None, input_synapses=None,
+                 nmm_types=None, nmm_labels=None, distances=None, positions=None, velocities=None, nmm_parameters=None,
+                 step_size=5e-4):
+        """
+        Initializes a network of neural mass models.
+
+        :param connections:
+        :param input_populations:
+        :param output_populations:
+        :param input_synapses:
+        :param nmm_types:
+        :param nmm_labels:
+        :param distances:
+        :param positions:
+        :param velocities:
+        :param nmm_parameters:
+        :param step_size:
+
+        """
+
+        ####################
+        # check parameters #
+        ####################
+
+        assert connections.shape[0] == connections.shape[1]
+        assert input_populations is None or len(input_populations) == connections.shape[0]
+        assert output_populations is None or len(output_populations) == connections.shape[0]
+        assert input_synapses is None or len(input_synapses) == connections.shape[0]
+        assert nmm_types is None or len(nmm_types) == connections.shape[0]
+        assert nmm_labels is None or len(nmm_labels) == connections.shape[0]
+        assert distances is None or np.sum(distances.shape == connections.shape) == 2
+        assert positions is None or (positions.shape[0] == connections.shape[0] and positions.shape[1] == 3)
+        assert velocities is None or (type(velocities) is float or list or dict)
+        assert nmm_parameters is None or type(nmm_parameters) is list
+        assert step_size >= 0
+        if nmm_types is None and nmm_parameters is None:
+            raise ValueError('Either NMM types or custom parameters have to be passed!')
+
+        ##########################
+        # set network parameters #
+        ##########################
+
+        self.N = connections.shape[0]
+        self.neural_mass_labels = nmm_labels if nmm_labels else [str(i) for i in range(self.N)]
+        self.C = connections
+        self.neural_masses = list()
+        self.neural_mass_states = list()
+        self.step_size = step_size
+        self.input_populations = input_populations
+        self.output_populations = output_populations
+        self.input_synapses = input_synapses
+        self.time_steps_old = 0
+        self.n_synapses = 1
+
+        #########################################
+        # make nmm specific parameters iterable #
+        #########################################
+
+        nmm_types = check_nones(nmm_types, self.N)
+
+        ###################
+        # initialize NMMs #
+        ###################
+
+        if nmm_parameters is None:
+
+            for i in range(self.N):
+                self.neural_masses.append(set_nmm(nmm_type=nmm_types[i],
+                                                  step_size=step_size))
+
+        else:
+
+            for i in range(self.N):
+                self.neural_masses.append(set_nmm(nmm_type=nmm_types[i],
+                                                  nmm_parameters=nmm_parameters[i],
+                                                  step_size=step_size))
+
+        ##################################
+        # set inter-population distances #
+        ##################################
+
+        if distances is not None:
+
+            # use passed distance matrix
+            self.D = distances
+
+        elif positions is not None:
+
+            # use positions to calculate distance matrix
+            self.D = get_euclidean_distances(positions)
+
+        else:
+
+            # set distances to zero
+            self.D = np.zeros((self.N, self.N))
+
+        ###########################################################
+        # transform distances into information propagation delays #
+        ###########################################################
+
+        if type(velocities) is float or np.ndarray:
+
+            # divide distances by single or pair-wise velocity
+            self.D = self.D / velocities
+
+        elif type(velocities) is dict:
+
+            # make D 3-dimensional
+            self.D = np.tile(self.D.reshape(self.N, self.N, 1), (1, 1, len(velocities['values'])))
+
+            # divide D by each possible velocity value on third dimension
+            for i in range(self.D.shape[2]):
+                self.D[:, :, i] = self.D[:, :, i] / velocities['values'][i]
+
+            # store velocity distribution weights and indices on object instance
+            self.velocity_distributions = velocities['distributions']
+            self.velocity_distribution_indices = velocities['indices']
+
+        elif not velocities and not all(self.D) == 0:
+
+            raise ValueError('Velocities need to be determined to realize information propagation delays.')
+
+        else:
+
+            raise ValueError('Wrong input type for velocities')
+
+        # transform propagation delays from seconds into time-steps
+        self.D = np.array(self.D / self.step_size, dtype=int)
+
+        ###########################
+        # initialize delay buffer #
+        ###########################
+
+        self.firing_rates_lookup = np.zeros((self.N, np.max(self.D) + 1))
+        self.firing_rates_lookup[:, 0] = np.array([self.neural_masses[i].neural_masses[output_populations[i]].
+                                                  output_firing_rate[-1] for i in range(self.N)])
+
+    def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, cutoff_time=0, store_step=1, verbose=False,
+            continue_run=False):
+        """
+        Simulates network behavior over time.
+
+        :param synaptic_inputs:
+        :param simulation_time:
+        :param extrinsic_current:
+        :param cutoff_time:
+        :param store_step:
+        :param verbose:
+        :param continue_run:
+
+        """
+
+        ##############################################################################
+        # transform simulation times and network delays from seconds into time-steps #
+        ##############################################################################
+
+        time_steps = np.int(simulation_time / self.step_size)
+        cutoff = np.int(cutoff_time / self.step_size)
+
+        ####################
+        # check parameters #
+        ####################
+
+        assert synaptic_inputs.shape[0] >= time_steps
+        assert synaptic_inputs.shape[1] == self.N
+        assert len(synaptic_inputs.shape) == 4
+        if extrinsic_current:
+            assert extrinsic_current.shape[0] >= time_steps
+            assert extrinsic_current.shape[1] == self.N
+            assert len(extrinsic_current.shape) == 3
+        assert simulation_time >= 0
+        assert cutoff_time >= 0
+        assert store_step >= 1
+        assert type(store_step) is int
+
+        ################################################
+        # check whether to start new simulation or not #
+        ################################################
+
+        if continue_run:
+            time_steps += self.time_steps_old
+        else:
+            self.firing_rates_lookup[:] = 0
+
+        ####################
+        # simulate network #
+        ####################
+
+        for n in range(self.time_steps_old, time_steps):
+
+            # check at which position in firing rate look-up we are
+            firing_rates_lookup_idx = np.mod(n, self.firing_rates_lookup.shape[1])
+
+            # get delayed input arriving at each neural mass
+            network_input = self.get_delayed_input()
+
+            neural_mass_states = np.zeros(self.N)
+
+            # update state of each neural mass according to input and store relevant state variables
+            for i in range(self.N):
+
+                # calculate synaptic input
+                synaptic_input = synaptic_inputs[n, i, self.input_populations[i], self.input_synapses[i]] + \
+                                 network_input[i]
+
+                # get extrinsic current
+                extrinsic_current_tmp = np.reshape(extrinsic_current[n, i, :],
+                                                   (1, np.sum(extrinsic_current[n, i, :] != 0)))
+                # update nmm state
+                self.neural_masses[i].run(synaptic_input, self.step_size, extrinsic_current_tmp)
+
+                # update firing-rate look-up
+                self.firing_rates_lookup[i, firing_rates_lookup_idx] = \
+                    self.neural_masses[i].neural_masses[self.output_populations[i]].output_firing_rate[-1]
+
+                # store membrane potential
+                neural_mass_states[i] = np.asarray(self.neural_masses[i].neural_mass_states[i, -1])
+
+            # store state-variables
+            if n > cutoff and np.mod(n, store_step) == 0:
+                self.neural_mass_states.append(neural_mass_states)
+
+            # display simulation progress
+            if verbose and np.mod(n, time_steps // 100) == 0:
+                print('simulation process: ', (np.float(n) / np.float(time_steps)) * 100., ' %')
+
+            # save simulation time
+            self.time_steps_old = time_steps
 
 
 def check_nones(param, n):
@@ -505,6 +821,95 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
         raise ValueError('Invalid population type!')
 
     return pop_instance
+
+
+def set_nmm(nmm_type, nmm_parameters=None, step_size=5e-4):
+    """
+    Initializes nmm instance.
+
+    :param nmm_type: character string indicating which pre-implemented nmm to use.
+    :param nmm_parameters: dictionary, can be used to initialize custom nmms.
+    :param step_size:
+
+    :return: nmm_instance
+    """
+
+    ####################
+    # check parameters #
+    ####################
+
+    assert type(nmm_type) is str or nmm_type is None
+    assert type(nmm_parameters) is dict or nmm_parameters is None
+    assert step_size >= 0
+
+    #####################################
+    # check all possible nmm parameters #
+    #####################################
+
+    if nmm_parameters:
+
+        param_list = ['connections', 'population_labels', 'population_types', 'synapses', 'axons',
+                      'population_resting_potentials', 'population_leak_taus', 'population_capacitance',
+                      'synaptic_kernel_length', 'distances', 'positions', 'velocities', 'synapse_params',
+                      'axon_params', 'init_states']
+
+        for param in param_list:
+
+            if param not in nmm_parameters:
+                nmm_parameters[param] = None
+
+    ##################
+    # initialize nmm #
+    ##################
+
+    if nmm_parameters is None:
+
+        if nmm_type == 'JansenRitCircuit':
+
+            nmm_instance = nmm.JansenRitCircuit(step_size=step_size)
+
+        else:
+
+            raise ValueError('Wrong NMM type!')
+
+    else:
+
+        if nmm_type == 'JansenRitCircuit':
+
+            nmm_instance = nmm.JansenRitCircuit(
+                population_resting_potentials=nmm_parameters['population_resting_potentials'],
+                population_leak_taus=nmm_parameters['population_leak_taus'],
+                population_capacitance=nmm_parameters['population_capacitance'],
+                step_size=step_size,
+                synaptic_kernel_length=nmm_parameters['synaptic_kernel_length'],
+                distances=nmm_parameters['distances'],
+                positions=nmm_parameters['positions'],
+                velocities=nmm_parameters['velocities'],
+                synapse_params=nmm_parameters['synapse_params'],
+                axon_params=nmm_parameters['axon_params'],
+                init_states=nmm_parameters['init_states'])
+
+        else:
+
+            nmm_instance = nmm.NeuralMassModel(
+                connections=nmm_parameters['connections'],
+                population_labels=nmm_parameters['population_labels'],
+                population_types=nmm_parameters['population_types'],
+                synapses=nmm_parameters['synapses'],
+                axons=nmm_parameters['axons'],
+                population_resting_potentials=nmm_parameters['population_resting_potentials'],
+                population_leak_taus=nmm_parameters['population_leak_taus'],
+                population_capacitance=nmm_parameters['population_capacitance'],
+                step_size=step_size,
+                synaptic_kernel_length=nmm_parameters['synaptic_kernel_length'],
+                distances=nmm_parameters['distances'],
+                positions=nmm_parameters['positions'],
+                velocities=nmm_parameters['velocities'],
+                synapse_params=nmm_parameters['synapse_params'],
+                axon_params=nmm_parameters['axon_params'],
+                init_states=nmm_parameters['init_states'])
+
+    return nmm_instance
 
 
 def get_euclidean_distances(positions):
