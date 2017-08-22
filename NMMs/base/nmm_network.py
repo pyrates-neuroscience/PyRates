@@ -5,12 +5,15 @@ Includes a basic neural mass model class.
 import numpy as np
 import NMMs.base.populations as pop
 from matplotlib.pyplot import *
+from scipy.interpolate import interp1d
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
+# TODO: Try implementing adaptive simulation step-sizes
 
-class NeuralMassModel:
+
+class NeuralMassModel(object):
     """
     Basic neural mass model class. Initializes a number of delay-coupled neural masses that are characterized by a
     number of synapses and an axon.
@@ -239,14 +242,13 @@ class NeuralMassModel:
 
             raise ValueError('Wrong input type for velocities')
 
-        # transform propagation delays from seconds into time-steps
-        self.D = np.array(self.D / self.step_size, dtype=int)
-
         ###########################
         # initialize delay buffer #
         ###########################
 
-        self.firing_rates_lookup = np.zeros((self.N, np.max(self.D) + 1))
+        max_delay = np.max(np.array(self.D / self.step_size, dtype=int)) + 1
+
+        self.firing_rates_lookup = np.zeros((self.N, max_delay))
         self.firing_rates_lookup[:, 0] = np.array([self.neural_masses[i].output_firing_rate[-1] for i in range(self.N)])
 
     def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, cutoff_time=0., store_step=1,
@@ -308,13 +310,11 @@ class NeuralMassModel:
 
         for n in range(self.time_steps_old, time_steps):
 
-            # check at which position in firing rate look-up we are
-            firing_rates_lookup_idx = np.mod(n, self.firing_rates_lookup.shape[1])
-
             # get delayed input arriving at each neural mass
             network_input = self.get_delayed_input()
 
             neural_mass_states = np.zeros(self.N)
+            firing_rates = np.zeros((self.N, 1))
 
             # update state of each neural mass according to input and store relevant state variables
             for i in range(self.N):
@@ -331,7 +331,7 @@ class NeuralMassModel:
                     self.neural_masses[i].state_update(synaptic_input=synaptic_input)
 
                 # update firing-rate look-up
-                self.firing_rates_lookup[i, firing_rates_lookup_idx] = self.neural_masses[i].output_firing_rate[-1]
+                firing_rates[i] = self.neural_masses[i].output_firing_rate[-1]
 
                 # store membrane potential
                 neural_mass_states[i] = np.asarray(self.neural_masses[i].state_variables[-1])
@@ -339,6 +339,10 @@ class NeuralMassModel:
             # store state-variables
             if n > cutoff and np.mod(n, store_step) == 0:
                 self.neural_mass_states.append(neural_mass_states)
+
+            # update firing-rate look-up
+            self.firing_rates_lookup = np.append(firing_rates, self.firing_rates_lookup, axis=1)
+            self.firing_rates_lookup = self.firing_rates_lookup[:, 0:-1]
 
             # display simulation progress
             if verbose and np.mod(n, time_steps//100) == 0:
@@ -356,6 +360,9 @@ class NeuralMassModel:
 
         """
 
+        # transform propagation delays from seconds into time-steps
+        D = np.array(self.D / self.step_size, dtype=int)
+
         #####################################
         # collect input to each neural mass #
         #####################################
@@ -365,7 +372,7 @@ class NeuralMassModel:
         for i in range(self.N):
 
             # get delayed firing rates from all populations at each possible velocity
-            firing_rate_delayed = np.array([self.firing_rates_lookup[j, self.D[i, j]] for j in range(self.N)])
+            firing_rate_delayed = np.array([self.firing_rates_lookup[j, D[i, j]] for j in range(self.N)])
 
             if hasattr(self, 'velocity_distributions'):
 
@@ -380,6 +387,61 @@ class NeuralMassModel:
 
         return network_input
 
+    def update_step_size(self, factor, interpolation_type='cubic'):
+        """
+        Updates the time-step size with which the network is simulated.
+
+        :param factor: Scalar, indicates by which factor the current step-size is supposed to be scaled.
+        :param interpolation_type: character string, indicates the type of interpolation used for up-/down-sampling the
+               firing-rate look-up matrix (default = 'cubic').
+
+        """
+
+        assert factor >= 0
+
+        ##########################
+        # update step-size field #
+        ##########################
+
+        step_size_old = self.step_size
+        self.step_size *= factor
+
+        ###################################
+        # update populations and synapses #
+        ###################################
+
+        for i in range(self.N):
+
+            self.neural_masses[i].step_size = self.step_size
+
+            for j in range(len(self.neural_masses[i].synapses)):
+
+                self.neural_masses[i].synapses[j].step_size = self.step_size
+                self.neural_masses[i].synapses[j].evaluate_kernel(build_kernel=True)
+
+        ##############################
+        # update firing rate loop-up #
+        ##############################
+
+        # get old and new maximum delay
+        new_delay = np.max(np.array(self.D / self.step_size, dtype=int)) + 1
+        old_delay = self.firing_rates_lookup.shape[1]
+
+        # initialize new loop-up matrix
+        firing_rates_lookup_new = np.zeros((self.N, new_delay))
+
+        # get step-size values of old look-up matrix
+        x = np.arange(old_delay) * step_size_old
+
+        # for each neural mass, get firing rates in old look-up matrix, create linear interpolation function and use
+        # interpolation function to get firing rates for step-sizes of new look-up matrix
+        for i in range(self.N):
+            y = self.firing_rates_lookup[i, :]
+            f = interp1d(x, y, kind=interpolation_type)
+            firing_rates_lookup_new[i, :] = f(np.arange(new_delay) * self.step_size)
+
+        self.firing_rates_lookup = firing_rates_lookup_new
+
     def plot_neural_mass_states(self, neural_mass_idx=None, time_window=None, create_plot=True):
         """
         Creates figure with neural mass states over time.
@@ -392,6 +454,8 @@ class NeuralMassModel:
         :return: figure handle
 
         """
+
+        neural_mass_states = np.array(self.neural_mass_states)
 
         ##########################
         # check input parameters #
@@ -408,7 +472,7 @@ class NeuralMassModel:
             neural_mass_idx = range(self.N)
 
         if time_window is None:
-            time_window = np.array([0, self.neural_mass_states.shape[1]])
+            time_window = np.array([0, neural_mass_states.shape[1]])
         time_window = np.array(time_window / self.step_size, dtype=int)
 
         #####################################
@@ -420,7 +484,7 @@ class NeuralMassModel:
 
         legend_labels = []
         for i in neural_mass_idx:
-            plot(self.neural_mass_states[i, time_window[0]:time_window[1]])
+            plot(neural_mass_states[i, time_window[0]:time_window[1]])
             legend_labels.append(self.neural_mass_labels[i])
 
         hold('off')

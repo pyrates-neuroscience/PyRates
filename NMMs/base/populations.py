@@ -14,7 +14,7 @@ __status__ = "Development"
 # TODO: Implement synaptic plasticity mechanism(s)
 
 
-class Population:
+class Population(object):
     """
     Basic neural mass or population class. A population is defined via a number of synapses and an axon. Includes a
     method to update the state of the population.

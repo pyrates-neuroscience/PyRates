@@ -12,7 +12,7 @@ __status__ = "Development"
 # TODO: find out reversal potentials for conductance based synapses
 
 
-class Synapse:
+class Synapse(object):
     """
     Basic class for synapses. Includes a method to calculate synaptic current based on firing rate input.
     
@@ -197,6 +197,7 @@ class Synapse:
 
         return fig
 
+
 class AMPACurrentSynapse(Synapse):
     """
     This defines a current-based synapse with AMPA neuroreceptor.
@@ -251,7 +252,7 @@ class AMPAConductanceSynapse(Synapse):
     """
 
     def __init__(self, step_size, kernel_length, efficiency=1.273*7.2e-10, tau_decay=0.0015, tau_rise=0.000009,
-                 reversal_potential=-0.075):
+                 reversal_potential=0.0):
         """
         Initializes a current-based synapse with parameters resembling an GABA_A receptor.
 
@@ -277,7 +278,7 @@ class GABAAConductanceSynapse(Synapse):
     """
 
     def __init__(self, step_size, kernel_length, efficiency=1.358*(-4e-11), tau_decay=0.02, tau_rise=0.0004,
-                 reversal_potential=-0.075):
+                 reversal_potential=-0.060):
         """
         Initializes a current-based synapse with parameters resembling an GABA_A receptor.
 

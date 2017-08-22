@@ -9,7 +9,7 @@ __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
 
 
-class Axon:
+class Axon(object):
     """
     Basic class for axons. The key function is to transform average membrane potentials (from the soma)
     into average firing rates.
