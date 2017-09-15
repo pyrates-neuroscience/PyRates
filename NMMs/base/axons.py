@@ -5,7 +5,7 @@ Includes basic axon class and pre-parametrized axon subclasses
 import numpy as np
 from matplotlib.pyplot import *
 
-__author__ = "Daniel F. Rose, Richard Gast"
+__author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
 
 
@@ -62,7 +62,8 @@ class Axon(object):
 
         """
 
-        return self.max_firing_rate / (1 + np.exp(self.sigmoid_steepness * (self.membrane_potential_threshold - membrane_potential)))
+        return self.max_firing_rate / (1 + np.exp(self.sigmoid_steepness *
+                                                  (self.membrane_potential_threshold - membrane_potential)))
 
     def plot_transfer_function(self, membrane_potentials=None, epsilon=1e-4, bin_size=0.001, create_plot=True,
                                fig=None):
@@ -178,7 +179,7 @@ class JansenRitAxon(Axon):
     Specific parametrization of generic axon, following Jansen & Rit (1995)
     """
 
-    def __init__(self, max_firing_rate=5., membrane_potential_threshold=0.060, sigmoid_steepness=555.56):
+    def __init__(self, max_firing_rate=5., membrane_potential_threshold=-0.060, sigmoid_steepness=555.56):
         """
         Initializes basic axon with Jansen & Rit's sigmoid parameters.
 

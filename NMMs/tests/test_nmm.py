@@ -646,6 +646,79 @@ class TestNMMs(unittest.TestCase):
         self.assertTupleEqual(states, target_states)
         print('VII.2 done!')
 
+    def test_8_JR_network_I(self):
+        """
+        tests whether 2 identical connected JR circuits behave as expected.
+        """
+
+        # set parameters
+        ################
+
+        # connectivity matrices
+        C1 = np.array([[0, 1], [1, 0]]) * 200.
+        C2 = np.array([[0, 0], [1, 0]]) * 200.
+        C3 = np.zeros((2, 2))
+
+        # distance matrix
+        D = np.zeros((2, 2))
+        D[0, 1] = 0.01
+        D[1, 0] = 0.01
+
+        # velocity
+        v = 10.
+
+        # neural mass circuit types
+        nmm_types = ['JansenRitCircuit', 'JansenRitCircuit']
+
+        # simulation step-size
+        stepsize = 5e-4
+
+        # simulation time
+        #################
+        T = 1.
+        timesteps = np.int(T / stepsize)
+
+        # synaptic input
+        stim_time = 0.3
+        stim_timesteps = np.int(stim_time / stepsize)
+        synaptic_input = np.zeros((timesteps, 2, 3, 2))
+        synaptic_input[0:stim_timesteps, 0, 1, 0] = 300.
+
+        # initialize nmm network
+        ########################
+
+        nmm1 = nmm_network.NeuralMassNetwork(connections=C1,
+                                             nmm_types=nmm_types,
+                                             distances=D,
+                                             velocities=v,
+                                             step_size=stepsize)
+
+        nmm2 = nmm_network.NeuralMassNetwork(connections=C2,
+                                             nmm_types=nmm_types,
+                                             distances=D,
+                                             velocities=v,
+                                             step_size=stepsize)
+
+        nmm3 = nmm_network.NeuralMassNetwork(connections=C3,
+                                             nmm_types=nmm_types,
+                                             distances=D,
+                                             velocities=v,
+                                             step_size=stepsize)
+
+        # run network simulations
+        #########################
+
+        nmm1.run(synaptic_inputs=synaptic_input, simulation_time=T)
+        nmm2.run(synaptic_inputs=synaptic_input, simulation_time=T)
+        nmm3.run(synaptic_inputs=synaptic_input, simulation_time=T)
+
+        # perform unit tests
+        ####################
+
+        nmm1.plot_neural_mass_states()
+        nmm2.plot_neural_mass_states()
+
+        self.assertTupleEqual(nmm1.neural_mass_states, nmm2.neural_mass_states)
 
 ##################
 # run unit tests #

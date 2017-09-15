@@ -153,12 +153,16 @@ class Population(object):
 
         self.axon = set_axon(axon, axon_params)
 
-    def state_update(self, synaptic_input, extrinsic_current=0.):
+    def state_update(self, synaptic_input, extrinsic_current=0., synaptic_modulation=1.0, neuromodulatory_input=1.0):
         """
         Updates state according to current synapse and axon parametrization.
 
         :param synaptic_input: vector, average firing rate arriving at each synapse [unit = 1/s].
         :param extrinsic_current: extrinsic current added to membrane potential change [unit = A] (default = 0).
+        :param synaptic_modulation: modulatory input to each synapse. Can be scalar (applied to all synapses then) or
+               vector with len = number of synapses (default = 1.0) [unit = 1].
+        :param neuromodulatory_input: Scalar used to scale the overall change in the membrane potential (default = 1.0)
+               [unit = 1].
 
         """
 
@@ -169,6 +173,8 @@ class Population(object):
         assert all(synaptic_input) >= 0
         assert len(synaptic_input) == len(self.synapses)
         assert type(extrinsic_current) is float or np.float64
+        assert type(synaptic_modulation) is float or type(synaptic_modulation) is np.ndarray
+        assert neuromodulatory_input >= 0
 
         #############################################
         # get input firing rate and state variables #
@@ -191,15 +197,17 @@ class Population(object):
             else:
                 synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i])
 
-        # sum over all synapses
-        synaptic_current = np.sum(synaptic_currents)
+        # sum over all synapses and apply synaptic modulation
+        if type(synaptic_modulation) is float:
+            synaptic_modulation = np.array([synaptic_modulation for i in range(len(self.synapses))])
+        synaptic_current = np.dot(synaptic_currents, synaptic_modulation)
 
         # calculate leak current
         leak_current = (self.resting_potential - membrane_potential) * self.membrane_capacitance / self.tau_leak
 
         # update membrane potential
         delta_membrane_potential = (synaptic_current + leak_current + extrinsic_current) / self.membrane_capacitance
-        membrane_potential = membrane_potential + self.step_size * delta_membrane_potential
+        membrane_potential = membrane_potential + self.step_size * delta_membrane_potential * neuromodulatory_input
 
         ###############################
         # compute average firing rate #
