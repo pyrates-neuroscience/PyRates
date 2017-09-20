@@ -6,10 +6,33 @@ import unittest
 import numpy as np
 from NMMs.base import nmm_network, populations, synapses, axons
 import pickle
+from matplotlib.pyplot import *
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"
 
+#####################
+# support functions #
+#####################
+
+
+def NMRSE(x, y):
+    """
+    Calculates the normalized root mean squared error of two vectors of equal length.
+
+    :param x: vector 1
+    :param y: vector 2
+
+    :return: NMRSE
+
+    """
+
+    max_val = np.max((np.max(x, axis=0), np.max(y, axis=0)))
+    min_val = np.min((np.min(x, axis=0), np.min(y, axis=0)))
+
+    diff = x - y
+
+    return np.sqrt(np.sum(diff**2, axis=0)) / (max_val - min_val)
 
 ##############
 # unit tests #
@@ -521,21 +544,25 @@ class TestNMMs(unittest.TestCase):
                 cutoff_time=cutoff_time,
                 store_step=store_step)
 
-        time_steps = len(nmm.neural_mass_states)
-        states = tuple(map(tuple, np.array(nmm.neural_mass_states).T))
+        states = np.array(nmm.neural_mass_states)
 
         # load target data
         ###################
 
         with open('JR_results_I.pickle', 'rb') as f:
             target_states = pickle.load(f)
-        target_states = tuple(map(tuple, target_states[:, 0:time_steps]))
+
+        # calculate NMRSE between time-series
+        #####################################
+
+        error = NMRSE(states, target_states)
+        error = np.sum(error)
 
         # perform unit test
         ###################
 
         print('VII.1 test response to step-function input to EINs')
-        self.assertTupleEqual(states, target_states)
+        self.assertAlmostEqual(error, 0, places=2)
         print('VII.1 done!')
 
     def test_7_JR_circuit_II(self):
@@ -620,105 +647,222 @@ class TestNMMs(unittest.TestCase):
         # run network simulation
         ########################
 
-        print('---------------------------------')
-        print('| Test VII - Jansen-Rit Circuit |')
-        print('---------------------------------')
-
         nmm.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time,
                 cutoff_time=cutoff_time,
                 store_step=store_step)
 
-        time_steps = len(nmm.neural_mass_states)
-        states = tuple(map(tuple, np.array(nmm.neural_mass_states).T))
+        states = np.array(nmm.neural_mass_states).T
 
         # load target data
         ###################
 
         with open('JR_results_II.pickle', 'rb') as f:
             target_states = pickle.load(f)
-        target_states = tuple(map(tuple, target_states[:, 0:time_steps]))
+
+        # calculate NMRSE between time-series
+        #####################################
+
+        error = NMRSE(states, target_states)
+        error = np.sum(error)
 
         # perform unit test
         ###################
 
         print('VII.2 test response to step-function input to EINs plus constant input to PCs')
-        self.assertTupleEqual(states, target_states)
+        self.assertAlmostEqual(error, 0, places=2)
         print('VII.2 done!')
 
-    def test_8_JR_network_I(self):
+    def test_8_JR_circuit_III(self):
         """
-        tests whether 2 identical connected JR circuits behave as expected.
+        Tests whether expected bifurcation occurs when synaptic efficiency of JR circuit is altered (given constant
+        input).
         """
 
         # set parameters
         ################
 
-        # connectivity matrices
-        C1 = np.array([[0, 1], [1, 0]]) * 200.
-        C2 = np.array([[0, 0], [1, 0]]) * 200.
-        C3 = np.zeros((2, 2))
+        with open('JR_parameters_III.pickle', 'rb') as f:
+            connections, population_labels, step_size, synaptic_kernel_length, distances, velocities, gaba_a_dict, \
+            axon_params, init_states, synaptic_inputs, simulation_time, cutoff_time, store_step = pickle.load(f)
 
-        # distance matrix
-        D = np.zeros((2, 2))
-        D[0, 1] = 0.01
-        D[1, 0] = 0.01
+        # # simulations parameters
+        # simulation_time = 3.0     # s
+        # cutoff_time = 0.0         # s
+        # step_size = 5.0e-4        # s
+        # store_step = 1
+        #
+        # # populations
+        # population_labels = ['PC', 'EIN', 'IIN']
+        # N = len(population_labels)
+        # n_synapses = 2
+        #
+        # # synapses
+        # connections = np.zeros((N, N, n_synapses))
+        #
+        # # AMPA connections (excitatory)
+        # connections[:, :, 0] = [[0, 0.8 * 135, 0], [1.0 * 135, 0, 0], [0.25 * 135, 0, 0]]
+        #
+        # # GABA-A connections (inhibitory)
+        # connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
+        #
+        # gaba_a_dict = {'efficiency': 0.5 * 1.273 * -1e-12,    # A
+        #                'tau_decay': 0.02,               # s
+        #                'tau_rise': 0.0004,              # s
+        #                'conductivity_based': False}
+        #
+        # synaptic_kernel_length = 100                  # in time steps
+        #
+        # # axon
+        # axon_dict = {'max_firing_rate': 5.,                     # 1/s
+        #              'membrane_potential_threshold': -0.069,    # V
+        #              'sigmoid_steepness': 555.56}               # 1/V
+        # axon_params = [axon_dict for i in range(N)]
+        #
+        # distances = np.zeros((N, N))
+        # velocities = float('inf')
+        #
+        # init_states = np.zeros((N, n_synapses))
+        #
+        # # synaptic inputs
+        # mag_stim = 200.0        # 1/s
+        # synaptic_inputs = np.zeros((int(simulation_time/step_size), N, n_synapses))
+        # synaptic_inputs[:, 1, 0] = mag_stim
 
-        # velocity
-        v = 10.
+        # loop over different AMPA synaptic efficiencies and simulate network behavior
+        ##############################################################################
 
-        # neural mass circuit types
-        nmm_types = ['JansenRitCircuit', 'JansenRitCircuit']
+        ampa_efficiencies = np.linspace(0.1, 1.0, 20) * 1.273 * 3e-13
 
-        # simulation step-size
-        stepsize = 5e-4
+        final_state = np.zeros(len(ampa_efficiencies))
 
-        # simulation time
-        #################
-        T = 1.
-        timesteps = np.int(T / stepsize)
+        for i, efficiency in enumerate(ampa_efficiencies):
 
-        # synaptic input
-        stim_time = 0.3
-        stim_timesteps = np.int(stim_time / stepsize)
-        synaptic_input = np.zeros((timesteps, 2, 3, 2))
-        synaptic_input[0:stim_timesteps, 0, 1, 0] = 300.
+            # set ampa parameters
+            #####################
 
-        # initialize nmm network
-        ########################
+            ampa_dict = {'efficiency': float(efficiency),   # A
+                         'tau_decay': 0.006,                # s
+                         'tau_rise': 0.0006,                # s
+                         'conductivity_based': False}
 
-        nmm1 = nmm_network.NeuralMassNetwork(connections=C1,
-                                             nmm_types=nmm_types,
-                                             distances=D,
-                                             velocities=v,
-                                             step_size=stepsize)
+            synapse_params = [ampa_dict, gaba_a_dict]
 
-        nmm2 = nmm_network.NeuralMassNetwork(connections=C2,
-                                             nmm_types=nmm_types,
-                                             distances=D,
-                                             velocities=v,
-                                             step_size=stepsize)
+            # initialize neural mass network
+            ################################
 
-        nmm3 = nmm_network.NeuralMassNetwork(connections=C3,
-                                             nmm_types=nmm_types,
-                                             distances=D,
-                                             velocities=v,
-                                             step_size=stepsize)
+            nmm = nmm_network.NeuralMassModel(connections=connections,
+                                              population_labels=population_labels,
+                                              step_size=step_size,
+                                              synaptic_kernel_length=synaptic_kernel_length,
+                                              distances=distances,
+                                              velocities=velocities,
+                                              synapse_params=synapse_params,
+                                              axon_params=axon_params,
+                                              init_states=init_states)
 
-        # run network simulations
-        #########################
+            # run network simulation
+            ########################
 
-        nmm1.run(synaptic_inputs=synaptic_input, simulation_time=T)
-        nmm2.run(synaptic_inputs=synaptic_input, simulation_time=T)
-        nmm3.run(synaptic_inputs=synaptic_input, simulation_time=T)
+            nmm.run(synaptic_inputs=synaptic_inputs,
+                    simulation_time=simulation_time,
+                    cutoff_time=cutoff_time,
+                    store_step=store_step)
 
-        # perform unit tests
-        ####################
+            final_state[i] = nmm.neural_mass_states[-1][0]
 
-        nmm1.plot_neural_mass_states()
-        nmm2.plot_neural_mass_states()
+        # load target data
+        ###################
 
-        self.assertTupleEqual(nmm1.neural_mass_states, nmm2.neural_mass_states)
+        with open('JR_results_III.pickle', 'rb') as f:
+            target_states = pickle.load(f)
+
+        # calculate NMRSE between time-series
+        #####################################
+
+        error = NMRSE(final_state, target_states)
+        error = np.sum(error)
+
+        # perform unit test
+        ###################
+
+        print('VII.3 test response to varying AMPA synapse efficiencies given constant input to EINs.')
+        self.assertAlmostEqual(error, 0, places=2)
+        print('VII.3 done!')
+
+    # def test_9_JR_network_I(self):
+    #     """
+    #     tests whether 2 identical connected JR circuits behave as expected.
+    #     """
+    #
+    #     # set parameters
+    #     ################
+    #
+    #     # connectivity matrices
+    #     C1 = np.array([[0, 1], [1, 0]]) * 200.
+    #     C2 = np.array([[0, 0], [1, 0]]) * 200.
+    #     C3 = np.zeros((2, 2))
+    #
+    #     # distance matrix
+    #     D = np.zeros((2, 2))
+    #     D[0, 1] = 0.01
+    #     D[1, 0] = 0.01
+    #
+    #     # velocity
+    #     v = 10.
+    #
+    #     # neural mass circuit types
+    #     nmm_types = ['JansenRitCircuit', 'JansenRitCircuit']
+    #
+    #     # simulation step-size
+    #     stepsize = 5e-4
+    #
+    #     # simulation time
+    #     #################
+    #     T = 1.
+    #     timesteps = np.int(T / stepsize)
+    #
+    #     # synaptic input
+    #     stim_time = 0.3
+    #     stim_timesteps = np.int(stim_time / stepsize)
+    #     synaptic_input = np.zeros((timesteps, 2, 3, 2))
+    #     synaptic_input[0:stim_timesteps, 0, 1, 0] = 300.
+    #
+    #     # initialize nmm network
+    #     ########################
+    #
+    #     nmm1 = nmm_network.NeuralMassNetwork(connections=C1,
+    #                                          nmm_types=nmm_types,
+    #                                          distances=D,
+    #                                          velocities=v,
+    #                                          step_size=stepsize)
+    #
+    #     nmm2 = nmm_network.NeuralMassNetwork(connections=C2,
+    #                                          nmm_types=nmm_types,
+    #                                          distances=D,
+    #                                          velocities=v,
+    #                                          step_size=stepsize)
+    #
+    #     nmm3 = nmm_network.NeuralMassNetwork(connections=C3,
+    #                                          nmm_types=nmm_types,
+    #                                          distances=D,
+    #                                          velocities=v,
+    #                                          step_size=stepsize)
+    #
+    #     # run network simulations
+    #     #########################
+    #
+    #     nmm1.run(synaptic_inputs=synaptic_input, simulation_time=T)
+    #     nmm2.run(synaptic_inputs=synaptic_input, simulation_time=T)
+    #     nmm3.run(synaptic_inputs=synaptic_input, simulation_time=T)
+    #
+    #     # perform unit tests
+    #     ####################
+    #
+    #     nmm1.plot_neural_mass_states()
+    #     nmm2.plot_neural_mass_states()
+    #
+    #     self.assertTupleEqual(nmm1.neural_mass_states, nmm2.neural_mass_states)
 
 ##################
 # run unit tests #
