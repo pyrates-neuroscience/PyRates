@@ -6,7 +6,6 @@ import unittest
 import numpy as np
 from NMMs.base import nmm_network, populations, synapses, axons
 import pickle
-from matplotlib.pyplot import *
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"
