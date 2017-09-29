@@ -785,9 +785,9 @@ class NeuralMassNetwork(NeuralMassModel):
 
             neural_mass_states = np.zeros(self.N)
 
-            #######################
-            # CPU Parallelization #
-            #######################
+            ###########################
+            # TODO: CPU Parallelization
+            ###########################
             # EXAMPLE CODE
             """
             import multiprocessing
@@ -833,11 +833,6 @@ class NeuralMassNetwork(NeuralMassModel):
                 pool.join()
                 
             """
-
-
-
-
-
 
             # update state of each neural mass according to input and store relevant state variables
             for i in range(self.N):

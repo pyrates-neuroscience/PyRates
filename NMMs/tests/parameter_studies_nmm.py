@@ -1,10 +1,26 @@
 """
 Includes functions to simulate and plot the behavior of simple neural mass models when varying certain parameters.
+
+Profiling:
+##########
+http://softwaretester.info/python-profiling-with-pycharm-community-edition/
+
+# install packages
+pip install snakeviz
+pip install cprofilev
+
+# Change “Run/Debug Configuration”:
+Interpreter options: -B -m cProfile -o profile.prof
+
+# show results (terminal):
+> snakeviz profile.prof
+
 """
 
 import numpy as np
 from NMMs.base import nmm_network, populations, synapses, axons
 from matplotlib.pyplot import *
+import virtualenv
 
 __author__ = "Richard Gast"
 __status__ = "Development"
