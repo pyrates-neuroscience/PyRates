@@ -238,7 +238,7 @@ def parameter_plot_2D(results, param_names, param_vals):
 # apply above defined functions #
 #################################
 
-ampa_efficiencies = np.linspace(0.1, 1.0, 10) * 1.273 * 3e-13
+ampa_efficiencies = np.linspace(0.1, 1.0, 2) * 1.273 * 3e-13
 synaptic_input_strengths = np.array([50, 100, 150, 200, 250, 300, 350, 400])
 results = JR_AMPAEfficiency_And_InputStrength_Varied(ampa_efficiencies=ampa_efficiencies,
                                                      synaptic_input_strengths=synaptic_input_strengths,

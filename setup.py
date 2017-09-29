@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-setup(name='NMMs',
+setup(name='BrainNetworks',
       version='0.1',
       description='Neural Mass Models',
       author='Richard Gast, Daniel Rose, Konstantin Weise',

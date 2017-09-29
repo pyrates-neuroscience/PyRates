@@ -785,6 +785,60 @@ class NeuralMassNetwork(NeuralMassModel):
 
             neural_mass_states = np.zeros(self.N)
 
+            #######################
+            # CPU Parallelization #
+            #######################
+            # EXAMPLE CODE
+            """
+            import multiprocessing
+            N_CPU_total = multiprocessing.cpu_count()
+            if N_CPU_total > N_MAX_CPU:
+                N_CPU = N_MAX_CPU
+            else:
+                N_CPU = N_CPU_total
+
+            print(
+                "Starting multiprocessed index version with {:d}/{:d} processors ...").format(N_CPU, N_CPU_total)
+
+            for j in range(len(points_out)):
+                print("Starting run " + str(j + 1) + " of " + str(range(len(points_out))))
+                # n_points[j] are all points in roi
+                # call multiprocessed version here -------------------------------
+
+                #  range(N_points_out_max) aufteilen nach cpu count
+                avg = N_points[j] / float(N_CPU)
+                chunks = []
+                last = 0.0
+                points = range(N_points[j])
+                while last < N_points[j]:
+                    chunks.append(np.array(points[int(last):int(last + avg)]))
+                    last += avg
+
+                # call pool
+                pool = multiprocessing.Pool(N_CPU)
+                partialized = partial(elem_workhorse,
+                                      points_out=points_out[j],
+                                      P1_all=P1_all,
+                                      P2_all=P2_all,
+                                      P3_all=P3_all,
+                                      P4_all=P4_all,
+                                      N_points_total=N_points[j],
+                                      N_CPU=N_CPU)
+
+                results = pool.map(partialized, chunks)
+
+                # concatenate results
+                tet_idx[:, j] = np.concatenate(results, axis=0)
+                pool.close()
+                pool.join()
+                
+            """
+
+
+
+
+
+
             # update state of each neural mass according to input and store relevant state variables
             for i in range(self.N):
 
