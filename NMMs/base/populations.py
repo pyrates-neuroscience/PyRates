@@ -153,16 +153,17 @@ class Population(object):
 
         self.axon = set_axon(axon, axon_params)
 
-    def state_update(self, synaptic_input, extrinsic_current=0., synaptic_modulation=1.0, neuromodulatory_input=1.0):
+    def state_update(self, synaptic_input, extrinsic_current=0., extrinsic_synaptic_modulation=1.0,
+                     synaptic_modulation_direction=1.0):
         """
         Updates state according to current synapse and axon parametrization.
 
         :param synaptic_input: vector, average firing rate arriving at each synapse [unit = 1/s].
         :param extrinsic_current: extrinsic current added to membrane potential change [unit = A] (default = 0).
-        :param synaptic_modulation: modulatory input to each synapse. Can be scalar (applied to all synapses then) or
-               vector with len = number of synapses (default = 1.0) [unit = 1].
-        :param neuromodulatory_input: Scalar used to scale the overall change in the membrane potential (default = 1.0)
-               [unit = 1].
+        :param extrinsic_synaptic_modulation: modulatory input to each synapse. Can be scalar (applied to all synapses
+               then) or vector with len = number of synapses (default = 1.0) [unit = 1].
+        :param synaptic_modulation_direction: Can be scalar or list of vectors used as a power for each modulatory
+               synapse as neuromodulatory effect. Should be either 1.0 or -1.0 (default = 1.0) [unit = 1].
 
         """
 
@@ -173,8 +174,7 @@ class Population(object):
         assert all(synaptic_input) >= 0
         assert len(synaptic_input) == len(self.synapses)
         assert type(extrinsic_current) is float or np.float64
-        assert type(synaptic_modulation) is float or type(synaptic_modulation) is np.ndarray
-        assert neuromodulatory_input >= 0
+        assert type(extrinsic_synaptic_modulation) is float or type(extrinsic_synaptic_modulation) is np.ndarray
 
         #############################################
         # get input firing rate and state variables #
@@ -188,26 +188,58 @@ class Population(object):
         # compute average membrane potential #
         ######################################
 
-        # calculate synaptic currents for each synapse
-        synaptic_currents = np.zeros(len(self.synapses))
+        # calculate synaptic currents and modulations for each synapse
+        synaptic_currents = list()
+        synaptic_modulation = list()
+
         for i in range(len(self.synapses)):
 
-            if self.synapses[i].conductivity_based:
-                synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i], membrane_potential)
+            # synaptic modulation value
+            if self.synapses[i].neuromodulatory:
+
+                if self.synapses[i].conductivity_based:
+                    synaptic_modulation.append(self.synapses[i].get_synaptic_current(inputs[:, i], membrane_potential))
+                else:
+                    synaptic_modulation.append(self.synapses[i].get_synaptic_current(inputs[:, i]))
+
             else:
-                synaptic_currents[i] = self.synapses[i].get_synaptic_current(inputs[:, i])
+
+                # synaptic current
+                if self.synapses[i].conductivity_based:
+                    synaptic_currents.append(self.synapses[i].get_synaptic_current(inputs[:, i], membrane_potential))
+                else:
+                    synaptic_currents.append(self.synapses[i].get_synaptic_current(inputs[:, i]))
+
+        synaptic_currents = np.array(synaptic_currents)
+        synaptic_modulation = np.array(synaptic_modulation)
+
+        if type(synaptic_modulation_direction) is float:
+            synaptic_modulation_direction = [np.ones(len(synaptic_currents) + 2) * synaptic_modulation_direction]
+
+        # set modulation direction for each synapse
+        synaptic_modulation_tmp = np.zeros((len(synaptic_modulation), len(synaptic_modulation_direction[0])))
+        for i in range(len(synaptic_modulation)):
+            synaptic_modulation_tmp[i] = synaptic_modulation[i]**synaptic_modulation_direction[i]
+        synaptic_modulation = np.prod(synaptic_modulation, axis=0)
+
+        # combine extrinsic and intrinsic synaptic modulation
+        if type(extrinsic_synaptic_modulation) is float:
+            extrinsic_synaptic_modulation = np.ones(len(synaptic_currents) + 2) * extrinsic_synaptic_modulation
+        synaptic_modulation *= extrinsic_synaptic_modulation
 
         # sum over all synapses and apply synaptic modulation
-        if type(synaptic_modulation) is float:
-            synaptic_modulation = np.array([synaptic_modulation for i in range(len(self.synapses))])
-        synaptic_current = np.dot(synaptic_currents, synaptic_modulation)
+        synaptic_current = np.dot(synaptic_currents, synaptic_modulation[0:-2])
 
         # calculate leak current
         leak_current = (self.resting_potential - membrane_potential) * self.membrane_capacitance / self.tau_leak
 
+        # apply neuromodulation to leak and extrinsic current
+        leak_current *= synaptic_modulation[-2]
+        extrinsic_current *= synaptic_modulation[-1]
+
         # update membrane potential
         delta_membrane_potential = (synaptic_current + leak_current + extrinsic_current) / self.membrane_capacitance
-        membrane_potential = membrane_potential + self.step_size * delta_membrane_potential * neuromodulatory_input
+        membrane_potential = membrane_potential + self.step_size * delta_membrane_potential
 
         ###############################
         # compute average firing rate #

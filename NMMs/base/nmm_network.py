@@ -11,7 +11,8 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 # TODO: Try implementing adaptive simulation step-sizes
-# TODO: Implement neuromodulatory connections (use standard connectivity matrix with synapses or extra mechanism?)
+# TODO: Implement neuromodulatory mechanisms (see neuromodulatory synapses at population level)
+
 
 class NeuralMassModel(object):
     """

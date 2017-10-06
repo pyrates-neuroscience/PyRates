@@ -29,7 +29,7 @@ class Synapse(object):
     """
 
     def __init__(self, efficiency, tau_decay, tau_rise, step_size, kernel_length, conductivity_based=False,
-                 reversal_potential=-0.075, synapse_type=None):
+                 reversal_potential=-0.075, synapse_type=None, neuromodulatory=False):
         """
         Initializes a standard double-exponential synapse kernel defined by 3 parameters.
 
@@ -48,6 +48,8 @@ class Synapse(object):
         :param reversal_potential: scalar, determines the reversal potential of the synapse. Only necessary for
                conductivity based synapses [unit = V] (default = -0.075).
         :param synapse_type: if not None, will be treated as type of synapse (should be character string)
+        :param neuromodulatory: if True, synapse will be treated as having a modulatory (multiplicative) effect.
+               Synaptic output is then treated as having unit 1.
 
         """
 
@@ -72,6 +74,7 @@ class Synapse(object):
         self.reversal_potential = reversal_potential
         self.step_size = step_size
         self.kernel_length = kernel_length
+        self.neuromodulatory = neuromodulatory
 
         ####################
         # set synapse type #
@@ -189,7 +192,12 @@ class Synapse(object):
         plot(self.synaptic_kernel[-1:0:-1])
         hold('off')
         xlabel('time-steps')
-        ylabel('synaptic conductivity [S]') if self.conductivity_based else ylabel('synaptic current [A]')
+        if self.neuromodulatory:
+            ylabel('modulation strength')
+        elif self.conductivity_based:
+            ylabel('synaptic conductivity [S]')
+        else:
+            ylabel('synaptic current [A]')
         title('Impulse Response Function')
 
         if create_plot:
@@ -219,7 +227,8 @@ class AMPACurrentSynapse(Synapse):
                                                  tau_rise=tau_rise,
                                                  step_size=step_size,
                                                  kernel_length=kernel_length,
-                                                 synapse_type='AMPA_current')
+                                                 synapse_type='AMPA_current',
+                                                 neuromodulatory=False)
 
 
 class GABAACurrentSynapse(Synapse):
@@ -243,7 +252,8 @@ class GABAACurrentSynapse(Synapse):
                                                   tau_rise=tau_rise,
                                                   step_size=step_size,
                                                   kernel_length=kernel_length,
-                                                  synapse_type='GABAA_current')
+                                                  synapse_type='GABAA_current',
+                                                  neuromodulatory=False)
 
 
 class AMPAConductanceSynapse(Synapse):
@@ -269,7 +279,8 @@ class AMPAConductanceSynapse(Synapse):
                                                      step_size=step_size,
                                                      kernel_length=kernel_length,
                                                      reversal_potential=reversal_potential,
-                                                     synapse_type='AMPA_conductance')
+                                                     synapse_type='AMPA_conductance',
+                                                     neuromodulatory=False)
 
 
 class GABAAConductanceSynapse(Synapse):
@@ -295,4 +306,5 @@ class GABAAConductanceSynapse(Synapse):
                                                       step_size=step_size,
                                                       kernel_length=kernel_length,
                                                       reversal_potential=reversal_potential,
-                                                      synapse_type='GABAA_current')
+                                                      synapse_type='GABAA_current',
+                                                      neuromodulatory=False)
