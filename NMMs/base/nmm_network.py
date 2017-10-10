@@ -38,7 +38,7 @@ class NeuralMassModel(object):
     def __init__(self, connections, population_labels=None, population_types=None, synapses=None, axons=None,
                  population_resting_potentials=-0.075, population_leak_taus=0.016, population_capacitance=1e-12,
                  step_size=0.001, synaptic_kernel_length=100, distances=None, positions=None, velocities=None,
-                 synapse_params=None, axon_params=None, init_states=None):
+                 synapse_params=None, axon_params=None, neuromodulatory_effect=None, init_states=None):
         """
         Initializes a network of neural masses.
 
@@ -92,6 +92,8 @@ class NeuralMassModel(object):
                                parameters will be replaced by the parameters in the dictionary (if set)
                             2) None, if pre-defined synapse parametrizations are to be used.
                (default = None)
+        :param neuromodulatory_effect: Can be list of scalars or vectors, indicating the direction in which the effect
+               of neuromodulatory synapses is applied to all other synapses (default = None) [unit = 1].
         :param init_states: array including the initial states of each neural mass in network (membrane potential,
                firing rate). Each row is a neural mass.
 
@@ -129,6 +131,7 @@ class NeuralMassModel(object):
         self.step_size = step_size
         self.active_synapses = np.zeros((self.N, self.n_synapses), dtype=bool)
         self.time_steps_old = 0
+        self.neuromodulation = neuromodulatory_effect
 
         # set up synapse labels
         if synapses:
@@ -252,8 +255,8 @@ class NeuralMassModel(object):
         self.firing_rates_lookup = np.zeros((self.N, max_delay))
         self.firing_rates_lookup[:, 0] = np.array([self.neural_masses[i].output_firing_rate[-1] for i in range(self.N)])
 
-    def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, cutoff_time=0., store_step=1,
-            verbose=False, continue_run=False):
+    def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, extrinsic_modulation=None, cutoff_time=0.,
+            store_step=1, verbose=False, continue_run=False):
         """
         Simulates neural mass network.
 
@@ -262,6 +265,9 @@ class NeuralMassModel(object):
         :param simulation_time: scalar, indicating the total time the network behavior is to be simulated [unit = s].
         :param extrinsic_current: n_timesteps x N array including all extrinsic currents applied to each neural
                mass over the time course of the simulation [unit = A] (default = None).
+        :param extrinsic_modulation: Can be list of lists of scalars or vectors of scalars, indicating the extrinsic
+               modulation of all/each synapse(s) of each population. First list dimension is timesteps, second is number
+               of populations (default = None) [unit = 1].
         :param cutoff_time: scalar, indicating the initial time period of the simulation that will not be stored
                [unit = s] (default = 0).
         :param store_step: integer, indicating which simulated time steps will be stored. If store_step = n, every n'th
@@ -305,6 +311,16 @@ class NeuralMassModel(object):
         else:
             self.firing_rates_lookup[:] = 0
 
+        ##################################
+        # set neuromodulatory parameters #
+        ##################################
+
+        if extrinsic_modulation is None:
+            extrinsic_modulation = [[1.0 for i in range(self.N)] for j in range(self.time_steps_old, time_steps)]
+
+        if self.neuromodulation is None:
+            self.neuromodulation = [1.0 for i in range(self.N)]
+
         ####################
         # simulate network #
         ####################
@@ -327,9 +343,14 @@ class NeuralMassModel(object):
                 # update all state variables
                 if extrinsic_current is not None:
                     self.neural_masses[i].state_update(synaptic_input=synaptic_input,
-                                                       extrinsic_current=extrinsic_current[n - self.time_steps_old, i])
+                                                       extrinsic_current=extrinsic_current[n - self.time_steps_old, i],
+                                                       extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
+                                                       synaptic_modulation_direction=self.neuromodulation[i])
                 else:
-                    self.neural_masses[i].state_update(synaptic_input=synaptic_input)
+                    self.neural_masses[i].state_update(synaptic_input=synaptic_input,
+                                                       extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
+                                                       synaptic_modulation_direction=self.neuromodulation[i]
+                                                       )
 
                 # update firing-rate look-up
                 firing_rates[i] = self.neural_masses[i].output_firing_rate[-1]
