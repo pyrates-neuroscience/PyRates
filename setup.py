@@ -9,4 +9,5 @@ setup(name='BrainNetworks',
       packages=['NMMs',
                 'NMMs/base',
                 'NMMs/tests'],
-      zip_safe=False)
+      zip_safe=False,
+      python_requires='>=3.5')
