@@ -5,8 +5,8 @@ parameters of an object instance.
 
 from matplotlib.pyplot import *
 
-from axon import Axon
-from synapse import Synapse
+from core.axon import Axon
+from core.synapse import Synapse
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"

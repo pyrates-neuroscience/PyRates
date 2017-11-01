@@ -4,7 +4,7 @@
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
-from network import NeuralMassModel
+from core.network import NeuralMassModel
 
 
 class JansenRitCircuit(NeuralMassModel):

@@ -1,6 +1,6 @@
 """
 """
-from axon import Axon
+from core.axon import Axon
 
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"

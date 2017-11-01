@@ -1,6 +1,6 @@
 """
 """
-from synapse import Synapse
+from core.synapse import Synapse
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"

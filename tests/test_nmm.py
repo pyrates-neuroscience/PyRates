@@ -7,11 +7,11 @@ import unittest
 
 import numpy as np
 
-from axon import Axon, JansenRitAxon
-from network import NeuralMassModel
-from population import Population
-from synapse import Synapse
-from synapse import AMPACurrentSynapse, GABAACurrentSynapse
+from core.axon import Axon, JansenRitAxon
+from core.network import NeuralMassModel
+from core.population import Population
+from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
+from core.synapse import Synapse
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"

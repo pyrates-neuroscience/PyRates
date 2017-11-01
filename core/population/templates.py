@@ -1,6 +1,6 @@
 """
 """
-from population import Population
+from core.population import Population
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"

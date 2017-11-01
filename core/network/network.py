@@ -5,9 +5,9 @@ Includes a basic neural mass model class.
 from matplotlib.pyplot import *
 from scipy.interpolate import interp1d
 
-from population import Population
-from population import JansenRitPyramidalCells, JansenRitInhibitoryInterneurons, JansenRitExcitatoryInterneurons
-from network import JansenRitCircuit
+from core.network import JansenRitCircuit
+from core.population import JansenRitPyramidalCells, JansenRitInhibitoryInterneurons, JansenRitExcitatoryInterneurons
+from core.population import Population
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
