@@ -5,8 +5,8 @@ parameters of an object instance.
 
 from matplotlib.pyplot import *
 
-import axon.axon as ax
-import synapse.synapse as syn
+from axon import Axon
+from synapse import Synapse
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -364,7 +364,7 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
 
     elif synapse_params:
 
-        syn_instance = syn.Synapse(synapse_params['efficiency'], synapse_params['tau_decay'],
+        syn_instance = Synapse(synapse_params['efficiency'], synapse_params['tau_decay'],
                                    synapse_params['tau_rise'], step_size, kernel_length)
         pre_defined_synapse = False
 
@@ -424,7 +424,7 @@ def set_axon(axon, axon_params=None):
 
     elif axon_params:
 
-        ax_instance = ax.Axon(axon_params['max_firing_rate'], axon_params['membrane_potential_threshold'],
+        ax_instance = Axon(axon_params['max_firing_rate'], axon_params['membrane_potential_threshold'],
                               axon_params['sigmoid_steepness'])
         pre_defined_axon = False
 

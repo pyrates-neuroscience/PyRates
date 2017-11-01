@@ -5,8 +5,8 @@ Includes a basic neural mass model class.
 from matplotlib.pyplot import *
 from scipy.interpolate import interp1d
 
-import population.population as pop
-import population.templates
+from population import Population
+from population import JansenRitPyramidalCells, JansenRitInhibitoryInterneurons, JansenRitExcitatoryInterneurons
 from network import JansenRitCircuit
 
 __author__ = "Richard Gast, Daniel Rose"
@@ -908,7 +908,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
 
     if population_type == 'JansenRitPyramidalCells':
 
-        pop_instance = population.templates.JansenRitPyramidalCells(init_state=init_state,
+        pop_instance = JansenRitPyramidalCells(init_state=init_state,
                                                                     step_size=step_size,
                                                                     synaptic_kernel_length=synaptic_kernel_length,
                                                                     resting_potential=resting_potential,
@@ -919,7 +919,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
 
     elif population_type == 'JansenRitExcitatoryInterneurons':
 
-        pop_instance = population.templates.JansenRitExcitatoryInterneurons(init_state=init_state,
+        pop_instance = JansenRitExcitatoryInterneurons(init_state=init_state,
                                                                             step_size=step_size,
                                                                             synaptic_kernel_length=synaptic_kernel_length,
                                                                             resting_potential=resting_potential,
@@ -930,7 +930,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
 
     elif population_type == 'JansenRitInhibitoryInterneurons':
 
-        pop_instance = population.templates.JansenRitInhibitoryInterneurons(init_state=init_state,
+        pop_instance = JansenRitInhibitoryInterneurons(init_state=init_state,
                                                                             step_size=step_size,
                                                                             synaptic_kernel_length=synaptic_kernel_length,
                                                                             resting_potential=resting_potential,
@@ -941,7 +941,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
 
     elif population_type is None:
 
-        pop_instance = pop.Population(synapses=synapses,
+        pop_instance = Population(synapses=synapses,
                                       axon=axon,
                                       init_state=init_state,
                                       step_size=step_size,
