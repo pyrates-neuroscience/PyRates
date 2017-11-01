@@ -2,13 +2,20 @@
 Includes unit tests for all classes included in NMMs/base.
 """
 
-import unittest
-import numpy as np
-from NMMs.base import nmm_network, populations, synapses, axons
 import pickle
+import unittest
+
+import numpy as np
+
+from core.axon import Axon, JansenRitAxon
+from core.network import NeuralMassModel
+from core.population import Population
+from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
+from core.synapse import Synapse
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"
+
 
 #####################
 # support functions #
@@ -31,7 +38,8 @@ def NMRSE(x, y):
 
     diff = x - y
 
-    return np.sqrt(np.sum(diff**2, axis=0)) / (max_val - min_val)
+    return np.sqrt(np.sum(diff ** 2, axis=0)) / (max_val - min_val)
+
 
 ##############
 # unit tests #
@@ -52,16 +60,16 @@ class TestNMMs(unittest.TestCase):
         # axon parameters
         #################
 
-        max_firing_rate = 5.                    # unit = 1
-        membrane_potential_threshold = -0.069   # unit = V
-        sigmoid_steepness = 555.56              # unit = 1/V
+        max_firing_rate = 5.  # unit = 1
+        membrane_potential_threshold = -0.069  # unit = V
+        sigmoid_steepness = 555.56  # unit = 1/V
 
         # initialize axon
         #################
 
-        axon = axons.Axon(max_firing_rate=max_firing_rate,
-                          membrane_potential_threshold=membrane_potential_threshold,
-                          sigmoid_steepness=sigmoid_steepness)
+        axon = Axon(max_firing_rate=max_firing_rate,
+                    membrane_potential_threshold=membrane_potential_threshold,
+                    sigmoid_steepness=sigmoid_steepness)
 
         # define inputs (unit = V)
         ##########################
@@ -120,30 +128,30 @@ class TestNMMs(unittest.TestCase):
         # synapse parameters
         ####################
 
-        efficiency = 1.273 * 3e-13                        # unit = A
-        tau_decay = 0.006                                 # unit = s
-        tau_rise = 0.0006                                 # unit = s
-        step_size = 5.e-4                                 # unit = s
-        synaptic_kernel_length = int(0.05 / step_size)    # unit = 1
+        efficiency = 1.273 * 3e-13  # unit = A
+        tau_decay = 0.006  # unit = s
+        tau_rise = 0.0006  # unit = s
+        step_size = 5.e-4  # unit = s
+        synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
         conductivity_based = False
 
         # initialize synapse
         ####################
 
-        synapse = synapses.Synapse(efficiency=efficiency,
-                                   tau_decay=tau_decay,
-                                   tau_rise=tau_rise,
-                                   step_size=step_size,
-                                   kernel_length=synaptic_kernel_length,
-                                   conductivity_based=conductivity_based)
+        synapse = Synapse(efficiency=efficiency,
+                          tau_decay=tau_decay,
+                          tau_rise=tau_rise,
+                          step_size=step_size,
+                          kernel_length=synaptic_kernel_length,
+                          conductivity_based=conductivity_based)
 
         # define firing rate inputs
         ###########################
 
         firing_rates_1 = np.zeros(synaptic_kernel_length)
         firing_rates_2 = np.ones(synaptic_kernel_length) * 300.0
-        firing_rates_3 = np.zeros(3*synaptic_kernel_length)
-        firing_rates_3[synaptic_kernel_length:2*synaptic_kernel_length] = 300.0
+        firing_rates_3 = np.zeros(3 * synaptic_kernel_length)
+        firing_rates_3[synaptic_kernel_length:2 * synaptic_kernel_length] = 300.0
 
         # calculate synaptic currents
         #############################
@@ -189,30 +197,30 @@ class TestNMMs(unittest.TestCase):
         # synapse parameters
         ####################
 
-        efficiency = 1.273 * -1e-12                       # unit = A
-        tau_decay = 0.02                                  # unit = s
-        tau_rise = 0.0004                                 # unit = s
-        step_size = 5.e-4                                 # unit = s
-        synaptic_kernel_length = int(0.05 / step_size)    # unit = 1
+        efficiency = 1.273 * -1e-12  # unit = A
+        tau_decay = 0.02  # unit = s
+        tau_rise = 0.0004  # unit = s
+        step_size = 5.e-4  # unit = s
+        synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
         conductivity_based = False
 
         # initialize synapse
         ####################
 
-        synapse = synapses.Synapse(efficiency=efficiency,
-                                   tau_decay=tau_decay,
-                                   tau_rise=tau_rise,
-                                   step_size=step_size,
-                                   kernel_length=synaptic_kernel_length,
-                                   conductivity_based=conductivity_based)
+        synapse = Synapse(efficiency=efficiency,
+                          tau_decay=tau_decay,
+                          tau_rise=tau_rise,
+                          step_size=step_size,
+                          kernel_length=synaptic_kernel_length,
+                          conductivity_based=conductivity_based)
 
         # define firing rate inputs
         ###########################
 
         firing_rates_1 = np.zeros(synaptic_kernel_length)
         firing_rates_2 = np.ones(synaptic_kernel_length) * 300.0
-        firing_rates_3 = np.zeros(3*synaptic_kernel_length)
-        firing_rates_3[synaptic_kernel_length:2*synaptic_kernel_length] = 300.0
+        firing_rates_3 = np.zeros(3 * synaptic_kernel_length)
+        firing_rates_3[synaptic_kernel_length:2 * synaptic_kernel_length] = 300.0
 
         # calculate synaptic currents
         #############################
@@ -257,22 +265,22 @@ class TestNMMs(unittest.TestCase):
         # synapse parameters
         ####################
 
-        efficiency = 1.273 * 7.2e-10                    # unit = S
-        tau_decay = 0.0015                              # unit = s
-        tau_rise = 0.000009                             # unit = s
-        step_size = 5.e-4                               # unit = s
+        efficiency = 1.273 * 7.2e-10  # unit = S
+        tau_decay = 0.0015  # unit = s
+        tau_rise = 0.000009  # unit = s
+        step_size = 5.e-4  # unit = s
         synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
         conductivity_based = True
 
         # initialize synapse
         ####################
 
-        synapse = synapses.Synapse(efficiency=efficiency,
-                                   tau_decay=tau_decay,
-                                   tau_rise=tau_rise,
-                                   step_size=step_size,
-                                   kernel_length=synaptic_kernel_length,
-                                   conductivity_based=conductivity_based)
+        synapse = Synapse(efficiency=efficiency,
+                          tau_decay=tau_decay,
+                          tau_rise=tau_rise,
+                          step_size=step_size,
+                          kernel_length=synaptic_kernel_length,
+                          conductivity_based=conductivity_based)
 
         # define firing rate inputs
         ###########################
@@ -327,23 +335,23 @@ class TestNMMs(unittest.TestCase):
         axon = 'JansenRit'
         init_state = (-0.07, 0.5)
         step_size = 5.e-4
-        synaptic_kernel_length = int(0.05/step_size)
+        synaptic_kernel_length = int(0.05 / step_size)
         tau_leak = 0.016
         resting_potential = -0.07
 
         # initialize population, synapses and axon
-        pop = populations.Population(synapses=synapse_types,
-                                     axon=axon,
-                                     init_state=init_state,
-                                     step_size=step_size,
-                                     synaptic_kernel_length=synaptic_kernel_length,
-                                     tau_leak=tau_leak,
-                                     resting_potential=resting_potential)
-        syn1 = synapses.AMPACurrentSynapse(step_size=step_size,
-                                           kernel_length=synaptic_kernel_length)
-        syn2 = synapses.GABAACurrentSynapse(step_size=step_size,
-                                            kernel_length=synaptic_kernel_length)
-        axon = axons.JansenRitAxon()
+        pop = Population(synapses=synapse_types,
+                         axon=axon,
+                         init_state=init_state,
+                         step_size=step_size,
+                         synaptic_kernel_length=synaptic_kernel_length,
+                         tau_leak=tau_leak,
+                         resting_potential=resting_potential)
+        syn1 = AMPACurrentSynapse(step_size=step_size,
+                                  kernel_length=synaptic_kernel_length)
+        syn2 = GABAACurrentSynapse(step_size=step_size,
+                                   kernel_length=synaptic_kernel_length)
+        axon = JansenRitAxon()
 
         # define firing rate input and membrane potential
         #################################################
@@ -388,22 +396,22 @@ class TestNMMs(unittest.TestCase):
 
         synapse_types = ['AMPA_current', 'GABAA_current']
         axon = 'Knoesche'
-        step_size = 5e-4                                    # unit = s
-        synaptic_kernel_length = int(0.05 / step_size)      # unit = 1
-        tau_leak = 0.016                                    # unit = s
-        resting_potential = -0.075                          # unit = V
-        membrane_capacitance = 1e-12                        # unit = q/V
-        init_state = (resting_potential, 0)                 # unit = (V, 1/s)
+        step_size = 5e-4  # unit = s
+        synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
+        tau_leak = 0.016  # unit = s
+        resting_potential = -0.075  # unit = V
+        membrane_capacitance = 1e-12  # unit = q/V
+        init_state = (resting_potential, 0)  # unit = (V, 1/s)
 
         # define population input
         #########################
 
-        synaptic_inputs = np.zeros((4, 2, 5*synaptic_kernel_length))
+        synaptic_inputs = np.zeros((4, 2, 5 * synaptic_kernel_length))
         synaptic_inputs[1, 0, :] = 300.0
         synaptic_inputs[2, 1, :] = 300.0
         synaptic_inputs[3, 0, 0:synaptic_kernel_length] = 300.0
 
-        extrinsic_inputs = np.zeros((2, 5*synaptic_kernel_length), dtype=float)
+        extrinsic_inputs = np.zeros((2, 5 * synaptic_kernel_length), dtype=float)
         extrinsic_inputs[1, 0:synaptic_kernel_length] = 1e-14
 
         # for each combination of inputs calculate state vector of population instance
@@ -412,14 +420,14 @@ class TestNMMs(unittest.TestCase):
         states = np.zeros((synaptic_inputs.shape[0], extrinsic_inputs.shape[0], extrinsic_inputs.shape[1]))
         for i in range(synaptic_inputs.shape[0]):
             for j in range(extrinsic_inputs.shape[0]):
-                pop = populations.Population(synapses=synapse_types,
-                                             axon=axon,
-                                             init_state=init_state,
-                                             step_size=step_size,
-                                             synaptic_kernel_length=synaptic_kernel_length,
-                                             tau_leak=tau_leak,
-                                             resting_potential=resting_potential,
-                                             membrane_capacitance=membrane_capacitance)
+                pop = Population(synapses=synapse_types,
+                                 axon=axon,
+                                 init_state=init_state,
+                                 step_size=step_size,
+                                 synaptic_kernel_length=synaptic_kernel_length,
+                                 tau_leak=tau_leak,
+                                 resting_potential=resting_potential,
+                                 membrane_capacitance=membrane_capacitance)
                 for k in range(synaptic_inputs.shape[2]):
                     pop.state_update(synaptic_input=synaptic_inputs[i, :, k],
                                      extrinsic_current=extrinsic_inputs[j, k])
@@ -445,7 +453,7 @@ class TestNMMs(unittest.TestCase):
         print('VI.3 done!')
 
         print('VI.4 test whether extrinsic current leads to expected change in membrane potential')
-        self.assertAlmostEqual(states[0, 1, 0], init_state[0] + step_size * (1e-14/membrane_capacitance), places=4)
+        self.assertAlmostEqual(states[0, 1, 0], init_state[0] + step_size * (1e-14 / membrane_capacitance), places=4)
         print('VI.4 done!')
 
         print('VI.5 test whether membrane potential goes back to resting potential after step-function input')
@@ -521,15 +529,15 @@ class TestNMMs(unittest.TestCase):
         # initialize neural mass network
         ################################
 
-        nmm = nmm_network.NeuralMassModel(connections=connections,
-                                          population_labels=population_labels,
-                                          step_size=step_size,
-                                          synaptic_kernel_length=synaptic_kernel_length,
-                                          distances=distances,
-                                          velocities=velocities,
-                                          synapse_params=synapse_params,
-                                          axon_params=axon_params,
-                                          init_states=init_states)
+        nmm = NeuralMassModel(connections=connections,
+                              population_labels=population_labels,
+                              step_size=step_size,
+                              synaptic_kernel_length=synaptic_kernel_length,
+                              distances=distances,
+                              velocities=velocities,
+                              synapse_params=synapse_params,
+                              axon_params=axon_params,
+                              init_states=init_states)
 
         # run network simulation
         ########################
@@ -633,15 +641,15 @@ class TestNMMs(unittest.TestCase):
         # initialize neural mass network
         ################################
 
-        nmm = nmm_network.NeuralMassModel(connections=connections,
-                                          population_labels=population_labels,
-                                          step_size=step_size,
-                                          synaptic_kernel_length=synaptic_kernel_length,
-                                          distances=distances,
-                                          velocities=velocities,
-                                          synapse_params=synapse_params,
-                                          axon_params=axon_params,
-                                          init_states=init_states)
+        nmm = NeuralMassModel(connections=connections,
+                              population_labels=population_labels,
+                              step_size=step_size,
+                              synaptic_kernel_length=synaptic_kernel_length,
+                              distances=distances,
+                              velocities=velocities,
+                              synapse_params=synapse_params,
+                              axon_params=axon_params,
+                              init_states=init_states)
 
         # run network simulation
         ########################
@@ -736,13 +744,12 @@ class TestNMMs(unittest.TestCase):
         final_state = np.zeros(len(ampa_efficiencies))
 
         for i, efficiency in enumerate(ampa_efficiencies):
-
             # set ampa parameters
             #####################
 
-            ampa_dict = {'efficiency': float(efficiency),   # A
-                         'tau_decay': 0.006,                # s
-                         'tau_rise': 0.0006,                # s
+            ampa_dict = {'efficiency': float(efficiency),  # A
+                         'tau_decay': 0.006,  # s
+                         'tau_rise': 0.0006,  # s
                          'conductivity_based': False}
 
             synapse_params = [ampa_dict, gaba_a_dict]
@@ -750,15 +757,15 @@ class TestNMMs(unittest.TestCase):
             # initialize neural mass network
             ################################
 
-            nmm = nmm_network.NeuralMassModel(connections=connections,
-                                              population_labels=population_labels,
-                                              step_size=step_size,
-                                              synaptic_kernel_length=synaptic_kernel_length,
-                                              distances=distances,
-                                              velocities=velocities,
-                                              synapse_params=synapse_params,
-                                              axon_params=axon_params,
-                                              init_states=init_states)
+            nmm = NeuralMassModel(connections=connections,
+                                  population_labels=population_labels,
+                                  step_size=step_size,
+                                  synaptic_kernel_length=synaptic_kernel_length,
+                                  distances=distances,
+                                  velocities=velocities,
+                                  synapse_params=synapse_params,
+                                  axon_params=axon_params,
+                                  init_states=init_states)
 
             # run network simulation
             ########################
@@ -789,83 +796,85 @@ class TestNMMs(unittest.TestCase):
         self.assertAlmostEqual(error, 0, places=2)
         print('VII.3 done!')
 
-    # def test_9_JR_network_I(self):
-    #     """
-    #     tests whether 2 identical connected JR circuits behave as expected.
-    #     """
-    #
-    #     # set parameters
-    #     ################
-    #
-    #     # connectivity matrices
-    #     C1 = np.array([[0, 1], [1, 0]]) * 200.
-    #     C2 = np.array([[0, 0], [1, 0]]) * 200.
-    #     C3 = np.zeros((2, 2))
-    #
-    #     # distance matrix
-    #     D = np.zeros((2, 2))
-    #     D[0, 1] = 0.01
-    #     D[1, 0] = 0.01
-    #
-    #     # velocity
-    #     v = 10.
-    #
-    #     # neural mass circuit types
-    #     nmm_types = ['JansenRitCircuit', 'JansenRitCircuit']
-    #
-    #     # simulation step-size
-    #     stepsize = 5e-4
-    #
-    #     # simulation time
-    #     #################
-    #     T = 1.
-    #     timesteps = np.int(T / stepsize)
-    #
-    #     # synaptic input
-    #     stim_time = 0.3
-    #     stim_timesteps = np.int(stim_time / stepsize)
-    #     synaptic_input = np.zeros((timesteps, 2, 3, 2))
-    #     synaptic_input[0:stim_timesteps, 0, 1, 0] = 300.
-    #
-    #     # initialize nmm network
-    #     ########################
-    #
-    #     nmm1 = nmm_network.NeuralMassNetwork(connections=C1,
-    #                                          nmm_types=nmm_types,
-    #                                          distances=D,
-    #                                          velocities=v,
-    #                                          step_size=stepsize)
-    #
-    #     nmm2 = nmm_network.NeuralMassNetwork(connections=C2,
-    #                                          nmm_types=nmm_types,
-    #                                          distances=D,
-    #                                          velocities=v,
-    #                                          step_size=stepsize)
-    #
-    #     nmm3 = nmm_network.NeuralMassNetwork(connections=C3,
-    #                                          nmm_types=nmm_types,
-    #                                          distances=D,
-    #                                          velocities=v,
-    #                                          step_size=stepsize)
-    #
-    #     # run network simulations
-    #     #########################
-    #
-    #     nmm1.run(synaptic_inputs=synaptic_input, simulation_time=T)
-    #     nmm2.run(synaptic_inputs=synaptic_input, simulation_time=T)
-    #     nmm3.run(synaptic_inputs=synaptic_input, simulation_time=T)
-    #
-    #     # perform unit tests
-    #     ####################
-    #
-    #     nmm1.plot_neural_mass_states()
-    #     nmm2.plot_neural_mass_states()
-    #
-    #     self.assertTupleEqual(nmm1.neural_mass_states, nmm2.neural_mass_states)
+        # def test_9_JR_network_I(self):
+        #     """
+        #     tests whether 2 identical connected JR circuits behave as expected.
+        #     """
+        #
+        #     # set parameters
+        #     ################
+        #
+        #     # connectivity matrices
+        #     C1 = np.array([[0, 1], [1, 0]]) * 200.
+        #     C2 = np.array([[0, 0], [1, 0]]) * 200.
+        #     C3 = np.zeros((2, 2))
+        #
+        #     # distance matrix
+        #     D = np.zeros((2, 2))
+        #     D[0, 1] = 0.01
+        #     D[1, 0] = 0.01
+        #
+        #     # velocity
+        #     v = 10.
+        #
+        #     # neural mass circuit types
+        #     nmm_types = ['JansenRitCircuit', 'JansenRitCircuit']
+        #
+        #     # simulation step-size
+        #     stepsize = 5e-4
+        #
+        #     # simulation time
+        #     #################
+        #     T = 1.
+        #     timesteps = np.int(T / stepsize)
+        #
+        #     # synaptic input
+        #     stim_time = 0.3
+        #     stim_timesteps = np.int(stim_time / stepsize)
+        #     synaptic_input = np.zeros((timesteps, 2, 3, 2))
+        #     synaptic_input[0:stim_timesteps, 0, 1, 0] = 300.
+        #
+        #     # initialize nmm network
+        #     ########################
+        #
+        #     nmm1 = NeuralMassNetwork(connections=C1,
+        #                                          nmm_types=nmm_types,
+        #                                          distances=D,
+        #                                          velocities=v,
+        #                                          step_size=stepsize)
+        #
+        #     nmm2 = NeuralMassNetwork(connections=C2,
+        #                                          nmm_types=nmm_types,
+        #                                          distances=D,
+        #                                          velocities=v,
+        #                                          step_size=stepsize)
+        #
+        #     nmm3 = NeuralMassNetwork(connections=C3,
+        #                                          nmm_types=nmm_types,
+        #                                          distances=D,
+        #                                          velocities=v,
+        #                                          step_size=stepsize)
+        #
+        #     # run network simulations
+        #     #########################
+        #
+        #     nmm1.run(synaptic_inputs=synaptic_input, simulation_time=T)
+        #     nmm2.run(synaptic_inputs=synaptic_input, simulation_time=T)
+        #     nmm3.run(synaptic_inputs=synaptic_input, simulation_time=T)
+        #
+        #     # perform unit tests
+        #     ####################
+        #
+        #     nmm1.plot_neural_mass_states()
+        #     nmm2.plot_neural_mass_states()
+        #
+        #     self.assertTupleEqual(nmm1.neural_mass_states, nmm2.neural_mass_states)
+
 
 ##################
 # run unit tests #
 ##################
+
 
 if __name__ == '__main__':
     unittest.main()

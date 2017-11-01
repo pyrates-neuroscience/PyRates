@@ -1,5 +1,7 @@
 from setuptools import setup, find_packages
 
+# fixme: folder reference needs to be fixed
+
 setup(name='BrainNetworks',
       version='0.1',
       description='Neural Mass Models',

@@ -17,13 +17,13 @@ Interpreter options: -B -m cProfile -o profile.prof
 
 """
 
-import numpy as np
-from NMMs.base import nmm_network, populations, synapses, axons
 from matplotlib.pyplot import *
-import virtualenv
+
+from core.network import NeuralMassModel
 
 __author__ = "Richard Gast"
 __status__ = "Development"
+
 
 #############################
 # parameter study functions #
@@ -60,23 +60,23 @@ def JR_parameter_study(param_names, param_values, simulation_time=1.0, step_size
     # GABA-A connections (inhibitory)
     connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
 
-    ampa_dict = {'efficiency': 1.273 * 3e-13,     # A
-                 'tau_decay': 0.006,              # s
-                 'tau_rise': 0.0006,              # s
+    ampa_dict = {'efficiency': 1.273 * 3e-13,  # A
+                 'tau_decay': 0.006,  # s
+                 'tau_rise': 0.0006,  # s
                  'conductivity_based': False}
 
-    gaba_a_dict = {'efficiency': 1.273 * -1e-12,    # A
-                   'tau_decay': 0.02,               # s
-                   'tau_rise': 0.0004,              # s
+    gaba_a_dict = {'efficiency': 1.273 * -1e-12,  # A
+                   'tau_decay': 0.02,  # s
+                   'tau_rise': 0.0004,  # s
                    'conductivity_based': False}
 
     synapse_params = [ampa_dict, gaba_a_dict]
-    synaptic_kernel_length = 100                  # in time steps
+    synaptic_kernel_length = 100  # in time steps
 
     # axon
-    axon_dict = {'max_firing_rate': 5.,                     # 1/s
-                 'membrane_potential_threshold': -0.069,    # V
-                 'sigmoid_steepness': 555.56}               # 1/V
+    axon_dict = {'max_firing_rate': 5.,  # 1/s
+                 'membrane_potential_threshold': -0.069,  # V
+                 'sigmoid_steepness': 555.56}  # 1/V
     axon_params = [axon_dict for i in range(N)]
 
     # inter-population delays
@@ -87,8 +87,8 @@ def JR_parameter_study(param_names, param_values, simulation_time=1.0, step_size
     init_states = np.zeros((N, n_synapses))
 
     # synaptic inputs
-    mag_stim = 300.0        # 1/s
-    synaptic_inputs = np.zeros((int(simulation_time/step_size), N, n_synapses))
+    mag_stim = 300.0  # 1/s
+    synaptic_inputs = np.zeros((int(simulation_time / step_size), N, n_synapses))
     synaptic_inputs[:, 1, 0] = mag_stim
 
     # store parameters in dict
@@ -117,15 +117,15 @@ def JR_parameter_study(param_names, param_values, simulation_time=1.0, step_size
             parameters[p] = param_values[j][i]
 
         # initialize network
-        nmm = nmm_network.NeuralMassModel(connections=parameters['connections'],
-                                          population_labels=parameters['population_labels'],
-                                          step_size=parameters['step_size'],
-                                          synaptic_kernel_length=parameters['synaptic_kernel_length'],
-                                          distances=parameters['distances'],
-                                          velocities=parameters['velocities'],
-                                          synapse_params=parameters['synapse_params'],
-                                          axon_params=parameters['axon_params'],
-                                          init_states=parameters['init_states'])
+        nmm = NeuralMassModel(connections=parameters['connections'],
+                              population_labels=parameters['population_labels'],
+                              step_size=parameters['step_size'],
+                              synaptic_kernel_length=parameters['synaptic_kernel_length'],
+                              distances=parameters['distances'],
+                              velocities=parameters['velocities'],
+                              synapse_params=parameters['synapse_params'],
+                              axon_params=parameters['axon_params'],
+                              init_states=parameters['init_states'])
 
         # run simulation
 
@@ -177,7 +177,6 @@ def JR_AMPAEfficiency_And_InputStrength_Varied(ampa_efficiencies, synaptic_input
                          'conductivity_based': False}
 
             for j in range(len(synaptic_input_strengths)):
-
                 synaptic_inputs_tmp = np.zeros((int(simulation_time / step_size), 3, 2))
                 synaptic_inputs_tmp[:, 1, 0] = synaptic_input_strengths[j]
 
@@ -187,7 +186,6 @@ def JR_AMPAEfficiency_And_InputStrength_Varied(ampa_efficiencies, synaptic_input
     else:
 
         for i in range(len(ampa_efficiencies)):
-
             ampa_dict = {'efficiency': float(ampa_efficiencies[i]),  # A
                          'tau_decay': 0.006,  # s
                          'tau_rise': 0.0006,  # s
@@ -212,10 +210,11 @@ def JR_AMPAEfficiency_And_InputStrength_Varied(ampa_efficiencies, synaptic_input
         # re-arrange results from vector to array
         results_final = np.zeros((len(ampa_efficiencies), len(synaptic_input_strengths)))
         for i in range(len(ampa_efficiencies)):
-            results_final[i, :] = results[i*len(synaptic_input_strengths):(i+1)*len(synaptic_input_strengths)]
+            results_final[i, :] = results[i * len(synaptic_input_strengths):(i + 1) * len(synaptic_input_strengths)]
         results = results_final
 
     return results
+
 
 ######################
 # plotting functions #
@@ -250,6 +249,7 @@ def parameter_plot_2D(results, param_names, param_vals):
 
     return fig
 
+
 #################################
 # apply above defined functions #
 #################################
@@ -262,6 +262,6 @@ results = JR_AMPAEfficiency_And_InputStrength_Varied(ampa_efficiencies=ampa_effi
 
 fig = parameter_plot_2D(results=results.T,
                         param_names=['AMPA synapse efficiency [1e-13 A]', 'Synaptic input strength [Hz]'],
-                        param_vals=[np.round(ampa_efficiencies*1e13, decimals=2), synaptic_input_strengths])
+                        param_vals=[np.round(ampa_efficiencies * 1e13, decimals=2), synaptic_input_strengths])
 
 fig.show()

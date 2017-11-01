@@ -2,5 +2,3 @@
 author: Daniel Rose
 """
 
-import sys
-sys.path.append('../base')
