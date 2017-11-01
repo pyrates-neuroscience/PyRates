@@ -2,10 +2,10 @@
 Includes a basic neural mass model class.
 """
 
-import numpy as np
-import NMMs.base.populations as pop
 from matplotlib.pyplot import *
 from scipy.interpolate import interp1d
+
+import population.population as pop
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"

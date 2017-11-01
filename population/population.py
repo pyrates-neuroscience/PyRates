@@ -3,10 +3,10 @@ Includes basic population class and functions to instantiate synapses or axons a
 parameters of an object instance.
 """
 
-import NMMs.base.synapses as syn
-import NMMs.base.axons as ax
-import numpy as np
 from matplotlib.pyplot import *
+
+import axon.axon as ax
+import synapse.synapse as syn
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
