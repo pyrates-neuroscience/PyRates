@@ -83,6 +83,8 @@ class NeuralMassModel(object):
                                 'distributions': velocity distributions the indices refer to
                                 'values': vector of velocity values for each bin of the velocity distributions
                            4) None if network is supposed to be delay-free
+                           Note: delay-free is equivalent to saying the expected delay is smaller than the defined
+                                 time step
                [unit = m/s] (default = None).
         :param synapse_params: Can be
                                1) A list of length n_synapses with each entry being a dictionary with synapse parameters

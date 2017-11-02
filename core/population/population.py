@@ -1,6 +1,6 @@
 """
 Includes basic population class and functions to instantiate synapses or axons as well as a function to update
-parameters of an object instance.
+parameters of an object instance. A 'population' is supposed to be smallest computational unit in the resulting network.
 """
 
 from matplotlib.pyplot import *
