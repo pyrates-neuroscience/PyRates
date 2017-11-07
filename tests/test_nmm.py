@@ -4,7 +4,6 @@ Includes unit tests for all classes included in NMMs/base.
 
 import pickle
 import unittest
-
 import numpy as np
 
 from core.axon import Axon, JansenRitAxon

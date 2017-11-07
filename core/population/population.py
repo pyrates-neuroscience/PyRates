@@ -4,9 +4,11 @@ parameters of an object instance. A 'population' is supposed to be smallest comp
 """
 
 from matplotlib.pyplot import *
-
+from scipy.interpolate import interp1d
 from core.axon import Axon
+import core.axon.templates as axon_templates
 from core.synapse import Synapse
+import core.synapse.templates as synapse_templates
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -78,7 +80,7 @@ class Population(object):
         assert step_size > 0
         assert synaptic_kernel_length > 0
         assert tau_leak > 0
-        assert type(resting_potential) is float
+        assert type(resting_potential) is float or type(resting_potential) is np.float64
         assert membrane_capacitance > 0
         assert synapse_params is None or type(synapse_params) is list
         assert axon_params is None or type(axon_params) is dict
@@ -98,6 +100,7 @@ class Population(object):
         self.resting_potential = resting_potential
         self.step_size = step_size
         self.membrane_capacitance = membrane_capacitance
+        self.t = 0
 
         # set initial state and firing rate values
         self.state_variables.append(init_state[0])
@@ -154,7 +157,7 @@ class Population(object):
         self.axon = set_axon(axon, axon_params)
 
     def state_update(self, synaptic_input, extrinsic_current=0., extrinsic_synaptic_modulation=1.0,
-                     synaptic_modulation_direction=1.0):
+                     synaptic_modulation_direction=1.0, variable_step_size=False):
         """
         Updates state according to current synapse and axon parametrization.
 
@@ -164,6 +167,8 @@ class Population(object):
                then) or vector with len = number of synapses (default = 1.0) [unit = 1].
         :param synaptic_modulation_direction: Can be scalar or list of vectors used as a power for each modulatory
                synapse as neuromodulatory effect. Should be either 1.0 or -1.0 (default = 1.0) [unit = 1].
+        :param variable_step_size: If false, DEs will be solved via Euler formalism. If false, 4/5th order Runge-Kutta
+               formalism will be used (default = False).
 
         """
 
@@ -183,6 +188,19 @@ class Population(object):
         self.input_firing_rate.append(synaptic_input)
         inputs = np.asarray(self.input_firing_rate)
         membrane_potential = self.state_variables[-1]
+
+        #####################################################################
+        # if variable step-size is used, interpolate synaptic input history #
+        #####################################################################
+
+        if variable_step_size and self.step_size != self.synapses[0].step_size:
+
+            # interpolate input history to fit synaptic kernel step size
+            net_input_time = inputs.shape[0] * self.step_size
+            old_time_steps = np.arange(0, net_input_time, self.step_size)
+            interpol_function = interp1d(old_time_steps, inputs, axis=0, kind='cubic')
+            new_time_steps = np.arange(0, net_input_time, self.synapses[0].step_size)
+            inputs = interpol_function(new_time_steps)
 
         ######################################
         # compute average membrane potential #
@@ -238,8 +256,11 @@ class Population(object):
         extrinsic_current *= synaptic_modulation[-1]
 
         # update membrane potential
-        delta_membrane_potential = (synaptic_current + leak_current + extrinsic_current) / self.membrane_capacitance
-        membrane_potential = membrane_potential + self.step_size * delta_membrane_potential
+        net_current = synaptic_current + leak_current + extrinsic_current
+        membrane_potential = self.take_step(f=self.calculate_delta_membrane_potential,
+                                            x=net_current,
+                                            y_old=membrane_potential,
+                                            variable_step_size=variable_step_size)
 
         ###############################
         # compute average firing rate #
@@ -267,14 +288,109 @@ class Population(object):
 
         if self.axon_plasticity:
 
-            delta_membrane_potential_threshold = (firing_rate - self.firing_rate_target) / self.tau_axon
-            self.axon.membrane_potential_threshold += self.step_size * delta_membrane_potential_threshold
+            self.axon.membrane_potential_threshold = self.take_step(f=self.calculate_delta_membrane_potential_threshold,
+                                                                    x=firing_rate,
+                                                                    y_old=self.axon.membrane_potential_threshold,
+                                                                    variable_step_size=variable_step_size)
 
         ###########################
         # update synaptic kernels #
         ###########################
 
         # TODO: implement differential equation that adapts synaptic efficiencies
+
+        ###################
+        # advance in time #
+        ###################
+
+        self.t += self.step_size
+
+    def calculate_delta_membrane_potential(self, t, current):
+        """
+        Method that calculates the change in membrane potential given an overall (summed up) cross-membrane current.
+
+        :param t: Scalar, indicates time [unit = s].
+        :param current: Scalar, indicates net current across the membrane (on average) [unit = mV].
+
+        :return: Delta membrane potential (scalar) [unit = mV].
+
+        """
+
+        return current / self.membrane_capacitance
+
+    def calculate_delta_membrane_potential_threshold(self, t, firing_rate):
+        """
+        Method that calculate the change in the axonal membrane potential threshold given the current firing rate.
+
+        :param t: Scalar, indicates time [unit = s].
+        :param firing_rate: Scalar, indicates current average firing rate of cell population [unit = Hz].
+
+        :return: Delta membrane potential threshold (scalar) [unit = mV].
+
+        """
+
+        return (firing_rate - self.firing_rate_target) / self.tau_axon
+
+    def take_step(self, f, x, y_old, variable_step_size=False):
+        """
+        Function that takes a step of an ODE with right-hand-side f using Euler or 4/5th order Runge-Kutta formalism.
+
+        :param f: Right-hand-side of ODE (function) that takes x as an argument.
+        :param x: input to f
+        :param y_old: old value of y that needs to be updated according to dy(t)/dt = f(t, x)
+        :param variable_step_size: If true, variable step solver (RK) will be used for update
+
+        :return: updated value of left-hand-side (scalar)
+
+        """
+
+        if variable_step_size:
+
+            # perform RK update
+            from scipy.integrate import RK45
+            solver = RK45(fun=f,
+                          t0=self.t,
+                          y0=y_old,
+                          t_bound=2*self.t+1.0)
+            solver.step()
+            y_new = solver.dense_output()
+
+            # update internal step-size
+            self.update_step_size(solver.step_size)
+
+        else:
+
+            # perform Euler update
+            y_new = y_old + self.step_size * f(self.t, x)
+
+        return y_new
+
+    def update_step_size(self, new_step_size, interpolation_type='cubic'):
+        """
+        Updates internal step-size to new step-size. Interpolates input history to fit new step-size.
+
+        :param new_step_size: new step-size with which population dynamics develop [unit = s].
+        :param interpolation_type: character string, indicates the type of interpolation used for up-/down-sampling the
+               firing-rate look-up matrix (default = 'cubic').
+
+        """
+
+        if new_step_size != self.step_size:
+
+            # get input history
+            inputs = np.array(self.input_firing_rate)
+
+            # interpolate input history to fit new step size
+            inputs = interpolate_array(old_step_size=self.step_size,
+                                       new_step_size=new_step_size,
+                                       y=inputs,
+                                       interpolation_type=interpolation_type)
+
+            # save new input history
+            self.input_firing_rate = inputs.tolist()
+
+            # set new step-size
+            self.step_size = new_step_size
 
     def plot_synaptic_kernels(self, synapse_idx=None, create_plot=True, fig=None):
         """
@@ -339,8 +455,6 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
 
     """
 
-    from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
-
     ####################
     # check parameters #
     ####################
@@ -358,16 +472,16 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
 
     if synapse == 'AMPA_current':
 
-        syn_instance = AMPACurrentSynapse(step_size, kernel_length)
+        syn_instance = synapse_templates.AMPACurrentSynapse(step_size, kernel_length)
 
     elif synapse == 'GABAA_current':
 
-        syn_instance = GABAACurrentSynapse(step_size, kernel_length)
+        syn_instance = synapse_templates.GABAACurrentSynapse(step_size, kernel_length)
 
     elif synapse_params:
 
         syn_instance = Synapse(synapse_params['efficiency'], synapse_params['tau_decay'],
-                               synapse_params['tau_rise'], step_size, kernel_length)
+                                   synapse_params['tau_rise'], step_size, kernel_length)
         pre_defined_synapse = False
 
     else:
@@ -403,8 +517,6 @@ def set_axon(axon, axon_params=None):
 
     """
 
-    from core.axon import KnoescheAxon, JansenRitAxon
-
     ####################
     # check parameters #
     ####################
@@ -420,16 +532,16 @@ def set_axon(axon, axon_params=None):
 
     if axon == 'Knoesche':
 
-        ax_instance = KnoescheAxon()
+        ax_instance = axon_templates.KnoescheAxon()
 
     elif axon == 'JansenRit':
 
-        ax_instance = JansenRitAxon()
+        ax_instance = axon_templates.JansenRitAxon()
 
     elif axon_params:
 
         ax_instance = Axon(axon_params['max_firing_rate'], axon_params['membrane_potential_threshold'],
-                           axon_params['sigmoid_steepness'])
+                              axon_params['sigmoid_steepness'])
         pre_defined_axon = False
 
     else:
@@ -468,3 +580,28 @@ def update_param(param, param_dict, object_instance):
         setattr(object_instance, param, param_dict[param])
 
     return object_instance
+
+
+def interpolate_array(t, old_step_size, new_step_size, y, interpolation_type='cubic', axis=0):
+    """
+    Interpolates time-vectors with scipy.interpolate.interp1d.
+
+    :param t: total time-length of y [unit = s].
+    :param old_step_size: old simulation step size [unit = s].
+    :param new_step_size: new simulation step size [unit = s].
+    :param y: vector to be interpolated
+    :param interpolation_type: can be 'linear' or spline stuff.
+    :param axis: axis along which y is to be interpolated (has to have same length as t/old_step_size)
+
+    :return: interpolated vector
+
+    """
+
+    # create time vectors
+    x_old = np.arange(0, t, old_step_size)
+    x_new = np.arange(0, t, new_step_size)
+
+    # create interpolation function
+    f = interp1d(x_old, y, axis=axis, kind=interpolation_type)
+
+    return f(x_new)

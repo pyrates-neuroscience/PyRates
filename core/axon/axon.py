@@ -1,5 +1,5 @@
 """
-Includes basic axon class and pre-parametrized axon subclasses test push
+Basic parametrized axon class that can compute average firing rates from an average membrane potential
 """
 
 from matplotlib.pyplot import *
@@ -10,8 +10,8 @@ __status__ = "Development"
 
 class Axon(object):
     """
-    Basic class for axons. The key function is to transform average membrane potentials (from the soma)
-    into average firing rates.
+    Basic class that behaves like the axon hillok. The key function is to transform average membrane potentials
+    (from the soma) into average firing rates.
 
     :var axon_type: character string, indicates type of the axon
     :var max_firing_rate: scalar, determines maximum firing rate of axon
