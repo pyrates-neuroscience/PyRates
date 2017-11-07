@@ -339,6 +339,8 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
 
     """
 
+    from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
+
     ####################
     # check parameters #
     ####################
@@ -356,16 +358,16 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
 
     if synapse == 'AMPA_current':
 
-        syn_instance = synapse.templates.AMPACurrentSynapse(step_size, kernel_length)
+        syn_instance = AMPACurrentSynapse(step_size, kernel_length)
 
     elif synapse == 'GABAA_current':
 
-        syn_instance = synapse.templates.GABAACurrentSynapse(step_size, kernel_length)
+        syn_instance = GABAACurrentSynapse(step_size, kernel_length)
 
     elif synapse_params:
 
         syn_instance = Synapse(synapse_params['efficiency'], synapse_params['tau_decay'],
-                                   synapse_params['tau_rise'], step_size, kernel_length)
+                               synapse_params['tau_rise'], step_size, kernel_length)
         pre_defined_synapse = False
 
     else:
@@ -401,6 +403,8 @@ def set_axon(axon, axon_params=None):
 
     """
 
+    from core.axon import KnoescheAxon, JansenRitAxon
+
     ####################
     # check parameters #
     ####################
@@ -416,16 +420,16 @@ def set_axon(axon, axon_params=None):
 
     if axon == 'Knoesche':
 
-        ax_instance = axon.templates.KnoescheAxon()
+        ax_instance = KnoescheAxon()
 
     elif axon == 'JansenRit':
 
-        ax_instance = axon.templates.JansenRitAxon()
+        ax_instance = JansenRitAxon()
 
     elif axon_params:
 
         ax_instance = Axon(axon_params['max_firing_rate'], axon_params['membrane_potential_threshold'],
-                              axon_params['sigmoid_steepness'])
+                           axon_params['sigmoid_steepness'])
         pre_defined_axon = False
 
     else:
