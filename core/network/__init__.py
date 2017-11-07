@@ -4,4 +4,6 @@
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
 
-from core.network.network import NeuralMassModel, NeuralMassNetwork, JansenRitCircuit
+# from core.network.neuralmassnetwork import NeuralMassNetwork
+from core.network.neuralmassmodel import NeuralMassModel
+from core.network.templates import JansenRitCircuit
