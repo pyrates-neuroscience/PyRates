@@ -337,22 +337,25 @@ class NeuralMassModel(object):
             # update state of each neural mass according to input and store relevant state variables
             for i in range(self.N):
 
-                # calculate synaptic input
-                synaptic_input = synaptic_inputs[n, i, self.active_synapses[i, :]] + \
-                                 network_input[i, self.active_synapses[i, :]]
+                # check whether neural mass needs to be updated
+                if self.neural_masses[i].t <= t:
 
-                # update all state variables
-                if extrinsic_current is not None:
-                    self.neural_masses[i].state_update(synaptic_input=synaptic_input,
-                                                       extrinsic_current=extrinsic_current[n, i],
-                                                       extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
-                                                       synaptic_modulation_direction=self.neuromodulation[i],
-                                                       variable_step_size=variable_step_size)
-                else:
-                    self.neural_masses[i].state_update(synaptic_input=synaptic_input,
-                                                       extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
-                                                       synaptic_modulation_direction=self.neuromodulation[i],
-                                                       variable_step_size=variable_step_size)
+                    # calculate synaptic input
+                    synaptic_input = synaptic_inputs[n, i, self.active_synapses[i, :]] + \
+                                     network_input[i, self.active_synapses[i, :]]
+
+                    # update all state variables
+                    if extrinsic_current is not None:
+                        self.neural_masses[i].state_update(synaptic_input=synaptic_input,
+                                                           extrinsic_current=extrinsic_current[n, i],
+                                                           extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
+                                                           synaptic_modulation_direction=self.neuromodulation[i],
+                                                           variable_step_size=variable_step_size)
+                    else:
+                        self.neural_masses[i].state_update(synaptic_input=synaptic_input,
+                                                           extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
+                                                           synaptic_modulation_direction=self.neuromodulation[i],
+                                                           variable_step_size=variable_step_size)
 
                 # update firing-rate look-up
                 firing_rates[i] = self.neural_masses[i].output_firing_rate[-1]
@@ -372,15 +375,8 @@ class NeuralMassModel(object):
             self.firing_rates_lookup = np.append(firing_rates, self.firing_rates_lookup, axis=1)
             self.firing_rates_lookup = self.firing_rates_lookup[:, 0:-1]
 
-            # if variable step solver is used, update step-size
-            if variable_step_size:
-                self.update_step_size(new_step_size=np.min(step_sizes),
-                                      synaptic_inputs=synaptic_inputs[n:, :, :],
-                                      extrinsic_current=extrinsic_current[n, :],
-                                      extrinsic_synaptic_modulation=extrinsic_modulation[n])
-
             # display simulation progress
-            if verbose and np.mod(t, simulation_time/100.) == 0:
+            if verbose and (t == 0 or ((t / simulation_time) * 100. % 10) < 2*self.step_size):
                 print('simulation process: ', (t / simulation_time) * 100., ' %')
 
             # update run variables
@@ -424,84 +420,92 @@ class NeuralMassModel(object):
 
         return network_input
 
-    def update_step_size(self, new_step_size, synaptic_inputs, extrinsic_current=None,
-                         extrinsic_synaptic_modulation=None, interpolation_type='cubic'):
+    def update_step_size(self, new_step_size, synaptic_inputs, update_threshold=1e-2, extrinsic_current=None,
+                         extrinsic_synaptic_modulation=None, idx=0, interpolation_type='linear'):
         """
         Updates the time-step size with which the network is simulated.
 
         :param new_step_size: Scalar, indicates the new simulation step-size [unit = s].
         :param synaptic_inputs: synaptic input array that needs to be interpolated.
+        :param update_threshold: If step-size ratio (old vs new) is larger than threshold, interpolations are initiated.
         :param extrinsic_current: extrinsic current array that needs to be interpolated.
         :param extrinsic_synaptic_modulation: synaptic modulation that needs to be interpolated.
+        :param idx: Can be used to interpolate arrays from this point on (int) (default = 0).
         :param interpolation_type: character string, indicates the type of interpolation used for up-/down-sampling the
                firing-rate look-up matrix (default = 'cubic').
 
         :return interpolated synaptic input array.
         """
 
-        ##########################
-        # update step-size field #
-        ##########################
+        ############################################
+        # check whether update has to be performed #
+        ############################################
 
-        step_size_old = self.step_size
-        self.step_size = new_step_size
+        step_size_ratio = np.max((self.step_size, new_step_size)) / np.min((self.step_size, new_step_size))
 
-        ###################################
-        # update populations and synapses #
-        ###################################
+        if np.abs(step_size_ratio - 1) > update_threshold and self.time_steps:
 
-        for i in range(self.N):
+            ##########################
+            # update step-size field #
+            ##########################
 
-            self.neural_masses[i].update_step_size(new_step_size=self.step_size,
-                                                   interpolation_type=interpolation_type)
+            step_size_old = self.step_size
+            self.step_size = new_step_size
 
-        ##############################
-        # update firing rate loop-up #
-        ##############################
+            ##############################
+            # update firing rate loop-up #
+            ##############################
 
-        # get maximum delay in seconds
-        delay = np.max(np.array(self.D, dtype=int)) + self.step_size
+            # get maximum delay in seconds
+            delay = np.max(np.array(self.D, dtype=int)) + self.step_size
 
-        # perform interpolation of old firing rate look-up
-        self.firing_rates_lookup = interpolate_array(t=delay,
-                                                     old_step_size=step_size_old,
-                                                     new_step_size=self.step_size,
-                                                     y=self.firing_rates_lookup,
-                                                     interpolation_type=interpolation_type,
-                                                     axis=1)
+            # check whether update is necessary
+            step_diff = abs(int(delay/self.step_size) - int(delay/step_size_old))
 
-        ###############################
-        # update all extrinsic inputs #
-        ###############################
+            if step_diff >= 1 and delay > self.step_size:
 
-        # synaptic inputs
-        net_input_time = synaptic_inputs.shape[0] * step_size_old
-        synaptic_inputs = interpolate_array(t=net_input_time,
-                                            old_step_size=step_size_old,
-                                            new_step_size=self.step_size,
-                                            y=synaptic_inputs,
-                                            axis=0,
-                                            interpolation_type=interpolation_type)
+                # perform interpolation of old firing rate look-up
+                self.firing_rates_lookup = interpolate_array(old_step_size=step_size_old,
+                                                             new_step_size=self.step_size,
+                                                             y=self.firing_rates_lookup,
+                                                             interpolation_type=interpolation_type,
+                                                             axis=1)
 
-        # extrinsic currents
-        net_input_time = extrinsic_current.shape[0] * step_size_old
-        extrinsic_current = interpolate_array(t=net_input_time,
-                                              old_step_size=step_size_old,
-                                              new_step_size=self.step_size,
-                                              y=extrinsic_current,
-                                              axis=0,
-                                              interpolation_type=interpolation_type)
+            ###############################
+            # update all extrinsic inputs #
+            ###############################
 
-        # synaptic inputs
-        net_input_time = extrinsic_synaptic_modulation.shape[0] * step_size_old
-        extrinsic_synaptic_modulation = interpolate_array(t=net_input_time,
-                                                          old_step_size=step_size_old,
+            # check whether update is necessary
+            net_input_time = synaptic_inputs[idx:, :, :].shape[0] * step_size_old
+
+            step_diff = abs(int(net_input_time/self.step_size) - int(net_input_time/step_size_old))
+
+            if step_diff >= 1:
+
+                # perform updates
+                synaptic_inputs = interpolate_array(old_step_size=step_size_old,
+                                                    new_step_size=self.step_size,
+                                                    y=synaptic_inputs[idx:, :, :],
+                                                    axis=0,
+                                                    interpolation_type=interpolation_type)
+
+                if extrinsic_current:
+
+                    extrinsic_current = interpolate_array(old_step_size=step_size_old,
                                                           new_step_size=self.step_size,
-                                                          y=extrinsic_synaptic_modulation,
+                                                          y=extrinsic_current[idx:, :],
                                                           axis=0,
                                                           interpolation_type=interpolation_type)
 
-        return synaptic_inputs, extrinsic_current, extrinsic_synaptic_modulation
+                if extrinsic_synaptic_modulation:
+
+                    extrinsic_synaptic_modulation = interpolate_array(old_step_size=step_size_old,
+                                                                      new_step_size=self.step_size,
+                                                                      y=np.array(extrinsic_synaptic_modulation)[idx:, :],
+                                                                      axis=0,
+                                                                      interpolation_type=interpolation_type).tolist()
+
+        return synaptic_inputs, extrinsic_current, extrinsic_synaptic_modulation, 0
 
     def plot_neural_mass_states(self, neural_mass_idx=None, time_window=None, create_plot=True):
         """
