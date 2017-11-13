@@ -34,7 +34,7 @@ class JansenRitAxon(Axon):
     Specific parametrization of generic axon, following Jansen & Rit (1995)
     """
 
-    def __init__(self, max_firing_rate=5., membrane_potential_threshold=-0.060, sigmoid_steepness=555.56):
+    def __init__(self, max_firing_rate=5., membrane_potential_threshold=-0.069, sigmoid_steepness=555.56):
         """
         Initializes basic axon with Jansen & Rit's sigmoid parameters.
 

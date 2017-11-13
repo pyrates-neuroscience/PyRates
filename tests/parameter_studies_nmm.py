@@ -102,7 +102,8 @@ def JR_parameter_study(param_names, param_values, simulation_time=1.0, step_size
                   'velocities': velocities,
                   'synapse_params': synapse_params,
                   'axon_params': axon_params,
-                  'init_states': init_states}
+                  'init_states': init_states,
+                  'synaptic_inputs': synaptic_inputs}
 
     # alter requested parameters and run simulations for each passed parameter value combination
     ############################################################################################
@@ -254,14 +255,14 @@ def parameter_plot_2D(results, param_names, param_vals):
 # apply above defined functions #
 #################################
 
-ampa_efficiencies = np.linspace(0.1, 1.0, 2) * 1.273 * 3e-13
-synaptic_input_strengths = np.array([50, 100, 150, 200, 250, 300, 350, 400])
-results = JR_AMPAEfficiency_And_InputStrength_Varied(ampa_efficiencies=ampa_efficiencies,
-                                                     synaptic_input_strengths=synaptic_input_strengths,
-                                                     grid_simulation=True)
+#ampa_efficiencies = np.linspace(0.1, 1.0, 2) * 1.273 * 3e-13
+#synaptic_input_strengths = np.array([50, 100, 150, 200, 250, 300, 350, 400])
+#results = JR_AMPAEfficiency_And_InputStrength_Varied(ampa_efficiencies=ampa_efficiencies,
+#                                                     synaptic_input_strengths=synaptic_input_strengths,
+#                                                     grid_simulation=True)
 
-fig = parameter_plot_2D(results=results.T,
-                        param_names=['AMPA synapse efficiency [1e-13 A]', 'Synaptic input strength [Hz]'],
-                        param_vals=[np.round(ampa_efficiencies * 1e13, decimals=2), synaptic_input_strengths])
-
-fig.show()
+#fig = parameter_plot_2D(results=results.T,
+#                        param_names=['AMPA synapse efficiency [1e-13 A]', 'Synaptic input strength [Hz]'],
+#                        param_vals=[np.round(ampa_efficiencies * 1e13, decimals=2), synaptic_input_strengths])
+#
+#fig.show()

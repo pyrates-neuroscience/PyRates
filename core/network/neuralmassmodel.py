@@ -376,8 +376,8 @@ class NeuralMassModel(object):
             self.firing_rates_lookup = self.firing_rates_lookup[:, 0:-1]
 
             # display simulation progress
-            if verbose and (t == 0 or ((t / simulation_time) * 100. % 10) < 2*self.step_size):
-                print('simulation process: ', (t / simulation_time) * 100., ' %')
+            if verbose and (t == 0 or ((t / simulation_time) * 100. % 10.) <= 1*self.step_size):
+                print('simulation progress: ', "%.2f" % ((t / simulation_time) * 100.), ' %')
 
             # update run variables
             t += self.step_size

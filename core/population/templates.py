@@ -183,7 +183,7 @@ class JansenRitInhibitoryInterneurons(Population):
 
         """
 
-        super(JansenRitInhibitoryInterneurons, self).__init__(synapses=['GABAA_current'],
+        super(JansenRitInhibitoryInterneurons, self).__init__(synapses=['AMPA_current'],
                                                               axon='JansenRit',
                                                               init_state=init_state,
                                                               step_size=step_size,

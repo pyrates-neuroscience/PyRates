@@ -657,7 +657,7 @@ class TestNMMs(unittest.TestCase):
                 simulation_time=simulation_time,
                 cutoff_time=cutoff_time,
                 store_step=store_step,
-                variable_step_size=True,
+                variable_step_size=False,
                 verbose=False)
 
         states = np.array(nmm.neural_mass_states).T

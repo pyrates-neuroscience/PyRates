@@ -17,6 +17,8 @@ __status__ = "Development"
 
 # TODO: Implement synaptic plasticity mechanism(s)
 
+# TODO: Change storage variables on population such that they use the same tim-scale as synaptic kernels (in order to
+# TODO: avoid interpolation)
 
 class Population(object):
     """
@@ -260,14 +262,16 @@ class Population(object):
                            y0=[y_old],
                            t_bound=float('inf'),
                            min_step=self.synapses[0].step_size,
-                           max_step=0.01)
+                           max_step=2*self.synapses[0].step_size,
+                           rtol=1e-1,
+                           atol=1e-3)
 
             # perform integration step and calculate output
             solver.step()
             y_new = np.squeeze(solver.y)
 
             # update internal step-size
-            self.update_step_size(solver.step_size)
+            self.update_step_size(solver.t - solver.t_old)
 
         else:
 
