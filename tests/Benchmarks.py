@@ -94,7 +94,7 @@ def run_JR_circuit_benchmark(simulation_time=60.0, step_size=1e-4, param_names=N
     return simulation_duration
 
 
-def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None, connectivity_scaling=100.0, D=False,
+def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None, connectivity_scaling=100.0, D=True,
                              velocity=1.0, synaptic_input=None, verbose=False, variable_step_size=False):
     """
     Runs benchmark for a number of JR circuits connected in a network.
@@ -208,38 +208,38 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
 
 # parameters
 simulation_duration = 1.0
-step_size = 1e-3
+step_size = 1e-4
 verbose = True
 variable_step_size = False
 D = False
 velocity = 2.0
-connectivity_scaling = 70.0
+connectivity_scaling = 100.0
 
 # single JR circuit
-#sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
-#                                              step_size=step_size,
-#                                              verbose=verbose,
-#                                              variable_step_size=variable_step_size)
+# sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
+#                                               step_size=step_size,
+#                                               verbose=verbose,
+#                                               variable_step_size=variable_step_size)
 
 # JR network (33 connected JR circuits)
-#sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
-#                                              step_size=step_size,
-#                                              D=D,
-#                                              velocity=velocity,
-#                                              connectivity_scaling=connectivity_scaling,
-#                                              verbose=verbose,
-#                                              variable_step_size=variable_step_size)
+sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
+                                              step_size=step_size,
+                                              D=D,
+                                              velocity=velocity,
+                                              connectivity_scaling=connectivity_scaling,
+                                              verbose=verbose,
+                                              variable_step_size=variable_step_size)
 
 ################
 # memory usage #
 ################
 
 # single JR circuit
-mem_use_JR_circuit = memory_usage((run_JR_circuit_benchmark, (simulation_duration, step_size)))
-print("%.2f" % simulation_duration, 's simulation of Jansen-Rit circuit used ',
-      "%.2f" % (np.sum(mem_use_JR_circuit) * 1e-1), ' MB RAM.')
+#mem_use_JR_circuit = memory_usage((run_JR_circuit_benchmark, (simulation_duration, step_size)))
+#print("%.2f" % simulation_duration, 's simulation of Jansen-Rit circuit used ',
+#      "%.2f" % (np.sum(mem_use_JR_circuit) * 1e-2), ' MB RAM.')
 
 # JR network (33 connected JR circuits)
-mem_use_JR_network = memory_usage((run_JR_network_benchmark, (simulation_duration, step_size)))
-print("%.2f" % simulation_duration, 's simulation of network with 33 JR circuits used ',
-      "%.2f" % (np.sum(mem_use_JR_network) * 1e-1), ' MB RAM.')
+#mem_use_JR_network = memory_usage((run_JR_network_benchmark, (simulation_duration, step_size)))
+#print("%.2f" % simulation_duration, 's simulation of network with 33 JR circuits used ',
+#      "%.2f" % (np.sum(mem_use_JR_network) * 1e-2), ' MB RAM.')

@@ -24,9 +24,9 @@ class JansenRitPyramidalCells(Population):
 
     """
 
-    def __init__(self, init_state=(0., 0), step_size=5e-4, synaptic_kernel_length=100, tau_leak=0.016,
-                 resting_potential=-0.075, membrane_capacitance=1e-12, synapse_params=None, axon_params=None,
-                 store_state_variables=False, store_input_firing_rate=False, store_output_firing_rate=False):
+    def __init__(self, init_state=0., step_size=5e-4, synaptic_kernel_length=100, tau_leak=0.016,
+                 resting_potential=-0.075, membrane_capacitance=1e-12, max_delay=0, synapse_params=None,
+                 axon_params=None, store_state_variables=False):
         """
         Initializes a single pyramidal cell population as defined in Jansen & Rit (1995).
 
@@ -63,11 +63,10 @@ class JansenRitPyramidalCells(Population):
                                                       tau_leak=tau_leak,
                                                       resting_potential=resting_potential,
                                                       membrane_capacitance=membrane_capacitance,
+                                                      max_delay=max_delay,
                                                       synapse_params=synapse_params,
                                                       axon_params=axon_params,
-                                                      store_state_variables=store_state_variables,
-                                                      store_input_firing_rate=store_input_firing_rate,
-                                                      store_output_firing_rate=store_output_firing_rate)
+                                                      store_state_variables=store_state_variables)
 
 
 class JansenRitExcitatoryInterneurons(Population):
@@ -88,9 +87,9 @@ class JansenRitExcitatoryInterneurons(Population):
 
     """
 
-    def __init__(self, init_state=(0., 0), step_size=5e-4, synaptic_kernel_length=100, tau_leak=0.016,
-                 resting_potential=-0.075, membrane_capacitance=1e-12, synapse_params=None, axon_params=None,
-                 store_state_variables=False, store_input_firing_rate=False, store_output_firing_rate=False):
+    def __init__(self, init_state=0., step_size=5e-4, synaptic_kernel_length=100, tau_leak=0.016,
+                 resting_potential=-0.075, membrane_capacitance=1e-12, max_delay=0, synapse_params=None,
+                 axon_params=None, store_state_variables=False):
         """
         Initializes a single excitatory interneuron population as defined in Jansen & Rit (1995).
 
@@ -127,11 +126,10 @@ class JansenRitExcitatoryInterneurons(Population):
                                                               tau_leak=tau_leak,
                                                               resting_potential=resting_potential,
                                                               membrane_capacitance=membrane_capacitance,
+                                                              max_delay=max_delay,
                                                               synapse_params=synapse_params,
                                                               axon_params=axon_params,
-                                                              store_state_variables=store_state_variables,
-                                                              store_input_firing_rate=store_input_firing_rate,
-                                                              store_output_firing_rate=store_output_firing_rate)
+                                                              store_state_variables=store_state_variables)
 
 
 class JansenRitInhibitoryInterneurons(Population):
@@ -152,9 +150,9 @@ class JansenRitInhibitoryInterneurons(Population):
 
     """
 
-    def __init__(self, init_state=(0., 0), step_size=5e-4, synaptic_kernel_length=100, tau_leak=0.016,
-                 resting_potential=-0.075, membrane_capacitance=1e-12, synapse_params=None, axon_params=None,
-                 store_state_variables=False, store_input_firing_rate=False, store_output_firing_rate=False):
+    def __init__(self, init_state=0., step_size=5e-4, synaptic_kernel_length=100, tau_leak=0.016,
+                 resting_potential=-0.075, membrane_capacitance=1e-12, max_delay=0, synapse_params=None,
+                 axon_params=None, store_state_variables=False):
         """
         Initializes a single inhibitory interneuron population as defined in Jansen & Rit (1995).
 
@@ -191,8 +189,7 @@ class JansenRitInhibitoryInterneurons(Population):
                                                               tau_leak=tau_leak,
                                                               resting_potential=resting_potential,
                                                               membrane_capacitance=membrane_capacitance,
+                                                              max_delay=max_delay,
                                                               synapse_params=synapse_params,
                                                               axon_params=axon_params,
-                                                              store_state_variables=store_state_variables,
-                                                              store_input_firing_rate=store_input_firing_rate,
-                                                              store_output_firing_rate=store_output_firing_rate)
+                                                              store_state_variables=store_state_variables)

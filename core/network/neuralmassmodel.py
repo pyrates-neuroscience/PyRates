@@ -136,6 +136,7 @@ class NeuralMassModel(object):
         self.time_steps = list()
         self.active_synapses = np.zeros((self.N, self.n_synapses), dtype=bool)
         self.neuromodulation = neuromodulatory_effect
+        self.network_output = np.zeros([self.N, self.n_synapses])
 
         # set up synapse labels
         if synapses:
@@ -171,36 +172,6 @@ class NeuralMassModel(object):
         if type(population_capacitance) is float:
             population_capacitance = [population_capacitance for i in range(self.N)]
 
-        ##########################
-        # initialize populations #
-        ##########################
-
-        if init_states is None:
-            init_states = np.zeros((self.N, 2))
-
-        for i in range(self.N):
-
-            # check and extract synapses that exist at respective population
-            self.active_synapses[i, :] = (np.sum(connections[i, :, :], axis=0) != 0).squeeze()
-            idx = np.asarray(self.active_synapses[i, :].nonzero(), dtype=int)
-            if len(idx) == 1:
-                idx = idx[0]
-            synapses_tmp = [self.synapse_types[j] for j in idx]
-            synapse_params_tmp = [synapse_params[j] for j in idx]
-
-            # pass parameters to function that initializes the population
-            self.neural_masses.append(set_population(population_type=population_types[i],
-                                                     synapses=synapses_tmp,
-                                                     axon=axons[i],
-                                                     init_state=init_states[i],
-                                                     step_size=step_size,
-                                                     synaptic_kernel_length=synaptic_kernel_length,
-                                                     resting_potential=population_resting_potentials[i],
-                                                     tau_leak=population_leak_taus[i],
-                                                     membrane_capacitance=population_capacitance[i],
-                                                     axon_params=axon_params[i],
-                                                     synapse_params=synapse_params_tmp))
-
         ##################################
         # set inter-population distances #
         ##################################
@@ -227,7 +198,7 @@ class NeuralMassModel(object):
         if type(velocities) is float or type(velocities) is np.ndarray:
 
             # divide distances by single or pair-wise velocity
-            self.D = self.D / velocities
+            self.D = self.D / (velocities *1e3)
 
         elif type(velocities) is dict:
 
@@ -250,14 +221,43 @@ class NeuralMassModel(object):
 
             raise ValueError('Wrong input type for velocities')
 
-        ###########################
-        # initialize delay buffer #
-        ###########################
+        ##############################################################################
+        # transform delays into time-steps and get maximum delay for each population #
+        ##############################################################################
 
-        max_delay = np.max(np.array(self.D / self.step_size, dtype=int)) + 1
+        self.D = np.array(self.D / self.step_size, dtype=int)
+        max_delay = np.max(self.D, axis=1)
 
-        self.firing_rates_lookup = np.zeros((self.N, max_delay))
-        self.firing_rates_lookup[:, 0] = np.array([self.neural_masses[i].output_firing_rate[-1] for i in range(self.N)])
+        ##########################
+        # initialize populations #
+        ##########################
+
+        if init_states is None:
+            init_states = np.zeros(self.N)
+
+        for i in range(self.N):
+
+            # check and extract synapses that exist at respective population
+            self.active_synapses[i, :] = (np.sum(connections[i, :, :], axis=0) != 0).squeeze()
+            idx = np.asarray(self.active_synapses[i, :].nonzero(), dtype=int)
+            if len(idx) == 1:
+                idx = idx[0]
+            synapses_tmp = [self.synapse_types[j] for j in idx]
+            synapse_params_tmp = [synapse_params[j] for j in idx]
+
+            # pass parameters to function that initializes the population
+            self.neural_masses.append(set_population(population_type=population_types[i],
+                                                     synapses=synapses_tmp,
+                                                     axon=axons[i],
+                                                     init_state=init_states[i],
+                                                     step_size=step_size,
+                                                     synaptic_kernel_length=synaptic_kernel_length,
+                                                     resting_potential=population_resting_potentials[i],
+                                                     tau_leak=population_leak_taus[i],
+                                                     membrane_capacitance=population_capacitance[i],
+                                                     max_delay=max_delay[i],
+                                                     axon_params=axon_params[i],
+                                                     synapse_params=synapse_params_tmp))
 
     def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, extrinsic_modulation=None, cutoff_time=0.,
             store_step=1, variable_step_size=False, verbose=False, continue_run=False):
@@ -321,59 +321,53 @@ class NeuralMassModel(object):
         # simulate network #
         ####################
 
+        # preparation
         n = 0
-        self.time_steps.pop()
+        self.time_steps.pop(0)
 
         while t < simulation_time-self.step_size:
 
-            # get delayed input arriving at each neural mass
-            network_input = self.get_delayed_input()
+            # get weighted firing rates of each population
+            self.get_firing_rates()
 
+            # initialize collector arrays
             neural_mass_states = np.zeros(self.N)
-            firing_rates = np.zeros((self.N, 1))
-            if variable_step_size:
-                step_sizes = np.zeros(self.N)
 
             # update state of each neural mass according to input and store relevant state variables
             for i in range(self.N):
 
+                # get active synapses idx
+                idx = self.active_synapses[i, :]
+
+                # pass external input to neural mass
+                ext_inp = synaptic_inputs[n, i, idx]
+                self.neural_masses[i].synaptic_input[self.neural_masses[i].current_input_idx, :] += ext_inp
+
+                # pass network input to neural mass
+                for j in range(self.N):
+                    self.neural_masses[i].synaptic_input[self.neural_masses[i].current_input_idx + self.D[i, j], :] += \
+                        self.network_output[j, idx] * self.C[i, j, idx]
+
                 # check whether neural mass needs to be updated
                 if self.neural_masses[i].t <= t:
 
-                    # calculate synaptic input
-                    synaptic_input = synaptic_inputs[n, i, self.active_synapses[i, :]] + \
-                                     network_input[i, self.active_synapses[i, :]]
-
                     # update all state variables
                     if extrinsic_current is not None:
-                        self.neural_masses[i].state_update(synaptic_input=synaptic_input,
-                                                           extrinsic_current=extrinsic_current[n, i],
+                        self.neural_masses[i].state_update(extrinsic_current=extrinsic_current[n, i],
                                                            extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
                                                            synaptic_modulation_direction=self.neuromodulation[i],
                                                            variable_step_size=variable_step_size)
                     else:
-                        self.neural_masses[i].state_update(synaptic_input=synaptic_input,
-                                                           extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
+                        self.neural_masses[i].state_update(extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
                                                            synaptic_modulation_direction=self.neuromodulation[i],
                                                            variable_step_size=variable_step_size)
 
-                # update firing-rate look-up
-                firing_rates[i] = self.neural_masses[i].output_firing_rate[-1]
-
                 # store membrane potential
-                neural_mass_states[i] = np.asarray(self.neural_masses[i].state_variables[-1])
-
-                # store updated step-size
-                if variable_step_size:
-                    step_sizes[i] = self.neural_masses[i].step_size
+                neural_mass_states[i] = self.neural_masses[i].state_variables[-1][0]
 
             # store state-variables
             if t >= cutoff_time and np.mod(n, store_step) == 0:
                 self.neural_mass_states.append(neural_mass_states)
-
-            # update firing-rate look-up
-            self.firing_rates_lookup = np.append(firing_rates, self.firing_rates_lookup, axis=1)
-            self.firing_rates_lookup = self.firing_rates_lookup[:, 0:-1]
 
             # display simulation progress
             if verbose and (t == 0 or ((t / simulation_time) * 100. % 10.) <= 1*self.step_size):
@@ -384,41 +378,29 @@ class NeuralMassModel(object):
             n += 1
             self.time_steps.append(t)
 
-    def get_delayed_input(self):
+    def get_firing_rates(self):
         """
-        Applies network delays to receive inputs arriving at each neural mass
+        Gets firing rate of each neural mass in network.
 
-        :return: network input: N x n_synapses matrix. Delayed, weighted network input to each synapse of each neural
-                 mass [unit: 1/s].
+        :return: network input: N x n_synapses matrix. Network outputs targeting different synapses [unit: 1/s].
 
         """
 
-        # transform propagation delays from seconds into time-steps
-        D = np.array(self.D / self.step_size, dtype=int)
-
-        #####################################
-        # collect input to each neural mass #
-        #####################################
-
-        network_input = np.zeros((self.N, self.n_synapses))
+        ######################################
+        # collect output of each neural mass #
+        ######################################
 
         for i in range(self.N):
 
-            # get delayed firing rates from all populations at each possible velocity
-            firing_rate_delayed = np.array([self.firing_rates_lookup[j, D[i, j]] for j in range(self.N)])
+            self.network_output[i, :] = self.neural_masses[i].get_firing_rate()
 
-            if hasattr(self, 'velocity_distributions'):
+            #if hasattr(self, 'velocity_distributions'):
+            #
+            #    # get velocity distribution for each connection to population i
+            #    velocities = np.array(self.velocity_distributions[self.velocity_distribution_indices[i, :]]).squeeze()
 
-                # get velocity distribution for each connection to population i
-                velocities = np.array(self.velocity_distributions[self.velocity_distribution_indices[i, :]]).squeeze()
-
-                # apply velocity distribution weights to the delayed firing rates
-                firing_rate_delayed = np.sum(firing_rate_delayed * velocities, axis=1)
-
-            # apply connection weights to delayed firing rates
-            network_input[i, :] = np.dot(self.C[i, :].T, firing_rate_delayed)
-
-        return network_input
+            #    # apply velocity distribution weights to the delayed firing rates
+            #    firing_rate_delayed = np.sum(firing_rate_delayed * velocities, axis=1)
 
     def update_step_size(self, new_step_size, synaptic_inputs, update_threshold=1e-2, extrinsic_current=None,
                          extrinsic_synaptic_modulation=None, idx=0, interpolation_type='linear'):
@@ -581,7 +563,7 @@ def check_nones(param, n):
 
 
 def set_population(population_type, synapses, axon, init_state, step_size, synaptic_kernel_length, resting_potential,
-                   tau_leak, membrane_capacitance, axon_params, synapse_params):
+                   tau_leak, membrane_capacitance, max_delay, axon_params, synapse_params):
     """
     Instantiates a population. For detailed parameter description, see population class.
 
@@ -600,6 +582,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
                                                resting_potential=resting_potential,
                                                tau_leak=tau_leak,
                                                membrane_capacitance=membrane_capacitance,
+                                               max_delay=max_delay,
                                                axon_params=axon_params,
                                                synapse_params=synapse_params)
 
@@ -611,6 +594,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
                                                        resting_potential=resting_potential,
                                                        tau_leak=tau_leak,
                                                        membrane_capacitance=membrane_capacitance,
+                                                       max_delay=max_delay,
                                                        axon_params=axon_params,
                                                        synapse_params=synapse_params)
 
@@ -622,6 +606,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
                                                        resting_potential=resting_potential,
                                                        tau_leak=tau_leak,
                                                        membrane_capacitance=membrane_capacitance,
+                                                       max_delay=max_delay,
                                                        axon_params=axon_params,
                                                        synapse_params=synapse_params)
 
@@ -635,6 +620,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
                                   resting_potential=resting_potential,
                                   tau_leak=tau_leak,
                                   membrane_capacitance=membrane_capacitance,
+                                  max_delay=max_delay,
                                   axon_params=axon_params,
                                   synapse_params=synapse_params)
 

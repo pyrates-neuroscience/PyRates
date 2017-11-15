@@ -536,7 +536,7 @@ class TestNMMs(unittest.TestCase):
                               velocities=velocities,
                               synapse_params=synapse_params,
                               axon_params=axon_params,
-                              init_states=init_states)
+                              init_states=init_states[0])
 
         # run network simulation
         ########################
@@ -648,7 +648,7 @@ class TestNMMs(unittest.TestCase):
                               velocities=velocities,
                               synapse_params=synapse_params,
                               axon_params=axon_params,
-                              init_states=init_states)
+                              init_states=init_states[0])
 
         # run network simulation
         ########################
@@ -766,7 +766,7 @@ class TestNMMs(unittest.TestCase):
                                   velocities=velocities,
                                   synapse_params=synapse_params,
                                   axon_params=axon_params,
-                                  init_states=init_states)
+                                  init_states=init_states[0])
 
             # run network simulation
             ########################

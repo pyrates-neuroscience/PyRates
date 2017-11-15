@@ -17,8 +17,8 @@ __status__ = "Development"
 
 # TODO: Implement synaptic plasticity mechanism(s)
 
-# TODO: Change storage variables on population such that they use the same tim-scale as synaptic kernels (in order to
-# TODO: avoid interpolation)
+# TODO: Implement new function that updates synaptic input field according to input + delay
+
 
 class Population(object):
     """
@@ -39,10 +39,9 @@ class Population(object):
 
     """
 
-    def __init__(self, synapses, axon='JansenRit', init_state=(0., 0), step_size=0.0001, synaptic_kernel_length=100,
-                 tau_leak=0.016, resting_potential=-0.075, membrane_capacitance=1e-12, synapse_params=None,
-                 axon_params=None, store_state_variables=False, store_input_firing_rate=False,
-                 store_output_firing_rate=False):
+    def __init__(self, synapses, axon='JansenRit', init_state=0., step_size=0.0001, synaptic_kernel_length=100,
+                 tau_leak=0.016, resting_potential=-0.075, membrane_capacitance=1e-12, max_delay=0, synapse_params=None,
+                 axon_params=None, store_state_variables=False):
         """
         Initializes a single neural mass.
 
@@ -60,15 +59,12 @@ class Population(object):
                population [unit = V] (default = -0.07).
         :param membrane_capacitance: scalar, determines average capacitance of the population cell membranes
                [unit = q/V] (default = 1e-12).
+        :param max_delay: number of time-steps that external input needs to affect population [unit = 1] (default = 0).
         :param synapse_params: list of dictionaries containing parameters for custom synapse type. For parameter
                explanation see synapse class (default = None).
         :param axon_params: dictionary containing parameters for custom axon type. For parameter explanation see
                axon class (default = None).
         :param store_state_variables: If false, old state variables will be erased after each state-update
-               (default = False).
-        :param store_input_firing_rate: If false, old input firing rates will only be kept for as much time-steps as
-               necessary by synaptic kernel length (default = False).
-        :param store_output_firing_rate: If false, old output firing rates will be erased after each state-update
                (default = False).
 
         """
@@ -79,8 +75,6 @@ class Population(object):
 
         assert type(synapses) is list
         assert type(axon) is str or axon is None
-        assert len(init_state) == 2
-        assert init_state[1] >= 0 and (type(init_state[0]) is float or np.float64)
         assert step_size > 0
         assert synaptic_kernel_length > 0
         assert tau_leak > 0
@@ -94,21 +88,18 @@ class Population(object):
         #############################
 
         self.synapses = list()
+        self.n_modulatory_synapses = 0
         self.state_variables = list()
-        self.input_firing_rate = list()
-        self.output_firing_rate = list()
         self.store_state_variables = store_state_variables
-        self.store_input_firing_rate = store_input_firing_rate
-        self.store_output_firing_rate = store_output_firing_rate
         self.tau_leak = tau_leak
         self.resting_potential = resting_potential
         self.step_size = step_size
         self.membrane_capacitance = membrane_capacitance
         self.t = 0
 
-        # set initial state and firing rate values
-        self.state_variables.append(init_state[0])
-        self.output_firing_rate.append(init_state[1])
+        # set initial states
+        self.state_variables.append([init_state]) if type(init_state) is float or np.float64 \
+            else self.state_variables.append(init_state)
 
         ####################################
         # set axonal plasticity parameters #
@@ -148,11 +139,21 @@ class Population(object):
 
             for i in range(len(synapses)):
                 self.synapses.append(set_synapse(synapses[i], step_size, synaptic_kernel_length))
+                if self.synapses[-1].neuromodulatory:
+                    self.n_modulatory_synapses += 1
 
         else:
 
             for i in range(len(synapse_params)):
                 self.synapses.append(set_synapse(synapses[i], step_size, synaptic_kernel_length, synapse_params[i]))
+                if self.synapses[-1].neuromodulatory:
+                    self.n_modulatory_synapses += 1
+
+        # set synaptic input array
+        self.synaptic_input = np.zeros((synaptic_kernel_length + max_delay, len(self.synapses)),)
+
+        # set input index for each synapse
+        self.current_input_idx = 0
 
         ############
         # set axon #
@@ -160,12 +161,11 @@ class Population(object):
 
         self.axon = set_axon(axon, axon_params)
 
-    def state_update(self, synaptic_input, extrinsic_current=0., extrinsic_synaptic_modulation=1.0,
-                     synaptic_modulation_direction=1.0, variable_step_size=False):
+    def state_update(self, extrinsic_current=0., extrinsic_synaptic_modulation=1.0, synaptic_modulation_direction=1.0,
+                     variable_step_size=False):
         """
         Updates state according to current synapse and axon parametrization.
 
-        :param synaptic_input: vector, average firing rate arriving at each synapse [unit = 1/s].
         :param extrinsic_current: extrinsic current added to membrane potential change [unit = A] (default = 0).
         :param extrinsic_synaptic_modulation: modulatory input to each synapse. Can be scalar (applied to all synapses
                then) or vector with len = number of synapses (default = 1.0) [unit = 1].
@@ -180,8 +180,6 @@ class Population(object):
         # check input parameters #
         ##########################
 
-        assert all(synaptic_input) >= 0
-        assert len(synaptic_input) == len(self.synapses)
         assert type(extrinsic_current) is float or np.float64
 
         ##########################################
@@ -189,38 +187,19 @@ class Population(object):
         ##########################################
 
         self.variable_step_size = variable_step_size
-        self.input_firing_rate.append(synaptic_input)
         self.extrinsic_current = extrinsic_current
         self.extrinsic_synaptic_modulation = extrinsic_synaptic_modulation
         self.synaptic_modulation_direction = synaptic_modulation_direction
-        membrane_potential = self.state_variables[-1]
 
         ######################################
         # compute average membrane potential #
         ######################################
 
+        membrane_potential = self.state_variables[-1][0]
         membrane_potential = self.take_step(f=self.get_delta_membrane_potential,
                                             y_old=membrane_potential)
 
-        ###############################
-        # compute average firing rate #
-        ###############################
-
-        firing_rate = self.axon.compute_firing_rate(membrane_potential)
-
-        ###########################################
-        # update state variables and firing rates #
-        ###########################################
-
-        self.state_variables.append(membrane_potential)
-        self.output_firing_rate.append(firing_rate)
-
-        if not self.store_output_firing_rate:
-            self.output_firing_rate.pop(0)
-        if not self.store_state_variables:
-            self.state_variables.pop(0)
-        if not self.store_input_firing_rate and (len(self.input_firing_rate) > self.synapses[0].kernel_length):
-            self.input_firing_rate.pop(0)
+        state_vars = [membrane_potential]
 
         ###################################
         # update axonal transfer function #
@@ -231,17 +210,38 @@ class Population(object):
             self.axon.membrane_potential_threshold = self.take_step(f=self.get_delta_membrane_potential_threshold,
                                                                     y_old=self.axon.membrane_potential_threshold)
 
+            state_vars.append(self.axon.membrane_potential_threshold)
+
         ###########################
         # update synaptic kernels #
         ###########################
 
         # TODO: implement differential equation that adapts synaptic efficiencies
 
-        ###################
-        # advance in time #
-        ###################
+        ##########################
+        # update state variables #
+        ##########################
+
+        self.state_variables.append(state_vars)
+
+        if not self.store_state_variables:
+            self.state_variables.pop(0)
+
+        ################################################
+        # advance in time and in synaptic input vector #
+        ################################################
 
         self.t += self.step_size
+
+        # synaptic input
+        if self.current_input_idx < self.synapses[0].kernel_length - 1:
+
+            self.current_input_idx += 1
+
+        else:
+
+            self.synaptic_input = np.append(self.synaptic_input, np.zeros((1, self.synaptic_input.shape[1])), axis=0)
+            self.synaptic_input = self.synaptic_input[1:, :]
 
     def take_step(self, f, y_old):
         """
@@ -262,8 +262,7 @@ class Population(object):
                            y0=[y_old],
                            t_bound=float('inf'),
                            min_step=self.synapses[0].step_size,
-                           max_step=2*self.synapses[0].step_size,
-                           rtol=1e-1,
+                           rtol=1e-2,
                            atol=1e-3)
 
             # perform integration step and calculate output
@@ -271,7 +270,7 @@ class Population(object):
             y_new = np.squeeze(solver.y)
 
             # update internal step-size
-            self.update_step_size(solver.t - solver.t_old)
+            self.step_size = solver.t - solver.t_old
 
         else:
 
@@ -308,29 +307,13 @@ class Population(object):
         :return: net synaptic current [unit = mA].
         """
 
-        ############################################################
-        # get input firing rate history and interpolate it until t #
-        ############################################################
-
-        inputs = np.asarray(self.input_firing_rate)
-        step_size_diff = self.synapses[0].kernel_length * self.step_size - \
-                         self.synapses[0].kernel_length * self.synapses[0].step_size
-
-        if inputs.shape[0] > 1 and self.variable_step_size and abs(step_size_diff) > self.step_size:
-
-            inputs = interpolate_array(old_step_size=self.step_size,
-                                       new_step_size=self.synapses[0].step_size,
-                                       y=inputs,
-                                       axis=0,
-                                       interpolation_type='linear')
-
-        ######################################
-        # compute average membrane potential #
-        ######################################
+        #############################################
+        # compute synaptic currents and modulations #
+        #############################################
 
         # calculate synaptic currents and modulations for each synapse
-        synaptic_currents = list()
-        synaptic_modulation = list()
+        synaptic_currents = np.zeros(len(self.synapses) - self.n_modulatory_synapses)
+        synaptic_modulation = np.zeros(self.n_modulatory_synapses)
 
         for i in range(len(self.synapses)):
 
@@ -338,38 +321,45 @@ class Population(object):
             if self.synapses[i].neuromodulatory:
 
                 if self.synapses[i].conductivity_based:
-                    synaptic_modulation.append(self.synapses[i].get_synaptic_current(inputs[:, i], membrane_potential))
+                    synaptic_modulation[i] = self.synapses[i].get_synaptic_current(
+                        self.synaptic_input[0:self.current_input_idx + 1, i], membrane_potential)
                 else:
-                    synaptic_modulation.append(self.synapses[i].get_synaptic_current(inputs[:, i]))
+                    synaptic_modulation[i] = self.synapses[i].get_synaptic_current(
+                        self.synaptic_input[0:self.current_input_idx + 1, i])
 
             else:
 
                 # synaptic current
                 if self.synapses[i].conductivity_based:
-                    synaptic_currents.append(self.synapses[i].get_synaptic_current(inputs[:, i], membrane_potential))
+                    synaptic_currents[i] = self.synapses[i].get_synaptic_current(
+                        self.synaptic_input[0:self.current_input_idx + 1, i], membrane_potential)
                 else:
-                    synaptic_currents.append(self.synapses[i].get_synaptic_current(inputs[:, i]))
+                    synaptic_currents[i] = self.synapses[i].get_synaptic_current(
+                        self.synaptic_input[0:self.current_input_idx + 1, i])
 
-        synaptic_currents = np.array(synaptic_currents)
-        synaptic_modulation = np.array(synaptic_modulation)
+        #######################################################
+        # apply extrinsic modulation and modulation direction #
+        #######################################################
 
-        if type(self.synaptic_modulation_direction) is float:
-            self.synaptic_modulation_direction = [np.ones(len(synaptic_currents) + 2) *
-                                                  self.synaptic_modulation_direction]
+        if synaptic_modulation:
 
-        # set modulation direction for each synapse
-        synaptic_modulation_tmp = np.zeros((len(synaptic_modulation), len(self.synaptic_modulation_direction[0])))
-        for i in range(len(synaptic_modulation)):
-            synaptic_modulation_tmp[i] = synaptic_modulation[i] ** self.synaptic_modulation_direction[i]
-        synaptic_modulation = np.prod(synaptic_modulation_tmp, axis=0)
+            if type(self.synaptic_modulation_direction) is float:
+                self.synaptic_modulation_direction = [np.ones(len(synaptic_currents)) *
+                                                      self.synaptic_modulation_direction]
+
+            # set modulation direction for each synapse
+            synaptic_modulation_tmp = np.zeros((len(synaptic_modulation), len(synaptic_currents)))
+            for i in range(len(synaptic_modulation)):
+                synaptic_modulation_tmp[i] = synaptic_modulation[i] ** self.synaptic_modulation_direction[i]
+            synaptic_modulation = np.prod(synaptic_modulation_tmp, axis=0)
 
         # combine extrinsic and intrinsic synaptic modulation
-        if type(self.extrinsic_synaptic_modulation) is float:
-            self.extrinsic_synaptic_modulation = np.ones(len(synaptic_currents) + 2) *\
+        if type(self.extrinsic_synaptic_modulation) is float and self.extrinsic_synaptic_modulation != 1.0:
+            self.extrinsic_synaptic_modulation = np.ones(len(synaptic_currents)) *\
                                                  self.extrinsic_synaptic_modulation
-        synaptic_modulation *= self.extrinsic_synaptic_modulation
+            synaptic_modulation *= self.extrinsic_synaptic_modulation
 
-        return np.dot(synaptic_currents, synaptic_modulation[0:-2])
+        return np.dot(synaptic_currents, synaptic_modulation) if synaptic_modulation else np.sum(synaptic_currents)
 
     def get_leak_current(self, membrane_potential):
         """
@@ -391,38 +381,17 @@ class Population(object):
 
         """
 
-        return (self.output_firing_rate[-1] - self.firing_rate_target) / self.tau_axon
+        return (self.get_firing_rate() - self.firing_rate_target) / self.tau_axon
 
-    def update_step_size(self, new_step_size, interpolation_type='linear'):
+    def get_firing_rate(self):
         """
-        Updates internal step-size to new step-size. Interpolates input history to fit new step-size.
+        Method that return the current average firing rate of the population.
 
-        :param new_step_size: new step-size with which population dynamics develop [unit = s].
-        :param interpolation_type: character string, indicates the type of interpolation used for up-/down-sampling the
-               firing-rate look-up matrix (default = 'cubic').
+        :return: average firing rate [unit = Hz]
 
         """
 
-        step_size_diff = self.synapses[0].kernel_length * new_step_size - \
-                         self.synapses[0].kernel_length * self.step_size
-
-        # get input history
-        inputs = np.asarray(self.input_firing_rate)
-
-        if abs(step_size_diff) > new_step_size and inputs.shape[0] > 1:
-
-            # interpolate input history to fit new step size
-            inputs = interpolate_array(old_step_size=self.step_size,
-                                       new_step_size=new_step_size,
-                                       y=inputs,
-                                       interpolation_type=interpolation_type,
-                                       axis=0)
-
-            # save new input history
-            self.input_firing_rate = inputs.tolist()
-
-            # set new step-size
-            self.step_size = new_step_size
+        return self.axon.compute_firing_rate(self.state_variables[-1][0])
 
     def plot_synaptic_kernels(self, synapse_idx=None, create_plot=True, fig=None):
         """
