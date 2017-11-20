@@ -332,7 +332,7 @@ class TestNMMs(unittest.TestCase):
 
         synapse_types = ['AMPA_current', 'GABAA_current']
         axon = 'JansenRit'
-        init_state = (-0.07, 0.5)
+        init_state = -0.07
         step_size = 5.e-4
         synaptic_kernel_length = int(0.05 / step_size)
         tau_leak = 0.016
@@ -400,7 +400,7 @@ class TestNMMs(unittest.TestCase):
         tau_leak = 0.016  # unit = s
         resting_potential = -0.075  # unit = V
         membrane_capacitance = 1e-12  # unit = q/V
-        init_state = (resting_potential, 0)  # unit = (V, 1/s)
+        init_state = resting_potential  # unit = (V, 1/s)
 
         # define population input
         #########################
@@ -428,9 +428,9 @@ class TestNMMs(unittest.TestCase):
                                  resting_potential=resting_potential,
                                  membrane_capacitance=membrane_capacitance)
                 for k in range(synaptic_inputs.shape[2]):
-                    pop.state_update(synaptic_input=synaptic_inputs[i, :, k],
-                                     extrinsic_current=extrinsic_inputs[j, k])
-                    states[i, j, k] = pop.state_variables[-1]
+                    pop.synaptic_input[pop.current_input_idx, :] = synaptic_inputs[i, :, k]
+                    pop.state_update(extrinsic_current=extrinsic_inputs[j, k])
+                    states[i, j, k] = pop.state_variables[-1][0]
 
         # perform unit tests
         ####################
@@ -452,7 +452,7 @@ class TestNMMs(unittest.TestCase):
         print('VI.3 done!')
 
         print('VI.4 test whether extrinsic current leads to expected change in membrane potential')
-        self.assertAlmostEqual(states[0, 1, 0], init_state[0] + step_size * (1e-14 / membrane_capacitance), places=4)
+        self.assertAlmostEqual(states[0, 1, 0], init_state + step_size * (1e-14 / membrane_capacitance), places=4)
         print('VI.4 done!')
 
         print('VI.5 test whether membrane potential goes back to resting potential after step-function input')
@@ -470,8 +470,8 @@ class TestNMMs(unittest.TestCase):
         ################
 
         with open('JR_parameters_I.pickle', 'rb') as f:
-            connections, population_labels, step_size, synaptic_kernel_length, distances, velocities, synapse_params, \
-            axon_params, init_states, synaptic_inputs, simulation_time, cutoff_time, store_step = pickle.load(f)
+           connections, population_labels, step_size, synaptic_kernel_length, distances, velocities, synapse_params, \
+           axon_params, init_states, synaptic_inputs, simulation_time, cutoff_time, store_step = pickle.load(f)
 
         # # simulations parameters
         # simulation_time = 1.0     # s
@@ -515,7 +515,7 @@ class TestNMMs(unittest.TestCase):
         # distances = np.zeros((N, N))
         # velocities = float('inf')
         #
-        # init_states = np.zeros((N, n_synapses))
+        # init_states = np.zeros(N)
         #
         # # synaptic inputs
         # start_stim = 0.3        # s
@@ -535,8 +535,7 @@ class TestNMMs(unittest.TestCase):
                               distances=distances,
                               velocities=velocities,
                               synapse_params=synapse_params,
-                              axon_params=axon_params,
-                              init_states=init_states[0])
+                              axon_params=axon_params)
 
         # run network simulation
         ########################
@@ -550,7 +549,7 @@ class TestNMMs(unittest.TestCase):
                 cutoff_time=cutoff_time,
                 store_step=store_step)
 
-        states = np.array(nmm.neural_mass_states)
+        states = nmm.neural_mass_states
 
         # load target data
         ###################
@@ -568,7 +567,7 @@ class TestNMMs(unittest.TestCase):
         ###################
 
         print('VII.1 test response to step-function input to EINs')
-        self.assertAlmostEqual(error, 0, places=2)
+        self.assertAlmostEqual(error, 0, places=1)
         print('VII.1 done!')
 
     def test_7_JR_circuit_II(self):
@@ -647,8 +646,7 @@ class TestNMMs(unittest.TestCase):
                               distances=distances,
                               velocities=velocities,
                               synapse_params=synapse_params,
-                              axon_params=axon_params,
-                              init_states=init_states[0])
+                              axon_params=axon_params)
 
         # run network simulation
         ########################
@@ -656,11 +654,9 @@ class TestNMMs(unittest.TestCase):
         nmm.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time,
                 cutoff_time=cutoff_time,
-                store_step=store_step,
-                variable_step_size=False,
-                verbose=False)
+                store_step=store_step)
 
-        states = np.array(nmm.neural_mass_states).T
+        states = nmm.neural_mass_states
 
         # load target data
         ###################
@@ -671,14 +667,14 @@ class TestNMMs(unittest.TestCase):
         # calculate NMRSE between time-series
         #####################################
 
-        error = NMRSE(states, target_states)
+        error = NMRSE(states, target_states.T)
         error = np.sum(error)
 
         # perform unit test
         ###################
 
         print('VII.2 test response to step-function input to EINs plus constant input to PCs')
-        self.assertAlmostEqual(error, 0, places=2)
+        self.assertAlmostEqual(error, 0, places=1)
         print('VII.2 done!')
 
     def test_8_JR_circuit_III(self):
@@ -765,8 +761,7 @@ class TestNMMs(unittest.TestCase):
                                   distances=distances,
                                   velocities=velocities,
                                   synapse_params=synapse_params,
-                                  axon_params=axon_params,
-                                  init_states=init_states[0])
+                                  axon_params=axon_params)
 
             # run network simulation
             ########################

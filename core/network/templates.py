@@ -31,7 +31,8 @@ class JansenRitCircuit(NeuralMassModel):
     """
 
     def __init__(self, population_resting_potentials=-0.075, population_leak_taus=0.016, population_capacitance=1e-12,
-                 step_size=0.001, synaptic_kernel_length=100, distances=None, positions=None, velocities=None,
+                 step_size=0.001, variable_step_size=False, synaptic_kernel_length=100,
+                 synaptic_modulation_direction=None, distances=None, positions=None, velocities=None,
                  synapse_params=None, axon_params=None, init_states=None):
         """
         Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory interneurons.
@@ -73,7 +74,9 @@ class JansenRitCircuit(NeuralMassModel):
                                                population_leak_taus=population_leak_taus,
                                                population_capacitance=population_capacitance,
                                                step_size=step_size,
+                                               variable_step_size=variable_step_size,
                                                synaptic_kernel_length=synaptic_kernel_length,
+                                               neuromodulatory_effect=synaptic_modulation_direction,
                                                distances=distances,
                                                positions=positions,
                                                velocities=velocities,

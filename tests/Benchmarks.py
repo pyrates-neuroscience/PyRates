@@ -33,7 +33,7 @@ __status__ = "Development"
 
 
 def run_JR_circuit_benchmark(simulation_time=60.0, step_size=1e-4, param_names=None, param_values=None,
-                             synaptic_inputs=None, verbose=False, variable_step_size=False):
+                             synaptic_inputs=None, verbose=False, variable_step_size=False, synaptic_kernel_length=100):
     """
     Runs a benchmark on a single Jansen-Rit type microcircuit (3 interconnected neural populations).
 
@@ -58,13 +58,16 @@ def run_JR_circuit_benchmark(simulation_time=60.0, step_size=1e-4, param_names=N
         mu_stim = 200.0
         std_stim = 20.0
         synaptic_inputs = np.zeros((int(simulation_time / step_size), 3, 2))
-        synaptic_inputs[:, 0, 0] = std_stim * np.random.random(synaptic_inputs.shape[0]) + mu_stim
+        synaptic_inputs[:, 1, 0] = std_stim * np.random.random(synaptic_inputs.shape[0]) + mu_stim
+        synaptic_inputs[:, 0, 0] = 0 * np.random.random(synaptic_inputs.shape[0]) + mu_stim/2.
 
     #########################
     # initialize JR circuit #
     #########################
 
-    nmm = JansenRitCircuit(step_size=step_size)
+    nmm = JansenRitCircuit(step_size=step_size,
+                           variable_step_size=variable_step_size,
+                           synaptic_kernel_length=synaptic_kernel_length)
 
     if param_names:
 
@@ -82,8 +85,7 @@ def run_JR_circuit_benchmark(simulation_time=60.0, step_size=1e-4, param_names=N
 
     nmm.run(simulation_time=simulation_time,
             synaptic_inputs=synaptic_inputs,
-            verbose=verbose,
-            variable_step_size=variable_step_size)
+            verbose=verbose)
 
     end_time = time.clock()
 
@@ -95,7 +97,8 @@ def run_JR_circuit_benchmark(simulation_time=60.0, step_size=1e-4, param_names=N
 
 
 def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None, connectivity_scaling=100.0, D=True,
-                             velocity=1.0, synaptic_input=None, verbose=False, variable_step_size=False):
+                             velocity=1.0, synaptic_input=None, verbose=False, variable_step_size=False,
+                             synaptic_kernel_length=100):
     """
     Runs benchmark for a number of JR circuits connected in a network.
 
@@ -109,6 +112,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     :param synaptic_input:
     :param verbose:
     :param variable_step_size:
+    :param synaptic_kernel_length:
 
     :return: simulation duration [unit = s]
 
@@ -178,7 +182,9 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
                           population_types=populations,
                           distances=D,
                           velocities=velocity,
-                          step_size=step_size)
+                          step_size=step_size,
+                          variable_step_size=variable_step_size,
+                          synaptic_kernel_length=synaptic_kernel_length)
 
     #####################
     # perform benchmark #
@@ -190,8 +196,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
 
     nmm.run(synaptic_inputs=synaptic_input,
             simulation_time=simulation_time,
-            verbose=verbose,
-            variable_step_size=variable_step_size)
+            verbose=verbose)
 
     end_time = time.clock()
 
@@ -213,13 +218,15 @@ verbose = True
 variable_step_size = False
 D = False
 velocity = 2.0
-connectivity_scaling = 100.0
+connectivity_scaling = 50.0
+synaptic_kernel_length = 1000
 
 # single JR circuit
 # sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
 #                                               step_size=step_size,
 #                                               verbose=verbose,
-#                                               variable_step_size=variable_step_size)
+#                                               variable_step_size=variable_step_size,
+#                                               synaptic_kernel_length=synaptic_kernel_length)
 
 # JR network (33 connected JR circuits)
 sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
@@ -228,7 +235,8 @@ sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duratio
                                               velocity=velocity,
                                               connectivity_scaling=connectivity_scaling,
                                               verbose=verbose,
-                                              variable_step_size=variable_step_size)
+                                              variable_step_size=variable_step_size,
+                                              synaptic_kernel_length=synaptic_kernel_length)
 
 ################
 # memory usage #

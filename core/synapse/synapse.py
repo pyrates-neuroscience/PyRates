@@ -3,12 +3,13 @@ Includes basic synapse class, pre-parametrized sub-classes and an exponential ke
 """
 
 from matplotlib.pyplot import *
-from scipy.integrate import trapz
+from numba import jit
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 # TODO: find out reversal potentials for conductance based synapses
+# TODO: get rid if membrane potential if condition in distinction between current- and conductivity based synapses
 
 
 class Synapse(object):
@@ -142,9 +143,6 @@ class Synapse(object):
 
         """
 
-        assert all(x) >= 0
-        assert membrane_potential is None or type(membrane_potential) is float
-
         #########################
         # apply synaptic kernel #
         #########################
@@ -156,7 +154,7 @@ class Synapse(object):
             kernel_value = x[-len(self.synaptic_kernel):] * self.synaptic_kernel
 
         # integrate over time
-        kernel_value = trapz(kernel_value, dx=self.step_size)
+        kernel_value = np.trapz(kernel_value, dx=self.step_size)
 
         ##############################
         # calculate synaptic current #
@@ -205,3 +203,35 @@ class Synapse(object):
         return fig
 
 
+#@jit
+def get_synaptic_current(x, membrane_potential, synaptic_kernel, step_size, reversal_potential):
+    """
+    Applies synaptic kernel to input vector (should resemble incoming firing rate).
+
+    :return: resulting synaptic current [unit = A]
+
+    """
+
+    #########################
+    # apply synaptic kernel #
+    #########################
+
+    # multiply firing rate input with kernel
+    if len(x) < len(synaptic_kernel):
+        kernel_value = x * synaptic_kernel[-len(x):]
+    else:
+        kernel_value = x[-len(synaptic_kernel):] * synaptic_kernel
+
+    # integrate over time
+    kernel_value = np.trapz(kernel_value, dx=step_size)
+
+    ##############################
+    # calculate synaptic current #
+    ##############################
+
+    if membrane_potential is None:
+        synaptic_current = kernel_value
+    else:
+        synaptic_current = kernel_value * (reversal_potential - membrane_potential)
+
+    return synaptic_current

@@ -39,8 +39,9 @@ class Population(object):
 
     """
 
-    def __init__(self, synapses, axon='JansenRit', init_state=0., step_size=0.0001, synaptic_kernel_length=100,
-                 tau_leak=0.016, resting_potential=-0.075, membrane_capacitance=1e-12, max_delay=0, synapse_params=None,
+    def __init__(self, synapses, axon='JansenRit', init_state=0., step_size=0.0001, variable_step_size=False,
+                 synaptic_kernel_length=100, synaptic_modulation_direction=None, tau_leak=0.016,
+                 resting_potential=-0.075, membrane_capacitance=1e-12, max_delay=0, synapse_params=None,
                  axon_params=None, store_state_variables=False):
         """
         Initializes a single neural mass.
@@ -51,8 +52,13 @@ class Population(object):
                [unit = V] & firing rate [unit = 1/s] (default = (0,0)).
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s] (default = 0.1).
+        :param variable_step_size: If false, DEs will be solved via Euler formalism. If false, 4/5th order Runge-Kutta
+               formalism will be used (default = False).
         :param synaptic_kernel_length: scalar that indicates number of bins the kernel should be evaluated for
                [unit = 1] (default = 100).
+        :param synaptic_modulation_direction: 2-dim array with first dimension being the additive synapses and the
+               second dimension being the modulatory synapses. Powers used on the synaptic modulation values.
+               Should be either 1.0 or -1.0 (default = None) [unit = 1].
         :param tau_leak: scalar, time-scale with which the membrane potential of the population goes back to resting
                potential [unit = s] (default = 0.001).
         :param resting_potential: scalar, membrane potential at which no synaptic currents flow if no input arrives at
@@ -88,12 +94,12 @@ class Population(object):
         #############################
 
         self.synapses = list()
-        self.n_modulatory_synapses = 0
         self.state_variables = list()
         self.store_state_variables = store_state_variables
         self.tau_leak = tau_leak
         self.resting_potential = resting_potential
         self.step_size = step_size
+        self.variable_step_size = variable_step_size
         self.membrane_capacitance = membrane_capacitance
         self.t = 0
 
@@ -135,25 +141,38 @@ class Population(object):
         # set synapse #
         ###############
 
+        synapse_type = np.ones(len(synapses), dtype=bool)
+
         if not synapse_params:
 
             for i in range(len(synapses)):
                 self.synapses.append(set_synapse(synapses[i], step_size, synaptic_kernel_length))
                 if self.synapses[-1].neuromodulatory:
-                    self.n_modulatory_synapses += 1
+                    synapse_type[i] = False
 
         else:
 
             for i in range(len(synapse_params)):
                 self.synapses.append(set_synapse(synapses[i], step_size, synaptic_kernel_length, synapse_params[i]))
                 if self.synapses[-1].neuromodulatory:
-                    self.n_modulatory_synapses += 1
+                    synapse_type[i] = False
 
         # set synaptic input array
-        self.synaptic_input = np.zeros((synaptic_kernel_length + max_delay, len(self.synapses)),)
+        self.synaptic_input = np.zeros((synaptic_kernel_length + max_delay, len(self.synapses)))
+        self.dummy_input = np.zeros((1, len(self.synapses)))
 
         # set input index for each synapse
         self.current_input_idx = 0
+
+        # set synaptic current and modulation collector vectors
+        self.additive_synapse_idx = np.where(synapse_type == 1)[0]
+        self.modulatory_synapse_idx = np.where(synapse_type == 0)[0]
+        self.synaptic_currents = np.zeros(len(self.additive_synapse_idx))
+        self.synaptic_modulation = np.zeros((1,len(self.modulatory_synapse_idx)))
+
+        # set modulation direction for modulatory synapses
+        if synaptic_modulation_direction is None and self.synaptic_modulation:
+            self.synaptic_modulation_direction = np.ones(len(self.synaptic_currents), len(self.synaptic_modulation))
 
         ############
         # set axon #
@@ -161,18 +180,13 @@ class Population(object):
 
         self.axon = set_axon(axon, axon_params)
 
-    def state_update(self, extrinsic_current=0., extrinsic_synaptic_modulation=1.0, synaptic_modulation_direction=1.0,
-                     variable_step_size=False):
+    def state_update(self, extrinsic_current=0., extrinsic_synaptic_modulation=1.0):
         """
         Updates state according to current synapse and axon parametrization.
 
         :param extrinsic_current: extrinsic current added to membrane potential change [unit = A] (default = 0).
         :param extrinsic_synaptic_modulation: modulatory input to each synapse. Can be scalar (applied to all synapses
                then) or vector with len = number of synapses (default = 1.0) [unit = 1].
-        :param synaptic_modulation_direction: Can be scalar or list of vectors used as a power for each modulatory
-               synapse as neuromodulatory effect. Should be either 1.0 or -1.0 (default = 1.0) [unit = 1].
-        :param variable_step_size: If false, DEs will be solved via Euler formalism. If false, 4/5th order Runge-Kutta
-               formalism will be used (default = False).
 
         """
 
@@ -186,10 +200,8 @@ class Population(object):
         # add inputs to internal state variables #
         ##########################################
 
-        self.variable_step_size = variable_step_size
         self.extrinsic_current = extrinsic_current
         self.extrinsic_synaptic_modulation = extrinsic_synaptic_modulation
-        self.synaptic_modulation_direction = synaptic_modulation_direction
 
         ######################################
         # compute average membrane potential #
@@ -240,7 +252,7 @@ class Population(object):
 
         else:
 
-            self.synaptic_input = np.append(self.synaptic_input, np.zeros((1, self.synaptic_input.shape[1])), axis=0)
+            self.synaptic_input = np.append(self.synaptic_input, self.dummy_input, axis=0)
             self.synaptic_input = self.synaptic_input[1:, :]
 
     def take_step(self, f, y_old):
@@ -311,55 +323,23 @@ class Population(object):
         # compute synaptic currents and modulations #
         #############################################
 
-        # calculate synaptic currents and modulations for each synapse
-        synaptic_currents = np.zeros(len(self.synapses) - self.n_modulatory_synapses)
-        synaptic_modulation = np.zeros(self.n_modulatory_synapses)
+        # calculate synaptic currents for each additive synapse
+        for i, idx in enumerate(self.additive_synapse_idx):
 
-        for i in range(len(self.synapses)):
-
-            # synaptic modulation value
-            if self.synapses[i].neuromodulatory:
-
-                if self.synapses[i].conductivity_based:
-                    synaptic_modulation[i] = self.synapses[i].get_synaptic_current(
-                        self.synaptic_input[0:self.current_input_idx + 1, i], membrane_potential)
-                else:
-                    synaptic_modulation[i] = self.synapses[i].get_synaptic_current(
-                        self.synaptic_input[0:self.current_input_idx + 1, i])
-
+            # synaptic current
+            if self.synapses[idx].conductivity_based:
+                self.synaptic_currents[i] = self.synapses[idx].get_synaptic_current(
+                    self.synaptic_input[0:self.current_input_idx + 1, idx], membrane_potential)
             else:
+                self.synaptic_currents[i] = self.synapses[idx].get_synaptic_current(
+                    self.synaptic_input[0:self.current_input_idx + 1, idx])
 
-                # synaptic current
-                if self.synapses[i].conductivity_based:
-                    synaptic_currents[i] = self.synapses[i].get_synaptic_current(
-                        self.synaptic_input[0:self.current_input_idx + 1, i], membrane_potential)
-                else:
-                    synaptic_currents[i] = self.synapses[i].get_synaptic_current(
-                        self.synaptic_input[0:self.current_input_idx + 1, i])
+        # compute synaptic modulation value for each modulatory synapse and apply it to currents
+        if self.modulatory_synapse_idx:
 
-        #######################################################
-        # apply extrinsic modulation and modulation direction #
-        #######################################################
+            self.get_synaptic_modulation(membrane_potential)
 
-        if synaptic_modulation:
-
-            if type(self.synaptic_modulation_direction) is float:
-                self.synaptic_modulation_direction = [np.ones(len(synaptic_currents)) *
-                                                      self.synaptic_modulation_direction]
-
-            # set modulation direction for each synapse
-            synaptic_modulation_tmp = np.zeros((len(synaptic_modulation), len(synaptic_currents)))
-            for i in range(len(synaptic_modulation)):
-                synaptic_modulation_tmp[i] = synaptic_modulation[i] ** self.synaptic_modulation_direction[i]
-            synaptic_modulation = np.prod(synaptic_modulation_tmp, axis=0)
-
-        # combine extrinsic and intrinsic synaptic modulation
-        if type(self.extrinsic_synaptic_modulation) is float and self.extrinsic_synaptic_modulation != 1.0:
-            self.extrinsic_synaptic_modulation = np.ones(len(synaptic_currents)) *\
-                                                 self.extrinsic_synaptic_modulation
-            synaptic_modulation *= self.extrinsic_synaptic_modulation
-
-        return np.dot(synaptic_currents, synaptic_modulation) if synaptic_modulation else np.sum(synaptic_currents)
+        return np.sum(self.synaptic_currents)
 
     def get_leak_current(self, membrane_potential):
         """
@@ -372,6 +352,34 @@ class Population(object):
         """
 
         return (self.resting_potential - membrane_potential) * self.membrane_capacitance / self.tau_leak
+
+    def get_synaptic_modulation(self, membrane_potential):
+        """
+        Method that calculates the modulation weight for each additive synapse.
+
+        :param membrane_potential: Current membrane potential [unit = V].
+
+        """
+
+        for i, idx in enumerate(self.modulatory_synapse_idx):
+
+            if self.synapses[idx].conductivity_based:
+                self.synaptic_modulation[i] = self.synapses[idx].get_synaptic_current(
+                    self.synaptic_input[0:self.current_input_idx + 1, idx], membrane_potential)
+            else:
+                self.synaptic_modulation[i] = self.synapses[idx].get_synaptic_current(
+                    self.synaptic_input[0:self.current_input_idx + 1, idx])
+
+        # apply modulation direction and get modulation value for each synapse
+        synaptic_modulation_new = np.tile(self.synaptic_modulation, (len(self.synaptic_currents), 1))
+        synaptic_modulation_new = synaptic_modulation_new ** self.synaptic_modulation_direction
+        synaptic_modulation_new = np.prod(synaptic_modulation_new, axis=1)
+
+        # combine extrinsic and intrinsic synaptic modulation
+        if self.extrinsic_synaptic_modulation:
+            synaptic_modulation_new *= self.extrinsic_synaptic_modulation
+
+        self.synaptic_currents *= synaptic_modulation_new
 
     def get_delta_membrane_potential_threshold(self, t, membrane_potential_threshold):
         """

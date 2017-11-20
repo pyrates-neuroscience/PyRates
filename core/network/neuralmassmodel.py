@@ -39,8 +39,8 @@ class NeuralMassModel(object):
 
     def __init__(self, connections, population_labels=None, population_types=None, synapses=None, axons=None,
                  population_resting_potentials=-0.075, population_leak_taus=0.016, population_capacitance=1e-12,
-                 step_size=0.001, synaptic_kernel_length=100, distances=None, positions=None, velocities=None,
-                 synapse_params=None, axon_params=None, neuromodulatory_effect=None, init_states=None):
+                 step_size=0.001, variable_step_size=False, synaptic_kernel_length=100, distances=None, positions=None,
+                 velocities=None, synapse_params=None, axon_params=None, neuromodulatory_effect=None, init_states=None):
         """
         Initializes a network of neural masses.
 
@@ -69,6 +69,8 @@ class NeuralMassModel(object):
                with a single membrane capacitance for each population [unit = ] (default = 1e-12).
         :param step_size: scalar, determining the time step-size with which the network simulation will progress
                [unit = s] (default = 0.001).
+        :param variable_step_size: if true, variable step-size solver will be used to simulate the model
+               (Runge-Kutta 4/5). Else Euler (default = False).
         :param synaptic_kernel_length: integer, determining the length of the synaptic kernel in terms of bins, where
                the distance between two bins is always equal to the step-size [unit = time-steps] (default = 100).
         :param distances: N x N array representing the distance between every pair of neural masses. Can be None if
@@ -228,6 +230,12 @@ class NeuralMassModel(object):
         self.D = np.array(self.D / self.step_size, dtype=int)
         max_delay = np.max(self.D, axis=1)
 
+        #############################
+        # set modulation directions #
+        #############################
+
+        self.neuromodulation = check_nones(self.neuromodulation, self.N)
+
         ##########################
         # initialize populations #
         ##########################
@@ -251,7 +259,9 @@ class NeuralMassModel(object):
                                                      axon=axons[i],
                                                      init_state=init_states[i],
                                                      step_size=step_size,
+                                                     variable_step_size=variable_step_size,
                                                      synaptic_kernel_length=synaptic_kernel_length,
+                                                     synaptic_modulation_direction=self.neuromodulation[i],
                                                      resting_potential=population_resting_potentials[i],
                                                      tau_leak=population_leak_taus[i],
                                                      membrane_capacitance=population_capacitance[i],
@@ -260,7 +270,7 @@ class NeuralMassModel(object):
                                                      synapse_params=synapse_params_tmp))
 
     def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, extrinsic_modulation=None, cutoff_time=0.,
-            store_step=1, variable_step_size=False, verbose=False, continue_run=False):
+            store_step=1, verbose=False, continue_run=False):
         """
         Simulates neural mass network.
 
@@ -276,8 +286,6 @@ class NeuralMassModel(object):
                [unit = s] (default = 0).
         :param store_step: integer, indicating which simulated time steps will be stored. If store_step = n, every n'th
                step will be stored [unit = 1] (default = 1).
-        :param variable_step_size: if true, variable step-size solver will be used to simulate the model
-               (Runge-Kutta 4/5). Else Euler (default = False).
         :param verbose: if true, relative progress of simulation will be displayed (default = False).
         :param continue_run: if true, old run will be continued, if false, new simulation will be started
                (default = False).
@@ -314,24 +322,27 @@ class NeuralMassModel(object):
         if extrinsic_modulation is None:
             extrinsic_modulation = np.ones((synaptic_inputs.shape[0], self.N)).tolist()
 
-        if self.neuromodulation is None:
-            self.neuromodulation = np.ones(self.N).tolist()
+        ########################
+        # create input indices #
+        ########################
+
+        conn_check = np.sum(self.C != 0, axis=2)
+        C_idx = [np.where(conn_check[i, :] > 0)[0] for i in range(conn_check.shape[0])]
 
         ####################
         # simulate network #
         ####################
 
         # preparation
-        n = 0
+        time_steps = int(simulation_time / self.step_size)
+        cutoff_steps = int(cutoff_time / self.step_size)
         self.time_steps.pop(0)
+        self.neural_mass_states = np.zeros(((time_steps - cutoff_steps) // store_step, self.N))
 
-        while t < simulation_time-self.step_size:
+        for n in range(time_steps):
 
             # get weighted firing rates of each population
             self.get_firing_rates()
-
-            # initialize collector arrays
-            neural_mass_states = np.zeros(self.N)
 
             # update state of each neural mass according to input and store relevant state variables
             for i in range(self.N):
@@ -344,7 +355,7 @@ class NeuralMassModel(object):
                 self.neural_masses[i].synaptic_input[self.neural_masses[i].current_input_idx, :] += ext_inp
 
                 # pass network input to neural mass
-                for j in range(self.N):
+                for j in C_idx[i]:
                     self.neural_masses[i].synaptic_input[self.neural_masses[i].current_input_idx + self.D[i, j], :] += \
                         self.network_output[j, idx] * self.C[i, j, idx]
 
@@ -354,23 +365,16 @@ class NeuralMassModel(object):
                     # update all state variables
                     if extrinsic_current is not None:
                         self.neural_masses[i].state_update(extrinsic_current=extrinsic_current[n, i],
-                                                           extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
-                                                           synaptic_modulation_direction=self.neuromodulation[i],
-                                                           variable_step_size=variable_step_size)
+                                                           extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
                     else:
-                        self.neural_masses[i].state_update(extrinsic_synaptic_modulation=extrinsic_modulation[n][i],
-                                                           synaptic_modulation_direction=self.neuromodulation[i],
-                                                           variable_step_size=variable_step_size)
+                        self.neural_masses[i].state_update(extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
 
                 # store membrane potential
-                neural_mass_states[i] = self.neural_masses[i].state_variables[-1][0]
-
-            # store state-variables
-            if t >= cutoff_time and np.mod(n, store_step) == 0:
-                self.neural_mass_states.append(neural_mass_states)
+                if n >= cutoff_steps and np.mod(n, store_step) == 0:
+                    self.neural_mass_states[n, i] = self.neural_masses[i].state_variables[-1][0]
 
             # display simulation progress
-            if verbose and (t == 0 or ((t / simulation_time) * 100. % 10.) <= 1*self.step_size):
+            if verbose and (n == 0 or (n % (time_steps // 10)) == 0):
                 print('simulation progress: ', "%.2f" % ((t / simulation_time) * 100.), ' %')
 
             # update run variables
@@ -502,7 +506,7 @@ class NeuralMassModel(object):
 
         """
 
-        neural_mass_states = np.array(self.neural_mass_states).T
+        neural_mass_states = self.neural_mass_states.T
 
         ##########################
         # check input parameters #
@@ -562,8 +566,9 @@ def check_nones(param, n):
     return [None for i in range(n)] if param is None else param
 
 
-def set_population(population_type, synapses, axon, init_state, step_size, synaptic_kernel_length, resting_potential,
-                   tau_leak, membrane_capacitance, max_delay, axon_params, synapse_params):
+def set_population(population_type, synapses, axon, init_state, step_size, variable_step_size, synaptic_kernel_length,
+                   synaptic_modulation_direction, resting_potential, tau_leak, membrane_capacitance, max_delay,
+                   axon_params, synapse_params):
     """
     Instantiates a population. For detailed parameter description, see population class.
 
@@ -578,7 +583,9 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
 
         pop_instance = JansenRitPyramidalCells(init_state=init_state,
                                                step_size=step_size,
+                                               variable_step_size=variable_step_size,
                                                synaptic_kernel_length=synaptic_kernel_length,
+                                               synaptic_modulation_direction=synaptic_modulation_direction,
                                                resting_potential=resting_potential,
                                                tau_leak=tau_leak,
                                                membrane_capacitance=membrane_capacitance,
@@ -590,7 +597,9 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
 
         pop_instance = JansenRitExcitatoryInterneurons(init_state=init_state,
                                                        step_size=step_size,
+                                                       variable_step_size=variable_step_size,
                                                        synaptic_kernel_length=synaptic_kernel_length,
+                                                       synaptic_modulation_direction=synaptic_modulation_direction,
                                                        resting_potential=resting_potential,
                                                        tau_leak=tau_leak,
                                                        membrane_capacitance=membrane_capacitance,
@@ -602,7 +611,9 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
 
         pop_instance = JansenRitInhibitoryInterneurons(init_state=init_state,
                                                        step_size=step_size,
+                                                       variable_step_size=variable_step_size,
                                                        synaptic_kernel_length=synaptic_kernel_length,
+                                                       synaptic_modulation_direction=synaptic_modulation_direction,
                                                        resting_potential=resting_potential,
                                                        tau_leak=tau_leak,
                                                        membrane_capacitance=membrane_capacitance,
@@ -616,7 +627,9 @@ def set_population(population_type, synapses, axon, init_state, step_size, synap
                                   axon=axon,
                                   init_state=init_state,
                                   step_size=step_size,
+                                  variable_step_size=variable_step_size,
                                   synaptic_kernel_length=synaptic_kernel_length,
+                                  synaptic_modulation_direction=synaptic_modulation_direction,
                                   resting_potential=resting_potential,
                                   tau_leak=tau_leak,
                                   membrane_capacitance=membrane_capacitance,
