@@ -12,7 +12,6 @@ from core.population.population import interpolate_array
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
-# TODO: Try implementing adaptive simulation step-sizes
 # TODO: Implement neuromodulatory mechanisms (see neuromodulatory synapses at population level)
 
 
