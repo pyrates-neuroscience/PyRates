@@ -11,7 +11,9 @@ class KnoescheAxon(Axon):
     Specific parametrization of generic axon, following the code of Thomas Knoesche
     """
 
-    def __init__(self, max_firing_rate=5., membrane_potential_threshold=-0.069, sigmoid_steepness=555.56):
+    def __init__(self, max_firing_rate: float = 5.,
+                 membrane_potential_threshold: float = -0.069,
+                 sigmoid_steepness: float = 555.56) -> None:
         """
         Initializes basic axon with Thomas Knoesche's sigmoid parameters.
 
@@ -34,7 +36,9 @@ class JansenRitAxon(Axon):
     Specific parametrization of generic axon, following Jansen & Rit (1995)
     """
 
-    def __init__(self, max_firing_rate=5., membrane_potential_threshold=-0.069, sigmoid_steepness=555.56):
+    def __init__(self, max_firing_rate: float = 5.,
+                 membrane_potential_threshold: float = -0.069,
+                 sigmoid_steepness: float = 555.56) -> None:
         """
         Initializes basic axon with Jansen & Rit's sigmoid parameters.
 
