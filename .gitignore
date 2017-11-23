@@ -116,4 +116,4 @@ venv.bak/
 ### pyannotate file info ####
 #############################
 
-file_info.json
+type_info.json
