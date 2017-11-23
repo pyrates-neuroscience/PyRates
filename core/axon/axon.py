@@ -23,7 +23,7 @@ class Axon(object):
     """
 
     def __init__(self, max_firing_rate: float, membrane_potential_threshold: float, sigmoid_steepness: float,
-                 axon_type: Optional(str) = None) -> None:
+                 axon_type: Optional[str] = None) -> None:
         """
         Initializes basic axon that transforms average membrane potential into average firing rate
         via a sigmoidal transfer function.
@@ -133,7 +133,7 @@ class Axon(object):
             membrane_potentials = np.concatenate((membrane_potential_1, membrane_potential_2))
 
         else:
-
+            # fixme: inconsistency in type of membrane_potentials
             firing_rates = self.compute_firing_rate(membrane_potentials)
 
         ##############################################

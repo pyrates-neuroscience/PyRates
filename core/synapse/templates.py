@@ -11,7 +11,8 @@ class AMPACurrentSynapse(Synapse):
     This defines a current-based synapse with AMPA neuroreceptor.
     """
 
-    def __init__(self, step_size, kernel_length, efficiency=1.273*3e-13, tau_decay=0.006, tau_rise=0.0006):
+    def __init__(self, step_size: float, kernel_length: int, efficacy: float = 1.273 * 3e-13,
+                 tau_decay: float = 0.006, tau_rise: float = 0.0006) -> None:
         """
         Initializes a current-based synapse with parameters resembling an AMPA receptor.
 
@@ -22,7 +23,7 @@ class AMPACurrentSynapse(Synapse):
 
         """
 
-        super(AMPACurrentSynapse, self).__init__(efficiency=efficiency,
+        super(AMPACurrentSynapse, self).__init__(efficacy=efficacy,
                                                  tau_decay=tau_decay,
                                                  tau_rise=tau_rise,
                                                  step_size=step_size,
@@ -36,7 +37,8 @@ class GABAACurrentSynapse(Synapse):
     This defines a current-based synapse with GABA_A neuroreceptor.
     """
 
-    def __init__(self, step_size, kernel_length, efficiency=1.273*(-1e-12), tau_decay=0.02, tau_rise=0.0004):
+    def __init__(self, step_size: float, kernel_length: int, efficacy: float = 1.273 * (-1e-12),
+                 tau_decay: float = 0.02, tau_rise: float = 0.0004) -> None:
         """
         Initializes a current-based synapse with parameters resembling an GABA_A receptor.
 
@@ -47,7 +49,7 @@ class GABAACurrentSynapse(Synapse):
 
         """
 
-        super(GABAACurrentSynapse, self).__init__(efficiency=efficiency,
+        super(GABAACurrentSynapse, self).__init__(efficacy=efficacy,
                                                   tau_decay=tau_decay,
                                                   tau_rise=tau_rise,
                                                   step_size=step_size,
@@ -61,8 +63,9 @@ class AMPAConductanceSynapse(Synapse):
     This defines a conductivity-based synapse with AMPA neuroreceptor.
     """
 
-    def __init__(self, step_size, kernel_length, efficiency=1.273*7.2e-10, tau_decay=0.0015, tau_rise=0.000009,
-                 reversal_potential=0.0):
+    def __init__(self, step_size: float, kernel_length: int, efficacy: float = 1.273 * 7.2e-10,
+                 tau_decay: float = 0.0015, tau_rise: float = 0.000009, reversal_potential: float = 0.0
+                 ) -> None:
         """
         Initializes a current-based synapse with parameters resembling an GABA_A receptor.
 
@@ -73,7 +76,7 @@ class AMPAConductanceSynapse(Synapse):
 
         """
 
-        super(AMPAConductanceSynapse, self).__init__(efficiency=efficiency,
+        super(AMPAConductanceSynapse, self).__init__(efficacy=efficacy,
                                                      tau_decay=tau_decay,
                                                      tau_rise=tau_rise,
                                                      step_size=step_size,
@@ -88,8 +91,9 @@ class GABAAConductanceSynapse(Synapse):
     This defines a conductivity-based synapse with GABA_A neuroreceptor.
     """
 
-    def __init__(self, step_size, kernel_length, efficiency=1.358*(-4e-11), tau_decay=0.02, tau_rise=0.0004,
-                 reversal_potential=-0.060):
+    def __init__(self, step_size: float, kernel_length: int, efficacy: float = 1.358 * (-4e-11),
+                 tau_decay: float = 0.02, tau_rise: float = 0.0004, reversal_potential: float = -0.060
+                 ) -> None:
         """
         Initializes a current-based synapse with parameters resembling an GABA_A receptor.
 
@@ -100,7 +104,7 @@ class GABAAConductanceSynapse(Synapse):
 
         """
 
-        super(GABAAConductanceSynapse, self).__init__(efficiency=efficiency,
+        super(GABAAConductanceSynapse, self).__init__(efficacy=efficacy,
                                                       tau_decay=tau_decay,
                                                       tau_rise=tau_rise,
                                                       step_size=step_size,
