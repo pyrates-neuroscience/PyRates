@@ -3,11 +3,14 @@ Includes a basic neural mass model class.
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
+# from scipy.interpolate import interp1d
 
 from core.population import JansenRitPyramidalCells, JansenRitExcitatoryInterneurons, \
     JansenRitInhibitoryInterneurons, Population
 from core.population.population import interpolate_array
+from typing import List, Optional, Dict, Union, TypeVar
+PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
+
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -36,10 +39,24 @@ class NeuralMassModel(object):
 
     """
 
-    def __init__(self, connections, population_labels=None, population_types=None, synapses=None, axons=None,
-                 population_resting_potentials=-0.075, population_leak_taus=0.016, population_capacitance=1e-12,
-                 step_size=0.001, variable_step_size=False, synaptic_kernel_length=100, distances=None, positions=None,
-                 velocities=None, synapse_params=None, axon_params=None, neuromodulatory_effect=None, init_states=None):
+    def __init__(self, connections: np.ndarray,
+                 population_labels: List[str]=None,
+                 population_types: Optional[List[str]]=None,
+                 synapses: Optional[List[str]]=None,
+                 axons: Optional[List[str]]=None,
+                 population_resting_potentials: Union[float, np.ndarray]=-0.075,
+                 population_leak_taus: Union[float, np.ndarray]=0.016,
+                 population_capacitance: Union[float, np.ndarray]=1e-12,
+                 step_size: float=0.001,
+                 # variable_step_size: bool=False,
+                 synaptic_kernel_length: int=100,
+                 distances: Optional[np.ndarray]=None,
+                 positions: Optional[np.ndarray]=None,
+                 velocities: Optional[Union[float, np.ndarray, dict]]=None,
+                 synapse_params: Optional[List[Dict[str, Union[bool, float]]]]=None,
+                 axon_params: Optional[List[Dict[str, float]]]=None,
+                 neuromodulatory_effect: Optional[list]=None,
+                 init_states: Optional[np.ndarray]=None) -> None:
         """
         Initializes a network of neural masses.
 
@@ -130,7 +147,7 @@ class NeuralMassModel(object):
         self.N = int(connections.shape[0])
         self.neural_mass_labels = population_labels if population_labels else [str(i) for i in range(self.N)]
         self.neural_masses = list()
-        self.neural_mass_states = list()
+        self.neural_mass_states = np.array([])  # fixme: define dtype
         self.C = connections
         self.n_synapses = int(connections.shape[2])
         self.step_size = step_size
@@ -258,7 +275,7 @@ class NeuralMassModel(object):
                                                      axon=axons[i],
                                                      init_state=init_states[i],
                                                      step_size=step_size,
-                                                     variable_step_size=variable_step_size,
+                                                     # variable_step_size=variable_step_size,
                                                      synaptic_kernel_length=synaptic_kernel_length,
                                                      synaptic_modulation_direction=self.neuromodulation[i],
                                                      resting_potential=population_resting_potentials[i],
@@ -267,9 +284,17 @@ class NeuralMassModel(object):
                                                      max_delay=max_delay[i],
                                                      axon_params=axon_params[i],
                                                      synapse_params=synapse_params_tmp))
+            # fixme: unclear return type of check_nones. Can't this be improved?
+            # --> possibly move to set_population function
 
-    def run(self, synaptic_inputs, simulation_time, extrinsic_current=None, extrinsic_modulation=None, cutoff_time=0.,
-            store_step=1, verbose=False, continue_run=False):
+    def run(self, synaptic_inputs: np.ndarray,
+            simulation_time: float,
+            extrinsic_current: Optional[np.ndarray]=None,
+            extrinsic_modulation: Optional[list]=None,
+            cutoff_time: float=0.,
+            store_step: int=1,
+            verbose: bool=False,
+            continue_run: bool=False) -> None:
         """
         Simulates neural mass network.
 
@@ -381,7 +406,7 @@ class NeuralMassModel(object):
             n += 1
             self.time_steps.append(t)
 
-    def get_firing_rates(self):
+    def get_firing_rates(self) -> None:
         """
         Gets firing rate of each neural mass in network.
 
@@ -548,7 +573,8 @@ class NeuralMassModel(object):
         return fig
 
 
-def check_nones(param, n):
+def check_nones(param: Optional[List[Dict[str, Union[bool, float]]]],
+                n: int):  # -> Union[List[Dict[str, Union[bool, float]]], List[None], List[str]]:
     """
     Checks whether param is None. If yes, it returns a list of n Nones. If not, the param is returned.
 
@@ -565,24 +591,45 @@ def check_nones(param, n):
     return [None for i in range(n)] if param is None else param
 
 
-def set_population(population_type, synapses, axon, init_state, step_size, variable_step_size, synaptic_kernel_length,
-                   synaptic_modulation_direction, resting_potential, tau_leak, membrane_capacitance, max_delay,
-                   axon_params, synapse_params):
+def set_population(population_type: Optional[str],
+                   synapses: List[str],
+                   axon: Optional[str],
+                   init_state: np.float64,
+                   step_size: float,
+                   # variable_step_size: bool,
+                   synaptic_kernel_length: int,
+                   synaptic_modulation_direction: Optional[list],
+                   resting_potential: float,
+                   tau_leak: float,
+                   membrane_capacitance: float,
+                   max_delay: np.int64,
+                   axon_params: Dict[str, float],
+                   synapse_params: List[Dict[str, Union[bool, float]]]):  # -> PopulationLike:
     """
     Instantiates a population. For detailed parameter description, see population class.
 
     :param population_type: Can be character string, indicating which pre-implemented population sub-class to use or None,
            if custom population is to be initialized.
-
-    :return population instance
-
+    :param synapses:
+    :param axon:
+    :param init_state:
+    :param step_size:
+    :param synaptic_kernel_length:
+    :param synaptic_modulation_direction:
+    :param resting_potential:
+    :param tau_leak:
+    :param membrane_capacitance:
+    :param max_delay:
+    :param axon_params:
+    :param synapse_params:
+    :return:
     """
 
     if population_type == 'JansenRitPyramidalCells':
 
         pop_instance = JansenRitPyramidalCells(init_state=init_state,
                                                step_size=step_size,
-                                               variable_step_size=variable_step_size,
+                                               # variable_step_size=variable_step_size,
                                                synaptic_kernel_length=synaptic_kernel_length,
                                                synaptic_modulation_direction=synaptic_modulation_direction,
                                                resting_potential=resting_potential,
@@ -596,7 +643,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, varia
 
         pop_instance = JansenRitExcitatoryInterneurons(init_state=init_state,
                                                        step_size=step_size,
-                                                       variable_step_size=variable_step_size,
+                                                       # variable_step_size=variable_step_size,
                                                        synaptic_kernel_length=synaptic_kernel_length,
                                                        synaptic_modulation_direction=synaptic_modulation_direction,
                                                        resting_potential=resting_potential,
@@ -610,7 +657,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, varia
 
         pop_instance = JansenRitInhibitoryInterneurons(init_state=init_state,
                                                        step_size=step_size,
-                                                       variable_step_size=variable_step_size,
+                                                       # variable_step_size=variable_step_size,
                                                        synaptic_kernel_length=synaptic_kernel_length,
                                                        synaptic_modulation_direction=synaptic_modulation_direction,
                                                        resting_potential=resting_potential,
@@ -626,7 +673,7 @@ def set_population(population_type, synapses, axon, init_state, step_size, varia
                                   axon=axon,
                                   init_state=init_state,
                                   step_size=step_size,
-                                  variable_step_size=variable_step_size,
+                                  # variable_step_size=variable_step_size,
                                   synaptic_kernel_length=synaptic_kernel_length,
                                   synaptic_modulation_direction=synaptic_modulation_direction,
                                   resting_potential=resting_potential,
@@ -640,10 +687,11 @@ def set_population(population_type, synapses, axon, init_state, step_size, varia
 
         raise ValueError('Invalid population type!')
 
+    # fixme: properly define generic type for subclasses of population
     return pop_instance
 
 
-def get_euclidean_distances(positions):
+def get_euclidean_distances(positions: np.ndarray):
     """
     Calculates the euclidean distances for every pair of positions.
 

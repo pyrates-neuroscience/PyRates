@@ -2,7 +2,9 @@
 Basic parametrized axon class that can compute average firing rates from an average membrane potential
 """
 
-from matplotlib.pyplot import *
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import Optional
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
@@ -20,7 +22,8 @@ class Axon(object):
 
     """
 
-    def __init__(self, max_firing_rate, membrane_potential_threshold, sigmoid_steepness, axon_type=None):
+    def __init__(self, max_firing_rate: float, membrane_potential_threshold: float, sigmoid_steepness: float,
+                 axon_type: Optional[str] = None) -> None:
         """
         Initializes basic axon that transforms average membrane potential into average firing rate
         via a sigmoidal transfer function.
@@ -38,7 +41,7 @@ class Axon(object):
         ##########################
 
         assert max_firing_rate >= 0
-        assert type(membrane_potential_threshold) is float
+        assert type(membrane_potential_threshold) is float  # fixme: could be removed
         assert sigmoid_steepness > 0
 
         ##############################
@@ -50,7 +53,7 @@ class Axon(object):
         self.membrane_potential_threshold = membrane_potential_threshold
         self.sigmoid_steepness = sigmoid_steepness
 
-    def compute_firing_rate(self, membrane_potential):
+    def compute_firing_rate(self, membrane_potential: np.float64) -> np.float64:
         """
         Method that computes average firing rate based on sigmoidal transfer function with previously set parameters
 
@@ -60,11 +63,14 @@ class Axon(object):
         :return: scalar, average firing rate at axon [unit = 1/s]
 
         """
-
+        # fixme: Possibly restrict to exclusively np.float64 (or float)
         return self.max_firing_rate / (1 + np.exp(self.sigmoid_steepness *
                                                   (self.membrane_potential_threshold - membrane_potential)))
 
-    def plot_transfer_function(self, membrane_potentials=None, epsilon=1e-4, bin_size=0.001, create_plot=True,
+    def plot_transfer_function(self, membrane_potentials: Optional[np.ndarray] = None,
+                               epsilon: float = 1e-4,
+                               bin_size: float = 0.001,
+                               create_plot: bool = True,
                                fig=None):
         """
         Creates figure of the sigmoidal function transforming membrane potentials into output firing rates.
@@ -81,7 +87,7 @@ class Axon(object):
         :return: figure handle
 
         """
-
+        # TODO: annotate plotting function
         ##########################
         # check input parameters #
         ##########################
@@ -127,7 +133,7 @@ class Axon(object):
             membrane_potentials = np.concatenate((membrane_potential_1, membrane_potential_2))
 
         else:
-
+            # fixme: inconsistency in type of membrane_potentials
             firing_rates = self.compute_firing_rate(membrane_potentials)
 
         ##############################################
@@ -135,18 +141,16 @@ class Axon(object):
         ##############################################
 
         if fig is None:
-            fig = figure('Axonal Transfer Function')
+            fig = plt.figure('Axonal Transfer Function')
 
-        hold('on')
-        plot(membrane_potentials, firing_rates)
-        hold('off')
-        xlabel('membrane potential [V]')
-        ylabel('firing rate [Hz]')
-        title('Wave-To-Pulse Function')
+        plt.hold('on')
+        plt.plot(membrane_potentials, firing_rates)
+        plt.hold('off')
+        plt.xlabel('membrane potential [V]')
+        plt.ylabel('firing rate [Hz]')
+        plt.title('Wave-To-Pulse Function')
 
         if create_plot:
             fig.show()
 
         return fig
-
-

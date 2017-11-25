@@ -3,14 +3,20 @@ Includes basic population class and functions to instantiate synapses or axons a
 parameters of an object instance. A 'population' is supposed to be smallest computational unit in the resulting network.
 """
 
-from matplotlib.pyplot import *
+import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from scipy.integrate import LSODA
+import numpy as np
 
 from core.axon import Axon
 import core.axon.templates as axon_templates
 from core.synapse import Synapse
 import core.synapse.templates as synapse_templates
+
+from typing import List, Optional, Union, Dict, Callable, TypeVar
+FloatLike = Union[float, np.float64]
+AxonLike = TypeVar('AxonLike', bound=Axon, covariant=True)
+SynapseLike = TypeVar('SynapseLike', bound=Synapse, covariant=True)
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -39,10 +45,20 @@ class Population(object):
 
     """
 
-    def __init__(self, synapses, axon='JansenRit', init_state=0., step_size=0.0001, variable_step_size=False,
-                 synaptic_kernel_length=100, synaptic_modulation_direction=None, tau_leak=0.016,
-                 resting_potential=-0.075, membrane_capacitance=1e-12, max_delay=0, synapse_params=None,
-                 axon_params=None, store_state_variables=False):
+    def __init__(self, synapses: List[str],
+                 axon: Optional[str]='JansenRit',
+                 init_state: FloatLike=0.,
+                 step_size: float=0.0001,
+                 variable_step_size: bool=False,
+                 synaptic_kernel_length: int=100,
+                 synaptic_modulation_direction: Optional[np.ndarray]=None,
+                 tau_leak: float=0.016,
+                 resting_potential: float=-0.075,
+                 membrane_capacitance: float=1e-12,
+                 max_delay: Union[int, np.int64]=0,
+                 synapse_params: Optional[List[Dict[str, Union[bool, float]]]]=None,  # fixme: this looks complicated
+                 axon_params: Optional[Dict[str, float]]=None,
+                 store_state_variables: bool=False) -> None:
         """
         Initializes a single neural mass.
 
@@ -180,7 +196,8 @@ class Population(object):
 
         self.axon = set_axon(axon, axon_params)
 
-    def state_update(self, extrinsic_current=0., extrinsic_synaptic_modulation=1.0):
+    def state_update(self, extrinsic_current: FloatLike=0.,
+                     extrinsic_synaptic_modulation: float=1.0) -> None:
         """
         Updates state according to current synapse and axon parametrization.
 
@@ -194,7 +211,8 @@ class Population(object):
         # check input parameters #
         ##########################
 
-        assert type(extrinsic_current) is float or np.float64
+        # assert type(extrinsic_current) is float or np.float64
+        # This should be covered in mypy type consistency tests
 
         ##########################################
         # add inputs to internal state variables #
@@ -255,7 +273,7 @@ class Population(object):
             self.synaptic_input = np.append(self.synaptic_input, self.dummy_input, axis=0)
             self.synaptic_input = self.synaptic_input[1:, :]
 
-    def take_step(self, f, y_old):
+    def take_step(self, f: Callable, y_old: FloatLike) -> np.float64:
         """
         Function that takes a step of an ODE with right-hand-side f using Euler or 4/5th order Adams/BDF formalism.
 
@@ -291,7 +309,8 @@ class Population(object):
 
         return y_new
 
-    def get_delta_membrane_potential(self, t, membrane_potential):
+    def get_delta_membrane_potential(self, t: Union[int, float], membrane_potential: FloatLike
+                                     ) -> FloatLike:
         """
         Method that calculates the change in membrane potential as a function of synaptic current, leak current and
         extrinsic current.
@@ -303,13 +322,15 @@ class Population(object):
 
         """
 
+        # fixme: variable t is ambiguously defined and seemingly never used. Remove?
         net_current = self.get_synaptic_currents(t, membrane_potential) + \
                       self.get_leak_current(membrane_potential) + \
                       self.extrinsic_current
 
         return net_current / self.membrane_capacitance
 
-    def get_synaptic_currents(self, t, membrane_potential):
+    def get_synaptic_currents(self, t: Union[int, float], membrane_potential: FloatLike
+                              ) -> FloatLike:
         """
         Method that calculates the net synaptic current over all synapses for time t.
 
@@ -339,9 +360,11 @@ class Population(object):
 
             self.get_synaptic_modulation(membrane_potential)
 
-        return np.sum(self.synaptic_currents)
+        # (disable type checker for return value)
+        # noinspection PyTypeChecker
+        return np.sum(self.synaptic_currents)  # type hint fails here, because np.sum may return both an array or scalar
 
-    def get_leak_current(self, membrane_potential):
+    def get_leak_current(self, membrane_potential: FloatLike) -> FloatLike:
         """
         Method that calculates the leakage current at a given point in time (instantaneous).
 
@@ -353,7 +376,7 @@ class Population(object):
 
         return (self.resting_potential - membrane_potential) * self.membrane_capacitance / self.tau_leak
 
-    def get_synaptic_modulation(self, membrane_potential):
+    def get_synaptic_modulation(self, membrane_potential: FloatLike) -> None:
         """
         Method that calculates the modulation weight for each additive synapse.
 
@@ -388,10 +411,10 @@ class Population(object):
         :return: Delta membrane potential threshold (scalar) [unit = mV].
 
         """
-
+        # fixme: the parameters don't seem to be used at all. Remove?
         return (self.get_firing_rate() - self.firing_rate_target) / self.tau_axon
 
-    def get_firing_rate(self):
+    def get_firing_rate(self) -> FloatLike:
         """
         Method that return the current average firing rate of the population.
 
@@ -432,14 +455,14 @@ class Population(object):
         #########################
 
         if fig is None:
-            fig = figure('Synaptic Kernel Functions')
+            fig = plt.figure('Synaptic Kernel Functions')
 
         synapse_types = list()
         for i in synapse_idx:
             fig = self.synapses[i].plot_synaptic_kernel(create_plot=False, fig=fig)
             synapse_types.append(self.synapses[i].synapse_type)
 
-        legend(synapse_types)
+        plt.legend(synapse_types)
 
         if create_plot:
             fig.show()
@@ -447,7 +470,8 @@ class Population(object):
         return fig
 
 
-def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
+def set_synapse(synapse: str, step_size: float, kernel_length: int,
+                synapse_params: Optional[Dict[str, Union[bool, float]]]=None) -> SynapseLike:
     """
     Instantiates a synapse, including a method to calculate the synaptic current resulting from the average firing rate
     arriving at the population.
@@ -463,13 +487,14 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
     :return synapse_instance: instance of synapse class, including method to compute synaptic current
 
     """
+    # fixme: set return type hint to a subclass of synapse
 
     ####################
     # check parameters #
     ####################
 
-    assert (type(synapse) is str) or (not synapse)
-    assert (type(synapse_params) is dict) or (not synapse_params)
+    # assert (type(synapse) is str) or (not synapse)
+    # assert (type(synapse_params) is dict) or (not synapse_params)
     assert step_size > 0
     assert kernel_length > 0
 
@@ -487,7 +512,7 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
 
         syn_instance = synapse_templates.GABAACurrentSynapse(step_size, kernel_length)
 
-    elif synapse_params:
+    elif synapse_params:  # fixme: this looks, like "synapse" could be made optional
 
         syn_instance = Synapse(synapse_params['efficiency'], synapse_params['tau_decay'],
                                    synapse_params['tau_rise'], step_size, kernel_length)
@@ -513,7 +538,7 @@ def set_synapse(synapse, step_size, kernel_length, synapse_params=None):
     return syn_instance
 
 
-def set_axon(axon, axon_params=None):
+def set_axon(axon: Union[str, None], axon_params: Optional[Dict[str, float]]=None) -> AxonLike:
     """
     Instantiates an axon, including a method to calculate the average output firing rate of a population given its
     current membrane potential.
@@ -525,6 +550,7 @@ def set_axon(axon, axon_params=None):
     :return ax_instance: instance of axon class, including method to compute firing rate
 
     """
+    # fixme: set return type hint to a subclass of axon
 
     ####################
     # check parameters #
@@ -550,7 +576,7 @@ def set_axon(axon, axon_params=None):
     elif axon_params:
 
         ax_instance = Axon(axon_params['max_firing_rate'], axon_params['membrane_potential_threshold'],
-                              axon_params['sigmoid_steepness'])
+                           axon_params['sigmoid_steepness'])
         pre_defined_axon = False
 
     else:
@@ -595,10 +621,10 @@ def interpolate_array(old_step_size, new_step_size, y, interpolation_type='cubic
     """
     Interpolates time-vectors with scipy.interpolate.interp1d.
 
-    :param old_t: total time-length of y [unit = s].
+    # :param old_t: total time-length of y [unit = s].
     :param old_step_size: old simulation step size [unit = s].
     :param new_step_size: new simulation step size [unit = s].
-    :param new_t: new total length of y [unit = s].
+    # :param new_t: new total length of y [unit = s].
     :param y: vector to be interpolated
     :param interpolation_type: can be 'linear' or spline stuff.
     :param axis: axis along which y is to be interpolated (has to have same length as t/old_step_size)

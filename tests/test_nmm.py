@@ -137,7 +137,7 @@ class TestNMMs(unittest.TestCase):
         # initialize synapse
         ####################
 
-        synapse = Synapse(efficiency=efficiency,
+        synapse = Synapse(efficacy=efficiency,
                           tau_decay=tau_decay,
                           tau_rise=tau_rise,
                           step_size=step_size,
@@ -206,7 +206,7 @@ class TestNMMs(unittest.TestCase):
         # initialize synapse
         ####################
 
-        synapse = Synapse(efficiency=efficiency,
+        synapse = Synapse(efficacy=efficiency,
                           tau_decay=tau_decay,
                           tau_rise=tau_rise,
                           step_size=step_size,
@@ -274,7 +274,7 @@ class TestNMMs(unittest.TestCase):
         # initialize synapse
         ####################
 
-        synapse = Synapse(efficiency=efficiency,
+        synapse = Synapse(efficacy=efficiency,
                           tau_decay=tau_decay,
                           tau_rise=tau_rise,
                           step_size=step_size,

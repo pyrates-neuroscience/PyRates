@@ -24,9 +24,17 @@ class JansenRitPyramidalCells(Population):
 
     """
 
-    def __init__(self, init_state=0., step_size=5e-4, variable_step_size=False, synaptic_kernel_length=100,
-                 synaptic_modulation_direction=None, tau_leak=0.016, resting_potential=-0.075,
-                 membrane_capacitance=1e-12, max_delay=0, synapse_params=None, axon_params=None,
+    def __init__(self, init_state=0.,
+                 step_size=5e-4,
+                 # variable_step_size=False,
+                 synaptic_kernel_length=100,
+                 synaptic_modulation_direction=None,
+                 tau_leak=0.016,
+                 resting_potential=-0.075,
+                 membrane_capacitance=1e-12,
+                 max_delay=0,
+                 synapse_params=None,
+                 axon_params=None,
                  store_state_variables=False):
         """
         Initializes a single pyramidal cell population as defined in Jansen & Rit (1995).
@@ -56,20 +64,20 @@ class JansenRitPyramidalCells(Population):
 
         """
 
-        super(JansenRitPyramidalCells, self).__init__(synapses=['AMPA_current', 'GABAA_current'],
-                                                      axon='JansenRit',
-                                                      init_state=init_state,
-                                                      step_size=step_size,
-                                                      variables_step_size=variable_step_size,
-                                                      synaptic_kernel_length=synaptic_kernel_length,
-                                                      synaptic_modulation_direction=synaptic_modulation_direction,
-                                                      tau_leak=tau_leak,
-                                                      resting_potential=resting_potential,
-                                                      membrane_capacitance=membrane_capacitance,
-                                                      max_delay=max_delay,
-                                                      synapse_params=synapse_params,
-                                                      axon_params=axon_params,
-                                                      store_state_variables=store_state_variables)
+        super().__init__(synapses=['AMPA_current', 'GABAA_current'],
+                         axon='JansenRit',
+                         init_state=init_state,
+                         step_size=step_size,
+                         # variables_step_size=variable_step_size,
+                         synaptic_kernel_length=synaptic_kernel_length,
+                         synaptic_modulation_direction=synaptic_modulation_direction,
+                         tau_leak=tau_leak,
+                         resting_potential=resting_potential,
+                         membrane_capacitance=membrane_capacitance,
+                         max_delay=max_delay,
+                         synapse_params=synapse_params,
+                         axon_params=axon_params,
+                         store_state_variables=store_state_variables)
 
 
 class JansenRitExcitatoryInterneurons(Population):
@@ -90,9 +98,17 @@ class JansenRitExcitatoryInterneurons(Population):
 
     """
 
-    def __init__(self, init_state=0., step_size=5e-4, variable_step_size=False, synaptic_kernel_length=100,
-                 synaptic_modulation_direction=None, tau_leak=0.016, resting_potential=-0.075,
-                 membrane_capacitance=1e-12, max_delay=0, synapse_params=None, axon_params=None,
+    def __init__(self, init_state=0.,
+                 step_size=5e-4,
+                 # variable_step_size=False,
+                 synaptic_kernel_length=100,
+                 synaptic_modulation_direction=None,
+                 tau_leak=0.016,
+                 resting_potential=-0.075,
+                 membrane_capacitance=1e-12,
+                 max_delay=0,
+                 synapse_params=None,
+                 axon_params=None,
                  store_state_variables=False):
         """
         Initializes a single excitatory interneuron population as defined in Jansen & Rit (1995).
@@ -122,20 +138,20 @@ class JansenRitExcitatoryInterneurons(Population):
 
         """
 
-        super(JansenRitExcitatoryInterneurons, self).__init__(synapses=['AMPA_current'],
-                                                              axon='JansenRit',
-                                                              init_state=init_state,
-                                                              step_size=step_size,
-                                                              variables_step_size=variable_step_size,
-                                                              synaptic_kernel_length=synaptic_kernel_length,
-                                                              synaptic_modulation_direction=synaptic_modulation_direction,
-                                                              tau_leak=tau_leak,
-                                                              resting_potential=resting_potential,
-                                                              membrane_capacitance=membrane_capacitance,
-                                                              max_delay=max_delay,
-                                                              synapse_params=synapse_params,
-                                                              axon_params=axon_params,
-                                                              store_state_variables=store_state_variables)
+        super().__init__(synapses=['AMPA_current'],
+                         axon='JansenRit',
+                         init_state=init_state,
+                         step_size=step_size,
+                         # variables_step_size=variable_step_size,
+                         synaptic_kernel_length=synaptic_kernel_length,
+                         synaptic_modulation_direction=synaptic_modulation_direction,
+                         tau_leak=tau_leak,
+                         resting_potential=resting_potential,
+                         membrane_capacitance=membrane_capacitance,
+                         max_delay=max_delay,
+                         synapse_params=synapse_params,
+                         axon_params=axon_params,
+                         store_state_variables=store_state_variables)
 
 
 class JansenRitInhibitoryInterneurons(Population):
@@ -156,9 +172,17 @@ class JansenRitInhibitoryInterneurons(Population):
 
     """
 
-    def __init__(self, init_state=0., step_size=5e-4, variable_step_size=False, synaptic_kernel_length=100,
-                 synaptic_modulation_direction=None, tau_leak=0.016, resting_potential=-0.075,
-                 membrane_capacitance=1e-12, max_delay=0, synapse_params=None, axon_params=None,
+    def __init__(self, init_state=0.,
+                 step_size=5e-4,
+                 # variable_step_size=False,
+                 synaptic_kernel_length=100,
+                 synaptic_modulation_direction=None,
+                 tau_leak=0.016,
+                 resting_potential=-0.075,
+                 membrane_capacitance=1e-12,
+                 max_delay=0,
+                 synapse_params=None,
+                 axon_params=None,
                  store_state_variables=False):
         """
         Initializes a single inhibitory interneuron population as defined in Jansen & Rit (1995).
@@ -188,17 +212,17 @@ class JansenRitInhibitoryInterneurons(Population):
 
         """
 
-        super(JansenRitInhibitoryInterneurons, self).__init__(synapses=['AMPA_current'],
-                                                              axon='JansenRit',
-                                                              init_state=init_state,
-                                                              step_size=step_size,
-                                                              variables_step_size=variable_step_size,
-                                                              synaptic_kernel_length=synaptic_kernel_length,
-                                                              synaptic_modulation_direction=synaptic_modulation_direction,
-                                                              tau_leak=tau_leak,
-                                                              resting_potential=resting_potential,
-                                                              membrane_capacitance=membrane_capacitance,
-                                                              max_delay=max_delay,
-                                                              synapse_params=synapse_params,
-                                                              axon_params=axon_params,
-                                                              store_state_variables=store_state_variables)
+        super().__init__(synapses=['AMPA_current'],
+                         axon='JansenRit',
+                         init_state=init_state,
+                         step_size=step_size,
+                         # variables_step_size=variable_step_size,
+                         synaptic_kernel_length=synaptic_kernel_length,
+                         synaptic_modulation_direction=synaptic_modulation_direction,
+                         tau_leak=tau_leak,
+                         resting_potential=resting_potential,
+                         membrane_capacitance=membrane_capacitance,
+                         max_delay=max_delay,
+                         synapse_params=synapse_params,
+                         axon_params=axon_params,
+                         store_state_variables=store_state_variables)
