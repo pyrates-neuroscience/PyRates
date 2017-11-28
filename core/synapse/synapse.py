@@ -1,83 +1,120 @@
-"""
-Includes basic synapse class, pre-parametrized sub-classes and an exponential kernel function
+"""Basic synapse class.
+
+This module includes a basic parametrized synapse class that can transform incoming average firing rates into average
+synaptic currents.
+
+Requires
+--------
+matplotlib
+numpy
+typing
+
 """
 
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Optional, Union, Iterable
-# from numba import jit
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 # TODO: find out reversal potentials for conductance based synapses
-# TODO: get rid if membrane potential if condition in distinction between current- and conductivity based synapses
 
 
 class Synapse(object):
-    """
-    Basic class for synapses. Includes a method to calculate synaptic current based on firing rate input.
-    
-    :var synapse_type: string, indicates type of synapse
-    :var synaptic_kernel: vector including weights for a certain number of time-steps after a synaptic input has
-         arrived, determining how strong that input affects the synapse at each time-step.
-    :var efficacy: scalar, determines strength of the synaptic response to input.
-    :var tau_decay: scalar, determines time-scale with which synaptic response to previous input decays.
-    :var tau_rise: scalar, determines time-scale with which synaptic response to previous input increases.
-    :var step_size: scalar, determines length of time-interval between time-steps.
-    :var kernel_length: scalar, determines length of the synaptic response kernel.
-    :var reversal_potential: scalar, determines reversal potential for that specific synapse.
+    """Basic synapse class. Represents average behavior of a defined post-synapse of a population.
+
+    Parameters
+    ----------
+    efficacy
+        Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
+    tau_decay
+        Lumped time delay constant that determines how fast the exponential synaptic kernel decays [unit = s].
+    tau_rise
+        Lumped time delay constant that determines how fast the exponential synaptic kernel rises [unit = s].
+    bin_size
+        Size of the time-steps between successive bins of the synaptic kernel [unit = s].
+    max_delay
+        Maximum time after which incoming synaptic input still affects the synapse [unit = s].
+    conductivity_based
+        If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
+        conductivity. Else translation to synaptic current will be direct (default = False).
+    reversal_potential
+        Synaptic reversal potential. Only needed for conductivity based synapses (default = -0.075) [unit = V].
+    modulatory
+        If true, synapse will have multiplicative instead of additive effect on change in membrane potential of
+        population (default = False).
+    synapse_type
+        Name of synapse type (default = None).
+
+    Attributes
+    ----------
+    synaptic_kernel : array_like
+        Vector including the synaptic kernel value at each time-bin [unit = S if conductivity based else A].
+    efficacy
+        See parameter description.
+    tau_decay
+        See parameter description.
+    tau_rise
+        See parameter description.
+    conductivity_based
+        See parameter description.
+    reversal_potential
+        See parameter description.
+    bin_size
+        See parameter description.
+    max_delay
+        See parameter description.
+    modulatory
+        See parameter description.
+    synapse_type
+        See parameter description.
+
+    Methods
+    -------
+    evaluate_kernel(build_kernel, t=0.)
+        Builds synaptic kernel or calculates synaptic kernel value at time-point(s) t.
+        See Also docstring of method itself.
+    get_synaptic_current(synaptic_input, membrane_potential=None)
+        Calculates synaptic current from incoming firing rate input using the synaptic kernel.
+        See Also docstring of method itself.
+    plot_synaptic_kernel(create_plot=True, fig=None)
+        Plots the synaptic kernel over time.
+        See Also docstring of method itself.
+
+    Notes
+    -----
+    Consider building a generic base class which allows for more flexible synapse types.
+
+    References
+    ----------
                               
     """
 
-    def __init__(self, efficacy: float, tau_decay: float, tau_rise: float, step_size: float,
-                 kernel_length: int, conductivity_based: bool = False, reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None, neuromodulatory: bool = False) -> None:
-        """
-        Initializes a standard double-exponential synapse kernel defined by 3 parameters.
-
-        :param efficacy: scalar, real-valued, defines strength and effect (excitatory vs inhibitory) of synapse
-               [unit = A or S].
-        :param tau_decay: scalar, positive & real-valued, lumped time delay constant that determines how steep
-               the exponential synaptic kernel decays [unit = s].
-        :param tau_rise: scalar, positive & real-valued, lumped time delay constant that determines how steep the
-               exponential synaptic kernel rises [unit = s].
-        :param step_size: scalar, size of the time step for which the population state will be updated according
-               to euler formalism [unit = s].
-        :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
-               [unit = 1].
-        :param conductivity_based: if true, synaptic input will be translated into synaptic current indirectly via
-               a change in synaptic conductivity. Else translation to synaptic current will be direct.
-        :param reversal_potential: scalar, determines the reversal potential of the synapse. Only necessary for
-               conductivity based synapses [unit = V] (default = -0.075).
-        :param synapse_type: if not None, will be treated as type of synapse (should be character string)
-        :param neuromodulatory: if True, synapse will be treated as having a modulatory (multiplicative) effect.
-               Synaptic output is then treated as having unit 1.
-
-        """
+    def __init__(self, efficacy: float, tau_decay: float, tau_rise: float, bin_size: float,
+                 max_delay: float, conductivity_based: bool = False, reversal_potential: float = -0.075,
+                 modulatory: bool = False, synapse_type: Optional[str] = None) -> None:
 
         ##########################
         # check input parameters #
         ##########################
 
-        assert type(efficacy) is float
-        assert tau_decay >= 0 and type(tau_decay) is float
-        assert tau_rise >= 0 and type(tau_rise) is float
-        assert step_size >= 0 and type(step_size) is float
-        assert kernel_length > 0 and type(kernel_length) is int
+        if tau_decay < 0 or tau_rise < 0 or bin_size < 0 or max_delay < 0:
+            raise ValueError('Time constants (tau, bin_size, max_delay) cannot be negative. '
+                             'See docstring for further information.')
 
         ##################
         # set parameters #
         ##################
 
-        self.efficiency = efficacy
+        self.efficacy = efficacy
         self.tau_decay = tau_decay
         self.tau_rise = tau_rise
         self.conductivity_based = conductivity_based
         self.reversal_potential = reversal_potential
-        self.step_size = step_size
-        self.kernel_length = kernel_length
-        self.neuromodulatory = neuromodulatory
+        self.bin_size = bin_size
+        self.max_delay = max_delay
+        self.modulatory = modulatory
 
         ####################
         # set synapse type #
@@ -102,16 +139,22 @@ class Synapse(object):
 
         self.synaptic_kernel = self.evaluate_kernel(build_kernel=True)
 
-    def evaluate_kernel(self, build_kernel: bool, t: Union[float, Iterable[float]] = 0.
+    def evaluate_kernel(self, build_kernel: bool, time_points: Optional[np.ndarray] = np.zeros(1)
                         ) -> np.ndarray:
-        """
-        Computes value of synaptic kernel at specific time point
+        """Builds synaptic kernel or computes value of it at specified time point(s).
 
-        :param build_kernel: if true, kernel will be evaluated at kernel_length timepoints. Else, t needs to be provided
-               and kernel will be evaluated at t.
-        :param t: scalar or vector, time(s) at which to evaluate kernel [unit = s] (default = 0.).
+        Parameters
+        ----------
+        build_kernel
+            If true, kernel will be evaluated at all relevant time-points for current parametrization. If false, kernel
+            will be evaluated at each provided t.
+        time_points
+            Time(s) at which to evaluate kernel. Only necessary if build_kernel is False (default = None) [unit = s].
 
-        :return: scalar or vector, synaptic kernel value at each t [unit = A or S]
+        Returns
+        -------
+        array_like
+            Synaptic kernel value at each t [unit = A or S]
 
         """
 
@@ -119,34 +162,34 @@ class Synapse(object):
         # check input parameter #
         #########################
 
-        if type(t) is float:
-            assert t >= 0
-        else:
-            assert all(t) >= 0
-            # fixme: inconcistency in defintion of t: array or scalar?
-            # I actually don't really get, why t would be defined on or the other way.
+        if any(time_points) < 0:
+            raise ValueError('Time-point(s) t cannot be negative. See docstring for further information.')
 
-        ############################################################
-        # check whether to build kernel or just evaluate its value #
-        ############################################################
+        ####################################################################
+        # check whether to build kernel or just evaluate it at time_points #
+        ####################################################################
 
         if build_kernel:
+            time_points = np.arange(self.max_delay, 0.-0.5*self.bin_size, -self.bin_size)
 
-            t = np.arange(self.kernel_length-1, -1, -1)
-            t = t * self.step_size
+        return self.efficacy * (np.exp(-time_points / self.tau_decay) - np.exp(-time_points / self.tau_rise))
 
-        return self.efficiency * (np.exp(-t / self.tau_decay) - np.exp(-t / self.tau_rise))
+    def get_synaptic_current(self, synaptic_input: np.ndarray,
+                             membrane_potential: Optional[Union[float, np.float64]]=None) -> Union[np.float64, float]:
+        """Applies synaptic kernel to synaptic input (should be incoming firing rate).
 
-    def get_synaptic_current(self, x: np.ndarray, membrane_potential: Optional[Union[float, np.float64]]=None
-                             ) -> Union[np.float64, float]:
-        """
-        Applies synaptic kernel to input vector (should resemble incoming firing rate).
+        Parameters
+        ----------
+        synaptic_input
+            Vector of incoming firing rates over time. [unit = 1/s].
+        membrane_potential
+            Membrane potential of post-synapse. Only to be used for conductivity based synapses (default = None)
+            [unit = V].
 
-        :param x: vector of values, kernel should be applied to [unit = 1/s].
-        :param membrane_potential: scalar, determines membrane potential of post-synapse. Only to be used for
-               conductivity based synapses [unit = V] (default = None).
-
-        :return: resulting synaptic current [unit = A]
+        Returns
+        -------
+        float
+            Resulting synaptic current [unit = A].
 
         """
 
@@ -155,13 +198,13 @@ class Synapse(object):
         #########################
 
         # multiply firing rate input with kernel
-        if len(x) < len(self.synaptic_kernel):
-            kernel_value = x * self.synaptic_kernel[-len(x):]
+        if len(synaptic_input) < len(self.synaptic_kernel):
+            kernel_value = synaptic_input * self.synaptic_kernel[-len(synaptic_input):]
         else:
-            kernel_value = x[-len(self.synaptic_kernel):] * self.synaptic_kernel
+            kernel_value = synaptic_input[-len(self.synaptic_kernel):] * self.synaptic_kernel
 
         # integrate over time
-        kernel_value = np.trapz(kernel_value, dx=self.step_size)
+        kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
         ##############################
         # calculate synaptic current #
@@ -175,13 +218,19 @@ class Synapse(object):
         return synaptic_current
 
     def plot_synaptic_kernel(self, create_plot=True, fig=None):
-        """
-        Creates plot of synaptic kernel over time.
+        """Creates plot of synaptic kernel over time.
 
-        :param create_plot: If false, no plot will be shown (default = True).
-        :param fig: figure handle, can be passed optionally (default = None).
+        Parameters
+        ----------
+        create_plot
+            If false, no plot will be shown (default = True).
+        fig
+            figure handle, can be passed optionally (default = None).
 
-        :return: figure handle
+        Returns
+        -------
+        :obj:`figure handle`
+            Handle of the newly created or updated figure.
 
         """
 
@@ -189,12 +238,16 @@ class Synapse(object):
         # plot synaptic kernel over time #
         ##################################
 
+        # check whether new figure has to be created
         if fig is None:
-            fig = plt.figure('Synaptic Kernel')
+            fig = plt.figure('Impulse Response Function')
 
+        # plot synaptic kernel
         plt.hold('on')
         plt.plot(self.synaptic_kernel[-1:0:-1])
         plt.hold('off')
+
+        # set figure labels
         plt.xlabel('time-steps')
         if self.neuromodulatory:
             plt.ylabel('modulation strength')
@@ -202,43 +255,10 @@ class Synapse(object):
             plt.ylabel('synaptic conductivity [S]')
         else:
             plt.ylabel('synaptic current [A]')
-        plt.title('Impulse Response Function')
+        plt.title('Synaptic Kernel')
 
+        # show plot
         if create_plot:
             fig.show()
 
         return fig
-
-
-#@jit
-# def get_synaptic_current(x, membrane_potential, synaptic_kernel, step_size, reversal_potential):
-#     """
-#     Applies synaptic kernel to input vector (should resemble incoming firing rate).
-#
-#     :return: resulting synaptic current [unit = A]
-#
-#     """
-#
-#     #########################
-#     # apply synaptic kernel #
-#     #########################
-#
-#     # multiply firing rate input with kernel
-#     if len(x) < len(synaptic_kernel):
-#         kernel_value = x * synaptic_kernel[-len(x):]
-#     else:
-#         kernel_value = x[-len(synaptic_kernel):] * synaptic_kernel
-#
-#     # integrate over time
-#     kernel_value = np.trapz(kernel_value, dx=step_size)
-#
-#     ##############################
-#     # calculate synaptic current #
-#     ##############################
-#
-#     if membrane_potential is None:
-#         synaptic_current = kernel_value
-#     else:
-#         synaptic_current = kernel_value * (reversal_potential - membrane_potential)
-#
-#     return synaptic_current

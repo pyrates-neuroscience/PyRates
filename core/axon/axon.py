@@ -1,5 +1,14 @@
-"""
-Basic parametrized axon class that can compute average firing rates from an average membrane potential
+"""Basic axon class.
+
+This module includes a basic axon parametrized class that can calculate average firing rates from average membrane
+potentials. Its behavior approximates the average axon hillok of a homogenous neural population.
+
+Requires
+--------
+matplotlib
+numpy
+typing
+
 """
 
 import matplotlib.pyplot as plt
@@ -11,38 +20,62 @@ __status__ = "Development"
 
 
 class Axon(object):
-    """
-    Basic class that behaves like the axon hillok. The key function is to transform average membrane potentials
-    (from the soma) into average firing rates.
+    """Basic axon class. Represents average firing behavior of axon hillok of a neural population.
 
-    :var axon_type: character string, indicates type of the axon
-    :var max_firing_rate: scalar, determines maximum firing rate of axon
-    :var membrane_potential_threshold: scalar, determines value for which sigmoidal transfer function value is 0.5
-    :var sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function
+    Parameters
+    ----------
+    max_firing_rate
+        Determines maximum firing rate of axon [unit = 1/s].
+    membrane_potential_threshold
+        Determines membrane potential for which output firing rate is half the maximum firing rate [unit = V].
+    sigmoid_steepness
+        Determines steepness of the sigmoidal transfer function mapping membrane potential to firing rate [unit = 1/V].
+    axon_type
+        Name of axon type.
+
+    Attributes
+    ----------
+    max_firing_rate
+        See parameter description.
+    membrane_potential_threshold
+        See parameter description.
+    sigmoid_steepness
+        See parameter description.
+    axon_type
+        See parameter description.
+
+    Methods
+    -------
+    compute_firing_rate(membrane_potential)
+        Calculates average firing rate from average membrane potential.
+        See Also docstring of method itself.
+    plot_transfer_function(membrane_potential=None, epsilon=1e-4, bin_size=1e-3, create_plot=True, fig=None)
+        Creates plot of average firing rates over membrane potentials.
+        See Also docstring of method itself.
+
+    Notes
+    -----
+    Consider building generic, non-parametric base class, instead of the specific one described in [1]_
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
     """
 
     def __init__(self, max_firing_rate: float, membrane_potential_threshold: float, sigmoid_steepness: float,
                  axon_type: Optional[str] = None) -> None:
-        """
-        Initializes basic axon that transforms average membrane potential into average firing rate
-        via a sigmoidal transfer function.
-
-        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = 1/s]
-        :param membrane_potential_threshold: scalar, determines value for which sigmoidal transfer function value is 0.5
-               [unit = V].
-        :param sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function [unit = 1/V]
-        :param axon_type: if not None, will be treated as type of axon (should be character string)
-
-        """
 
         ##########################
         # check input parameters #
         ##########################
 
-        assert max_firing_rate >= 0
-        assert type(membrane_potential_threshold) is float  # fixme: could be removed
-        assert sigmoid_steepness > 0
+        if max_firing_rate < 0:
+            raise ValueError('Maximum firing rate cannot be negative.')
+
+        if sigmoid_steepness < 0:
+            raise ValueError('Sigmoid steepness cannot be negative.')
 
         ##############################
         # initialize axon parameters #
@@ -53,17 +86,23 @@ class Axon(object):
         self.membrane_potential_threshold = membrane_potential_threshold
         self.sigmoid_steepness = sigmoid_steepness
 
-    def compute_firing_rate(self, membrane_potential: np.float64) -> np.float64:
+    def compute_firing_rate(self, membrane_potential: float) -> float:
+        """Computes average firing rate from membrane potential based on sigmoidal transfer function.
+
+        Parameters
+        ----------
+        membrane_potential
+            current average membrane potential of neural mass [unit = V].
+
+        Returns
+        -------
+        float
+            average firing rate at axon hillok [unit = 1/s]
+
         """
-        Method that computes average firing rate based on sigmoidal transfer function with previously set parameters
 
-        :param membrane_potential: scalar, resembles current average membrane potential that is to be transferred into
-               an average firing rate [unit = V].
-
-        :return: scalar, average firing rate at axon [unit = 1/s]
-
-        """
         # fixme: Possibly restrict to exclusively np.float64 (or float)
+
         return self.max_firing_rate / (1 + np.exp(self.sigmoid_steepness *
                                                   (self.membrane_potential_threshold - membrane_potential)))
 
@@ -72,29 +111,39 @@ class Axon(object):
                                bin_size: float = 0.001,
                                create_plot: bool = True,
                                fig=None):
+        """Creates figure of the sigmoidal function transforming membrane potentials into output firing rates.
+
+        Parameters
+        ----------
+        membrane_potentials
+            Membrane potential values for which to plot transfer function value [unit = V] (default = None).
+        epsilon
+            Determines min/max function value to plot, if membrane_potentials is None.
+            Min = 0 + epsilon, max = max_firing_rate - epsilon [unit = 1/s] (default = 1e-4).
+        bin_size
+            Determines size of steps between membrane potentials at which function is evaluated. Not necessary if
+            membrane_potentials is None [unit = V] (default = 0.001).
+        create_plot
+            If false, plot will bot be shown (default = True).
+        fig
+            If passed, plot will be created in respective figure (default = None).
+
+        Returns
+        -------
+        :obj:`figure handle`
+            Handle of the newly created or updated figure.
+
         """
-        Creates figure of the sigmoidal function transforming membrane potentials into output firing rates.
 
-        :param membrane_potentials: Can be vector of membrane potentials for which to plot the function value
-               [unit = V] (default = None).
-        :param epsilon: scalar, determines min/max function value to plot, if membrane_potentials were not passed.
-               Min = 0 + epsilon, max = max_firing_rate - epsilon [unit = 1/s] (default = 1e-4).
-        :param bin_size: scalar, determines the size of the steps between the membrane potentials at which the firing
-               rate is evaluated. Only necessary if no membrane potentials are passed [unit = V] (default = 0.001).
-        :param create_plot: If false, plot will not be shown (default = True).
-        :param fig: figure handle that can be passed optionally (default = None).
-
-        :return: figure handle
-
-        """
-        # TODO: annotate plotting function
         ##########################
         # check input parameters #
         ##########################
 
-        assert membrane_potentials is None or type(membrane_potentials) is np.ndarray
-        assert epsilon >= 0
-        assert bin_size >= 0
+        if epsilon < 0:
+            raise ValueError('Epsilon cannot be negative. See parameter description for further information.')
+
+        if bin_size < 0:
+            raise ValueError('Bin size cannot be negative. See parameter description for further information.')
 
         ##########################
         # calculate firing rates #
@@ -140,16 +189,21 @@ class Axon(object):
         # plot firing rates over membrane potentials #
         ##############################################
 
+        # check whether new figure needs to be created
         if fig is None:
-            fig = plt.figure('Axonal Transfer Function')
+            fig = plt.figure('Wave-To-Pulse-Function')
 
+        # plot firing rates over membrane potentials
         plt.hold('on')
         plt.plot(membrane_potentials, firing_rates)
         plt.hold('off')
+
+        # set figure labels
         plt.xlabel('membrane potential [V]')
         plt.ylabel('firing rate [Hz]')
-        plt.title('Wave-To-Pulse Function')
+        plt.title('Axon Hillok Transfer Function')
 
+        # show plot
         if create_plot:
             fig.show()
 
