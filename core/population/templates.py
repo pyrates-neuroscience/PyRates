@@ -27,12 +27,12 @@ class JansenRitPyramidalCells(Population):
     def __init__(self, init_state=0.,
                  step_size=5e-4,
                  # variable_step_size=False,
-                 synaptic_kernel_length=100,
+                 max_synaptic_delay=100,
                  synaptic_modulation_direction=None,
                  tau_leak=0.016,
                  resting_potential=-0.075,
                  membrane_capacitance=1e-12,
-                 max_delay=0,
+                 max_population_delay=0,
                  synapse_params=None,
                  axon_params=None,
                  store_state_variables=False):
@@ -43,7 +43,7 @@ class JansenRitPyramidalCells(Population):
                [unit = V] & firing rate [unit = 1/s] (default = (0,0)).
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s] (default = 5e-4).
-        :param synaptic_kernel_length: scalar that indicates number of bins the kernel should be evaluated for
+        :param max_synaptic_delay: scalar that indicates number of bins the kernel should be evaluated for
                [unit = 1] (default = 100).
         :param tau_leak: scalar, time-scale with which the membrane potential of the population goes back to resting
                potential [unit = s] (default = 0.016).
@@ -69,12 +69,12 @@ class JansenRitPyramidalCells(Population):
                          init_state=init_state,
                          step_size=step_size,
                          # variables_step_size=variable_step_size,
-                         synaptic_kernel_length=synaptic_kernel_length,
+                         max_synaptic_delay=max_synaptic_delay,
                          synaptic_modulation_direction=synaptic_modulation_direction,
                          tau_leak=tau_leak,
                          resting_potential=resting_potential,
                          membrane_capacitance=membrane_capacitance,
-                         max_delay=max_delay,
+                         max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
                          store_state_variables=store_state_variables)
@@ -101,12 +101,12 @@ class JansenRitExcitatoryInterneurons(Population):
     def __init__(self, init_state=0.,
                  step_size=5e-4,
                  # variable_step_size=False,
-                 synaptic_kernel_length=100,
+                 max_synaptic_delay=100,
                  synaptic_modulation_direction=None,
                  tau_leak=0.016,
                  resting_potential=-0.075,
                  membrane_capacitance=1e-12,
-                 max_delay=0,
+                 max_population_delay=0,
                  synapse_params=None,
                  axon_params=None,
                  store_state_variables=False):
@@ -117,7 +117,7 @@ class JansenRitExcitatoryInterneurons(Population):
                [unit = V] & firing rate [unit = 1/s] (default = (0,0)).
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s] (default = 5e-4).
-        :param synaptic_kernel_length: scalar that indicates number of bins the kernel should be evaluated for
+        :param max_synaptic_delay: scalar that indicates number of bins the kernel should be evaluated for
                [unit = 1] (default = 100).
         :param tau_leak: scalar, time-scale with which the membrane potential of the population goes back to resting
                potential [unit = s] (default = 0.016).
@@ -143,12 +143,12 @@ class JansenRitExcitatoryInterneurons(Population):
                          init_state=init_state,
                          step_size=step_size,
                          # variables_step_size=variable_step_size,
-                         synaptic_kernel_length=synaptic_kernel_length,
+                         max_synaptic_delay=max_synaptic_delay,
                          synaptic_modulation_direction=synaptic_modulation_direction,
                          tau_leak=tau_leak,
                          resting_potential=resting_potential,
                          membrane_capacitance=membrane_capacitance,
-                         max_delay=max_delay,
+                         max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
                          store_state_variables=store_state_variables)
@@ -175,12 +175,12 @@ class JansenRitInhibitoryInterneurons(Population):
     def __init__(self, init_state=0.,
                  step_size=5e-4,
                  # variable_step_size=False,
-                 synaptic_kernel_length=100,
+                 max_synaptic_delay=100,
                  synaptic_modulation_direction=None,
                  tau_leak=0.016,
                  resting_potential=-0.075,
                  membrane_capacitance=1e-12,
-                 max_delay=0,
+                 max_population_delay=0,
                  synapse_params=None,
                  axon_params=None,
                  store_state_variables=False):
@@ -191,7 +191,7 @@ class JansenRitInhibitoryInterneurons(Population):
                [unit = V] & firing rate [unit = 1/s] (default = (0,0)).
         :param step_size: scalar, size of the time step for which the population state will be updated according
                to euler formalism [unit = s] (default = 5e-4).
-        :param synaptic_kernel_length: scalar that indicates number of bins the kernel should be evaluated for
+        :param max_synaptic_delay: scalar that indicates number of bins the kernel should be evaluated for
                [unit = 1] (default = 100).
         :param tau_leak: scalar, time-scale with which the membrane potential of the population goes back to resting
                potential [unit = s] (default = 0.016).
@@ -217,12 +217,12 @@ class JansenRitInhibitoryInterneurons(Population):
                          init_state=init_state,
                          step_size=step_size,
                          # variables_step_size=variable_step_size,
-                         synaptic_kernel_length=synaptic_kernel_length,
+                         max_synaptic_delay=max_synaptic_delay,
                          synaptic_modulation_direction=synaptic_modulation_direction,
                          tau_leak=tau_leak,
                          resting_potential=resting_potential,
                          membrane_capacitance=membrane_capacitance,
-                         max_delay=max_delay,
+                         max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
                          store_state_variables=store_state_variables)

@@ -1,19 +1,13 @@
-"""Basic synapse class.
+"""Module that includes basic synapse class plus derivations of it.
 
 This module includes a basic parametrized synapse class that can transform incoming average firing rates into average
 synaptic currents.
-
-Requires
---------
-matplotlib
-numpy
-typing
 
 """
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Optional, Union, Iterable
+from typing import Optional, Union, Callable
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -26,12 +20,11 @@ class Synapse(object):
 
     Parameters
     ----------
+    kernel_function
+        Function that specifies kernel value given the time-point after arrival of synaptic input. Output will be either
+        a synaptic current or conductance change [unit = S or A respectively].
     efficacy
         Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
-    tau_decay
-        Lumped time delay constant that determines how fast the exponential synaptic kernel decays [unit = s].
-    tau_rise
-        Lumped time delay constant that determines how fast the exponential synaptic kernel rises [unit = s].
     bin_size
         Size of the time-steps between successive bins of the synaptic kernel [unit = s].
     max_delay
@@ -46,17 +39,19 @@ class Synapse(object):
         population (default = False).
     synapse_type
         Name of synapse type (default = None).
+    **kwargs
+        Keyword arguments for the kernel function
 
     Attributes
     ----------
-    synaptic_kernel : array_like
+    synaptic_kernel : np.ndarray
         Vector including the synaptic kernel value at each time-bin [unit = S if conductivity based else A].
+    kernel_function
+        See parameter description.
+    kernel_function_args
+        Keyword arguments will be saved as dict on the object.
     efficacy
-        See parameter description.
-    tau_decay
-        See parameter description.
-    tau_rise
-        See parameter description.
+        Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
     conductivity_based
         See parameter description.
     reversal_potential
@@ -70,51 +65,34 @@ class Synapse(object):
     synapse_type
         See parameter description.
 
-    Methods
-    -------
-    evaluate_kernel(build_kernel, t=0.)
-        Builds synaptic kernel or calculates synaptic kernel value at time-point(s) t.
-        See Also docstring of method itself.
-    get_synaptic_current(synaptic_input, membrane_potential=None)
-        Calculates synaptic current from incoming firing rate input using the synaptic kernel.
-        See Also docstring of method itself.
-    plot_synaptic_kernel(create_plot=True, fig=None)
-        Plots the synaptic kernel over time.
-        See Also docstring of method itself.
-
-    Notes
-    -----
-    Consider building a generic base class which allows for more flexible synapse types.
-
-    References
-    ----------
-                              
     """
 
-    def __init__(self, efficacy: float, tau_decay: float, tau_rise: float, bin_size: float,
-                 max_delay: float, conductivity_based: bool = False, reversal_potential: float = -0.075,
-                 modulatory: bool = False, synapse_type: Optional[str] = None) -> None:
+    def __init__(self, kernel_function: Callable[float, float], efficacy: float, bin_size: float, max_delay: float,
+                 conductivity_based: bool = False, reversal_potential: float = -0.075,
+                 modulatory: bool = False, synapse_type: Optional[str] = None, **kwargs) -> None:
+        """Instantiates base synapse.
+        """
 
         ##########################
         # check input parameters #
         ##########################
 
-        if tau_decay < 0 or tau_rise < 0 or bin_size < 0 or max_delay < 0:
-            raise ValueError('Time constants (tau, bin_size, max_delay) cannot be negative. '
+        if bin_size < 0 or max_delay < 0:
+            raise ValueError('Time constants (bin_size, max_delay) cannot be negative. '
                              'See docstring for further information.')
 
         ##################
-        # set parameters #
+        # set attributes #
         ##################
 
         self.efficacy = efficacy
-        self.tau_decay = tau_decay
-        self.tau_rise = tau_rise
         self.conductivity_based = conductivity_based
         self.reversal_potential = reversal_potential
         self.bin_size = bin_size
         self.max_delay = max_delay
         self.modulatory = modulatory
+        self.kernel_function = kernel_function
+        self.kernel_function_args = kwargs
 
         ####################
         # set synapse type #
@@ -153,7 +131,7 @@ class Synapse(object):
 
         Returns
         -------
-        array_like
+        np.ndarray
             Synaptic kernel value at each t [unit = A or S]
 
         """
@@ -172,10 +150,10 @@ class Synapse(object):
         if build_kernel:
             time_points = np.arange(self.max_delay, 0.-0.5*self.bin_size, -self.bin_size)
 
-        return self.efficacy * (np.exp(-time_points / self.tau_decay) - np.exp(-time_points / self.tau_rise))
+        return self.kernel_function(time_points, **self.kernel_function_args)
 
     def get_synaptic_current(self, synaptic_input: np.ndarray,
-                             membrane_potential: Optional[Union[float, np.float64]]=None) -> Union[np.float64, float]:
+                             membrane_potential: Optional[Union[float, np.float64]] = None) -> Union[np.float64, float]:
         """Applies synaptic kernel to synaptic input (should be incoming firing rate).
 
         Parameters
@@ -249,7 +227,7 @@ class Synapse(object):
 
         # set figure labels
         plt.xlabel('time-steps')
-        if self.neuromodulatory:
+        if self.modulatory:
             plt.ylabel('modulation strength')
         elif self.conductivity_based:
             plt.ylabel('synaptic conductivity [S]')
@@ -262,3 +240,86 @@ class Synapse(object):
             fig.show()
 
         return fig
+
+
+class DoubleExponentialSynapse(Synapse):
+    """Basic synapse class. Represents average behavior of a defined post-synapse of a population.
+
+    Parameters
+    ----------
+    efficacy
+        See documentation of parameter `efficacy` in :class:`Synapse`.
+    tau_decay
+        Lumped time delay constant that determines how fast the exponential synaptic kernel decays [unit = s].
+    tau_rise
+        Lumped time delay constant that determines how fast the exponential synaptic kernel rises [unit = s].
+    bin_size
+        See documentation of parameter `bin_size` in :class:`Synapse`.
+    max_delay
+        See documentation of parameter `max_delay` in :class:`Synapse`.
+    conductivity_based
+        See documentation of parameter `conductivity_based` in :class:`Synapse`.
+    reversal_potential
+        See documentation of parameter `reversal_potential` in :class:`Synapse`.
+    modulatory
+        See documentation of parameter `modulatory` in :class:`Synapse`.
+    synapse_type
+        Name of synapse type (default = None).
+
+    See Also
+    --------
+    :class:`Synapse`: documentation for a detailed description of the object attributes and methods.
+                              
+    """
+
+    def __init__(self, efficacy: float, tau_decay: float, tau_rise: float, bin_size: float,
+                 max_delay: float, conductivity_based: bool = False, reversal_potential: float = -0.075,
+                 modulatory: bool = False, synapse_type: Optional[str] = None) -> None:
+
+        ##########################
+        # check input parameters #
+        ##########################
+
+        if tau_decay < 0 or tau_rise < 0:
+            raise ValueError('Time constants tau cannot be negative. See docstring for further information.')
+
+        ##########################
+        # define kernel function #
+        ##########################
+
+        def double_exponential(time_points: Union[float, np.ndarray], tau_decay: float,
+                               tau_rise: float) -> Union[float, np.ndarray]:
+            """Uses double exponential function to calculate synaptic kernel value for each passed time-point.
+
+            Parameters
+            ----------
+            time_points : Union[float, np.ndarray]
+                Vector of time-points for which to calculate kernel value [unit = s].
+            tau_decay
+                See parameter documentation of `tau_decay` of :class:`DoubleExponentialSynapse`.
+            tau_rise
+                See parameter documentation of `tau_rise` of :class:`DoubleExponentialSynapse`.
+
+            Returns
+            -------
+            Union[float, np.ndarray]
+                Kernel values at the time-points [unit = S if conductivity based else A].
+
+            """
+
+            return np.exp(-time_points / tau_decay) - np.exp(-time_points / tau_rise)
+
+        ###################
+        # call super init #
+        ###################
+
+        super().__init__(kernel_function=double_exponential,
+                         efficacy=efficacy,
+                         bin_size=bin_size,
+                         max_delay=max_delay,
+                         conductivity_based=conductivity_based,
+                         reversal_potential=reversal_potential,
+                         modulatory=modulatory,
+                         synapse_type=synapse_type,
+                         tau_rise=tau_rise,
+                         tau_decay=tau_decay)

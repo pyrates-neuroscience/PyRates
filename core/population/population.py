@@ -1,6 +1,8 @@
-"""
-Includes basic population class and functions to instantiate synapses or axons as well as a function to update
-parameters of an object instance. A 'population' is supposed to be smallest computational unit in the resulting network.
+"""Module that includes basic population class plus derivations of it.
+
+A population is supposed to be the basic computational unit in the neural mass model. It contains various synapses
+plus an axon hillok.
+
 """
 
 import matplotlib.pyplot as plt
@@ -8,12 +10,12 @@ from scipy.interpolate import interp1d
 from scipy.integrate import LSODA
 import numpy as np
 
-from core.axon import Axon
+from core.axon import Axon, SigmoidAxon
 import core.axon.templates as axon_templates
-from core.synapse import Synapse
+from core.synapse import Synapse, DoubleExponentialSynapse
 import core.synapse.templates as synapse_templates
 
-from typing import List, Optional, Union, Dict, Callable, TypeVar
+from typing import List, Optional, Union, Dict, Callable, TypeVar, Iterable
 FloatLike = Union[float, np.float64]
 AxonLike = TypeVar('AxonLike', bound=Axon, covariant=True)
 SynapseLike = TypeVar('SynapseLike', bound=Synapse, covariant=True)
@@ -22,88 +24,162 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 # TODO: Implement synaptic plasticity mechanism(s)
-
 # TODO: Implement new function that updates synaptic input field according to input + delay
+# TODO: Rework set-up of state vector to have fixed positions for certain state variables (i.e. use fixed size vector)
+# TODO: Move helper functions to separate file and set_synapse/_axon to object
 
 
 class Population(object):
-    """
-    Basic neural mass or population class. A population is defined via a number of synapses and an axon. Includes a
-    method to update the state of the population.
+    """Base neural mass or population class.
 
-    :var synapses: list of synapse names.
-    :var state_variables: list of state variable vectors collected over updates with the following entries:
-            [0] - membrane potential [unit = V]
-    :var input_firing_rate: list of input firing rates collected over updates [unit = 1/s]
-    :var output_firing_rate: list of output firing rates collected over updates [unit = 1/s]
-    :var store_state_variables: indicates whether all or only most recent state variables are stored
-    :var store_input_firing_rate: indicates whether all or only last few inputs are stored
-    :var store_output_firing_rate: indicates whether all or only most recent output firing rate is stored
-    :var axon_plasticity: indicates whether axon plasticity mechanism is enabled or not
-    :var tau_leak: time delay with which the population goes back to resting state potential [unit = s]
-    :var resting_potential: resting-state membrane potential of the population [unit = V]
+    A population is defined via a number of synapses and an axon.
+
+    Parameters
+    ----------
+    synapses
+        Can be set to use default synapse types. These include:
+        :class:`synapse_templates.AMPACurrentSynapse`,
+        :class:`synapse_templates.GABAACurrentSynapse`,
+        :class:`synapse_templates.AMPAConductanceSynapse`,
+        :class:`synapse_templates.GABAAConductanceSynapse`.
+    axon
+        Can be set to use default axon types. These include:
+        :class:`axon_templates.JansenRitAxon`.
+    init_state
+        Vector defining initial state of the population. Vector entries represent the following state variables:
+        1) membrane potential (default = 0.0) [unit = V].
+    step_size
+        Time step-size of a single state update (default = 0.0001) [unit = s].
+    variable_step_size
+        If true, time step-size of each state update will be chosen automatically by LSODA algorithm.
+        Else fixed step_size will be used with Euler formalism (default = False).
+    max_synaptic_delay
+        Maximum time delay after arrival of synaptic input at synapse for which this input can still affect the synapse
+        (default = 0.1) [unit = s].
+    synaptic_modulation_direction
+        2-dim array with first dimension being the additive synapses and the second dimension being the modulatory
+        synapses. Powers used on the synaptic modulation values to define up- or down-modulation.
+        Should be either 1.0 (up) or -1.0 (down) (default = None) [unit = 1].
+    resting_potential
+        Membrane potential at which no synaptic currents flow if no input arrives at population
+        (default = -0.07) [unit = V].
+    tau_leak
+        time-scale with which the membrane potential of the population goes back to resting potential
+        (default = 0.001) [unit = s].
+    membrane_capacitance
+        Average capacitance of the populations cell membrane (default = 1e-12) [unit = q/V].
+    max_population_delay
+        Maximum number of time-steps that external input is allowed to take to affect population
+        (default = 0) [unit = s]
+    synapse_params
+        List of dictionaries containing parameters for custom synapse type. For parameter explanation see documentation
+        of respective synapse class (:class:`DoubleExponentialSynapse`) (default = None).
+    axon_params
+        Parameters for custom axon type. For parameter explanation see documentation of respective axon type
+        (:class:`SigmoidAxon`) (default = False).
+    store_state_variables
+        If false, old state variables will be erased after each state-update (default = False).
+
+    Attributes
+    ----------
+    synapses : :obj:`list` of :class:`Synapse` objects
+        Synapse instances. See documentation of :class:`Synapse`.
+    axon : :class:`Axon` object
+        Axon instance. See documentation of :class:`Axon`.
+    state_variables : :obj:`list` of :obj:`np.ndarray`
+        Collection of state variable vectors over state updates. Vector entries represent the following state variables:
+        1) membrane potential [unit = V]
+        2) membrane_potential_threshold [unit = V]
+    t : float
+        Time the current population state refers to [unit = s].
+    synaptic_input : np.ndarray
+        Vector containing synaptic input over time [unit = 1/s].
+    current_input_idx : int
+        Index referring to position in `synaptic_input` that corresponds to time `t` of the population [unit = 1].
+    additive_synapse_idx : np.ndarray
+        Indices of non-modulatory synapses.
+    modulatory_synapse_idx : np.ndarray
+        Indices of modulatory synapses.
+    synaptic_currents : np.ndarray
+        Vector with synaptic currents produced by the non-modulatory synapses at time-point `t`.
+    synaptic_modulation : np.ndarray
+        Vector with synaptic modulatory effects (applied multiplicatively to non-modulatory synapses) produced by
+        modulatory synapses at time-point `t`.
+    synaptic_modulation_direction : np.ndarray
+        2D array containing the modulation direction (up/down) on each non-modulatory synapse (1.dim) of each
+        modulatory synapse (2.dim). 1 = up-modulation, -1 = down-modulation.
+    axon_plasticity : bool
+        If true, axonal plasticity mechanism is enabled that adjusts the `membrane_potential_threshold` of the axon.
+        Also adds that variable to the `state_variable` vector of the population.
+    firing_rate_target : float
+        Target firing rate that is used for synaptic plasticity mechanism. Only set if `axon_plasticity` is true.
+    extrinsic_current : float
+        Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
+    extrinsic_synaptic_modulation : float
+        Extrinsic modulatory influences on the population at time-point `t`.
+    store_state_variables
+        See documentation of parameter `store_state_variables`.
+    resting_potential
+        See documentation of parameter `resting_potential`.
+    tau_leak
+        See documentation of parameter `tau_leak`.
+    step_size
+        See documentation of parameter `step_size`.
+    variable_step_size
+        See documentation of parameter `variable_step_size`.
+    membrane_capacitance
+        See documentation of parameter `membrane_capacitance`.
+
+    Methods
+    -------
+    state_update
+        See method docstring.
+    take_step
+        See method docstring.
+    get_delta_membrane_potential
+        See method docstring.
+    get_synaptic_current
+        See method docstring.
+    get_leak_current
+        See method docstring.
+    get_synaptic_modulation
+        See method docstring.
+    get_delta_membrane_potential_threshold
+        See method docstring.
+    get_firing_rate
+        See method docstring.
+    plot_synaptic_kernels
+        See method docstring.
 
     """
 
     def __init__(self, synapses: List[str],
-                 axon: Optional[str]='JansenRit',
+                 axon: str,
                  init_state: FloatLike=0.,
                  step_size: float=0.0001,
                  variable_step_size: bool=False,
-                 synaptic_kernel_length: int=100,
+                 max_synaptic_delay: float=0.1,
                  synaptic_modulation_direction: Optional[np.ndarray]=None,
                  tau_leak: float=0.016,
                  resting_potential: float=-0.075,
                  membrane_capacitance: float=1e-12,
-                 max_delay: Union[int, np.int64]=0,
-                 synapse_params: Optional[List[Dict[str, Union[bool, float]]]]=None,  # fixme: this looks complicated
+                 max_population_delay: FloatLike=0.,
+                 synapse_params: Optional[List[Dict[str, Union[bool, float]]]]=None,
                  axon_params: Optional[Dict[str, float]]=None,
                  store_state_variables: bool=False) -> None:
-        """
-        Initializes a single neural mass.
-
-        :param synapses: list of character strings that indicate synapse type (see pre-implemented synapse sub-classes)
-        :param axon: character string that indicates axon type (see pre-implemented axon sub-classes)
-        :param init_state: vector of length 2, containing initial state of neural mass, i.e. membrane potential
-               [unit = V] & firing rate [unit = 1/s] (default = (0,0)).
-        :param step_size: scalar, size of the time step for which the population state will be updated according
-               to euler formalism [unit = s] (default = 0.1).
-        :param variable_step_size: If false, DEs will be solved via Euler formalism. If false, 4/5th order Runge-Kutta
-               formalism will be used (default = False).
-        :param synaptic_kernel_length: scalar that indicates number of bins the kernel should be evaluated for
-               [unit = 1] (default = 100).
-        :param synaptic_modulation_direction: 2-dim array with first dimension being the additive synapses and the
-               second dimension being the modulatory synapses. Powers used on the synaptic modulation values.
-               Should be either 1.0 or -1.0 (default = None) [unit = 1].
-        :param tau_leak: scalar, time-scale with which the membrane potential of the population goes back to resting
-               potential [unit = s] (default = 0.001).
-        :param resting_potential: scalar, membrane potential at which no synaptic currents flow if no input arrives at
-               population [unit = V] (default = -0.07).
-        :param membrane_capacitance: scalar, determines average capacitance of the population cell membranes
-               [unit = q/V] (default = 1e-12).
-        :param max_delay: number of time-steps that external input needs to affect population [unit = 1] (default = 0).
-        :param synapse_params: list of dictionaries containing parameters for custom synapse type. For parameter
-               explanation see synapse class (default = None).
-        :param axon_params: dictionary containing parameters for custom axon type. For parameter explanation see
-               axon class (default = None).
-        :param store_state_variables: If false, old state variables will be erased after each state-update
-               (default = False).
-
+        """Instantiation of base population.
         """
 
         ##########################
         # check input parameters #
         ##########################
 
-        assert type(synapses) is list
-        assert type(axon) is str or axon is None
-        assert step_size > 0
-        assert synaptic_kernel_length > 0
-        assert tau_leak > 0
-        assert type(resting_potential) is float or type(resting_potential) is np.float64
-        assert membrane_capacitance > 0
-        assert synapse_params is None or type(synapse_params) is list
-        assert axon_params is None or type(axon_params) is dict
+        if step_size < 0 or tau_leak < 0 or max_synaptic_delay < 0 or max_population_delay < 0:
+            raise ValueError('Time constants (tau, step_size, max_delay) cannot be negative. '
+                             'See parameter docstring for further information.')
+
+        if membrane_capacitance < 0:
+            raise ValueError('Membrane capacitance cannot be negative. See docstring for further information.')
 
         #############################
         # set population parameters #
@@ -117,7 +193,7 @@ class Population(object):
         self.step_size = step_size
         self.variable_step_size = variable_step_size
         self.membrane_capacitance = membrane_capacitance
-        self.t = 0
+        self.t = 0.
 
         # set initial states
         self.state_variables.append([init_state]) if type(init_state) is float or np.float64 \
@@ -161,20 +237,22 @@ class Population(object):
 
         if not synapse_params:
 
+            # use pre-parametrized synapse types
             for i in range(len(synapses)):
-                self.synapses.append(set_synapse(synapses[i], step_size, synaptic_kernel_length))
+                self.synapses.append(set_synapse(synapses[i], step_size, max_synaptic_delay))
                 if self.synapses[-1].neuromodulatory:
                     synapse_type[i] = False
 
         else:
 
+            # use custom synapse parametrization
             for i in range(len(synapse_params)):
-                self.synapses.append(set_synapse(synapses[i], step_size, synaptic_kernel_length, synapse_params[i]))
+                self.synapses.append(set_synapse(synapses[i], step_size, max_synaptic_delay, synapse_params[i]))
                 if self.synapses[-1].neuromodulatory:
                     synapse_type[i] = False
 
         # set synaptic input array
-        self.synaptic_input = np.zeros((synaptic_kernel_length + max_delay, len(self.synapses)))
+        self.synaptic_input = np.zeros((max_synaptic_delay + max_population_delay, len(self.synapses)))
         self.dummy_input = np.zeros((1, len(self.synapses)))
 
         # set input index for each synapse
@@ -184,7 +262,7 @@ class Population(object):
         self.additive_synapse_idx = np.where(synapse_type == 1)[0]
         self.modulatory_synapse_idx = np.where(synapse_type == 0)[0]
         self.synaptic_currents = np.zeros(len(self.additive_synapse_idx))
-        self.synaptic_modulation = np.zeros((1,len(self.modulatory_synapse_idx)))
+        self.synaptic_modulation = np.zeros((1, len(self.modulatory_synapse_idx)))
 
         # set modulation direction for modulatory synapses
         if synaptic_modulation_direction is None and self.synaptic_modulation:
@@ -196,23 +274,27 @@ class Population(object):
 
         self.axon = set_axon(axon, axon_params)
 
+        ###################################
+        # initialize extrinsic influences #
+        ###################################
+
+        self.extrinsic_current = 0.
+        self.extrinsic_synaptic_modulation = 1.
+
     def state_update(self, extrinsic_current: FloatLike=0.,
                      extrinsic_synaptic_modulation: float=1.0) -> None:
+        """Updates state of population by making a single step forward in time.
+
+        Parameters
+        ----------
+        extrinsic_current
+            Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
+            (default = 0.) [unit = A].
+        extrinsic_synaptic_modulation
+            modulatory input to each synapse. Can be scalar (applied to all synapses then) or vector with len = number
+            of synapses (default = 1.0) [unit = 1].
+
         """
-        Updates state according to current synapse and axon parametrization.
-
-        :param extrinsic_current: extrinsic current added to membrane potential change [unit = A] (default = 0).
-        :param extrinsic_synaptic_modulation: modulatory input to each synapse. Can be scalar (applied to all synapses
-               then) or vector with len = number of synapses (default = 1.0) [unit = 1].
-
-        """
-
-        ##########################
-        # check input parameters #
-        ##########################
-
-        # assert type(extrinsic_current) is float or np.float64
-        # This should be covered in mypy type consistency tests
 
         ##########################################
         # add inputs to internal state variables #
@@ -261,6 +343,7 @@ class Population(object):
         # advance in time and in synaptic input vector #
         ################################################
 
+        # time
         self.t += self.step_size
 
         # synaptic input
@@ -273,14 +356,20 @@ class Population(object):
             self.synaptic_input = np.append(self.synaptic_input, self.dummy_input, axis=0)
             self.synaptic_input = self.synaptic_input[1:, :]
 
-    def take_step(self, f: Callable, y_old: FloatLike) -> np.float64:
-        """
-        Function that takes a step of an ODE with right-hand-side f using Euler or 4/5th order Adams/BDF formalism.
+    def take_step(self, f: Callable, y_old: FloatLike) -> FloatLike:
+        """Takes a step of an ODE with right-hand-side f using Euler or Adams/BDF formalism.
 
-        :param f: Right-hand-side of ODE (function) that takes t as an argument.
-        :param y_old: old value of y that needs to be updated according to dy(t)/dt = f(t, y)
+        Parameters
+        ----------
+        f
+            Function that represents right-hand-side of ODE and takes `t` plus `y_old` as an argument.
+        y_old
+            Old value of y that needs to be updated according to dy(t)/dt = f(t, y)
 
-        :return: updated value of left-hand-side (scalar)
+        Returns
+        -------
+        float
+            Updated value of left-hand-side (y).
 
         """
 
@@ -311,14 +400,20 @@ class Population(object):
 
     def get_delta_membrane_potential(self, t: Union[int, float], membrane_potential: FloatLike
                                      ) -> FloatLike:
-        """
-        Method that calculates the change in membrane potential as a function of synaptic current, leak current and
+        """Calculates change in membrane potential as function of synaptic current, leak current and
         extrinsic current.
 
-        :param t: time for which to calculate the delta term [unit = s].
-        :param membrane_potential: current membrane potential of population [unit = mV].
+        Parameters
+        ----------
+        t
+            Time for which to calculate the delta term [unit = s].
+        membrane_potential
+            Current membrane potential of population [unit = V].
 
-        :return: Delta membrane potential (scalar) [unit = mV].
+        Returns
+        -------
+        float
+            Delta membrane potential [unit = V].
 
         """
 
@@ -331,13 +426,20 @@ class Population(object):
 
     def get_synaptic_currents(self, t: Union[int, float], membrane_potential: FloatLike
                               ) -> FloatLike:
-        """
-        Method that calculates the net synaptic current over all synapses for time t.
+        """Calculates the net synaptic current over all synapses for time `t`.
 
-        :param t: time for which to calculate the synaptic current [unit = s].
-        :param membrane_potential: current membrane potential of population [unit = mV].
+        Parameters
+        ----------
+        t
+            Time for which to calculate the synaptic current [unit = s].
+        membrane_potential
+            Current membrane potential of population [unit = V].
 
-        :return: net synaptic current [unit = mA].
+        Returns
+        -------
+        float
+            Net synaptic current [unit = A].
+
         """
 
         #############################################
@@ -365,22 +467,31 @@ class Population(object):
         return np.sum(self.synaptic_currents)  # type hint fails here, because np.sum may return both an array or scalar
 
     def get_leak_current(self, membrane_potential: FloatLike) -> FloatLike:
-        """
-        Method that calculates the leakage current at a given point in time (instantaneous).
+        """Calculates the leakage current at a given point in time (instantaneous).
 
-        :param membrane_potential: current membrane potential of population [unit = mV].
+        Parameters
+        ----------
+        membrane_potential
+            Current membrane potential of population [unit = V].
 
-        :return: leak current [unit = mA].
+        Returns
+        -------
+        float
+            Leak current [unit = A].
 
         """
 
         return (self.resting_potential - membrane_potential) * self.membrane_capacitance / self.tau_leak
 
     def get_synaptic_modulation(self, membrane_potential: FloatLike) -> None:
-        """
-        Method that calculates the modulation weight for each additive synapse.
+        """Calculates modulation weight for each additive synapse.
 
-        :param membrane_potential: Current membrane potential [unit = V].
+         Modulation values are applied to the synaptic current stored on the population afterwards.
+
+        Parameters
+        ----------
+        membrane_potential
+            Current membrane potential [unit = V].
 
         """
 
@@ -404,36 +515,54 @@ class Population(object):
 
         self.synaptic_currents *= synaptic_modulation_new
 
-    def get_delta_membrane_potential_threshold(self, t, membrane_potential_threshold):
-        """
-        Method that calculate the change in the axonal membrane potential threshold given the current firing rate.
+    def get_delta_membrane_potential_threshold(self, t: float, membrane_potential_threshold: float) -> float:
+        """Calculates change in axonal `membrane_potential_threshold` given current firing rate.
 
-        :return: Delta membrane potential threshold (scalar) [unit = mV].
+        Parameters
+        ----------
+        t
+            Time-point for which to calculate the change in `membrane_potential_threshold` [unit = s].
+        membrane_potential_threshold
+            Current value of `membrane_potential_threshold` that needs to be updated [unit = V].
+
+        Returns
+        -------
+        float
+            Change in `membrane_potential_threshold` [unit = V].
 
         """
         # fixme: the parameters don't seem to be used at all. Remove?
         return (self.get_firing_rate() - self.firing_rate_target) / self.tau_axon
 
     def get_firing_rate(self) -> FloatLike:
-        """
-        Method that return the current average firing rate of the population.
+        """Calculate the current average firing rate of the population.
 
-        :return: average firing rate [unit = Hz]
+        Returns
+        -------
+        float
+            Average firing rate of population [unit = 1/s].
 
         """
 
         return self.axon.compute_firing_rate(self.state_variables[-1][0])
 
-    def plot_synaptic_kernels(self, synapse_idx=None, create_plot=True, fig=None):
-        """
-        Creates plot of all specified synapses over time.
+    def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]]=None, create_plot: Optional[bool]=True,
+                              fig=None) -> None:
+        """Creates plot of all specified synapses over time.
 
-        :param synapse_idx: Can be list of synapse indices, specifying for which synapses to plot the kernels
-               (default = None).
-        :param create_plot: If false, no plot will be shown (default = True).
-        :param fig: figure handle, can be passed optionally (default = None).
+        Parameters
+        ----------
+        synapse_idx
+            Index of synapses for which to plot kernel.
+        create_plot
+            If true, plot will be shown.
+        fig
+            Can be used to pass figure handle of figure to plot into.
 
-        :return: figure handle
+        Returns
+        -------
+        figure handle
+            Handle of newly created or updated figure.
 
         """
 
@@ -458,7 +587,7 @@ class Population(object):
             fig = plt.figure('Synaptic Kernel Functions')
 
         synapse_types = list()
-        for i in synapse_idx:
+        for i in synapse_idx:           # fixme: what is the problem here?
             fig = self.synapses[i].plot_synaptic_kernel(create_plot=False, fig=fig)
             synapse_types.append(self.synapses[i].synapse_type)
 
@@ -470,7 +599,7 @@ class Population(object):
         return fig
 
 
-def set_synapse(synapse: str, step_size: float, kernel_length: int,
+def set_synapse(synapse: str, step_size: float, max_delay: float,
                 synapse_params: Optional[Dict[str, Union[bool, float]]]=None) -> SynapseLike:
     """
     Instantiates a synapse, including a method to calculate the synaptic current resulting from the average firing rate
@@ -479,7 +608,7 @@ def set_synapse(synapse: str, step_size: float, kernel_length: int,
     :param synapse: character string that indicates synapse type (see pre-implemented synapse sub-classes)
     :param step_size: scalar, size of the time step for which the population state will be updated according
            to euler formalism [unit = s].
-    :param kernel_length: scalar that indicates number of bins the kernel should be evaluated for
+    :param max_delay: scalar that indicates number of bins the kernel should be evaluated for
            [unit = 1].
     :param synapse_params: dictionary containing parameters for custom synapse type. For parameter explanation see
            synapse class (default = None).
@@ -496,7 +625,7 @@ def set_synapse(synapse: str, step_size: float, kernel_length: int,
     # assert (type(synapse) is str) or (not synapse)
     # assert (type(synapse_params) is dict) or (not synapse_params)
     assert step_size > 0
-    assert kernel_length > 0
+    assert max_delay > 0
 
     ###############################
     # initialize synapse instance #
@@ -506,16 +635,19 @@ def set_synapse(synapse: str, step_size: float, kernel_length: int,
 
     if synapse == 'AMPA_current':
 
-        syn_instance = synapse_templates.AMPACurrentSynapse(step_size, kernel_length)
+        syn_instance = synapse_templates.AMPACurrentSynapse(step_size, max_delay)
 
     elif synapse == 'GABAA_current':
 
-        syn_instance = synapse_templates.GABAACurrentSynapse(step_size, kernel_length)
+        syn_instance = synapse_templates.GABAACurrentSynapse(step_size, max_delay)
 
     elif synapse_params:  # fixme: this looks, like "synapse" could be made optional
 
-        syn_instance = Synapse(synapse_params['efficiency'], synapse_params['tau_decay'],
-                                   synapse_params['tau_rise'], step_size, kernel_length)
+        syn_instance = DoubleExponentialSynapse(efficacy=synapse_params['efficacy'],
+                                                tau_decay=synapse_params['tau_decay'],
+                                                tau_rise=synapse_params['tau_rise'],
+                                                bin_size=step_size,
+                                                max_delay=max_delay)
         pre_defined_synapse = False
 
     else:
@@ -528,7 +660,7 @@ def set_synapse(synapse: str, step_size: float, kernel_length: int,
 
     if pre_defined_synapse and synapse_params:
 
-        param_list = ['efficiency', 'tau_decay', 'tau_rise', 'conductivity_based', 'reversal_potential']
+        param_list = ['efficacy', 'tau_decay', 'tau_rise', 'conductivity_based', 'reversal_potential']
 
         for p in param_list:
             syn_instance = update_param(p, synapse_params, syn_instance)
@@ -565,18 +697,14 @@ def set_axon(axon: Union[str, None], axon_params: Optional[Dict[str, float]]=Non
 
     pre_defined_axon = True
 
-    if axon == 'Knoesche':
-
-        ax_instance = axon_templates.KnoescheAxon()
-
-    elif axon == 'JansenRit':
+    if axon == 'JansenRit':
 
         ax_instance = axon_templates.JansenRitAxon()
 
     elif axon_params:
 
-        ax_instance = Axon(axon_params['max_firing_rate'], axon_params['membrane_potential_threshold'],
-                           axon_params['sigmoid_steepness'])
+        ax_instance = SigmoidAxon(axon_params['max_firing_rate'], axon_params['membrane_potential_threshold'],
+                                  axon_params['sigmoid_steepness'])
         pre_defined_axon = False
 
     else:

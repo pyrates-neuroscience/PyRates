@@ -1,56 +1,42 @@
+"""Templates for specific axon parametrizations.
 """
-"""
-from core.axon import Axon
+from core.axon import SigmoidAxon
 
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
 
 
-class KnoescheAxon(Axon):
-    """
-    Specific parametrization of generic axon, following the code of Thomas Knoesche
-    """
+class JansenRitAxon(SigmoidAxon):
+    """Sigmoid axon with parameters set according to [1]_.
 
-    def __init__(self, max_firing_rate: float = 5.,
-                 membrane_potential_threshold: float = -0.069,
-                 sigmoid_steepness: float = 555.56) -> None:
-        """
-        Initializes basic axon with Thomas Knoesche's sigmoid parameters.
+    Parameters
+    ----------
+    max_firing_rate
+        Default = 5.0 Hz. See documentation of parameter 'max_firing_rate' of :class:`SigmoidAxon`.
+    membrane_potential_threshold
+        Default = -0.069 V. See documentation of parameter 'membrane_potential_threshold' of :class:`SigmoidAxon`.
+    sigmoid_steepness
+        Default = 555.56 Hz. See documentation of parameter 'sigmoid_steepness' of :class:`SigmoidAxon`.
 
-        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = 1/s] (default = 5).
-        :param membrane_potential_threshold: scalar, determines value for which sigmoidal transfer function value is 0.5
-               [unit = V] (default = -0.069).
-        :param sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function [unit = 1/V]
-               (default = 555.56).
+    See Also
+    --------
+    :class:`SigmoidAxon`: Detailed description of parameters.
+    :class:`Axon`: Detailed description of attributes and methods.
 
-        """
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
-        super(KnoescheAxon, self).__init__(max_firing_rate=max_firing_rate,
-                                           membrane_potential_threshold=membrane_potential_threshold,
-                                           sigmoid_steepness=sigmoid_steepness,
-                                           axon_type='Knoesche')
-
-
-class JansenRitAxon(Axon):
-    """
-    Specific parametrization of generic axon, following Jansen & Rit (1995)
     """
 
     def __init__(self, max_firing_rate: float = 5.,
                  membrane_potential_threshold: float = -0.069,
                  sigmoid_steepness: float = 555.56) -> None:
-        """
-        Initializes basic axon with Jansen & Rit's sigmoid parameters.
-
-        :param max_firing_rate: scalar, determines maximum firing rate of axon [unit = 1/s] (default = 5).
-        :param membrane_potential_threshold: scalar, determines value for which sigmoidal transfer function value is 0.5
-               [unit = V] (default = 0.06).
-        :param sigmoid_steepness: scalar, determines steepness of the sigmoidal transfer function [unit = 1/V]
-               (default = 555.56).
-
+        """Instantiates sigmoid axon with Jansen & Rit's parameters.
         """
 
-        super(JansenRitAxon, self).__init__(max_firing_rate=max_firing_rate,
-                                            membrane_potential_threshold=membrane_potential_threshold,
-                                            sigmoid_steepness=sigmoid_steepness,
-                                            axon_type='JansenRit')
+        super().__init__(max_firing_rate=max_firing_rate,
+                         membrane_potential_threshold=membrane_potential_threshold,
+                         sigmoid_steepness=sigmoid_steepness,
+                         axon_type='JansenRit')

@@ -343,13 +343,13 @@ class TestNMMs(unittest.TestCase):
                          axon=axon,
                          init_state=init_state,
                          step_size=step_size,
-                         synaptic_kernel_length=synaptic_kernel_length,
+                         max_synaptic_delay=synaptic_kernel_length,
                          tau_leak=tau_leak,
                          resting_potential=resting_potential)
         syn1 = AMPACurrentSynapse(step_size=step_size,
                                   kernel_length=synaptic_kernel_length)
-        syn2 = GABAACurrentSynapse(step_size=step_size,
-                                   kernel_length=synaptic_kernel_length)
+        syn2 = GABAACurrentSynapse(bin_size=step_size,
+                                   max_delay=synaptic_kernel_length)
         axon = JansenRitAxon()
 
         # define firing rate input and membrane potential
@@ -423,7 +423,7 @@ class TestNMMs(unittest.TestCase):
                                  axon=axon,
                                  init_state=init_state,
                                  step_size=step_size,
-                                 synaptic_kernel_length=synaptic_kernel_length,
+                                 max_synaptic_delay=synaptic_kernel_length,
                                  tau_leak=tau_leak,
                                  resting_potential=resting_potential,
                                  membrane_capacitance=membrane_capacitance)
@@ -870,7 +870,6 @@ class TestNMMs(unittest.TestCase):
 ##################
 # run unit tests #
 ##################
-
 
 if __name__ == '__main__':
     unittest.main()
