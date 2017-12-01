@@ -67,7 +67,7 @@ class Synapse(object):
 
     """
 
-    def __init__(self, kernel_function: Callable[float, float], efficacy: float, bin_size: float, max_delay: float,
+    def __init__(self, kernel_function: Callable[[float], float], efficacy: float, bin_size: float, max_delay: float,
                  conductivity_based: bool = False, reversal_potential: float = -0.075,
                  modulatory: bool = False, synapse_type: Optional[str] = None, **kwargs) -> None:
         """Instantiates base synapse.
@@ -117,8 +117,8 @@ class Synapse(object):
 
         self.synaptic_kernel = self.evaluate_kernel(build_kernel=True)
 
-    def evaluate_kernel(self, build_kernel: bool, time_points: Optional[np.ndarray] = np.zeros(1)
-                        ) -> np.ndarray:
+    def evaluate_kernel(self, build_kernel: bool,
+                        time_points: Optional[Union[float, np.ndarray]] = 0.) -> Union[float, np.ndarray]:
         """Builds synaptic kernel or computes value of it at specified time point(s).
 
         Parameters
@@ -140,7 +140,7 @@ class Synapse(object):
         # check input parameter #
         #########################
 
-        if any(time_points) < 0:
+        if np.sum(time_points < 0) > 0:
             raise ValueError('Time-point(s) t cannot be negative. See docstring for further information.')
 
         ####################################################################
@@ -148,7 +148,7 @@ class Synapse(object):
         ####################################################################
 
         if build_kernel:
-            time_points = np.arange(self.max_delay, 0.-0.5*self.bin_size, -self.bin_size)
+            time_points = np.arange(self.max_delay, 0.+0.5*self.bin_size, -self.bin_size)
 
         return self.kernel_function(time_points, **self.kernel_function_args)
 

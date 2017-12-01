@@ -1,13 +1,12 @@
+"""Basic neural mass model class.
 """
-Includes a basic neural mass model class.
-"""
+
 import numpy as np
 import matplotlib.pyplot as plt
-# from scipy.interpolate import interp1d
 
 from core.population import JansenRitPyramidalCells, JansenRitExcitatoryInterneurons, \
     JansenRitInhibitoryInterneurons, Population
-from core.population.population import interpolate_array
+from core.utility import interpolate_array
 from typing import List, Optional, Dict, Union, TypeVar
 PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
 
@@ -19,9 +18,19 @@ __status__ = "Development"
 
 
 class NeuralMassModel(object):
-    """
-    Basic neural mass model class. Initializes a number of delay-coupled neural masses that are characterized by a
-    number of synapses and an axon.
+    """Base neural mass model class.
+
+    Initializes a number of delay-coupled neural masses that are each characterized by a number of synapses and an axon.
+
+    Parameters
+    ----------
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
 
     :var N: integer that indicates number of populations in network.
     :var n_synapses: number of different synapse types expressed in the network

@@ -1,4 +1,4 @@
-"""Module that includes basic population class plus derivations of it.
+"""Module that includes basic population class.
 
 A population is supposed to be the basic computational unit in the neural mass model. It contains various synapses
 plus an axon hillok.
@@ -6,16 +6,14 @@ plus an axon hillok.
 """
 
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
 from scipy.integrate import LSODA
 import numpy as np
 
 from core.axon import Axon, SigmoidAxon
-import core.axon.templates as axon_templates
 from core.synapse import Synapse, DoubleExponentialSynapse
-import core.synapse.templates as synapse_templates
+from core.utility import set_instance
 
-from typing import List, Optional, Union, Dict, Callable, TypeVar, Iterable
+from typing import List, Optional, Union, Dict, Callable, TypeVar
 FloatLike = Union[float, np.float64]
 AxonLike = TypeVar('AxonLike', bound=Axon, covariant=True)
 SynapseLike = TypeVar('SynapseLike', bound=Synapse, covariant=True)
@@ -150,6 +148,10 @@ class Population(object):
         See method docstring.
     plot_synaptic_kernels
         See method docstring.
+    set_synapse
+        See method docstring.
+    set_axon
+        See method docstring.
 
     """
 
@@ -186,6 +188,7 @@ class Population(object):
         #############################
 
         self.synapses = list()
+        self.axon = None
         self.state_variables = list()
         self.store_state_variables = store_state_variables
         self.tau_leak = tau_leak
@@ -239,20 +242,22 @@ class Population(object):
 
             # use pre-parametrized synapse types
             for i in range(len(synapses)):
-                self.synapses.append(set_synapse(synapses[i], step_size, max_synaptic_delay))
-                if self.synapses[-1].neuromodulatory:
+                self.set_synapse(synapses[i], max_synaptic_delay)
+                if self.synapses[-1].modulatory:
                     synapse_type[i] = False
 
         else:
 
             # use custom synapse parametrization
             for i in range(len(synapse_params)):
-                self.synapses.append(set_synapse(synapses[i], step_size, max_synaptic_delay, synapse_params[i]))
-                if self.synapses[-1].neuromodulatory:
+                self.set_synapse(synapses[i], max_synaptic_delay,
+                                 synapse_params=synapse_params[i])
+                if self.synapses[-1].modulatory:
                     synapse_type[i] = False
 
         # set synaptic input array
-        self.synaptic_input = np.zeros((max_synaptic_delay + max_population_delay, len(self.synapses)))
+        self.synaptic_input = np.zeros((int((max_synaptic_delay + max_population_delay)/self.step_size),
+                                        len(self.synapses)))
         self.dummy_input = np.zeros((1, len(self.synapses)))
 
         # set input index for each synapse
@@ -272,7 +277,7 @@ class Population(object):
         # set axon #
         ############
 
-        self.axon = set_axon(axon, axon_params)
+        self.set_axon(axon, axon_params=axon_params)
 
         ###################################
         # initialize extrinsic influences #
@@ -347,7 +352,7 @@ class Population(object):
         self.t += self.step_size
 
         # synaptic input
-        if self.current_input_idx < self.synapses[0].kernel_length - 1:
+        if self.current_input_idx < len(self.synapses[0].synaptic_kernel) - 1:
 
             self.current_input_idx += 1
 
@@ -375,7 +380,7 @@ class Population(object):
 
         if self.variable_step_size:
 
-            # initialize RK45 solver
+            # initialize LSODA solver
             solver = LSODA(fun=f,
                            t0=0.,
                            y0=[y_old],
@@ -547,7 +552,7 @@ class Population(object):
         return self.axon.compute_firing_rate(self.state_variables[-1][0])
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]]=None, create_plot: Optional[bool]=True,
-                              fig=None) -> None:
+                              fig=None) -> object:
         """Creates plot of all specified synapses over time.
 
         Parameters
@@ -577,7 +582,7 @@ class Population(object):
         #############################
 
         if synapse_idx is None:
-            synapse_idx = range(len(self.synapses))
+            synapse_idx = np.arange(len(self.synapses)).tolist()
 
         #########################
         # plot synaptic kernels #
@@ -598,176 +603,45 @@ class Population(object):
 
         return fig
 
+    def set_synapse(self, synapse_subtype: str, max_synaptic_delay: float,
+                    synapse_type: Optional[str]='DoubleExponentialSynapse',
+                    synapse_params: Optional[dict]=None) -> None:
+        """Instantiates synapse.
 
-def set_synapse(synapse: str, step_size: float, max_delay: float,
-                synapse_params: Optional[Dict[str, Union[bool, float]]]=None) -> SynapseLike:
-    """
-    Instantiates a synapse, including a method to calculate the synaptic current resulting from the average firing rate
-    arriving at the population.
+        Parameters
+        ----------
+        synapse_subtype
+            Name of pre-parametrized synapse sub-class.
+        max_synaptic_delay
+            See docstring of parameter `max_synaptic_delay` of :class:`Population`.
+        synapse_type
+            Name of synapse class to instantiate.
+        synapse_params
+            Dictionary with synapse parameter name-value pairs.
 
-    :param synapse: character string that indicates synapse type (see pre-implemented synapse sub-classes)
-    :param step_size: scalar, size of the time step for which the population state will be updated according
-           to euler formalism [unit = s].
-    :param max_delay: scalar that indicates number of bins the kernel should be evaluated for
-           [unit = 1].
-    :param synapse_params: dictionary containing parameters for custom synapse type. For parameter explanation see
-           synapse class (default = None).
+        """
 
-    :return synapse_instance: instance of synapse class, including method to compute synaptic current
+        if synapse_type == 'DoubleExponentialSynapse':
+            self.synapses.append(set_instance(DoubleExponentialSynapse, synapse_subtype, synapse_params,
+                                              bin_size=self.step_size, max_delay=max_synaptic_delay))
+        else:
+            raise AttributeError('Invalid synapse type!')
 
-    """
-    # fixme: set return type hint to a subclass of synapse
+    def set_axon(self, axon_subtype, axon_type='SigmoidAxon', axon_params=None) -> None:
+        """Instantiates axon
 
-    ####################
-    # check parameters #
-    ####################
+        Parameters
+        ----------
+        axon_subtype
+            Name of pre-parametrized axon sub-class.
+        axon_type
+            Name of axon class to instantiate.
+        axon_params
+            Dictionary with axon parameter name-value pairs.
 
-    # assert (type(synapse) is str) or (not synapse)
-    # assert (type(synapse_params) is dict) or (not synapse_params)
-    assert step_size > 0
-    assert max_delay > 0
+        """
 
-    ###############################
-    # initialize synapse instance #
-    ###############################
-
-    pre_defined_synapse = True
-
-    if synapse == 'AMPA_current':
-
-        syn_instance = synapse_templates.AMPACurrentSynapse(step_size, max_delay)
-
-    elif synapse == 'GABAA_current':
-
-        syn_instance = synapse_templates.GABAACurrentSynapse(step_size, max_delay)
-
-    elif synapse_params:  # fixme: this looks, like "synapse" could be made optional
-
-        syn_instance = DoubleExponentialSynapse(efficacy=synapse_params['efficacy'],
-                                                tau_decay=synapse_params['tau_decay'],
-                                                tau_rise=synapse_params['tau_rise'],
-                                                bin_size=step_size,
-                                                max_delay=max_delay)
-        pre_defined_synapse = False
-
-    else:
-
-        raise ValueError('Not a valid synapse type! Check synapses.py for all possible synapse types')
-
-    #########################################################################
-    # adjust pre-defined parametrization if relevant parameters were passed #
-    #########################################################################
-
-    if pre_defined_synapse and synapse_params:
-
-        param_list = ['efficacy', 'tau_decay', 'tau_rise', 'conductivity_based', 'reversal_potential']
-
-        for p in param_list:
-            syn_instance = update_param(p, synapse_params, syn_instance)
-
-    syn_instance.synaptic_kernel = syn_instance.evaluate_kernel(build_kernel=True)
-
-    return syn_instance
-
-
-def set_axon(axon: Union[str, None], axon_params: Optional[Dict[str, float]]=None) -> AxonLike:
-    """
-    Instantiates an axon, including a method to calculate the average output firing rate of a population given its
-    current membrane potential.
-
-    :param axon: character string that indicates axon type (see pre-implemented axon sub-classes)
-    :param axon_params: dictionary containing parameters for custom axon type. For parameter explanation see axon
-           class (default = None).
-
-    :return ax_instance: instance of axon class, including method to compute firing rate
-
-    """
-    # fixme: set return type hint to a subclass of axon
-
-    ####################
-    # check parameters #
-    ####################
-
-    assert (type(axon) is str) or (not axon)
-    assert (type(axon_params) is dict) or (not axon_params)
-
-    ############################
-    # initialize axon instance #
-    ############################
-
-    pre_defined_axon = True
-
-    if axon == 'JansenRit':
-
-        ax_instance = axon_templates.JansenRitAxon()
-
-    elif axon_params:
-
-        ax_instance = SigmoidAxon(axon_params['max_firing_rate'], axon_params['membrane_potential_threshold'],
-                                  axon_params['sigmoid_steepness'])
-        pre_defined_axon = False
-
-    else:
-
-        raise ValueError('Not a valid axon type!')
-
-    #########################################################################
-    # adjust pre-defined parametrization if relevant parameters were passed #
-    #########################################################################
-
-    if pre_defined_axon and axon_params:
-
-        param_list = ['max_firing_rate', 'membrane_potential_threshold', 'sigmoid_steepness']
-
-        for p in param_list:
-            ax_instance = update_param(p, axon_params, ax_instance)
-
-    return ax_instance
-
-
-def update_param(param, param_dict, object_instance):
-    """
-    Checks whether param is a key in param_dict. If yes, the corresponding value in param_dict will be updated in
-    object_instance.
-
-    :param param: string, specifies parameter to check
-    :param param_dict: dictionary, potentially contains param
-    :param object_instance: object instance for which to update parameter
-
-    :return: object
-    """
-
-    assert param in object_instance
-
-    if param in param_dict:
-        setattr(object_instance, param, param_dict[param])
-
-    return object_instance
-
-
-def interpolate_array(old_step_size, new_step_size, y, interpolation_type='cubic', axis=0):
-    """
-    Interpolates time-vectors with scipy.interpolate.interp1d.
-
-    # :param old_t: total time-length of y [unit = s].
-    :param old_step_size: old simulation step size [unit = s].
-    :param new_step_size: new simulation step size [unit = s].
-    # :param new_t: new total length of y [unit = s].
-    :param y: vector to be interpolated
-    :param interpolation_type: can be 'linear' or spline stuff.
-    :param axis: axis along which y is to be interpolated (has to have same length as t/old_step_size)
-
-    :return: interpolated vector
-
-    """
-
-    # create time vectors
-    x_old = np.arange(y.shape[axis]) * old_step_size
-
-    new_steps_n = int(np.ceil(x_old[-1] / new_step_size))
-    x_new = np.linspace(0, x_old[-1], new_steps_n)
-
-    # create interpolation function
-    f = interp1d(x_old, y, axis=axis, kind=interpolation_type, bounds_error=False, fill_value='extrapolate')
-
-    return f(x_new)
+        if axon_type == 'SigmoidAxon':
+            self.axon = set_instance(SigmoidAxon, axon_subtype, axon_params)
+        else:
+            raise AttributeError('Invalid axon type!')

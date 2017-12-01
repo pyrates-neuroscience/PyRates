@@ -44,7 +44,7 @@ class Axon(object):
 
     """
 
-    def __init__(self, transfer_function: Callable[float, float], axon_type: Optional[str] = None,
+    def __init__(self, transfer_function: Callable[[float], float], axon_type: Optional[str] = None,
                  **kwargs) -> None:
         """Instantiates base axon.
         """

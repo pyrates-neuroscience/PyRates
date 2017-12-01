@@ -1,43 +1,19 @@
-"""
-Includes unit tests for all classes included in NMMs/base.
+"""Unit tests for all modules of BrainNetworks/core.
 """
 
 import pickle
 import unittest
 import numpy as np
 
-from core.axon import Axon, JansenRitAxon
+from core.axon import SigmoidAxon, JansenRitAxon
 from core.network import NeuralMassModel
 from core.population import Population
 from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
-from core.synapse import Synapse
+from core.synapse import Synapse, DoubleExponentialSynapse
+from core.utility import NMRSE
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"
-
-
-#####################
-# support functions #
-#####################
-
-
-def NMRSE(x, y):
-    """
-    Calculates the normalized root mean squared error of two vectors of equal length.
-
-    :param x: vector 1
-    :param y: vector 2
-
-    :return: NMRSE
-
-    """
-
-    max_val = np.max((np.max(x, axis=0), np.max(y, axis=0)))
-    min_val = np.min((np.min(x, axis=0), np.min(y, axis=0)))
-
-    diff = x - y
-
-    return np.sqrt(np.sum(diff ** 2, axis=0)) / (max_val - min_val)
 
 
 ##############
@@ -46,32 +22,43 @@ def NMRSE(x, y):
 
 
 class TestNMMs(unittest.TestCase):
-    """
-    Test class that includes unit tests for all components of NMM network.
+    """Unit tests for all components of NMM network.
     """
 
     def test_0_JR_axon(self):
-        """
-        Tests whether axon with standard parametrization from Jansen & Rit (1995) shows expected behavior to input in
-        form of various membrane potentials.
+        """Tests whether axon with standard parametrization from [1]_ shows expected output to membrane potential input.
+
+        See Also
+        --------
+        :class:`SigmoidAxon`: Detailed documentation of axon parameters.
+        :class:`Axon`: Detailed documentation of axon attributes and methods.
+
+        References
+        ----------
+        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+           of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
         """
 
-        # axon parameters
-        #################
+        ###################
+        # axon parameters #
+        ###################
 
         max_firing_rate = 5.  # unit = 1
         membrane_potential_threshold = -0.069  # unit = V
         sigmoid_steepness = 555.56  # unit = 1/V
 
-        # initialize axon
-        #################
+        ###################
+        # initialize axon #
+        ###################
 
-        axon = Axon(max_firing_rate=max_firing_rate,
-                    membrane_potential_threshold=membrane_potential_threshold,
-                    sigmoid_steepness=sigmoid_steepness)
+        axon = SigmoidAxon(max_firing_rate=max_firing_rate,
+                           membrane_potential_threshold=membrane_potential_threshold,
+                           sigmoid_steepness=sigmoid_steepness)
 
-        # define inputs (unit = V)
-        ##########################
+        ############################
+        # define inputs (unit = V) #
+        ############################
 
         membrane_potential_1 = membrane_potential_threshold
         membrane_potential_2 = membrane_potential_threshold - 0.01
@@ -79,8 +66,9 @@ class TestNMMs(unittest.TestCase):
         membrane_potential_4 = membrane_potential_threshold - 0.1
         membrane_potential_5 = membrane_potential_threshold + 0.1
 
-        # get firing rates
-        ##################
+        ####################
+        # get firing rates #
+        ####################
 
         firing_rate_1 = axon.compute_firing_rate(membrane_potential_1)
         firing_rate_2 = axon.compute_firing_rate(membrane_potential_2)
@@ -88,8 +76,9 @@ class TestNMMs(unittest.TestCase):
         firing_rate_4 = axon.compute_firing_rate(membrane_potential_4)
         firing_rate_5 = axon.compute_firing_rate(membrane_potential_5)
 
-        # perform unit tests
-        #################################################################################
+        ######################
+        # perform unit tests #
+        ######################
 
         print('-----------------')
         print('| Test I - Axon |')
@@ -119,38 +108,49 @@ class TestNMMs(unittest.TestCase):
         print('I.5 done!')
 
     def test_1_AMPA_synapse(self):
-        """
-        Tests whether synapse with standard AMPA parametrization from Thomas Knoesche shows expected behavior for
-        various firing rate inputs.
+        """Tests whether synapse with standard AMPA parametrization from Thomas Knoesche (corresponding to AMPA synapse
+         in [1]_) shows expected output for various firing rate inputs.
+
+        See Also
+        --------
+        :class:`DoubleExponentialSynapse`: Detailed documentation of synapse parameters.
+        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+
+        References
+        ----------
+        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+           of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
         """
 
         # synapse parameters
         ####################
 
-        efficiency = 1.273 * 3e-13  # unit = A
+        efficacy = 1.273 * 3e-13  # unit = A
         tau_decay = 0.006  # unit = s
         tau_rise = 0.0006  # unit = s
         step_size = 5.e-4  # unit = s
-        synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
+        synaptic_kernel_length = 0.05  # unit = s
         conductivity_based = False
 
         # initialize synapse
         ####################
 
-        synapse = Synapse(efficacy=efficiency,
-                          tau_decay=tau_decay,
-                          tau_rise=tau_rise,
-                          step_size=step_size,
-                          kernel_length=synaptic_kernel_length,
-                          conductivity_based=conductivity_based)
+        synapse = DoubleExponentialSynapse(efficacy=efficacy,
+                                           tau_decay=tau_decay,
+                                           tau_rise=tau_rise,
+                                           bin_size=step_size,
+                                           max_delay=synaptic_kernel_length,
+                                           conductivity_based=conductivity_based)
 
         # define firing rate inputs
         ###########################
 
-        firing_rates_1 = np.zeros(synaptic_kernel_length)
-        firing_rates_2 = np.ones(synaptic_kernel_length) * 300.0
-        firing_rates_3 = np.zeros(3 * synaptic_kernel_length)
-        firing_rates_3[synaptic_kernel_length:2 * synaptic_kernel_length] = 300.0
+        time_steps = int(synaptic_kernel_length/step_size)
+        firing_rates_1 = np.zeros(time_steps)
+        firing_rates_2 = np.ones(time_steps) * 300.0
+        firing_rates_3 = np.zeros(3 * time_steps)
+        firing_rates_3[time_steps:2 * time_steps] = 300.0
 
         # calculate synaptic currents
         #############################
@@ -188,38 +188,48 @@ class TestNMMs(unittest.TestCase):
         print('')
 
     def test_2_GABAA_synapse(self):
-        """
-        Tests whether synapse with standard GABAA parametrization from Thomas Knoesche shows expected behavior for
-        various firing rate inputs.
+        """Tests whether synapse with standard GABAA parametrization from Thomas Knoesche (corresponding to GABAA
+        synapse in [1]_) shows expected output for various firing rate inputs.
+
+        See Also
+        --------
+        :class:`DoubleExponentialSynapse`: Detailed documentation of synapse parameters.
+        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+
+        References
+        ----------
+        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+           of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
         """
 
         # synapse parameters
         ####################
 
-        efficiency = 1.273 * -1e-12  # unit = A
+        efficacy = 1.273 * -1e-12  # unit = A
         tau_decay = 0.02  # unit = s
         tau_rise = 0.0004  # unit = s
         step_size = 5.e-4  # unit = s
-        synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
+        synaptic_kernel_length = 0.05  # unit = s
         conductivity_based = False
 
         # initialize synapse
         ####################
 
-        synapse = Synapse(efficacy=efficiency,
-                          tau_decay=tau_decay,
-                          tau_rise=tau_rise,
-                          step_size=step_size,
-                          kernel_length=synaptic_kernel_length,
-                          conductivity_based=conductivity_based)
+        synapse = DoubleExponentialSynapse(efficacy=efficacy,
+                                           tau_decay=tau_decay,
+                                           tau_rise=tau_rise,
+                                           bin_size=step_size,
+                                           max_delay=synaptic_kernel_length,
+                                           conductivity_based=conductivity_based)
 
         # define firing rate inputs
         ###########################
-
-        firing_rates_1 = np.zeros(synaptic_kernel_length)
-        firing_rates_2 = np.ones(synaptic_kernel_length) * 300.0
-        firing_rates_3 = np.zeros(3 * synaptic_kernel_length)
-        firing_rates_3[synaptic_kernel_length:2 * synaptic_kernel_length] = 300.0
+        time_steps = int(0.05 / step_size)
+        firing_rates_1 = np.zeros(time_steps)
+        firing_rates_2 = np.ones(time_steps) * 300.0
+        firing_rates_3 = np.zeros(3 * time_steps)
+        firing_rates_3[time_steps:2 * time_steps] = 300.0
 
         # calculate synaptic currents
         #############################
@@ -257,37 +267,44 @@ class TestNMMs(unittest.TestCase):
         print('')
 
     def test_3_AMPA_conductivity_synapse(self):
-        """
-        Tests whether conductivity based AMPA synapse shows expected behavior.
+        """Tests whether synapse with parametrization from Thomas Knoesche corresponding to conductivity based AMPA
+        synapse shows expected output for various firing rate inputs.
+
+        See Also
+        --------
+        :class:`DoubleExponentialSynapse`: Detailed documentation of synapse parameters.
+        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+
         """
 
         # synapse parameters
         ####################
 
-        efficiency = 1.273 * 7.2e-10  # unit = S
+        efficacy = 1.273 * 7.2e-10  # unit = S
         tau_decay = 0.0015  # unit = s
         tau_rise = 0.000009  # unit = s
         step_size = 5.e-4  # unit = s
-        synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
+        synaptic_kernel_length = 0.05  # unit = s
         conductivity_based = True
 
         # initialize synapse
         ####################
 
-        synapse = Synapse(efficacy=efficiency,
-                          tau_decay=tau_decay,
-                          tau_rise=tau_rise,
-                          step_size=step_size,
-                          kernel_length=synaptic_kernel_length,
-                          conductivity_based=conductivity_based)
+        synapse = DoubleExponentialSynapse(efficacy=efficacy,
+                                           tau_decay=tau_decay,
+                                           tau_rise=tau_rise,
+                                           bin_size=step_size,
+                                           max_delay=synaptic_kernel_length,
+                                           conductivity_based=conductivity_based)
 
         # define firing rate inputs
         ###########################
 
-        firing_rates_1 = np.zeros(synaptic_kernel_length)
-        firing_rates_2 = np.ones(synaptic_kernel_length) * 300.0
-        firing_rates_3 = np.zeros(3 * synaptic_kernel_length)
-        firing_rates_3[synaptic_kernel_length:2 * synaptic_kernel_length] = 300.0
+        time_steps = int(0.05 / step_size)
+        firing_rates_1 = np.zeros(time_steps)
+        firing_rates_2 = np.ones(time_steps) * 300.0
+        firing_rates_3 = np.zeros(3 * time_steps)
+        firing_rates_3[time_steps:2 * time_steps] = 300.0
 
         # calculate synaptic currents
         #############################
@@ -323,18 +340,22 @@ class TestNMMs(unittest.TestCase):
         print('IV.3 done!')
 
     def test_4_population_init(self):
-        """
-        Tests whether synapses and axon of initialized population show expected behavior.
+        """Tests whether synapses and axon of initialized population show expected behavior.
+
+        See Also
+        --------
+        :class:`Population`: Detailed documentation of population parameters, attributes and methods.
+
         """
 
         # population parameters
         #######################
 
-        synapse_types = ['AMPA_current', 'GABAA_current']
-        axon = 'JansenRit'
+        synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse']
+        axon = 'JansenRitAxon'
         init_state = -0.07
         step_size = 5.e-4
-        synaptic_kernel_length = int(0.05 / step_size)
+        synaptic_kernel_length = 0.05
         tau_leak = 0.016
         resting_potential = -0.07
 
@@ -346,8 +367,8 @@ class TestNMMs(unittest.TestCase):
                          max_synaptic_delay=synaptic_kernel_length,
                          tau_leak=tau_leak,
                          resting_potential=resting_potential)
-        syn1 = AMPACurrentSynapse(step_size=step_size,
-                                  kernel_length=synaptic_kernel_length)
+        syn1 = AMPACurrentSynapse(bin_size=step_size,
+                                  max_delay=synaptic_kernel_length)
         syn2 = GABAACurrentSynapse(bin_size=step_size,
                                    max_delay=synaptic_kernel_length)
         axon = JansenRitAxon()
@@ -355,7 +376,8 @@ class TestNMMs(unittest.TestCase):
         # define firing rate input and membrane potential
         #################################################
 
-        firing_rate = np.zeros(synaptic_kernel_length) + 300.0
+        time_steps = int(0.05 / step_size)
+        firing_rate = np.zeros(time_steps) + 300.0
         membrane_potential = -0.06
 
         # calculate population, synapse and axon response
@@ -367,7 +389,7 @@ class TestNMMs(unittest.TestCase):
         syn2_response = syn2.get_synaptic_current(firing_rate)
 
         pop_ax_response = pop.axon.compute_firing_rate(membrane_potential)
-        ax_reponse = axon.compute_firing_rate(membrane_potential)
+        ax_response = axon.compute_firing_rate(membrane_potential)
 
         # perform unit tests
         ####################
@@ -382,21 +404,25 @@ class TestNMMs(unittest.TestCase):
         print('V.1 done!')
 
         print('V.2 test whether population axon shows expected response to membrane potential input')
-        self.assertEqual(pop_ax_response, ax_reponse)
+        self.assertEqual(pop_ax_response, ax_response)
         print('V.2 done!')
 
     def test_5_population_dynamics(self):
-        """
-        Tests whether population develops as expected over time given some input.
+        """Tests whether population develops as expected over time given some input.
+
+        See Also
+        --------
+        :class:`Population`: Detailed documentation of population parameters, attributes and methods.
+
         """
 
         # set population parameters
         ###########################
 
-        synapse_types = ['AMPA_current', 'GABAA_current']
-        axon = 'Knoesche'
+        synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse']
+        axon = 'JansenRitAxon'
         step_size = 5e-4  # unit = s
-        synaptic_kernel_length = int(0.05 / step_size)  # unit = 1
+        synaptic_kernel_length = 0.05  # unit = s
         tau_leak = 0.016  # unit = s
         resting_potential = -0.075  # unit = V
         membrane_capacitance = 1e-12  # unit = q/V
@@ -405,13 +431,14 @@ class TestNMMs(unittest.TestCase):
         # define population input
         #########################
 
-        synaptic_inputs = np.zeros((4, 2, 5 * synaptic_kernel_length))
+        time_steps = int(0.05 / step_size)
+        synaptic_inputs = np.zeros((4, 2, 5 * time_steps))
         synaptic_inputs[1, 0, :] = 300.0
         synaptic_inputs[2, 1, :] = 300.0
-        synaptic_inputs[3, 0, 0:synaptic_kernel_length] = 300.0
+        synaptic_inputs[3, 0, 0:time_steps] = 300.0
 
-        extrinsic_inputs = np.zeros((2, 5 * synaptic_kernel_length), dtype=float)
-        extrinsic_inputs[1, 0:synaptic_kernel_length] = 1e-14
+        extrinsic_inputs = np.zeros((2, 5 * time_steps), dtype=float)
+        extrinsic_inputs[1, 0:time_steps] = 1e-14
 
         # for each combination of inputs calculate state vector of population instance
         ##############################################################################
