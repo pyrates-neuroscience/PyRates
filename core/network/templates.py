@@ -2,15 +2,13 @@
 """
 import numpy as np
 
-from core.network import NeuralMassModel
+from core.network import CircuitFromPopulations
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
-# from core.network import NeuralMassModel
 
-
-class JansenRitCircuit(NeuralMassModel):
+class JansenRitCircuit(CircuitFromPopulations):
     """
     Basic Jansen-Rit circuit as defined in Jansen & Rit (1995).
 
@@ -30,12 +28,10 @@ class JansenRitCircuit(NeuralMassModel):
 
     """
 
-    def __init__(self, population_resting_potentials=-0.075, population_leak_taus=0.016, population_capacitance=1e-12,
-                 step_size=0.001, variable_step_size=False, synaptic_kernel_length=100,
-                 synaptic_modulation_direction=None, distances=None, positions=None, velocities=None,
-                 synapse_params=None, axon_params=None, init_states=None):
-        """
-        Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory interneurons.
+    def __init__(self, resting_potential: float=-0.075, tau_leak: float=0.016, membrane_capacitance: float=1e-12,
+                 step_size: float=5e-4, variable_step_size: bool=False, max_synaptic_delay: float=0.05,
+                 delays: np.ndarray=None, init_states: np.ndarray=np.zeros(3)) -> None:
+        """Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory interneurons.
         For detailed parameter description see super class.
         """
 
@@ -46,7 +42,11 @@ class JansenRitCircuit(NeuralMassModel):
         populations = ['JansenRitPyramidalCells',
                        'JansenRitExcitatoryInterneurons',
                        'JansenRitInhibitoryInterneurons']
-        population_labels = ['PCs', 'EINs', 'IINs']
+
+        population_labels = ['JR_PCs',
+                             'JR_EINs',
+                             'JR_IINs']
+
         N = 3                                               # PCs, EINs, IIns
         n_synapses = 2                                      # AMPA and GABAA
 
@@ -67,19 +67,14 @@ class JansenRitCircuit(NeuralMassModel):
         # call super init #
         ###################
 
-        super(JansenRitCircuit, self).__init__(connections=connections,
-                                               population_types=populations,
-                                               population_labels=population_labels,
-                                               population_resting_potentials=population_resting_potentials,
-                                               population_leak_taus=population_leak_taus,
-                                               population_capacitance=population_capacitance,
-                                               step_size=step_size,
-                                               variable_step_size=variable_step_size,
-                                               synaptic_kernel_length=synaptic_kernel_length,
-                                               neuromodulatory_effect=synaptic_modulation_direction,
-                                               distances=distances,
-                                               positions=positions,
-                                               velocities=velocities,
-                                               synapse_params=synapse_params,
-                                               axon_params=axon_params,
-                                               init_states=init_states)
+        super().__init__(population_types=populations,
+                         connectivity=connections,
+                         delays=delays,
+                         population_labels=population_labels,
+                         resting_potential=resting_potential,
+                         tau_leak=tau_leak,
+                         membrane_capacitance=membrane_capacitance,
+                         step_size=step_size,
+                         variable_step_size=variable_step_size,
+                         max_synaptic_delay=max_synaptic_delay,
+                         init_states=init_states)

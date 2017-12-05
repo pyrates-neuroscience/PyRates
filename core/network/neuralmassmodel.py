@@ -70,7 +70,7 @@ class Circuit(object):
                                  'See parameter docstrings for further explanation.')
 
         # attribute values
-        if any(delays) < 0. or step_size < 0.:
+        if np.sum(delays < 0.) > 0 or step_size < 0.:
             raise ValueError('Time constants (delays, step_size) cannot be negative. See parameter docstrings for '
                              'further explanation.')
 
@@ -78,17 +78,17 @@ class Circuit(object):
         # set circuit attributes #
         ##########################
 
-        # circuit structure
-        self.populations = populations
-        self.C = connectivity
-        self.D = delays
-
         # circuit properties
         self.step_size = step_size
         self.N = len(populations)
         self.n_synapses = connectivity.shape[2]
         self.t = 0.
-        self.active_synapses = np.zeros((self.N, self.n_synapses))
+        self.active_synapses = np.zeros((self.N, self.n_synapses), dtype=bool)
+
+        # circuit structure
+        self.populations = populations
+        self.C = connectivity
+        self.D = delays
 
         # collector variables
         self.population_states = np.zeros(0)
@@ -301,7 +301,7 @@ class Circuit(object):
 
         legend_labels = []
         for i in population_idx:
-            plt.plot(population_states[i, :])
+            plt.plot(population_states[:, i])
             legend_labels.append(self.populations[i].label)
 
         plt.hold('off')
@@ -353,7 +353,7 @@ class CircuitFromScratch(Circuit):
                  tau_leak: Optional[Union[float, List[float]]]=0.016,
                  resting_potential: Optional[Union[float, List[float]]]=-0.075,
                  init_states: Optional[np.ndarray]=0.,
-                 population_label: Optional[List[str]]=None) -> None:
+                 population_labels: Optional[List[str]]=None) -> None:
         """Instantiates circuit from synapse/axon types and parameters.
         """
 
@@ -384,16 +384,25 @@ class CircuitFromScratch(Circuit):
         N = connectivity.shape[0]
 
         # check information transmission delay
-        if delays:
-            max_population_delay = np.max(delays, axis=1)
+        if not delays:
+            delays = np.zeros((N, N), dtype=int)
         else:
-            max_population_delay = np.zeros(N)
+            delays = np.array(delays / step_size, dtype=int)
+
+        # set maximum transfer delay for each population
+        max_population_delay = np.max(delays, axis=1)
 
         # make float variables iterable
         if type(init_states) is float:
             init_states = np.zeros(N) + init_states
         if type(max_synaptic_delay) is float:
             max_synaptic_delay = np.zeros(N) + max_synaptic_delay
+        if type(tau_leak) is float:
+            tau_leak = np.zeros(N) + tau_leak
+        if type(resting_potential) is float:
+            resting_potential = np.zeros(N) + resting_potential
+        if type(membrane_capacitance) is float:
+            membrane_capacitance = np.zeros(N) + membrane_capacitance
 
         # make None variables iterable
         synapses = check_nones(synapses, n_synapses)
@@ -401,8 +410,8 @@ class CircuitFromScratch(Circuit):
         axons = check_nones(axons, N)
         axon_params = check_nones(axon_params, N)
         synaptic_modulation_direction = check_nones(synaptic_modulation_direction, N)
-        if not population_label:
-            population_label = ['Custom' for i in range(N)]
+        if not population_labels:
+            population_labels = ['Custom' for i in range(N)]
 
         # instantiate each population
         populations = list()
@@ -410,7 +419,7 @@ class CircuitFromScratch(Circuit):
 
             # check and extract synapses that exist at respective population
             idx = (np.sum(connectivity[i, :, :], axis=0) != 0).squeeze()
-            idx = np.asarray(idx[i, :].nonzero(), dtype=int)
+            idx = np.asarray(idx.nonzero(), dtype=int)
             if len(idx) == 1:
                 idx = idx[0]
             synapses_tmp = [synapses[j] for j in idx]
@@ -430,7 +439,7 @@ class CircuitFromScratch(Circuit):
                                           max_population_delay=max_population_delay[i],
                                           axon_params=axon_params[i],
                                           synapse_params=synapse_params_tmp,
-                                          label=population_label[i]))
+                                          label=population_labels[i]))
 
         ###################
         # call super init #
@@ -474,7 +483,7 @@ class CircuitFromPopulations(Circuit):
                  tau_leak: Optional[Union[float, List[float]]]=0.016,
                  resting_potential: Optional[Union[float, List[float]]]=-0.075,
                  init_states: Optional[np.ndarray]=0.,
-                 population_label: Optional[List[str]]=None) -> None:
+                 population_labels: Optional[List[str]]=None) -> None:
         """Instantiates circuit from population types and parameters.
         """
 
@@ -483,7 +492,7 @@ class CircuitFromPopulations(Circuit):
         ##########################
 
         # attribute dimensions
-        if population_types != connectivity.shape[0]:
+        if len(population_types) != connectivity.shape[0]:
             raise AttributeError('One population type per population in circuit has to be passed. See parameter '
                                  'docstring for further information.')
 
@@ -494,10 +503,13 @@ class CircuitFromPopulations(Circuit):
         N = len(population_types)
 
         # check information transmission delay
-        if delays:
-            max_population_delay = np.max(delays, axis=1)
+        if not delays:
+            delays = np.zeros((N, N), dtype=int)
         else:
-            max_population_delay = np.zeros(N)
+            delays = np.array(delays / step_size, dtype=int)
+
+        # set maximum transfer delay for each population
+        max_population_delay = np.max(delays, axis=1)
 
         # make float variables iterable
         if type(init_states) is float:
@@ -513,8 +525,8 @@ class CircuitFromPopulations(Circuit):
 
         # make None variables iterable
         synaptic_modulation_direction = check_nones(synaptic_modulation_direction, N)
-        if not population_label:
-            population_label = ['Custom' for i in range(N)]
+        if not population_labels:
+            population_labels = ['Custom' for i in range(N)]
 
         # instantiate each population
         populations = list()
@@ -530,7 +542,7 @@ class CircuitFromPopulations(Circuit):
                                               membrane_capacitance=membrane_capacitance[i],
                                               resting_potential=resting_potential[i],
                                               max_population_delay=max_population_delay[i],
-                                              label=population_label[i])
+                                              label=population_labels[i])
 
             elif population_types[i] == 'JansenRitExcitatoryInterneurons':
                 pop = JansenRitExcitatoryInterneurons(init_state=init_states[i],
@@ -542,7 +554,7 @@ class CircuitFromPopulations(Circuit):
                                                       membrane_capacitance=membrane_capacitance[i],
                                                       resting_potential=resting_potential[i],
                                                       max_population_delay=max_population_delay[i],
-                                                      label=population_label[i])
+                                                      label=population_labels[i])
 
             elif population_types[i] == 'JansenRitInhibitoryInterneurons':
                 pop = JansenRitInhibitoryInterneurons(init_state=init_states[i],
@@ -554,7 +566,7 @@ class CircuitFromPopulations(Circuit):
                                                       membrane_capacitance=membrane_capacitance[i],
                                                       resting_potential=resting_potential[i],
                                                       max_population_delay=max_population_delay[i],
-                                                      label=population_label[i])
+                                                      label=population_labels[i])
 
             else:
                 raise ValueError('Population type does not exist. See docstring of parameter `population_types` for '
@@ -608,7 +620,7 @@ class CircuitFromCircuit(Circuit):
         if len(circuits) != connectivity.shape[0] or len(circuits) != connectivity.shape[1]:
             raise AttributeError('First and second dimension of connectivity need to match the number of circuits. '
                                  'See parameter docstring for further information.')
-        if len(circuits) != delays.shape[0] or len(circuits) != delays.shape[1]:
+        if delays is not None and (len(circuits) != delays.shape[0] or len(circuits) != delays.shape[1]):
             raise AttributeError('First and second dimension of delays need to match the number of circuits. '
                                  'See parameter docstring for further information.')
 
@@ -621,6 +633,15 @@ class CircuitFromCircuit(Circuit):
         if not circuit_labels:
             circuit_labels = ['' for i in range(n_circuits)]
 
+        # set delays
+        if delays is None:
+            delays = np.zeros((n_circuits, n_circuits), dtype=int)
+        else:
+            delays = np.array(delays / circuits[0].step_size, dtype=int)
+
+        # set maximum transfer delay for each population
+        max_population_delay = np.max(delays, axis=1)
+
         # initialize stuff
         n_populations = np.zeros(n_circuits+1, dtype=int)
         connectivity_coll = list()
@@ -632,7 +653,7 @@ class CircuitFromCircuit(Circuit):
         for i in range(n_circuits):
 
             # collect population count
-            n_populations[i+1] = circuits[i].N
+            n_populations[i+1] = n_populations[i] + circuits[i].N
 
             # collect connectivity matrix
             connectivity_tmp = circuits[i].C
@@ -648,10 +669,16 @@ class CircuitFromCircuit(Circuit):
             n_synapses[i] = circuits[i].n_synapses
 
             # collect populations
-            for j in range(circuits[i].N):
-                pop = circuits[i].populations[j]
+            for pop in circuits[i].populations:
+
                 # update population label
                 pop.label = circuit_labels[i] + '_' + pop.label
+
+                # update population delay
+                pop.synaptic_input = np.zeros((int((len(pop.synapses[0].synaptic_kernel) + max_population_delay[i])),
+                                               len(pop.synapses)))
+
+                # add population
                 populations.append(pop)
 
         # check whether synapse dimensions match
@@ -662,32 +689,27 @@ class CircuitFromCircuit(Circuit):
         # build new connectivity and delay matrix #
         ###########################################
 
-        # set circuit delays
-        if not delays:
-            delays = np.zeros((n_circuits, n_circuits))
-
         # set input populations
         if not input_populations:
-            input_populations = np.zeros((n_circuits, n_circuits), dtype=int).tolist()
+            input_populations = np.zeros((n_circuits, n_circuits, 1), dtype=int).tolist()
 
         # set output populations
         if not output_populations:
             output_populations = np.zeros((n_circuits, n_circuits), dtype=int)
 
         # initialize stuff
-        n_total = np.sum(n_populations, dtype=int)
-        connectivity_new = np.zeros((n_total, n_total, connectivity.shape[2]))
-        delays_new = np.zeros((n_total, n_total))
+        connectivity_new = np.zeros((n_populations[-1], n_populations[-1], connectivity.shape[2]))
+        delays_new = np.zeros((n_populations[-1], n_populations[-1]), dtype=int)
 
         # loop over all circuits
         for i in range(n_circuits):
 
             # set intra-circuit connectivity of circuit i
-            connectivity_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1], :] = \
+            connectivity_new[n_populations[i]:n_populations[i+1], n_populations[i]:n_populations[i+1], :] = \
                 connectivity_coll[i]
 
             # set intra-circuit delays of circuit i
-            delays_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1]] = delays_coll[i]
+            delays_new[n_populations[i]:n_populations[i+1], n_populations[i]:n_populations[i+1]] = delays_coll[i]
 
             # loop again over all circuits
             for j in range(n_circuits):
@@ -695,18 +717,16 @@ class CircuitFromCircuit(Circuit):
                 # for other circuits
                 if i != j:
 
-                    # get starting position of circuit
-                    idx = np.sum(n_populations[0:j+1])
-
                     # loop over each input population in circuit i,j
-                    for k in range(input_populations[i][j]):
+                    for k in range(len(input_populations[i][j])):
 
                         # set inter-circuit connectivities
-                        connectivity_new[idx+input_populations[i][j][k], idx+output_populations[i, j], :] = \
-                            connectivity[i, j, :]
+                        connectivity_new[n_populations[j]+input_populations[i][j][k],
+                                         n_populations[i]+output_populations[i, j], :] = connectivity[i, j, :]
 
                         # set inter-circuit delays
-                        delays_new[idx + input_populations[i][j][k], idx + output_populations[i, j], :] = delays[i, j]
+                        delays_new[n_populations[j] + input_populations[i][j][k],
+                                   n_populations[i] + output_populations[i, j]] = delays[i, j]
 
         ###################
         # call super init #

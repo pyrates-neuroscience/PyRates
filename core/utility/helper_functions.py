@@ -73,7 +73,7 @@ def set_instance(class_handle, instance_type: str=None, instance_params: dict=No
     elif instance_params:
 
         # instantiate new object
-        instance = class_handle(**instance_params)
+        instance = class_handle(**instance_params, **kwargs)
 
     return instance
 

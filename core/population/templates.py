@@ -66,8 +66,8 @@ class JansenRitPyramidalCells(Population):
         """Instantiates JansenRitPyramidalCell population with AMPA+GABAA current based synapses and Jansen-Rit Axon.
         """
 
-        super().__init__(synapses=['AMPA_current', 'GABAA_current'],
-                         axon='JansenRit',
+        super().__init__(synapses=['AMPACurrentSynapse', 'GABAACurrentSynapse'],
+                         axon='JansenRitAxon',
                          init_state=init_state,
                          step_size=step_size,
                          variable_step_size=variable_step_size,
@@ -140,8 +140,8 @@ class JansenRitExcitatoryInterneurons(Population):
         """Instantiates JansenRitExcitatoryInterneuron population with AMPA current based synapse and Jansen-Rit Axon.
         """
 
-        super().__init__(synapses=['AMPA_current'],
-                         axon='JansenRit',
+        super().__init__(synapses=['AMPACurrentSynapse'],
+                         axon='JansenRitAxon',
                          init_state=init_state,
                          step_size=step_size,
                          variable_step_size=variable_step_size,
@@ -214,8 +214,8 @@ class JansenRitInhibitoryInterneurons(Population):
         """Instantiates JansenRitInhibitoryInterneuron population with AMPA current based synapse and Jansen-Rit Axon.
         """
 
-        super().__init__(synapses=['AMPA_current'],
-                         axon='JansenRit',
+        super().__init__(synapses=['AMPACurrentSynapse'],
+                         axon='JansenRitAxon',
                          init_state=init_state,
                          step_size=step_size,
                          variable_step_size=variable_step_size,
