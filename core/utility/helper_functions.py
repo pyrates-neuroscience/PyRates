@@ -3,7 +3,7 @@
 
 import numpy as np
 import inspect
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -156,3 +156,44 @@ def NMRSE(x: np.ndarray, y: np.ndarray) -> Union[float, np.ndarray]:
     diff = x - y
 
     return np.sqrt(np.sum(diff ** 2, axis=0)) / (max_val - min_val)
+
+
+def get_euclidean_distances(positions: np.ndarray) -> np.ndarray:
+    """
+    Calculates the euclidean distances for every pair of positions.
+
+    :param positions: N x 3 matrix, where N is the number of positions
+
+    :return: N x N matrix with euclidean distances
+
+    """
+
+    assert type(positions) is np.ndarray
+    assert positions.shape[1] == 3
+
+    n = positions.shape[0]
+    D = np.zeros((n, n))
+
+    for i in range(n):
+
+        # calculate coordinate difference between position i and all others
+        differences = np.tile(positions[i, :], (n, 1)) - positions
+
+        # calculate the square root of the sum of the squared differences for each pair of positions
+        D[i, :] = np.sqrt(np.sum(differences ** 2, axis=1))
+
+    return D
+
+
+def check_nones(param: Optional[Union[str, dict]], n: int) -> Union[str, dict, List[None]]:
+    """
+    Checks whether param is None. If yes, it returns a list of n Nones. If not, the param is returned.
+
+    :param param: Parameter, to be tested for None.
+    :param n: size of the list to return.
+
+    :return: param or list of Nones
+
+    """
+
+    return [None for i in range(n)] if param is None else param

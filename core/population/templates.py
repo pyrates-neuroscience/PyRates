@@ -61,7 +61,8 @@ class JansenRitPyramidalCells(Population):
                  max_population_delay: Optional[float] = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 store_state_variables: Optional[bool] = False) -> None:
+                 store_state_variables: Optional[bool] = False,
+                 label: str='JR_PCs') -> None:
         """Instantiates JansenRitPyramidalCell population with AMPA+GABAA current based synapses and Jansen-Rit Axon.
         """
 
@@ -78,7 +79,8 @@ class JansenRitPyramidalCells(Population):
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
-                         store_state_variables=store_state_variables)
+                         store_state_variables=store_state_variables,
+                         label=label)
 
 
 class JansenRitExcitatoryInterneurons(Population):
@@ -133,7 +135,8 @@ class JansenRitExcitatoryInterneurons(Population):
                  max_population_delay: Optional[float] = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 store_state_variables: Optional[bool] = False) -> None:
+                 store_state_variables: Optional[bool] = False,
+                 label: str='JR_EINs') -> None:
         """Instantiates JansenRitExcitatoryInterneuron population with AMPA current based synapse and Jansen-Rit Axon.
         """
 
@@ -150,7 +153,8 @@ class JansenRitExcitatoryInterneurons(Population):
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
-                         store_state_variables=store_state_variables)
+                         store_state_variables=store_state_variables,
+                         label=label)
 
 
 class JansenRitInhibitoryInterneurons(Population):
@@ -205,7 +209,8 @@ class JansenRitInhibitoryInterneurons(Population):
                  max_population_delay: Optional[float] = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 store_state_variables: Optional[bool] = False) -> None:
+                 store_state_variables: Optional[bool] = False,
+                 label: str = 'JR_IINs') -> None:
         """Instantiates JansenRitInhibitoryInterneuron population with AMPA current based synapse and Jansen-Rit Axon.
         """
 
@@ -222,4 +227,5 @@ class JansenRitInhibitoryInterneurons(Population):
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
-                         store_state_variables=store_state_variables)
+                         store_state_variables=store_state_variables,
+                         label=label)

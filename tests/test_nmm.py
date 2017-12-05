@@ -488,9 +488,19 @@ class TestNMMs(unittest.TestCase):
         print('VI.5 done!')
 
     def test_6_JR_circuit_I(self):
-        """
-        Tests whether current implementation shows expected behavior when standard Jansen-Rit circuit is fed with step-
-        function input targeted onto the excitatory interneurons.
+        """Tests whether current implementation shows expected behavior when standard Jansen-Rit circuit ([1]_)is fed
+        with step-function input targeted onto the excitatory interneurons.
+
+        See Also
+        --------
+        :class:`JansenRitCircuit`: Documentation of Jansen-Rit NMM parametrization
+        :class:`NeuralMassModel`: Detailed documentation of NMM parameters, attributes and methods.
+
+        References
+        ----------
+        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+           of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
         """
 
         # set parameters

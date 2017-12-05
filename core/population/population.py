@@ -11,7 +11,7 @@ import numpy as np
 
 from core.axon import Axon, SigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse
-from core.utility import set_instance
+from core.utility import set_instance, check_nones
 
 from typing import List, Optional, Union, Dict, Callable, TypeVar
 FloatLike = Union[float, np.float64]
@@ -77,6 +77,8 @@ class Population(object):
         (:class:`SigmoidAxon`) (default = False).
     store_state_variables
         If false, old state variables will be erased after each state-update (default = False).
+    label
+        Can be used to label the population (default = 'Custom').
 
     Attributes
     ----------
@@ -127,6 +129,8 @@ class Population(object):
         See documentation of parameter `variable_step_size`.
     membrane_capacitance
         See documentation of parameter `membrane_capacitance`.
+    label
+        See documentation of parameter 'label'.
 
     Methods
     -------
@@ -155,20 +159,21 @@ class Population(object):
 
     """
 
-    def __init__(self, synapses: List[str],
-                 axon: str,
-                 init_state: FloatLike=0.,
-                 step_size: float=0.0001,
-                 variable_step_size: bool=False,
-                 max_synaptic_delay: float=0.1,
+    def __init__(self, synapses: Optional[List[str]]=None,
+                 axon: Optional[str]=None,
+                 init_state: Optional[FloatLike]=0.,
+                 step_size: Optional[float]=0.0001,
+                 variable_step_size: Optional[bool]=False,
+                 max_synaptic_delay: Optional[float]=0.1,
                  synaptic_modulation_direction: Optional[np.ndarray]=None,
-                 tau_leak: float=0.016,
-                 resting_potential: float=-0.075,
-                 membrane_capacitance: float=1e-12,
-                 max_population_delay: FloatLike=0.,
+                 tau_leak: Optional[float]=0.016,
+                 resting_potential: Optional[float]=-0.075,
+                 membrane_capacitance: Optional[float]=1e-12,
+                 max_population_delay: Optional[FloatLike]=0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]]=None,
                  axon_params: Optional[Dict[str, float]]=None,
-                 store_state_variables: bool=False) -> None:
+                 store_state_variables: Optional[bool]=False,
+                 label: Optional[str]='Custom') -> None:
         """Instantiation of base population.
         """
 
@@ -176,10 +181,16 @@ class Population(object):
         # check input parameters #
         ##########################
 
+        # check synapse/axon attributes
+        if not synapses and not synapse_params:
+            raise AttributeError('Either synapses or synapse_params have to be passed!')
+        if not axon and not axon_params:
+            raise AttributeError('Either axon or axon_params have to be passed!')
+
+        # check attribute values
         if step_size < 0 or tau_leak < 0 or max_synaptic_delay < 0 or max_population_delay < 0:
             raise ValueError('Time constants (tau, step_size, max_delay) cannot be negative. '
                              'See parameter docstring for further information.')
-
         if membrane_capacitance < 0:
             raise ValueError('Membrane capacitance cannot be negative. See docstring for further information.')
 
@@ -197,6 +208,7 @@ class Population(object):
         self.variable_step_size = variable_step_size
         self.membrane_capacitance = membrane_capacitance
         self.t = 0.
+        self.label = label
 
         # set initial states
         self.state_variables.append([init_state]) if type(init_state) is float or np.float64 \
@@ -236,24 +248,19 @@ class Population(object):
         # set synapse #
         ###############
 
+        # initialize synapse parameters
         synapse_type = np.ones(len(synapses), dtype=bool)
+        n_synapses = len(synapses) if synapses else len(synapse_params)
+        synapses = check_nones(synapses, n_synapses)
+        synapse_params = check_nones(synapse_params, n_synapses)
 
-        if not synapse_params:
-
-            # use pre-parametrized synapse types
-            for i in range(len(synapses)):
-                self.set_synapse(synapses[i], max_synaptic_delay)
-                if self.synapses[-1].modulatory:
-                    synapse_type[i] = False
-
-        else:
-
-            # use custom synapse parametrization
-            for i in range(len(synapse_params)):
-                self.set_synapse(synapses[i], max_synaptic_delay,
-                                 synapse_params=synapse_params[i])
-                if self.synapses[-1].modulatory:
-                    synapse_type[i] = False
+        # instantiate synapses
+        for i in range(len(synapses)):
+            self.set_synapse(max_synaptic_delay,
+                             synapse_subtype=synapses[i],
+                             synapse_params=synapse_params[i])
+            if self.synapses[-1].modulatory:
+                synapse_type[i] = False
 
         # set synaptic input array
         self.synaptic_input = np.zeros((int((max_synaptic_delay + max_population_delay)/self.step_size),
@@ -592,7 +599,7 @@ class Population(object):
             fig = plt.figure('Synaptic Kernel Functions')
 
         synapse_types = list()
-        for i in synapse_idx:           # fixme: what is the problem here?
+        for i in synapse_idx:
             fig = self.synapses[i].plot_synaptic_kernel(create_plot=False, fig=fig)
             synapse_types.append(self.synapses[i].synapse_type)
 
@@ -603,7 +610,7 @@ class Population(object):
 
         return fig
 
-    def set_synapse(self, synapse_subtype: str, max_synaptic_delay: float,
+    def set_synapse(self, max_synaptic_delay: float, synapse_subtype: Optional[str]=None,
                     synapse_type: Optional[str]='DoubleExponentialSynapse',
                     synapse_params: Optional[dict]=None) -> None:
         """Instantiates synapse.
