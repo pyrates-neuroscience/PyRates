@@ -75,8 +75,6 @@ class Axon(object):
         return self.transfer_function(membrane_potential, **self.transfer_function_args)
 
     def plot_transfer_function(self, membrane_potentials: np.ndarray = None,
-                               epsilon: float = 1e-4,
-                               bin_size: float = 0.001,
                                create_plot: bool = True,
                                fig=None):
         """Creates figure of the transfer function transforming membrane potentials into output firing rates.
@@ -85,12 +83,6 @@ class Axon(object):
         ----------
         membrane_potentials
             Membrane potential values for which to plot transfer function value [unit = V].
-        epsilon
-            Determines min/max function value to plot, if membrane_potentials is None.
-            Min = 0 + epsilon, max = max_firing_rate - epsilon [unit = 1/s] (default = 1e-4).
-        bin_size
-            Determines size of steps between membrane potentials at which function is evaluated. Not necessary if
-            membrane_potentials is None [unit = V] (default = 0.001).
         create_plot
             If false, plot will bot be shown (default = True).
         fig
@@ -102,16 +94,6 @@ class Axon(object):
             Handle of the newly created or updated figure.
 
         """
-
-        ##########################
-        # check input parameters #
-        ##########################
-
-        if epsilon < 0:
-            raise ValueError('Epsilon cannot be negative. See parameter description for further information.')
-
-        if bin_size < 0:
-            raise ValueError('Bin size cannot be negative. See parameter description for further information.')
 
         ##########################
         # calculate firing rates #
@@ -232,13 +214,41 @@ class SigmoidAxon(Axon):
                                fig=None):
         """Plots axon hillok sigmoidal transfer function.
 
-        See description of `plot_transfer_function` method of :class:`Axon` for a detailed input/output description.
+        Parameters
+        ----------
+        membrane_potentials
+            See method docstring of :class:`Axon`.
+        epsilon
+            Determines min/max function value to plot, if membrane_potentials is None.
+            Min = 0 + epsilon, max = max_firing_rate - epsilon [unit = 1/s] (default = 1e-4).
+        bin_size
+            Determines size of steps between membrane potentials at which function is evaluated.
+            [unit = V] (default = 0.001).
+        create_plot
+            See method docstring of :class:`Axon`.
+        fig
+            See method docstring of :class:`Axon`.
+
+
+        See Also
+        --------
+        :class:`Axon`: See description of `plot_transfer_function` method for a detailed input/output description.
 
         Notes
         -----
         Membrane potential is now an optional argument compared to base axon plotting function.
 
         """
+
+        ##########################
+        # check input parameters #
+        ##########################
+
+        if epsilon < 0:
+            raise ValueError('Epsilon cannot be negative. See parameter description for further information.')
+
+        if bin_size < 0:
+            raise ValueError('Bin size cannot be negative. See parameter description for further information.')
 
         ##########################
         # calculate firing rates #
@@ -251,13 +261,13 @@ class SigmoidAxon(Axon):
             membrane_potential = list()
             membrane_potential.append(self.transfer_function_args['membrane_potential_threshold'])
             firing_rate = self.compute_firing_rate(membrane_potential[-1])
-            while firing_rate >= epsilon:
+            while firing_rate > epsilon:
                 membrane_potential.append(membrane_potential[-1] - bin_size)
                 firing_rate = self.compute_firing_rate(membrane_potential[-1])
             membrane_potential_1 = np.array(membrane_potential)
             membrane_potential_1 = np.flipud(membrane_potential_1)
 
-            # start at 70 mV and successively calculate the firing rate & increase the membrane
+            # start at membrane_potential_threshold and successively calculate the firing rate & increase the membrane
             # potential until the firing rate is greater or equal to max_firing_rate - epsilon
             membrane_potential = list()
             membrane_potential.append(self.transfer_function_args['membrane_potential_threshold'] + bin_size)
@@ -275,7 +285,5 @@ class SigmoidAxon(Axon):
         #####################
 
         super(SigmoidAxon, self).plot_transfer_function(membrane_potentials=membrane_potentials,
-                                                        epsilon=epsilon,
-                                                        bin_size=bin_size,
                                                         create_plot=create_plot,
                                                         fig=fig)

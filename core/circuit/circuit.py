@@ -246,7 +246,8 @@ class Circuit(object):
         return states
 
     def plot_population_states(self, population_idx: Optional[List[int]]=None, state_idx: Optional[int] = 0,
-                               time_window: Optional[List[float]]=None, create_plot: Optional[bool]=True) -> object:
+                               time_window: Optional[List[float]]=None, create_plot: Optional[bool]=True,
+                               fig=None) -> object:
         """Creates figure with population states over time.
 
         Parameters
@@ -259,6 +260,8 @@ class Circuit(object):
             Start and end time point for which to plot population states.
         create_plot
             If true, plot will be shown.
+        fig
+            Optional figure handle.
 
         Returns
         -------
@@ -296,7 +299,8 @@ class Circuit(object):
         # plot population states over time #
         ####################################
 
-        fig = plt.figure('Population States')
+        if fig is None:
+            fig = plt.figure('Population States')
         plt.hold('on')
 
         legend_labels = []

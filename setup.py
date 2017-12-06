@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 # fixme: folder reference needs to be fixed
 
 setup(name='BrainNetworks',
-      version='0.1',
+      version='0.2',
       description='Neural Mass Modeling Framework',
       author='Richard Gast, Daniel Rose, Konstantin Weise',
       author_email='rgast@cbs.mpg.de',
@@ -11,7 +11,8 @@ setup(name='BrainNetworks',
       packages=['core/axon',
                 'core/synapse',
                 'core/population',
-                'core/network',
+                'core/circuit',
+                'core/utility',
                 'tests'],
       zip_safe=False,
       python_requires='>=3.5',
