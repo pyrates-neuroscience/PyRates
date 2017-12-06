@@ -6,7 +6,7 @@ import unittest
 import numpy as np
 
 from core.axon import SigmoidAxon, JansenRitAxon
-from core.network import CircuitFromScratch, CircuitFromPopulations, CircuitFromCircuit, JansenRitCircuit
+from core.circuit import CircuitFromScratch, CircuitFromPopulations, CircuitFromCircuit, JansenRitCircuit
 from core.population import Population
 from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
 from core.synapse import Synapse, DoubleExponentialSynapse

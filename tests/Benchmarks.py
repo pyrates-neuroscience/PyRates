@@ -22,7 +22,7 @@ import time
 from memory_profiler import memory_usage
 from scipy.io import loadmat
 
-from core.network import NeuralMassModel, JansenRitCircuit
+from core.circuit import NeuralMassModel, JansenRitCircuit
 
 __author__ = "Richard Gast"
 __status__ = "Development"

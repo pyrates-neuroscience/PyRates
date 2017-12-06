@@ -2,7 +2,7 @@
 """
 import numpy as np
 
-from core.network import CircuitFromPopulations
+from core.circuit import CircuitFromPopulations
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"

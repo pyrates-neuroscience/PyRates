@@ -3,8 +3,8 @@
 import numpy as np
 from scipy.interpolate import interp1d
 
-from core.network import NeuralMassModel, JansenRitCircuit
-from core.network.neuralmassmodel import check_nones, get_euclidean_distances
+from core.circuit import NeuralMassModel, JansenRitCircuit
+from core.circuit.circuit import check_nones, get_euclidean_distances
 
 __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"

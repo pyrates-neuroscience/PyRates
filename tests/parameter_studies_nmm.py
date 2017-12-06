@@ -19,7 +19,7 @@ Interpreter options: -B -m cProfile -o profile.prof
 
 from matplotlib.pyplot import *
 
-from core.network import NeuralMassModel
+from core.circuit import NeuralMassModel
 
 __author__ = "Richard Gast"
 __status__ = "Development"
