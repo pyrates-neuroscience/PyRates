@@ -11,11 +11,13 @@
 body {
   background: #222;
   background-color: #222;
+  overflow-x:hidden !important;
+  overflow-y:hidden !important;
 }
 
 .reveal {
   font-family: "Source Sans Pro", Helvetica, sans-serif;
-  font-size: 60px;
+  font-size: 20px;
   font-weight: normal;
   color: #fff;
 }

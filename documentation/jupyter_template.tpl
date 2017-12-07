@@ -18,7 +18,7 @@
 
 <!-- General and theme style sheets -->
 <link rel="stylesheet" href="{{resources.reveal.url_prefix}}/css/reveal.css">
-<link rel="stylesheet" href="css/custom.css" id="theme">
+<link rel="stylesheet" href="css/sky.css" id="theme">
 
 <!-- If the query includes 'print-pdf', include the PDF print sheet -->
 <script>
@@ -89,7 +89,7 @@ div.code_cell {
   background-color: transparent;
 }
 div.prompt {
-  width: 11ex;
+  width: 15ex;
   padding: 0.4em;
   margin: 0px;
   font-family: monospace, sans-serif;
@@ -102,7 +102,7 @@ div.output_area pre {
 }
 div.output_prompt {
   /* 5px right shift to account for margin in parent container */
-  margin: 5px 5px 0 0;
+  margin: 1px 1px 0 0;
 }
 .rendered_html p {
   text-align: inherit;
@@ -136,6 +136,10 @@ require(
     function(head, Reveal){
         // Full list of configuration options available here: https://github.com/hakimel/reveal.js#configuration
         Reveal.initialize({
+	    width: "100%",
+	    height: "80%",
+	    margin: 0.1,
+	    maxScale: 1.5,
             controls: true,
             progress: true,
             history: true,
