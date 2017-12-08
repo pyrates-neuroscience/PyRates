@@ -15,7 +15,10 @@
    id="svg2"
    version="1.1"
    inkscape:version="0.91 r13725"
-   sodipodi:docname="program structure.svg">
+   sodipodi:docname="program structure.svg"
+   inkscape:export-filename="/home/raid1/drose/Desktop/PhD/12_NMM_Framework/BrainNetworks/documentation/img/program_structure.svg.png"
+   inkscape:export-xdpi="300"
+   inkscape:export-ydpi="300">
   <defs
      id="defs4" />
   <sodipodi:namedview
@@ -25,9 +28,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1.1470703"
-     inkscape:cx="175.20298"
-     inkscape:cy="740.50333"
+     inkscape:zoom="0.57353516"
+     inkscape:cx="405.3959"
+     inkscape:cy="736.44795"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -59,75 +62,68 @@
        height="505.48563"
        x="12.328914"
        y="13.034439" />
-    <rect
-       style="opacity:1;fill:#b3b3b3;fill-opacity:1;stroke:#000000;stroke-width:0.69999999;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       id="rect3336-3"
-       width="442.60815"
-       height="505.48563"
-       x="890.39514"
-       y="-364.27814" />
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:45px;line-height:125%;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="1042.6572"
-       y="-58.520947"
+       x="312.10043"
+       y="150.70773"
        id="text4153"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan4155"
-         x="1042.6572"
-         y="-58.520947"
+         x="312.10043"
+         y="150.70773"
          style="font-size:180px">C</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:45px;line-height:125%;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="1443.3472"
-       y="-277.97571"
+       x="482.29837"
+       y="79.969467"
        id="text4157"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan4159"
-         x="1443.3472"
-         y="-277.97571"><tspan
+         x="482.29837"
+         y="79.969467"><tspan
    style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:70px;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans Bold'"
    id="tspan4161">C</tspan>ircuit</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:45px;line-height:125%;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="1402.6821"
-       y="-164.09279"
+       x="484.48685"
+       y="153.75023"
        id="text4157-2"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan4159-9"
-         x="1402.6821"
-         y="-164.09279"><tspan
+         x="484.48685"
+         y="153.75023"><tspan
    style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:70px;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans Bold'"
    id="tspan4161-1">P</tspan>opulation</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:45px;line-height:125%;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="1353.8622"
-       y="-53.375954"
+       x="483.4263"
+       y="227.85204"
        id="text4157-27"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan4159-0"
-         x="1353.8622"
-         y="-53.375954"><tspan
+         x="483.4263"
+         y="227.85204"><tspan
    style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:70px;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans Bold'"
    id="tspan4161-9">A</tspan>xon</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:45px;line-height:125%;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="1375.6569"
-       y="98.314835"
+       x="483.15286"
+       y="306.31281"
        id="text4157-3"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan4159-6"
-         x="1375.6569"
-         y="98.314835"><tspan
+         x="483.15286"
+         y="306.31281"><tspan
    style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:70px;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans Bold'"
    id="tspan4161-0">S</tspan>ynapse</tspan></text>
     <g
@@ -459,5 +455,16 @@
            id="tspan4422-9-3"
            sodipodi:role="line">S</tspan></text>
     </g>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:45px;line-height:125%;font-family:'Liberation Sans';-inkscape-font-specification:'Liberation Sans, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="27.897161"
+       y="560.6748"
+       id="text4600"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         x="27.897161"
+         y="560.6748"
+         id="tspan4604">+ Connectivity matrix</tspan></text>
   </g>
 </svg>
