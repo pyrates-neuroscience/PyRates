@@ -110,9 +110,9 @@ class Axon(object):
             fig = plt.figure('Wave-To-Pulse-Function')
 
         # plot firing rates over membrane potentials
-        plt.hold('on')
+        # plt.hold('on')
         plt.plot(membrane_potentials, firing_rates)
-        plt.hold('off')
+        # plt.hold('off')
 
         # set figure labels
         plt.xlabel('membrane potential [V]')

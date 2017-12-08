@@ -301,14 +301,14 @@ class Circuit(object):
 
         if fig is None:
             fig = plt.figure('Population States')
-        plt.hold('on')
+        # plt.hold('on')  # deprecated in matplotlib version >2.0
 
         legend_labels = []
         for i in population_idx:
             plt.plot(population_states[:, i])
             legend_labels.append(self.populations[i].label)
 
-        plt.hold('off')
+        # plt.hold('off')  # deprecated in matplotlib version >2.0
         plt.legend(legend_labels)
         plt.ylabel('membrane potential [V]')
         plt.xlabel('time-steps')

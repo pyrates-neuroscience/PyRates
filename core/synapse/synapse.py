@@ -221,9 +221,9 @@ class Synapse(object):
             fig = plt.figure('Impulse Response Function')
 
         # plot synaptic kernel
-        plt.hold('on')
+        # plt.hold('on')  # deprecated
         plt.plot(self.synaptic_kernel[-1:0:-1])
-        plt.hold('off')
+        # plt.hold('off')  # deprecated
 
         # set figure labels
         plt.xlabel('time-steps')
