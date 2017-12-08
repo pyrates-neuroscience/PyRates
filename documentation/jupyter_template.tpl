@@ -136,8 +136,8 @@ require(
     function(head, Reveal){
         // Full list of configuration options available here: https://github.com/hakimel/reveal.js#configuration
         Reveal.initialize({
-	    width: "100%",
-	    height: "80%",
+	    width: 2000,
+	    height: 1500,
 	    margin: 0.1,
 	    maxScale: 1.5,
             controls: true,

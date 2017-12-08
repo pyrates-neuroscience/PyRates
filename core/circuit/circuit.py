@@ -247,7 +247,7 @@ class Circuit(object):
 
     def plot_population_states(self, population_idx: Optional[List[int]]=None, state_idx: Optional[int] = 0,
                                time_window: Optional[List[float]]=None, create_plot: Optional[bool]=True,
-                               fig=None) -> object:
+                               axes=None) -> object:
         """Creates figure with population states over time.
 
         Parameters
@@ -260,7 +260,7 @@ class Circuit(object):
             Start and end time point for which to plot population states.
         create_plot
             If true, plot will be shown.
-        fig
+        axes
             Optional figure handle.
 
         Returns
@@ -299,24 +299,24 @@ class Circuit(object):
         # plot population states over time #
         ####################################
 
-        if fig is None:
-            fig = plt.figure('Population States')
+        if axes is None:
+            fig, axes = plt.subplots(num='Population States')
         # plt.hold('on')  # deprecated in matplotlib version >2.0
 
         legend_labels = []
         for i in population_idx:
-            plt.plot(population_states[:, i])
+            axes.plot(population_states[:, i])
             legend_labels.append(self.populations[i].label)
 
         # plt.hold('off')  # deprecated in matplotlib version >2.0
         plt.legend(legend_labels)
-        plt.ylabel('membrane potential [V]')
-        plt.xlabel('time-steps')
+        axes.set_ylabel('membrane potential [V]')
+        axes.set_xlabel('time-steps')
 
         if create_plot:
             fig.show()
 
-        return fig
+        return axes
 
 
 class CircuitFromScratch(Circuit):

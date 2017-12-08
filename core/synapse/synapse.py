@@ -195,7 +195,7 @@ class Synapse(object):
 
         return synaptic_current
 
-    def plot_synaptic_kernel(self, create_plot=True, fig=None):
+    def plot_synaptic_kernel(self, create_plot=True, axes=None):
         """Creates plot of synaptic kernel over time.
 
         Parameters
@@ -217,29 +217,29 @@ class Synapse(object):
         ##################################
 
         # check whether new figure has to be created
-        if fig is None:
-            fig = plt.figure('Impulse Response Function')
+        if axes is None:
+            fig, axes = plt.subplots(num='Impulse Response Function')
 
         # plot synaptic kernel
         # plt.hold('on')  # deprecated
-        plt.plot(self.synaptic_kernel[-1:0:-1])
+        axes.plot(self.synaptic_kernel[-1:0:-1])
         # plt.hold('off')  # deprecated
 
         # set figure labels
-        plt.xlabel('time-steps')
+        axes.set_xlabel('time-steps')
         if self.modulatory:
-            plt.ylabel('modulation strength')
+            axes.set_ylabel('modulation strength')
         elif self.conductivity_based:
-            plt.ylabel('synaptic conductivity [S]')
+            axes.set_ylabel('synaptic conductivity [S]')
         else:
-            plt.ylabel('synaptic current [A]')
-        plt.title('Synaptic Kernel')
+            axes.set_ylabel('synaptic current [A]')
+        axes.set_title('Synaptic Kernel')
 
         # show plot
         if create_plot:
             fig.show()
 
-        return fig
+        return axes
 
 
 class DoubleExponentialSynapse(Synapse):

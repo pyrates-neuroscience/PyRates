@@ -559,7 +559,7 @@ class Population(object):
         return self.axon.compute_firing_rate(self.state_variables[-1][0])
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]]=None, create_plot: Optional[bool]=True,
-                              fig=None) -> object:
+                              axes=None) -> object:
         """Creates plot of all specified synapses over time.
 
         Parameters
@@ -568,7 +568,7 @@ class Population(object):
             Index of synapses for which to plot kernel.
         create_plot
             If true, plot will be shown.
-        fig
+        axes
             Can be used to pass figure handle of figure to plot into.
 
         Returns
@@ -595,12 +595,12 @@ class Population(object):
         # plot synaptic kernels #
         #########################
 
-        if fig is None:
-            fig = plt.figure('Synaptic Kernel Functions')
+        if axes is None:
+            fig, axes = plt.subplots(num='Synaptic Kernel Functions')
 
         synapse_types = list()
         for i in synapse_idx:
-            fig = self.synapses[i].plot_synaptic_kernel(create_plot=False, fig=fig)
+            axes = self.synapses[i].plot_synaptic_kernel(create_plot=False, axes=axes)
             synapse_types.append(self.synapses[i].synapse_type)
 
         plt.legend(synapse_types)
@@ -608,7 +608,7 @@ class Population(object):
         if create_plot:
             fig.show()
 
-        return fig
+        return axes
 
     def set_synapse(self, max_synaptic_delay: float, synapse_subtype: Optional[str]=None,
                     synapse_type: Optional[str]='DoubleExponentialSynapse',
