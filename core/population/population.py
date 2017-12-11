@@ -364,8 +364,8 @@ class Population(object):
 
         else:
 
-            self.synaptic_input = np.append(self.synaptic_input, self.dummy_input, axis=0)
-            self.synaptic_input = self.synaptic_input[1:, :]
+            self.synaptic_input[0:-1, :] = self.synaptic_input[1:, :]
+            self.synaptic_input[-1, :] = self.dummy_input
 
     def take_step(self, f: Callable, y_old: FloatLike) -> FloatLike:
         """Takes a step of an ODE with right-hand-side f using Euler or Adams/BDF formalism.
