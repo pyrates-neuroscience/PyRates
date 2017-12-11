@@ -26,29 +26,47 @@ class Circuit(object):
     Parameters
     ----------
     populations
+        List of population instances. Need to have same simulation step-size.
     connectivity
+        3D array (n_populations x n_populations x n_synapses) with each entry representing the average number of
+        synaptic contacts between two populations via a given synapse type. 1. dimension are the receiving populations,
+        2. dimension are the sending populations.
     delays
+        2D array (n_populations x n_populations) with each entry representing the information transfer delay between the
+        respective populations [unit = s].
     step_size
+        Simulation step-size [unit = s] (default = 5e-4).
 
     Attributes
     ----------
     populations
-    population_states
+        See description of parameter `populations`
     population_firing_rates
+        2D array with the firing rates of all populations (1.dim) at the current and previous time-step (2.dim)
+        [unit = 1/s].
     C
+        See description of parameter `connectivity`.
     D
+        See description of parameter `delays`.
     step_size
+        See description of parameter `step_size`.
     N
+        Number of populations in circuit.
     n_synapses
+        Number of synapse types in circuit.
     t
+        Current time the circuit lives at [unit = s].
     active_synapses
-
+        2D boolean array indicating which synapses (2.dim) exist on which population (1.dim).
 
     Methods
     -------
     run
+        See docstring of method `run`.
     get_population_states
+        See docstring of method `get_population_states`.
     plot_population_states
+        See docstring of method `plot_population_states`.
 
     """
 
@@ -91,7 +109,6 @@ class Circuit(object):
         self.D = delays
 
         # collector variables
-        self.population_states = np.zeros(0)
         self.population_firing_rates = np.zeros((self.N, 2))
 
         # population specific properties
@@ -106,23 +123,28 @@ class Circuit(object):
             # store current firing rate
             self.population_firing_rates[i, 0] = self.populations[i].get_firing_rate()
 
+            # TODO: make sure that population step-size corresponds to circuit step-size
+
     def run(self, synaptic_inputs: np.ndarray,
             simulation_time: float,
             extrinsic_current: Optional[np.ndarray]=None,
             extrinsic_modulation: Optional[list]=None,
             verbose: bool=False) -> None:
-        """
+        """Simulates circuit behavior over time.
 
         Parameters
         ----------
         synaptic_inputs
+            3D array (n_timesteps x n_populations x n_synapses) of synaptic input [unit = 1/s].
         simulation_time
+            Total simulation time [unit = s].
         extrinsic_current
+            2D array (n_timesteps x n_populations) of current extrinsically applied to the populations [unit = A].
         extrinsic_modulation
+            List (with n_populations entries) of vectors with extrinsic modulatory influences on each synapse of a
+            population.
         verbose
-
-        Returns
-        -------
+            If true, simulation progress will be printed to console.
 
         """
         ##########################
@@ -216,10 +238,14 @@ class Circuit(object):
         Parameters
         ----------
         state_variable_idx
+            Index of state variable that is to be extracted.
         time_window
+            Start and end of time window for which to extract the state variables [unit = s].
 
         Returns
         -------
+        np.ndarray
+            2D array (n_timesteps x n_populations) of state variable entries.
 
         """
 
@@ -261,12 +287,12 @@ class Circuit(object):
         create_plot
             If true, plot will be shown.
         axes
-            Optional figure handle.
+            Optional axis handle.
 
         Returns
         -------
         object
-            Figure handle.
+            Axis handle.
 
         """
 
@@ -325,17 +351,29 @@ class CircuitFromScratch(Circuit):
     Parameters
     ----------
     synapses
+        List of synapse types that exist in circuit (n_synapses strings).
     axons
+        List of axon types that exist on each population (n_populations strings).
     connectivity
+        See docstring for parameter `connectivity` of :class:`Circuit`.
     delays
+        See docstring for parameter `delays` of :class:`Circuit`.
     step_size
+        See docstring for parameter `step_size` of :class:`Circuit`.
     synapse_params
+        List of dictionaries (with n_synapses entries) that include name-value pairs for each synapse parameter.
     max_synaptic_delay
+        Maximum time after which input can still affect synapses [unit = s].
     axon_params
+        List of dictionaries (with n_populations entries) that include name-value pairs for each axon parameter.
     membrane_capacitance
+        Population membrane capacitance [unit = q/S].
     tau_leak
+        Time-constant of population leak current [unit = s].
     resting_potential
+        Population resting-state membrane potential [unit = V].
     init_states
+        2D array containing the initial values for each state variable (2.dim) of each population (1.dim).
 
     See Also
     --------
@@ -461,14 +499,23 @@ class CircuitFromPopulations(Circuit):
     Parameters
     ----------
     population_types
+        List of population types (n_populations strings).
     connectivity
+        See docstring for parameter `connectivity` of :class:`Circuit`.
     delays
+        See docstring for parameter `delays` of :class:`Circuit`.
     step_size
+        See docstring for parameter `step_size` of :class:`Circuit`.
     max_synaptic_delay
+        Maximum time after which input can still affect synapses [unit = s].
     membrane_capacitance
+        Population membrane capacitance [unit = q/S].
     tau_leak
+        Time-constant of population leak current [unit = s].
     resting_potential
+        Population resting-state membrane potential [unit = V].
     init_states
+        2D array containing the initial values for each state variable (2.dim) of each population (1.dim).
 
     See Also
     --------
@@ -594,11 +641,17 @@ class CircuitFromCircuit(Circuit):
         Parameters
         ----------
         circuits
+            List of circuit instances.
         connectivity
+            See docstring for parameter `connectivity` of :class:`Circuit`.
         delays
+            See docstring for parameter `delays` of :class:`Circuit`.
         input_populations
+            3D list of indices for the input populations (3.dim) of each pair-wise connection (1. + 2.dim).
         output_populations
+            2D array of indices for the output population of each pair-wise connection.
         circuit_labels
+            List of strings with circuit labels.
 
         See Also
         --------

@@ -108,16 +108,25 @@ def update_param(param: str, param_dict: dict, object_instance) -> object:
 
 
 def interpolate_array(old_step_size, new_step_size, y, interpolation_type='cubic', axis=0):
-    """
-    Interpolates time-vectors with scipy.interpolate.interp1d.
+    """Interpolates time-vectors with :class:`scipy.interpolate.interp1d`.
 
-    :param old_step_size: old simulation step size [unit = s].
-    :param new_step_size: new simulation step size [unit = s].
-    :param y: vector to be interpolated
-    :param interpolation_type: can be 'linear' or spline stuff.
-    :param axis: axis along which y is to be interpolated (has to have same length as t/old_step_size)
+    Parameters
+    ----------
+    old_step_size
+        Old simulation step size [unit = s].
+    new_step_size
+        New simulation step size [unit = s].
+    y
+        Vector ar array to be interpolated.
+    interpolation_type
+        Can be 'linear' or spline stuff (See :class:`scipy.interpolate.interp1d`)
+    axis
+        Axis along which y is to be interpolated (has to have same length as t/old_step_size).
 
-    :return: interpolated vector
+    Returns
+    -------
+    np.ndarray
+        Interpolation of y.
 
     """
 
@@ -135,13 +144,13 @@ def interpolate_array(old_step_size, new_step_size, y, interpolation_type='cubic
     return f(x_new)
 
 
-def NMRSE(x: np.ndarray, y: np.ndarray) -> Union[float, np.ndarray]:
+def nmrse(x: np.ndarray, y: np.ndarray) -> Union[float, np.ndarray]:
     """Calculates the normalized root mean squared error of two vectors of equal length.
 
     Parameters
     ----------
     x,y
-        1D arrays to calculate the NMRSE between.
+        Arrays to calculate the nmrse between.
 
     Returns
     -------
@@ -159,12 +168,17 @@ def NMRSE(x: np.ndarray, y: np.ndarray) -> Union[float, np.ndarray]:
 
 
 def get_euclidean_distances(positions: np.ndarray) -> np.ndarray:
-    """
-    Calculates the euclidean distances for every pair of positions.
+    """Calculates the euclidean distances for every pair of positions.
 
-    :param positions: N x 3 matrix, where N is the number of positions
+    Parameters
+    ----------
+    positions
+        N x 3 matrix, where N is the number of positions.
 
-    :return: N x N matrix with euclidean distances
+    Returns
+    -------
+    np.ndarray
+        N x N matrix with euclidean distances between given positions.
 
     """
 
@@ -186,13 +200,19 @@ def get_euclidean_distances(positions: np.ndarray) -> np.ndarray:
 
 
 def check_nones(param: Optional[Union[str, dict]], n: int) -> Union[str, dict, List[None]]:
-    """
-    Checks whether param is None. If yes, it returns a list of n Nones. If not, the param is returned.
+    """Checks whether param is None. If yes, it returns a list of n Nones. If not, the param is returned.
 
-    :param param: Parameter, to be tested for None.
-    :param n: size of the list to return.
+    Parameters
+    ----------
+    param
+        Parameter to be tested for None.
+    n
+        Size of the list to return
 
-    :return: param or list of Nones
+    Returns
+    -------
+    NoneLike
+        Param or list of Nones
 
     """
 

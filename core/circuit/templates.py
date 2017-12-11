@@ -1,5 +1,6 @@
+"""Templates for specific ciricuit parametrizations.
 """
-"""
+
 import numpy as np
 
 from core.circuit import CircuitFromPopulations
@@ -9,22 +10,36 @@ __status__ = "Development"
 
 
 class JansenRitCircuit(CircuitFromPopulations):
-    """
-    Basic Jansen-Rit circuit as defined in Jansen & Rit (1995).
+    """Basic Jansen-Rit circuit as defined in [1]_.
 
-    :var N: integer that indicates number of populations in network.
-    :var n_synapses: number of different synapse types expressed in the network
-    :var synapse_types: list with names of the different synapse types in the network.
-    :var C: N x N x n_synapses connectivity matrix.
-    :var D: N x N x n_velocities delay matrix, where n_velocities is the number of possible velocities for each
-         connection. If n_velocities > 1, there will be a field velocity_distributions on self including multiple
-         probability distributions over the n velocities and a field velocity_distribution_indices with an N x N
-         matrix including an index to a single distribution for each connection.
-    :var neural_mass_labels: list with the names of the different populations.
-    :var neural_masses: list with the population object instances.
-    :var neural_mass_states: N x n_time_steps matrix, including the average membrane potential of each population at
-         each time-step.
-    :var step_size: scalar, indicating the size of the time-steps made during the simulation.
+    Parameters
+    ----------
+    resting_potential
+        Default = -0.075 V.
+    tau_leak
+        Default = 0.016 s.
+    membrane_capacitance
+        Default = 1e-12 q/S.
+    step_size
+        Default = 5e-4 s.
+    variable_step_size
+        Default = False.
+    max_synaptic_delay
+        Default = 0.05 s.
+    delays
+        Default = None
+    init_states
+        Default = np.zeros(3)
+
+    See Also
+    --------
+    :class:`CircuitFromPopulations`: Detailed description of parameters.
+    :class:`Circuit`: Detailed description of attributes and methods.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
     """
 

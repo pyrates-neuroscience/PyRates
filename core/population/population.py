@@ -24,7 +24,6 @@ __status__ = "Development"
 # TODO: Implement synaptic plasticity mechanism(s)
 # TODO: Implement new function that updates synaptic input field according to input + delay
 # TODO: Rework set-up of state vector to have fixed positions for certain state variables (i.e. use fixed size vector)
-# TODO: Move helper functions to separate file and set_synapse/_axon to object
 
 
 class Population(object):

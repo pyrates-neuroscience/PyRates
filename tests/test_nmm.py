@@ -10,7 +10,7 @@ from core.circuit import CircuitFromScratch, CircuitFromPopulations, CircuitFrom
 from core.population import Population
 from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
 from core.synapse import Synapse, DoubleExponentialSynapse
-from core.utility import NMRSE
+from core.utility import nmrse
 
 __author__ = "Richard Gast & Konstantin Weise"
 __status__ = "Test"
@@ -580,10 +580,10 @@ class TestNMMs(unittest.TestCase):
         with open('JR_results_I.pickle', 'rb') as f:
             target_states = pickle.load(f)
 
-        # calculate NMRSE between time-series
+        # calculate nmrse between time-series
         #####################################
 
-        error = NMRSE(states[1:, :], target_states)
+        error = nmrse(states[1:, :], target_states)
         error = np.mean(error)
 
         # perform unit test
@@ -639,10 +639,10 @@ class TestNMMs(unittest.TestCase):
         with open('JR_results_II.pickle', 'rb') as f:
             target_states = pickle.load(f)
 
-        # calculate NMRSE between time-series
+        # calculate nmrse between time-series
         #####################################
 
-        error = NMRSE(states[1:, :], target_states.T)
+        error = nmrse(states[1:, :], target_states.T)
         error = np.mean(error)
 
         # perform unit test
@@ -745,10 +745,10 @@ class TestNMMs(unittest.TestCase):
         with open('JR_results_III.pickle', 'rb') as f:
             target_states = pickle.load(f)
 
-        # calculate NMRSE between time-series
+        # calculate nmrse between time-series
         #####################################
 
-        error = NMRSE(final_state, target_states)
+        error = nmrse(final_state, target_states)
         error = np.mean(error)
 
         # perform unit test
@@ -819,7 +819,7 @@ class TestNMMs(unittest.TestCase):
         states1 = circuit1.get_population_states(state_variable_idx=0)
         states2 = circuit2.get_population_states(state_variable_idx=0)
 
-        error = NMRSE(states1, states2)
+        error = nmrse(states1, states2)
         error = np.mean(error)
 
         print('VII.4 test information transfer between two delay-connected JR circuits...')
