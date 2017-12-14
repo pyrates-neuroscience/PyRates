@@ -202,7 +202,7 @@ class Synapse(object):
         ----------
         create_plot
             If false, no plot will be shown (default = True).
-        fig
+        axes
             figure handle, can be passed optionally (default = None).
 
         Returns

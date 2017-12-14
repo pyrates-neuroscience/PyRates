@@ -535,7 +535,6 @@ class TestNMMs(unittest.TestCase):
         tau_leak = 0.016                           # s
         membrane_capacitance = 1e-12               # q/S
         delays = None
-        variable_step_size = False
         synaptic_modulation_direction = None
 
         # synaptic inputs
@@ -559,7 +558,6 @@ class TestNMMs(unittest.TestCase):
                                      tau_leak=tau_leak,
                                      membrane_capacitance=membrane_capacitance,
                                      population_labels=population_labels,
-                                     variable_step_size=variable_step_size,
                                      synaptic_modulation_direction=synaptic_modulation_direction)
 
         # run network simulation
@@ -623,7 +621,7 @@ class TestNMMs(unittest.TestCase):
         # initialize neural mass network
         ################################
 
-        nmm = JansenRitCircuit()
+        nmm = JansenRitCircuit(max_synaptic_delay=0.045)
 
         # run network simulation
         ########################

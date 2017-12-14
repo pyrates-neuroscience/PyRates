@@ -6,7 +6,6 @@ plus an axon hillok.
 """
 
 import matplotlib.pyplot as plt
-from scipy.integrate import LSODA
 import numpy as np
 
 from core.axon import Axon, SigmoidAxon
@@ -21,9 +20,8 @@ SynapseLike = TypeVar('SynapseLike', bound=Synapse, covariant=True)
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
-# TODO: Implement synaptic plasticity mechanism(s)
-# TODO: Implement new function that updates synaptic input field according to input + delay
 # TODO: Rework set-up of state vector to have fixed positions for certain state variables (i.e. use fixed size vector)
+# TODO: Create base class plus that takes the different getters as init arguments
 
 
 class Population(object):
@@ -35,21 +33,18 @@ class Population(object):
     ----------
     synapses
         Can be set to use default synapse types. These include:
-        :class:`synapse_templates.AMPACurrentSynapse`,
-        :class:`synapse_templates.GABAACurrentSynapse`,
-        :class:`synapse_templates.AMPAConductanceSynapse`,
-        :class:`synapse_templates.GABAAConductanceSynapse`.
+        :class:`core.synapse.templates.AMPACurrentSynapse`,
+        :class:`core.synapse.templates.GABAACurrentSynapse`,
+        :class:`core.synapse.templates.AMPAConductanceSynapse`,
+        :class:`core.synapse.templates.GABAAConductanceSynapse`.
     axon
         Can be set to use default axon types. These include:
-        :class:`axon_templates.JansenRitAxon`.
+        :class:`core.axon.templates.JansenRitAxon`.
     init_state
         Vector defining initial state of the population. Vector entries represent the following state variables:
         1) membrane potential (default = 0.0) [unit = V].
     step_size
         Time step-size of a single state update (default = 0.0001) [unit = s].
-    variable_step_size
-        If true, time step-size of each state update will be chosen automatically by LSODA algorithm.
-        Else fixed step_size will be used with Euler formalism (default = False).
     max_synaptic_delay
         Maximum time delay after arrival of synaptic input at synapse for which this input can still affect the synapse
         (default = 0.1) [unit = s].
@@ -124,8 +119,6 @@ class Population(object):
         See documentation of parameter `tau_leak`.
     step_size
         See documentation of parameter `step_size`.
-    variable_step_size
-        See documentation of parameter `variable_step_size`.
     membrane_capacitance
         See documentation of parameter `membrane_capacitance`.
     label
@@ -162,8 +155,7 @@ class Population(object):
                  axon: Optional[str]=None,
                  init_state: Optional[FloatLike]=0.,
                  step_size: Optional[float]=0.0001,
-                 variable_step_size: Optional[bool]=False,
-                 max_synaptic_delay: Optional[float]=0.1,
+                 max_synaptic_delay: Optional[Union[float, np.ndarray]]=0.1,
                  synaptic_modulation_direction: Optional[np.ndarray]=None,
                  tau_leak: Optional[float]=0.016,
                  resting_potential: Optional[float]=-0.075,
@@ -204,8 +196,9 @@ class Population(object):
         self.tau_leak = tau_leak
         self.resting_potential = resting_potential
         self.step_size = step_size
-        self.variable_step_size = variable_step_size
         self.membrane_capacitance = membrane_capacitance
+        self.max_population_delay = max_population_delay
+        self.synaptic_modulation_direction = synaptic_modulation_direction
         self.t = 0.
         self.label = label
 
@@ -241,49 +234,55 @@ class Population(object):
         # set synaptic plasticity parameters #
         ######################################
 
-        # TODO: implement synaptic plasticity mechanism
+        self.plastic_synapses = list()
+        if synapse_params:
+
+            self.tau_depression = list()
+            self.tau_recycle = list()
+
+            # loop over synapses and check for passed synaptic plasticity parameters
+            for i, syn in enumerate(synapse_params):
+
+                if syn and 'tau_depression' in syn and 'tau_recycle' in syn:
+                    self.plastic_synapses.append(True)
+                    self.tau_depression.append(syn['tau_depression'])
+                    self.tau_recycle.append(syn['tau_recycle'])
+                else:
+                    self.plastic_synapses.append(False)
+
+            # transform lists into arrays
+            self.plastic_synapses = np.array(self.plastic_synapses, dtype=bool)
+            self.tau_depression = np.array(self.tau_depression)
+            self.tau_recycle = np.array(self.tau_recycle)
 
         ###############
         # set synapse #
         ###############
 
         # initialize synapse parameters
-        synapse_type = np.ones(len(synapses), dtype=bool)
         n_synapses = len(synapses) if synapses else len(synapse_params)
         synapses = check_nones(synapses, n_synapses)
         synapse_params = check_nones(synapse_params, n_synapses)
+        if type(max_synaptic_delay) is np.ndarray:
+            self.max_synaptic_delay = max_synaptic_delay
+        else:
+            self.max_synaptic_delay = np.zeros(n_synapses) + max_synaptic_delay
 
         # instantiate synapses
-        for i in range(len(synapses)):
-            self.set_synapse(max_synaptic_delay,
+        for i in range(n_synapses):
+            self.set_synapse(self.max_synaptic_delay[i],
                              synapse_subtype=synapses[i],
                              synapse_params=synapse_params[i])
-            if self.synapses[-1].modulatory:
-                synapse_type[i] = False
 
-        # set synaptic input array
-        self.synaptic_input = np.zeros((int((max_synaptic_delay + max_population_delay)/self.step_size),
-                                        len(self.synapses)))
-        self.dummy_input = np.zeros((1, len(self.synapses)))
-
-        # set input index for each synapse
-        self.current_input_idx = 0
-
-        # set synaptic current and modulation collector vectors
-        self.additive_synapse_idx = np.where(synapse_type == 1)[0]
-        self.modulatory_synapse_idx = np.where(synapse_type == 0)[0]
-        self.synaptic_currents = np.zeros(len(self.additive_synapse_idx))
-        self.synaptic_modulation = np.zeros((1, len(self.modulatory_synapse_idx)))
-
-        # set modulation direction for modulatory synapses
-        if synaptic_modulation_direction is None and self.synaptic_modulation:
-            self.synaptic_modulation_direction = np.ones(len(self.synaptic_currents), len(self.synaptic_modulation))
+        # set synapse dependent attributes
+        self.set_synapse_dependencies()
 
         ############
         # set axon #
         ############
 
         self.set_axon(axon, axon_params=axon_params)
+        self.current_firing_rate = self.get_firing_rate()
 
         ###################################
         # initialize extrinsic influences #
@@ -336,15 +335,20 @@ class Population(object):
             state_vars.append(self.axon.membrane_potential_threshold)
 
         ###########################
-        # update synaptic kernels #
+        # update synaptic scaling #
         ###########################
 
-        # TODO: implement differential equation that adapts synaptic efficiencies
+        if any(self.plastic_synapses):
+            self.synaptic_scalings[self.plastic_synapses] = self.take_step(f=self.get_delta_synaptic_scaling,
+                                                                           y_old=self.synaptic_scalings[
+                                                                               self.plastic_synapses])
+            #state_vars.append(self.synaptic_scalings[self.plastic_synapses])
 
         ##########################
         # update state variables #
         ##########################
 
+        self.current_firing_rate = self.get_firing_rate()
         self.state_variables.append(state_vars)
 
         if not self.store_state_variables:
@@ -358,14 +362,11 @@ class Population(object):
         self.t += self.step_size
 
         # synaptic input
-        if self.current_input_idx < len(self.synapses[0].synaptic_kernel) - 1:
-
-            self.current_input_idx += 1
-
-        else:
-
-            self.synaptic_input[0:-1, :] = self.synaptic_input[1:, :]
-            self.synaptic_input[-1, :] = self.dummy_input
+        idx = self.current_input_idx < self.kernel_lengths-1
+        not_idx = np.invert(idx)
+        self.current_input_idx[idx] += 1
+        self.synaptic_input[0:-1, not_idx] = self.synaptic_input[1:, not_idx]
+        self.synaptic_input[-1, not_idx] = self.dummy_input[0, not_idx]
 
     def take_step(self, f: Callable, y_old: FloatLike) -> FloatLike:
         """Takes a step of an ODE with right-hand-side f using Euler or Adams/BDF formalism.
@@ -384,40 +385,14 @@ class Population(object):
 
         """
 
-        if self.variable_step_size:
+        return y_old + self.step_size * f(y_old)
 
-            # initialize LSODA solver
-            solver = LSODA(fun=f,
-                           t0=0.,
-                           y0=[y_old],
-                           t_bound=float('inf'),
-                           min_step=self.synapses[0].step_size,
-                           rtol=1e-2,
-                           atol=1e-3)
-
-            # perform integration step and calculate output
-            solver.step()
-            y_new = np.squeeze(solver.y)
-
-            # update internal step-size
-            self.step_size = solver.t - solver.t_old
-
-        else:
-
-            # perform Euler update
-            y_new = y_old + self.step_size * f(self.t, y_old)
-
-        return y_new
-
-    def get_delta_membrane_potential(self, t: Union[int, float], membrane_potential: FloatLike
-                                     ) -> FloatLike:
+    def get_delta_membrane_potential(self, membrane_potential: FloatLike) -> FloatLike:
         """Calculates change in membrane potential as function of synaptic current, leak current and
         extrinsic current.
 
         Parameters
         ----------
-        t
-            Time for which to calculate the delta term [unit = s].
         membrane_potential
             Current membrane potential of population [unit = V].
 
@@ -428,21 +403,17 @@ class Population(object):
 
         """
 
-        # fixme: variable t is ambiguously defined and seemingly never used. Remove?
-        net_current = self.get_synaptic_currents(t, membrane_potential) + \
+        net_current = self.get_synaptic_currents(membrane_potential) + \
                       self.get_leak_current(membrane_potential) + \
                       self.extrinsic_current
 
         return net_current / self.membrane_capacitance
 
-    def get_synaptic_currents(self, t: Union[int, float], membrane_potential: FloatLike
-                              ) -> FloatLike:
+    def get_synaptic_currents(self, membrane_potential: FloatLike) -> FloatLike:
         """Calculates the net synaptic current over all synapses for time `t`.
 
         Parameters
         ----------
-        t
-            Time for which to calculate the synaptic current [unit = s].
         membrane_potential
             Current membrane potential of population [unit = V].
 
@@ -463,19 +434,17 @@ class Population(object):
             # synaptic current
             if self.synapses[idx].conductivity_based:
                 self.synaptic_currents[i] = self.synapses[idx].get_synaptic_current(
-                    self.synaptic_input[0:self.current_input_idx + 1, idx], membrane_potential)
+                    self.synaptic_input[0:self.current_input_idx[idx] + 1, idx], membrane_potential)
             else:
                 self.synaptic_currents[i] = self.synapses[idx].get_synaptic_current(
-                    self.synaptic_input[0:self.current_input_idx + 1, idx])
+                    self.synaptic_input[0:self.current_input_idx[idx] + 1, idx])
 
         # compute synaptic modulation value for each modulatory synapse and apply it to currents
         if self.modulatory_synapse_idx:
 
             self.get_synaptic_modulation(membrane_potential)
 
-        # (disable type checker for return value)
-        # noinspection PyTypeChecker
-        return np.sum(self.synaptic_currents)  # type hint fails here, because np.sum may return both an array or scalar
+        return self.synaptic_currents @ self.synaptic_scalings
 
     def get_leak_current(self, membrane_potential: FloatLike) -> FloatLike:
         """Calculates the leakage current at a given point in time (instantaneous).
@@ -526,13 +495,11 @@ class Population(object):
 
         self.synaptic_currents *= synaptic_modulation_new
 
-    def get_delta_membrane_potential_threshold(self, t: float, membrane_potential_threshold: float) -> float:
+    def get_delta_membrane_potential_threshold(self, membrane_potential_threshold: float) -> float:
         """Calculates change in axonal `membrane_potential_threshold` given current firing rate.
 
         Parameters
         ----------
-        t
-            Time-point for which to calculate the change in `membrane_potential_threshold` [unit = s].
         membrane_potential_threshold
             Current value of `membrane_potential_threshold` that needs to be updated [unit = V].
 
@@ -542,8 +509,29 @@ class Population(object):
             Change in `membrane_potential_threshold` [unit = V].
 
         """
-        # fixme: the parameters don't seem to be used at all. Remove?
-        return (self.get_firing_rate() - self.firing_rate_target) / self.tau_axon
+
+        return (self.current_firing_rate - self.firing_rate_target) / self.tau_axon
+
+    def get_delta_synaptic_scaling(self, synaptic_scaling: float) -> float:
+        """Calculates change in synaptic efficacy given current firing rate.
+
+        Parameters
+        ----------
+        synaptic_scaling
+            Current value used to scale the synaptic efficacy [unit = 1].
+
+        Returns
+        -------
+        float
+            Scaling of synaptic efficacy.
+
+        """
+
+        depression_rate = (synaptic_scaling * self.current_firing_rate) / \
+                          (self.axon.transfer_function_args['max_firing_rate'] * self.tau_depression)
+        recycle_rate = (1 - synaptic_scaling) / self.tau_recycle
+
+        return recycle_rate - depression_rate
 
     def get_firing_rate(self) -> FloatLike:
         """Calculate the current average firing rate of the population.
@@ -651,3 +639,36 @@ class Population(object):
             self.axon = set_instance(SigmoidAxon, axon_subtype, axon_params)
         else:
             raise AttributeError('Invalid axon type!')
+
+    def set_synapse_dependencies(self):
+        """Sets important helper attributes on population to handle different synapse types etc.
+        """
+
+        n_synapses = len(self.synapses)
+
+        # extract synapse types
+        synapse_type = np.ones(n_synapses, dtype=bool)
+        self.kernel_lengths = np.ones(n_synapses, dtype=int)
+        for i, syn in enumerate(self.synapses):
+            if syn.modulatory:
+                synapse_type[i] = False
+            self.kernel_lengths[i] = len(syn.synaptic_kernel)
+
+        # set synaptic input array
+        self.synaptic_input = np.zeros((int((np.max(self.max_synaptic_delay) + self.max_population_delay) / self.step_size),
+                                        n_synapses))
+        self.dummy_input = np.zeros((1, n_synapses))
+
+        # set input index for each synapse
+        self.current_input_idx = np.zeros(n_synapses, dtype=int)
+
+        # set synaptic current and modulation collector vectors
+        self.additive_synapse_idx = np.where(synapse_type == 1)[0]
+        self.modulatory_synapse_idx = np.where(synapse_type == 0)[0]
+        self.synaptic_currents = np.zeros(len(self.additive_synapse_idx))
+        self.synaptic_modulation = np.zeros((1, len(self.modulatory_synapse_idx)))
+        self.synaptic_scalings = np.ones(n_synapses)
+
+        # set modulation direction for modulatory synapses
+        if self.synaptic_modulation_direction is None and self.synaptic_modulation:
+            self.synaptic_modulation_direction = np.ones(len(self.synaptic_currents), len(self.synaptic_modulation))

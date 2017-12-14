@@ -18,8 +18,6 @@ class JansenRitPyramidalCells(Population):
         Default = 0 V.
     step_size
         Default = 0.0001 s.
-    variable_step_size
-        Default = False.
     max_synaptic_delay
         Default = 0.1 s.
     synaptic_modulation_direction
@@ -52,7 +50,6 @@ class JansenRitPyramidalCells(Population):
 
     def __init__(self, init_state: Optional[float]=0.,
                  step_size: Optional[float] = 5e-4,
-                 variable_step_size: Optional[bool] = False,
                  max_synaptic_delay: Optional[float] = 0.05,
                  synaptic_modulation_direction: Optional[np.ndarray] = None,
                  tau_leak: Optional[float] = 0.016,
@@ -70,7 +67,6 @@ class JansenRitPyramidalCells(Population):
                          axon='JansenRitAxon',
                          init_state=init_state,
                          step_size=step_size,
-                         variable_step_size=variable_step_size,
                          max_synaptic_delay=max_synaptic_delay,
                          synaptic_modulation_direction=synaptic_modulation_direction,
                          tau_leak=tau_leak,
@@ -92,8 +88,6 @@ class JansenRitExcitatoryInterneurons(Population):
         Default = 0 V.
     step_size
         Default = 0.0001 s.
-    variable_step_size
-        Default = False.
     max_synaptic_delay
         Default = 0.1 s.
     synaptic_modulation_direction
@@ -126,7 +120,6 @@ class JansenRitExcitatoryInterneurons(Population):
 
     def __init__(self, init_state: Optional[float] = 0.,
                  step_size: Optional[float] = 5e-4,
-                 variable_step_size: Optional[bool] = False,
                  max_synaptic_delay: Optional[float] = 0.05,
                  synaptic_modulation_direction: Optional[np.ndarray] = None,
                  tau_leak: Optional[float] = 0.016,
@@ -144,7 +137,6 @@ class JansenRitExcitatoryInterneurons(Population):
                          axon='JansenRitAxon',
                          init_state=init_state,
                          step_size=step_size,
-                         variable_step_size=variable_step_size,
                          max_synaptic_delay=max_synaptic_delay,
                          synaptic_modulation_direction=synaptic_modulation_direction,
                          tau_leak=tau_leak,
@@ -166,8 +158,6 @@ class JansenRitInhibitoryInterneurons(Population):
         Default = 0 V.
     step_size
         Default = 0.0001 s.
-    variable_step_size
-        Default = False.
     max_synaptic_delay
         Default = 0.1 s.
     synaptic_modulation_direction
@@ -200,7 +190,6 @@ class JansenRitInhibitoryInterneurons(Population):
 
     def __init__(self, init_state: Optional[float] = 0.,
                  step_size: Optional[float] = 5e-4,
-                 variable_step_size: Optional[bool] = False,
                  max_synaptic_delay: Optional[float] = 0.05,
                  synaptic_modulation_direction: Optional[np.ndarray] = None,
                  tau_leak: Optional[float] = 0.016,
@@ -218,7 +207,6 @@ class JansenRitInhibitoryInterneurons(Population):
                          axon='JansenRitAxon',
                          init_state=init_state,
                          step_size=step_size,
-                         variable_step_size=variable_step_size,
                          max_synaptic_delay=max_synaptic_delay,
                          synaptic_modulation_direction=synaptic_modulation_direction,
                          tau_leak=tau_leak,

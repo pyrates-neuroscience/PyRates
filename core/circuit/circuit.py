@@ -3,6 +3,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 from core.population import Population, JansenRitPyramidalCells, JansenRitExcitatoryInterneurons, \
     JansenRitInhibitoryInterneurons
@@ -112,16 +113,31 @@ class Circuit(object):
         self.population_firing_rates = np.zeros((self.N, 2))
 
         # population specific properties
+        self.synapse_type_idx = list()
         for i in range(self.N):
 
             # check and extract synapses that exist at respective population
             self.active_synapses[i, :] = (np.sum(connectivity[i, :, :], axis=0) != 0).squeeze()
 
+            # make a synapse copy for each connection targeting a certain synapse type
+            idx = np.sum(self.active_synapses[i, :])
+            for j in np.where(self.active_synapses[i, :])[0]:
+                for k in range(np.sum(connectivity[i, :, j] != 0).squeeze()):
+                    self.populations[i].synapses.insert(idx, deepcopy(self.populations[i].synapses[j]))
+                    idx += 1
+
+            # check whether max_population_delay has changed
+            if np.max(delays[i, :]) > self.populations[i].max_population_delay:
+                self.populations[i].max_population_delay = np.max(delays[i, :])
+
+            # update synaptic_input array on population
+            self.populations[i].set_synapse_dependencies()
+
             # make sure state variable history will be saved on population
             self.populations[i].store_state_variables = True
 
             # store current firing rate
-            self.population_firing_rates[i, 0] = self.populations[i].get_firing_rate()
+            self.population_firing_rates[i, 0] = self.populations[i].current_firing_rate
 
             # TODO: make sure that population step-size corresponds to circuit step-size
 
@@ -190,8 +206,8 @@ class Circuit(object):
         # create input indices #
         ########################
 
-        conn_check = np.sum(self.C != 0, axis=2)
-        C_idx = [np.where(conn_check[i, :] > 0)[0] for i in range(conn_check.shape[0])]
+        conn_idx = [np.where(self.C[i, :, :] > 0) for i in range(self.N)]
+        conn_idx = [[[conn[0][i], conn[1][i]] for i in range(len(conn[0]))] for conn in conn_idx]
 
         ####################
         # simulate network #
@@ -204,15 +220,17 @@ class Circuit(object):
 
                 # get active synapses idx
                 idx = self.active_synapses[i, :]
+                n_idx = np.sum(idx, dtype=int)
 
                 # pass external input to population
-                self.populations[i].synaptic_input[self.populations[i].current_input_idx, :] += \
+                self.populations[i].synaptic_input[self.populations[i].current_input_idx, :n_idx] += \
                     synaptic_inputs[n, i, idx]
 
                 # pass network input to population
-                for j in C_idx[i]:
-                    self.populations[i].synaptic_input[self.populations[i].current_input_idx + self.D[i, j], :] += \
-                        self.population_firing_rates[j, 0] * self.C[i, j, idx]
+                for j, conns in enumerate(conn_idx[i]):
+                    self.populations[i].synaptic_input[self.populations[i].current_input_idx+self.D[i, conns[0]],
+                                                       j+n_idx] += self.population_firing_rates[conns[0], 0] * \
+                                                                      self.C[i, conns[0], conns[1]]
 
                 # check whether population needs to be updated
                 if self.populations[i].t <= self.t:
@@ -222,7 +240,7 @@ class Circuit(object):
                                                      extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
 
                     # update firing rate
-                    self.population_firing_rates[i, 1] = self.populations[i].get_firing_rate()
+                    self.population_firing_rates[i, 1] = self.populations[i].current_firing_rate
 
             # display simulation progress
             if verbose and (n == 0 or (n % (simulation_time_steps // 10)) == 0):
@@ -384,7 +402,6 @@ class CircuitFromScratch(Circuit):
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
                  step_size: Optional[float] = 5e-4,
-                 variable_step_size: Optional[bool]=False,
                  synapses: Optional[List[str]]=None,
                  axons: Optional[Union[str, List[str]]]=None,
                  synapse_params: Optional[List[dict]]=None,
@@ -472,7 +489,6 @@ class CircuitFromScratch(Circuit):
                                           axon=axons[i],
                                           init_state=init_states[i],
                                           step_size=step_size,
-                                          variable_step_size=variable_step_size,
                                           max_synaptic_delay=max_synaptic_delay[i],
                                           synaptic_modulation_direction=synaptic_modulation_direction[i],
                                           tau_leak=tau_leak[i],
@@ -527,7 +543,6 @@ class CircuitFromPopulations(Circuit):
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
                  step_size: Optional[float] = 5e-4,
-                 variable_step_size: Optional[bool]=False,
                  max_synaptic_delay: Optional[Union[float, List[float]]] = 0.05,
                  synaptic_modulation_direction: Optional[List[List[np.ndarray]]]=None,
                  membrane_capacitance: Optional[Union[float, List[float]]]=1e-12,
@@ -586,7 +601,6 @@ class CircuitFromPopulations(Circuit):
             if population_types[i] == 'JansenRitPyramidalCells':
                 pop = JansenRitPyramidalCells(init_state=init_states[i],
                                               step_size=step_size,
-                                              variable_step_size=variable_step_size,
                                               max_synaptic_delay=max_synaptic_delay[i],
                                               synaptic_modulation_direction=synaptic_modulation_direction[i],
                                               tau_leak=tau_leak[i],
@@ -598,7 +612,6 @@ class CircuitFromPopulations(Circuit):
             elif population_types[i] == 'JansenRitExcitatoryInterneurons':
                 pop = JansenRitExcitatoryInterneurons(init_state=init_states[i],
                                                       step_size=step_size,
-                                                      variable_step_size=variable_step_size,
                                                       max_synaptic_delay=max_synaptic_delay[i],
                                                       synaptic_modulation_direction=synaptic_modulation_direction[i],
                                                       tau_leak=tau_leak[i],
@@ -610,7 +623,6 @@ class CircuitFromPopulations(Circuit):
             elif population_types[i] == 'JansenRitInhibitoryInterneurons':
                 pop = JansenRitInhibitoryInterneurons(init_state=init_states[i],
                                                       step_size=step_size,
-                                                      variable_step_size=variable_step_size,
                                                       max_synaptic_delay=max_synaptic_delay[i],
                                                       synaptic_modulation_direction=synaptic_modulation_direction[i],
                                                       tau_leak=tau_leak[i],
