@@ -111,6 +111,12 @@ class Synapse(object):
 
             self.synapse_type = synapse_type
 
+        # set kernel scaling (only relevant for conductivity based synapses)
+        if conductivity_based:
+            self.kernel_scaling = lambda membrane_potential: self.reversal_potential - membrane_potential
+        else:
+            self.kernel_scaling = lambda membrane_potential: 1.0
+
         #########################
         # build synaptic kernel #
         #########################
@@ -153,7 +159,7 @@ class Synapse(object):
         return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
 
     def get_synaptic_current(self, synaptic_input: np.ndarray,
-                             membrane_potential: Optional[Union[float, np.float64]] = None) -> Union[np.float64, float]:
+                             membrane_potential: Optional[Union[float, np.float64]] = -0.075) -> Union[np.float64, float]:
         """Applies synaptic kernel to synaptic input (should be incoming firing rate).
 
         Parameters
@@ -176,24 +182,12 @@ class Synapse(object):
         #########################
 
         # multiply firing rate input with kernel
-        if len(synaptic_input) < len(self.synaptic_kernel):
-            kernel_value = synaptic_input * self.synaptic_kernel[-len(synaptic_input):]
-        else:
-            kernel_value = synaptic_input[-len(self.synaptic_kernel):] * self.synaptic_kernel
+        kernel_value = synaptic_input * self.synaptic_kernel[-len(synaptic_input):]
 
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
-        ##############################
-        # calculate synaptic current #
-        ##############################
-
-        if membrane_potential is None:
-            synaptic_current = kernel_value
-        else:
-            synaptic_current = kernel_value * (self.reversal_potential - membrane_potential)
-
-        return synaptic_current
+        return kernel_value * self.kernel_scaling(membrane_potential)
 
     def plot_synaptic_kernel(self, create_plot=True, axes=None):
         """Creates plot of synaptic kernel over time.

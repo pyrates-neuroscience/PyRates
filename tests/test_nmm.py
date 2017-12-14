@@ -149,8 +149,8 @@ class TestNMMs(unittest.TestCase):
         time_steps = int(synaptic_kernel_length/step_size)
         firing_rates_1 = np.zeros(time_steps)
         firing_rates_2 = np.ones(time_steps) * 300.0
-        firing_rates_3 = np.zeros(3 * time_steps)
-        firing_rates_3[time_steps:2 * time_steps] = 300.0
+        firing_rates_3 = np.zeros(time_steps)
+        firing_rates_3[40:70] = 300.0
 
         # calculate synaptic currents
         #############################
@@ -228,8 +228,8 @@ class TestNMMs(unittest.TestCase):
         time_steps = int(0.05 / step_size)
         firing_rates_1 = np.zeros(time_steps)
         firing_rates_2 = np.ones(time_steps) * 300.0
-        firing_rates_3 = np.zeros(3 * time_steps)
-        firing_rates_3[time_steps:2 * time_steps] = 300.0
+        firing_rates_3 = np.zeros(time_steps)
+        firing_rates_3[40:70] = 300.0
 
         # calculate synaptic currents
         #############################
@@ -303,18 +303,19 @@ class TestNMMs(unittest.TestCase):
         time_steps = int(0.05 / step_size)
         firing_rates_1 = np.zeros(time_steps)
         firing_rates_2 = np.ones(time_steps) * 300.0
-        firing_rates_3 = np.zeros(3 * time_steps)
-        firing_rates_3[time_steps:2 * time_steps] = 300.0
+        firing_rates_3 = np.zeros(time_steps)
+        firing_rates_3[40:70] = 300.0
 
         # calculate synaptic currents
         #############################
 
-        synaptic_current_1 = synapse.get_synaptic_current(firing_rates_1)
-        synaptic_current_2 = synapse.get_synaptic_current(firing_rates_2)
+        synaptic_current_1 = synapse.get_synaptic_current(firing_rates_1, membrane_potential=-0.09)
+        synaptic_current_2 = synapse.get_synaptic_current(firing_rates_2, membrane_potential=-0.09)
 
         # get synaptic current at each incoming firing rate of firing_rates_3
         idx = np.arange(1, len(firing_rates_3))
-        synaptic_current_3 = np.array([synapse.get_synaptic_current(firing_rates_3[0:i]) for i in idx])
+        synaptic_current_3 = np.array([synapse.get_synaptic_current(firing_rates_3[0:i],
+                                                                    membrane_potential=-0.09) for i in idx])
 
         # perform unit tests
         ####################

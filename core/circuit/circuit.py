@@ -206,8 +206,12 @@ class Circuit(object):
         # create input indices #
         ########################
 
+        # indices for network input
         conn_idx = [np.where(self.C[i, :, :] > 0) for i in range(self.N)]
         conn_idx = [[[conn[0][i], conn[1][i]] for i in range(len(conn[0]))] for conn in conn_idx]
+
+        # number of active synapses at population
+        n_idx = np.sum(self.active_synapses, axis=1, dtype=int)
 
         ####################
         # simulate network #
@@ -218,29 +222,22 @@ class Circuit(object):
             # update state of each population according to input and store relevant state variables
             for i in range(self.N):
 
-                # get active synapses idx
-                idx = self.active_synapses[i, :]
-                n_idx = np.sum(idx, dtype=int)
-
                 # pass external input to population
-                self.populations[i].synaptic_input[self.populations[i].current_input_idx, :n_idx] += \
-                    synaptic_inputs[n, i, idx]
+                self.populations[i].synaptic_input[self.populations[i].current_input_idx, :n_idx[i]] += \
+                    synaptic_inputs[n, i, self.active_synapses[i, :]]
 
                 # pass network input to population
                 for j, conns in enumerate(conn_idx[i]):
                     self.populations[i].synaptic_input[self.populations[i].current_input_idx+self.D[i, conns[0]],
-                                                       j+n_idx] += self.population_firing_rates[conns[0], 0] * \
+                                                       j+n_idx[i]] += self.population_firing_rates[conns[0], 0] * \
                                                                       self.C[i, conns[0], conns[1]]
 
-                # check whether population needs to be updated
-                if self.populations[i].t <= self.t:
+                # update all state variables
+                self.populations[i].state_update(extrinsic_current=extrinsic_current[n, i],
+                                                 extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
 
-                    # update all state variables
-                    self.populations[i].state_update(extrinsic_current=extrinsic_current[n, i],
-                                                     extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
-
-                    # update firing rate
-                    self.population_firing_rates[i, 1] = self.populations[i].current_firing_rate
+                # update firing rate
+                self.population_firing_rates[i, 1] = self.populations[i].current_firing_rate
 
             # display simulation progress
             if verbose and (n == 0 or (n % (simulation_time_steps // 10)) == 0):

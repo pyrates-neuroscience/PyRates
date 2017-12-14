@@ -274,7 +274,7 @@ class Population(object):
                              synapse_subtype=synapses[i],
                              synapse_params=synapse_params[i])
 
-        # set synapse dependent attributes
+        # set synapse-dependent attributes
         self.set_synapse_dependencies()
 
         ############
@@ -358,10 +358,10 @@ class Population(object):
         # advance in time and in synaptic input vector #
         ################################################
 
-        # time
+        # time advance
         self.t += self.step_size
 
-        # synaptic input
+        # synaptic input rotation
         idx = self.current_input_idx < self.kernel_lengths-1
         not_idx = np.invert(idx)
         self.current_input_idx[idx] += 1
@@ -431,13 +431,8 @@ class Population(object):
         # calculate synaptic currents for each additive synapse
         for i, idx in enumerate(self.additive_synapse_idx):
 
-            # synaptic current
-            if self.synapses[idx].conductivity_based:
-                self.synaptic_currents[i] = self.synapses[idx].get_synaptic_current(
-                    self.synaptic_input[0:self.current_input_idx[idx] + 1, idx], membrane_potential)
-            else:
-                self.synaptic_currents[i] = self.synapses[idx].get_synaptic_current(
-                    self.synaptic_input[0:self.current_input_idx[idx] + 1, idx])
+            self.synaptic_currents[i] = self.synapses[idx].get_synaptic_current(
+                self.synaptic_input[0:self.current_input_idx[idx] + 1, idx], membrane_potential)
 
         # compute synaptic modulation value for each modulatory synapse and apply it to currents
         if self.modulatory_synapse_idx:
@@ -475,14 +470,11 @@ class Population(object):
 
         """
 
+        # calculate synaptic modulation value of each modulatory synapse
         for i, idx in enumerate(self.modulatory_synapse_idx):
 
-            if self.synapses[idx].conductivity_based:
-                self.synaptic_modulation[i] = self.synapses[idx].get_synaptic_current(
-                    self.synaptic_input[0:self.current_input_idx + 1, idx], membrane_potential)
-            else:
-                self.synaptic_modulation[i] = self.synapses[idx].get_synaptic_current(
-                    self.synaptic_input[0:self.current_input_idx + 1, idx])
+            self.synaptic_modulation[i] = self.synapses[idx].get_synaptic_current(
+                self.synaptic_input[0:self.current_input_idx + 1, idx], membrane_potential)
 
         # apply modulation direction and get modulation value for each synapse
         synaptic_modulation_new = np.tile(self.synaptic_modulation, (len(self.synaptic_currents), 1))

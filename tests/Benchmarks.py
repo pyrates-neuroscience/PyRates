@@ -22,7 +22,7 @@ import time
 from memory_profiler import memory_usage
 from scipy.io import loadmat
 
-from core.circuit import NeuralMassModel, JansenRitCircuit
+from core.circuit import JansenRitCircuit
 
 __author__ = "Richard Gast"
 __status__ = "Development"
@@ -32,8 +32,8 @@ __status__ = "Development"
 #######################
 
 
-def run_JR_circuit_benchmark(simulation_time=60.0, step_size=1e-4, param_names=None, param_values=None,
-                             synaptic_inputs=None, verbose=False, variable_step_size=False, synaptic_kernel_length=100):
+def run_JR_circuit_benchmark(simulation_time=1.0, step_size=5e-4, param_names=None, param_values=None,
+                             synaptic_inputs=None, verbose=False, max_synaptic_delay=0.05):
     """
     Runs a benchmark on a single Jansen-Rit type microcircuit (3 interconnected neural populations).
 
@@ -65,9 +65,7 @@ def run_JR_circuit_benchmark(simulation_time=60.0, step_size=1e-4, param_names=N
     # initialize JR circuit #
     #########################
 
-    nmm = JansenRitCircuit(step_size=step_size,
-                           variable_step_size=variable_step_size,
-                           synaptic_kernel_length=synaptic_kernel_length)
+    nmm = JansenRitCircuit(step_size=step_size, max_synaptic_delay=max_synaptic_delay)
 
     if param_names:
 
@@ -96,147 +94,145 @@ def run_JR_circuit_benchmark(simulation_time=60.0, step_size=1e-4, param_names=N
     return simulation_duration
 
 
-def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None, connectivity_scaling=100.0, D=True,
-                             velocity=1.0, synaptic_input=None, verbose=False, variable_step_size=False,
-                             synaptic_kernel_length=100):
-    """
-    Runs benchmark for a number of JR circuits connected in a network.
-
-    :param simulation_time:
-    :param step_size:
-    :param N:
-    :param C:
-    :param connectivity_scaling:
-    :param D:
-    :param velocity:
-    :param synaptic_input:
-    :param verbose:
-    :param variable_step_size:
-    :param synaptic_kernel_length:
-
-    :return: simulation duration [unit = s]
-
-    """
-
-    #############################
-    # set simulation parameters #
-    #############################
-
-    # connectivity matrix
-    if C is None:
-
-        # load connectivity matrix
-        C_tmp = loadmat('SC')['SC']
-        C_tmp *= connectivity_scaling
-
-        # create full connectivity matrix
-        n_pops = 3
-        C = np.zeros([N*n_pops, N*n_pops, 2])
-        for i in range(N):
-            for j in range(N):
-                if i == j:
-                    C[i*n_pops:i*n_pops+n_pops, j*n_pops:j*n_pops+n_pops, 0] = \
-                        [[0, 0.8 * 135, 0], [1.0 * 135, 0, 0], [0.25 * 135, 0, 0]]
-                    C[i*n_pops:i*n_pops+n_pops, j*n_pops:j*n_pops+n_pops, 1] = \
-                        [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
-                C[i * n_pops, j * n_pops, 0] = C_tmp[i, j]
-
-    else:
-
-        C *= connectivity_scaling
-
-    # network delays
-    if D:
-
-        D_tmp = loadmat('D')['D']
-
-        D = np.zeros([N*n_pops, N*n_pops])
-        for i in range(N):
-            for j in range(N):
-                D[i*n_pops:i*n_pops+n_pops, j*n_pops:j*n_pops+n_pops] = D_tmp[i, j]
-
-    else:
-
-        D = None
-
-    # network input
-    if synaptic_input is None:
-
-        synaptic_input = np.zeros([int(np.ceil(simulation_time/step_size)), N*n_pops, 2])
-        idx_pcs = np.mod(np.arange(N*n_pops), n_pops) == 0
-        idx_eins = np.mod(np.arange(N*n_pops), n_pops) == 1
-        synaptic_input[:, idx_pcs, 0] = np.random.randn(int(np.ceil(simulation_time/step_size)), N) + 100.0
-        synaptic_input[:, idx_eins, 0] = 22 * np.random.randn(int(np.ceil(simulation_time/step_size)), N) + 200.0
-
-    # populations
-    populations = list()
-    population_types = ['JansenRitPyramidalCells', 'JansenRitExcitatoryInterneurons', 'JansenRitInhibitoryInterneurons']
-    for i in range(N*n_pops):
-        populations.append(population_types[np.mod(i, n_pops)])
-
-    ################
-    # set up model #
-    ################
-
-    nmm = NeuralMassModel(connections=C,
-                          population_types=populations,
-                          distances=D,
-                          velocities=velocity,
-                          step_size=step_size,
-                          variable_step_size=variable_step_size,
-                          synaptic_kernel_length=synaptic_kernel_length)
-
-    #####################
-    # perform benchmark #
-    #####################
-
-    print('Starting simulation...')
-
-    start_time = time.clock()
-
-    nmm.run(synaptic_inputs=synaptic_input,
-            simulation_time=simulation_time,
-            verbose=verbose)
-
-    end_time = time.clock()
-
-    simulation_duration = end_time - start_time
-
-    print("%.2f" % simulation_time, 's simulation of Jansen-Rit network with ', N, 'populations finished after ',
-          "%.2f" % simulation_duration, ' s.')
-
-    return simulation_duration
+# def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None, connectivity_scaling=100.0, D=True,
+#                              velocity=1.0, synaptic_input=None, verbose=False, variable_step_size=False,
+#                              synaptic_kernel_length=100):
+#     """
+#     Runs benchmark for a number of JR circuits connected in a network.
+#
+#     :param simulation_time:
+#     :param step_size:
+#     :param N:
+#     :param C:
+#     :param connectivity_scaling:
+#     :param D:
+#     :param velocity:
+#     :param synaptic_input:
+#     :param verbose:
+#     :param variable_step_size:
+#     :param synaptic_kernel_length:
+#
+#     :return: simulation duration [unit = s]
+#
+#     """
+#
+#     #############################
+#     # set simulation parameters #
+#     #############################
+#
+#     # connectivity matrix
+#     if C is None:
+#
+#         # load connectivity matrix
+#         C_tmp = loadmat('SC')['SC']
+#         C_tmp *= connectivity_scaling
+#
+#         # create full connectivity matrix
+#         n_pops = 3
+#         C = np.zeros([N*n_pops, N*n_pops, 2])
+#         for i in range(N):
+#             for j in range(N):
+#                 if i == j:
+#                     C[i*n_pops:i*n_pops+n_pops, j*n_pops:j*n_pops+n_pops, 0] = \
+#                         [[0, 0.8 * 135, 0], [1.0 * 135, 0, 0], [0.25 * 135, 0, 0]]
+#                     C[i*n_pops:i*n_pops+n_pops, j*n_pops:j*n_pops+n_pops, 1] = \
+#                         [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
+#                 C[i * n_pops, j * n_pops, 0] = C_tmp[i, j]
+#
+#     else:
+#
+#         C *= connectivity_scaling
+#
+#     # network delays
+#     if D:
+#
+#         D_tmp = loadmat('D')['D']
+#
+#         D = np.zeros([N*n_pops, N*n_pops])
+#         for i in range(N):
+#             for j in range(N):
+#                 D[i*n_pops:i*n_pops+n_pops, j*n_pops:j*n_pops+n_pops] = D_tmp[i, j]
+#
+#     else:
+#
+#         D = None
+#
+#     # network input
+#     if synaptic_input is None:
+#
+#         synaptic_input = np.zeros([int(np.ceil(simulation_time/step_size)), N*n_pops, 2])
+#         idx_pcs = np.mod(np.arange(N*n_pops), n_pops) == 0
+#         idx_eins = np.mod(np.arange(N*n_pops), n_pops) == 1
+#         synaptic_input[:, idx_pcs, 0] = np.random.randn(int(np.ceil(simulation_time/step_size)), N) + 100.0
+#         synaptic_input[:, idx_eins, 0] = 22 * np.random.randn(int(np.ceil(simulation_time/step_size)), N) + 200.0
+#
+#     # populations
+#     populations = list()
+#     population_types = ['JansenRitPyramidalCells', 'JansenRitExcitatoryInterneurons', 'JansenRitInhibitoryInterneurons']
+#     for i in range(N*n_pops):
+#         populations.append(population_types[np.mod(i, n_pops)])
+#
+#     ################
+#     # set up model #
+#     ################
+#
+#     nmm = NeuralMassModel(connections=C,
+#                           population_types=populations,
+#                           distances=D,
+#                           velocities=velocity,
+#                           step_size=step_size,
+#                           variable_step_size=variable_step_size,
+#                           synaptic_kernel_length=synaptic_kernel_length)
+#
+#     #####################
+#     # perform benchmark #
+#     #####################
+#
+#     print('Starting simulation...')
+#
+#     start_time = time.clock()
+#
+#     nmm.run(synaptic_inputs=synaptic_input,
+#             simulation_time=simulation_time,
+#             verbose=verbose)
+#
+#     end_time = time.clock()
+#
+#     simulation_duration = end_time - start_time
+#
+#     print("%.2f" % simulation_time, 's simulation of Jansen-Rit network with ', N, 'populations finished after ',
+#           "%.2f" % simulation_duration, ' s.')
+#
+#     return simulation_duration
 
 ######################
 # perform benchmarks #
 ######################
 
 # parameters
-simulation_duration = 1.0
-step_size = 1e-4
+simulation_duration = 10.0
+step_size = 5e-4
 verbose = True
-variable_step_size = False
 D = False
 velocity = 2.0
 connectivity_scaling = 50.0
-synaptic_kernel_length = 1000
+max_synaptic_delay = 0.05
 
 # single JR circuit
-# sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
-#                                               step_size=step_size,
-#                                               verbose=verbose,
-#                                               variable_step_size=variable_step_size,
-#                                               synaptic_kernel_length=synaptic_kernel_length)
+sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
+                                              step_size=step_size,
+                                              verbose=verbose,
+                                              max_synaptic_delay=max_synaptic_delay)
 
 # JR network (33 connected JR circuits)
-sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
-                                              step_size=step_size,
-                                              D=D,
-                                              velocity=velocity,
-                                              connectivity_scaling=connectivity_scaling,
-                                              verbose=verbose,
-                                              variable_step_size=variable_step_size,
-                                              synaptic_kernel_length=synaptic_kernel_length)
+#sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
+#                                              step_size=step_size,
+#                                              D=D,
+#                                              velocity=velocity,
+#                                              connectivity_scaling=connectivity_scaling,
+#                                              verbose=verbose,
+#                                              variable_step_size=variable_step_size,
+#                                              synaptic_kernel_length=synaptic_kernel_length)
 
 ################
 # memory usage #
