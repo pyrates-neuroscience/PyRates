@@ -69,7 +69,7 @@ class Synapse(object):
 
     def __init__(self, kernel_function: Callable[[float], float], efficacy: float, bin_size: float, max_delay: float,
                  conductivity_based: bool = False, reversal_potential: float = -0.075,
-                 modulatory: bool = False, synapse_type: Optional[str] = None, **kwargs: float) -> None:
+                 modulatory: bool = False, synapse_type: Optional[str] = None, **kernel_function_args: float) -> None:
         """Instantiates base synapse.
         """
 
@@ -92,7 +92,7 @@ class Synapse(object):
         self.max_delay = max_delay
         self.modulatory = modulatory
         self.kernel_function = kernel_function
-        self.kernel_function_args = kwargs
+        self.kernel_function_args = kernel_function_args
 
         ####################
         # set synapse type #
@@ -159,7 +159,8 @@ class Synapse(object):
         return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
 
     def get_synaptic_current(self, synaptic_input: np.ndarray,
-                             membrane_potential: Optional[Union[float, np.float64]] = -0.075) -> Union[np.float64, float]:
+                             membrane_potential: Optional[Union[float, np.float64]] = -0.075
+                             ) -> Union[np.float64, float]:
         """Applies synaptic kernel to synaptic input (should be incoming firing rate).
 
         Parameters

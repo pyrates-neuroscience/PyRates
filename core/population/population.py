@@ -161,7 +161,7 @@ class Population(object):
                  resting_potential: Optional[float]=-0.075,
                  membrane_capacitance: Optional[float]=1e-12,
                  max_population_delay: Optional[FloatLike]=0.,
-                 synapse_params: Optional[List[Dict[str, Union[bool, float]]]]=None,
+                 synapse_params: Optional[List[dict]]=None,
                  axon_params: Optional[Dict[str, float]]=None,
                  store_state_variables: Optional[bool]=False,
                  label: Optional[str]='Custom') -> None:
@@ -210,50 +210,16 @@ class Population(object):
         # set axonal plasticity parameters #
         ####################################
 
-        if axon_params:
+        if axon_params and 'tau' in axon_params:
 
-            if 'tau' in axon_params:
-
-                # if axon timescale tau is in axon parameters, set relevant parameters for axon plasticity
-                self.axon_plasticity = True
-                self.tau_axon = axon_params['tau']
-                if 'firing_rate_target' in axon_params:
-                    self.firing_rate_target = axon_params['firing_rate_target']
-                else:
-                    self.firing_rate_target = 2.5
-
-            else:
-
-                self.axon_plasticity = False
+            # if axon timescale tau is in axon parameters, set relevant parameters for axon plasticity
+            self.axon_plasticity = True
+            self.tau_axon = axon_params['tau']
+            self.firing_rate_target = axon_params['firing_rate_target']
 
         else:
 
             self.axon_plasticity = False
-
-        ######################################
-        # set synaptic plasticity parameters #
-        ######################################
-
-        self.plastic_synapses = list()
-        if synapse_params:
-
-            self.tau_depression = list()
-            self.tau_recycle = list()
-
-            # loop over synapses and check for passed synaptic plasticity parameters
-            for i, syn in enumerate(synapse_params):
-
-                if syn and 'tau_depression' in syn and 'tau_recycle' in syn:
-                    self.plastic_synapses.append(True)
-                    self.tau_depression.append(syn['tau_depression'])
-                    self.tau_recycle.append(syn['tau_recycle'])
-                else:
-                    self.plastic_synapses.append(False)
-
-            # transform lists into arrays
-            self.plastic_synapses = np.array(self.plastic_synapses, dtype=bool)
-            self.tau_depression = np.array(self.tau_depression)
-            self.tau_recycle = np.array(self.tau_recycle)
 
         ###############
         # set synapse #
@@ -268,11 +234,21 @@ class Population(object):
         else:
             self.max_synaptic_delay = np.zeros(n_synapses) + max_synaptic_delay
 
-        # instantiate synapses
+        # loop over passed synapses
         for i in range(n_synapses):
+
+            # instantiate synapse
             self.set_synapse(self.max_synaptic_delay[i],
                              synapse_subtype=synapses[i],
                              synapse_params=synapse_params[i])
+
+            # store plasticity parameters on synapse
+            if synapse_params[i] and 'tau_depression' in synapse_params[i]:
+                self.synapses[-1].plastic = True
+                self.synapses[-1].tau_depression = synapse_params[i]['tau_depression']
+                self.synapses[-1].tau_recycle = synapse_params[i]['tau_recycle']
+            else:
+                self.synapses[-1].plastic = False
 
         # set synapse-dependent attributes
         self.set_synapse_dependencies()
@@ -368,7 +344,7 @@ class Population(object):
         self.synaptic_input[0:-1, not_idx] = self.synaptic_input[1:, not_idx]
         self.synaptic_input[-1, not_idx] = self.dummy_input[0, not_idx]
 
-    def take_step(self, f: Callable, y_old: FloatLike) -> FloatLike:
+    def take_step(self, f: Callable, y_old: Union[FloatLike, np.ndarray]) -> FloatLike:
         """Takes a step of an ODE with right-hand-side f using Euler or Adams/BDF formalism.
 
         Parameters
@@ -520,8 +496,9 @@ class Population(object):
         """
 
         depression_rate = (synaptic_scaling * self.current_firing_rate) / \
-                          (self.axon.transfer_function_args['max_firing_rate'] * self.tau_depression)
-        recycle_rate = (1 - synaptic_scaling) / self.tau_recycle
+                          (self.axon.transfer_function_args['max_firing_rate'] *
+                           self.tau_depression[self.plastic_synapses])
+        recycle_rate = (1 - synaptic_scaling) / self.tau_recycle[self.plastic_synapses]
 
         return recycle_rate - depression_rate
 
@@ -638,17 +615,31 @@ class Population(object):
 
         n_synapses = len(self.synapses)
 
-        # extract synapse types
+        # get relevant information from each synapse instance
         synapse_type = np.ones(n_synapses, dtype=bool)
+        self.plastic_synapses = np.zeros(n_synapses, dtype=bool)
+        self.tau_depression = np.zeros(n_synapses)
+        self.tau_recycle = np.zeros(n_synapses)
         self.kernel_lengths = np.ones(n_synapses, dtype=int)
+
         for i, syn in enumerate(self.synapses):
+
+            # distinguish between additive and multiplicatory synapses
             if syn.modulatory:
                 synapse_type[i] = False
+
+            # get kernel length
             self.kernel_lengths[i] = len(syn.synaptic_kernel)
 
+            # get plasticity parameters
+            self.plastic_synapses[i] = self.synapses[i].plastic
+            if self.plastic_synapses[i]:
+                self.tau_depression[i] = self.synapses[i].tau_depression
+                self.tau_recycle[i] = self.synapses[i].tau_recycle
+
         # set synaptic input array
-        self.synaptic_input = np.zeros((int((np.max(self.max_synaptic_delay) + self.max_population_delay) / self.step_size),
-                                        n_synapses))
+        self.synaptic_input = np.zeros((int((np.max(self.max_synaptic_delay) +
+                                             self.max_population_delay) / self.step_size), n_synapses))
         self.dummy_input = np.zeros((1, n_synapses))
 
         # set input index for each synapse

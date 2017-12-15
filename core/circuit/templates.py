@@ -4,6 +4,7 @@
 import numpy as np
 
 from core.circuit import CircuitFromPopulations, CircuitFromScratch
+from typing import Optional
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -128,7 +129,7 @@ class WangKnoescheCircuit(CircuitFromScratch):
 
     def __init__(self, resting_potential: float=-0.075, tau_leak: float=0.016, membrane_capacitance: float=1e-12,
                  step_size: float=5e-4, max_synaptic_delay: float=0.05, delays: np.ndarray=None,
-                 init_states: np.ndarray=np.zeros(5)) -> None:
+                 init_states: Optional[np.ndarray]=None) -> None:
         """Initializes a basic Wang-Knoesche circuit of pyramidal cells and inhibitory interneurons in layer 2/3 as well
         as layer 5/6 plus a layer 4 excitatory interneuron population.
         """
@@ -154,7 +155,7 @@ class WangKnoescheCircuit(CircuitFromScratch):
                     'GABAACurrentSynapse']
         synapse_params = {'tau_depression': tau_depression,
                           'tau_recycle': tau_recycle}
-        synapse_params = [synapse_params, None]   # one dictionary per synapse type
+        synapse_params = [synapse_params, None]          # one dictionary per synapse type
 
         # connectivity matrix
         connections = np.zeros((N, N, n_synapses))
@@ -173,6 +174,10 @@ class WangKnoescheCircuit(CircuitFromScratch):
 
         # axon information
         axons = ['JansenRitAxon' for i in range(N)]         # use Jansen-Rit parametrization of axon ([2]_)
+
+        # initial states
+        if init_states is None:
+            init_states = np.zeros(N) - 0.075
 
         ###################
         # call super init #

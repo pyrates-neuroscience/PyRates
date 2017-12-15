@@ -207,8 +207,8 @@ class Circuit(object):
         ########################
 
         # indices for network input
-        conn_idx = [np.where(self.C[i, :, :] > 0) for i in range(self.N)]
-        conn_idx = [[[conn[0][i], conn[1][i]] for i in range(len(conn[0]))] for conn in conn_idx]
+        conn_idx = [np.where(self.C[i, :, :].squeeze().T > 0) for i in range(self.N)]
+        conn_idx = [[[conn[1][i], conn[0][i]] for i in range(len(conn[0]))] for conn in conn_idx]
 
         # number of active synapses at population
         n_idx = np.sum(self.active_synapses, axis=1, dtype=int)
