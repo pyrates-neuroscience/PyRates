@@ -35,17 +35,13 @@ class Axon(object):
     transfer_function_args
         Keyword arguments will be saved as dict on the object.
 
-    Methods
-    -------
-    compute_firing_rate
-        See method docstring.
-    plot_transfer_function
-        See method docstring.
-
     """
 
-    def __init__(self, transfer_function: Callable[[float], float], axon_type: Optional[str] = None,
-                 **kwargs) -> None:
+    def __init__(self,
+                 transfer_function: Callable[[float], float],
+                 axon_type: Optional[str] = None,
+                 **transfer_function_args
+                 ) -> None:
         """Instantiates base axon.
         """
 
@@ -55,9 +51,11 @@ class Axon(object):
 
         self.transfer_function = transfer_function
         self.axon_type = 'custom' if axon_type is None else axon_type
-        self.transfer_function_args = kwargs
+        self.transfer_function_args = transfer_function_args
 
-    def compute_firing_rate(self, membrane_potential: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    def compute_firing_rate(self,
+                            membrane_potential: Union[float, np.ndarray]
+                            ) -> Union[float, np.ndarray]:
         """Computes average firing rate from membrane potential based on transfer function.
 
         Parameters
@@ -74,9 +72,11 @@ class Axon(object):
 
         return self.transfer_function(membrane_potential, **self.transfer_function_args)
 
-    def plot_transfer_function(self, membrane_potentials: np.ndarray = None,
+    def plot_transfer_function(self,
+                               membrane_potentials: Optional[np.ndarray] = None,
                                create_plot: bool = True,
-                               fig=None):
+                               axes: Optional[object] = None
+                               ) -> object:
         """Creates figure of the transfer function transforming membrane potentials into output firing rates.
 
         Parameters
@@ -85,8 +85,8 @@ class Axon(object):
             Membrane potential values for which to plot transfer function value [unit = V].
         create_plot
             If false, plot will bot be shown (default = True).
-        fig
-            If passed, plot will be created in respective figure (default = None).
+        axes
+            If passed, plot will be created in respective figure axis (default = None).
 
         Returns
         -------
@@ -106,24 +106,22 @@ class Axon(object):
         ##############################################
 
         # check whether new figure needs to be created
-        if fig is None:
-            fig = plt.figure('Wave-To-Pulse-Function')
+        if axes is None:
+            fig, axes = plt.subplots(num='Wave-To-Pulse-Function')
 
         # plot firing rates over membrane potentials
-        # plt.hold('on')
-        plt.plot(membrane_potentials, firing_rates)
-        # plt.hold('off')
+        axes.plot(membrane_potentials, firing_rates)
 
         # set figure labels
-        plt.xlabel('membrane potential [V]')
-        plt.ylabel('firing rate [Hz]')
-        plt.title('Axon Hillok Transfer Function')
+        axes.set_xlabel('membrane potential [V]')
+        axes.set_ylabel('firing rate [Hz]')
+        axes.set_title('Axon Hillok Transfer Function')
 
         # show plot
         if create_plot:
             fig.show()
 
-        return fig
+        return axes
 
 
 class SigmoidAxon(Axon):
@@ -152,8 +150,12 @@ class SigmoidAxon(Axon):
 
     """
 
-    def __init__(self, max_firing_rate: float, membrane_potential_threshold: float, sigmoid_steepness: float,
-                 axon_type: Optional[str] = None) -> None:
+    def __init__(self,
+                 max_firing_rate: float,
+                 membrane_potential_threshold: float,
+                 sigmoid_steepness: float,
+                 axon_type: Optional[str] = None
+                 ) -> None:
         """Initializes sigmoid axon instance.
         """
 
@@ -171,9 +173,11 @@ class SigmoidAxon(Axon):
         # define sigmoidal transfer function #
         ######################################
 
-        def parametric_sigmoid(membrane_potential: Union[float, np.ndarray], max_firing_rate: float,
+        def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
+                               max_firing_rate: float,
                                membrane_potential_threshold: float,
-                               sigmoid_steepness: float) -> Union[float, np.ndarray]:
+                               sigmoid_steepness: float
+                               ) -> Union[float, np.ndarray]:
             """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
 
             Parameters
@@ -207,11 +211,12 @@ class SigmoidAxon(Axon):
                                           membrane_potential_threshold=membrane_potential_threshold,
                                           sigmoid_steepness=sigmoid_steepness)
 
-    def plot_transfer_function(self, membrane_potentials: np.ndarray = None,
+    def plot_transfer_function(self,
+                               membrane_potentials: Optional[np.ndarray] = None,
                                epsilon: float = 1e-4,
                                bin_size: float = 0.001,
                                create_plot: bool = True,
-                               fig=None):
+                               axes: Optional[object] = None):
         """Plots axon hillok sigmoidal transfer function.
 
         Parameters
@@ -226,7 +231,7 @@ class SigmoidAxon(Axon):
             [unit = V] (default = 0.001).
         create_plot
             See method docstring of :class:`Axon`.
-        fig
+        axes
             See method docstring of :class:`Axon`.
 
 
@@ -286,4 +291,4 @@ class SigmoidAxon(Axon):
 
         super(SigmoidAxon, self).plot_transfer_function(membrane_potentials=membrane_potentials,
                                                         create_plot=create_plot,
-                                                        fig=fig)
+                                                        axes=axes)

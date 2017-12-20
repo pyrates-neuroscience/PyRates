@@ -27,8 +27,11 @@ class Synapse(object):
         Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
     bin_size
         Size of the time-steps between successive bins of the synaptic kernel [unit = s].
+    epsilon
+        Minimum kernel value. Kernel values below epsilon will be set to zero [unit = S or A] (default = 1e-14).
     max_delay
-        Maximum time after which incoming synaptic input still affects the synapse [unit = s].
+        Maximum time after which incoming synaptic input still affects the synapse [unit = s] (default = None). If set,
+        epsilon will be ignored.
     conductivity_based
         If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
         conductivity. Else translation to synaptic current will be direct (default = False).
@@ -67,9 +70,17 @@ class Synapse(object):
 
     """
 
-    def __init__(self, kernel_function: Callable[[float], float], efficacy: float, bin_size: float, max_delay: float,
-                 conductivity_based: bool = False, reversal_potential: float = -0.075,
-                 modulatory: bool = False, synapse_type: Optional[str] = None, **kernel_function_args: float) -> None:
+    def __init__(self, kernel_function: Callable[[float], float],
+                 efficacy: float,
+                 bin_size: float,
+                 epsilon: float = 1e-14,
+                 max_delay: Optional[float] = None,
+                 conductivity_based: bool = False,
+                 reversal_potential: float = -0.075,
+                 modulatory: bool = False,
+                 synapse_type: Optional[str] = None,
+                 **kernel_function_args: float
+                 ) -> None:
         """Instantiates base synapse.
         """
 
@@ -77,9 +88,12 @@ class Synapse(object):
         # check input parameters #
         ##########################
 
-        if bin_size < 0 or max_delay < 0:
+        if bin_size < 0 or (max_delay and max_delay < 0):
             raise ValueError('Time constants (bin_size, max_delay) cannot be negative. '
                              'See docstring for further information.')
+
+        if epsilon < 0:
+            raise ValueError('Epsilon is an absolute error term that cannot be negative.')
 
         ##################
         # set attributes #
@@ -89,6 +103,7 @@ class Synapse(object):
         self.conductivity_based = conductivity_based
         self.reversal_potential = reversal_potential
         self.bin_size = bin_size
+        self.epsilon = epsilon
         self.max_delay = max_delay
         self.modulatory = modulatory
         self.kernel_function = kernel_function
@@ -111,11 +126,11 @@ class Synapse(object):
 
             self.synapse_type = synapse_type
 
-        # set kernel scaling (only relevant for conductivity based synapses)
+        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
         if conductivity_based:
             self.kernel_scaling = lambda membrane_potential: self.reversal_potential - membrane_potential
         else:
-            self.kernel_scaling = lambda membrane_potential: 1.0
+            self.kernel_scaling = lambda membrane_potential: 1.
 
         #########################
         # build synaptic kernel #
@@ -123,8 +138,10 @@ class Synapse(object):
 
         self.synaptic_kernel = self.evaluate_kernel(build_kernel=True)
 
-    def evaluate_kernel(self, build_kernel: bool,
-                        time_points: Optional[Union[float, np.ndarray]] = 0.) -> Union[float, np.ndarray]:
+    def evaluate_kernel(self,
+                        build_kernel: bool,
+                        time_points: Union[float, np.ndarray] = 0.
+                        ) -> Union[float, np.ndarray]:
         """Builds synaptic kernel or computes value of it at specified time point(s).
 
         Parameters
@@ -153,13 +170,30 @@ class Synapse(object):
         # check whether to build kernel or just evaluate it at time_points #
         ####################################################################
 
-        if build_kernel:
+        if build_kernel and self.max_delay:
+
+            # create time vector from max_delay
             time_points = np.arange(self.max_delay, 0.+0.5*self.bin_size, -self.bin_size)
+
+        elif build_kernel:
+
+            # create time vector from epsilon
+            time_points = list()
+            time_points.append(0.)
+            kernel_val = self.kernel_function(time_points[-1], **self.kernel_function_args) * self.efficacy
+            while True:
+                time_points.append(time_points[-1] + self.bin_size)
+                kernel_val_tmp = self.kernel_function(time_points[-1], **self.kernel_function_args) * self.efficacy
+                if kernel_val_tmp - kernel_val < 0. and abs(kernel_val_tmp) < self.epsilon:
+                    break
+                kernel_val = kernel_val_tmp
+            time_points = np.flip(np.asarray(time_points), axis=0)
 
         return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
 
-    def get_synaptic_current(self, synaptic_input: np.ndarray,
-                             membrane_potential: Optional[Union[float, np.float64]] = -0.075
+    def get_synaptic_current(self,
+                             synaptic_input: np.ndarray,
+                             membrane_potential: Union[float, np.float64] = -0.075
                              ) -> Union[np.float64, float]:
         """Applies synaptic kernel to synaptic input (should be incoming firing rate).
 
@@ -190,7 +224,10 @@ class Synapse(object):
 
         return kernel_value * self.kernel_scaling(membrane_potential)
 
-    def plot_synaptic_kernel(self, create_plot=True, axes=None):
+    def plot_synaptic_kernel(self,
+                             create_plot: bool = True,
+                             axes: Optional[object] = None
+                             ) -> object:
         """Creates plot of synaptic kernel over time.
 
         Parameters
@@ -267,9 +304,18 @@ class DoubleExponentialSynapse(Synapse):
                               
     """
 
-    def __init__(self, efficacy: float, tau_decay: float, tau_rise: float, bin_size: float,
-                 max_delay: float, conductivity_based: bool = False, reversal_potential: float = -0.075,
-                 modulatory: bool = False, synapse_type: Optional[str] = None) -> None:
+    def __init__(self,
+                 efficacy: float,
+                 tau_decay: float,
+                 tau_rise: float,
+                 bin_size: float,
+                 epsilon: float = 1e-14,
+                 max_delay: float = None,
+                 conductivity_based: bool = False,
+                 reversal_potential: float = -0.075,
+                 modulatory: bool = False,
+                 synapse_type: Optional[str] = None
+                 ) -> None:
 
         ##########################
         # check input parameters #
@@ -282,8 +328,10 @@ class DoubleExponentialSynapse(Synapse):
         # define kernel function #
         ##########################
 
-        def double_exponential(time_points: Union[float, np.ndarray], tau_decay: float,
-                               tau_rise: float) -> Union[float, np.ndarray]:
+        def double_exponential(time_points: Union[float, np.ndarray],
+                               tau_decay: float,
+                               tau_rise: float
+                               ) -> Union[float, np.ndarray]:
             """Uses double exponential function to calculate synaptic kernel value for each passed time-point.
 
             Parameters
@@ -311,6 +359,7 @@ class DoubleExponentialSynapse(Synapse):
         super().__init__(kernel_function=double_exponential,
                          efficacy=efficacy,
                          bin_size=bin_size,
+                         epsilon=epsilon,
                          max_delay=max_delay,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,

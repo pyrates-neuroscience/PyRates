@@ -187,11 +187,12 @@ class WangKnoescheCircuit(CircuitFromScratch):
                          delays=delays,
                          step_size=step_size,
                          synapses=synapses,
-                         axons=axons,
                          synapse_params=synapse_params,
+                         axons=axons,
                          max_synaptic_delay=max_synaptic_delay,
                          membrane_capacitance=membrane_capacitance,
                          tau_leak=tau_leak,
                          resting_potential=resting_potential,
                          init_states=init_states,
-                         population_labels=population_labels)
+                         population_labels=population_labels,
+                         plastic_populations=True)

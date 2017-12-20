@@ -16,4 +16,4 @@ setup(name='BrainNetworks',
                 'tests'],
       zip_safe=False,
       python_requires='>=3.5',
-      install_requires=['numpy', 'matplotlib', 'scipy'])
+      install_requires=['numpy', 'matplotlib', 'scipy', 'networkx'])

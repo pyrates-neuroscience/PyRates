@@ -1,7 +1,7 @@
 """Templates for specific population parametrizations.
 """
 
-from core.population import Population
+from core.population import Population, PlasticPopulation
 from typing import Optional, List, Dict, Union
 import numpy as np
 

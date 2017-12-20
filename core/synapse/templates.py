@@ -136,7 +136,8 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
                                                      max_delay=max_delay,
                                                      reversal_potential=reversal_potential,
                                                      synapse_type='AMPA_conductance',
-                                                     modulatory=False)
+                                                     modulatory=False,
+                                                     conductivity_based=True)
 
 
 class GABAAConductanceSynapse(DoubleExponentialSynapse):
@@ -165,7 +166,7 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
     """
 
     def __init__(self, bin_size: float, max_delay: float, efficacy: float = 1.358 * (-4e-11),
-                 tau_decay: float = 0.02, tau_rise: float = 0.0004, reversal_potential: float = -0.060
+                 tau_decay: float = 0.02, tau_rise: float = 0.0004, reversal_potential: float = -0.070
                  ) -> None:
         """
         Instantiates a current-based synapse with GABA_A receptor.
@@ -178,4 +179,5 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                                                       max_delay=max_delay,
                                                       reversal_potential=reversal_potential,
                                                       synapse_type='GABAA_current',
-                                                      modulatory=False)
+                                                      modulatory=False,
+                                                      conductivity_based=True)

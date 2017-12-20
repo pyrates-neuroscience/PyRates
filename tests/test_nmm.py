@@ -433,20 +433,20 @@ class TestNMMs(unittest.TestCase):
         #########################
 
         time_steps = int(0.05 / step_size)
-        synaptic_inputs = np.zeros((4, 2, 5 * time_steps))
-        synaptic_inputs[1, 0, :] = 300.0
-        synaptic_inputs[2, 1, :] = 300.0
-        synaptic_inputs[3, 0, 0:time_steps] = 300.0
+        synaptic_inputs = np.zeros((5 * time_steps, 2, 4))
+        synaptic_inputs[:, 0, 1] = 300.0
+        synaptic_inputs[:, 1, 2] = 300.0
+        synaptic_inputs[0:time_steps, 0, 3] = 300.0
 
-        extrinsic_inputs = np.zeros((2, 5 * time_steps), dtype=float)
-        extrinsic_inputs[1, 0:time_steps] = 1e-14
+        extrinsic_inputs = np.zeros((5 * time_steps, 2), dtype=float)
+        extrinsic_inputs[0:time_steps, 1] = 1e-14
 
         # for each combination of inputs calculate state vector of population instance
         ##############################################################################
 
-        states = np.zeros((synaptic_inputs.shape[0], extrinsic_inputs.shape[0], extrinsic_inputs.shape[1]))
-        for i in range(synaptic_inputs.shape[0]):
-            for j in range(extrinsic_inputs.shape[0]):
+        states = np.zeros((synaptic_inputs.shape[2], extrinsic_inputs.shape[1], extrinsic_inputs.shape[0]))
+        for i in range(synaptic_inputs.shape[2]):
+            for j in range(extrinsic_inputs.shape[1]):
                 pop = Population(synapses=synapse_types,
                                  axon=axon,
                                  init_state=init_state,
@@ -455,9 +455,9 @@ class TestNMMs(unittest.TestCase):
                                  tau_leak=tau_leak,
                                  resting_potential=resting_potential,
                                  membrane_capacitance=membrane_capacitance)
-                for k in range(synaptic_inputs.shape[2]):
-                    pop.synaptic_input[pop.current_input_idx, :] = synaptic_inputs[i, :, k]
-                    pop.state_update(extrinsic_current=extrinsic_inputs[j, k])
+                for k in range(synaptic_inputs.shape[0]):
+                    pop.state_update(synaptic_input=synaptic_inputs[k, :, i].squeeze(),
+                                     extrinsic_current=extrinsic_inputs[k, j])
                     states[i, j, k] = pop.state_variables[-1][0]
 
         # perform unit tests

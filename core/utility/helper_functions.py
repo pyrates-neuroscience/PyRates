@@ -3,7 +3,7 @@
 
 import numpy as np
 import inspect
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Callable
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
