@@ -1,4 +1,4 @@
-"""Templates for specific ciricuit parametrizations.
+"""Templates for specific circuit parametrizations.
 """
 
 import numpy as np
