@@ -196,3 +196,98 @@ class WangKnoescheCircuit(CircuitFromScratch):
                          init_states=init_states,
                          population_labels=population_labels,
                          plastic_populations=True)
+
+
+class MoranCircuit(CircuitFromScratch):
+    """Basic cortical column circuit as defined in [1]_.
+
+    Parameters
+    ----------
+    resting_potential
+        Default = -0.075 V.
+    tau_leak
+        Default = 0.016 s.
+    membrane_capacitance
+        Default = 1e-12 q/S.
+    step_size
+        Default = 5e-4 s.
+    delays
+        Default = None
+    init_states
+        Default = np.zeros(3)
+
+    See Also
+    --------
+    :class:`CircuitFromPopulations`: Detailed description of parameters.
+    :class:`Circuit`: Detailed description of attributes and methods.
+
+    References
+    ----------
+    .. [1] P. Wang & T.R. Knoesche, "A realistic neural mass model of the cortex with laminar-specific connections and
+       synaptic plasticity-evaluation with auditory habituation." PloS one, vol. 8(10): e77876, 2013.
+
+    """
+
+    def __init__(self, resting_potential: float=-0.075, tau_leak: float=0.016, membrane_capacitance: float=1e-12,
+                 step_size: float=5e-4, delays: np.ndarray=None, epsilon: float=1e-14,
+                 init_states: Optional[np.ndarray]=None) -> None:
+        """Initializes a basic Moran circuit of pyramidal cells, excitatory and inhibitory interneurons.
+        """
+
+        ##################
+        # set parameters #
+        ##################
+
+        # population information
+        population_labels = ['PCs',
+                             'EINs',
+                             'IINs']
+        N = 3
+
+        # synapse information
+        n_synapses = 2                                      # AMPA and GABAA
+        synapses = ['AMPACurrentSynapse',                   # synapse types
+                    'GABAACurrentSynapse']
+        synapse_params = {'epsilon': epsilon}
+        synapse_params = [synapse_params, synapse_params]   # one dictionary per synapse type
+
+        # connectivity matrix
+        connections = np.zeros((N, N, n_synapses))
+
+        connections[:, :, 0] = [[0., 128., 0.],     # AMPA connections (excitatory)
+                                [128., 0.,  0.],
+                                [64., 0., 0.]]
+
+        connections[:, :, 1] = [[0., 0., 64.],    # GABA-A connections (inhibitory)
+                                [0., 0., 0.],
+                                [0., 0., 16.]]
+
+        # axon information
+        axons = ['JansenRitAxon' for i in range(N)]    # use axon as defined in ([2]_)
+
+        axon_params = {'tau': 0.512,
+                       'firing_rate_target': 2.5}
+        axon_params = [None, axon_params, None]
+
+        # initial states
+        if init_states is None:
+            init_states = np.zeros(N)
+
+        ###################
+        # call super init #
+        ###################
+
+        super().__init__(connectivity=connections,
+                         delays=delays,
+                         step_size=step_size,
+                         synapses=synapses,
+                         synapse_params=synapse_params,
+                         axons=axons,
+                         axon_params=axon_params,
+                         membrane_capacitance=membrane_capacitance,
+                         tau_leak=tau_leak,
+                         resting_potential=resting_potential,
+                         init_states=init_states,
+                         population_labels=population_labels,
+                         plastic_populations=True,
+                         axon_class='SigmoidAxon')

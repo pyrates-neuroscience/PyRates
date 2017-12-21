@@ -1,6 +1,8 @@
 """Templates for specific axon parametrizations.
 """
-from core.axon import SigmoidAxon
+
+from core.axon import SigmoidAxon, Axon
+import numpy as np
 
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
@@ -40,3 +42,24 @@ class JansenRitAxon(SigmoidAxon):
                          membrane_potential_threshold=membrane_potential_threshold,
                          sigmoid_steepness=sigmoid_steepness,
                          axon_type='JansenRit')
+
+
+class MoranAxon(Axon):
+    """
+    """
+
+    def __init__(self,
+                 max_firing_rate: float = 1.,
+                 sigmoid_steepness: float = 200.,
+                 membrane_potential_threshold: float = 0.001):
+
+        def sigmoid(membrane_potential, max_firing_rate, membrane_potential_threshold, sigmoid_steepness):
+            return max_firing_rate / (1 + np.exp(sigmoid_steepness *
+                                                 (membrane_potential_threshold - membrane_potential))) - \
+                   max_firing_rate / (1 + np.exp(sigmoid_steepness * membrane_potential_threshold))
+
+        super().__init__(sigmoid,
+                         'Moran_Axon',
+                         max_firing_rate=max_firing_rate,
+                         membrane_potential_threshold=membrane_potential_threshold,
+                         sigmoid_steepness=sigmoid_steepness)

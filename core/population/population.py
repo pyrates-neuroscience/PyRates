@@ -142,6 +142,8 @@ class Population(object):
                  max_population_delay: FloatLike = 0.,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
+                 synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
+                 axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Custom'
                  ) -> None:
@@ -159,7 +161,7 @@ class Population(object):
             raise AttributeError('Either axon or axon_params have to be passed!')
 
         # check attribute values
-        if step_size < 0 or tau_leak < 0 or max_synaptic_delay < 0 or max_population_delay < 0:
+        if step_size < 0 or tau_leak < 0 or max_population_delay < 0:
             raise ValueError('Time constants (tau, step_size, max_delay) cannot be negative. '
                              'See parameter docstring for further information.')
         if membrane_capacitance < 0:
@@ -191,7 +193,8 @@ class Population(object):
 
         # initialize synapse parameters
         self.n_synapses = len(synapses) if synapses else len(synapse_params)
-
+        if type(synapse_class) is str:
+            synapse_class = [synapse_class for i in range(self.n_synapses)]
         if max_synaptic_delay is None:
             self.max_synaptic_delay = check_nones(max_synaptic_delay, self.n_synapses)
         elif type(max_synaptic_delay) is np.ndarray:
@@ -201,7 +204,8 @@ class Population(object):
 
         # instantiate synapses
         self.set_synapses(synapse_subtypes=synapses,
-                          synapse_params=synapse_params)
+                          synapse_params=synapse_params,
+                          synapse_types=synapse_class)
 
         # get relevant information from each synapse instance
         synapse_type = np.ones(self.n_synapses, dtype=bool)
@@ -238,7 +242,7 @@ class Population(object):
         # set axon #
         ############
 
-        self.set_axon(axon, axon_params=axon_params)
+        self.set_axon(axon, axon_params=axon_params, axon_type=axon_class)
         self.current_firing_rate = self.get_firing_rate()
 
         ###################################
@@ -278,6 +282,9 @@ class Population(object):
             if synapse_types[i] == 'DoubleExponentialSynapse':
                 self.synapses.append(set_instance(DoubleExponentialSynapse, synapse_subtypes[i], synapse_params[i],
                                                   bin_size=self.step_size, max_delay=self.max_synaptic_delay[i]))
+            elif synapse_types[i] == 'Synapse':
+                self.synapses.append(set_instance(Synapse, synapse_subtypes[i], synapse_params[i],
+                                                  bin_size=self.step_size, max_delay=self.max_synaptic_delay[i]))
             else:
                 raise AttributeError('Invalid synapse type!')
 
@@ -301,6 +308,8 @@ class Population(object):
 
         if axon_type == 'SigmoidAxon':
             self.axon = set_instance(SigmoidAxon, axon_subtype, axon_params)
+        elif axon_type == 'Axon':
+            self.axon = set_instance(Axon, axon_subtype, axon_params)
         else:
             raise AttributeError('Invalid axon type!')
 
@@ -675,6 +684,8 @@ class PlasticPopulation(Population):
                  max_population_delay: FloatLike = 0.,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
+                 synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
+                 axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Custom'
                  ) -> None:
@@ -697,6 +708,8 @@ class PlasticPopulation(Population):
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
+                         synapse_class=synapse_class,
+                         axon_class=axon_class,
                          store_state_variables=store_state_variables,
                          label=label)
 
@@ -770,9 +783,9 @@ class PlasticPopulation(Population):
 
         if self.axon_plasticity:
 
-            self.axon.membrane_potential_threshold = self.take_step(f=self.get_delta_membrane_potential_threshold,
-                                                                    y_old=self.axon.transfer_function_args
-                                                                    ['membrane_potential_threshold'])
+            self.axon.transfer_function_args['membrane_potential_threshold'] = \
+                self.take_step(f=self.get_delta_membrane_potential_threshold,
+                               y_old=self.axon.transfer_function_args['membrane_potential_threshold'])
 
         ###########################
         # update synaptic scaling #
@@ -828,7 +841,7 @@ class PlasticPopulation(Population):
         Returns
         -------
         float
-            Change in `membrane_potential_threshold` [unit = V].
+            Change in `membrane_potential_threshold` [unit = A].
 
         """
 
