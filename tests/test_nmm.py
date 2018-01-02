@@ -5,7 +5,7 @@ import pickle
 import unittest
 import numpy as np
 
-from core.axon import SigmoidAxon, JansenRitAxon
+from core.axon import SigmoidAxon, KnoescheAxon
 from core.circuit import CircuitFromScratch, CircuitFromPopulations, CircuitFromCircuit, JansenRitCircuit
 from core.population import Population
 from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
@@ -210,7 +210,7 @@ class TestNMMs(unittest.TestCase):
         tau_decay = 0.02  # unit = s
         tau_rise = 0.0004  # unit = s
         step_size = 5.e-4  # unit = s
-        synaptic_kernel_length = 0.05  # unit = s
+        epsilon = 1e-13  # unit = s
         conductivity_based = False
 
         # initialize synapse
@@ -220,7 +220,7 @@ class TestNMMs(unittest.TestCase):
                                            tau_decay=tau_decay,
                                            tau_rise=tau_rise,
                                            bin_size=step_size,
-                                           max_delay=synaptic_kernel_length,
+                                           epsilon=epsilon,
                                            conductivity_based=conductivity_based)
 
         # define firing rate inputs
@@ -353,12 +353,12 @@ class TestNMMs(unittest.TestCase):
         #######################
 
         synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse']
-        axon = 'JansenRitAxon'
-        init_state = -0.07
+        axon = 'KnoescheAxon'
+        init_state = -0.075
         step_size = 5.e-4
         synaptic_kernel_length = 0.05
         tau_leak = 0.016
-        resting_potential = -0.07
+        resting_potential = -0.075
 
         # initialize population, synapses and axon
         pop = Population(synapses=synapse_types,
@@ -372,7 +372,7 @@ class TestNMMs(unittest.TestCase):
                                   max_delay=synaptic_kernel_length)
         syn2 = GABAACurrentSynapse(bin_size=step_size,
                                    max_delay=synaptic_kernel_length)
-        axon = JansenRitAxon()
+        axon = KnoescheAxon()
 
         # define firing rate input and membrane potential
         #################################################
@@ -421,7 +421,7 @@ class TestNMMs(unittest.TestCase):
         ###########################
 
         synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse']
-        axon = 'JansenRitAxon'
+        axon = 'KnoescheAxon'
         step_size = 5e-4  # unit = s
         synaptic_kernel_length = 0.05  # unit = s
         tau_leak = 0.016  # unit = s
@@ -507,41 +507,18 @@ class TestNMMs(unittest.TestCase):
         # set parameters
         ################
 
+        N = 3
+        n_synapses = 2
+        max_synaptic_delay = 0.15 # s
+
         # simulations parameters
         simulation_time = 1.0     # s
-        cutoff_time = 0.0         # s
-        step_size = 5.0e-4        # s
-
-        # populations
-        populations = ['JansenRitPyramidalCells',
-                       'JansenRitExcitatoryInterneurons',
-                       'JansenRitInhibitoryInterneurons']
-        population_labels = ['PC', 'EIN', 'IIN']
-        N = len(population_labels)
-        n_synapses = 2
-
-        # synapses
-        connections = np.zeros((N, N, n_synapses))
-
-        # AMPA connections (excitatory)
-        connections[:, :, 0] = [[0, 0.8 * 135, 0], [1.0 * 135, 0, 0], [0.25 * 135, 0, 0]]
-
-        # GABA-A connections (inhibitory)
-        connections[:, :, 1] = [[0, 0, 0.25 * 135], [0, 0, 0], [0, 0, 0]]
-
-        # other population parameters
-        max_synaptic_delay = 0.05                  # s
-        init_states = np.zeros(N)                  # V
-        resting_potential = -0.075                 # V
-        tau_leak = 0.016                           # s
-        membrane_capacitance = 1e-12               # q/S
-        delays = None
-        synaptic_modulation_direction = None
+        step_size = 5e-4          # s
 
         # synaptic inputs
         start_stim = 0.3        # s
         len_stim = 0.05         # s
-        mag_stim = 300.0        # 1/s
+        mag_stim = 200.0        # 1/s
 
         synaptic_inputs = np.zeros((int(simulation_time/step_size), N, n_synapses))
         synaptic_inputs[int(start_stim/step_size):int(start_stim/step_size+len_stim/step_size), 1, 0] = mag_stim
@@ -549,17 +526,7 @@ class TestNMMs(unittest.TestCase):
         # initialize neural mass network
         ################################
 
-        nmm = CircuitFromPopulations(population_types=populations,
-                                     connectivity=connections,
-                                     step_size=step_size,
-                                     max_synaptic_delay=max_synaptic_delay,
-                                     init_states=init_states,
-                                     delays=delays,
-                                     resting_potential=resting_potential,
-                                     tau_leak=tau_leak,
-                                     membrane_capacitance=membrane_capacitance,
-                                     population_labels=population_labels,
-                                     synaptic_modulation_direction=synaptic_modulation_direction)
+        nmm = JansenRitCircuit(step_size=step_size, max_synaptic_delay=max_synaptic_delay)
 
         # run network simulation
         ########################
@@ -571,10 +538,10 @@ class TestNMMs(unittest.TestCase):
         nmm.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time)
 
-        states = nmm.get_population_states(state_variable_idx=0)
+        states = nmm.get_population_states(state_variable_idx=0) - 0.075
 
         # load target data
-        ###################
+        ##################
 
         with open('JR_results_I.pickle', 'rb') as f:
             target_states = pickle.load(f)

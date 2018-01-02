@@ -23,7 +23,7 @@ class Axon(object):
         [unit = V] as input and returns average firing rates [unit = 1/s].
     axon_type
         Name of axon type.
-    **kwargs
+    **transfer_function_args
         Keyword arguments for the transfer function
 
     Attributes
@@ -73,7 +73,7 @@ class Axon(object):
         return self.transfer_function(membrane_potential, **self.transfer_function_args)
 
     def plot_transfer_function(self,
-                               membrane_potentials: Optional[np.ndarray] = None,
+                               membrane_potentials: np.ndarray,
                                create_plot: bool = True,
                                axes: Optional[object] = None
                                ) -> object:

@@ -5,10 +5,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from networkx import MultiDiGraph
 
-from core.population import Population, PlasticPopulation, \
-    JansenRitPyramidalCells, JansenRitExcitatoryInterneurons, JansenRitInhibitoryInterneurons
-from core.utility import interpolate_array, check_nones
-from typing import List, Optional, Dict, Union, TypeVar
+from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
+from core.population import JansenRitPyramidalCells, JansenRitInterneurons
+from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
+from core.utility import interpolate_array, check_nones, set_instance
+from typing import List, Optional, Union, TypeVar, Callable
 PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
 
 
@@ -42,9 +43,6 @@ class Circuit(object):
     ----------
     populations
         See description of parameter `populations`
-    population_firing_rates
-        2D array with the firing rates of all populations (1.dim) at the current and previous time-step (2.dim)
-        [unit = 1/s].
     C
         See description of parameter `connectivity`.
     D
@@ -104,9 +102,6 @@ class Circuit(object):
         self.C = connectivity
         self.D = delays
 
-        # collector variables
-        self.synaptic_input = np.zeros((self.N + 1, self.n_synapses))
-
         # population specific properties
         for i in range(self.N):
 
@@ -145,13 +140,11 @@ class Circuit(object):
 
                         if self.C[i, j, k] > 0:
 
-                            if isinstance(self.populations[i], PlasticPopulation) and \
-                                    self.populations[i].plastic_synapses[k]:
+                            if hasattr(self.populations[i], 'synapse_plasticity_function') and \
+                                    self.populations[i].synapse_plasticity_function_params[k2]:
 
                                 # add synapse copy to population
-                                plasticity_dict = {'tau_depression': self.populations[i].tau_depression[k],
-                                                   'tau_recycle': self.populations[i].tau_recycle[k]}
-                                self.populations[i].add_synapse(synapse_idx=k, plasticity_taus=plasticity_dict,
+                                self.populations[i].add_synapse(synapse_idx=k2,
                                                                 max_firing_rate=self.populations[j].axon.
                                                                 transfer_function_args['max_firing_rate'] *
                                                                                 self.C[i, j, k])
@@ -171,13 +164,19 @@ class Circuit(object):
                                                             delay=int(self.D[i, j]),
                                                             synapse_index=k2)
 
+                    # turn of plasticity at original synapse
+                    if hasattr(self.populations[i], 'synapse_plasticity_function'):
+                        self.populations[i].synapse_plasticity_function_params[k2] = None
+
             self.active_synapses[i] += new_synapses
 
-    def run(self, synaptic_inputs: np.ndarray,
+    def run(self,
+            synaptic_inputs: np.ndarray,
             simulation_time: float,
-            extrinsic_current: Optional[np.ndarray]=None,
-            extrinsic_modulation: Optional[list]=None,
-            verbose: bool=False) -> None:
+            extrinsic_current: Optional[np.ndarray] = None,
+            extrinsic_modulation: Optional[list] = None,
+            verbose: bool = False
+            ) -> None:
         """Simulates circuit behavior over time.
 
         Parameters
@@ -244,8 +243,8 @@ class Circuit(object):
             self.pass_through_circuit()
 
             # update all population states
-            self.update_population_states(synaptic_inputs[n],
-                                          extrinsic_current[n],
+            self.update_population_states(synaptic_inputs[n, :, :],
+                                          extrinsic_current[n, :],
                                           extrinsic_modulation[n])
 
             # display simulation progress
@@ -310,7 +309,10 @@ class Circuit(object):
                     self.network_graph.node[pop]['data'].current_firing_rate * \
                     connected_pops[target_pop][conn_idx]['weight']
 
-    def get_population_states(self, state_variable_idx: int, time_window: Optional[List[float]]=None) -> np.ndarray:
+    def get_population_states(self,
+                              state_variable_idx: int,
+                              time_window: Optional[List[float]]=None
+                              ) -> np.ndarray:
         """Extracts specified state variable from populations and puts them into matrix.
 
         Parameters
@@ -349,9 +351,13 @@ class Circuit(object):
 
         return states
 
-    def plot_population_states(self, population_idx: Optional[List[int]]=None, state_idx: Optional[int] = 0,
-                               time_window: Optional[List[float]]=None, create_plot: Optional[bool]=True,
-                               axes=None) -> object:
+    def plot_population_states(self,
+                               population_idx: Optional[List[int]]=None,
+                               state_idx: int = 0,
+                               time_window: Optional[List[float]]=None,
+                               create_plot: bool = True,
+                               axes: Optional[object] = None
+                               ) -> object:
         """Creates figure with population states over time.
 
         Parameters
@@ -454,9 +460,6 @@ class CircuitFromScratch(Circuit):
         2D array containing the initial values for each state variable (2.dim) of each population (1.dim).
     population_labels
         Labels of populations.
-    plastic_populations
-        If true, populations will be instances of :class:`PlasticPopulation`
-
 
     See Also
     --------
@@ -466,21 +469,26 @@ class CircuitFromScratch(Circuit):
     def __init__(self,
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
-                 step_size: Optional[float] = 5e-4,
-                 synapses: Optional[List[str]]=None,
-                 axons: Optional[Union[str, List[str]]]=None,
-                 synapse_params: Optional[List[dict]]=None,
-                 max_synaptic_delay: Optional[Union[float, List[float]]]=0.05,
-                 synaptic_modulation_direction: Optional[List[List[np.ndarray]]]=None,
+                 step_size: float = 5e-4,
+                 synapses: Optional[List[str]] = None,
+                 axons: Optional[Union[str, List[str]]] = None,
+                 synapse_params: Optional[List[dict]] = None,
+                 max_synaptic_delay: Union[float, List[float]] = 0.05,
+                 synaptic_modulation_direction: Optional[List[List[np.ndarray]]] = None,
                  synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
-                 axon_params: Optional[List[dict]]=None,
+                 axon_params: Optional[List[dict]] = None,
                  axon_class: Union[str, List[str]] = 'SigmoidAxon',
-                 membrane_capacitance: Optional[Union[float, List[float]]]=1e-12,
-                 tau_leak: Optional[Union[float, List[float]]]=0.016,
-                 resting_potential: Optional[Union[float, List[float]]]=-0.075,
-                 init_states: Optional[np.ndarray]=0.,
-                 population_labels: Optional[List[str]]=None,
-                 plastic_populations: bool=False
+                 population_class: Union[List[str], str] = 'Population',
+                 membrane_capacitance: Union[float, List[float]] = 1e-12,
+                 tau_leak: Union[float, List[float]] = 0.016,
+                 resting_potential: Union[float, List[float]] = -0.075,
+                 init_states: Union[float, np.ndarray] = 0.,
+                 population_labels: Optional[List[str]] = None,
+                 axon_plasticity_function: Optional[List[Callable[[float], float]]] = None,
+                 axon_plasticity_target_param: Optional[List[str]] = None,
+                 axon_plasticity_function_params: Optional[List[dict]] = None,
+                 synapse_plasticity_function: Optional[List[Callable[[float], float]]] = None,
+                 synapse_plasticity_function_params: Optional[List[Union[List[dict], dict]]] = None,
                  ) -> None:
         """Instantiates circuit from synapse/axon types and parameters.
         """
@@ -538,12 +546,19 @@ class CircuitFromScratch(Circuit):
         axons = check_nones(axons, N)
         axon_params = check_nones(axon_params, N)
         synaptic_modulation_direction = check_nones(synaptic_modulation_direction, N)
+        axon_plasticity_function = check_nones(axon_plasticity_function, N)
+        axon_plasticity_target_param = check_nones(axon_plasticity_target_param, N)
+        axon_plasticity_function_params = check_nones(axon_plasticity_function_params, N)
+        synapse_plasticity_function = check_nones(synapse_plasticity_function, N)
+        synapse_plasticity_function_params = check_nones(synapse_plasticity_function_params, N)
         if not population_labels:
             population_labels = ['Custom' for i in range(N)]
         if type(synapse_class) is str:
             synapse_class = [synapse_class for i in range(n_synapses)]
         if type(axon_class) is str:
             axon_class = [axon_class for i in range(N)]
+        if type(population_class) is str:
+            population_class = [population_class for i in range(N)]
 
         # instantiate each population
         populations = list()
@@ -557,40 +572,45 @@ class CircuitFromScratch(Circuit):
             synapses_tmp = [synapses[j] for j in idx]
             synapse_params_tmp = [synapse_params[j] for j in idx]
             synapse_class_tmp = [synapse_class[j] for j in idx]
+            synapse_plasticity_function_params_tmp = [synapse_plasticity_function_params[i][j] for j in idx]
 
-            # pass parameters to function that initializes the population
-            if plastic_populations:
-                populations.append(PlasticPopulation(synapses=synapses_tmp,
-                                                     axon=axons[i],
-                                                     init_state=init_states[i],
-                                                     step_size=step_size,
-                                                     max_synaptic_delay=max_synaptic_delay[i],
-                                                     synaptic_modulation_direction=synaptic_modulation_direction[i],
-                                                     tau_leak=tau_leak[i],
-                                                     resting_potential=resting_potential[i],
-                                                     membrane_capacitance=membrane_capacitance[i],
-                                                     max_population_delay=max_population_delay[i],
-                                                     axon_params=axon_params[i],
-                                                     synapse_params=synapse_params_tmp,
-                                                     synapse_class=synapse_class_tmp,
-                                                     axon_class=axon_class[i],
-                                                     label=population_labels[i]))
+            # create dictionary with relevant parameters
+            pop_params = {'synapses': synapses_tmp,
+                          'axon': axons[i],
+                          'init_state': init_states[i],
+                          'step_size': step_size,
+                          'max_synaptic_delay': max_synaptic_delay[i],
+                          'max_population_delay': max_population_delay[i],
+                          'synapse_params': synapse_params_tmp,
+                          'axon_params': axon_params[i],
+                          'synapse_class': synapse_class_tmp,
+                          'axon_class': axon_class[i],
+                          'label': population_labels[i]}
+
+            # add plasticity parameters if necessary
+            if population_class[i] == 'SecondOrderPlasticPopulation' or population_class[i] == 'PlasticPopulation':
+                pop_params['axon_plasticity_function'] = axon_plasticity_function[i]
+                pop_params['axon_plasticity_target_param'] = axon_plasticity_target_param[i]
+                pop_params['axon_plasticity_function_params'] = axon_plasticity_function_params[i]
+                pop_params['synapse_plasticity_function'] = synapse_plasticity_function[i]
+                pop_params['synapse_plasticity_function_params'] = synapse_plasticity_function_params_tmp
+
+            # add first-order parameters if necessary
+            if population_class[i] == 'Population' or population_class[i] == 'PlasticPopulation':
+                pop_params['synaptic_modulation_direction'] = synaptic_modulation_direction[i]
+                pop_params['tau_leak'] = tau_leak[i]
+                pop_params['resting_potential'] = resting_potential[i]
+                pop_params['membrane_capacitance'] = membrane_capacitance[i]
+
+            # pass parameters to initialization function
+            if population_class[i] == 'SecondOrderPlasticPopulation':
+                populations.append(SecondOrderPlasticPopulation(**pop_params))
+            elif population_class[i] == 'SecondOrderPopulation':
+                populations.append(SecondOrderPopulation(**pop_params))
+            elif population_class[i] == 'PlasticPopulation':
+                populations.append(PlasticPopulation(**pop_params))
             else:
-                populations.append(Population(synapses=synapses_tmp,
-                                              axon=axons[i],
-                                              init_state=init_states[i],
-                                              step_size=step_size,
-                                              max_synaptic_delay=max_synaptic_delay[i],
-                                              synaptic_modulation_direction=synaptic_modulation_direction[i],
-                                              tau_leak=tau_leak[i],
-                                              resting_potential=resting_potential[i],
-                                              membrane_capacitance=membrane_capacitance[i],
-                                              max_population_delay=max_population_delay[i],
-                                              axon_params=axon_params[i],
-                                              synapse_params=synapse_params_tmp,
-                                              synapse_class=synapse_class_tmp,
-                                              axon_class=axon_class[i],
-                                              label=population_labels[i]))
+                populations.append(Population(**pop_params))
 
         ###################
         # call super init #
@@ -625,6 +645,8 @@ class CircuitFromPopulations(Circuit):
         Population resting-state membrane potential [unit = V].
     init_states
         2D array containing the initial values for each state variable (2.dim) of each population (1.dim).
+    population_class
+        Class names the population types refer to.
 
     See Also
     --------
@@ -635,14 +657,16 @@ class CircuitFromPopulations(Circuit):
                  population_types: List[str],
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
-                 step_size: Optional[float] = 5e-4,
-                 max_synaptic_delay: Optional[Union[float, List[float]]] = 0.05,
+                 step_size: float = 5e-4,
+                 max_synaptic_delay: Union[float, List[float]] = 0.05,
                  synaptic_modulation_direction: Optional[List[List[np.ndarray]]]=None,
-                 membrane_capacitance: Optional[Union[float, List[float]]]=1e-12,
-                 tau_leak: Optional[Union[float, List[float]]]=0.016,
-                 resting_potential: Optional[Union[float, List[float]]]=-0.075,
-                 init_states: Optional[np.ndarray]=0.,
-                 population_labels: Optional[List[str]]=None) -> None:
+                 membrane_capacitance: Union[float, List[float]] = 1e-12,
+                 tau_leak: Union[float, List[float]] = 0.016,
+                 resting_potential: Union[float, List[float]] = -0.075,
+                 init_states: Union[float, np.ndarray] = 0.,
+                 population_class: Union[List[str], str] = 'Population',
+                 population_labels: Optional[List[str]]=None
+                 ) -> None:
         """Instantiates circuit from population types and parameters.
         """
 
@@ -662,7 +686,7 @@ class CircuitFromPopulations(Circuit):
         N = len(population_types)
 
         # check information transmission delay
-        if not delays:
+        if delays is None:
             delays = np.zeros((N, N), dtype=int)
         else:
             delays = np.array(delays / step_size, dtype=int)
@@ -682,53 +706,36 @@ class CircuitFromPopulations(Circuit):
         if type(membrane_capacitance) is float:
             membrane_capacitance = np.zeros(N) + membrane_capacitance
 
-        # make None variables iterable
+        # make None/str variables iterable
         synaptic_modulation_direction = check_nones(synaptic_modulation_direction, N)
         if not population_labels:
             population_labels = ['Custom' for i in range(N)]
+        if type(population_class) is str:
+            population_class = [population_class for i in range(N)]
 
         # instantiate each population
         populations = list()
         for i in range(N):
 
-            if population_types[i] == 'JansenRitPyramidalCells':
-                pop = JansenRitPyramidalCells(init_state=init_states[i],
-                                              step_size=step_size,
-                                              max_synaptic_delay=max_synaptic_delay[i],
-                                              synaptic_modulation_direction=synaptic_modulation_direction[i],
-                                              tau_leak=tau_leak[i],
-                                              membrane_capacitance=membrane_capacitance[i],
-                                              resting_potential=resting_potential[i],
-                                              max_population_delay=max_population_delay[i],
-                                              label=population_labels[i])
+            # create parameter dict
+            pop_params = {'init_state': init_states[i],
+                          'step_size': step_size,
+                          'max_synaptic_delay': max_synaptic_delay[i],
+                          'max_population_delay': max_population_delay[i],
+                          'label': population_labels[i]}
 
-            elif population_types[i] == 'JansenRitExcitatoryInterneurons':
-                pop = JansenRitExcitatoryInterneurons(init_state=init_states[i],
-                                                      step_size=step_size,
-                                                      max_synaptic_delay=max_synaptic_delay[i],
-                                                      synaptic_modulation_direction=synaptic_modulation_direction[i],
-                                                      tau_leak=tau_leak[i],
-                                                      membrane_capacitance=membrane_capacitance[i],
-                                                      resting_potential=resting_potential[i],
-                                                      max_population_delay=max_population_delay[i],
-                                                      label=population_labels[i])
+            # pass parameters to instantiation function
+            if population_class[i] == 'SecondOrderPlasticPopulation':
+                populations.append(set_instance(SecondOrderPlasticPopulation, population_types[i], **pop_params))
 
-            elif population_types[i] == 'JansenRitInhibitoryInterneurons':
-                pop = JansenRitInhibitoryInterneurons(init_state=init_states[i],
-                                                      step_size=step_size,
-                                                      max_synaptic_delay=max_synaptic_delay[i],
-                                                      synaptic_modulation_direction=synaptic_modulation_direction[i],
-                                                      tau_leak=tau_leak[i],
-                                                      membrane_capacitance=membrane_capacitance[i],
-                                                      resting_potential=resting_potential[i],
-                                                      max_population_delay=max_population_delay[i],
-                                                      label=population_labels[i])
+            elif population_class[i] == 'SecondOrderPopulation':
+                populations.append(set_instance(SecondOrderPopulation, population_types[i], **pop_params))
+
+            elif population_class[i] == 'PlasticPopulation':
+                populations.append(set_instance(PlasticPopulation, population_types[i], **pop_params))
 
             else:
-                raise ValueError('Population type does not exist. See docstring of parameter `population_types` for '
-                                 'further information.')
-
-            populations.append(pop)
+                populations.append(set_instance(Population, population_types[i], **pop_params))
 
         ###################
         # call super init #
@@ -767,10 +774,11 @@ class CircuitFromCircuit(Circuit):
     def __init__(self,
                  circuits: List[Circuit],
                  connectivity: np.ndarray,
-                 delays: Optional[np.ndarray]=None,
-                 input_populations: Optional[np.ndarray]=None,
-                 output_populations: Optional[np.ndarray]=None,
-                 circuit_labels: Optional[List[str]]=None) -> None:
+                 delays: Optional[np.ndarray] = None,
+                 input_populations: Optional[np.ndarray] = None,
+                 output_populations: Optional[np.ndarray] = None,
+                 circuit_labels: Optional[List[str]] = None
+                 ) -> None:
         """Instantiates circuit from population types and parameters.
         """
 

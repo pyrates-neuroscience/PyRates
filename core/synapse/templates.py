@@ -1,7 +1,8 @@
 """Templates for specific synapse parametrizations.
 """
 
-from core.synapse import DoubleExponentialSynapse
+from core.synapse import DoubleExponentialSynapse, ExponentialSynapse
+from typing import Optional
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
@@ -9,8 +10,6 @@ __status__ = "Development"
 
 class AMPACurrentSynapse(DoubleExponentialSynapse):
     """Current-based synapse with AMPA neuroreceptor.
-
-    Corresponds to the excitatory synapse described in [1]_.
 
     Parameters
     ----------
@@ -29,11 +28,6 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
     --------
     :class:`DoubleExponentialSynapse`: Detailed documentation of parameters of double exponential synapse.
     :class:`Synapse`: Detailed documentation of synapse attributes and methods.
-
-    References
-    ----------
-    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
-       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
     """
 
@@ -55,8 +49,6 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
 class GABAACurrentSynapse(DoubleExponentialSynapse):
     """Current-based synapse with GABA_A neuroreceptor.
 
-    Corresponds to the inhibitory synapse described in [1]_.
-
     Parameters
     ----------
     bin_size
@@ -74,11 +66,6 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
     --------
     :class:`DoubleExponentialSynapse`: Detailed documentation of parameters of double exponential synapse.
     :class:`Synapse`: Detailed documentation of synapse attributes and methods.
-
-    References
-    ----------
-    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
-       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
     """
 
@@ -172,12 +159,176 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
         Instantiates a current-based synapse with GABA_A receptor.
         """
 
-        super(GABAAConductanceSynapse, self).__init__(efficacy=efficacy,
-                                                      tau_decay=tau_decay,
-                                                      tau_rise=tau_rise,
-                                                      bin_size=bin_size,
-                                                      max_delay=max_delay,
-                                                      reversal_potential=reversal_potential,
-                                                      synapse_type='GABAA_current',
-                                                      modulatory=False,
-                                                      conductivity_based=True)
+        super().__init__(efficacy=efficacy,
+                         tau_decay=tau_decay,
+                         tau_rise=tau_rise,
+                         bin_size=bin_size,
+                         max_delay=max_delay,
+                         reversal_potential=reversal_potential,
+                         synapse_type='GABAA_current',
+                         modulatory=False,
+                         conductivity_based=True)
+
+
+class JansenRitExcitatorySynapse(ExponentialSynapse):
+    """Excitatory second-order synapse as defined in [1]_.
+
+        Parameters
+        ----------
+        bin_size
+            See documentation of parameter `bin_size` of :class:`Synapse`.
+        epsilon
+            See documentation of parameter `epsilon` of :class:`Synapse`.
+        max_delay
+            See documentation of parameter `max_delay` of :class:`Synapse`.
+        efficacy
+            Default = 3.25 * 1e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
+        tau
+            Default = 0.01 s. See Also documentation of parameter `tau` of :class:`ExponentialSynapse`.
+
+        See Also
+        --------
+        :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
+        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+
+        References
+        ----------
+        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
+           model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
+        """
+
+    def __init__(self, bin_size: float, epsilon: float = 5e-5, max_delay: Optional[float] = None,
+                 efficacy: float = 3.25 * 1e-3, tau: float = 0.01) -> None:
+        """Initializes excitatory exponential synapse as defined in [1]_.
+        """
+
+        super().__init__(efficacy=efficacy,
+                         tau=tau,
+                         bin_size=bin_size,
+                         epsilon=epsilon,
+                         max_delay=max_delay,
+                         synapse_type='JR_excitatory')
+
+
+class JansenRitInhibitorySynapse(ExponentialSynapse):
+    """Inhibitory second-order synapse as defined in [1]_.
+
+        Parameters
+        ----------
+        bin_size
+            See documentation of parameter `bin_size` of :class:`Synapse`.
+        epsilon
+            See documentation of parameter `epsilon` of :class:`Synapse`.
+        max_delay
+            See documentation of parameter `max_delay` of :class:`Synapse`.
+        efficacy
+            Default = -22 * 1e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
+        tau
+            Default = 0.02 s. See Also documentation of parameter `tau` of :class:`ExponentialSynapse`.
+
+        See Also
+        --------
+        :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
+        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+
+        References
+        ----------
+        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
+           model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
+        """
+
+    def __init__(self, bin_size: float, epsilon: float = 5e-5, max_delay: Optional[float] = None,
+                 efficacy: float = -22e-3, tau: float = 0.02) -> None:
+        """Initializes excitatory exponential synapse as defined in [1]_.
+        """
+
+        super().__init__(efficacy=efficacy,
+                         tau=tau,
+                         bin_size=bin_size,
+                         epsilon=epsilon,
+                         max_delay=max_delay,
+                         synapse_type='JR_inhibitory')
+
+
+class MoranExcitatorySynapse(ExponentialSynapse):
+    """Excitatory second-order synapse as defined in [1]_.
+
+        Parameters
+        ----------
+        bin_size
+            See documentation of parameter `bin_size` of :class:`Synapse`.
+        epsilon
+            See documentation of parameter `epsilon` of :class:`Synapse`.
+        max_delay
+            See documentation of parameter `max_delay` of :class:`Synapse`.
+        efficacy
+            Default = 4e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
+        tau
+            Default = 4e-3 s. See Also documentation of parameter `tau` of :class:`ExponentialSynapse`.
+
+        See Also
+        --------
+        :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
+        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+
+        References
+        ----------
+        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
+           model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
+        """
+
+    def __init__(self, bin_size: float, epsilon: float = 5e-5, max_delay: Optional[float] = None,
+                 efficacy: float = 4e-3, tau: float = 4e-3) -> None:
+        """Initializes excitatory exponential synapse as defined in [1]_.
+        """
+
+        super().__init__(efficacy=efficacy,
+                         tau=tau,
+                         bin_size=bin_size,
+                         epsilon=epsilon,
+                         max_delay=max_delay,
+                         synapse_type='Moran_excitatory')
+
+
+class MoranInhibitorySynapse(ExponentialSynapse):
+    """Inhibitory second-order synapse as defined in [1]_.
+
+        Parameters
+        ----------
+        bin_size
+            See documentation of parameter `bin_size` of :class:`Synapse`.
+        epsilon
+            See documentation of parameter `epsilon` of :class:`Synapse`.
+        max_delay
+            See documentation of parameter `max_delay` of :class:`Synapse`.
+        efficacy
+            Default = -32e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
+        tau
+            Default = 16e-3 s. See Also documentation of parameter `tau` of :class:`ExponentialSynapse`.
+
+        See Also
+        --------
+        :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
+        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+
+        References
+        ----------
+        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
+           model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
+        """
+
+    def __init__(self, bin_size: float, epsilon: float = 5e-5, max_delay: Optional[float] = None,
+                 efficacy: float = -32e-3, tau: float = 16e-3) -> None:
+        """Initializes excitatory exponential synapse as defined in [1]_.
+        """
+
+        super().__init__(efficacy=efficacy,
+                         tau=tau,
+                         bin_size=bin_size,
+                         epsilon=epsilon,
+                         max_delay=max_delay,
+                         synapse_type='Moran_inhibitory')

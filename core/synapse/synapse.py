@@ -132,6 +132,9 @@ class Synapse(object):
         else:
             self.kernel_scaling = lambda membrane_potential: 1.
 
+        # set synaptic depression (for plasticity mechanisms)
+        self.depression = 1.0
+
         #########################
         # build synaptic kernel #
         #########################
@@ -184,8 +187,10 @@ class Synapse(object):
             while True:
                 time_points.append(time_points[-1] + self.bin_size)
                 kernel_val_tmp = self.kernel_function(time_points[-1], **self.kernel_function_args) * self.efficacy
-                if kernel_val_tmp - kernel_val < 0. and abs(kernel_val_tmp) < self.epsilon:
-                    break
+                if ((kernel_val_tmp - kernel_val < 0.) and (self.efficacy > 0.)) or \
+                        ((kernel_val - kernel_val_tmp < 0.) and (self.efficacy < 0.)):
+                    if abs(kernel_val_tmp) < self.epsilon:
+                        break
                 kernel_val = kernel_val_tmp
             time_points = np.flip(np.asarray(time_points), axis=0)
 
@@ -222,7 +227,7 @@ class Synapse(object):
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
-        return kernel_value * self.kernel_scaling(membrane_potential)
+        return kernel_value * self.kernel_scaling(membrane_potential) * self.depression
 
     def plot_synaptic_kernel(self,
                              create_plot: bool = True,
@@ -254,7 +259,7 @@ class Synapse(object):
 
         # plot synaptic kernel
         # plt.hold('on')  # deprecated
-        axes.plot(self.synaptic_kernel[-1:0:-1])
+        axes.plot(self.synaptic_kernel[-1:0:-1] * self.depression)
         # plt.hold('off')  # deprecated
 
         # set figure labels
@@ -367,3 +372,87 @@ class DoubleExponentialSynapse(Synapse):
                          synapse_type=synapse_type,
                          tau_rise=tau_rise,
                          tau_decay=tau_decay)
+
+
+class ExponentialSynapse(Synapse):
+    """Basic synapse class. Represents average behavior of a defined post-synapse of a population. Follows definition of
+    [1]_.
+
+    Parameters
+    ----------
+    efficacy
+        See documentation of parameter `efficacy` in :class:`Synapse`.
+    tau
+        Lumped time delay constant that determines the shape of the exponential synaptic kernel [unit = s].
+    bin_size
+        See documentation of parameter `bin_size` in :class:`Synapse`.
+    max_delay
+        See documentation of parameter `max_delay` in :class:`Synapse`.
+    synapse_type
+        Name of synapse type (default = None).
+
+    See Also
+    --------
+    :class:`Synapse`: documentation for a detailed description of the object attributes and methods.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
+    """
+
+    def __init__(self,
+                 efficacy: float,
+                 tau: float,
+                 bin_size: float = 5e-4,
+                 epsilon: float = 1e-5,
+                 max_delay: float = None,
+                 synapse_type: Optional[str] = None
+                 ) -> None:
+
+        ##########################
+        # check input parameters #
+        ##########################
+
+        if tau < 0.:
+            raise ValueError('Time constant tau cannot be negative. See docstring for further information.')
+
+        ##########################
+        # define kernel function #
+        ##########################
+
+        def exponential(time_points: Union[float, np.ndarray],
+                        tau: float,
+                        ) -> Union[float, np.ndarray]:
+            """Uses exponential function to calculate synaptic kernel value for each passed time-point.
+
+            Parameters
+            ----------
+            time_points : Union[float, np.ndarray]
+                Vector of time-points for which to calculate kernel value [unit = s].
+            tau
+                See parameter documentation of `tau` of :class:`ExponentialSynapse`.
+
+            Returns
+            -------
+            Union[float, np.ndarray]
+                Kernel values at the time-points [unit = S if conductivity based else A].
+
+            """
+
+            return time_points * np.exp(-time_points / tau) / tau
+
+        ###################
+        # call super init #
+        ###################
+
+        super().__init__(kernel_function=exponential,
+                         efficacy=efficacy,
+                         bin_size=bin_size,
+                         epsilon=epsilon,
+                         max_delay=max_delay,
+                         synapse_type=synapse_type,
+                         conductivity_based=False,
+                         modulatory=False,
+                         tau=tau)
