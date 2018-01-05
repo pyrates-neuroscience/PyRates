@@ -751,6 +751,8 @@ class PlasticPopulation(Population):
         self.axon_plasticity_function = axon_plasticity_function
         self.axon_plasticity_target_param = axon_plasticity_target_param
         self.axon_plasticity_function_params = axon_plasticity_function_params
+        if self.axon_plasticity_function:
+            self.state_variables[-1] += [self.axon.transfer_function_args[self.axon_plasticity_target_param]]
 
         # for synapses
         self.synapse_plasticity_function = synapse_plasticity_function
@@ -759,6 +761,10 @@ class PlasticPopulation(Population):
         else:
             self.synapse_plasticity_function_params = [synapse_plasticity_function_params
                                                        for i in range(self.n_synapses)]
+        if self.synapse_plasticity_function:
+            for i in range(self.n_synapses):
+                if self.synapse_plasticity_function_params[i]:
+                    self.state_variables[-1] += [self.synapses[i].depression]
 
     def state_update(self,
                      synaptic_input: np.ndarray,
@@ -794,6 +800,7 @@ class PlasticPopulation(Population):
 
         if self.axon_plasticity_function:
 
+            # update axon
             self.axon.transfer_function_args[self.axon_plasticity_target_param] = \
                 Population.take_step(self,
                                      f=self.axon_plasticity_function,
@@ -801,19 +808,29 @@ class PlasticPopulation(Population):
                                      firing_rate_target=self.current_firing_rate,
                                      **self.axon_plasticity_function_params)
 
+            # update state vector
+            self.state_variables[-1] += [self.axon.transfer_function_args[self.axon_plasticity_target_param]]
+
         ###########################
         # update synaptic scaling #
         ###########################
 
         if self.synapse_plasticity_function:
+
             for i in range(self.n_synapses):
+
                 if self.synapse_plasticity_function_params[i]:
+
+                    # update synaptic depression
                     self.synapses[i].depression = Population.take_step(self,
                                                                        f=self.synapse_plasticity_function,
                                                                        y_old=self.synapses[i].depression,
                                                                        firing_rate=self.synaptic_input[
                                                                        self.current_input_idx[i] - 1, i],
                                                                        **self.synapse_plasticity_function_params[i])
+
+                    # update state vector
+                    self.state_variables[-1] += [self.synapses[i].depression]
 
     def add_synapse(self,
                     synapse: Optional[object] = None,
