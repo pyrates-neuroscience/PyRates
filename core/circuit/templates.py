@@ -229,6 +229,7 @@ class MoranCircuit(CircuitFromPopulations):
     def __init__(self,
                  resting_potential: float = 0.0,
                  step_size: float = 5e-4,
+                 max_synaptic_delays: Optional[float] = None,
                  delays: Optional[np.ndarray] = None,
                  init_states: np.ndarray = np.zeros(3)
                  ) -> None:
@@ -271,6 +272,7 @@ class MoranCircuit(CircuitFromPopulations):
                          population_types=['MoranPyramidalCells',
                                            'MoranExcitatoryInterneurons',
                                            'MoranInhibitoryInterneurons'],
+                         max_synaptic_delay=max_synaptic_delays,
                          delays=delays,
                          step_size=step_size,
                          resting_potential=resting_potential,
