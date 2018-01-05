@@ -3,7 +3,7 @@
 
 import numpy as np
 import inspect
-from typing import List, Dict, Union, Optional, Callable, TypeVar
+from typing import List, Dict, Union, Optional, Callable, TypeVar, Any, overload
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -19,7 +19,7 @@ __status__ = "Development"
 #############
 
 
-def set_instance(class_handle: type, instance_type: str=None, instance_params: dict=None, **kwargs) -> object:
+def set_instance(class_handle: type, instance_type: Optional[str]=None, instance_params: dict=None, **kwargs) -> object:
     """Instantiates object of `class_handle` and returns instance.
 
     Parameters
@@ -209,7 +209,20 @@ def get_euclidean_distances(positions: np.ndarray) -> np.ndarray:
     return D
 
 
-def check_nones(param: Optional[Union[str, dict]], n: int) -> Union[str, dict, List[None]]:
+T = TypeVar("T")
+
+
+@overload
+def check_nones(param: object, n: int) -> object:
+    ...
+
+
+@overload
+def check_nones(param: None, n: int) -> List[None]:
+    ...
+
+
+def check_nones(param, n):
     """Checks whether param is None. If yes, it returns a list of n Nones. If not, the param is returned.
 
     Parameters
@@ -226,4 +239,4 @@ def check_nones(param: Optional[Union[str, dict]], n: int) -> Union[str, dict, L
 
     """
 
-    return [None for i in range(n)] if param is None else param
+    return [None for _ in range(n)] if param is None else param
