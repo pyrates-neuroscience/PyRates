@@ -61,7 +61,20 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
         """Instantiates JansenRit PC population with second order synapses and Jansen-Rit axon.
         """
 
+        ############################
+        # check synapse parameters #
+        ############################
+
+        # synapse type
         synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
+
+        # synapse delay
+        if not max_synaptic_delay and not synapse_params:
+            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+
+        ###################
+        # call super init #
+        ###################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -129,7 +142,20 @@ class JansenRitInterneurons(SecondOrderPopulation):
         """Instantiates JansenRit interneuron population with second order synapse and Jansen-Rit axon.
         """
 
+        ############################
+        # check synapse parameters #
+        ############################
+
+        # synapse type
         synapses = ['JansenRitExcitatorySynapse'] if not synapses else synapses
+
+        # synapse delay
+        if not max_synaptic_delay and not synapse_params:
+            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+
+        ###################
+        # call super init #
+        ###################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -198,7 +224,20 @@ class MoranPyramidalCells(SecondOrderPopulation):
         """Instantiates a population as defined in [1]_.
         """
 
+        ############################
+        # check synapse parameters #
+        ############################
+
+        # synapse type
         synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
+
+        # synapse delay
+        if not max_synaptic_delay and not synapse_params:
+            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+
+        ###################
+        # call super init #
+        ###################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -272,7 +311,16 @@ class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
         """
 
+        ############################
+        # check synapse parameters #
+        ############################
+
+        # synapse type
         synapses = ['MoranExcitatorySynapse'] if not synapses else synapses
+
+        # synapse delay
+        if not max_synaptic_delay and not synapse_params:
+            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
 
         ###############################################
         # define spike frequency adaptation mechanism #
@@ -383,7 +431,20 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
         """
 
+        ############################
+        # check synapse parameters #
+        ############################
+
+        # synapse type
         synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
+
+        # synapse delay
+        if not max_synaptic_delay and not synapse_params:
+            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+
+        ###################
+        # call super init #
+        ###################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -464,8 +525,19 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
         """Instantiates a population as defined in [1]_ with a synaptic efficacy adaptation mechanism.
         """
 
+        #####################
+        # check synapse parameters #
+        ############################
+
+        # synapse type
         synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
+
+        # synaptic plasticity
         plastic_synapses = [True, False] if not plastic_synapses else plastic_synapses
+
+        # synapse delay
+        if not max_synaptic_delay and not synapse_params:
+            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
 
         ########################################
         # define synaptic adaptation mechanism #
