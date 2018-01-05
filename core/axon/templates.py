@@ -143,7 +143,7 @@ class MoranAxon(Axon):
         # call super init #
         ###################
 
-        super().__init__(sigmoid,
+        super().__init__(sigmoid,  # type: ignore
                          'Moran_Axon',
                          max_firing_rate=max_firing_rate,
                          membrane_potential_threshold=membrane_potential_threshold,
