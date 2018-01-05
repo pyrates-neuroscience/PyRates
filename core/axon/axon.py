@@ -38,7 +38,7 @@ class Axon(object):
     """
 
     def __init__(self,
-                 transfer_function: Callable[[float, ...], float],
+                 transfer_function: Callable[..., float],
                  axon_type: Optional[str] = None,
                  **transfer_function_args
                  ) -> None:

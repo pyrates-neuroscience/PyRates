@@ -70,7 +70,7 @@ class Synapse(object):
 
     """
 
-    def __init__(self, kernel_function: Callable[[float, ...], float],
+    def __init__(self, kernel_function: Callable[..., float],
                  efficacy: float,
                  bin_size: float,
                  epsilon: float = 1e-14,
