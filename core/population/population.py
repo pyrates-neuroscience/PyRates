@@ -828,8 +828,6 @@ class PlasticPopulation(Population):
             Synapse object to add (default = None)
         synapse_idx
             Index of synapse to copy (default = None).
-        plasticity_taus
-            Contains tau_depression and tau_recycle. If passed, plasticity mechanism is added (default = None).
         max_firing_rate
             Maximum firing rate of connecting population. Used for synaptic plasticity mechanism (default = None).
 

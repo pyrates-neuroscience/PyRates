@@ -16,7 +16,7 @@ class JansenRitAxon(SigmoidAxon):
     max_firing_rate
         Default = 5.0 Hz. See documentation of parameter 'max_firing_rate' of :class:`SigmoidAxon`.
     membrane_potential_threshold
-        Default = -0.06 V. See documentation of parameter 'membrane_potential_threshold' of :class:`SigmoidAxon`.
+        Default = 0.006 V. See documentation of parameter 'membrane_potential_threshold' of :class:`SigmoidAxon`.
     sigmoid_steepness
         Default = 560.0 Hz. See documentation of parameter 'sigmoid_steepness' of :class:`SigmoidAxon`.
 
@@ -81,9 +81,14 @@ class MoranAxon(Axon):
     Parameters
     ----------
     max_firing_rate
+        Default = 1.0 Hz. See documentation of parameter 'max_firing_rate' of :class:`SigmoidAxon`.
     sigmoid_steepness
+        Default = 2000 Hz. See documentation of parameter 'sigmoid_steepness' of :class:`SigmoidAxon`.
     membrane_potential_threshold
-    adaption
+        Default = 0.001 V. See documentation of parameter 'membrane_potential_threshold' of :class:`SigmoidAxon`.
+    adaptation
+        Default = 0. V. Added to incoming membrane potential of transfer function to account for spike frequency
+        adaptation.
 
     See Also
     --------
@@ -100,15 +105,38 @@ class MoranAxon(Axon):
                  max_firing_rate: float = 1.,
                  sigmoid_steepness: float = 2000.,
                  membrane_potential_threshold: float = 0.001,
-                 adaption: float = 0.):
+                 adaptation: float = 0.):
 
         ###########################################
         # sigmoidal transfer function (de-meaned) #
         ###########################################
 
-        def sigmoid(membrane_potential, max_firing_rate, membrane_potential_threshold, sigmoid_steepness, adaption):
+        def sigmoid(membrane_potential,
+                    max_firing_rate,
+                    membrane_potential_threshold,
+                    sigmoid_steepness,
+                    adaptation):
+            """
+
+            Parameters
+            ----------
+            membrane_potential
+                See above parameter description.
+            max_firing_rate
+                See above parameter description.
+            membrane_potential_threshold
+                See above parameter description.
+            sigmoid_steepness
+                See above parameter description.
+            adaptation
+                See above parameter description.
+
+            Returns
+            -------
+
+            """
             return max_firing_rate / (1 + np.exp(sigmoid_steepness *
-                                                 (membrane_potential_threshold - membrane_potential + adaption))) - \
+                                                 (membrane_potential_threshold - membrane_potential + adaptation))) - \
                    max_firing_rate / (1 + np.exp(sigmoid_steepness * membrane_potential_threshold))
 
         ###################
@@ -120,4 +148,4 @@ class MoranAxon(Axon):
                          max_firing_rate=max_firing_rate,
                          membrane_potential_threshold=membrane_potential_threshold,
                          sigmoid_steepness=sigmoid_steepness,
-                         adaption=adaption)
+                         adaptation=adaptation)

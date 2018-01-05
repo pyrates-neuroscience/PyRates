@@ -21,7 +21,7 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
     init_state
         Default = 0 V.
     step_size
-        Default = 0.0001 s.
+        Default = 0.0005 s.
     max_synaptic_delay
         Default = 0.1 s.
     max_population_delay
@@ -32,10 +32,12 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
         Default = None.
     store_state_variables
         Default = False.
+    label
+        Default = 'JR_PCs'
 
     See Also
     --------
-    :class:`Population`: Detailed documentation of population parameters, attributes and methods.
+    :class:`SecondOrderPopulation`: Detailed documentation of 2. order population parameters, attributes and methods.
 
     References
     ----------
@@ -45,11 +47,11 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
     """
 
     def __init__(self,
-                 synapses: List[str] = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'],
+                 synapses: Optional[List[str]] = None,
                  axon: str = 'JansenRitAxon',
                  init_state: float = 0.,
                  step_size: float = 5e-4,
-                 max_synaptic_delay: float = 0.05,
+                 max_synaptic_delay: Optional[float] = None,
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
@@ -58,6 +60,8 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
                  ) -> None:
         """Instantiates JansenRit PC population with second order synapses and Jansen-Rit axon.
         """
+
+        synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -85,7 +89,7 @@ class JansenRitInterneurons(SecondOrderPopulation):
     init_state
         Default = 0 V.
     step_size
-        Default = 0.0001 s.
+        Default = 0.0005 s.
     max_synaptic_delay
         Default = 0.1 s.
     max_population_delay
@@ -96,10 +100,12 @@ class JansenRitInterneurons(SecondOrderPopulation):
         Default = None.
     store_state_variables
         Default = False.
+    label
+        Default = 'JR_INs'
 
     See Also
     --------
-    :class:`Population`: Detailed documentation of population parameters, attributes and methods.
+    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
@@ -109,11 +115,11 @@ class JansenRitInterneurons(SecondOrderPopulation):
     """
 
     def __init__(self,
-                 synapses: List[str] = ['JansenRitExcitatorySynapse'],
+                 synapses: Optional[List[str]] = None,
                  axon: str = 'JansenRitAxon',
                  init_state: float = 0.,
                  step_size: float = 5e-4,
-                 max_synaptic_delay: float = 0.05,
+                 max_synaptic_delay: Optional[float] = None,
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
@@ -122,6 +128,8 @@ class JansenRitInterneurons(SecondOrderPopulation):
                  ) -> None:
         """Instantiates JansenRit interneuron population with second order synapse and Jansen-Rit axon.
         """
+
+        synapses = ['JansenRitExcitatorySynapse'] if not synapses else synapses
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -142,19 +150,41 @@ class MoranPyramidalCells(SecondOrderPopulation):
 
     Parameters
     ----------
+    synapses
+        Default = MoranExcitatorySynapse, MoranInhibitorySynapse
+    axon
+        Default = MoranAxon.
+    init_state
+        Default = 0 V.
+    step_size
+        Default = 0.0005 s.
+    max_synaptic_delay
+        Default = None
+    max_population_delay
+        Default = 0.
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
+    store_state_variables
+        Default = False.
+    label
+        Default = 'Moran_PCs'
 
     See Also
     --------
+    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
-
+    .. [1] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
+       Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
     """
     def __init__(self,
-                 synapses: List[str] = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'],
+                 synapses: Optional[List[str]] = None,
                  axon: str = 'MoranAxon',
                  init_state: float = 0.,
-                 step_size: float = 0.0001,
+                 step_size: float = 5e-4,
                  max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
                  resting_potential: float = 0.,
                  max_population_delay: float = 0.,
@@ -163,10 +193,12 @@ class MoranPyramidalCells(SecondOrderPopulation):
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'Axon',
                  store_state_variables: bool = False,
-                 label: str = 'MoranCells'
+                 label: str = 'Moran_PCs'
                  ) -> None:
         """Instantiates a population as defined in [1]_.
         """
+
+        synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -189,17 +221,40 @@ class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
 
     Parameters
     ----------
+    synapses
+        Default = MoranExcitatorySynapse.
+    axon
+        Default = MoranAxon.
+    init_state
+        Default = 0 V.
+    step_size
+        Default = 0.0005 s.
+    max_synaptic_delay
+        Default = None
+    max_population_delay
+        Default = 0.
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
+    store_state_variables
+        Default = False.
+    label
+        Default = 'Moran_EINs'
 
     See Also
     --------
+    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
+    .. [1] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
+       Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
 
     """
 
     def __init__(self,
-                 synapses: List[str] = ['MoranExcitatorySynapse'],
+                 synapses: Optional[List[str]] = None,
                  axon: str = 'MoranAxon',
                  init_state: float = 0.,
                  step_size: float = 0.0001,
@@ -212,24 +267,32 @@ class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
                  axon_class: str = 'Axon',
                  store_state_variables: bool = False,
                  tau: float = 0.512,
-                 label: str = 'MoranCells'
+                 label: str = 'Moran_EINs'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
         """
+
+        synapses = ['MoranExcitatorySynapse'] if not synapses else synapses
 
         ###############################################
         # define spike frequency adaptation mechanism #
         ###############################################
 
         # function
-        def spike_frequency_adaptation(adaption, firing_rate_target, tau):
+        def spike_frequency_adaptation(adaptation: float,
+                                       firing_rate_target: float,
+                                       tau: float
+                                       ) -> float:
             """Calculates adaption in sigmoid threshold of axonal transfer function.
 
             Parameters
             ----------
-            adaption
+            adaptation
+                Determines strength of spike-frequency-adaptation [unit = V].
             firing_rate_target
+                Target firing rate towards which spike frequency is adapted [unit = 1/s].
             tau
+                Time constant of adaptation process [unit = s].
 
             Returns
             -------
@@ -238,7 +301,7 @@ class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
 
             """
 
-            return (firing_rate_target - adaption) / tau
+            return (firing_rate_target - adaptation) / tau
 
         # adaptation time constant
         params = {'tau': tau}
@@ -260,7 +323,7 @@ class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
                          axon_class=axon_class,
                          store_state_variables=store_state_variables,
                          axon_plasticity_function=spike_frequency_adaptation,
-                         axon_plasticity_target_param='adaption',
+                         axon_plasticity_target_param='adaptation',
                          axon_plasticity_function_params=params,
                          label=label)
 
@@ -270,17 +333,40 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
 
     Parameters
     ----------
+    synapses
+        Default = MoranExcitatorySynapse, MoranInhibitorySynapse
+    axon
+        Default = MoranAxon.
+    init_state
+        Default = 0 V.
+    step_size
+        Default = 0.0005 s.
+    max_synaptic_delay
+        Default = None
+    max_population_delay
+        Default = 0.
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
+    store_state_variables
+        Default = False.
+    label
+        Default = 'Moran_IINs'
 
     See Also
     --------
+    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
+    .. [1] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
+       Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
 
     """
 
     def __init__(self,
-                 synapses: List[str] = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'],
+                 synapses: Optional[List[str]] = None,
                  axon: str = 'MoranAxon',
                  init_state: float = 0.,
                  step_size: float = 0.0001,
@@ -292,10 +378,12 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'Axon',
                  store_state_variables: bool = False,
-                 label: str = 'MoranCells'
+                 label: str = 'Moran_IINs'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
         """
+
+        synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -318,19 +406,48 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
 
     Parameters
     ----------
+    synapses
+        Default = JansenRitExcitatorySynapse, JansenRitInhibitorySynapse
+    axon
+        Default = JansenRitAxon.
+    init_state
+        Default = 0 V.
+    step_size
+        Default = 0.0005 s.
+    max_synaptic_delay
+        Default = None
+    max_population_delay
+        Default = 0.
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
+    store_state_variables
+        Default = False.
+    label
+        Default = 'WangKnoeschePopulation'
+    tau_depression
+        Default = 0.05 s. Defines synaptic depression time constant.
+    tau_recycle
+        Default = 0.5 s. Defines synaptic recycling time constant.
+    plastic_synapses
+        Default = [True, False]. Defines which synapses are plastic and which are not.
 
     See Also
     --------
+    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
+    .. [1] P. Wang & T.R. Knoesche, "A realistic neural mass model of the cortex with laminar-specific connections and
+       synaptic plasticity-evaluation with auditory habituation." PloS one, vol. 8(10): e77876, 2013.
 
     """
     def __init__(self,
-                 synapses: List[str] = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'],
+                 synapses: Optional[List[str]] = None,
                  axon: str = 'JansenRitAxon',
                  init_state: float = 0.,
-                 step_size: float = 0.0001,
+                 step_size: float = 5e-4,
                  max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
                  resting_potential: float = 0.,
                  max_population_delay: float = 0.,
@@ -339,29 +456,42 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = False,
-                 label: str = 'MoranCells',
+                 label: str = 'WangKnoeschePopulation',
                  tau_depression: float = 0.05,
                  tau_recycle: float = 0.5,
-                 plastic_synapses: List[bool] = [True, False]
+                 plastic_synapses: Optional[List[bool]] = None
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a synaptic efficacy adaptation mechanism.
         """
+
+        synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
+        plastic_synapses = [True, False] if not plastic_synapses else plastic_synapses
 
         ########################################
         # define synaptic adaptation mechanism #
         ########################################
 
         # function
-        def synaptic_efficacy_adaptation(efficacy, firing_rate, max_firing_rate, tau_depression, tau_recycle):
+        def synaptic_efficacy_adaptation(efficacy: float,
+                                         firing_rate: float,
+                                         max_firing_rate: float,
+                                         tau_depression: float,
+                                         tau_recycle: float
+                                         ) -> float:
             """Calculates synaptic efficacy change.
 
             Parameters
             ----------
             efficacy
+                Synaptic efficacy, See 'efficacy' parameter documentation of :class:`Synapse`.
             firing_rate
+                Pre-synaptic firing rate [unit = 1/s].
             max_firing_rate
+                Maximum pre-synaptic firing rate [unit = 1/s].
             tau_depression
+                Defines synaptic depression time constant [unit = s].
             tau_recycle
+                Defines synaptic recycling time constant [unit = s].
 
             Returns
             -------

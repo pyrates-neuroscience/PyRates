@@ -1,7 +1,7 @@
 """Module that includes basic axon class plus parametrized derivations of it.
 
 This module includes a basic axon class and parametric sub-classes that can calculate average firing rates from
-average membrane potentials. Its behavior approximates the average axon hillok of a homogenous neural population.
+average membrane potentials. Its behavior approximates the average axon hillok of a homogeneous neural population.
 
 """
 
@@ -38,7 +38,7 @@ class Axon(object):
     """
 
     def __init__(self,
-                 transfer_function: Callable[[float], float],
+                 transfer_function: Callable[[float, ...], float],
                  axon_type: Optional[str] = None,
                  **transfer_function_args
                  ) -> None:
@@ -173,6 +173,7 @@ class SigmoidAxon(Axon):
         # define sigmoidal transfer function #
         ######################################
 
+
         def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
                                max_firing_rate: float,
                                membrane_potential_threshold: float,
@@ -205,11 +206,11 @@ class SigmoidAxon(Axon):
         # call super init #
         ###################
 
-        super(SigmoidAxon, self).__init__(transfer_function=parametric_sigmoid,
-                                          axon_type=axon_type,
-                                          max_firing_rate=max_firing_rate,
-                                          membrane_potential_threshold=membrane_potential_threshold,
-                                          sigmoid_steepness=sigmoid_steepness)
+        super().__init__(transfer_function=parametric_sigmoid,
+                         axon_type=axon_type,
+                         max_firing_rate=max_firing_rate,
+                         membrane_potential_threshold=membrane_potential_threshold,
+                         sigmoid_steepness=sigmoid_steepness)
 
     def plot_transfer_function(self,
                                membrane_potentials: Optional[np.ndarray] = None,
@@ -289,6 +290,6 @@ class SigmoidAxon(Axon):
         # call super method #
         #####################
 
-        super(SigmoidAxon, self).plot_transfer_function(membrane_potentials=membrane_potentials,
-                                                        create_plot=create_plot,
-                                                        axes=axes)
+        super().plot_transfer_function(membrane_potentials=membrane_potentials,
+                                       create_plot=create_plot,
+                                       axes=axes)

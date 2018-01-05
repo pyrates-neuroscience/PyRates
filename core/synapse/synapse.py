@@ -70,7 +70,7 @@ class Synapse(object):
 
     """
 
-    def __init__(self, kernel_function: Callable[[float], float],
+    def __init__(self, kernel_function: Callable[[float, ...], float],
                  efficacy: float,
                  bin_size: float,
                  epsilon: float = 1e-14,
@@ -315,7 +315,7 @@ class DoubleExponentialSynapse(Synapse):
                  tau_rise: float,
                  bin_size: float,
                  epsilon: float = 1e-14,
-                 max_delay: float = None,
+                 max_delay: Optional[float] = None,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
                  modulatory: bool = False,
@@ -407,7 +407,7 @@ class ExponentialSynapse(Synapse):
                  tau: float,
                  bin_size: float = 5e-4,
                  epsilon: float = 1e-5,
-                 max_delay: float = None,
+                 max_delay: Optional[float] = None,
                  synapse_type: Optional[str] = None
                  ) -> None:
 

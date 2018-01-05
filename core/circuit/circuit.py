@@ -6,17 +6,13 @@ import matplotlib.pyplot as plt
 from networkx import MultiDiGraph
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
-from core.population import JansenRitPyramidalCells, JansenRitInterneurons
-from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
-from core.utility import interpolate_array, check_nones, set_instance
+from core.utility import check_nones, set_instance
 from typing import List, Optional, Union, TypeVar, Callable
 PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
 
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
-
-# TODO: Implement extrinsic modulatory mechanisms (see modulatory input parameter at population level)
 
 
 class Circuit(object):
@@ -57,11 +53,13 @@ class Circuit(object):
         Current time the circuit lives at [unit = s].
     active_synapses
         2D boolean array indicating which synapses (2.dim) exist on which population (1.dim).
+    network_graph
+        Directional multi-graph representing the network structure.
 
     """
 
     def __init__(self,
-                 populations: List[Union[Population, PlasticPopulation]],
+                 populations: List[PopulationLike],
                  connectivity: np.ndarray,
                  delays: np.ndarray,
                  step_size: float=5e-4
@@ -188,8 +186,8 @@ class Circuit(object):
         extrinsic_current
             2D array (n_timesteps x n_populations) of current extrinsically applied to the populations [unit = A].
         extrinsic_modulation
-            List (with n_populations entries) of vectors with extrinsic modulatory influences on each synapse of a
-            population.
+            List (n_timesteps length) of list (with n_populations entries) of vectors with extrinsic modulatory
+            influences on each synapse of a population.
         verbose
             If true, simulation progress will be printed to console.
 
@@ -264,8 +262,12 @@ class Circuit(object):
         Parameters
         ----------
         synaptic_inputs
+            2D array containing the synaptic inputs for each synapse (2.dim) of each population (1.dim).
         extrinsic_current
+            vector containing the extrinsic current input to each population.
         extrinsic_modulation
+            list (with n_populations entries) of vectors with extrinsic modulatory influences on each synapse of a
+            population.
 
         """
 
@@ -302,11 +304,11 @@ class Circuit(object):
             for conn_idx in connected_pops[target_pop]:
 
                 # transfer input to target node
-                self.network_graph.node[target_pop]['data'].synaptic_input[
-                    self.network_graph.node[target_pop]['data'].current_input_idx +
+                self.network_graph.nodes[target_pop]['data'].synaptic_input[
+                    self.network_graph.nodes[target_pop]['data'].current_input_idx +
                     connected_pops[target_pop][conn_idx]['delay'],
                     connected_pops[target_pop][conn_idx]['synapse_index']] += \
-                    self.network_graph.node[pop]['data'].current_firing_rate * \
+                    self.network_graph.nodes[pop]['data'].current_firing_rate * \
                     connected_pops[target_pop][conn_idx]['weight']
 
     def get_population_states(self,
@@ -411,14 +413,12 @@ class Circuit(object):
 
         if axes is None:
             fig, axes = plt.subplots(num='Population States')
-        # plt.hold('on')  # deprecated in matplotlib version >2.0
 
         legend_labels = []
         for i in population_idx:
             axes.plot(population_states[:, i])
             legend_labels.append(self.populations[i].label)
 
-        # plt.hold('off')  # deprecated in matplotlib version >2.0
         plt.legend(legend_labels)
         axes.set_ylabel('membrane potential [V]')
         axes.set_xlabel('time-steps')
@@ -460,6 +460,16 @@ class CircuitFromScratch(Circuit):
         2D array containing the initial values for each state variable (2.dim) of each population (1.dim).
     population_labels
         Labels of populations.
+    axon_plasticity_function
+        List with functions defining the axonal plasticity mechanisms to be used on each population.
+    axon_plasticity_target_param
+        List with target parameters of the population axons to which the axonal plasticity function is applied.
+    axon_plasticity_function_params
+        List with name-value pairs defining the parameters for the axonal plasticity function.
+    synapse_plasticity_function
+        List of functions defining the synaptic plasticity mechanisms to be used on each population.
+    synapse_plasticity_function_params
+        List of name-value pairs defining the parameters for the synaptic plasticity function.
 
     See Also
     --------
@@ -602,7 +612,7 @@ class CircuitFromScratch(Circuit):
                 pop_params['resting_potential'] = resting_potential[i]
                 pop_params['membrane_capacitance'] = membrane_capacitance[i]
 
-            # pass parameters to initialization function
+            # instantiate population
             if population_class[i] == 'SecondOrderPlasticPopulation':
                 populations.append(SecondOrderPlasticPopulation(**pop_params))
             elif population_class[i] == 'SecondOrderPopulation':
@@ -647,6 +657,8 @@ class CircuitFromPopulations(Circuit):
         2D array containing the initial values for each state variable (2.dim) of each population (1.dim).
     population_class
         Class names the population types refer to.
+    population_labels
+        Label of each population.
 
     See Also
     --------
@@ -731,11 +743,19 @@ class CircuitFromPopulations(Circuit):
             elif population_class[i] == 'SecondOrderPopulation':
                 populations.append(set_instance(SecondOrderPopulation, population_types[i], **pop_params))
 
-            elif population_class[i] == 'PlasticPopulation':
-                populations.append(set_instance(PlasticPopulation, population_types[i], **pop_params))
-
             else:
-                populations.append(set_instance(Population, population_types[i], **pop_params))
+
+                # add first order population parameters
+                pop_params['tau_leak'] = tau_leak
+                pop_params['resting_potential'] = resting_potential
+                pop_params['membrane_capacitance'] = membrane_capacitance
+                pop_params['synaptic_modulation_direction'] = synaptic_modulation_direction
+
+                if population_class[i] == 'PlasticPopulation':
+                    populations.append(set_instance(PlasticPopulation, population_types[i], **pop_params))
+
+                else:
+                    populations.append(set_instance(Population, population_types[i], **pop_params))
 
         ###################
         # call super init #
@@ -832,7 +852,7 @@ class CircuitFromCircuit(Circuit):
                 connectivity_tmp = np.append(connectivity_tmp, np.zeros((circuits[i].N, circuits[i].N)), axis=2)
             connectivity_coll.append(connectivity_tmp)
 
-            # collect delay matric
+            # collect delay matrix
             delays_coll.append(circuits[i].D)
 
             # collect number of synapses
