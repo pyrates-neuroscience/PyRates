@@ -313,7 +313,8 @@ class Circuit(object):
 
     def get_population_states(self,
                               state_variable_idx: int,
-                              time_window: Optional[List[float]]=None
+                              population_idx: Optional[list] = None,
+                              time_window: Optional[List[float]] = None
                               ) -> np.ndarray:
         """Extracts specified state variable from populations and puts them into matrix.
 
@@ -321,6 +322,8 @@ class Circuit(object):
         ----------
         state_variable_idx
             Index of state variable that is to be extracted.
+        population_idx
+            List with population indices for which to extract states.
         time_window
             Start and end of time window for which to extract the state variables [unit = s].
 
@@ -340,12 +343,18 @@ class Circuit(object):
         if time_window and any(time_window) < 0:
             raise ValueError('Time constants cannot be negative.')
 
+        if not population_idx:
+            population_idx = [i for i in range(self.N)]
+
         ############################################
         # extract state variables from populations #
         ############################################
 
         # get states from populations for all time-steps
-        states = np.array([np.array(p.state_variables)[:, state_variable_idx] for p in self.populations]).T
+        states = list()
+        for idx in population_idx:
+            states.append(np.array(self.populations[idx].state_variables, ndmin=2)[1:, state_variable_idx])
+        states = np.array(states, ndmin=2).T
 
         # reduce states to time-window
         if time_window:
@@ -382,30 +391,18 @@ class Circuit(object):
 
         """
 
-        #########################
-        # get population states #
-        #########################
-
-        population_states = self.get_population_states(state_idx, time_window)
-
         ########################
-        # apply population idx #
+        # check population idx #
         ########################
 
         if population_idx is None:
             population_idx = range(self.N)
 
-        population_states = population_states[:, population_idx]
+        #########################
+        # get population states #
+        #########################
 
-        #####################
-        # apply time window #
-        #####################
-
-        if time_window is None:
-            time_window = np.array([0, population_states.shape[1]])
-        time_window = np.array(time_window / self.step_size, dtype=int)
-
-        population_states = population_states[time_window[0]:time_window[1], :]
+        population_states = self.get_population_states(state_idx, population_idx, time_window)
 
         ####################################
         # plot population states over time #
@@ -415,9 +412,9 @@ class Circuit(object):
             fig, axes = plt.subplots(num='Population States')
 
         legend_labels = []
-        for i in population_idx:
+        for i in range(len(population_idx)):
             axes.plot(population_states[:, i])
-            legend_labels.append(self.populations[i].label)
+            legend_labels.append(self.populations[population_idx[i]].label)
 
         plt.legend(legend_labels)
         axes.set_ylabel('membrane potential [V]')
