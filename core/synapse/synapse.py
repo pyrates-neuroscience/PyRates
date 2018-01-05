@@ -7,10 +7,33 @@ synaptic currents.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Optional, Union, Callable
+from typing import Optional, Union, Callable, Any, List, TypeVar, overload
+
+from matplotlib.axes import Axes  # For type info
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
+
+#############
+# Type Info #
+#############
+
+KernelFunction = Callable[[Union[float, np.ndarray], Any], Union[float, np.ndarray]]
+
+# another way:
+#
+# @overload
+# def kernel_function(time_points: float, **kwargs: float) -> float:
+#     ...
+#
+#
+# @overload
+# def kernel_function(time_points: np.ndarray, **kwargs: float) -> np.ndarray:
+#     ...
+
+#############
+# Main Code #
+#############
 
 # TODO: find out reversal potentials for conductance based synapses
 
@@ -70,7 +93,7 @@ class Synapse(object):
 
     """
 
-    def __init__(self, kernel_function: Callable[[float], float],
+    def __init__(self, kernel_function: KernelFunction,
                  efficacy: float,
                  bin_size: float,
                  epsilon: float = 1e-14,
@@ -139,19 +162,57 @@ class Synapse(object):
         # build synaptic kernel #
         #########################
 
-        self.synaptic_kernel = self.evaluate_kernel(build_kernel=True)
+        self.synaptic_kernel = self.build_kernel()
+
+    def build_kernel(self) -> np.ndarray:
+
+        """Builds synaptic kernel.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        np.ndarray
+            Synaptic kernel value at each t [unit = A or S]
+
+        """
+
+        ####################################################################
+        # check whether to build kernel or just evaluate it at time_points #
+        ####################################################################
+
+        if self.max_delay:
+
+            # create time vector from max_delay
+            time_points = np.arange(self.max_delay, 0.+0.5*self.bin_size, -self.bin_size)
+
+        else:
+            # create time vector from epsilon
+            time_points = []
+            kernel_val = self.kernel_function(time_points[-1], **self.kernel_function_args)  # type: ignore
+            kernel_val *= self.efficacy
+
+            while True:
+                time_points.append(time_points[-1] + self.bin_size)
+                kernel_val_tmp = self.kernel_function(time_points[-1], **self.kernel_function_args)  # type: ignore
+                kernel_val_tmp *= self.efficacy
+                if ((kernel_val_tmp - kernel_val < 0.) and (self.efficacy > 0.)) or \
+                        ((kernel_val - kernel_val_tmp < 0.) and (self.efficacy < 0.)):
+                    if abs(kernel_val_tmp) < self.epsilon:
+                        break
+                kernel_val = kernel_val_tmp
+            time_points = np.flip(np.asarray(time_points), axis=0)
+
+        return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy  # type: ignore
 
     def evaluate_kernel(self,
-                        build_kernel: bool,
                         time_points: Union[float, np.ndarray] = 0.
                         ) -> Union[float, np.ndarray]:
         """Builds synaptic kernel or computes value of it at specified time point(s).
 
         Parameters
         ----------
-        build_kernel
-            If true, kernel will be evaluated at all relevant time-points for current parametrization. If false, kernel
-            will be evaluated at each provided t.
         time_points
             Time(s) at which to evaluate kernel. Only necessary if build_kernel is False (default = None) [unit = s].
 
@@ -162,39 +223,7 @@ class Synapse(object):
 
         """
 
-        #########################
-        # check input parameter #
-        #########################
-
-        if np.sum(time_points < 0) > 0:
-            raise ValueError('Time-point(s) t cannot be negative. See docstring for further information.')
-
-        ####################################################################
-        # check whether to build kernel or just evaluate it at time_points #
-        ####################################################################
-
-        if build_kernel and self.max_delay:
-
-            # create time vector from max_delay
-            time_points = np.arange(self.max_delay, 0.+0.5*self.bin_size, -self.bin_size)
-
-        elif build_kernel:
-
-            # create time vector from epsilon
-            time_points = list()
-            time_points.append(0.)
-            kernel_val = self.kernel_function(time_points[-1], **self.kernel_function_args) * self.efficacy
-            while True:
-                time_points.append(time_points[-1] + self.bin_size)
-                kernel_val_tmp = self.kernel_function(time_points[-1], **self.kernel_function_args) * self.efficacy
-                if ((kernel_val_tmp - kernel_val < 0.) and (self.efficacy > 0.)) or \
-                        ((kernel_val - kernel_val_tmp < 0.) and (self.efficacy < 0.)):
-                    if abs(kernel_val_tmp) < self.epsilon:
-                        break
-                kernel_val = kernel_val_tmp
-            time_points = np.flip(np.asarray(time_points), axis=0)
-
-        return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
+        return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy  # type: ignore
 
     def get_synaptic_current(self,
                              synaptic_input: np.ndarray,
@@ -231,7 +260,7 @@ class Synapse(object):
 
     def plot_synaptic_kernel(self,
                              create_plot: bool = True,
-                             axes: Optional[object] = None
+                             axes: Optional[Axes] = None
                              ) -> object:
         """Creates plot of synaptic kernel over time.
 
@@ -257,6 +286,9 @@ class Synapse(object):
         if axes is None:
             fig, axes = plt.subplots(num='Impulse Response Function')
 
+        else:
+            fig = axes.get_figure()
+
         # plot synaptic kernel
         # plt.hold('on')  # deprecated
         axes.plot(self.synaptic_kernel[-1:0:-1] * self.depression)
@@ -277,6 +309,31 @@ class Synapse(object):
             fig.show()
 
         return axes
+
+
+def double_exponential(time_points: Union[float, np.ndarray],
+                       tau_decay: float,
+                       tau_rise: float
+                       ) -> Union[float, np.ndarray]:
+    """Uses double exponential function to calculate synaptic kernel value for each passed time-point.
+
+    Parameters
+    ----------
+    time_points : Union[float, np.ndarray]
+        Vector of time-points for which to calculate kernel value [unit = s].
+    tau_decay
+        See parameter documentation of `tau_decay` of :class:`DoubleExponentialSynapse`.
+    tau_rise
+        See parameter documentation of `tau_rise` of :class:`DoubleExponentialSynapse`.
+
+    Returns
+    -------
+    Union[float, np.ndarray]
+        Kernel values at the time-points [unit = S if conductivity based else A].
+
+    """
+
+    return np.exp(-time_points / tau_decay) - np.exp(-time_points / tau_rise)
 
 
 class DoubleExponentialSynapse(Synapse):
@@ -333,35 +390,13 @@ class DoubleExponentialSynapse(Synapse):
         # define kernel function #
         ##########################
 
-        def double_exponential(time_points: Union[float, np.ndarray],
-                               tau_decay: float,
-                               tau_rise: float
-                               ) -> Union[float, np.ndarray]:
-            """Uses double exponential function to calculate synaptic kernel value for each passed time-point.
-
-            Parameters
-            ----------
-            time_points : Union[float, np.ndarray]
-                Vector of time-points for which to calculate kernel value [unit = s].
-            tau_decay
-                See parameter documentation of `tau_decay` of :class:`DoubleExponentialSynapse`.
-            tau_rise
-                See parameter documentation of `tau_rise` of :class:`DoubleExponentialSynapse`.
-
-            Returns
-            -------
-            Union[float, np.ndarray]
-                Kernel values at the time-points [unit = S if conductivity based else A].
-
-            """
-
-            return np.exp(-time_points / tau_decay) - np.exp(-time_points / tau_rise)
+        kernel_function = double_exponential
 
         ###################
         # call super init #
         ###################
 
-        super().__init__(kernel_function=double_exponential,
+        super().__init__(kernel_function=kernel_function,  # type:ignore
                          efficacy=efficacy,
                          bin_size=bin_size,
                          epsilon=epsilon,
@@ -372,6 +407,28 @@ class DoubleExponentialSynapse(Synapse):
                          synapse_type=synapse_type,
                          tau_rise=tau_rise,
                          tau_decay=tau_decay)
+
+
+def exponential(time_points: Union[float, np.ndarray],
+                tau: float,
+                ) -> Union[float, np.ndarray]:
+    """Uses exponential function to calculate synaptic kernel value for each passed time-point.
+
+    Parameters
+    ----------
+    time_points : Union[float, np.ndarray]
+        Vector of time-points for which to calculate kernel value [unit = s].
+    tau
+        See parameter documentation of `tau` of :class:`ExponentialSynapse`.
+
+    Returns
+    -------
+    Union[float, np.ndarray]
+        Kernel values at the time-points [unit = S if conductivity based else A].
+
+    """
+
+    return time_points * np.exp(-time_points / tau) / tau
 
 
 class ExponentialSynapse(Synapse):
@@ -422,32 +479,13 @@ class ExponentialSynapse(Synapse):
         # define kernel function #
         ##########################
 
-        def exponential(time_points: Union[float, np.ndarray],
-                        tau: float,
-                        ) -> Union[float, np.ndarray]:
-            """Uses exponential function to calculate synaptic kernel value for each passed time-point.
-
-            Parameters
-            ----------
-            time_points : Union[float, np.ndarray]
-                Vector of time-points for which to calculate kernel value [unit = s].
-            tau
-                See parameter documentation of `tau` of :class:`ExponentialSynapse`.
-
-            Returns
-            -------
-            Union[float, np.ndarray]
-                Kernel values at the time-points [unit = S if conductivity based else A].
-
-            """
-
-            return time_points * np.exp(-time_points / tau) / tau
+        kernel_function = exponential
 
         ###################
         # call super init #
         ###################
 
-        super().__init__(kernel_function=exponential,
+        super().__init__(kernel_function=kernel_function,
                          efficacy=efficacy,
                          bin_size=bin_size,
                          epsilon=epsilon,

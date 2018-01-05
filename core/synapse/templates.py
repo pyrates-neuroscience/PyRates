@@ -1,7 +1,7 @@
 """Templates for specific synapse parametrizations.
 """
 
-from core.synapse import DoubleExponentialSynapse, ExponentialSynapse
+from core.synapse import DoubleExponentialSynapse, ExponentialSynapse  # type: ignore
 from typing import Optional
 
 __author__ = "Richard Gast, Daniel F. Rose"
