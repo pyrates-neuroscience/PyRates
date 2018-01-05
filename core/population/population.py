@@ -9,11 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from copy import deepcopy
 
-from matplotlib.axes import Axes
-
 from core.axon import Axon, SigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse
-from core.utility import set_instance, check_nones  # type: ignore
+from core.utility import set_instance, check_nones
 
 from typing import List, Optional, Union, Dict, Callable, TypeVar
 FloatLike = Union[float, np.float64]
@@ -174,9 +172,9 @@ class Population(object):
         # set population parameters #
         #############################
 
-        self.synapses: List[Synapse] = []  # instance of an Synapse class
-        # self.axon: Optional[Axon] = None  # is set in _set_axon
-        self.state_variables: List[List[FloatLike]] = []
+        self.synapses = list()
+        self.axon = None
+        self.state_variables = list()
         self.store_state_variables = store_state_variables
         self.tau_leak = tau_leak
         self.resting_potential = resting_potential
@@ -187,34 +185,28 @@ class Population(object):
         self.label = label
 
         # set initial states
-        if type(init_state) is FloatLike:
-            self.state_variables.append([init_state])
-        else:
-            raise TypeError("If this error is raised, then the signature of 'init_state' in 'Synapse' is wrong")
-            # self.state_variables.append(init_state)
+        self.state_variables.append([init_state]) if type(init_state) is float or np.float64 \
+            else self.state_variables.append(init_state)
 
         ################
         # set synapses #
         ################
 
         # initialize synapse parameters
-        self.n_synapses = len(synapses) if synapses else len(synapse_params)  # type: ignore
-        # the following is redundant, because it is also done in self.set_synapse
-        # if isinstance(synapse_class, str):
-        #     synapse_types = [synapse_class for _ in range(self.n_synapses)]
-        # else:  # if synapse_class is of type List[str]
-        #     synapse_types = synapse_class  # type: ignore
+        self.n_synapses = len(synapses) if synapses else len(synapse_params)
+        if type(synapse_class) is str:
+            synapse_class = [synapse_class for i in range(self.n_synapses)]
         if max_synaptic_delay is None:
-            self.max_synaptic_delay = np.array(check_nones(max_synaptic_delay, self.n_synapses))
-        elif isinstance(max_synaptic_delay, np.ndarray):
+            self.max_synaptic_delay = check_nones(max_synaptic_delay, self.n_synapses)
+        elif type(max_synaptic_delay) is np.ndarray:
             self.max_synaptic_delay = max_synaptic_delay
         else:
             self.max_synaptic_delay = np.zeros(self.n_synapses) + max_synaptic_delay
 
         # instantiate synapses
-        self._set_synapses(synapse_subtypes=synapses,  # type: ignore
-                           synapse_params=synapse_params,
-                           synapse_types=synapse_class)
+        self.set_synapses(synapse_subtypes=synapses,
+                          synapse_params=synapse_params,
+                          synapse_types=synapse_class)
 
         # get relevant information from each synapse instance
         synapse_type = np.ones(self.n_synapses, dtype=bool)
@@ -251,7 +243,7 @@ class Population(object):
         # set axon #
         ############
 
-        self._set_axon(axon, axon_params=axon_params, axon_type=axon_class)
+        self.set_axon(axon, axon_params=axon_params, axon_type=axon_class)
         self.current_firing_rate = self.get_firing_rate()
 
         ###################################
@@ -261,11 +253,11 @@ class Population(object):
         self.extrinsic_current = 0.
         self.extrinsic_synaptic_modulation = 1.
 
-    def _set_synapses(self,
-                      synapse_subtypes: Optional[List[str]] = None,
-                      synapse_types: Union[str, List[str]] = 'DoubleExponentialSynapse',
-                      synapse_params: Optional[List[dict]] = None
-                      ) -> None:
+    def set_synapses(self,
+                     synapse_subtypes: Optional[List[str]] = None,
+                     synapse_types: Union[str, List[str]] = 'DoubleExponentialSynapse',
+                     synapse_params: Optional[List[dict]] = None
+                     ) -> None:
         """Instantiates synapses.
 
         Parameters
@@ -280,9 +272,8 @@ class Population(object):
         """
 
         # check synapse parameter formats
-        if isinstance(synapse_types, str):
-            synapse_types = [synapse_types for _ in range(self.n_synapses)]
-
+        if type(synapse_types) is str:
+            synapse_types = [synapse_types for i in range(self.n_synapses)]
         synapse_subtypes = check_nones(synapse_subtypes, self.n_synapses)
         synapse_params = check_nones(synapse_params, self.n_synapses)
 
@@ -290,30 +281,22 @@ class Population(object):
         for i in range(self.n_synapses):
 
             if synapse_types[i] == 'DoubleExponentialSynapse':
-                self.synapses.append(set_instance(DoubleExponentialSynapse,  # type: ignore
-                                                  synapse_subtypes[i],  # type: ignore
-                                                  synapse_params[i],  # type: ignore
-                                                  bin_size=self.step_size,
-                                                  max_delay=self.max_synaptic_delay[i]))
+                self.synapses.append(set_instance(DoubleExponentialSynapse, synapse_subtypes[i], synapse_params[i],
+                                                  bin_size=self.step_size, max_delay=self.max_synaptic_delay[i]))
             elif synapse_types[i] == 'ExponentialSynapse':
-                self.synapses.append(set_instance(ExponentialSynapse,  # type: ignore
-                                                  synapse_subtypes[i],   # type: ignore
-                                                  synapse_params[i],  # type: ignore
+                self.synapses.append(set_instance(ExponentialSynapse, synapse_subtypes[i], synapse_params[i],
                                                   bin_size=self.step_size, max_delay=self.max_synaptic_delay[i]))
             elif synapse_types[i] == 'Synapse':
-                self.synapses.append(set_instance(Synapse,  # type: ignore
-                                                  synapse_subtypes[i],  # type: ignore
-                                                  synapse_params[i],  # type: ignore
-                                                  bin_size=self.step_size,
-                                                  max_delay=self.max_synaptic_delay[i]))
+                self.synapses.append(set_instance(Synapse, synapse_subtypes[i], synapse_params[i],
+                                                  bin_size=self.step_size, max_delay=self.max_synaptic_delay[i]))
             else:
                 raise AttributeError('Invalid synapse type!')
 
-    def _set_axon(self,
-                  axon_subtype: Optional[str] = None,
-                  axon_type: str = 'SigmoidAxon',
-                  axon_params: Optional[dict] = None
-                  ) -> None:
+    def set_axon(self,
+                 axon_subtype: str,
+                 axon_type: str = 'SigmoidAxon',
+                 axon_params: Optional[dict] = None
+                 ) -> None:
         """Instantiates axon.
 
         Parameters
@@ -328,9 +311,9 @@ class Population(object):
         """
 
         if axon_type == 'SigmoidAxon':
-            self.axon: Axon = set_instance(SigmoidAxon, axon_subtype, axon_params)  # type: ignore
+            self.axon = set_instance(SigmoidAxon, axon_subtype, axon_params)
         elif axon_type == 'Axon':
-            self.axon: Axon = set_instance(Axon, axon_subtype, axon_params)  # type: ignore
+            self.axon = set_instance(Axon, axon_subtype, axon_params)
         else:
             raise AttributeError('Invalid axon type!')
 
@@ -479,7 +462,7 @@ class Population(object):
         ##########################################
 
         # synaptic inputs
-        self.synaptic_input[self.current_input_idx, 0:len(synaptic_input)] += synaptic_input  # type: ignore
+        self.synaptic_input[self.current_input_idx, 0:len(synaptic_input)] += synaptic_input
 
         # extrinsic inputs
         self.extrinsic_current = extrinsic_current
@@ -545,21 +528,8 @@ class Population(object):
 
         return y_old + self.step_size * f(y_old, **kwargs)
 
-    def copy_synapse(self, synapse_idx: int) -> None:
-        """Copies an existing synapse
-
-        Parameters
-        ----------
-        synapse_idx
-            Index of synapse to copy (default = None).
-        """
-
-        synapse: Synapse = deepcopy(self.synapses[synapse_idx])
-
-        self.add_synapse(synapse)
-
     def add_synapse(self,
-                    synapse: Synapse,
+                    synapse: Optional[object] = None,
                     synapse_idx: Optional[int] = None,
                     ) -> None:
         """Adds copy of specified synapse to population.
@@ -573,10 +543,19 @@ class Population(object):
 
         """
 
-        ###############
-        # add synapse #
-        ###############
+        ##########################
+        # check input parameters #
+        ##########################
 
+        if synapse is None and synapse_idx is None:
+            raise AttributeError('Either synapse or synapse index has to be passed!')
+
+        ####################################################
+        # create synapse copy if necessary and add synapse #
+        ####################################################
+
+        if synapse is None:
+            synapse = deepcopy(self.synapses[synapse_idx])
         self.synapses.append(synapse)
 
         ###############################
@@ -584,10 +563,10 @@ class Population(object):
         ###############################
 
         self.n_synapses += 1
-        self.kernel_lengths = np.append(self.kernel_lengths, len(synapse.synaptic_kernel))  # type: ignore
+        self.kernel_lengths = np.append(self.kernel_lengths, len(synapse.synaptic_kernel))
 
         # check modulation dependencies
-        if synapse.modulatory:  # type: ignore
+        if synapse.modulatory:
             raise AttributeError('Adding modulatory synapses is currently not implemented. Sorry.')
         else:
             if self.synaptic_modulation_direction is not None:
@@ -610,7 +589,7 @@ class Population(object):
         self.state_variables.append(init_state)
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]]=None, create_plot: Optional[bool]=True,
-                              axes: Axes=None) -> object:
+                              axes=None) -> object:
         """Creates plot of all specified synapses over time.
 
         Parameters
@@ -633,14 +612,14 @@ class Population(object):
         # check parameters #
         ####################
 
-        # assert synapse_idx is None or isinstance(synapse_idx, list)
+        assert synapse_idx is None or type(synapse_idx) is list
 
         #############################
         # check positional argument #
         #############################
 
         if synapse_idx is None:
-            synapse_idx = list(range(len(self.synapses)))
+            synapse_idx = np.arange(len(self.synapses)).tolist()
 
         #########################
         # plot synaptic kernels #
@@ -648,8 +627,6 @@ class Population(object):
 
         if axes is None:
             fig, axes = plt.subplots(num='Synaptic Kernel Functions')
-        else:
-            fig = axes.get_figure()
 
         synapse_types = list()
         for i in synapse_idx:
@@ -736,11 +713,11 @@ class PlasticPopulation(Population):
                  axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Custom',
-                 axon_plasticity_function: Optional[Callable[[float], float]] = None,
-                 axon_plasticity_target_param: Optional[str] = None,
-                 axon_plasticity_function_params: Optional[Dict[str, float]] = None,
+                 axon_plasticity_function: Callable[[float], float] = None,
+                 axon_plasticity_target_param: str = None,
+                 axon_plasticity_function_params: dict = None,
                  synapse_plasticity_function: Callable[[float], float] = None,
-                 synapse_plasticity_function_params: List[dict] = None,
+                 synapse_plasticity_function_params: Union[List[dict], dict] = None,
                  ) -> None:
         """Instantiation of plastic population.
         """
@@ -771,24 +748,17 @@ class PlasticPopulation(Population):
         #############################
 
         # for axon
-        if axon_plasticity_function:
-            if not axon_plasticity_target_param or not axon_plasticity_function_params:
-                raise ValueError("If an axon_plasticity_function was given, then also axon_plasticity_target_param and "
-                                 "axon_plasticity_function_params need to be specified.")
-            self.axon_plasticity_target_param = axon_plasticity_target_param
-            self.axon_plasticity_function_params = axon_plasticity_function_params
         self.axon_plasticity_function = axon_plasticity_function
+        self.axon_plasticity_target_param = axon_plasticity_target_param
+        self.axon_plasticity_function_params = axon_plasticity_function_params
 
         # for synapses
         self.synapse_plasticity_function = synapse_plasticity_function
-        if synapse_plasticity_function_params:
-            if len(synapse_plasticity_function_params) == 1:
-                self.synapse_plasticity_function_params = [synapse_plasticity_function_params[0]
-                                                           for _ in range(self.n_synapses)]
-            else:
-                self.synapse_plasticity_function_params = synapse_plasticity_function_params
+        if type(synapse_plasticity_function_params) is list:
+            self.synapse_plasticity_function_params = synapse_plasticity_function_params
         else:
-            raise ValueError("synapse_plasticity_function_params needs to be given as a list of dictionaries.")
+            self.synapse_plasticity_function_params = [synapse_plasticity_function_params
+                                                       for i in range(self.n_synapses)]
 
     def state_update(self,
                      synaptic_input: np.ndarray,
@@ -825,9 +795,9 @@ class PlasticPopulation(Population):
         if self.axon_plasticity_function:
 
             self.axon.transfer_function_args[self.axon_plasticity_target_param] = \
-                Population.take_step(self,  # type: ignore
+                Population.take_step(self,
                                      f=self.axon_plasticity_function,
-                                     y_old=self.axon.transfer_function_args[self.axon_plasticity_target_param],  # type: ignore
+                                     y_old=self.axon.transfer_function_args[self.axon_plasticity_target_param],
                                      firing_rate_target=self.current_firing_rate,
                                      **self.axon_plasticity_function_params)
 
@@ -842,21 +812,22 @@ class PlasticPopulation(Population):
                                                                        f=self.synapse_plasticity_function,
                                                                        y_old=self.synapses[i].depression,
                                                                        firing_rate=self.synaptic_input[
-                                                                            self.current_input_idx[i] - 1, i],
+                                                                       self.current_input_idx[i] - 1, i],
                                                                        **self.synapse_plasticity_function_params[i])
 
-    def add_plastic_synapse(self,
-                            synapse_idx: int,
-                            synapse: Optional[Synapse] = None,
-                            max_firing_rate: Optional[float] = None) -> None:
+    def add_synapse(self,
+                    synapse: Optional[object] = None,
+                    synapse_idx: Optional[int] = None,
+                    max_firing_rate: Optional[float] = None
+                    ) -> None:
         """Adds copy of specified synapse to population.
 
         Parameters
         ----------
-        synapse_idx
-            Index of synapse to copy (default = None).
         synapse
             Synapse object to add (default = None)
+        synapse_idx
+            Index of synapse to copy (default = None).
         max_firing_rate
             Maximum firing rate of connecting population. Used for synaptic plasticity mechanism (default = None).
 
@@ -866,10 +837,7 @@ class PlasticPopulation(Population):
         # call super method #
         #####################
 
-        if synapse:
-            self.add_synapse(synapse, synapse_idx)
-        else:
-            self.copy_synapse(synapse_idx)
+        super().add_synapse(synapse, synapse_idx)
 
         ##################################
         # check plasticity related stuff #
@@ -1072,7 +1040,7 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
                  axon_plasticity_target_param: str = None,
                  axon_plasticity_function_params: dict = None,
                  synapse_plasticity_function: Callable[[float], float] = None,
-                 synapse_plasticity_function_params: Optional[List[dict]] = None,
+                 synapse_plasticity_function_params: Union[List[dict], dict] = None,
                  ) -> None:
         """Instantiation of second order population.
         """

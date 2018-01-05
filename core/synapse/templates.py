@@ -31,8 +31,13 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
 
     """
 
-    def __init__(self, bin_size: float, max_delay: float, efficacy: float = 1.273 * 3e-13,
-                 tau_decay: float = 0.006, tau_rise: float = 0.0006) -> None:
+    def __init__(self,
+                 bin_size: float,
+                 max_delay: float,
+                 efficacy: float = 1.273 * 3e-13,
+                 tau_decay: float = 0.006,
+                 tau_rise: float = 0.0006
+                 ) -> None:
         """
         Instantiates current-based synapse with AMPA receptor.
         """
@@ -69,8 +74,13 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
 
     """
 
-    def __init__(self, bin_size: float, max_delay: float, efficacy: float = 1.273 * (-1e-12),
-                 tau_decay: float = 0.02, tau_rise: float = 0.0004) -> None:
+    def __init__(self,
+                 bin_size: float,
+                 max_delay: float,
+                 efficacy: float = 1.273 * (-1e-12),
+                 tau_decay: float = 0.02,
+                 tau_rise: float = 0.0004
+                 ) -> None:
         """
         Instantiates current-based synapse with GABA_A receptor.
         """
@@ -109,8 +119,13 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
 
     """
 
-    def __init__(self, bin_size: float, max_delay: int, efficacy: float = 1.273 * 7.2e-10,
-                 tau_decay: float = 0.0015, tau_rise: float = 0.000009, reversal_potential: float = 0.0
+    def __init__(self,
+                 bin_size: float,
+                 max_delay: int,
+                 efficacy: float = 1.273 * 7.2e-10,
+                 tau_decay: float = 0.0015,
+                 tau_rise: float = 0.000009,
+                 reversal_potential: float = 0.0
                  ) -> None:
         """
         Instantiates a conductance-based synapse with GABA_A receptor.
@@ -152,8 +167,13 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
 
     """
 
-    def __init__(self, bin_size: float, max_delay: float, efficacy: float = 1.358 * (-4e-11),
-                 tau_decay: float = 0.02, tau_rise: float = 0.0004, reversal_potential: float = -0.070
+    def __init__(self,
+                 bin_size: float,
+                 max_delay: float,
+                 efficacy: float = 1.358 * (-4e-11),
+                 tau_decay: float = 0.02,
+                 tau_rise: float = 0.0004,
+                 reversal_potential: float = -0.070
                  ) -> None:
         """
         Instantiates a current-based synapse with GABA_A receptor.
@@ -198,8 +218,13 @@ class JansenRitExcitatorySynapse(ExponentialSynapse):
 
         """
 
-    def __init__(self, bin_size: float, epsilon: float = 5e-5, max_delay: Optional[float] = None,
-                 efficacy: float = 3.25 * 1e-3, tau: float = 0.01) -> None:
+    def __init__(self,
+                 bin_size: float,
+                 epsilon: float = 5e-5,
+                 max_delay: Optional[float] = None,
+                 efficacy: float = 3.25 * 1e-3,
+                 tau: float = 0.01
+                 ) -> None:
         """Initializes excitatory exponential synapse as defined in [1]_.
         """
 
@@ -239,8 +264,13 @@ class JansenRitInhibitorySynapse(ExponentialSynapse):
 
         """
 
-    def __init__(self, bin_size: float, epsilon: float = 5e-5, max_delay: Optional[float] = None,
-                 efficacy: float = -22e-3, tau: float = 0.02) -> None:
+    def __init__(self,
+                 bin_size: float,
+                 epsilon: float = 5e-5,
+                 max_delay: Optional[float] = None,
+                 efficacy: float = -22e-3,
+                 tau: float = 0.02
+                 ) -> None:
         """Initializes excitatory exponential synapse as defined in [1]_.
         """
 
@@ -280,8 +310,13 @@ class MoranExcitatorySynapse(ExponentialSynapse):
 
         """
 
-    def __init__(self, bin_size: float, epsilon: float = 5e-5, max_delay: Optional[float] = None,
-                 efficacy: float = 4e-3, tau: float = 4e-3) -> None:
+    def __init__(self,
+                 bin_size: float,
+                 epsilon: float = 5e-5,
+                 max_delay: Optional[float] = None,
+                 efficacy: float = 4e-3,
+                 tau: float = 4e-3
+                 ) -> None:
         """Initializes excitatory exponential synapse as defined in [1]_.
         """
 
@@ -321,8 +356,13 @@ class MoranInhibitorySynapse(ExponentialSynapse):
 
         """
 
-    def __init__(self, bin_size: float, epsilon: float = 5e-5, max_delay: Optional[float] = None,
-                 efficacy: float = -32e-3, tau: float = 16e-3) -> None:
+    def __init__(self,
+                 bin_size: float,
+                 epsilon: float = 5e-5,
+                 max_delay: Optional[float] = None,
+                 efficacy: float = -32e-3,
+                 tau: float = 16e-3
+                 ) -> None:
         """Initializes excitatory exponential synapse as defined in [1]_.
         """
 

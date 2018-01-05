@@ -42,7 +42,7 @@ class JansenRitCircuit(CircuitFromPopulations):
     def __init__(self,
                  resting_potential: float = 0.0,
                  step_size: float = 5e-4,
-                 max_synaptic_delay: float = 0.05,
+                 max_synaptic_delay: Optional[float] = None,
                  delays: Optional[np.ndarray] = None,
                  init_states: np.ndarray=np.zeros(3),
                  ) -> None:
@@ -70,13 +70,17 @@ class JansenRitCircuit(CircuitFromPopulations):
         ###################
 
         connections = np.zeros((N, N, n_synapses))
-        C = 135.
+        c = 135.
 
         # excitatory connections
-        connections[:, :, 0] = [[0, 0.8 * C, 0], [1.0 * C, 0, 0], [0.25 * C, 0, 0]]
+        connections[:, :, 0] = [[0, 0.8 * c, 0],
+                                [1.0 * c, 0, 0],
+                                [0.25 * c, 0, 0]]
 
         # inhibitory connections
-        connections[:, :, 1] = [[0, 0, 0.25 * C], [0, 0, 0], [0, 0, 0]]
+        connections[:, :, 1] = [[0, 0, 0.25 * c],
+                                [0, 0, 0],
+                                [0, 0, 0]]
 
         ###################
         # call super init #
@@ -103,7 +107,7 @@ class WangKnoescheCircuit(Circuit):
     step_size
         Default = 5e-4 s.
     max_synaptic_delay
-        Default = 0.15 s.
+        Default = None.
     delays
         Default = None
     init_states
@@ -128,7 +132,7 @@ class WangKnoescheCircuit(Circuit):
     def __init__(self,
                  resting_potential: float = 0.0,
                  step_size: float = 5e-4,
-                 max_synaptic_delay: float = 0.15,
+                 max_synaptic_delay: Optional[float] = None,
                  delays: Optional[np.ndarray] = None,
                  init_states: np.ndarray = np.zeros(5),
                  tau_depression: float = 0.05,
@@ -185,9 +189,6 @@ class WangKnoescheCircuit(Circuit):
         # delay matrix
         if delays is None:
             delays = np.zeros((N, N))
-
-        # axon information
-        axons = ['JansenRitAxon' for i in range(N)]         # use Jansen-Rit parametrization of axon
 
         ###################
         # call super init #
