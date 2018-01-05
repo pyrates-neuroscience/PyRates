@@ -195,7 +195,7 @@ class Population(object):
         # initialize synapse parameters
         self.n_synapses = len(synapses) if synapses else len(synapse_params)
         if type(synapse_class) is str:
-            synapse_class = [synapse_class for i in range(self.n_synapses)]
+            synapse_class = [synapse_class for _ in range(self.n_synapses)]
         if max_synaptic_delay is None:
             self.max_synaptic_delay = check_nones(max_synaptic_delay, self.n_synapses)
         elif type(max_synaptic_delay) is np.ndarray:

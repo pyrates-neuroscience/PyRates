@@ -3,13 +3,23 @@
 
 import numpy as np
 import inspect
-from typing import List, Dict, Union, Optional, Callable
+from typing import List, Dict, Union, Optional, Callable, TypeVar
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
+#############
+# Type Info #
+#############
 
-def set_instance(class_handle, instance_type: str=None, instance_params: dict=None, **kwargs) -> object:
+# ClassHandle = TypeVar['ClassHandle', type]
+
+#############
+# Main Code #
+#############
+
+
+def set_instance(class_handle: type, instance_type: str=None, instance_params: dict=None, **kwargs) -> object:
     """Instantiates object of `class_handle` and returns instance.
 
     Parameters
@@ -60,7 +70,7 @@ def set_instance(class_handle, instance_type: str=None, instance_params: dict=No
     # if passed, instantiate/update object with instance parameters #
     #################################################################
 
-    if instance_params and instance_type:
+    if instance_params and instance_type:  # vary hacky section
 
         # fetch attributes on object
         attributes = inspect.getmembers(class_handle, lambda a: not (inspect.isroutine(a)))
@@ -68,7 +78,7 @@ def set_instance(class_handle, instance_type: str=None, instance_params: dict=No
 
         # update passed parameters of instance
         for attr in attributes:
-            instance = update_param(attr, instance_params, instance)
+            instance = update_param(attr[0], instance_params, instance)
 
     elif instance_params:
 
