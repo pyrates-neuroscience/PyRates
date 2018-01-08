@@ -5,9 +5,9 @@ import numpy as np
 import inspect
 from typing import Union, Optional, TypeVar, overload, Iterable, Type
 
-from core.axon import Axon  # type: ignore
-from core.population import Population  # type: ignore
-from core.synapse import Synapse  # type: ignore
+# from core.axon import Axon  # type: ignore
+# from core.population import Population  # type: ignore
+# from core.synapse import Synapse  # type: ignore
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"

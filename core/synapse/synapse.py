@@ -190,12 +190,12 @@ class Synapse(object):
         else:
             # create time vector from epsilon
             time_points = []
-            kernel_val = self.kernel_function(time_points[-1], **self.kernel_function_args)  # type: ignore
+            kernel_val = self.kernel_function(time_points[-1], **self.kernel_function_args)
             kernel_val *= self.efficacy
 
             while True:
                 time_points.append(time_points[-1] + self.bin_size)
-                kernel_val_tmp = self.kernel_function(time_points[-1], **self.kernel_function_args)  # type: ignore
+                kernel_val_tmp = self.kernel_function(time_points[-1], **self.kernel_function_args)
                 kernel_val_tmp *= self.efficacy
                 if ((kernel_val_tmp - kernel_val < 0.) and (self.efficacy > 0.)) or \
                         ((kernel_val - kernel_val_tmp < 0.) and (self.efficacy < 0.)):
@@ -204,7 +204,7 @@ class Synapse(object):
                 kernel_val = kernel_val_tmp
             time_points = np.flip(np.asarray(time_points), axis=0)
 
-        return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy  # type: ignore
+        return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
 
     def evaluate_kernel(self,
                         time_points: Union[float, np.ndarray] = 0.
