@@ -3,7 +3,11 @@
 
 import numpy as np
 import inspect
-from typing import List, Dict, Union, Optional, Callable, TypeVar, Any, overload
+from typing import Union, Optional, TypeVar, overload, Iterable, Type
+
+from core.axon import Axon  # type: ignore
+from core.population import Population  # type: ignore
+from core.synapse import Synapse  # type: ignore
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -12,14 +16,41 @@ __status__ = "Development"
 # Type Info #
 #############
 
-# ClassHandle = TypeVar['ClassHandle', type]
+# ClassObject = TypeVar['ClassObject']
 
 #############
 # Main Code #
 #############
 
 
-def set_instance(class_handle: type, instance_type: Optional[str]=None, instance_params: dict=None, **kwargs) -> object:
+# @overload
+# def set_instance(class_handle: Type[Population],
+#                  instance_type: Optional[str]=None,
+#                  instance_params: dict=None,
+#                  **kwargs) -> Population: ...
+#
+#
+# @overload
+# def set_instance(class_handle: Type[Axon],
+#                  instance_type: Optional[str] = None,
+#                  instance_params: dict = None,
+#                  **kwargs) -> Axon: ...
+#
+#
+# @overload
+# def set_instance(class_handle: Type[Synapse],
+#                  instance_type: Optional[str] = None,
+#                  instance_params: dict = None,
+#                  **kwargs) -> Synapse: ...
+
+ClassObject = TypeVar('ClassObject')
+
+
+# noinspection PyUnboundLocalVariable
+def set_instance(class_handle: Type[ClassObject],
+                 instance_type: Optional[str] = None,
+                 instance_params: dict = None,
+                 **kwargs) -> ClassObject:
     """Instantiates object of `class_handle` and returns instance.
 
     Parameters
@@ -56,15 +87,12 @@ def set_instance(class_handle: type, instance_type: Optional[str]=None, instance
         type_objects = class_handle.__subclasses__()
 
         # loop over pre-implemented types and compare with passed type
-        i = 0
-        while True:
-            if i >= len(preimplemented_types):
-                raise AttributeError('Passed type is no pre-implemented parametrization of given object!')
-            elif preimplemented_types[i] == instance_type:
-                instance = type_objects[i](**kwargs)
+        for i, _type in enumerate(preimplemented_types):
+            if _type == instance_type:
+                instance = type_objects[i](**kwargs)  # type: ignore
                 break
-            else:
-                i += 1
+        else:
+            raise AttributeError('Passed type is no pre-implemented parametrization of given object!')
 
     #################################################################
     # if passed, instantiate/update object with instance parameters #
@@ -78,12 +106,13 @@ def set_instance(class_handle: type, instance_type: Optional[str]=None, instance
 
         # update passed parameters of instance
         for attr in attributes:
-            instance = update_param(attr[0], instance_params, instance)
+            instance = update_param(attr[0], instance_params, instance)  # type: ignore
 
     elif instance_params:
 
         # instantiate new object
-        instance = class_handle(**instance_params, **kwargs)
+        # noinspection PyCallingNonCallable
+        instance = class_handle(**instance_params, **kwargs)  # type: ignore
 
     return instance
 
@@ -192,7 +221,7 @@ def get_euclidean_distances(positions: np.ndarray) -> np.ndarray:
 
     """
 
-    assert type(positions) is np.ndarray
+    assert isinstance(positions, np.ndarray)
     assert positions.shape[1] == 3
 
     n = positions.shape[0]
@@ -209,17 +238,12 @@ def get_euclidean_distances(positions: np.ndarray) -> np.ndarray:
     return D
 
 
-T = TypeVar("T")
+@overload
+def check_nones(param: None, n: int) -> Iterable[None]: ...
 
 
 @overload
-def check_nones(param: object, n: int) -> object:
-    ...
-
-
-@overload
-def check_nones(param: None, n: int) -> List[None]:
-    ...
+def check_nones(param: Iterable, n: int) -> Iterable: ...
 
 
 def check_nones(param, n):
