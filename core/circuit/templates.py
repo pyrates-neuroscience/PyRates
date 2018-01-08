@@ -3,7 +3,7 @@
 
 import numpy as np
 
-from core.circuit import CircuitFromPopulations, CircuitFromScratch, Circuit
+from core.circuit import CircuitFromPopulations, CircuitFromScratch, Circuit  # type: ignore
 from core.population import WangKnoescheCells
 from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
 from typing import Optional

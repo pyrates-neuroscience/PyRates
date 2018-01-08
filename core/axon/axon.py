@@ -6,12 +6,21 @@ average membrane potentials. Its behavior approximates the average axon hillok o
 """
 
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 import numpy as np
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, Any, Dict
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
 
+
+# Type Info #
+#############
+TransferFunction = Callable[[float, Any], float]
+
+
+# Main Body #
+#############
 
 class Axon(object):
     """Base axon class. Represents average behavior of generic axon hillok.
@@ -40,7 +49,7 @@ class Axon(object):
     def __init__(self,
                  transfer_function: Callable[..., float],
                  axon_type: Optional[str] = None,
-                 **transfer_function_args
+                 **transfer_function_args: float
                  ) -> None:
         """Instantiates base axon.
         """
@@ -70,12 +79,13 @@ class Axon(object):
 
         """
 
-        return self.transfer_function(membrane_potential, **self.transfer_function_args)
+        # TODO: use functools.partial to convert transfer function to compute_firing_rate function?
+        return self.transfer_function(membrane_potential, **self.transfer_function_args)  # type: ignore
 
     def plot_transfer_function(self,
                                membrane_potentials: np.ndarray,
                                create_plot: bool = True,
-                               axes: Optional[object] = None
+                               axes: Optional[Axes] = None
                                ) -> object:
         """Creates figure of the transfer function transforming membrane potentials into output firing rates.
 
@@ -119,9 +129,43 @@ class Axon(object):
 
         # show plot
         if create_plot:
+            fig = axes.get_figure()
             fig.show()
 
         return axes
+
+
+######################################
+# define sigmoidal transfer function #
+######################################
+
+def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
+                       max_firing_rate: float,
+                       membrane_potential_threshold: float,
+                       sigmoid_steepness: float
+                       ) -> Union[float, np.ndarray]:
+    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
+
+    Parameters
+    ----------
+    membrane_potential
+        Membrane potential for which to calculate firing rate [unit = V].
+    max_firing_rate
+        See parameter description of `max_firing_rate` of :class:`SigmoidAxon`.
+    membrane_potential_threshold
+        See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
+    sigmoid_steepness
+        See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
+
+    Returns
+    -------
+    float
+        average firing rate [unit = 1/s]
+
+    """
+
+    return max_firing_rate / (1 + np.exp(sigmoid_steepness *
+                                         (membrane_potential_threshold - membrane_potential)))
 
 
 class SigmoidAxon(Axon):
@@ -169,55 +213,30 @@ class SigmoidAxon(Axon):
         if sigmoid_steepness < 0:
             raise ValueError('Sigmoid steepness cannot be negative.')
 
-        ######################################
-        # define sigmoidal transfer function #
-        ######################################
 
+        ############################
+        # define  transfer function #
+        ############################
 
-        def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
-                               max_firing_rate: float,
-                               membrane_potential_threshold: float,
-                               sigmoid_steepness: float
-                               ) -> Union[float, np.ndarray]:
-            """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
-
-            Parameters
-            ----------
-            membrane_potential
-                Membrane potential for which to calculate firing rate [unit = V].
-            max_firing_rate
-                See parameter description of `max_firing_rate` of :class:`SigmoidAxon`.
-            membrane_potential_threshold
-                See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
-            sigmoid_steepness
-                See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
-
-            Returns
-            -------
-            float
-                average firing rate [unit = 1/s]
-
-            """
-
-            return max_firing_rate / (1 + np.exp(sigmoid_steepness *
-                                                 (membrane_potential_threshold - membrane_potential)))
+        transfer_function = parametric_sigmoid  # just an alias for readability
 
         ###################
         # call super init #
         ###################
 
-        super().__init__(transfer_function=parametric_sigmoid,
-                         axon_type=axon_type,
-                         max_firing_rate=max_firing_rate,
-                         membrane_potential_threshold=membrane_potential_threshold,
-                         sigmoid_steepness=sigmoid_steepness)
 
-    def plot_transfer_function(self,
+        super(SigmoidAxon, self).__init__(transfer_function=transfer_function,  # type: ignore
+                                          axon_type=axon_type,
+                                          max_firing_rate=max_firing_rate,
+                                          membrane_potential_threshold=membrane_potential_threshold,
+                                          sigmoid_steepness=sigmoid_steepness)
+
+    def plot_transfer_function(self,  # type: ignore
                                membrane_potentials: Optional[np.ndarray] = None,
                                epsilon: float = 1e-4,
                                bin_size: float = 0.001,
                                create_plot: bool = True,
-                               axes: Optional[object] = None):
+                               axes: Optional[Axes] = None):
         """Plots axon hillok sigmoidal transfer function.
 
         Parameters
