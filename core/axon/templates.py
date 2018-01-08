@@ -105,7 +105,7 @@ class MoranAxon(Axon):
                  max_firing_rate: float = 1.,
                  sigmoid_steepness: float = 2000.,
                  membrane_potential_threshold: float = 0.001,
-                 adaptation: float = 0.):
+                 adaptation: float = 0.) -> None:
 
         ###########################################
         # sigmoidal transfer function (de-meaned) #
@@ -143,7 +143,7 @@ class MoranAxon(Axon):
         # call super init #
         ###################
 
-        super().__init__(sigmoid,
+        super().__init__(sigmoid,  # type: ignore
                          'Moran_Axon',
                          max_firing_rate=max_firing_rate,
                          membrane_potential_threshold=membrane_potential_threshold,
