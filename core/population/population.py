@@ -13,7 +13,7 @@ from matplotlib.axes import Axes
 
 from core.axon import Axon, SigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse
-from core.utility import set_instance, check_nones
+from core.utility import set_instance, check_nones  # type: ignore
 
 from typing import List, Optional, Union, Dict, Callable, TypeVar
 FloatLike = Union[float, np.float64]
@@ -200,14 +200,14 @@ class Population(object):
         # initialize synapse parameters
         self.n_synapses = len(synapses) if synapses else len(synapse_params)  # type: ignore
         # the following is redundant, because it is also done in self.set_synapse
-        # if type(synapse_class) is str:
+        # if isinstance(synapse_class, str):
         #     synapse_types = [synapse_class for _ in range(self.n_synapses)]
         # else:  # if synapse_class is of type List[str]
         #     synapse_types = synapse_class  # type: ignore
         if max_synaptic_delay is None:
-            self.max_synaptic_delay = check_nones(max_synaptic_delay, self.n_synapses)
-        elif type(max_synaptic_delay) is np.ndarray:
-            self.max_synaptic_delay = max_synaptic_delay  # type: ignore
+            self.max_synaptic_delay = np.array(check_nones(max_synaptic_delay, self.n_synapses))
+        elif isinstance(max_synaptic_delay, np.ndarray):
+            self.max_synaptic_delay = max_synaptic_delay
         else:
             self.max_synaptic_delay = np.zeros(self.n_synapses) + max_synaptic_delay
 
@@ -280,8 +280,8 @@ class Population(object):
         """
 
         # check synapse parameter formats
-        if type(synapse_types) is str:
-            synapse_types = [synapse_types for _ in range(self.n_synapses)]  # type: ignore
+        if isinstance(synapse_types, str):
+            synapse_types = [synapse_types for _ in range(self.n_synapses)]
 
         synapse_subtypes = check_nones(synapse_subtypes, self.n_synapses)
         synapse_params = check_nones(synapse_params, self.n_synapses)
@@ -633,7 +633,7 @@ class Population(object):
         # check parameters #
         ####################
 
-        assert synapse_idx is None or type(synapse_idx) is list
+        assert synapse_idx is None or isinstance(synapse_idx, list)
 
         #############################
         # check positional argument #
