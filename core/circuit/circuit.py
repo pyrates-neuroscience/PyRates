@@ -3,11 +3,13 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from networkx import MultiDiGraph
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.utility import check_nones, set_instance
 from typing import List, Optional, Union, TypeVar, Callable
+
 PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
 
 
@@ -62,7 +64,7 @@ class Circuit(object):
                  populations: List[PopulationLike],
                  connectivity: np.ndarray,
                  delays: np.ndarray,
-                 step_size: float=5e-4
+                 step_size: float = 5e-4
                  ) -> None:
         """Instantiates population circuit object.
         """
@@ -134,37 +136,37 @@ class Circuit(object):
 
             for k2, k in enumerate(self.active_synapses[i]):
 
-                    for j in range(self.N):
+                for j in range(self.N):
 
-                        if self.C[i, j, k] > 0:
+                    if self.C[i, j, k] > 0:
 
-                            if hasattr(self.populations[i], 'synapse_plasticity_function') and \
-                                    self.populations[i].synapse_plasticity_function_params[k2]:
+                        if hasattr(self.populations[i], 'synapse_plasticity_function') and \
+                                self.populations[i].synapse_plasticity_function_params[k2]:
 
-                                # add synapse copy to population
-                                self.populations[i].add_synapse(synapse_idx=k2,
-                                                                max_firing_rate=self.populations[j].axon.
-                                                                transfer_function_args['max_firing_rate'] *
-                                                                                self.C[i, j, k])
-                                new_synapses.append(self.populations[i].n_synapses - 1)
+                            # add synapse copy to population
+                            self.populations[i].add_plastic_synapse(synapse_idx=k2,
+                                                                    max_firing_rate=self.populations[j].axon.
+                                                                    transfer_function_args['max_firing_rate'] * self.C[
+                                                                                        i, j, k])
+                            new_synapses.append(self.populations[i].n_synapses - 1)
 
-                                # create new edge
-                                self.network_graph.add_edge(j, i,
-                                                            weight=float(self.C[i, j, k]),
-                                                            delay=int(self.D[i, j]),
-                                                            synapse_index=new_synapses[-1])
+                            # create new edge
+                            self.network_graph.add_edge(j, i,
+                                                        weight=float(self.C[i, j, k]),
+                                                        delay=int(self.D[i, j]),
+                                                        synapse_index=new_synapses[-1])
 
-                            else:
+                        else:
 
-                                # create new edge
-                                self.network_graph.add_edge(j, i,
-                                                            weight=float(self.C[i, j, k]),
-                                                            delay=int(self.D[i, j]),
-                                                            synapse_index=k2)
+                            # create new edge
+                            self.network_graph.add_edge(j, i,
+                                                        weight=float(self.C[i, j, k]),
+                                                        delay=int(self.D[i, j]),
+                                                        synapse_index=k2)
 
-                    # turn of plasticity at original synapse
-                    if hasattr(self.populations[i], 'synapse_plasticity_function'):
-                        self.populations[i].synapse_plasticity_function_params[k2] = None
+                # turn of plasticity at original synapse
+                if hasattr(self.populations[i], 'synapse_plasticity_function'):
+                    self.populations[i].synapse_plasticity_function_params[k2] = None
 
             self.active_synapses[i] += new_synapses
 
@@ -199,7 +201,7 @@ class Circuit(object):
         # simulation time
         if simulation_time < 0.:
             raise ValueError('Simulation time cannot be negative.')
-        simulation_time_steps = int(simulation_time/self.step_size)
+        simulation_time_steps = int(simulation_time / self.step_size)
 
         # synaptic inputs
         if synaptic_inputs.shape[0] != simulation_time_steps:
@@ -273,7 +275,7 @@ class Circuit(object):
 
         for i in range(self.N):
             self.populations[i].state_update(synaptic_input=synaptic_inputs[i, self.active_synapses[i]
-                                                                               [0:synaptic_inputs.shape[1]]],
+            [0:synaptic_inputs.shape[1]]],
                                              extrinsic_current=extrinsic_current[i],
                                              extrinsic_synaptic_modulation=extrinsic_modulation[i])
 
@@ -302,7 +304,6 @@ class Circuit(object):
 
             # loop over existing connections between node and target node
             for conn_idx in connected_pops[target_pop]:
-
                 # transfer input to target node
                 self.network_graph.nodes[target_pop]['data'].synaptic_input[
                     self.network_graph.nodes[target_pop]['data'].current_input_idx +
@@ -358,16 +359,16 @@ class Circuit(object):
 
         # reduce states to time-window
         if time_window:
-            states = states[int(time_window[0]/self.step_size):int(time_window[1]/self.step_size), :]
+            states = states[int(time_window[0] / self.step_size):int(time_window[1] / self.step_size), :]
 
         return states
 
     def plot_population_states(self,
-                               population_idx: Optional[List[int]]=None,
+                               population_idx: Optional[List[int]] = None,
                                state_idx: int = 0,
-                               time_window: Optional[List[float]]=None,
+                               time_window: Optional[List[float]] = None,
                                create_plot: bool = True,
-                               axes: Optional[object] = None
+                               axes: Optional[Axes] = None
                                ) -> object:
         """Creates figure with population states over time.
 
@@ -410,6 +411,8 @@ class Circuit(object):
 
         if axes is None:
             fig, axes = plt.subplots(num='Population States')
+        else:
+            fig = axes.get_figure()
 
         legend_labels = []
         for i in range(len(population_idx)):
@@ -473,6 +476,7 @@ class CircuitFromScratch(Circuit):
     :class:`Circuit`: Detailed explanation of attributes and methods on circuit.
 
     """
+
     def __init__(self,
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
@@ -662,19 +666,20 @@ class CircuitFromPopulations(Circuit):
     :class:`Circuit`: Detailed explanation of attributes and methods on circuit.
 
     """
+
     def __init__(self,
                  population_types: List[str],
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
                  step_size: float = 5e-4,
                  max_synaptic_delay: Union[float, List[float]] = 0.05,
-                 synaptic_modulation_direction: Optional[List[List[np.ndarray]]]=None,
+                 synaptic_modulation_direction: Optional[List[List[np.ndarray]]] = None,
                  membrane_capacitance: Union[float, List[float]] = 1e-12,
                  tau_leak: Union[float, List[float]] = 0.016,
                  resting_potential: Union[float, List[float]] = -0.075,
                  init_states: Union[float, np.ndarray] = 0.,
                  population_class: Union[List[str], str] = 'Population',
-                 population_labels: Optional[List[str]]=None
+                 population_labels: Optional[List[str]] = None
                  ) -> None:
         """Instantiates circuit from population types and parameters.
         """
@@ -830,7 +835,7 @@ class CircuitFromCircuit(Circuit):
         max_population_delay = np.max(delays, axis=1)
 
         # initialize stuff
-        n_populations = np.zeros(n_circuits+1, dtype=int)
+        n_populations = np.zeros(n_circuits + 1, dtype=int)
         connectivity_coll = list()
         delays_coll = list()
         populations = list()
@@ -840,7 +845,7 @@ class CircuitFromCircuit(Circuit):
         for i in range(n_circuits):
 
             # collect population count
-            n_populations[i+1] = n_populations[i] + circuits[i].N
+            n_populations[i + 1] = n_populations[i] + circuits[i].N
 
             # collect connectivity matrix
             connectivity_tmp = circuits[i].C
@@ -857,7 +862,6 @@ class CircuitFromCircuit(Circuit):
 
             # collect populations
             for pop in circuits[i].populations:
-
                 # update population label
                 pop.label = circuit_labels[i] + '_' + pop.label
 
@@ -892,11 +896,11 @@ class CircuitFromCircuit(Circuit):
         for i in range(n_circuits):
 
             # set intra-circuit connectivity of circuit i
-            connectivity_new[n_populations[i]:n_populations[i+1], n_populations[i]:n_populations[i+1], :] = \
+            connectivity_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1], :] = \
                 connectivity_coll[i]
 
             # set intra-circuit delays of circuit i
-            delays_new[n_populations[i]:n_populations[i+1], n_populations[i]:n_populations[i+1]] = delays_coll[i]
+            delays_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1]] = delays_coll[i]
 
             # loop again over all circuits
             for j in range(n_circuits):
@@ -906,10 +910,9 @@ class CircuitFromCircuit(Circuit):
 
                     # loop over each input population in circuit i,j
                     for k in range(len(input_populations[i][j])):
-
                         # set inter-circuit connectivities
-                        connectivity_new[n_populations[j]+input_populations[i][j][k],
-                                         n_populations[i]+output_populations[i, j], :] = connectivity[i, j, :]
+                        connectivity_new[n_populations[j] + input_populations[i][j][k],
+                        n_populations[i] + output_populations[i, j], :] = connectivity[i, j, :]
 
                         # set inter-circuit delays
                         delays_new[n_populations[j] + input_populations[i][j][k],
@@ -923,7 +926,6 @@ class CircuitFromCircuit(Circuit):
                          connectivity=connectivity_new,
                          delays=delays_new,
                          step_size=circuits[0].step_size)
-
 
 # def update_step_size(self, new_step_size, synaptic_inputs, update_threshold=1e-2, extrinsic_current=None,
 #                      extrinsic_synaptic_modulation=None, idx=0, interpolation_type='linear'):

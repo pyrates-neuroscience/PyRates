@@ -1,7 +1,8 @@
 """Templates for specific population parametrizations.
 """
 
-from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
+from core.population import Population, PlasticPopulation  # type: ignore
+from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation  # type: ignore
 from typing import Optional, List, Dict, Union
 import numpy as np
 
@@ -429,6 +430,8 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
                  label: str = 'Moran_IINs'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
+
+
         """
 
         ############################
@@ -436,7 +439,8 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
         ############################
 
         # synapse type
-        synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
+        if not synapses:
+            synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
@@ -530,10 +534,12 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
         ############################
 
         # synapse type
-        synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
+        if not synapses:
+            synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
 
         # synaptic plasticity
-        plastic_synapses = [True, False] if not plastic_synapses else plastic_synapses
+        if not plastic_synapses:  # A list [False] evaluates correctly
+            plastic_synapses = [True, False] if not plastic_synapses else plastic_synapses
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
@@ -580,7 +586,7 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
         # function parameters
         params = {'tau_depression': tau_depression,
                   'tau_recycle': tau_recycle}
-        param_list = list()
+        param_list = list()  # type: List[Union[dict, None]]
         for p in plastic_synapses:
             if p:
                 param_list.append(params)
