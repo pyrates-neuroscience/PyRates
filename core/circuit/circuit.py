@@ -313,7 +313,7 @@ class Circuit(object):
 
     def get_population_states(self,
                               state_variable_idx: int,
-                              population_idx: Optional[list] = None,
+                              population_idx: Optional[Union[list, range]] = None,
                               time_window: Optional[List[float]] = None
                               ) -> np.ndarray:
         """Extracts specified state variable from populations and puts them into matrix.
@@ -354,13 +354,13 @@ class Circuit(object):
         states = list()
         for idx in population_idx:
             states.append(np.array(self.populations[idx].state_variables, ndmin=2)[1:, state_variable_idx])
-        states = np.array(states, ndmin=2).T
+        _states = np.array(states, ndmin=2).T
 
         # reduce states to time-window
         if time_window:
-            states = states[int(time_window[0] / self.step_size):int(time_window[1] / self.step_size), :]
+            _states = _states[int(time_window[0] / self.step_size):int(time_window[1] / self.step_size), :]
 
-        return states
+        return _states
 
     def plot_population_states(self,
                                population_idx: Optional[Union[List[int], range]] = None,
