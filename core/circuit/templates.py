@@ -5,6 +5,7 @@ import numpy as np
 
 from core.circuit import CircuitFromPopulations, CircuitFromScratch, Circuit
 from core.population import WangKnoescheCells
+from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
 from typing import Optional
 
 __author__ = "Richard Gast, Daniel Rose"
@@ -102,8 +103,6 @@ class WangKnoescheCircuit(Circuit):
 
     Parameters
     ----------
-    resting_potential
-        Default = 0.0 V.
     step_size
         Default = 5e-4 s.
     max_synaptic_delay
@@ -130,7 +129,6 @@ class WangKnoescheCircuit(Circuit):
     """
 
     def __init__(self,
-                 resting_potential: float = 0.0,
                  step_size: float = 5e-4,
                  max_synaptic_delay: Optional[float] = None,
                  delays: Optional[np.ndarray] = None,
@@ -150,24 +148,42 @@ class WangKnoescheCircuit(Circuit):
         n_synapses = 2
 
         # populations
-        l23_pcs = WangKnoescheCells(step_size=step_size, resting_potential=resting_potential,
-                                    max_synaptic_delay=max_synaptic_delay, init_state=init_states[0], label='L23_PCs',
-                                    tau_depression=tau_depression, tau_recycle=tau_recycle)
-        l23_iins = WangKnoescheCells(step_size=step_size, resting_potential=resting_potential,
-                                     max_synaptic_delay=max_synaptic_delay, init_state=init_states[1], label='L23_IIns',
-                                     synapses=['JansenRitExcitatorySynapse'], plastic_synapses=[True],
-                                     tau_depression=tau_depression, tau_recycle=tau_recycle)
-        l4_eins = WangKnoescheCells(step_size=step_size, resting_potential=resting_potential,
-                                    max_synaptic_delay=max_synaptic_delay, init_state=init_states[2], label='L4_EINs',
-                                    synapses=['JansenRitExcitatorySynapse'], plastic_synapses=[True],
-                                    tau_depression=tau_depression, tau_recycle=tau_recycle)
-        l56_pcs = WangKnoescheCells(step_size=step_size, resting_potential=resting_potential,
-                                    max_synaptic_delay=max_synaptic_delay, init_state=init_states[3], label='L56_PCs',
-                                    tau_depression=tau_depression, tau_recycle=tau_recycle)
-        l56_iins = WangKnoescheCells(step_size=step_size, resting_potential=resting_potential,
-                                     max_synaptic_delay=max_synaptic_delay, init_state=init_states[4], label='L56_IINs',
-                                     synapses=['JansenRitExcitatorySynapse'], plastic_synapses=[True],
-                                     tau_depression=tau_depression, tau_recycle=tau_recycle)
+        l23_pcs = WangKnoescheCells(step_size=step_size,
+                                    max_synaptic_delay=max_synaptic_delay,
+                                    init_state=init_states[0],
+                                    label='L23_PCs',
+                                    tau_depression=tau_depression,
+                                    tau_recycle=tau_recycle)
+        l23_iins = WangKnoescheCells(step_size=step_size,
+                                     max_synaptic_delay=max_synaptic_delay,
+                                     init_state=init_states[1],
+                                     label='L23_IIns',
+                                     synapses=['JansenRitExcitatorySynapse'],
+                                     plastic_synapses=[True],
+                                     tau_depression=tau_depression,
+                                     tau_recycle=tau_recycle)
+        l4_eins = WangKnoescheCells(step_size=step_size,
+                                    max_synaptic_delay=max_synaptic_delay,
+                                    init_state=init_states[2],
+                                    label='L4_EINs',
+                                    synapses=['JansenRitExcitatorySynapse'],
+                                    plastic_synapses=[True],
+                                    tau_depression=tau_depression,
+                                    tau_recycle=tau_recycle)
+        l56_pcs = WangKnoescheCells(step_size=step_size,
+                                    max_synaptic_delay=max_synaptic_delay,
+                                    init_state=init_states[3],
+                                    label='L56_PCs',
+                                    tau_depression=tau_depression,
+                                    tau_recycle=tau_recycle)
+        l56_iins = WangKnoescheCells(step_size=step_size,
+                                     max_synaptic_delay=max_synaptic_delay,
+                                     init_state=init_states[4],
+                                     label='L56_IINs',
+                                     synapses=['JansenRitExcitatorySynapse'],
+                                     plastic_synapses=[True],
+                                     tau_depression=tau_depression,
+                                     tau_recycle=tau_recycle)
 
         N = 5
 
@@ -200,15 +216,17 @@ class WangKnoescheCircuit(Circuit):
                          step_size=step_size)
 
 
-class MoranCircuit(CircuitFromPopulations):
+class MoranCircuit(Circuit):
     """Basic 3-population cortical column circuit as defined in [1]_.
 
     Parameters
     ----------
-    resting_potential
-        Default = 0.0 V.
     step_size
         Default = 5e-4 s.
+    max_synaptic_delay
+        Default = None.
+    epsilon
+        Default = 1e-5 V.
     delays
         Default = None
     init_states
@@ -227,28 +245,25 @@ class MoranCircuit(CircuitFromPopulations):
     """
 
     def __init__(self,
-                 resting_potential: float = 0.0,
                  step_size: float = 5e-4,
-                 max_synaptic_delays: Optional[float] = None,
+                 max_synaptic_delay: Optional[float] = None,
+                 epsilon: float = 1e-5,
                  delays: Optional[np.ndarray] = None,
                  init_states: np.ndarray = np.zeros(3)
                  ) -> None:
-        """Initializes a basic Moran circuit of pyramidal cells, excitatory and inhibitory interneurons.
+        """Initializes a basic Moran circuit of pyramidal cells (plastic + non-plastic), excitatory and inhibitory
+        interneurons.
         """
 
         ##################
         # set parameters #
         ##################
 
-        # population information
-        population_classes = ['SecondOrderPopulation',
-                              'SecondOrderPlasticPopulation',
-                              'SecondOrderPopulation']
-
-        population_labels = ['PCs',
+        population_labels = ['PCs_plastic',
+                             'PCs_nonplastic',
                              'EINs',
                              'IINs']
-        N = 3
+        N = 4
 
         # synapse information
         n_synapses = 2                                       # excitatory and inhibitory
@@ -256,26 +271,59 @@ class MoranCircuit(CircuitFromPopulations):
         # connectivity matrix
         connections = np.zeros((N, N, n_synapses))
 
-        connections[:, :, 0] = [[0., 128., 0.],     # excitatory connections
-                                [128., 0.,  0.],
-                                [64., 0., 0.]]
+        connections[:, :, 0] = [[0., 0., 128., 0.],     # excitatory connections
+                                [0., 0., 128., 0.],
+                                [128., 0., 0.,  0.],
+                                [0., 64., 0., 0.]]
 
-        connections[:, :, 1] = [[0., 0., 64.],    # inhibitory connections
-                                [0., 0., 0.],
-                                [0., 0., 16.]]
+        connections[:, :, 1] = [[0., 0., 0., 64.],      # inhibitory connections
+                                [0., 0., 0., 64.],
+                                [0., 0., 0., 0.],
+                                [0., 0., 0., 16.]]
+
+        # spike-frequency adaptation time constant
+        tau = 0.512
+
+        # delays
+        if delays is None:
+            delays = np.zeros((N, N)) + 2e-3 / step_size
+
+        # synapse params
+        synapse_params = {'epsilon': epsilon}
+
+        ###########################
+        # instantiate populations #
+        ###########################
+
+        pcs_plastic = MoranPyramidalCells(step_size=step_size,
+                                          max_synaptic_delay=max_synaptic_delay,
+                                          synapse_params=[synapse_params, synapse_params],
+                                          init_state=init_states[0],
+                                          tau=tau,
+                                          label=population_labels[0]
+                                          )
+        pcs_nonplastic = MoranPyramidalCells(step_size=step_size,
+                                             max_synaptic_delay=max_synaptic_delay,
+                                             synapse_params=[synapse_params, synapse_params],
+                                             init_state=init_states[0],
+                                             label=population_labels[1]
+                                             )
+        eins = MoranExcitatoryInterneurons(step_size=step_size,
+                                           max_synaptic_delay=max_synaptic_delay,
+                                           synapse_params=[synapse_params],
+                                           init_state=init_states[1],
+                                           label=population_labels[2])
+        iins = MoranInhibitoryInterneurons(step_size=step_size,
+                                           max_synaptic_delay=max_synaptic_delay,
+                                           synapse_params=[synapse_params, synapse_params],
+                                           init_state=init_states[2],
+                                           label=population_labels[3])
 
         ###################
         # call super init #
         ###################
 
-        super().__init__(connectivity=connections,
-                         population_types=['MoranPyramidalCells',
-                                           'MoranExcitatoryInterneurons',
-                                           'MoranInhibitoryInterneurons'],
-                         max_synaptic_delay=max_synaptic_delays,
+        super().__init__(populations=[pcs_plastic, pcs_nonplastic, eins, iins],
+                         connectivity=connections,
                          delays=delays,
-                         step_size=step_size,
-                         resting_potential=resting_potential,
-                         init_states=init_states,
-                         population_class=population_classes,
-                         population_labels=population_labels)
+                         step_size=step_size)

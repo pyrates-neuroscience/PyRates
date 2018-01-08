@@ -171,7 +171,7 @@ class JansenRitInterneurons(SecondOrderPopulation):
                          axon_class='SigmoidAxon')
 
 
-class MoranPyramidalCells(SecondOrderPopulation):
+class MoranPyramidalCells(SecondOrderPlasticPopulation):
     """Population of pyramidal cells as described in [1]_.
 
     Parameters
@@ -192,6 +192,8 @@ class MoranPyramidalCells(SecondOrderPopulation):
         Default = None.
     axon_params
         Default = None.
+    tau
+        Default = None.
     store_state_variables
         Default = False.
     label
@@ -205,6 +207,7 @@ class MoranPyramidalCells(SecondOrderPopulation):
     ----------
     .. [1] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
        Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
+
     """
     def __init__(self,
                  synapses: Optional[List[str]] = None,
@@ -218,6 +221,7 @@ class MoranPyramidalCells(SecondOrderPopulation):
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'Axon',
+                 tau: Optional[float] = None,
                  store_state_variables: bool = False,
                  label: str = 'Moran_PCs'
                  ) -> None:
@@ -230,93 +234,6 @@ class MoranPyramidalCells(SecondOrderPopulation):
 
         # synapse type
         synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
-
-        # synapse delay
-        if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
-
-        ###################
-        # call super init #
-        ###################
-
-        super().__init__(synapses=synapses,
-                         axon=axon,
-                         init_state=init_state,
-                         step_size=step_size,
-                         max_synaptic_delay=max_synaptic_delay,
-                         resting_potential=resting_potential,
-                         max_population_delay=max_population_delay,
-                         synapse_params=synapse_params,
-                         axon_params=axon_params,
-                         synapse_class=synapse_class,
-                         axon_class=axon_class,
-                         store_state_variables=store_state_variables,
-                         label=label
-                         )
-
-
-class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
-    """Population of excitatory interneurons without spike-frequency-adaptation (see [1]_).
-
-    Parameters
-    ----------
-    synapses
-        Default = MoranExcitatorySynapse.
-    axon
-        Default = MoranAxon.
-    init_state
-        Default = 0 V.
-    step_size
-        Default = 0.0005 s.
-    max_synaptic_delay
-        Default = None
-    max_population_delay
-        Default = 0.
-    synapse_params
-        Default = None.
-    axon_params
-        Default = None.
-    store_state_variables
-        Default = False.
-    label
-        Default = 'Moran_EINs'
-
-    See Also
-    --------
-    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
-
-    References
-    ----------
-    .. [1] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
-       Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
-
-    """
-
-    def __init__(self,
-                 synapses: Optional[List[str]] = None,
-                 axon: str = 'MoranAxon',
-                 init_state: float = 0.,
-                 step_size: float = 0.0001,
-                 max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
-                 resting_potential: float = 0.,
-                 max_population_delay: float = 0.,
-                 synapse_params: Optional[List[dict]] = None,
-                 axon_params: Optional[Dict[str, float]] = None,
-                 synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
-                 axon_class: str = 'Axon',
-                 store_state_variables: bool = False,
-                 tau: float = 0.512,
-                 label: str = 'Moran_EINs'
-                 ) -> None:
-        """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
-        """
-
-        ############################
-        # check synapse parameters #
-        ############################
-
-        # synapse type
-        synapses = ['MoranExcitatorySynapse'] if not synapses else synapses
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
@@ -369,10 +286,96 @@ class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
                          axon_params=axon_params,
                          synapse_class=synapse_class,
                          axon_class=axon_class,
-                         store_state_variables=store_state_variables,
-                         axon_plasticity_function=spike_frequency_adaptation,
+                         axon_plasticity_function=spike_frequency_adaptation if tau else None,
                          axon_plasticity_target_param='adaptation',
                          axon_plasticity_function_params=params,
+                         store_state_variables=store_state_variables,
+                         label=label
+                         )
+
+
+class MoranExcitatoryInterneurons(SecondOrderPopulation):
+    """Population of excitatory interneurons as defined in [1]_.
+
+    Parameters
+    ----------
+    synapses
+        Default = MoranExcitatorySynapse.
+    axon
+        Default = MoranAxon.
+    init_state
+        Default = 0 V.
+    step_size
+        Default = 0.0005 s.
+    max_synaptic_delay
+        Default = None
+    max_population_delay
+        Default = 0.
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
+    store_state_variables
+        Default = False.
+    label
+        Default = 'Moran_EINs'
+
+    See Also
+    --------
+    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
+
+    References
+    ----------
+    .. [1] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
+       Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
+
+    """
+
+    def __init__(self,
+                 synapses: Optional[List[str]] = None,
+                 axon: str = 'MoranAxon',
+                 init_state: float = 0.,
+                 step_size: float = 0.0001,
+                 max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
+                 resting_potential: float = 0.,
+                 max_population_delay: float = 0.,
+                 synapse_params: Optional[List[dict]] = None,
+                 axon_params: Optional[Dict[str, float]] = None,
+                 synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
+                 axon_class: str = 'Axon',
+                 store_state_variables: bool = False,
+                 label: str = 'Moran_EINs'
+                 ) -> None:
+        """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
+        """
+
+        ############################
+        # check synapse parameters #
+        ############################
+
+        # synapse type
+        synapses = ['MoranExcitatorySynapse'] if not synapses else synapses
+
+        # synapse delay
+        if not max_synaptic_delay and not synapse_params:
+            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+
+        ###################
+        # call super init #
+        ###################
+
+        super().__init__(synapses=synapses,
+                         axon=axon,
+                         init_state=init_state,
+                         step_size=step_size,
+                         max_synaptic_delay=max_synaptic_delay,
+                         resting_potential=resting_potential,
+                         max_population_delay=max_population_delay,
+                         synapse_params=synapse_params,
+                         axon_params=axon_params,
+                         synapse_class=synapse_class,
+                         axon_class=axon_class,
+                         store_state_variables=store_state_variables,
                          label=label)
 
 

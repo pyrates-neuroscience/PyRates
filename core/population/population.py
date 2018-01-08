@@ -291,6 +291,7 @@ class Population(object):
                                                   bin_size=self.step_size, max_delay=self.max_synaptic_delay[i]))
             else:
                 raise AttributeError('Invalid synapse type!')
+            self.synapses[-1].synaptic_kernel = self.synapses[-1].evaluate_kernel(build_kernel=True)
 
     def set_axon(self,
                  axon_subtype: str,
@@ -581,12 +582,15 @@ class Population(object):
         self.dummy_input = np.zeros((1, self.n_synapses))
 
     def clear(self):
-        """Clears states stored on population.
+        """Clears states stored on population and synaptic input.
         """
 
         init_state = self.state_variables[0]
         self.state_variables.clear()
         self.state_variables.append(init_state)
+        self.synaptic_input = np.zeros_like(self.synaptic_input)
+        self.current_firing_rate = self.get_firing_rate()
+        self.current_input_idx = np.zeros_like(self.current_input_idx)
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]]=None, create_plot: Optional[bool]=True,
                               axes=None) -> object:

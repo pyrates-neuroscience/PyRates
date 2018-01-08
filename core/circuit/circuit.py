@@ -112,7 +112,9 @@ class Circuit(object):
 
             # check whether max_population_delay has changed
             if np.max(delays[i, :]) > self.populations[i].max_population_delay:
-                self.populations[i].max_population_delay = np.max(delays[i, :])
+                self.populations[i].synaptic_input = np.zeros((int(np.max(delays[i, :])) +
+                                                               np.max(self.populations[i].kernel_lengths),
+                                                               self.populations[i].n_synapses))
 
             # TODO: make sure that population step-size corresponds to circuit step-size
 
@@ -425,6 +427,13 @@ class Circuit(object):
 
         return axes
 
+    def clear(self):
+        """Method that clears state history of all populations on circuit.
+        """
+
+        for i in range(self.N):
+            self.populations[i].clear()
+
 
 class CircuitFromScratch(Circuit):
     """Circuit class that requires information about each synapse/axon in the circuit to be build.
@@ -708,6 +717,8 @@ class CircuitFromPopulations(Circuit):
             init_states = np.zeros(N) + init_states
         if type(max_synaptic_delay) is float:
             max_synaptic_delay = np.zeros(N) + max_synaptic_delay
+        elif max_synaptic_delay is None:
+            max_synaptic_delay = check_nones(max_synaptic_delay, N)
         if type(tau_leak) is float:
             tau_leak = np.zeros(N) + tau_leak
         if type(resting_potential) is float:

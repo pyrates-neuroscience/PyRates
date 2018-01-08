@@ -63,12 +63,12 @@ def set_instance(class_handle, instance_type: str=None, instance_params: dict=No
     if instance_params and instance_type:
 
         # fetch attributes on object
-        attributes = inspect.getmembers(class_handle, lambda a: not (inspect.isroutine(a)))
+        attributes = inspect.getmembers(instance, lambda a: not (inspect.isroutine(a)))
         attributes = [a for a in attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
         # update passed parameters of instance
         for attr in attributes:
-            instance = update_param(attr, instance_params, instance)
+            instance = update_param(attr[0], instance_params, instance)
 
     elif instance_params:
 
@@ -98,7 +98,7 @@ def update_param(param: str, param_dict: dict, object_instance) -> object:
 
     """
 
-    if param not in object_instance:
+    if not hasattr(object_instance, param):
         raise AttributeError('Param needs to be an attribute of object_instance!')
 
     if param in param_dict:
