@@ -1,7 +1,8 @@
 """Templates for specific population parametrizations.
 """
 
-from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
+from core.population import Population, PlasticPopulation  # type: ignore
+from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation  # type: ignore
 from typing import Optional, List, Dict, Union
 import numpy as np
 
@@ -77,7 +78,7 @@ class JansenRitInterneurons(SecondOrderPopulation):
     """Interneuron population with excitatory synapse as defined in [1]_.
 
     Parameters
-    ----------
+    ----------# type: ignore
     synapses
         Default = JansenRitExcitatorySynapse.
     axon
@@ -270,6 +271,10 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
 
     Parameters
     ----------
+    synapses
+        List of synapses defined by strings. Default argument is ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'].
+        (Moved default argument into body of __init__, since a list is mutable which may cause problems as a default
+        argument.)
 
     See Also
     --------
@@ -280,7 +285,7 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
     """
 
     def __init__(self,
-                 synapses: List[str] = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'],
+                 synapses: List[str] = None,
                  axon: str = 'MoranAxon',
                  init_state: float = 0.,
                  step_size: float = 0.0001,
@@ -295,7 +300,12 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
                  label: str = 'MoranCells'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
+
+
         """
+
+        if not synapses:
+            synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse']
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -318,6 +328,14 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
 
     Parameters
     ----------
+    synapses
+        (Optional) list of synapses defined by strings. Default argument is ['JansenRitExcitatorySynapse',
+        'JansenRitInhibitorySynapse']. (Moved default argument into body of __init__, since a list is mutable which may
+        cause problems as a default argument.)
+    plastic_synapses
+        (Optional) list of booleans to define plastic synapses. Default argument is [True, False].
+        (Moved default argument into body of __init__, since a list is mutable which may cause problems as a default
+        argument.)
 
     See Also
     --------
@@ -327,7 +345,7 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
 
     """
     def __init__(self,
-                 synapses: List[str] = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'],
+                 synapses: Optional[List[str]] = None,
                  axon: str = 'JansenRitAxon',
                  init_state: float = 0.,
                  step_size: float = 0.0001,
@@ -342,10 +360,20 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
                  label: str = 'MoranCells',
                  tau_depression: float = 0.05,
                  tau_recycle: float = 0.5,
-                 plastic_synapses: List[bool] = [True, False]
+                 plastic_synapses: Optional[List[bool]] = None
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a synaptic efficacy adaptation mechanism.
         """
+
+        ######################################################
+        # mutable default arguments defined in function body #
+        ######################################################
+
+        if not synapses:
+            synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
+
+        if not plastic_synapses:  # A list [False] evaluates correctly
+            plastic_synapses = [True, False]
 
         ########################################
         # define synaptic adaptation mechanism #
@@ -378,7 +406,7 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
         # function parameters
         params = {'tau_depression': tau_depression,
                   'tau_recycle': tau_recycle}
-        param_list = list()
+        param_list = list()  # type: List[Union[dict, None]]
         for p in plastic_synapses:
             if p:
                 param_list.append(params)
