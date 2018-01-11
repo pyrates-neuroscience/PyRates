@@ -14,7 +14,7 @@ PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
 
 
 __author__ = "Richard Gast, Daniel Rose"
-__status__ = "Development">>>>>>> cleanup
+__status__ = "Development"
 
 
 class Circuit(object):
@@ -65,7 +65,7 @@ class Circuit(object):
                  connectivity: np.ndarray,
                  delays: np.ndarray,
                  step_size: float = 5e-4
-                 ) -> None:>>>>>>> cleanup
+                 ) -> None:
         """Instantiates population circuit object.
         """
 
@@ -481,7 +481,7 @@ class CircuitFromScratch(Circuit):
     """
 
     def __init__(self,
-                 connectivity: np.ndar>>>>>>> cleanupray,
+                 connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
                  step_size: float = 5e-4,
                  synapses: Optional[List[str]] = None,

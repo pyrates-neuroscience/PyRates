@@ -308,7 +308,7 @@ class Population(object):
                                                   max_delay=self.max_synaptic_delay[i]))
             else:
                 raise AttributeError('Invalid synapse type!')
-            self.synapses[-1].synaptic_kernel = self.synapses[-1].evaluate_kernel(build_kernel=True)
+            self.synapses[-1].synaptic_kernel = self.synapses[-1].build_kernel()
 
     def _set_axon(self,
                   axon_subtype: Optional[str] = None,
@@ -1067,9 +1067,7 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
     See Also
     --------
     :class:`Population`: Detailed description of parameters, attributes and methods.
-    :class:`PlasticPopulation`: Detailed description of>>>>>>> cleanup
-870
- plasticity parameters.
+    :class:`PlasticPopulation`: Detailed description of plasticity parameters.
 
     References
     ----------
@@ -1093,9 +1091,7 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
                  store_state_variables: bool = False,
                  label: str = 'Custom',
                  axon_plasticity_function: Callable[[float], float] = None,
-                 axon_plasticity_target_param: str = None,>>>>>>> cleanup
-870
-
+                 axon_plasticity_target_param: str = None,
                  axon_plasticity_function_params: dict = None,
                  synapse_plasticity_function: Callable[[float], float] = None,
                  synapse_plasticity_function_params: Optional[List[dict]] = None,
