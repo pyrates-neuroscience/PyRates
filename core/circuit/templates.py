@@ -2,12 +2,11 @@
 """
 
 import numpy as np
+from typing import Optional, List
 
 from core.circuit import CircuitFromPopulations, CircuitFromScratch, Circuit
 from core.population import WangKnoescheCells
 from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
-from core.population import JansenRitPyramidalCells, JansenRitInterneurons
-from typing import Optional, List
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"

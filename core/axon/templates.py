@@ -1,8 +1,8 @@
 """Templates for specific axon parametrizations.
 """
 
-from core.axon import SigmoidAxon, Axon  # type: ignore
 import numpy as np
+from core.axon import SigmoidAxon, Axon  # type: ignore
 
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"

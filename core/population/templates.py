@@ -1,9 +1,10 @@
 """Templates for specific population parametrizations.
 """
 
-from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation
 from typing import Optional, List, Dict, Union
 import numpy as np
+from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation
+
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
