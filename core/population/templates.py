@@ -267,7 +267,7 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         # spike frequency adaptation params
         ###################################
@@ -359,7 +359,7 @@ class MoranExcitatoryInterneurons(SecondOrderPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         # call super init
         #################
@@ -446,7 +446,7 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         # call super init
         #################
@@ -583,7 +583,7 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         # synaptic plasticity params
         ############################
