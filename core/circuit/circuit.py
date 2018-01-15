@@ -17,6 +17,11 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
+#########################
+# generic circuit class #
+#########################
+
+
 class Circuit(object):
     """Base circuit class.
 
@@ -86,16 +91,15 @@ class Circuit(object):
             raise ValueError('Time constants (delays, step_size) cannot be negative. See parameter docstrings for '
                              'further explanation.')
 
-        ##########################
-        # set circuit attributes #
-        ##########################
+        # set circuit attributes
+        ########################
 
         # circuit properties
         self.step_size = step_size
         self.N = len(populations)
         self.n_synapses = connectivity.shape[2]
         self.t = 0.
-        self.active_synapses: List[List[int]] = list()
+        self.active_synapses = list()
 
         # circuit structure
         self.populations = populations
@@ -115,12 +119,12 @@ class Circuit(object):
             # check whether max_population_delay has changed
             if np.max(delays[i, :]) > self.populations[i].max_population_delay:
                 self.populations[i].max_population_delay = np.max(delays[i, :])
+                self.populations[i]._set_synapse_dependencies(update=False)
 
             # TODO: make sure that population step-size corresponds to circuit step-size
 
-        ########################
-        # create network graph #
-        ########################
+        # create network graph
+        ######################
 
         # create empty directed multi-graph
         self.network_graph = MultiDiGraph()
@@ -165,7 +169,7 @@ class Circuit(object):
 
                 # turn of plasticity at original synapse
                 if isinstance(current_population, PlasticPopulation):
-                    current_population.synapse_plasticity_function_params[k2] = None  # type: ignore
+                    current_population.synapse_plasticity_function_params[k2] = None
 
             self.active_synapses[i] += new_synapses
 
@@ -193,9 +197,9 @@ class Circuit(object):
             If true, simulation progress will be printed to console.
 
         """
-        ##########################
-        # check input parameters #
-        ##########################
+
+        # check input parameters
+        ########################
 
         # simulation time
         if simulation_time < 0.:
@@ -232,9 +236,8 @@ class Circuit(object):
             if len(extrinsic_current[0]) != self.N:
                 raise AttributeError('Second dimension of extrinsic current has to match the number of populations!')
 
-        ####################
-        # simulate network #
-        ####################
+        # simulate network
+        ##################
 
         for n in range(simulation_time_steps):
 
@@ -273,8 +276,8 @@ class Circuit(object):
         """
 
         for i in range(self.N):
-            self.populations[i].state_update(synaptic_input=synaptic_inputs[i, self.active_synapses[i]
-            [0:synaptic_inputs.shape[1]]],
+            self.populations[i].state_update(synaptic_input=synaptic_inputs[i, self.active_synapses[i][0:self.
+                                             n_synapses]],
                                              extrinsic_current=extrinsic_current[i],
                                              extrinsic_synaptic_modulation=extrinsic_modulation[i])
 
@@ -303,9 +306,11 @@ class Circuit(object):
 
             # loop over existing connections between node and target node
             for conn_idx in connected_pops[target_pop]:
+
                 # transfer input to target node
                 self.network_graph.nodes[target_pop]['data'].synaptic_input[
-                    self.network_graph.nodes[target_pop]['data'].current_input_idx +
+                    self.network_graph.nodes[target_pop]['data'].current_input_idx[
+                        connected_pops[target_pop][conn_idx]['synapse_index']] +
                     connected_pops[target_pop][conn_idx]['delay'],
                     connected_pops[target_pop][conn_idx]['synapse_index']] += \
                     self.network_graph.nodes[pop]['data'].current_firing_rate * \
@@ -334,9 +339,8 @@ class Circuit(object):
 
         """
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         if state_variable_idx < 0:
             raise ValueError('Index cannot be negative.')
@@ -346,9 +350,8 @@ class Circuit(object):
         if not population_idx:
             population_idx = [i for i in range(self.N)]
 
-        ############################################
-        # extract state variables from populations #
-        ############################################
+        # extract state variables from populations
+        ##########################################
 
         # get states from populations for all time-steps
         states = list()
@@ -357,12 +360,18 @@ class Circuit(object):
 
         _states = np.array(states, ndmin=2).T
 
-
         # reduce states to time-window
         if time_window:
             _states = _states[int(time_window[0] / self.step_size):int(time_window[1] / self.step_size), :]
 
         return _states
+
+    def clear(self):
+        """Clears states of all populations
+        """
+
+        for pop in self.populations:
+            pop.clear()
 
     def plot_population_states(self,
                                population_idx: Optional[Union[List[int], range]] = None,
@@ -393,29 +402,25 @@ class Circuit(object):
 
         """
 
-        ########################
-        # check population idx #
-        ########################
+        # check population idx
+        ######################
 
         if population_idx is None:
             population_idx = range(self.N)
 
-        #########################
-        # get population states #
-        #########################
+        # get population states
+        #######################
 
         population_states = self.get_population_states(state_idx, population_idx, time_window)
 
-        ####################################
-        # plot population states over time #
-        ####################################
+        # plot population states over time
+        ##################################
 
         if axes is None:
             fig, axes = plt.subplots(num='Population States')
 
         else:
             fig = axes.get_figure()
-
 
         legend_labels = []
         for i in range(len(population_idx)):
@@ -430,6 +435,11 @@ class Circuit(object):
             fig.show()
 
         return axes
+
+
+############################################################
+# constructor for circuits from synapse + axon information #
+############################################################
 
 
 class CircuitFromScratch(Circuit):
@@ -507,9 +517,8 @@ class CircuitFromScratch(Circuit):
         """Instantiates circuit from synapse/axon types and parameters.
         """
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         # check whether axon/synapse information was given
         if synapses:
@@ -535,9 +544,8 @@ class CircuitFromScratch(Circuit):
             raise AttributeError('Number of axons needs to match the first dimension of connectivity. See docstrings'
                                  'for further explanation.')
 
-        ###########################
-        # instantiate populations #
-        ###########################
+        # instantiate populations
+        #########################
 
         N = connectivity.shape[0]
 
@@ -576,11 +584,11 @@ class CircuitFromScratch(Circuit):
         if not population_labels:
             population_labels = ['Custom' for _ in range(N)]
         if isinstance(synapse_class, str):
-            synapse_class = [synapse_class for _ in range(n_synapses)]  # type: ignore
+            synapse_class = [synapse_class for _ in range(n_synapses)]
         if isinstance(axon_class, str):
-            axon_class = [axon_class for _ in range(N)]  # type: ignore
+            axon_class = [axon_class for _ in range(N)]
         if isinstance(population_class, str):
-            population_class = [population_class for _ in range(N)]  # type: ignore
+            population_class = [population_class for _ in range(N)]
 
         # instantiate each population
         populations = list()  # type: List[Population]
@@ -589,60 +597,63 @@ class CircuitFromScratch(Circuit):
             # check and extract synapses that exist at respective population
             idx = (np.sum(connectivity[i, :, :], axis=0) != 0).squeeze()
             idx = np.asarray(idx.nonzero(), dtype=int)
-            # noinspection PyTypeChecker
             if len(idx) == 1:
                 idx = idx[0]
-            synapses_tmp = [synapses[j] for j in idx]  # type: ignore
-            synapse_params_tmp = [synapse_params[j] for j in idx]  # type: ignore
-            synapse_class_tmp = [synapse_class[j] for j in idx]  # type: ignore
-            synapse_plasticity_function_params_tmp = [synapse_plasticity_function_params[i][j] for j in idx]  # type: ignore
+            synapses_tmp = [synapses[j] for j in idx]
+            synapse_params_tmp = [synapse_params[j] for j in idx]
+            synapse_class_tmp = [synapse_class[j] for j in idx]
+            synapse_plasticity_function_params_tmp = [synapse_plasticity_function_params[i][j] for j in idx]
 
             # create dictionary with relevant parameters
             pop_params = {'synapses': synapses_tmp,
-                          'axon': axons[i],  # type: ignore
-                          'init_state': init_states[i],  # type: ignore
+                          'axon': axons[i],
+                          'init_state': init_states[i],
                           'step_size': step_size,
-                          'max_synaptic_delay': max_synaptic_delay[i],  # type: ignore
+                          'max_synaptic_delay': max_synaptic_delay[i],
                           'max_population_delay': max_population_delay[i],
                           'synapse_params': synapse_params_tmp,
-                          'axon_params': axon_params[i],  # type: ignore
+                          'axon_params': axon_params[i],
                           'synapse_class': synapse_class_tmp,
                           'axon_class': axon_class[i],
                           'label': population_labels[i]}
 
             # add plasticity parameters if necessary
             if population_class[i] == 'SecondOrderPlasticPopulation' or population_class[i] == 'PlasticPopulation':
-                pop_params['axon_plasticity_function'] = axon_plasticity_function[i]  # type: ignore
-                pop_params['axon_plasticity_target_param'] = axon_plasticity_target_param[i]  # type: ignore
-                pop_params['axon_plasticity_function_params'] = axon_plasticity_function_params[i]  # type: ignore
-                pop_params['synapse_plasticity_function'] = synapse_plasticity_function[i]  # type: ignore
+                pop_params['axon_plasticity_function'] = axon_plasticity_function[i]
+                pop_params['axon_plasticity_target_param'] = axon_plasticity_target_param[i]
+                pop_params['axon_plasticity_function_params'] = axon_plasticity_function_params[i]
+                pop_params['synapse_plasticity_function'] = synapse_plasticity_function[i]
                 pop_params['synapse_plasticity_function_params'] = synapse_plasticity_function_params_tmp
 
             # add first-order parameters if necessary
             if population_class[i] == 'Population' or population_class[i] == 'PlasticPopulation':
-                pop_params['synaptic_modulation_direction'] = synaptic_modulation_direction[i]  # type: ignore
-                pop_params['tau_leak'] = tau_leak[i]  # type: ignore
-                pop_params['resting_potential'] = resting_potential[i]  # type: ignore
-                pop_params['membrane_capacitance'] = membrane_capacitance[i]  # type: ignore
+                pop_params['synaptic_modulation_direction'] = synaptic_modulation_direction[i]
+                pop_params['tau_leak'] = tau_leak[i]
+                pop_params['resting_potential'] = resting_potential[i]
+                pop_params['membrane_capacitance'] = membrane_capacitance[i]
 
             # instantiate population
             if population_class[i] == 'SecondOrderPlasticPopulation':
-                populations.append(SecondOrderPlasticPopulation(**pop_params))  # type: ignore
+                populations.append(SecondOrderPlasticPopulation(**pop_params))
             elif population_class[i] == 'SecondOrderPopulation':
-                populations.append(SecondOrderPopulation(**pop_params))  # type: ignore
+                populations.append(SecondOrderPopulation(**pop_params))
             elif population_class[i] == 'PlasticPopulation':
-                populations.append(PlasticPopulation(**pop_params))  # type: ignore
+                populations.append(PlasticPopulation(**pop_params))
             else:
-                populations.append(Population(**pop_params))  # type: ignore
+                populations.append(Population(**pop_params))
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(populations=populations,
                          connectivity=connectivity,
                          delays=delays,
                          step_size=step_size)
+
+
+###############################################################
+# constructor that builds circuit from population information #
+###############################################################
 
 
 class CircuitFromPopulations(Circuit):
@@ -696,18 +707,16 @@ class CircuitFromPopulations(Circuit):
         """Instantiates circuit from population types and parameters.
         """
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         # attribute dimensions
         if len(population_types) != connectivity.shape[0]:
             raise AttributeError('One population type per population in circuit has to be passed. See parameter '
                                  'docstring for further information.')
 
-        ###########################
-        # instantiate populations #
-        ###########################
+        # instantiate populations
+        #########################
 
         N = len(population_types)
 
@@ -725,6 +734,8 @@ class CircuitFromPopulations(Circuit):
             init_states = np.zeros(N) + init_states
         if isinstance(max_synaptic_delay, float):
             max_synaptic_delay = np.zeros(N) + max_synaptic_delay
+        elif max_synaptic_delay is None:
+            max_synaptic_delay = check_nones(max_synaptic_delay, N)
         if isinstance(tau_leak, float):
             tau_leak = np.zeros(N) + tau_leak
         if isinstance(resting_potential, float):
@@ -740,13 +751,13 @@ class CircuitFromPopulations(Circuit):
             population_class = [population_class for _ in range(N)]
 
         # instantiate each population
-        populations: List[Population] = list()
+        populations = list()
         for i in range(N):
 
             # create parameter dict
             pop_params = {'init_state': init_states[i],
                           'step_size': step_size,
-                          'max_synaptic_delay': max_synaptic_delay[i],  # type: ignore
+                          'max_synaptic_delay': max_synaptic_delay[i],
                           'max_population_delay': max_population_delay[i],
                           'label': population_labels[i]}
 
@@ -771,14 +782,18 @@ class CircuitFromPopulations(Circuit):
                 else:
                     populations.append(set_instance(Population, population_types[i], **pop_params))
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(populations=populations,
                          connectivity=connectivity,
                          delays=delays,
                          step_size=step_size)
+
+
+#####################################################
+# constructor that builds circuit from sub-circuits #
+#####################################################
 
 
 class CircuitFromCircuit(Circuit):
@@ -816,9 +831,8 @@ class CircuitFromCircuit(Circuit):
         """Instantiates circuit from population types and parameters.
         """
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         # attribute dimensions
         if len(circuits) != connectivity.shape[0] or len(circuits) != connectivity.shape[1]:
@@ -828,9 +842,8 @@ class CircuitFromCircuit(Circuit):
             raise AttributeError('First and second dimension of delays need to match the number of circuits. '
                                  'See parameter docstring for further information.')
 
-        ######################################
-        # fetch important circuit attributes #
-        ######################################
+        # fetch important circuit attributes
+        ####################################
 
         n_circuits = len(circuits)
 
@@ -888,9 +901,8 @@ class CircuitFromCircuit(Circuit):
         if any(n_synapses) > connectivity.shape[2]:
             raise AttributeError('Cannot connect circuits that have more synapses than outer connectivity matrix!')
 
-        ###########################################
-        # build new connectivity and delay matrix #
-        ###########################################
+        # build new connectivity and delay matrix
+        #########################################
 
         # set input populations
         if not input_populations:
@@ -924,15 +936,14 @@ class CircuitFromCircuit(Circuit):
                     for k in range(len(input_populations[i][j])):
                         # set inter-circuit connectivities
                         connectivity_new[n_populations[j] + input_populations[i][j][k],
-                        n_populations[i] + output_populations[i, j], :] = connectivity[i, j, :]
+                                         n_populations[i] + output_populations[i, j], :] = connectivity[i, j, :]
 
                         # set inter-circuit delays
                         delays_new[n_populations[j] + input_populations[i][j][k],
                                    n_populations[i] + output_populations[i, j]] = delays[i, j]
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(populations=populations,
                          connectivity=connectivity_new,

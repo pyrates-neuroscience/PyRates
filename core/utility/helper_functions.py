@@ -9,7 +9,7 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
-def set_instance(class_handle, instance_type: str=None, instance_params: dict=None, **kwargs) -> object:
+def set_instance(class_handle, instance_type: str=None, instance_params: dict=None, **kwargs):
     """Instantiates object of `class_handle` and returns instance.
 
     Parameters
@@ -23,7 +23,7 @@ def set_instance(class_handle, instance_type: str=None, instance_params: dict=No
 
     Returns
     -------
-    object
+    instance
         Instance of `class_handle`.
 
     """
@@ -101,6 +101,12 @@ def update_param(param: str, param_dict: dict, object_instance) -> object:
     if not hasattr(object_instance, param):
         raise AttributeError('Param needs to be an attribute of object_instance!')
 
+    if 'args' in param:
+        dictionary = getattr(object_instance, param)
+        for key in dictionary:
+            if key in param_dict:
+                dictionary[key] = param_dict[key]
+        setattr(object_instance, param, dictionary)
     if param in param_dict:
         setattr(object_instance, param, param_dict[param])
 

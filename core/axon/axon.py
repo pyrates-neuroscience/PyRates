@@ -14,13 +14,10 @@ __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
 
 
-# Type Info #
-#############
-TransferFunction = Callable[[float, Any], float]
+################
+# generic axon #
+################
 
-
-# Main Body #
-#############
 
 class Axon(object):
     """Base axon class. Represents average behavior of generic axon hillok.
@@ -54,9 +51,8 @@ class Axon(object):
         """Instantiates base axon.
         """
 
-        ##################
-        # set attributes #
-        ##################
+        # set attributes
+        ################
 
         self.transfer_function = transfer_function
         self.axon_type = 'custom' if axon_type is None else axon_type
@@ -105,15 +101,13 @@ class Axon(object):
 
         """
 
-        ##########################
-        # calculate firing rates #
-        ##########################
+        # calculate firing rates
+        ########################
 
         firing_rates = self.compute_firing_rate(membrane_potentials)
 
-        ##############################################
-        # plot firing rates over membrane potentials #
-        ##############################################
+        # plot firing rates over membrane potentials
+        ############################################
 
         # check whether new figure needs to be created
         if axes is None:
@@ -135,9 +129,9 @@ class Axon(object):
         return axes
 
 
-######################################
-# define sigmoidal transfer function #
-######################################
+##################
+# sigmoidal axon #
+##################
 
 def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
                        max_firing_rate: float,
@@ -203,9 +197,8 @@ class SigmoidAxon(Axon):
         """Initializes sigmoid axon instance.
         """
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         if max_firing_rate < 0:
             raise ValueError('Maximum firing rate cannot be negative.')
@@ -213,25 +206,16 @@ class SigmoidAxon(Axon):
         if sigmoid_steepness < 0:
             raise ValueError('Sigmoid steepness cannot be negative.')
 
+        # call super init
+        #################
 
-        ############################
-        # define  transfer function #
-        ############################
-
-        transfer_function = parametric_sigmoid  # just an alias for readability
-
-        ###################
-        # call super init #
-        ###################
-
-
-        super(SigmoidAxon, self).__init__(transfer_function=transfer_function,  # type: ignore
+        super(SigmoidAxon, self).__init__(transfer_function=parametric_sigmoid,
                                           axon_type=axon_type,
                                           max_firing_rate=max_firing_rate,
                                           membrane_potential_threshold=membrane_potential_threshold,
                                           sigmoid_steepness=sigmoid_steepness)
 
-    def plot_transfer_function(self,  # type: ignore
+    def plot_transfer_function(self,
                                membrane_potentials: Optional[np.ndarray] = None,
                                epsilon: float = 1e-4,
                                bin_size: float = 0.001,
@@ -265,9 +249,8 @@ class SigmoidAxon(Axon):
 
         """
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         if epsilon < 0:
             raise ValueError('Epsilon cannot be negative. See parameter description for further information.')
@@ -275,9 +258,8 @@ class SigmoidAxon(Axon):
         if bin_size < 0:
             raise ValueError('Bin size cannot be negative. See parameter description for further information.')
 
-        ##########################
-        # calculate firing rates #
-        ##########################
+        # calculate firing rates
+        ########################
 
         if membrane_potentials is None:
 
@@ -305,9 +287,8 @@ class SigmoidAxon(Axon):
             # concatenate the resulting membrane potentials
             membrane_potentials = np.concatenate((membrane_potential_1, membrane_potential_2))
 
-        #####################
-        # call super method #
-        #####################
+        # call super method
+        ###################
 
         super().plot_transfer_function(membrane_potentials=membrane_potentials,
                                        create_plot=create_plot,

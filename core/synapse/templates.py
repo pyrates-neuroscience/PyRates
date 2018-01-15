@@ -1,11 +1,16 @@
 """Templates for specific synapse parametrizations.
 """
 
-from core.synapse import DoubleExponentialSynapse, ExponentialSynapse  # type: ignore
+from core.synapse import DoubleExponentialSynapse, ExponentialSynapse
 from typing import Optional
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
+
+
+############################
+# leaky capacitor synapses #
+############################
 
 
 class AMPACurrentSynapse(DoubleExponentialSynapse):
@@ -188,6 +193,11 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                          synapse_type='GABAA_current',
                          modulatory=False,
                          conductivity_based=True)
+
+
+###########################
+# JansenRit-type synapses #
+###########################
 
 
 class JansenRitExcitatorySynapse(ExponentialSynapse):

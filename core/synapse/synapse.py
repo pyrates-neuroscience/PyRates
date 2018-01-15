@@ -7,35 +7,18 @@ synaptic currents.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Optional, Union, Callable, Any, List, TypeVar, overload
+from typing import Optional, Union, Callable
 
-from matplotlib.axes import Axes  # For type info
+from matplotlib.axes import Axes
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
-#############
-# Type Info #
-#############
-
-KernelFunction = Callable[[Union[float, np.ndarray], Any], Union[float, np.ndarray]]
-
-# another way:
-#
-# @overload
-# def kernel_function(time_points: float, **kwargs: float) -> float:
-#     ...
-#
-#
-# @overload
-# def kernel_function(time_points: np.ndarray, **kwargs: float) -> np.ndarray:
-#     ...
-
-#############
-# Main Code #
-#############
-
 # TODO: find out reversal potentials for conductance based synapses
+
+###################
+# generic synapse #
+###################
 
 
 class Synapse(object):
@@ -93,7 +76,7 @@ class Synapse(object):
 
     """
 
-    def __init__(self, kernel_function: Callable[..., float],
+    def __init__(self, kernel_function: Callable[..., Union[float, np.ndarray]],
                  efficacy: float,
                  bin_size: float,
                  epsilon: float = 1e-14,
@@ -107,9 +90,8 @@ class Synapse(object):
         """Instantiates base synapse.
         """
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         if bin_size < 0 or (max_delay and max_delay < 0):
             raise ValueError('Time constants (bin_size, max_delay) cannot be negative. '
@@ -118,9 +100,8 @@ class Synapse(object):
         if epsilon < 0:
             raise ValueError('Epsilon is an absolute error term that cannot be negative.')
 
-        ##################
-        # set attributes #
-        ##################
+        # set attributes
+        ################
 
         self.efficacy = efficacy
         self.conductivity_based = conductivity_based
@@ -132,9 +113,8 @@ class Synapse(object):
         self.kernel_function = kernel_function
         self.kernel_function_args = kernel_function_args
 
-        ####################
-        # set synapse type #
-        ####################
+        # set synapse type
+        ##################
 
         if synapse_type is None:
 
@@ -158,9 +138,8 @@ class Synapse(object):
         # set synaptic depression (for plasticity mechanisms)
         self.depression = 1.0
 
-        #########################
-        # build synaptic kernel #
-        #########################
+        # build synaptic kernel
+        #######################
 
         self.synaptic_kernel = self.build_kernel()
 
@@ -178,9 +157,8 @@ class Synapse(object):
 
         """
 
-        ####################################################################
-        # check whether to build kernel or just evaluate it at time_points #
-        ####################################################################
+        # check whether to build kernel or just evaluate it at time_points
+        ##################################################################
 
         if self.max_delay:
 
@@ -188,21 +166,29 @@ class Synapse(object):
             time_points = np.arange(self.max_delay, 0.+0.5*self.bin_size, -self.bin_size)
 
         else:
+
             # create time vector from epsilon
-            time_points = []
-            kernel_val = self.kernel_function(time_points[-1], **self.kernel_function_args)
-            kernel_val *= self.efficacy
+            time_points = [0.]
+            kernel_val = self.evaluate_kernel(time_points[-1])
 
             while True:
+
+                # calculate kernel value for next time-step
                 time_points.append(time_points[-1] + self.bin_size)
-                kernel_val_tmp = self.kernel_function(time_points[-1], **self.kernel_function_args)
-                kernel_val_tmp *= self.efficacy
+                kernel_val_tmp = self.evaluate_kernel(time_points[-1])
+
+                # check whether kernel value is decaying towards zero
                 if ((kernel_val_tmp - kernel_val < 0.) and (self.efficacy > 0.)) or \
                         ((kernel_val - kernel_val_tmp < 0.) and (self.efficacy < 0.)):
+
+                    # if yes, check whether kernel value is already smaller epsilon
                     if abs(kernel_val_tmp) < self.epsilon:
                         break
+
                 kernel_val = kernel_val_tmp
-            time_points = np.flip(np.asarray(time_points), axis=0)
+
+            # create time points array
+            time_points = np.flip(np.array(time_points), axis=0)
 
         return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
 
@@ -223,7 +209,7 @@ class Synapse(object):
 
         """
 
-        return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy  # type: ignore
+        return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
 
     def get_synaptic_current(self,
                              synaptic_input: np.ndarray,
@@ -246,9 +232,8 @@ class Synapse(object):
 
         """
 
-        #########################
-        # apply synaptic kernel #
-        #########################
+        # apply synaptic kernel
+        #######################
 
         # multiply firing rate input with kernel
         kernel_value = synaptic_input * self.synaptic_kernel[-len(synaptic_input):]
@@ -278,11 +263,9 @@ class Synapse(object):
 
         """
 
-        ##################################
-        # plot synaptic kernel over time #
-        ##################################
-
         # check whether new figure has to be created
+        ############################################
+
         if axes is None:
             fig, axes = plt.subplots(num='Impulse Response Function')
 
@@ -290,9 +273,9 @@ class Synapse(object):
             fig = axes.get_figure()
 
         # plot synaptic kernel
-        # plt.hold('on')  # deprecated
+        ######################
+
         axes.plot(self.synaptic_kernel[-1:0:-1] * self.depression)
-        # plt.hold('off')  # deprecated
 
         # set figure labels
         axes.set_xlabel('time-steps')
@@ -309,6 +292,11 @@ class Synapse(object):
             fig.show()
 
         return axes
+
+
+##############################
+# double exponential synapse #
+##############################
 
 
 def double_exponential(time_points: Union[float, np.ndarray],
@@ -379,24 +367,16 @@ class DoubleExponentialSynapse(Synapse):
                  synapse_type: Optional[str] = None
                  ) -> None:
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         if tau_decay < 0 or tau_rise < 0:
             raise ValueError('Time constants tau cannot be negative. See docstring for further information.')
 
-        ##########################
-        # define kernel function #
-        ##########################
+        # call super init
+        #################
 
-        kernel_function = double_exponential
-
-        ###################
-        # call super init #
-        ###################
-
-        super().__init__(kernel_function=kernel_function,  # type:ignore
+        super().__init__(kernel_function=double_exponential,
                          efficacy=efficacy,
                          bin_size=bin_size,
                          epsilon=epsilon,
@@ -407,6 +387,11 @@ class DoubleExponentialSynapse(Synapse):
                          synapse_type=synapse_type,
                          tau_rise=tau_rise,
                          tau_decay=tau_decay)
+
+
+#######################
+# exponential synapse #
+#######################
 
 
 def exponential(time_points: Union[float, np.ndarray],
@@ -468,24 +453,16 @@ class ExponentialSynapse(Synapse):
                  synapse_type: Optional[str] = None
                  ) -> None:
 
-        ##########################
-        # check input parameters #
-        ##########################
+        # check input parameters
+        ########################
 
         if tau < 0.:
             raise ValueError('Time constant tau cannot be negative. See docstring for further information.')
 
-        ##########################
-        # define kernel function #
-        ##########################
+        # call super init
+        #################
 
-        kernel_function = exponential
-
-        ###################
-        # call super init #
-        ###################
-
-        super().__init__(kernel_function=kernel_function,
+        super().__init__(kernel_function=exponential,
                          efficacy=efficacy,
                          bin_size=bin_size,
                          epsilon=epsilon,

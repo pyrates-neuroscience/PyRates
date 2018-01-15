@@ -3,13 +3,19 @@
 
 import numpy as np
 
-from core.circuit import CircuitFromPopulations, CircuitFromScratch, Circuit  # type: ignore
+from core.circuit import CircuitFromPopulations, Circuit
 from core.population import WangKnoescheCells
 from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
+from core.population import JansenRitPyramidalCells, JansenRitInterneurons
 from typing import Optional
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
+
+
+#######################
+# jansen-rit circuits #
+#######################
 
 
 class JansenRitCircuit(CircuitFromPopulations):
@@ -51,9 +57,8 @@ class JansenRitCircuit(CircuitFromPopulations):
         interneurons.
         """
 
-        ##################
-        # set parameters #
-        ##################
+        # set parameters
+        ################
 
         populations = ['JansenRitPyramidalCells',
                        'JansenRitInterneurons',
@@ -66,9 +71,8 @@ class JansenRitCircuit(CircuitFromPopulations):
         N = 3                                               # PCs, EINs, IIns
         n_synapses = 2                                      # excitatory and inhibitory
 
-        ###################
-        # set connections #
-        ###################
+        # set connections
+        #################
 
         connections = np.zeros((N, N, n_synapses))
         c = 135.
@@ -83,9 +87,8 @@ class JansenRitCircuit(CircuitFromPopulations):
                                 [0, 0, 0],
                                 [0, 0, 0]]
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(population_types=populations,
                          connectivity=connections,
@@ -96,6 +99,81 @@ class JansenRitCircuit(CircuitFromPopulations):
                          step_size=step_size,
                          max_synaptic_delay=max_synaptic_delay,
                          init_states=init_states)
+
+
+class GeneralizedJansenRitCircuit(Circuit):
+    """
+
+    """
+    def __init__(self,
+                 n_circuits,
+                 synapse_params=None,
+                 axon_params=None,
+                 connectivity_scalings=None,
+                 weights=None,
+                 step_size=5e-4,
+                 max_synaptic_delay=0.2
+                 ):
+        """"""
+
+        if not synapse_params:
+            synapse_params = [None for i in range(n_circuits)]
+        if not axon_params:
+            axon_params = [None for i in range(n_circuits)]
+        if not connectivity_scalings:
+            connectivity_scalings = [135 for i in range(n_circuits)]
+        if not weights:
+            weights = [1/n_circuits for i in range(n_circuits)]
+
+        connectivity = np.zeros((n_circuits * 3, n_circuits * 3, 2))
+        conns = np.zeros((3, 3, 2))
+        populations = list()
+
+        for i in range(n_circuits):
+
+            #if synapse_params[i]:
+            #    scaling = (10. * synapse_params[i][1]['tau']) / (20. * synapse_params[i][0]['tau'])
+            #    synapse_params[i][0]['efficacy'] = 3.25e-3 * scaling
+
+            pcs = JansenRitPyramidalCells(synapse_params=synapse_params[i],
+                                          axon_params=axon_params[i],
+                                          step_size=step_size,
+                                          max_synaptic_delay=max_synaptic_delay,
+                                          label='JR_PCs_' + str(i))
+            eins = JansenRitInterneurons(synapse_params=[synapse_params[i][0]],
+                                         axon_params=axon_params[i],
+                                         step_size=step_size,
+                                         max_synaptic_delay=max_synaptic_delay,
+                                         label='JR_EINs_' + str(i))
+            iins = JansenRitInterneurons(synapse_params=[synapse_params[i][0]],
+                                         axon_params=axon_params[i],
+                                         step_size=step_size,
+                                         max_synaptic_delay=max_synaptic_delay,
+                                         label='JR_IINs_' + str(i))
+
+            c = connectivity_scalings[i]
+            # excitatory connections
+            conns[:, :, 0] = [[0, 0.8 * c, 0],
+                              [1.0 * c, 0, 0],
+                              [0.25 * c, 0, 0]]
+
+            # inhibitory connections
+            conns[:, :, 1] = [[0, 0, 0.25 * c],
+                              [0, 0, 0],
+                              [0, 0, 0]]
+
+            connectivity[:, i*3:(i+1)*3, :] = np.tile(weights[i] * conns, (n_circuits, 1, 1))
+            populations += [pcs, eins, iins]
+
+        super().__init__(populations=populations,
+                         connectivity=connectivity,
+                         delays=np.zeros((n_circuits * 3, n_circuits * 3)),
+                         step_size=step_size)
+
+
+#########################################################################
+# wang knoesche circuit with synaptic plasticity on excitatory synapses #
+#########################################################################
 
 
 class WangKnoescheCircuit(Circuit):
@@ -140,9 +218,8 @@ class WangKnoescheCircuit(Circuit):
         as layer 5/6 plus a layer 4 excitatory interneuron population.
         """
 
-        ##################
-        # set parameters #
-        ##################
+        # set parameters
+        ################
 
         # synapse information
         n_synapses = 2
@@ -206,14 +283,18 @@ class WangKnoescheCircuit(Circuit):
         if delays is None:
             delays = np.zeros((N, N))
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(populations=[l23_pcs, l23_iins, l4_eins, l56_pcs, l56_iins],
                          connectivity=connections,
                          delays=delays,
                          step_size=step_size)
+
+
+#################################################
+# moran circuit with spike-frequency adaptation #
+#################################################
 
 
 class MoranCircuit(Circuit):
@@ -255,9 +336,8 @@ class MoranCircuit(Circuit):
         interneurons.
         """
 
-        ##################
-        # set parameters #
-        ##################
+        # set parameters
+        ################
 
         population_labels = ['PCs_plastic',
                              'PCs_nonplastic',
@@ -291,9 +371,8 @@ class MoranCircuit(Circuit):
         # synapse params
         synapse_params = {'epsilon': epsilon}
 
-        ###########################
-        # instantiate populations #
-        ###########################
+        # instantiate populations
+        #########################
 
         pcs_plastic = MoranPyramidalCells(step_size=step_size,
                                           max_synaptic_delay=max_synaptic_delay,
@@ -319,9 +398,8 @@ class MoranCircuit(Circuit):
                                            init_state=init_states[2],
                                            label=population_labels[3])
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(populations=[pcs_plastic, pcs_nonplastic, eins, iins],
                          connectivity=connections,

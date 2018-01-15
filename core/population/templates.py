@@ -1,13 +1,17 @@
 """Templates for specific population parametrizations.
 """
 
-from core.population import Population, PlasticPopulation  # type: ignore
-from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation  # type: ignore
+from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation
 from typing import Optional, List, Dict, Union
 import numpy as np
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
+
+
+##################################
+# JansenRit population templates #
+##################################
 
 
 class JansenRitPyramidalCells(SecondOrderPopulation):
@@ -62,20 +66,18 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
         """Instantiates JansenRit PC population with second order synapses and Jansen-Rit axon.
         """
 
-        ############################
-        # check synapse parameters #
-        ############################
+        # check synapse parameters
+        ##########################
 
         # synapse type
         synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 1e-10} for i in range(len(synapses))]
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -143,20 +145,18 @@ class JansenRitInterneurons(SecondOrderPopulation):
         """Instantiates JansenRit interneuron population with second order synapse and Jansen-Rit axon.
         """
 
-        ############################
-        # check synapse parameters #
-        ############################
+        # check synapse parameters
+        ##########################
 
         # synapse type
         synapses = ['JansenRitExcitatorySynapse'] if not synapses else synapses
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 1e-10} for i in range(len(synapses))]
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -170,6 +170,36 @@ class JansenRitInterneurons(SecondOrderPopulation):
                          label=label,
                          synapse_class='ExponentialSynapse',
                          axon_class='SigmoidAxon')
+
+
+#####################################################
+# moran populations with spike frequency adaptation #
+#####################################################
+
+
+def spike_frequency_adaptation(adaptation: float,
+                               firing_rate_target: float,
+                               tau: float
+                               ) -> float:
+    """Calculates adaption in sigmoid threshold of axonal transfer function.
+
+    Parameters
+    ----------
+    adaptation
+        Determines strength of spike-frequency-adaptation [unit = V].
+    firing_rate_target
+        Target firing rate towards which spike frequency is adapted [unit = 1/s].
+    tau
+        Time constant of adaptation process [unit = s].
+
+    Returns
+    -------
+    float
+        Change in threshold of sigmoidal axonal transfer function.
+
+    """
+
+    return (firing_rate_target - adaptation) / tau
 
 
 class MoranPyramidalCells(SecondOrderPlasticPopulation):
@@ -229,9 +259,8 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
         """Instantiates a population as defined in [1]_.
         """
 
-        ############################
-        # check synapse parameters #
-        ############################
+        # check synapse parameters
+        ##########################
 
         # synapse type
         synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
@@ -240,41 +269,13 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
         if not max_synaptic_delay and not synapse_params:
             synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
 
-        ###############################################
-        # define spike frequency adaptation mechanism #
-        ###############################################
+        # spike frequency adaptation params
+        ###################################
 
-        # function
-        def spike_frequency_adaptation(adaptation: float,
-                                       firing_rate_target: float,
-                                       tau: float
-                                       ) -> float:
-            """Calculates adaption in sigmoid threshold of axonal transfer function.
-
-            Parameters
-            ----------
-            adaptation
-                Determines strength of spike-frequency-adaptation [unit = V].
-            firing_rate_target
-                Target firing rate towards which spike frequency is adapted [unit = 1/s].
-            tau
-                Time constant of adaptation process [unit = s].
-
-            Returns
-            -------
-            float
-                Change in threshold of sigmoidal axonal transfer function.
-
-            """
-
-            return (firing_rate_target - adaptation) / tau
-
-        # adaptation time constant
         params = {'tau': tau}
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -350,9 +351,8 @@ class MoranExcitatoryInterneurons(SecondOrderPopulation):
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
         """
 
-        ############################
-        # check synapse parameters #
-        ############################
+        # check synapse parameters
+        ##########################
 
         # synapse type
         synapses = ['MoranExcitatorySynapse'] if not synapses else synapses
@@ -361,9 +361,8 @@ class MoranExcitatoryInterneurons(SecondOrderPopulation):
         if not max_synaptic_delay and not synapse_params:
             synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -424,9 +423,7 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
                  step_size: float = 0.0001,
                  max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
                  resting_potential: float = 0.,
-               >>>>>>> cleanup
-870
-  max_population_delay: float = 0.,
+                 max_population_delay: float = 0.,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
@@ -439,9 +436,8 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
 
         """
 
-        ############################
-        # check synapse parameters #
-        ############################
+        # check synapse parameters
+        ##########################
 
         # synapse type
 
@@ -452,9 +448,8 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
         if not max_synaptic_delay and not synapse_params:
             synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(synapses=synapses,
                          axon=axon,
@@ -470,6 +465,45 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
                          store_state_variables=store_state_variables,
                          label=label
                          )
+
+
+#####################################################
+# wang-knoesche population with synaptic plasticity #
+#####################################################
+
+
+def synaptic_efficacy_adaptation(efficacy: float,
+                                 firing_rate: float,
+                                 max_firing_rate: float,
+                                 tau_depression: float,
+                                 tau_recycle: float
+                                 ) -> float:
+    """Calculates synaptic efficacy change.
+
+    Parameters
+    ----------
+    efficacy
+        Synaptic efficacy, See 'efficacy' parameter documentation of :class:`Synapse`.
+    firing_rate
+        Pre-synaptic firing rate [unit = 1/s].
+    max_firing_rate
+        Maximum pre-synaptic firing rate [unit = 1/s].
+    tau_depression
+        Defines synaptic depression time constant [unit = s].
+    tau_recycle
+        Defines synaptic recycling time constant [unit = s].
+
+    Returns
+    -------
+    float
+        Synaptic efficacy change.
+
+    """
+
+    depression_rate = (efficacy * firing_rate) / (max_firing_rate * tau_depression)
+    recycle_rate = (1 - efficacy) / tau_recycle
+
+    return recycle_rate - depression_rate if firing_rate > 0. else recycle_rate
 
 
 class WangKnoescheCells(SecondOrderPlasticPopulation):
@@ -535,9 +569,8 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
         """Instantiates a population as defined in [1]_ with a synaptic efficacy adaptation mechanism.
         """
 
-        #####################
-        # check synapse parameters #
-        ############################
+        # check synapse parameters
+        ##########################
 
         # synapse type
 
@@ -552,57 +585,20 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
         if not max_synaptic_delay and not synapse_params:
             synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
 
-        ########################################
-        # define synaptic adaptation mechanism #
-        ########################################
+        # synaptic plasticity params
+        ############################
 
-        # function
-        def synaptic_efficacy_adaptation(efficacy: float,
-                                         firing_rate: float,
-                                         max_firing_rate: float,
-                                         tau_depression: float,
-                                         tau_recycle: float
-                                         ) -> float:
-            """Calculates synaptic efficacy change.
-
-            Parameters
-            ----------
-            efficacy
-                Synaptic efficacy, See 'efficacy' parameter documentation of :class:`Synapse`.
-            firing_rate
-                Pre-synaptic firing rate [unit = 1/s].
-            max_firing_rate
-                Maximum pre-synaptic firing rate [unit = 1/s].
-            tau_depression
-                Defines synaptic depression time constant [unit = s].
-            tau_recycle
-                Defines synaptic recycling time constant [unit = s].
-
-            Returns
-            -------
-            float
-                Synaptic efficacy change.
-
-            """
-
-            depression_rate = (efficacy * firing_rate) / (max_firing_rate * tau_depression)
-            recycle_rate = (1 - efficacy) / tau_recycle
-
-            return recycle_rate - depression_rate if firing_rate > 0. else recycle_rate
-
-        # function parameters
         params = {'tau_depression': tau_depression,
                   'tau_recycle': tau_recycle}
-        param_list = list()  # type: List[Union[dict, None]]
+        param_list = list()
         for p in plastic_synapses:
             if p:
                 param_list.append(params)
             else:
                 param_list.append(None)
 
-        ###################
-        # call super init #
-        ###################
+        # call super init
+        #################
 
         super().__init__(synapses=synapses,
                          axon=axon,
