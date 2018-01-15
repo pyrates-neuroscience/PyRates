@@ -3,13 +3,37 @@
 
 import numpy as np
 import inspect
-from typing import List, Dict, Union, Optional, Callable
+from typing import List, Dict, Union, Optional, Callable, Iterable, overload, TypeVar, Type
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
-def set_instance(class_handle, instance_type: str=None, instance_params: dict=None, **kwargs) -> object:
+# @overload
+# def set_instance(class_handle: Type[Population],
+#                  instance_type: Optional[str]=None,
+#                  instance_params: dict=None,
+#                  **kwargs) -> Population: ...
+#
+#
+# @overload
+# def set_instance(class_handle: Type[Axon],
+#                  instance_type: Optional[str] = None,
+#                  instance_params: dict = None,
+#                  **kwargs) -> Axon: ...
+#
+#
+# @overload
+# def set_instance(class_handle: Type[Synapse],
+#                  instance_type: Optional[str] = None,
+#                  instance_params: dict = None,
+#                  **kwargs) -> Synapse: ...
+
+ClassInstance = TypeVar('ClassInstance')
+
+
+def set_instance(class_handle: type,
+                 instance_type: str=None, instance_params: dict=None, **kwargs) -> ClassInstance:
     """Instantiates object of `class_handle` and returns instance.
 
     Parameters
@@ -43,7 +67,7 @@ def set_instance(class_handle, instance_type: str=None, instance_params: dict=No
 
         # fetch names and object handles of sub-classes of object
         preimplemented_types = [cls.__name__ for cls in class_handle.__subclasses__()]
-        type_objects = class_handle.__subclasses__()
+        type_objects: List[type] = class_handle.__subclasses__()
 
         # loop over pre-implemented types and compare with passed type
         i = 0
@@ -199,7 +223,15 @@ def get_euclidean_distances(positions: np.ndarray) -> np.ndarray:
     return D
 
 
-def check_nones(param: Optional[Union[str, dict]], n: int) -> Union[str, dict, List[None]]:
+@overload
+def check_nones(param: None, n: int) -> List[None]: ...
+
+
+@overload
+def check_nones(param: Iterable, n: int) -> Iterable: ...
+
+
+def check_nones(param, n):
     """Checks whether param is None. If yes, it returns a list of n Nones. If not, the param is returned.
 
     Parameters
@@ -216,4 +248,4 @@ def check_nones(param: Optional[Union[str, dict]], n: int) -> Union[str, dict, L
 
     """
 
-    return [None for i in range(n)] if param is None else param
+    return [None for _ in range(n)] if param is None else param
