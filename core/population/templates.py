@@ -71,7 +71,7 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         ###################
         # call super init #
@@ -152,7 +152,7 @@ class JansenRitInterneurons(SecondOrderPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         ###################
         # call super init #
@@ -238,7 +238,7 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         ###############################################
         # define spike frequency adaptation mechanism #
@@ -359,7 +359,7 @@ class MoranExcitatoryInterneurons(SecondOrderPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         ###################
         # call super init #
@@ -424,9 +424,7 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
                  step_size: float = 0.0001,
                  max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
                  resting_potential: float = 0.,
-               >>>>>>> cleanup
-870
-  max_population_delay: float = 0.,
+                 max_population_delay: float = 0.,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
@@ -450,7 +448,7 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         ###################
         # call super init #
@@ -550,7 +548,7 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
 
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for i in range(len(synapses))]
+            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         ########################################
         # define synaptic adaptation mechanism #
