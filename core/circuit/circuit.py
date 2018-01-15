@@ -5,10 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from networkx import MultiDiGraph
+from typing import List, Optional, Union, TypeVar, Callable
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.utility import check_nones, set_instance
-from typing import List, Optional, Union, TypeVar, Callable
 
 PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
 

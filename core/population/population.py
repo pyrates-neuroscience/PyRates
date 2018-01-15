@@ -8,14 +8,14 @@ plus an axon hillok.
 import matplotlib.pyplot as plt
 import numpy as np
 from copy import deepcopy
-
 from matplotlib.axes import Axes
+from typing import List, Optional, Union, Dict, Callable, TypeVar
+
 
 from core.axon import Axon, SigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse
 from core.utility import set_instance, check_nones
 
-from typing import List, Optional, Union, Dict, Callable, TypeVar
 FloatLike = Union[float, np.float64]
 AxonLike = TypeVar('AxonLike', bound=Axon, covariant=True)
 SynapseLike = TypeVar('SynapseLike', bound=Synapse, covariant=True)
