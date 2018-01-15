@@ -550,7 +550,7 @@ class CircuitFromScratch(Circuit):
         N = connectivity.shape[0]
 
         # check information transmission delay
-        if not delays:
+        if delays is None:
             delays = np.zeros((N, N), dtype=int)
         else:
             delays = np.array(delays / step_size, dtype=int)
@@ -581,6 +581,9 @@ class CircuitFromScratch(Circuit):
         axon_plasticity_function_params = check_nones(axon_plasticity_function_params, N)
         synapse_plasticity_function = check_nones(synapse_plasticity_function, N)
         synapse_plasticity_function_params = check_nones(synapse_plasticity_function_params, N)
+        for i, syn in enumerate(synapse_plasticity_function_params):
+            syn = check_nones(syn, n_synapses)
+            synapse_plasticity_function_params[i] = syn
         if not population_labels:
             population_labels = ['Custom' for _ in range(N)]
         if isinstance(synapse_class, str):

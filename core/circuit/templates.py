@@ -3,11 +3,11 @@
 
 import numpy as np
 
-from core.circuit import CircuitFromPopulations, Circuit
+from core.circuit import CircuitFromPopulations, CircuitFromScratch, Circuit
 from core.population import WangKnoescheCells
 from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
 from core.population import JansenRitPyramidalCells, JansenRitInterneurons
-from typing import Optional
+from typing import Optional, List
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -101,7 +101,109 @@ class JansenRitCircuit(CircuitFromPopulations):
                          init_states=init_states)
 
 
-class GeneralizedJansenRitCircuit(Circuit):
+class DavidFristonCircuit(CircuitFromScratch):
+    """Slightly altered Jansen-Rit circuit as defined in [1]_.
+
+    Parameters
+    ----------
+    step_size
+        Default = 5e-4 s.
+    max_synaptic_delay
+        Default = None.
+    delays
+        Default = None.
+    connectivity_scaling
+        Default = None.
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
+    init_states
+        Default = np.zeros(4).
+
+    See Also
+    --------
+    :class:`Circuit`: Detailed description of parameters, attributes and methods.
+
+    References
+    ----------
+    .. [1] O. David & K.J. Friston, "A Neural Mass Model for EEG/MEG: coupling and neuronal dynamics" NeuroImage,
+       vol. 20(3), pp. 1743-1755, 2003.
+
+    """
+
+    def __init__(self,
+                 step_size: float = 5e-4,
+                 max_synaptic_delay: Optional[float] = None,
+                 delays: Optional[np.ndarray] = None,
+                 connectivity_scaling: float = 135.,
+                 synapse_params: Optional[List[dict]] = None,
+                 axon_params: Optional[List[dict]] = None,
+                 init_states: np.ndarray = np.zeros(4)
+                 ) -> None:
+        """Initializes a basic Jansen-Rit circuit of pyramidal cells (plastic + non-plastic), excitatory and inhibitory
+        interneurons.
+        """
+
+        # set parameters
+        ################
+
+        population_labels = ['PCs_to_EINS',
+                             'PCs_to_IINs',
+                             'EINs',
+                             'IINs']
+        N = 4
+
+        # synapse information
+        n_synapses = 2                                       # excitatory and inhibitory
+
+        # connectivity matrix
+        connections = np.zeros((N, N, n_synapses))
+        c = connectivity_scaling
+
+        connections[:, :, 0] = [[0., 0., 1.*c, 0.],     # excitatory connections
+                                [0., 0., 1.*c, 0.],
+                                [1., 0., 0.,  0.],
+                                [0., 1., 0., 0.]]
+
+        connections[:, :, 1] = [[0., 0., 0., 0.25*c],      # inhibitory connections
+                                [0., 0., 0., 0.25*c],
+                                [0., 0., 0., 0.],
+                                [0., 0., 0., 0.]]
+
+        # delays
+        if delays is None:
+            delays = np.zeros((N, N))
+
+        # synapse information
+        synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
+
+        # axon information
+        axon_types = ['DavidAxon' for _ in range(N)]
+        if not axon_params:
+            axon_params_eins = {'membrane_potential_scaling': 0.8 * c}
+            axon_params_iins = {'membrane_potential_scaling': 0.25 * c}
+            axon_params = [None, None, axon_params_eins, axon_params_iins]
+
+        # call super init
+        #################
+
+        super().__init__(connectivity=connections,
+                         delays=delays,
+                         step_size=step_size,
+                         synapses=synapse_types,
+                         axons=axon_types,
+                         synapse_params=synapse_params,
+                         axon_params=axon_params,
+                         max_synaptic_delay=max_synaptic_delay,
+                         synapse_class='ExponentialSynapse',
+                         axon_class='Axon',
+                         population_class='SecondOrderPopulation',
+                         init_states=init_states,
+                         population_labels=population_labels)
+
+
+class GeneralizedDavidFristonCircuit(Circuit):
     """
 
     """
@@ -117,57 +219,32 @@ class GeneralizedJansenRitCircuit(Circuit):
         """"""
 
         if not synapse_params:
-            synapse_params = [None for i in range(n_circuits)]
+            synapse_params = [None for _ in range(n_circuits)]
         if not axon_params:
-            axon_params = [None for i in range(n_circuits)]
+            axon_params = [None for _ in range(n_circuits)]
         if not connectivity_scalings:
-            connectivity_scalings = [135 for i in range(n_circuits)]
+            connectivity_scalings = [135 for _ in range(n_circuits)]
         if not weights:
-            weights = [1/n_circuits for i in range(n_circuits)]
+            weights = [1/n_circuits for _ in range(n_circuits)]
 
-        connectivity = np.zeros((n_circuits * 3, n_circuits * 3, 2))
-        conns = np.zeros((3, 3, 2))
+        connectivity = np.zeros((n_circuits * 4, n_circuits * 4, 2))
         populations = list()
 
         for i in range(n_circuits):
 
-            #if synapse_params[i]:
-            #    scaling = (10. * synapse_params[i][1]['tau']) / (20. * synapse_params[i][0]['tau'])
-            #    synapse_params[i][0]['efficacy'] = 3.25e-3 * scaling
+            circuit_tmp = DavidFristonCircuit(step_size=step_size,
+                                              max_synaptic_delay=max_synaptic_delay,
+                                              connectivity_scaling=connectivity_scalings[i],
+                                              synapse_params=synapse_params[i],
+                                              axon_params=axon_params[i])
 
-            pcs = JansenRitPyramidalCells(synapse_params=synapse_params[i],
-                                          axon_params=axon_params[i],
-                                          step_size=step_size,
-                                          max_synaptic_delay=max_synaptic_delay,
-                                          label='JR_PCs_' + str(i))
-            eins = JansenRitInterneurons(synapse_params=[synapse_params[i][0]],
-                                         axon_params=axon_params[i],
-                                         step_size=step_size,
-                                         max_synaptic_delay=max_synaptic_delay,
-                                         label='JR_EINs_' + str(i))
-            iins = JansenRitInterneurons(synapse_params=[synapse_params[i][0]],
-                                         axon_params=axon_params[i],
-                                         step_size=step_size,
-                                         max_synaptic_delay=max_synaptic_delay,
-                                         label='JR_IINs_' + str(i))
-
-            c = connectivity_scalings[i]
-            # excitatory connections
-            conns[:, :, 0] = [[0, 0.8 * c, 0],
-                              [1.0 * c, 0, 0],
-                              [0.25 * c, 0, 0]]
-
-            # inhibitory connections
-            conns[:, :, 1] = [[0, 0, 0.25 * c],
-                              [0, 0, 0],
-                              [0, 0, 0]]
-
-            connectivity[:, i*3:(i+1)*3, :] = np.tile(weights[i] * conns, (n_circuits, 1, 1))
-            populations += [pcs, eins, iins]
+            connectivity[:, i*circuit_tmp.N:(i+1)*circuit_tmp.N, :] = np.tile(weights[i] *
+                                                                              circuit_tmp.C, (n_circuits, 1, 1))
+            populations += circuit_tmp.populations
 
         super().__init__(populations=populations,
                          connectivity=connectivity,
-                         delays=np.zeros((n_circuits * 3, n_circuits * 3)),
+                         delays=np.zeros((n_circuits * 4, n_circuits * 4)),
                          step_size=step_size)
 
 
