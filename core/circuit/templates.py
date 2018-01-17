@@ -118,6 +118,118 @@ class JansenRitCircuit(CircuitFromScratch):
                          )
 
 
+class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
+    """Jansen-Rit circuit as defined in [1]_, implemented as a leaky capacitor.
+
+    Parameters
+    ----------
+    step_size
+        Default = 5e-4 s.
+    max_synaptic_delay
+        Default = None.
+    delays
+        Default = None
+    connectivity_scaling
+        Default = 135.
+    init_states
+        Default = np.zeros(3) - 0.075
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
+    resting_potential
+        Default = -0.075 V.
+    tau_leak
+        Default = 0.016 s.
+    membrane_capacitance
+        Default = 1e-12 q/V.
+
+    See Also
+    --------
+    :class:`CircuitFromScratch`: Detailed description of parameters.
+    :class:`Circuit`: Detailed description of attributes and methods.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
+    """
+
+    def __init__(self,
+                 step_size: float = 1e-4,
+                 max_synaptic_delay: Optional[float] = None,
+                 delays: Optional[np.ndarray] = None,
+                 connectivity_scaling: float = 135.,
+                 init_states: np.ndarray = np.zeros(3) - 0.075,
+                 synapse_params: Optional[List[dict]] = None,
+                 axon_params: Optional[List[dict]] = None,
+                 resting_potential: float = -0.075,
+                 tau_leak: float = 0.016,
+                 membrane_capacitance: float = 1e-12
+                 ) -> None:
+        """Initializes a leaky capacitor version of a Jansen-Rit circuit.
+        """
+
+        # set parameters
+        ################
+
+        # general
+        population_labels = ['LC_PCs',
+                             'LC_EINs',
+                             'LC_IINs']
+        population_class = 'Population'
+        N = 3                                               # PCs, EINs, IIns
+        n_synapses = 2                                      # excitatory and inhibitory
+
+        # connectivity
+        connections = np.zeros((N, N, n_synapses))
+        c = connectivity_scaling
+
+        connections[:, :, 0] = [[0., 0.8 * c, 0],    # excitatory connections
+                                [1.0 * c, 0., 0],
+                                [0.25 * c, 0, 0]]
+
+        connections[:, :, 1] = [[0, 0, 0.25 * c],           # inhibitory connections
+                                [0, 0, 0],
+                                [0, 0, 0.]]
+
+        # delays
+        if delays is None:
+            delays = np.zeros((N, N))
+        else:
+            delays = np.array(delays / step_size, dtype=int)
+
+        # synapses
+        synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse']
+        synapse_class = 'DoubleExponentialSynapse'
+
+        # axon
+        axon_types = ['KnoescheAxon', 'KnoescheAxon', 'KnoescheAxon']
+        axon_class = 'SigmoidAxon'
+
+        # call super init
+        #################
+
+        super().__init__(connectivity=connections,
+                         delays=delays,
+                         synapses=synapse_types,
+                         synapse_params=synapse_params,
+                         synapse_class=synapse_class,
+                         axons=axon_types,
+                         axon_params=axon_params,
+                         axon_class=axon_class,
+                         population_labels=population_labels,
+                         population_class=population_class,
+                         step_size=step_size,
+                         max_synaptic_delay=max_synaptic_delay,
+                         init_states=init_states,
+                         resting_potential=resting_potential,
+                         tau_leak=tau_leak,
+                         membrane_capacitance=membrane_capacitance
+                         )
+
+
 class JansenRitFeedbackCircuit(CircuitFromScratch):
     """Jansen-Rit circuit as defined in [1]_ with optional self-feedback loops at each population. Motivated by [2]_.
 

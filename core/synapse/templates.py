@@ -42,7 +42,7 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
                  max_delay: float,
                  efficacy: float = 1.273 * 3e-13,
                  tau_decay: float = 0.006,
-                 tau_rise: float = 0.0006
+                 tau_rise: float = 0.0003
                  ) -> None:
         """
         Instantiates current-based synapse with AMPA receptor.
@@ -85,7 +85,7 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
                  max_delay: float,
                  efficacy: float = 1.273 * (-1e-12),
                  tau_decay: float = 0.02,
-                 tau_rise: float = 0.0004
+                 tau_rise: float = 0.0006
                  ) -> None:
         """
         Instantiates current-based synapse with GABA_A receptor.

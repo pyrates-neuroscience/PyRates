@@ -6,4 +6,4 @@ __status__ = "Development"
 
 from core.circuit.circuit import Circuit, CircuitFromCircuit, CircuitFromPopulations, CircuitFromScratch
 from core.circuit.templates import JansenRitCircuit, WangKnoescheCircuit, MoranCircuit, DavidFristonCircuit, \
-    GeneralizedDavidFristonCircuit, JansenRitFeedbackCircuit
+    GeneralizedDavidFristonCircuit, JansenRitFeedbackCircuit, JansenRitLeakyCapacitorCircuit

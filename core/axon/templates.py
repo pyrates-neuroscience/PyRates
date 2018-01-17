@@ -34,7 +34,7 @@ class KnoescheAxon(SigmoidAxon):
 
     def __init__(self, max_firing_rate: float = 5.,
                  membrane_potential_threshold: float = -0.069,
-                 sigmoid_steepness: float = 555.56) -> None:
+                 sigmoid_steepness: float = 560.0) -> None:
         """Instantiates sigmoid axon with Knoesche's parameters.
         """
 
