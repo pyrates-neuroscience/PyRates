@@ -217,7 +217,7 @@ class Circuit(object):
                                  'circuit!')
 
         # extrinsic currents
-        if not extrinsic_current:
+        if extrinsic_current is None:
             extrinsic_current = np.zeros((simulation_time_steps, self.N))
         else:
             if extrinsic_current.shape[0] != simulation_time_steps:
@@ -356,7 +356,7 @@ class Circuit(object):
         # get states from populations for all time-steps
         states = list()
         for idx in population_idx:
-            states.append(np.array(self.populations[idx].state_variables, ndmin=2)[1:, state_variable_idx])
+            states.append(np.array(self.populations[idx].state_variables, ndmin=2)[:, state_variable_idx])
 
         _states = np.array(states, ndmin=2).T
 
@@ -427,7 +427,7 @@ class Circuit(object):
             axes.plot(population_states[:, i])
             legend_labels.append(self.populations[population_idx[i]].label)
 
-        plt.legend(legend_labels)
+        axes.legend(legend_labels)
         axes.set_ylabel('membrane potential [V]')
         axes.set_xlabel('time-steps')
 
@@ -563,6 +563,8 @@ class CircuitFromScratch(Circuit):
             init_states = np.zeros(N) + init_states
         if isinstance(max_synaptic_delay, float):
             max_synaptic_delay = np.zeros(N) + max_synaptic_delay
+        elif not max_synaptic_delay:
+            max_synaptic_delay = check_nones(max_synaptic_delay, N)
         if isinstance(tau_leak, float):
             tau_leak = np.zeros(N) + tau_leak
         if isinstance(resting_potential, float):

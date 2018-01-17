@@ -86,10 +86,10 @@ class JansenRitAxon(SigmoidAxon):
 
 
 def moran_sigmoid(membrane_potential,
-            max_firing_rate,
-            membrane_potential_threshold,
-            sigmoid_steepness,
-            adaptation):
+                  max_firing_rate,
+                  membrane_potential_threshold,
+                  sigmoid_steepness,
+                  adaptation):
     """
 
     Parameters

@@ -17,21 +17,25 @@ __status__ = "Development"
 #######################
 
 
-class JansenRitCircuit(CircuitFromPopulations):
-    """Basic Jansen-Rit circuit as defined in [1]_.
+class JansenRitCircuit(CircuitFromScratch):
+    """Jansen-Rit circuit as defined in [1]_.
 
     Parameters
     ----------
-    resting_potential
-        Default = 0.0 V.
     step_size
         Default = 5e-4 s.
     max_synaptic_delay
         Default = None.
     delays
         Default = None
+    connectivity_scaling
+        Default = 135.
     init_states
         Default = np.zeros(3)
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
 
     See Also
     --------
@@ -46,11 +50,13 @@ class JansenRitCircuit(CircuitFromPopulations):
     """
 
     def __init__(self,
-                 resting_potential: float = 0.0,
                  step_size: float = 5e-4,
                  max_synaptic_delay: Optional[float] = None,
                  delays: Optional[np.ndarray] = None,
-                 init_states: np.ndarray=np.zeros(3),
+                 connectivity_scaling: float = 135.,
+                 init_states: np.ndarray = np.zeros(3),
+                 synapse_params: Optional[List[dict]] = None,
+                 axon_params: Optional[List[dict]] = None,
                  ) -> None:
         """Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory
         interneurons.
@@ -59,45 +65,164 @@ class JansenRitCircuit(CircuitFromPopulations):
         # set parameters
         ################
 
-        populations = ['JansenRitPyramidalCells',
-                       'JansenRitInterneurons',
-                       'JansenRitInterneurons']
-
+        # general
         population_labels = ['JR_PCs',
                              'JR_EINs',
                              'JR_IINs']
-
+        population_class = 'SecondOrderPopulation'
         N = 3                                               # PCs, EINs, IIns
         n_synapses = 2                                      # excitatory and inhibitory
 
-        # set connections
-        #################
-
+        # connectivity
         connections = np.zeros((N, N, n_synapses))
-        c = 135.
+        c = connectivity_scaling
 
-        # excitatory connections
-        connections[:, :, 0] = [[0, 0.8 * c, 0],
-                                [1.0 * c, 0, 0],
+        connections[:, :, 0] = [[0., 0.8 * c, 0],    # excitatory connections
+                                [1.0 * c, 0., 0],
                                 [0.25 * c, 0, 0]]
 
-        # inhibitory connections
-        connections[:, :, 1] = [[0, 0, 0.25 * c],
+        connections[:, :, 1] = [[0, 0, 0.25 * c],           # inhibitory connections
                                 [0, 0, 0],
-                                [0, 0, 0]]
+                                [0, 0, 0.]]
+
+        # delays
+        if delays is None:
+            delays = np.zeros((N, N))
+        else:
+            delays = np.array(delays / step_size, dtype=int)
+
+        # synapses
+        synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
+        synapse_class = 'ExponentialSynapse'
+
+        # axon
+        axon_types = ['JansenRitAxon', 'JansenRitAxon', 'JansenRitAxon']
+        axon_class = 'SigmoidAxon'
 
         # call super init
         #################
 
-        super().__init__(population_types=populations,
-                         connectivity=connections,
+        super().__init__(connectivity=connections,
                          delays=delays,
-                         population_class='SecondOrderPopulation',
+                         synapses=synapse_types,
+                         synapse_params=synapse_params,
+                         synapse_class=synapse_class,
+                         axons=axon_types,
+                         axon_params=axon_params,
+                         axon_class=axon_class,
                          population_labels=population_labels,
-                         resting_potential=resting_potential,
+                         population_class=population_class,
                          step_size=step_size,
                          max_synaptic_delay=max_synaptic_delay,
-                         init_states=init_states)
+                         init_states=init_states
+                         )
+
+
+class JansenRitFeedbackCircuit(CircuitFromScratch):
+    """Jansen-Rit circuit as defined in [1]_ with optional self-feedback loops at each population. Motivated by [2]_.
+
+    Parameters
+    ----------
+    step_size
+        Default = 5e-4 s.
+    max_synaptic_delay
+        Default = None.
+    delays
+        Default = None
+    connectivity_scaling
+        Default = 135.
+    feedback_strength
+        Default = np.zeros(3)
+    init_states
+        Default = np.zeros(3)
+    synapse_params
+        Default = None.
+    axon_params
+        Default = None.
+
+    See Also
+    --------
+    :class:`CircuitFromPopulations`: Detailed description of parameters.
+    :class:`Circuit`: Detailed description of attributes and methods.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+    .. [2] V. Youssofzadeh, G. Prasad & K.F. Wong-Lin, "On self-feedback connectivity in neural mass models applied to
+       event-related potentials." NeuroImage, vol. 108, pp. 364-376, 2015.
+
+    """
+
+    def __init__(self,
+                 step_size: float = 5e-4,
+                 max_synaptic_delay: Optional[float] = None,
+                 delays: Optional[np.ndarray] = None,
+                 connectivity_scaling: float = 135.,
+                 feedback_strength: np.ndarray = np.zeros(3),
+                 init_states: np.ndarray = np.zeros(3),
+                 synapse_params: Optional[List[dict]] = None,
+                 axon_params: Optional[List[dict]] = None,
+                 ) -> None:
+        """Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory
+        interneurons.
+        """
+
+        # set parameters
+        ################
+
+        # general
+        population_labels = ['JR_PCs',
+                             'JR_EINs',
+                             'JR_IINs']
+        population_class = 'SecondOrderPopulation'
+        N = 3                                               # PCs, EINs, IIns
+        n_synapses = 2                                      # excitatory and inhibitory
+
+        # connectivity
+        connections = np.zeros((N, N, n_synapses))
+        c = connectivity_scaling
+        fb = feedback_strength
+
+        connections[:, :, 0] = [[fb[0] * c, 0.8 * c, 0],    # excitatory connections
+                                [1.0 * c, fb[1] * c, 0],
+                                [0.25 * c, 0, 0]]
+
+        connections[:, :, 1] = [[0, 0, 0.25 * c],           # inhibitory connections
+                                [0, 0, 0],
+                                [0, 0, fb[2] * c]]
+
+        # delays
+        if delays is None:
+            delays = np.zeros((N, N))
+        else:
+            delays = np.array(delays / step_size, dtype=int)
+
+        # synapses
+        synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
+        synapse_class = 'ExponentialSynapse'
+
+        # axon
+        axon_types = ['JansenRitAxon', 'JansenRitAxon', 'JansenRitAxon']
+        axon_class = 'SigmoidAxon'
+
+        # call super init
+        #################
+
+        super().__init__(connectivity=connections,
+                         delays=delays,
+                         synapses=synapse_types,
+                         synapse_params=synapse_params,
+                         synapse_class=synapse_class,
+                         axons=axon_types,
+                         axon_params=axon_params,
+                         axon_class=axon_class,
+                         population_labels=population_labels,
+                         population_class=population_class,
+                         step_size=step_size,
+                         max_synaptic_delay=max_synaptic_delay,
+                         init_states=init_states
+                         )
 
 
 class DavidFristonCircuit(CircuitFromScratch):

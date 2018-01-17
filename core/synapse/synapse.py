@@ -448,7 +448,7 @@ class ExponentialSynapse(Synapse):
                  efficacy: float,
                  tau: float,
                  bin_size: float = 5e-4,
-                 epsilon: float = 1e-5,
+                 epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
                  synapse_type: Optional[str] = None
                  ) -> None:

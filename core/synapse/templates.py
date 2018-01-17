@@ -231,7 +231,7 @@ class JansenRitExcitatorySynapse(ExponentialSynapse):
 
     def __init__(self,
                  bin_size: float,
-                 epsilon: float = 5e-5,
+                 epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
                  efficacy: float = 3.25 * 1e-3,
                  tau: float = 0.01
@@ -277,7 +277,7 @@ class JansenRitInhibitorySynapse(ExponentialSynapse):
 
     def __init__(self,
                  bin_size: float,
-                 epsilon: float = 5e-5,
+                 epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
                  efficacy: float = -22e-3,
                  tau: float = 0.02
