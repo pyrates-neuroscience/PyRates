@@ -7,7 +7,7 @@ synaptic currents.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Optional, Union, Callable
+from typing import Optional, Union, Callable, overload
 
 from matplotlib.axes import Axes
 
@@ -15,6 +15,13 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 # TODO: find out reversal potentials for conductance based synapses
+
+#############
+# Type info #
+#############
+
+FloatOrArray = Union[float, np.ndarray]
+
 
 ###################
 # generic synapse #
@@ -76,7 +83,7 @@ class Synapse(object):
 
     """
 
-    def __init__(self, kernel_function: Callable[..., Union[float, np.ndarray]],
+    def __init__(self, kernel_function: Callable[..., FloatOrArray],
                  efficacy: float,
                  bin_size: float,
                  epsilon: float = 1e-14,
@@ -93,12 +100,12 @@ class Synapse(object):
         # check input parameters
         ########################
 
-        if bin_size < 0 or (max_delay and max_delay < 0):
-            raise ValueError('Time constants (bin_size, max_delay) cannot be negative. '
+        if bin_size <= 0 or (max_delay and max_delay <= 0):
+            raise ValueError('Time constants (bin_size, max_delay) cannot be negative or zero. '
                              'See docstring for further information.')
 
-        if epsilon < 0:
-            raise ValueError('Epsilon is an absolute error term that cannot be negative.')
+        if epsilon <= 0:
+            raise ValueError('Epsilon is an absolute error term that cannot be negative or zero.')
 
         # set attributes
         ################
@@ -163,7 +170,7 @@ class Synapse(object):
         if self.max_delay:
 
             # create time vector from max_delay
-            time_points = np.arange(self.max_delay, 0.+0.5*self.bin_size, -self.bin_size)
+            time_points = np.arange(0., self.max_delay + 0.5*self.bin_size, self.bin_size)
 
         else:
 
@@ -171,7 +178,7 @@ class Synapse(object):
             time_points = [0.]
             kernel_val = self.evaluate_kernel(time_points[-1])
 
-            while True:
+            while time_points[-1] < 100:  # cuts off at a maximum delay of 100 s (which is already too long)
 
                 # calculate kernel value for next time-step
                 time_points.append(time_points[-1] + self.bin_size)
@@ -186,15 +193,25 @@ class Synapse(object):
                         break
 
                 kernel_val = kernel_val_tmp
+            else:
+                raise ValueError("The synaptic kernel reached the break condition of 100s. This could either mean that "
+                                 "your `kernel_function` does not decay to zero (fast enough) or your chosen `epsilon`"
+                                 "error is too small. If you want to have a synapse with a longer synaptic memory than "
+                                 "100s, you have to specify a `max_delay` accordingly.")
 
-            # create time points array
-            time_points = np.flip(np.array(time_points), axis=0)
+        # flip time points array
+        time_points = np.flip(np.array(time_points), axis=0)
 
+        # noinspection PyTypeChecker
         return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
 
-    def evaluate_kernel(self,
-                        time_points: Union[float, np.ndarray] = 0.
-                        ) -> Union[float, np.ndarray]:
+    @overload
+    def evaluate_kernel(self, time_points: float = 0.) -> float: ...
+
+    @overload
+    def evaluate_kernel(self, time_points: np.ndarray = 0.) -> np.ndarray: ...
+
+    def evaluate_kernel(self, time_points=0.):
         """Builds synaptic kernel or computes value of it at specified time point(s).
 
         Parameters
@@ -204,9 +221,8 @@ class Synapse(object):
 
         Returns
         -------
-        np.ndarray
+        np.ndarray, float
             Synaptic kernel value at each t [unit = A or S]
-
         """
 
         return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
@@ -236,6 +252,7 @@ class Synapse(object):
         #######################
 
         # multiply firing rate input with kernel
+        # noinspection PyTypeChecker
         kernel_value = synaptic_input * self.synaptic_kernel[-len(synaptic_input):]
 
         # integrate over time
@@ -471,3 +488,7 @@ class ExponentialSynapse(Synapse):
                          conductivity_based=False,
                          modulatory=False,
                          tau=tau)
+
+
+if __name__ == "__main__":
+    synapse = Synapse(kernel_function=lambda time_points: np.exp(-time_points), efficacy=1, bin_size=1)

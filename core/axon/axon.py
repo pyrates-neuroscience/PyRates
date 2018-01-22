@@ -8,7 +8,7 @@ average membrane potentials. Its behavior approximates the average axon hillok o
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import numpy as np
-from typing import Optional, Callable, Union, Any, Dict
+from typing import Optional, Callable, Union, Any, Dict, overload
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
@@ -58,9 +58,13 @@ class Axon(object):
         self.axon_type = 'custom' if axon_type is None else axon_type
         self.transfer_function_args = transfer_function_args
 
-    def compute_firing_rate(self,
-                            membrane_potential: Union[float, np.ndarray]
-                            ) -> Union[float, np.ndarray]:
+    @overload
+    def compute_firing_rate(self, membrane_potential: float) -> float: ...
+
+    @overload
+    def compute_firing_rate(self, membrane_potential: np.ndarray) -> np.ndarray: ...
+
+    def compute_firing_rate(self, membrane_potential):
         """Computes average firing rate from membrane potential based on transfer function.
 
         Parameters
