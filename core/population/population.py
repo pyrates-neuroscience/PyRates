@@ -152,7 +152,7 @@ class Population(object):
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
                  axon_class: str = 'SigmoidAxon',
-                 store_state_variables: bool = False,
+                 store_state_variables: bool = True,
                  label: str = 'Custom'
                  ) -> None:
         """Instantiation of base population.
@@ -1038,7 +1038,7 @@ class SecondOrderPopulation(Population):
 
         """
 
-        return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current
+        return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current + self.state_variables[0][0]
 
 
 ######################################
