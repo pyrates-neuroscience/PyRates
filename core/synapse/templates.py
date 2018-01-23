@@ -23,6 +23,8 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
         See documentation of parameter `bin_size` of :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` of :class:`Synapse`.
+    epsilon
+        See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
         Default = 1.273 * 3e-13 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
     tau_decay
@@ -39,22 +41,24 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
 
     def __init__(self,
                  bin_size: float,
-                 max_delay: float,
+                 max_delay: Optional[float] = None,
+                 epsilon: float = 1e-15,
                  efficacy: float = 1.273 * 3e-13,
                  tau_decay: float = 0.006,
-                 tau_rise: float = 0.0003
+                 tau_rise: float = 0.0006
                  ) -> None:
         """
         Instantiates current-based synapse with AMPA receptor.
         """
 
-        super(AMPACurrentSynapse, self).__init__(efficacy=efficacy,
-                                                 tau_decay=tau_decay,
-                                                 tau_rise=tau_rise,
-                                                 bin_size=bin_size,
-                                                 max_delay=max_delay,
-                                                 synapse_type='AMPA_current',
-                                                 modulatory=False)
+        super().__init__(efficacy=efficacy,
+                         tau_decay=tau_decay,
+                         tau_rise=tau_rise,
+                         bin_size=bin_size,
+                         max_delay=max_delay,
+                         epsilon=epsilon,
+                         synapse_type='AMPA_current',
+                         modulatory=False)
 
 
 class GABAACurrentSynapse(DoubleExponentialSynapse):
@@ -66,6 +70,8 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
         See documentation of parameter `bin_size` of :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` of :class:`Synapse`.
+    epsilon
+        See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
         Default = 1.273 * -1e-12 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
     tau_decay
@@ -82,22 +88,24 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
 
     def __init__(self,
                  bin_size: float,
-                 max_delay: float,
+                 max_delay: Optional[float] = None,
+                 epsilon: float = 1e-15,
                  efficacy: float = 1.273 * (-1e-12),
                  tau_decay: float = 0.02,
-                 tau_rise: float = 0.0006
+                 tau_rise: float = 0.0004
                  ) -> None:
         """
         Instantiates current-based synapse with GABA_A receptor.
         """
 
-        super(GABAACurrentSynapse, self).__init__(efficacy=efficacy,
-                                                  tau_decay=tau_decay,
-                                                  tau_rise=tau_rise,
-                                                  bin_size=bin_size,
-                                                  max_delay=max_delay,
-                                                  synapse_type='GABAA_current',
-                                                  modulatory=False)
+        super().__init__(efficacy=efficacy,
+                         tau_decay=tau_decay,
+                         tau_rise=tau_rise,
+                         bin_size=bin_size,
+                         max_delay=max_delay,
+                         epsilon=epsilon,
+                         synapse_type='GABAA_current',
+                         modulatory=False)
 
 
 class AMPAConductanceSynapse(DoubleExponentialSynapse):
@@ -109,6 +117,8 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
         See documentation of parameter `bin_size` of :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` of :class:`Synapse`.
+    epsilon
+        See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
         Default = 1.273 * 7.2e-10 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
     tau_decay
@@ -127,7 +137,8 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
 
     def __init__(self,
                  bin_size: float,
-                 max_delay: int,
+                 max_delay: Optional[float] = None,
+                 epsilon: float = 1e-13,
                  efficacy: float = 1.273 * 7.2e-10,
                  tau_decay: float = 0.0015,
                  tau_rise: float = 0.000009,
@@ -137,15 +148,16 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
         Instantiates a conductance-based synapse with GABA_A receptor.
         """
 
-        super(AMPAConductanceSynapse, self).__init__(efficacy=efficacy,
-                                                     tau_decay=tau_decay,
-                                                     tau_rise=tau_rise,
-                                                     bin_size=bin_size,
-                                                     max_delay=max_delay,
-                                                     reversal_potential=reversal_potential,
-                                                     synapse_type='AMPA_conductance',
-                                                     modulatory=False,
-                                                     conductivity_based=True)
+        super().__init__(efficacy=efficacy,
+                         tau_decay=tau_decay,
+                         tau_rise=tau_rise,
+                         bin_size=bin_size,
+                         max_delay=max_delay,
+                         epsilon=epsilon,
+                         reversal_potential=reversal_potential,
+                         synapse_type='AMPA_conductance',
+                         modulatory=False,
+                         conductivity_based=True)
 
 
 class GABAAConductanceSynapse(DoubleExponentialSynapse):
@@ -157,6 +169,8 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
         See documentation of parameter `bin_size` of :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` of :class:`Synapse`.
+    epsilon
+        See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
         Default = 1.358 * -4e-11 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
     tau_decay
@@ -175,7 +189,8 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
 
     def __init__(self,
                  bin_size: float,
-                 max_delay: float,
+                 max_delay: Optional[float] = None,
+                 epsilon: float = 1e-13,
                  efficacy: float = 1.358 * (-4e-11),
                  tau_decay: float = 0.02,
                  tau_rise: float = 0.0004,
@@ -190,6 +205,7 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          bin_size=bin_size,
                          max_delay=max_delay,
+                         epsilon=epsilon,
                          reversal_potential=reversal_potential,
                          synapse_type='GABAA_current',
                          modulatory=False,
@@ -231,7 +247,7 @@ class JansenRitExcitatorySynapse(ExponentialSynapse):
 
     def __init__(self,
                  bin_size: float,
-                 epsilon: float = 1e-10,
+                 epsilon: float = 5e-5,
                  max_delay: Optional[float] = None,
                  efficacy: float = 3.25 * 1e-3,
                  tau: float = 0.01
@@ -277,7 +293,7 @@ class JansenRitInhibitorySynapse(ExponentialSynapse):
 
     def __init__(self,
                  bin_size: float,
-                 epsilon: float = 1e-10,
+                 epsilon: float = 5e-5,
                  max_delay: Optional[float] = None,
                  efficacy: float = -22e-3,
                  tau: float = 0.02
