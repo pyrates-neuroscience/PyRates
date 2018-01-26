@@ -44,7 +44,9 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
         Default = 0.016 s.
     membrane_capacitance
         Default = 1e-12 q/V.
-
+    conductance_based
+        Default = False
+        
     See Also
     --------
     :class:`CircuitFromScratch`: Detailed description of parameters.
@@ -68,7 +70,8 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
                  axon_params: Optional[List[dict]] = None,
                  resting_potential: float = -0.075,
                  tau_leak: float = 0.016,
-                 membrane_capacitance: float = 1e-12
+                 membrane_capacitance: float = 1e-12,
+                 conductance_based: bool = False,
                  ) -> None:
         """Initializes a leaky capacitor version of a Jansen-Rit circuit.
         """
@@ -104,7 +107,10 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
             delays = np.array(delays / step_size, dtype=int)
 
         # synapses
-        synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse']
+        if conductance_based:
+            synapse_types = ['AMPAConductanceSynapse', 'GABAAConductanceSynapse']
+        else:
+            synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse']
         synapse_class = 'DoubleExponentialSynapse'
 
         # axon

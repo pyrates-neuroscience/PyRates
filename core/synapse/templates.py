@@ -90,7 +90,7 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
                  bin_size: float,
                  max_delay: Optional[float] = None,
                  epsilon: float = 1e-15,
-                 efficacy: float = 1.273 * (-1e-12),
+                 efficacy: float = -1.273 * 1e-12,
                  tau_decay: float = 0.02,
                  tau_rise: float = 0.0004
                  ) -> None:
@@ -191,10 +191,10 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                  bin_size: float,
                  max_delay: Optional[float] = None,
                  epsilon: float = 1e-13,
-                 efficacy: float = 1.358 * (-4e-11),
+                 efficacy: float = 1.358 * 4e-11,
                  tau_decay: float = 0.02,
                  tau_rise: float = 0.0004,
-                 reversal_potential: float = -0.070
+                 reversal_potential: float = -0.080
                  ) -> None:
         """
         Instantiates a current-based synapse with GABA_A receptor.
