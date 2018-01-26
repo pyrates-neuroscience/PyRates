@@ -37,8 +37,11 @@ class Circuit(object):
         synaptic contacts between two populations via a given synapse type. 1. dimension are the receiving populations,
         2. dimension are the sending populations.
     delays
-        2D array (n_populations x n_populations) with each entry representing the information transfer delay between the
-        respective populations [unit = s].
+        2D array (n_populations x n_populations) or 3D array (n_populations x n_populations x n_delays) with each entry 
+        representing the information transfer delay between the respective populations [unit = s].
+    delay_distributions
+        3D array (n_populations x n_populations x n_delays) with each entry representing a weight for the 
+        corresponding entry in delays [unit = 1].
     step_size
         Simulation step-size [unit = s] (default = 5e-4).
 
@@ -69,6 +72,7 @@ class Circuit(object):
                  populations: List[PopulationLike],
                  connectivity: np.ndarray,
                  delays: np.ndarray,
+                 delay_distributions: Optional[np.ndarray] = None,
                  step_size: float = 5e-4
                  ) -> None:
         """Instantiates population circuit object.
@@ -138,11 +142,16 @@ class Circuit(object):
             current_population = self.populations[i]
             new_synapses = list()
 
+            # loop over synapses existing at current_population
             for k2, k in enumerate(self.active_synapses[i]):
 
+                # loop over all network nodes
                 for j in range(self.N):
 
+                    # check whether node j connects to current_population via synapse k
                     if self.C[i, j, k] > 0:
+
+                        # if synapse k is plastic, add copy of it to current_population
                         if isinstance(current_population, PlasticPopulation) and \
                                 current_population.synapse_plasticity_function_params[k2]:
 
@@ -153,19 +162,33 @@ class Circuit(object):
                                                                                        i, j, k])
                             new_synapses.append(self.populations[i].n_synapses - 1)
 
-                            # create new edge
-                            self.network_graph.add_edge(j, i,
-                                                        weight=float(self.C[i, j, k]),
-                                                        delay=int(self.D[i, j]),
-                                                        synapse_index=new_synapses[-1])
+                            # create one edge for each delay between j and i
+                            if delay_distributions is None:
+                                self.network_graph.add_edge(j, i,
+                                                            weight=float(self.C[i, j, k]),
+                                                            delay=int(self.D[i, j]),
+                                                            synapse_index=new_synapses[-1])
+                            else:
+                                for w, d in zip(delay_distributions[i, j, :], self.D[i, j, :]):
+                                    self.network_graph.add_edge(j, i,
+                                                                weight=float(self.C[i, j, k]) * w,
+                                                                delay=int(d),
+                                                                synapse_index=new_synapses[-1])
 
                         else:
 
-                            # create new edge
-                            self.network_graph.add_edge(j, i,
-                                                        weight=float(self.C[i, j, k]),
-                                                        delay=int(self.D[i, j]),
-                                                        synapse_index=k2)
+                            # create one edge for each delay between j and i
+                            if delay_distributions is None:
+                                self.network_graph.add_edge(j, i,
+                                                            weight=float(self.C[i, j, k]),
+                                                            delay=int(self.D[i, j]),
+                                                            synapse_index=k2)
+                            else:
+                                for w, d in zip(delay_distributions[i, j, :], self.D[i, j, :]):
+                                    self.network_graph.add_edge(j, i,
+                                                                weight=float(self.C[i, j, k]) * w,
+                                                                delay=int(d),
+                                                                synapse_index=k2)
 
                 # turn of plasticity at original synapse
                 if isinstance(current_population, PlasticPopulation):
@@ -304,7 +327,7 @@ class Circuit(object):
         # loop over connections of node
         for target_pop in connected_pops:
 
-            # loop over existing connections between node and target node
+            # loop over existing connections between source node and target node
             for conn_idx in connected_pops[target_pop]:
 
                 # transfer input to target node
@@ -455,6 +478,8 @@ class CircuitFromScratch(Circuit):
         See docstring for parameter `connectivity` of :class:`Circuit`.
     delays
         See docstring for parameter `delays` of :class:`Circuit`.
+    delay_distributions
+        See docstring for parameter `delay_distributions` of :class:`Circuit`.
     step_size
         See docstring for parameter `step_size` of :class:`Circuit`.
     synapse_params
@@ -493,6 +518,7 @@ class CircuitFromScratch(Circuit):
     def __init__(self,
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
+                 delay_distributions: Optional[np.ndarray] = None,
                  step_size: float = 5e-4,
                  synapses: Optional[List[str]] = None,
                  axons: Optional[List[str]] = None,
@@ -653,6 +679,7 @@ class CircuitFromScratch(Circuit):
         super().__init__(populations=populations,
                          connectivity=connectivity,
                          delays=delays,
+                         delay_distributions=delay_distributions,
                          step_size=step_size)
 
 
@@ -672,6 +699,8 @@ class CircuitFromPopulations(Circuit):
         See docstring for parameter `connectivity` of :class:`Circuit`.
     delays
         See docstring for parameter `delays` of :class:`Circuit`.
+    delay_distributions
+        See docstring for parameter `delay_distributions` of :class:`Circuit`.
     step_size
         See docstring for parameter `step_size` of :class:`Circuit`.
     max_synaptic_delay
@@ -699,6 +728,7 @@ class CircuitFromPopulations(Circuit):
                  population_types: List[str],
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
+                 delay_distributions: Optional[np.ndarray] = None,
                  step_size: float = 5e-4,
                  max_synaptic_delay: Union[float, List[float]] = 0.05,
                  synaptic_modulation_direction: Optional[List[List[np.ndarray]]] = None,
@@ -793,6 +823,7 @@ class CircuitFromPopulations(Circuit):
         super().__init__(populations=populations,
                          connectivity=connectivity,
                          delays=delays,
+                         delay_distributions=delay_distributions,
                          step_size=step_size)
 
 
@@ -812,6 +843,8 @@ class CircuitFromCircuit(Circuit):
             See docstring for parameter `connectivity` of :class:`Circuit`.
         delays
             See docstring for parameter `delays` of :class:`Circuit`.
+        delay_distributions
+            See docstring for parameter `delay_distributions` of :class:`Circuit`.
         input_populations
             3D list of indices for the input populations (3.dim) of each pair-wise connection (1. + 2.dim).
         output_populations
@@ -829,6 +862,7 @@ class CircuitFromCircuit(Circuit):
                  circuits: List[Circuit],
                  connectivity: np.ndarray,
                  delays: Optional[np.ndarray] = None,
+                 delay_distributions: Optional[np.ndarray] = None,
                  input_populations: Optional[np.ndarray] = None,
                  output_populations: Optional[np.ndarray] = None,
                  circuit_labels: Optional[List[str]] = None

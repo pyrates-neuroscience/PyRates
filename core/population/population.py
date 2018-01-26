@@ -1038,7 +1038,7 @@ class SecondOrderPopulation(Population):
 
         """
 
-        return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current + self.state_variables[0][0]
+        return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current
 
 
 ######################################

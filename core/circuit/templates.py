@@ -281,6 +281,7 @@ class GeneralizedJansenRitCircuit(Circuit):
                  feedback_strengths: Optional[List[np.ndarray]] = None,
                  weights: Optional[List[float]] = None,
                  delays: Optional[np.ndarray] = None,
+                 delay_distributions: Optional[np.ndarray] = None,
                  step_size: float = 5e-4,
                  max_synaptic_delay: Optional[float] = None,
                  init_states: Optional[List[np.ndarray]] = None
@@ -309,7 +310,7 @@ class GeneralizedJansenRitCircuit(Circuit):
             init_states = [np.zeros(n_populations) for _ in range(n_circuits)]
         if not feedback_strengths:
             feedback_strengths = [np.zeros(n_populations) for _ in range(n_circuits)]
-        if not delays:
+        if delays is None:
             delays = np.zeros((n_circuits * n_populations, n_circuits * n_populations))
 
         connectivity = np.zeros((n_circuits * n_populations, n_circuits * n_populations, n_synapses))
@@ -332,6 +333,7 @@ class GeneralizedJansenRitCircuit(Circuit):
         super().__init__(populations=populations,
                          connectivity=connectivity,
                          delays=delays,
+                         delay_distributions=delay_distributions,
                          step_size=step_size)
 
 

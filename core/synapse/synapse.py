@@ -136,14 +136,15 @@ class Synapse(object):
 
             self.synapse_type = synapse_type
 
-        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
-        if conductivity_based:
-            self.kernel_scaling = lambda membrane_potential: self.reversal_potential - membrane_potential
-        else:
-            self.kernel_scaling = lambda membrane_potential: 1.
-
         # set synaptic depression (for plasticity mechanisms)
         self.depression = 1.0
+
+        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+        if conductivity_based:
+            self.kernel_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential) \
+                                                             * self.depression
+        else:
+            self.kernel_scaling = lambda membrane_potential: self.depression
 
         # build synaptic kernel
         #######################
@@ -258,7 +259,7 @@ class Synapse(object):
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
-        return kernel_value * self.kernel_scaling(membrane_potential) * self.depression
+        return kernel_value * self.kernel_scaling(membrane_potential)
 
     def plot_synaptic_kernel(self,
                              create_plot: bool = True,
@@ -285,7 +286,6 @@ class Synapse(object):
 
         if axes is None:
             fig, axes = plt.subplots(num='Impulse Response Function')
-
         else:
             fig = axes.get_figure()
 
