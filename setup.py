@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 # fixme: folder reference needs to be fixed
 
-setup(name='BrainNetworks',
+setup(name='PyRates',
       version='0.2',
       description='Neural Mass Modeling Framework',
       author='Richard Gast, Daniel Rose, Konstantin Weise',
