@@ -100,7 +100,7 @@ class Synapse(object):
         # check input parameters
         ########################
 
-        if bin_size <= 0 or (max_delay and max_delay <= 0):
+        if bin_size <= 0 or (max_delay is not None and max_delay <= 0):
             raise ValueError('Time constants (bin_size, max_delay) cannot be negative or zero. '
                              'See docstring for further information.')
 
