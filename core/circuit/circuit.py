@@ -12,7 +12,6 @@ from core.utility import check_nones, set_instance
 
 PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
 
-
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
@@ -91,6 +90,7 @@ class Circuit(object):
                                  'See parameter docstrings for further explanation.')
 
         # attribute values
+        # noinspection PyTypeChecker
         if np.sum(delays < 0.) > 0 or step_size < 0.:
             raise ValueError('Time constants (delays, step_size) cannot be negative. See parameter docstrings for '
                              'further explanation.')
@@ -200,7 +200,7 @@ class Circuit(object):
             synaptic_inputs: np.ndarray,
             simulation_time: float,
             extrinsic_current: Optional[np.ndarray] = None,
-            extrinsic_modulation: Optional[list] = None,
+            extrinsic_modulation: Optional[np.ndarray] = None,
             verbose: bool = False
             ) -> None:
         """Simulates circuit behavior over time.
@@ -209,6 +209,7 @@ class Circuit(object):
         ----------
         synaptic_inputs
             3D array (n_timesteps x n_populations x n_synapses) of synaptic input [unit = 1/s].
+            # fixme: why have global 3D arrays for synaptic input?
         simulation_time
             Total simulation time [unit = s].
         extrinsic_current
@@ -231,33 +232,33 @@ class Circuit(object):
 
         # synaptic inputs
         if synaptic_inputs.shape[0] != simulation_time_steps:
-            raise AttributeError('First dimension of synaptic input has to match the number of simulation time steps!')
+            raise ValueError('First dimension of synaptic input has to match the number of simulation time steps!')
         if synaptic_inputs.shape[1] != self.N:
-            raise AttributeError('Second dimension of synaptic input has to match the number of populations in the '
-                                 'circuit!')
+            raise ValueError('Second dimension of synaptic input has to match the number of populations in the '
+                             'circuit!')
         if synaptic_inputs.shape[2] != self.n_synapses:
-            raise AttributeError('Third dimension of synaptic input has to match the number of synapse types in the '
-                                 'circuit!')
+            raise ValueError('Third dimension of synaptic input has to match the number of synapse types in the '
+                             'circuit!')
 
         # extrinsic currents
         if extrinsic_current is None:
             extrinsic_current = np.zeros((simulation_time_steps, self.N))
         else:
             if extrinsic_current.shape[0] != simulation_time_steps:
-                raise AttributeError('First dimension of extrinsic current has to match the number of simulation time '
-                                     'steps!')
+                raise ValueError('First dimension of extrinsic current has to match the number of simulation time '
+                                 'steps!')
             if extrinsic_current.shape[1] != self.N:
-                raise AttributeError('Second dimension of extrinsic current has to match the number of populations!')
+                raise ValueError('Second dimension of extrinsic current has to match the number of populations!')
 
         # extrinsic modulation
         if not extrinsic_modulation:
-            extrinsic_modulation = np.ones((simulation_time_steps, self.N)).tolist()
+            extrinsic_modulation = np.ones((simulation_time_steps, self.N))
         else:
-            if len(extrinsic_modulation) != simulation_time_steps:
-                raise AttributeError('First dimension of extrinsic modulation has to match the number of simulation '
-                                     'time steps!')
-            if len(extrinsic_current[0]) != self.N:
-                raise AttributeError('Second dimension of extrinsic current has to match the number of populations!')
+            if extrinsic_modulation.shape[0] != simulation_time_steps:
+                raise ValueError('First dimension of extrinsic modulation has to match the number of simulation '
+                                 'time steps!')
+            if extrinsic_modulation.shape[1] != self.N:
+                raise ValueError('Second dimension of extrinsic modulation has to match the number of populations!')
 
         # simulate network
         ##################
@@ -270,11 +271,13 @@ class Circuit(object):
             # update all population states
             self.update_population_states(synaptic_inputs[n, :, :],
                                           extrinsic_current[n, :],
-                                          extrinsic_modulation[n])  # type: ignore
+                                          extrinsic_modulation[n, :])  # type: ignore
 
             # display simulation progress
-            if verbose and (n == 0 or (n % (simulation_time_steps // 10)) == 0):
-                print('simulation progress: ', "%.2f" % ((self.t / simulation_time) * 100.), ' %')
+            if verbose:
+                if n == 0 or (n % (simulation_time_steps // 10)) == 0:
+                    simulation_progress = (self.t / simulation_time) * 100.
+                    print(f'simulation progress: {simulation_progress:.0f} %')
 
             # update time-variant variables
             self.t += self.step_size
@@ -329,7 +332,6 @@ class Circuit(object):
 
             # loop over existing connections between source node and target node
             for conn_idx in connected_pops[target_pop]:
-
                 # transfer input to target node
                 self.network_graph.nodes[target_pop]['data'].synaptic_input[
                     self.network_graph.nodes[target_pop]['data'].current_input_idx[
@@ -975,7 +977,7 @@ class CircuitFromCircuit(Circuit):
                     for k in range(len(input_populations[i][j])):
                         # set inter-circuit connectivities
                         connectivity_new[n_populations[j] + input_populations[i][j][k],
-                                         n_populations[i] + output_populations[i, j], :] = connectivity[i, j, :]
+                        n_populations[i] + output_populations[i, j], :] = connectivity[i, j, :]
 
                         # set inter-circuit delays
                         delays_new[n_populations[j] + input_populations[i][j][k],

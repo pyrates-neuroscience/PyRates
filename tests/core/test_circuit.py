@@ -5,7 +5,6 @@ import numpy as np
 import pytest
 import pickle
 
-
 ###########
 # Utility #
 ###########
@@ -270,6 +269,7 @@ def test_4_3_jr_circuit_iii():
     assert pytest.approx(0, abs=0.5) == error
 
 
+@pytest.mark.skip
 def test_4_4_jr_network_i():
     """
     tests whether 2 delay-connected vs unconnected JR circuits behave as expected.
@@ -338,3 +338,118 @@ def test_4_4_jr_network_i():
 
     # test information transfer between two delay-connected JR circuits...
     assert not pytest.approx(0, abs=0.5) == error
+
+
+def test_4_5_circuit_run_method():
+    """Testing whether the method Circuit.run does what it is supposed to"""
+
+    from core.circuit import JansenRitCircuit
+
+    # set parameters
+    ################
+
+    N = 3
+    n_synapses = 2
+
+    # simulations parameters
+    simulation_time = 1e-3  # s
+    step_size = 5e-4  # s
+    n_time_steps = int(simulation_time / step_size)
+    synaptic_inputs = np.zeros((n_time_steps, N, n_synapses))
+
+    # initialize neural mass network
+    ################################
+
+    circuit = JansenRitCircuit(step_size=step_size)
+
+    # test if run is executed as expected
+    #####################################
+
+    with pytest.raises(ValueError):
+        circuit.run(synaptic_inputs=synaptic_inputs,
+                    simulation_time=-1)
+
+    # check if dimensions of synaptic input are correct
+    ###################################################
+
+    indices = ((1, 0, 0),
+               (0, 1, 0),
+               (0, 0, 1))
+    for i, j, k in indices:
+        with pytest.raises(ValueError):
+            wrong_synaptic_inputs = synaptic_inputs[i:, j:, k:]
+            circuit.run(synaptic_inputs=wrong_synaptic_inputs,
+                        simulation_time=simulation_time)
+
+    # check shape of extrinsic current
+    ##################################
+
+    ext_current = np.zeros((n_time_steps, N))
+    indices = ((1, 0),
+               (0, 1))
+    for i, j in indices:
+        with pytest.raises(ValueError):
+            wrong_ext_current = ext_current[i:, j:]
+            circuit.run(synaptic_inputs=synaptic_inputs,
+                        simulation_time=simulation_time,
+                        extrinsic_current=wrong_ext_current)
+
+    # check extrinsic modulation
+    ############################
+
+    ext_mod = np.ones((n_time_steps, N))
+    indices = ((1, 0),
+               (0, 1))
+    for i, j in indices:
+        with pytest.raises(ValueError):
+            wrong_ext_mod = ext_mod[i:, j:]
+            circuit.run(synaptic_inputs=synaptic_inputs,
+                        simulation_time=simulation_time,
+                        extrinsic_modulation=wrong_ext_mod)
+
+    # check actual runtime
+    ######################
+
+    # TODO: think of a simple case to check for (like a test population/test circuit)
+
+def test_circuit_run_verbosity(capsys):
+
+    from core.circuit import JansenRitCircuit
+
+    # set parameters
+    ################
+
+    N = 3
+    n_synapses = 2
+
+    # simulations parameters
+    simulation_time = 0.1  # s
+    step_size = 5e-4  # s
+    n_time_steps = int(simulation_time / step_size)
+    synaptic_inputs = np.zeros((n_time_steps, N, n_synapses))
+
+    # initialize neural mass network
+    ################################
+
+    circuit = JansenRitCircuit(step_size=step_size)
+    # check verbosity
+    #################
+
+    circuit.run(synaptic_inputs=synaptic_inputs,
+                simulation_time=simulation_time,
+                verbose=True)
+
+    out, err = capsys.readouterr()
+    exp_out = 'simulation progress: 0 %\n' \
+              'simulation progress: 10 %\n' \
+              'simulation progress: 20 %\n' \
+              'simulation progress: 30 %\n' \
+              'simulation progress: 40 %\n' \
+              'simulation progress: 50 %\n' \
+              'simulation progress: 60 %\n' \
+              'simulation progress: 70 %\n' \
+              'simulation progress: 80 %\n' \
+              'simulation progress: 90 %\n'
+    assert out == exp_out
+
+
