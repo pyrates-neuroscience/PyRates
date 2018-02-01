@@ -177,7 +177,7 @@ class Population(object):
         # set population parameters
         ###########################
 
-        self.synapses = []  # type: List[Synapse] # instance of an Synapse class
+        self.synapses = []  # type: List[Synapse]
         self.state_variables = []  # type: List[List[FloatLike]]
         self.store_state_variables = store_state_variables
         self.tau_leak = tau_leak
