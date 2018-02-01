@@ -13,3 +13,23 @@ If you get no output, all type checks are successful. Some issues are ignored us
 These issues may be too complicated for mypy to recognise them properly - or too complicated to fix immediately, 
 but might need fixing, nevertheless. 
 
+
+### Running tests with py.test
+
+We use `py.test` for testing.
+
+Make sure you have `pytest` installed. 
+
+Usage:
+- from within PyCharm 
+  - select py.test as default testing framework
+  - right-click on tests and select "run py.test in tests"
+- from the console
+  - navigate to the PyRates base directory
+  - run `pytest tests`
+
+#### Structure of the tests folder
+
+- benchmarks: scripts to be run to collect benchmark information (WIP)
+- core: tests for corresponding `core` source code
+- resources: represents data that is used in the tests (configuration or target data)
