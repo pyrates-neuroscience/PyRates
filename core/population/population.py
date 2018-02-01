@@ -213,7 +213,7 @@ class Population(object):
                            synapse_types=synapse_class)
 
         # set synapse dependencies
-        self._set_synapse_dependencies(update=False)
+        self.set_synapse_dependencies(update=False)
 
         # set axon
         ##########
@@ -310,8 +310,8 @@ class Population(object):
         else:
             raise AttributeError('Invalid axon type!')
 
-    def _set_synapse_dependencies(self,
-                                  update: bool = False):
+    def set_synapse_dependencies(self,
+                                 update: bool = False):
         """Re-initiates all population attributes that depend on synapse properties.
         """
 
@@ -602,7 +602,7 @@ class Population(object):
         #############################
 
         self.n_synapses += 1
-        self._set_synapse_dependencies(update=False)
+        self.set_synapse_dependencies(update=False)
 
         # self.kernel_lengths = np.append(self.kernel_lengths, len(synapse.synaptic_kernel))  # type: ignore
         #

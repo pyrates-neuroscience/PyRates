@@ -10,8 +10,6 @@ from typing import List, Optional, Union, TypeVar, Callable
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.utility import check_nones, set_instance
 
-PopulationLike = TypeVar('PopulationLike', bound=Population, covariant=True)
-
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
@@ -68,7 +66,7 @@ class Circuit(object):
     """
 
     def __init__(self,
-                 populations: List[PopulationLike],
+                 populations: List[Population],
                  connectivity: np.ndarray,
                  delays: np.ndarray,
                  delay_distributions: Optional[np.ndarray] = None,
@@ -123,7 +121,7 @@ class Circuit(object):
             # check whether max_population_delay has changed
             if np.max(delays[i, :]) > self.populations[i].max_population_delay:
                 self.populations[i].max_population_delay = np.max(delays[i, :])
-                self.populations[i]._set_synapse_dependencies(update=False)
+                self.populations[i].set_synapse_dependencies(update=False)
 
             # TODO: make sure that population step-size corresponds to circuit step-size
 
