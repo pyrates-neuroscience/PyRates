@@ -7,11 +7,25 @@ __status__ = "Development"
 
 from typing import Union, List
 from inspect import getsource
+import numpy as np
+import json
 
 from core.circuit import Circuit
 from core.population import Population
 from core.axon import Axon
 from core.synapse import Synapse
+
+
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
 
 
 def read_config_from_axon(axon: Axon) -> dict:
@@ -50,7 +64,7 @@ def read_config_from_population(population: Union[List[Population], Population])
         for key, item in population.__dict__.items():
             if key not in object.__dict__:
                 if key == "synapses":
-                    continue
+                    item = read_config_from_synapse(item)
 
                 if key == "axon":
                     item = read_config_from_axon(item)
@@ -123,9 +137,6 @@ def read_config_from_circuit(circuit: Circuit) -> dict:
         if key not in object.__dict__:
             if key == "populations":
                 item = read_config_from_population(item)
-
-            if key == "active_synapses":
-                item = read_config_from_synapse(item)
 
             if key == "network_graph":
                 item = networkx.node_link_data(item)

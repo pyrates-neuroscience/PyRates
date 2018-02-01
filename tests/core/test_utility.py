@@ -2,6 +2,9 @@
 """
 
 import pytest
+# import numpy as np
+
+from core.utility.json_filestorage import MyEncoder
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -36,7 +39,10 @@ def test_store_circuit_config_as_dict():
 
     config_dict = read_config_from_circuit(circuit)
 
-    with open("../resources/jr_config_target.json", "r") as json_file:
+    with open("tests/resources/jr_config_target.json", "w") as json_file:
+        json.dump(config_dict, json_file, cls=MyEncoder)
+
+    with open("tests/resources/jr_config_target.json", "r") as json_file:
         target_config_dict = json.load(json_file)
 
     assert config_dict == target_config_dict
