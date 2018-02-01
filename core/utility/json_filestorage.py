@@ -14,7 +14,6 @@ from core.axon import Axon
 from core.synapse import Synapse
 
 
-
 def read_config_from_axon(axon: Axon) -> dict:
     """Transform meta-data form an axon into a dictionary."""
 

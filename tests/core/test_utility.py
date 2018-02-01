@@ -22,12 +22,12 @@ def setup_module():
 #########
 
 
-@pytest.mark.xfail
+# @pytest.mark.xfail
 def test_store_circuit_config_as_dict():
     """As title says."""
 
     from core.circuit import JansenRitCircuit
-    from core.utility import read_config_from_circuit
+    from core.utility.json_filestorage import read_config_from_circuit
     import json
 
     step_size = 1e-4
