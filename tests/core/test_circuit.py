@@ -269,7 +269,7 @@ def test_4_3_jr_circuit_iii():
     assert pytest.approx(0, abs=0.5) == error
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_4_4_jr_network_i():
     """
     tests whether 2 delay-connected vs unconnected JR circuits behave as expected.
