@@ -138,3 +138,21 @@ def test_construct_circuit_from_file_or_dict():
 
 
 
+@pytest.mark.xfail
+def test_compare_circuit_repr_and_constructor():
+    # load_json
+    # load_reference_circuit
+    assert repr(circuit) == circuit_constructor_str
+
+@pytest.mark.xfail
+def test_construct_circuit_from_repr_eval():
+    from core.circuit import JansenRitCircuit
+
+    step_size = 1e-4
+
+    circuit = JansenRitCircuit(step_size)
+
+    _repr = repr(circuit)
+    new_circuit = eval(_repr)
+
+    assert circuit == new_circuit

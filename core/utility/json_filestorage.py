@@ -1,6 +1,7 @@
 """ Utility functions to store Circuit configurations and data in JSON files
 and read/construct circuit from JSON.
 """
+from functools import partial
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -21,8 +22,8 @@ def get_attrs(obj: object) -> dict:
     """Transform meta-data of a given object into a dictionary, ignoring default fields form class <object>."""
     config_dict = dict()
     for key, item in obj.__dict__.items():
-        if key not in object.__dict__:
-            config_dict[key] = item
+        config_dict[key] = item
+    config_dict["class"] = {"__module__": obj.__class__.__module__, "__name__": obj.__class__.__name__}
     return config_dict
 
 
@@ -52,7 +53,63 @@ class CustomEncoder(json.JSONEncoder):
         elif callable(obj):
             return getsource(obj)
         else:
-            return super(CustomEncoder, self).default(obj)
+            return super().default(obj)
+
+# class Data:
+#     pass
+
+
+class Data:
+    # @staticmethod
+    # def repr(obj):
+    #     items = []
+    #     for key, value in obj.__dict__.items():
+    #         try:
+    #             item = "%s = %r" % (key, value)
+    #             assert len(item) < 20
+    #         except:
+    #             item = "%s: <%s>" % (key, value.__class__.__name__)
+    #         items.append(item)
+    #
+    #     return f"{obj.__class__.__name__}({', '.join(items)})"
+
+    def dict(self):
+        pass
+
+    def __init__(self, cls):
+        # cls.__repr__ = Data.repr
+        self.cls = cls
+
+    def __call__(self, *args, **kwargs):
+        inst = self.cls(*args, **kwargs)
+
+        def _repr(obj):
+            module = obj.__class__.__module__
+            name = obj.__class__.__name__
+            # return f"{module}.{name}({', '.join(args)}, {kwargs})"
+            return f"{module}.{name}({args}, {kwargs})"
+        inst.__repr__ = _repr
+
+        return inst
+
+
+def repr_decorator(cls):
+    def cls_wrapper(*args, **kwargs):
+        def representer(obj):
+            module = obj.__class__.__module__
+            name = obj.__class__.__name__
+            return f"{module}.{name}({', '.join(args)},{kwargs})"
+        inst = cls(*args, **kwargs)
+        inst.__repr__ = representer(inst)
+        return cls(*args, **kwargs)
+    return cls_wrapper
+
+
+def repr_parser(obj: object, *args, **kwargs) -> str:
+    module = obj.__class__.__module__
+    name = obj.__class__.__name__
+    rep_str = f"{module}.{name}({args},{kwargs})"
+    return rep_str
 
 
 # def read_config_from_axon(axon: Axon) -> dict:
@@ -125,9 +182,6 @@ class CustomEncoder(json.JSONEncoder):
 #     return pop_config_list
 
 
-
-
-
 # def read_config_from_synapse(synapse: Union[List[Synapse], Synapse]) -> List[dict]:
 #     """Transform meta-data from a synapse or list of synapses into a list of dictionaries"""
 #     if isinstance(synapse, list):
@@ -185,3 +239,13 @@ class CustomEncoder(json.JSONEncoder):
 #
 #     return config_dict
 
+
+if __name__ == "__main__":
+
+    @Data
+    class Dummy():
+        def __init__(self, a, b=1):
+            self.a = a
+
+    c = Dummy(a=2)
+    print(c)

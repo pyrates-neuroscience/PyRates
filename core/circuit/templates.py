@@ -7,6 +7,7 @@ from typing import Optional, List
 from core.circuit import CircuitFromPopulations, CircuitFromScratch, Circuit
 from core.population import WangKnoescheCells
 from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
+from core.utility.json_filestorage import Data
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -139,6 +140,7 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
                          )
 
 
+@Data
 class JansenRitCircuit(CircuitFromScratch):
     """Jansen-Rit circuit as defined in [1]_ with optional self-feedback loops at each population (motivated by [2]_).
 

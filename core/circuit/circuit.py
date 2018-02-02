@@ -107,6 +107,7 @@ class Circuit(object):
         self.populations = populations
         self.C = connectivity
         self.D = delays
+        self.delay_distributions = delay_distributions
 
         # population specific properties
         for i in range(self.N):
@@ -193,6 +194,14 @@ class Circuit(object):
                     current_population.synapse_plasticity_function_params[k2] = None
 
             self.active_synapses[i] += new_synapses
+
+    def __repr__(self) -> str:
+        """Printable representation of the class that can be evaluated with eval and yields the same"""
+        module = self.__class__.__module__
+        name = self.__class__.__name__
+        rep_str = f"{module}.{name}(populations={self.populations}, connectivity={self.C}, delays={self.D}, " \
+                  f"delay_distributions={self.delay_distributions}, step_size={self.step_size})"
+        return rep_str
 
     def run(self,
             synaptic_inputs: np.ndarray,

@@ -32,7 +32,11 @@
                     },
                     "synapse_type": "JR_excitatory",
                     "depression": 1.0,
-                    "kernel_scaling": "            self.kernel_scaling = lambda membrane_potential: self.depression\n"
+                    "kernel_scaling": "            self.kernel_scaling = lambda membrane_potential: self.depression\n",
+                    "class": {
+                        "__module__": "core.synapse.templates",
+                        "__name__": "JansenRitExcitatorySynapse"
+                    }
                 },
                 {
                     "efficacy": -0.022,
@@ -48,7 +52,11 @@
                     },
                     "synapse_type": "JR_inhibitory",
                     "depression": 1.0,
-                    "kernel_scaling": "            self.kernel_scaling = lambda membrane_potential: self.depression\n"
+                    "kernel_scaling": "            self.kernel_scaling = lambda membrane_potential: self.depression\n",
+                    "class": {
+                        "__module__": "core.synapse.templates",
+                        "__name__": "JansenRitInhibitorySynapse"
+                    }
                 }
             ],
             "state_variables": [
@@ -6664,11 +6672,19 @@
                     "max_firing_rate": 5.0,
                     "membrane_potential_threshold": 0.006,
                     "sigmoid_steepness": 560.0
+                },
+                "class": {
+                    "__module__": "core.axon.templates",
+                    "__name__": "JansenRitAxon"
                 }
             },
             "current_firing_rate": 0.16784611640741262,
             "extrinsic_current": 0.0,
-            "extrinsic_synaptic_modulation": 1.0
+            "extrinsic_synaptic_modulation": 1.0,
+            "class": {
+                "__module__": "core.population.population",
+                "__name__": "SecondOrderPopulation"
+            }
         },
         {
             "synapses": [
@@ -6686,7 +6702,11 @@
                     },
                     "synapse_type": "JR_excitatory",
                     "depression": 1.0,
-                    "kernel_scaling": "            self.kernel_scaling = lambda membrane_potential: self.depression\n"
+                    "kernel_scaling": "            self.kernel_scaling = lambda membrane_potential: self.depression\n",
+                    "class": {
+                        "__module__": "core.synapse.templates",
+                        "__name__": "JansenRitExcitatorySynapse"
+                    }
                 }
             ],
             "state_variables": [
@@ -8530,11 +8550,19 @@
                     "max_firing_rate": 5.0,
                     "membrane_potential_threshold": 0.006,
                     "sigmoid_steepness": 560.0
+                },
+                "class": {
+                    "__module__": "core.axon.templates",
+                    "__name__": "JansenRitAxon"
                 }
             },
             "current_firing_rate": 0.16784611640741262,
             "extrinsic_current": 0.0,
-            "extrinsic_synaptic_modulation": 1.0
+            "extrinsic_synaptic_modulation": 1.0,
+            "class": {
+                "__module__": "core.population.population",
+                "__name__": "SecondOrderPopulation"
+            }
         },
         {
             "synapses": [
@@ -8552,7 +8580,11 @@
                     },
                     "synapse_type": "JR_excitatory",
                     "depression": 1.0,
-                    "kernel_scaling": "            self.kernel_scaling = lambda membrane_potential: self.depression\n"
+                    "kernel_scaling": "            self.kernel_scaling = lambda membrane_potential: self.depression\n",
+                    "class": {
+                        "__module__": "core.synapse.templates",
+                        "__name__": "JansenRitExcitatorySynapse"
+                    }
                 }
             ],
             "state_variables": [
@@ -10396,11 +10428,19 @@
                     "max_firing_rate": 5.0,
                     "membrane_potential_threshold": 0.006,
                     "sigmoid_steepness": 560.0
+                },
+                "class": {
+                    "__module__": "core.axon.templates",
+                    "__name__": "JansenRitAxon"
                 }
             },
             "current_firing_rate": 0.16784611640741262,
             "extrinsic_current": 0.0,
-            "extrinsic_synaptic_modulation": 1.0
+            "extrinsic_synaptic_modulation": 1.0,
+            "class": {
+                "__module__": "core.population.population",
+                "__name__": "SecondOrderPopulation"
+            }
         }
     ],
     "C": [
@@ -10513,5 +10553,9 @@
                 "key": 0
             }
         ]
+    },
+    "class": {
+        "__module__": "core.circuit.templates",
+        "__name__": "JansenRitCircuit"
     }
 }
