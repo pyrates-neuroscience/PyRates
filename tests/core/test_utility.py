@@ -4,7 +4,7 @@
 import pytest
 # import numpy as np
 
-from core.utility.json_filestorage import MyEncoder
+from core.utility.json_filestorage import CustomEncoder, get_attrs
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -30,17 +30,20 @@ def test_store_circuit_config_as_dict():
     """As title says."""
 
     from core.circuit import JansenRitCircuit
-    from core.utility.json_filestorage import read_config_from_circuit
     import json
 
     step_size = 1e-4
 
     circuit = JansenRitCircuit(step_size)
 
-    config_dict = read_config_from_circuit(circuit)
+    config_dict = get_attrs(circuit)
 
     with open("tests/resources/jr_config_target.json", "w") as json_file:
-        json.dump(config_dict, json_file, cls=MyEncoder)
+        json.dump(config_dict, json_file, cls=CustomEncoder, indent=4)
+
+    config_dict = json.loads(json.dumps(config_dict, cls=CustomEncoder))
+
+    # TODO: need to properly filter all elements in dict - or simply directly pass to file
 
     with open("tests/resources/jr_config_target.json", "r") as json_file:
         target_config_dict = json.load(json_file)
