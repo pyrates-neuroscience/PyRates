@@ -39,8 +39,8 @@ def test_store_circuit_config_as_json():
     config_dict = get_attrs(circuit)
 
     # comment/uncomment this to create new target JSON file if necessary
-    # with open("tests/resources/jr_config_target.json", "w") as json_file:
-    #     json.dump(config_dict, json_file, cls=CustomEncoder, indent=4)
+    with open("tests/resources/jr_config_target.json", "w") as json_file:
+        json.dump(config_dict, json_file, cls=CustomEncoder, indent=4)
 
     config_dict = json.loads(json.dumps(config_dict, cls=CustomEncoder))
 

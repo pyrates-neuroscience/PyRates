@@ -23,7 +23,6 @@ def get_attrs(obj: object) -> dict:
     for key, item in obj.__dict__.items():
         if key not in object.__dict__:
             config_dict[key] = item
-
     return config_dict
 
 
@@ -38,11 +37,18 @@ class CustomEncoder(json.JSONEncoder):
         elif isinstance(obj, Population):
             return get_attrs(obj)
         elif isinstance(obj, Synapse):
-            return get_attrs(obj)
+            attr_dict = get_attrs(obj)
+            # remove synaptic_kernel from dict, if kernel_function is specified
+            if "kernel_function" in attr_dict:
+                attr_dict.pop("synaptic_kernel", None)
+            return attr_dict
         elif isinstance(obj, Axon):
             return get_attrs(obj)
         elif isinstance(obj, MultiDiGraph):
-            return node_link_data(obj)
+            net_dict = node_link_data(obj)
+            for population in net_dict["nodes"]:
+                population.pop("data", None)
+            return net_dict
         elif callable(obj):
             return getsource(obj)
         else:
