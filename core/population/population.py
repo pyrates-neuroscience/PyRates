@@ -332,8 +332,7 @@ class Population(object):
         if update:
             synaptic_input_tmp = self.synaptic_input
 
-        self.synaptic_input = np.zeros((int(self.max_population_delay / self.step_size) +
-                                        np.max(self.kernel_lengths) + 1, self.n_synapses))
+        self.synaptic_input = np.zeros((self.max_population_delay + np.max(self.kernel_lengths) + 1, self.n_synapses))
 
         if update:
             self.synaptic_input[0:synaptic_input_tmp.shape[0], 0:synaptic_input_tmp.shape[1]] = synaptic_input_tmp
