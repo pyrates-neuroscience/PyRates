@@ -87,7 +87,7 @@ class Data:
             module = obj.__class__.__module__
             name = obj.__class__.__name__
             # return f"{module}.{name}({', '.join(args)}, {kwargs})"
-            return f"{module}.{name}({args}, {kwargs})"
+            return f"{module}.{name}()"
         inst.__repr__ = _repr
 
         return inst
