@@ -46,14 +46,17 @@ def test_2_1_synapse_init():
     ##########################
 
     with pytest.raises(ValueError):
-        _ = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=0)
-        _ = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=-1)
-
-        _ = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, max_delay=0)
-        _ = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, max_delay=-1)
-
-        _ = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, epsilon=0)
-        _ = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, epsilon=-1)
+        Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=0)
+    with pytest.raises(ValueError):
+        Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=-1)
+    with pytest.raises(ValueError):
+        Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, max_delay=0.)
+    with pytest.raises(ValueError):
+        Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, max_delay=-1)
+    with pytest.raises(ValueError):
+        Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, epsilon=0)
+    with pytest.raises(ValueError):
+        Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, epsilon=-1)
 
     # test synapse_type
     ###################
