@@ -26,7 +26,7 @@ def setup_module():
 
 
 # @pytest.mark.xfail
-def test_store_circuit_config_as_dict():
+def test_store_circuit_config_as_json():
     """As title says."""
 
     from core.circuit import JansenRitCircuit
@@ -38,12 +38,11 @@ def test_store_circuit_config_as_dict():
 
     config_dict = get_attrs(circuit)
 
-    with open("tests/resources/jr_config_target.json", "w") as json_file:
-        json.dump(config_dict, json_file, cls=CustomEncoder, indent=4)
+    # comment/uncomment this to create new target JSON file if necessary
+    # with open("tests/resources/jr_config_target.json", "w") as json_file:
+    #     json.dump(config_dict, json_file, cls=CustomEncoder, indent=4)
 
     config_dict = json.loads(json.dumps(config_dict, cls=CustomEncoder))
-
-    # TODO: need to properly filter all elements in dict - or simply directly pass to file
 
     with open("tests/resources/jr_config_target.json", "r") as json_file:
         target_config_dict = json.load(json_file)
