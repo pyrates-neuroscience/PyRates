@@ -198,14 +198,6 @@ class Circuit(RepresentationBase):
 
             self.active_synapses[i] += new_synapses
 
-    def __repr__(self) -> str:
-        """Printable representation of the class that can be evaluated with eval and yields the same"""
-        module = self.__class__.__module__
-        name = self.__class__.__name__
-        rep_str = f"{module}.{name}(populations={self.populations}, connectivity={self.C}, delays={self.D}, " \
-                  f"delay_distributions={self.delay_distributions}, step_size={self.step_size})"
-        return rep_str
-
     def run(self,
             synaptic_inputs: np.ndarray,
             simulation_time: float,
