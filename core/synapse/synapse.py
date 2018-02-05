@@ -11,6 +11,8 @@ from typing import Optional, Union, Callable, overload
 
 from matplotlib.axes import Axes
 
+from core.utility.json_filestorage import RepresentationBase
+
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
@@ -28,7 +30,7 @@ FloatOrArray = Union[float, np.ndarray]
 ###################
 
 
-class Synapse(object):
+class Synapse(RepresentationBase):
     """Basic synapse class. Represents average behavior of a defined post-synapse of a population.
 
     Parameters

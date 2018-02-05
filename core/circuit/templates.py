@@ -7,7 +7,6 @@ from typing import Optional, List
 from core.circuit import CircuitFromPopulations, CircuitFromScratch, Circuit
 from core.population import WangKnoescheCells
 from core.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
-from core.utility.json_filestorage import Data
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -140,7 +139,6 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
                          )
 
 
-@Data
 class JansenRitCircuit(CircuitFromScratch):
     """Jansen-Rit circuit as defined in [1]_ with optional self-feedback loops at each population (motivated by [2]_).
 
@@ -190,6 +188,11 @@ class JansenRitCircuit(CircuitFromScratch):
         """Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory
         interneurons.
         """
+        # save input to attributes locals
+        #################################
+
+        self.connectivity_scaling = connectivity_scaling
+        self.feedback_strength = feedback_strength
 
         # set parameters
         ################
@@ -216,10 +219,10 @@ class JansenRitCircuit(CircuitFromScratch):
                                 [0, 0, fb[2] * c]]
 
         # delays
-        if delays is None:
-            delays = np.zeros((N, N))
-        else:
-            delays = np.array(delays / step_size, dtype=int)
+        # if delays is None:
+        #     delays = np.zeros((N, N))
+        # else:
+        #     delays = np.array(delays / step_size, dtype=int)
 
         # synapses
         synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']

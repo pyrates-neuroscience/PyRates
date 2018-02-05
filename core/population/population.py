@@ -15,6 +15,7 @@ from typing import List, Optional, Union, Dict, Callable, TypeVar
 from core.axon import Axon, SigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse
 from core.utility import set_instance, check_nones
+from core.utility.json_filestorage import RepresentationBase
 
 FloatLike = Union[float, np.float64]
 AxonLike = TypeVar('AxonLike', bound=Axon, covariant=True)
@@ -31,7 +32,7 @@ __status__ = "Development"
 ##############################
 
 
-class Population(object):
+class Population(RepresentationBase):
     """Base neural mass or population class, behaving like a leaky capacitor.
 
         A population is defined via a number of synapses and an axon.

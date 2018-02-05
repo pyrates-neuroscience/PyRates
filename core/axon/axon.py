@@ -10,6 +10,8 @@ from matplotlib.axes import Axes
 import numpy as np
 from typing import Optional, Callable, Union, Any, Dict, overload
 
+from core.utility.json_filestorage import RepresentationBase
+
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
 
@@ -19,7 +21,7 @@ __status__ = "Development"
 ################
 
 
-class Axon(object):
+class Axon(RepresentationBase):
     """Base axon class. Represents average behavior of generic axon hillok.
 
     Parameters

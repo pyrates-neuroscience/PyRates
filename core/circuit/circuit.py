@@ -9,6 +9,7 @@ from typing import List, Optional, Union, TypeVar, Callable
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.utility import check_nones, set_instance
+from core.utility.json_filestorage import RepresentationBase
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -19,7 +20,7 @@ __status__ = "Development"
 #########################
 
 
-class Circuit(object):
+class Circuit(RepresentationBase):
     """Base circuit class.
 
     Initializes a number of (delay-) coupled populations (neural masses) that are each characterized by a number of
@@ -106,7 +107,9 @@ class Circuit(object):
         # circuit structure
         self.populations = populations
         self.C = connectivity
+        self.connectivity = self.C  # alias for repr and json functionality
         self.D = delays
+        self.delays = self.D  # alias for repr and json functionality
         self.delay_distributions = delay_distributions
 
         # population specific properties
@@ -552,6 +555,29 @@ class CircuitFromScratch(Circuit):
         """Instantiates circuit from synapse/axon types and parameters.
         """
 
+        # save input to attributes locals
+        #################################
+
+        self.synapses = synapses
+        self.axons = axons
+        self.synapse_params = synapse_params
+        self.max_synaptic_delay = max_synaptic_delay
+        self.synaptic_modulation_direction = synaptic_modulation_direction
+        self.synapse_class = synapse_class
+        self.axon_params = axon_params
+        self.axon_class = axon_class
+        self.population_class = population_class
+        self.membrane_capacitance = membrane_capacitance
+        self.tau_leak = tau_leak
+        self.resting_potential = resting_potential
+        self.init_states = init_states
+        self.population_labels = population_labels
+        self.axon_plasticity_function = axon_plasticity_function
+        self.axon_plasticity_target_param = axon_plasticity_target_param
+        self.axon_plasticity_function_params = axon_plasticity_function_params
+        self.synapse_plasticity_function = synapse_plasticity_function
+        self.synapse_plasticity_function_params = synapse_plasticity_function_params
+
         # check input parameters
         ########################
 
@@ -596,14 +622,18 @@ class CircuitFromScratch(Circuit):
         # make float variables iterable
         if isinstance(init_states, float):
             init_states = np.zeros(N) + init_states
+
         if isinstance(max_synaptic_delay, float):
             max_synaptic_delay = np.zeros(N) + max_synaptic_delay
         elif not max_synaptic_delay:
             max_synaptic_delay = check_nones(max_synaptic_delay, N)
+
         if isinstance(tau_leak, float):
             tau_leak = np.zeros(N) + tau_leak
+
         if isinstance(resting_potential, float):
             resting_potential = np.zeros(N) + resting_potential
+
         if isinstance(membrane_capacitance, float):
             membrane_capacitance = np.zeros(N) + membrane_capacitance
 
@@ -750,6 +780,19 @@ class CircuitFromPopulations(Circuit):
                  ) -> None:
         """Instantiates circuit from population types and parameters.
         """
+        # save input to attributes locals
+        #################################
+
+        self.population_types = population_types
+        self.max_synaptic_delay = max_synaptic_delay
+        self.synaptic_modulation_direction = synaptic_modulation_direction
+        self.population_class = population_class
+        self.membrane_capacitance = membrane_capacitance
+        self.tau_leak = tau_leak
+        self.resting_potential = resting_potential
+        self.init_states = init_states
+        self.population_labels = population_labels
+
 
         # check input parameters
         ########################
@@ -878,6 +921,13 @@ class CircuitFromCircuit(Circuit):
                  ) -> None:
         """Instantiates circuit from population types and parameters.
         """
+        # save input to attributes locals
+        #################################
+
+        self.circuits = circuits
+        self.input_populations = input_populations
+        self.output_populations = output_populations
+        self.circuit_labels = circuit_labels
 
         # check input parameters
         ########################
@@ -996,7 +1046,8 @@ class CircuitFromCircuit(Circuit):
         super().__init__(populations=populations,
                          connectivity=connectivity_new,
                          delays=delays_new,
-                         step_size=circuits[0].step_size)
+                         step_size=circuits[0].step_size,
+                         delay_distributions=delay_distributions)
 
 # def update_step_size(self, new_step_size, synaptic_inputs, update_threshold=1e-2, extrinsic_current=None,
 #                      extrinsic_synaptic_modulation=None, idx=0, interpolation_type='linear'):

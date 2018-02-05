@@ -4,7 +4,7 @@
 import pytest
 # import numpy as np
 
-from core.utility.json_filestorage import CustomEncoder, get_attrs
+# from core.utility.json_filestorage import CustomEncoder, get_attrs
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -26,7 +26,7 @@ def setup_module():
 
 
 # @pytest.mark.xfail
-def test_store_circuit_config_as_json():
+def test_store_circuit_config_as_dict():
     """As title says."""
 
     from core.circuit import JansenRitCircuit
@@ -36,15 +36,31 @@ def test_store_circuit_config_as_json():
 
     circuit = JansenRitCircuit(step_size)
 
-    config_dict = get_attrs(circuit)
+    # try without defaults
+    ######################
+    # config_dict = circuit.to_dict(include_defaults=False, recursive=True)
 
     # comment/uncomment this to create new target JSON file if necessary
-    with open("tests/resources/jr_config_target.json", "w") as json_file:
-        json.dump(config_dict, json_file, cls=CustomEncoder, indent=4)
+    # assuming, the cwd is the tests root directory
+    # circuit.to_json(details="min", path="resources/", filename="jr_config_target_no_defaults.json")
 
-    config_dict = json.loads(json.dumps(config_dict, cls=CustomEncoder))
+    with open("resources/jr_config_target_no_defaults.json", "r") as json_file:
+        target_config_dict = json.load(json_file)
 
-    with open("tests/resources/jr_config_target.json", "r") as json_file:
+    config_dict = json.loads(circuit.to_json(details="min"))
+
+    assert config_dict == target_config_dict
+
+    # try with defaults
+    # #################
+
+    # comment/uncomment this to create new target JSON file if necessary
+    # assuming, the cwd is the tests root directory
+    # circuit.to_json(details="defaults", path="resources/", filename="jr_config_target_with_defaults.json")
+
+    config_dict = json.loads(circuit.to_json(details="defaults"))
+
+    with open("resources/jr_config_target_with_defaults.json", "r") as json_file:
         target_config_dict = json.load(json_file)
 
     assert config_dict == target_config_dict

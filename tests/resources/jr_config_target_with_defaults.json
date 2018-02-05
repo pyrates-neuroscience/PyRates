@@ -1,0 +1,38 @@
+{
+    "class": {
+        "__module__": "core.circuit.templates",
+        "__name__": "JansenRitCircuit"
+    },
+    "step_size": 0.0001,
+    "max_synaptic_delay": null,
+    "delays": [
+        [
+            0,
+            0,
+            0
+        ],
+        [
+            0,
+            0,
+            0
+        ],
+        [
+            0,
+            0,
+            0
+        ]
+    ],
+    "connectivity_scaling": 135.0,
+    "feedback_strength": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "init_states": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "synapse_params": null,
+    "axon_params": null
+}
