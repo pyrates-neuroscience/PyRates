@@ -61,10 +61,12 @@ class Axon(RepresentationBase):
         self.transfer_function_args = transfer_function_args
 
     @overload
-    def compute_firing_rate(self, membrane_potential: float) -> float: ...
+    def compute_firing_rate(self, membrane_potential: float) -> float:
+        ...
 
     @overload
-    def compute_firing_rate(self, membrane_potential: np.ndarray) -> np.ndarray: ...
+    def compute_firing_rate(self, membrane_potential: np.ndarray) -> np.ndarray:
+        ...
 
     def compute_firing_rate(self, membrane_potential):
         """Computes average firing rate from membrane potential based on transfer function.
@@ -215,11 +217,11 @@ class SigmoidAxon(Axon):
         # call super init
         #################
 
-        super(SigmoidAxon, self).__init__(transfer_function=parametric_sigmoid,
-                                          axon_type=axon_type,
-                                          max_firing_rate=max_firing_rate,
-                                          membrane_potential_threshold=membrane_potential_threshold,
-                                          sigmoid_steepness=sigmoid_steepness)
+        super().__init__(transfer_function=parametric_sigmoid,
+                         axon_type=axon_type,
+                         max_firing_rate=max_firing_rate,
+                         membrane_potential_threshold=membrane_potential_threshold,
+                         sigmoid_steepness=sigmoid_steepness)
 
     def plot_transfer_function(self,
                                membrane_potentials: Optional[np.ndarray] = None,

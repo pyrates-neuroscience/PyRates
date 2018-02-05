@@ -42,12 +42,12 @@ def test_store_circuit_config_as_dict():
 
     # comment/uncomment this to create new target JSON file if necessary
     # assuming, the cwd is the tests root directory
-    # circuit.to_json(details="min", path="resources/", filename="jr_config_target_no_defaults.json")
+    # circuit.to_json(include_defaults=False, path="resources/", filename="jr_config_target_no_defaults.json")
 
     with open("resources/jr_config_target_no_defaults.json", "r") as json_file:
         target_config_dict = json.load(json_file)
 
-    config_dict = json.loads(circuit.to_json(details="min"))
+    config_dict = json.loads(circuit.to_json(include_defaults=False))
 
     assert config_dict == target_config_dict
 
@@ -56,11 +56,26 @@ def test_store_circuit_config_as_dict():
 
     # comment/uncomment this to create new target JSON file if necessary
     # assuming, the cwd is the tests root directory
-    # circuit.to_json(details="defaults", path="resources/", filename="jr_config_target_with_defaults.json")
+    # circuit.to_json(include_defaults=True, path="resources/", filename="jr_config_target_with_defaults.json")
 
-    config_dict = json.loads(circuit.to_json(details="defaults"))
+    config_dict = json.loads(circuit.to_json(include_defaults=True))
 
     with open("resources/jr_config_target_with_defaults.json", "r") as json_file:
+        target_config_dict = json.load(json_file)
+
+    assert config_dict == target_config_dict
+
+    # try with graph
+    # ##############
+
+    # comment/uncomment this to create new target JSON file if necessary
+    # assuming, the cwd is the tests root directory
+    # circuit.to_json(include_defaults=False, include_graph=True,
+    #                 path="resources/", filename="jr_config_target_with_graph.json")
+
+    config_dict = json.loads(circuit.to_json(include_defaults=False, include_graph=True))
+
+    with open("resources/jr_config_target_with_graph.json", "r") as json_file:
         target_config_dict = json.load(json_file)
 
     assert config_dict == target_config_dict
