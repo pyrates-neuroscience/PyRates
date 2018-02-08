@@ -148,9 +148,6 @@ class Synapse(object):
 
         """Builds synaptic kernel.
 
-        Parameters
-        ----------
-
         Returns
         -------
         np.ndarray
