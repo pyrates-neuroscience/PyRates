@@ -103,8 +103,6 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
         # delays
         if delays is None:
             delays = np.zeros((N, N))
-        else:
-            delays = np.array(delays / step_size, dtype=int)
 
         # synapses
         if conductance_based:

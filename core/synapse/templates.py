@@ -139,7 +139,7 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
                  bin_size: float,
                  max_delay: Optional[float] = None,
                  epsilon: float = 1e-13,
-                 efficacy: float = 1.273 * 7.2e-10,
+                 efficacy: float = 7.2e-10,  # * 1.273
                  tau_decay: float = 0.0015,
                  tau_rise: float = 0.000009,
                  reversal_potential: float = 0.0
@@ -191,8 +191,8 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                  bin_size: float,
                  max_delay: Optional[float] = None,
                  epsilon: float = 1e-13,
-                 efficacy: float = 1.358 * 4e-11,
-                 tau_decay: float = 0.02,
+                 efficacy: float = 4e-11,  # * 1.358
+                 tau_decay: float = 0.008,  # 0.02
                  tau_rise: float = 0.0004,
                  reversal_potential: float = -0.080
                  ) -> None:
