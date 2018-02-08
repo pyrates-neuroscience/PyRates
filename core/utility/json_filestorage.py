@@ -119,13 +119,24 @@ class RepresentationBase(object):
     def to_json(self, include_defaults=False, include_graph=False, path="", filename=""):
         """Parse a dictionary into """
 
-        import os
         # from core.utility.json_filestorage import CustomEncoder
 
         _dict = self.to_dict(include_defaults=include_defaults, include_graph=include_graph, recursive=True)
 
         if filename:
+            import os
+            import errno
+
             filepath = os.path.join(path, filename)
+
+            # create directory if necessary
+            if not os.path.exists(os.path.dirname(filepath)):
+                try:
+                    os.makedirs(os.path.dirname(filepath))
+                except OSError as exc:  # Guard against race condition
+                    if exc.errno != errno.EEXIST:
+                        raise
+
             with open(filepath, "w") as outfile:
                 json.dump(_dict, outfile, cls=CustomEncoder, indent=4)
 
