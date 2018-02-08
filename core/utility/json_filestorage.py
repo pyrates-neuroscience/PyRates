@@ -131,3 +131,14 @@ class RepresentationBase(object):
 
         # return json as string
         return json.dumps(_dict, cls=CustomEncoder)
+
+
+
+
+
+
+
+
+
+
+
