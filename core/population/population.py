@@ -15,6 +15,7 @@ from typing import List, Optional, Union, Dict, Callable, TypeVar
 from core.axon import Axon, SigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse
 from core.utility import set_instance, check_nones
+from core.utility.json_filestorage import RepresentationBase
 
 FloatLike = Union[float, np.float64]
 AxonLike = TypeVar('AxonLike', bound=Axon, covariant=True)
@@ -31,7 +32,7 @@ __status__ = "Development"
 ##############################
 
 
-class Population(object):
+class Population(RepresentationBase):
     """Base neural mass or population class, behaving like a leaky capacitor.
 
         A population is defined via a number of synapses and an axon.
@@ -160,7 +161,7 @@ class Population(object):
         # set population parameters
         ###########################
 
-        self.synapses = []  # type: List[Synapse] # instance of an Synapse class
+        self.synapses = []  # type: List[Synapse]
         self.state_variables = []  # type: List[List[FloatLike]]
         self.store_state_variables = store_state_variables
         self.tau_leak = tau_leak
@@ -169,6 +170,12 @@ class Population(object):
         self.membrane_capacitance = membrane_capacitance
         self.max_population_delay = int(max_population_delay)
         self.label = label
+
+        self.init_state = init_state
+        self.synapse_params = synapse_params
+        self.axon_params = axon_params
+        self.synapse_class = synapse_class
+        self.axon_class = axon_class
 
         # set initial states
         if type(init_state) not in (list, np.ndarray):

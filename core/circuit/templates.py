@@ -186,6 +186,11 @@ class JansenRitCircuit(CircuitFromScratch):
         """Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory
         interneurons.
         """
+        # save input to attributes locals
+        #################################
+
+        self.connectivity_scaling = connectivity_scaling
+        self.feedback_strength = feedback_strength
 
         # set parameters
         ################
@@ -212,10 +217,10 @@ class JansenRitCircuit(CircuitFromScratch):
                                 [0, 0, fb[2] * c]]
 
         # delays
-        if delays is None:
-            delays = np.zeros((N, N))
-        else:
-            delays = np.array(delays / step_size, dtype=int)
+        # if delays is None:
+        #     delays = np.zeros((N, N))
+        # else:
+        #     delays = np.array(delays / step_size, dtype=int)
 
         # synapses
         synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
