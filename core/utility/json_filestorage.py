@@ -120,7 +120,7 @@ class RepresentationBase(object):
         """Parse a dictionary into """
 
         import os
-        from core.utility.json_filestorage import CustomEncoder
+        # from core.utility.json_filestorage import CustomEncoder
 
         _dict = self.to_dict(include_defaults=include_defaults, include_graph=include_graph, recursive=True)
 
