@@ -213,8 +213,7 @@ class Circuit(object):
         extrinsic_current
             2D array (n_timesteps x n_populations) of current extrinsically applied to the populations [unit = A].
         extrinsic_modulation
-            List (n_timesteps length) of list (with n_populations entries) of vectors with extrinsic modulatory
-            influences on each synapse of a population.
+            3D array (n_timesteps x n_populations x n_synapses) of synapse scalings [unit = 1].
         verbose
             If true, simulation progress will be printed to console.
 
@@ -250,7 +249,7 @@ class Circuit(object):
 
         # extrinsic modulation
         if not extrinsic_modulation:
-            extrinsic_modulation = np.ones((simulation_time_steps, self.N))
+            extrinsic_modulation = np.ones((simulation_time_steps, self.N, self.n_synapses))
         else:
             if extrinsic_modulation.shape[0] != simulation_time_steps:
                 raise ValueError('First dimension of extrinsic modulation has to match the number of simulation '
@@ -294,8 +293,7 @@ class Circuit(object):
         extrinsic_current
             vector containing the extrinsic current input to each population.
         extrinsic_modulation
-            list (with n_populations entries) of vectors with extrinsic modulatory influences on each synapse of a
-            population.
+            2D array containing the synaptic scalings for each synapse (2.dim) of each population (1.dim).
 
         """
 
@@ -303,7 +301,8 @@ class Circuit(object):
             self.populations[i].state_update(synaptic_input=synaptic_inputs[i, self.active_synapses[i][0:self.
                                              n_synapses]],
                                              extrinsic_current=extrinsic_current[i],
-                                             extrinsic_synaptic_modulation=extrinsic_modulation[i])
+                                             extrinsic_synaptic_modulation=extrinsic_modulation[i,
+                                             self.active_synapses[i][0:self.n_synapses]])
 
     def pass_through_circuit(self):
         """Passes current population firing rates through circuit.
@@ -524,7 +523,6 @@ class CircuitFromScratch(Circuit):
                  axons: Optional[List[str]] = None,
                  synapse_params: Optional[List[dict]] = None,
                  max_synaptic_delay: Union[float, List[float]] = 0.05,
-                 synaptic_modulation_direction: Optional[List[List[np.ndarray]]] = None,
                  synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
                  axon_params: Optional[List[dict]] = None,
                  axon_class: Union[str, List[str]] = 'SigmoidAxon',
@@ -603,7 +601,6 @@ class CircuitFromScratch(Circuit):
         synapse_params = check_nones(synapse_params, n_synapses)
         axons = check_nones(axons, N)
         axon_params = check_nones(axon_params, N)
-        synaptic_modulation_direction = check_nones(synaptic_modulation_direction, N)
         axon_plasticity_function = check_nones(axon_plasticity_function, N)
         axon_plasticity_target_param = check_nones(axon_plasticity_target_param, N)
         axon_plasticity_function_params = check_nones(axon_plasticity_function_params, N)
@@ -658,7 +655,6 @@ class CircuitFromScratch(Circuit):
 
             # add first-order parameters if necessary
             if population_class[i] == 'Population' or population_class[i] == 'PlasticPopulation':
-                pop_params['synaptic_modulation_direction'] = synaptic_modulation_direction[i]
                 pop_params['tau_leak'] = tau_leak[i]
                 pop_params['resting_potential'] = resting_potential[i]
                 pop_params['membrane_capacitance'] = membrane_capacitance[i]
@@ -731,7 +727,6 @@ class CircuitFromPopulations(Circuit):
                  delay_distributions: Optional[np.ndarray] = None,
                  step_size: float = 5e-4,
                  max_synaptic_delay: Union[float, List[float]] = 0.05,
-                 synaptic_modulation_direction: Optional[List[List[np.ndarray]]] = None,
                  membrane_capacitance: Union[float, List[float]] = 1e-12,
                  tau_leak: Union[float, List[float]] = 0.016,
                  resting_potential: Union[float, List[float]] = -0.075,
@@ -779,7 +774,6 @@ class CircuitFromPopulations(Circuit):
             membrane_capacitance = np.zeros(N) + membrane_capacitance
 
         # make None/str variables iterable
-        synaptic_modulation_direction = check_nones(synaptic_modulation_direction, N)
         if not population_labels:
             population_labels = ['Custom' for _ in range(N)]
         if isinstance(population_class, str):
@@ -809,7 +803,6 @@ class CircuitFromPopulations(Circuit):
                 pop_params['tau_leak'] = tau_leak
                 pop_params['resting_potential'] = resting_potential
                 pop_params['membrane_capacitance'] = membrane_capacitance
-                pop_params['synaptic_modulation_direction'] = synaptic_modulation_direction
 
                 if population_class[i] == 'PlasticPopulation':
                     populations.append(set_instance(PlasticPopulation, population_types[i], **pop_params))

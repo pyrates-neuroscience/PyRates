@@ -57,8 +57,8 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
                          bin_size=bin_size,
                          max_delay=max_delay,
                          epsilon=epsilon,
-                         synapse_type='AMPA_current',
-                         modulatory=False)
+                         synapse_type='AMPA_current'
+                         )
 
 
 class GABAACurrentSynapse(DoubleExponentialSynapse):
@@ -104,8 +104,8 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
                          bin_size=bin_size,
                          max_delay=max_delay,
                          epsilon=epsilon,
-                         synapse_type='GABAA_current',
-                         modulatory=False)
+                         synapse_type='GABAA_current'
+                         )
 
 
 class AMPAConductanceSynapse(DoubleExponentialSynapse):
@@ -156,7 +156,6 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
                          synapse_type='AMPA_conductance',
-                         modulatory=False,
                          conductivity_based=True)
 
 
@@ -208,7 +207,6 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
                          synapse_type='GABAA_current',
-                         modulatory=False,
                          conductivity_based=True)
 
 

@@ -50,9 +50,6 @@ class Synapse(object):
         conductivity. Else translation to synaptic current will be direct (default = False).
     reversal_potential
         Synaptic reversal potential. Only needed for conductivity based synapses (default = -0.075) [unit = V].
-    modulatory
-        If true, synapse will have multiplicative instead of additive effect on change in membrane potential of
-        population (default = False).
     synapse_type
         Name of synapse type (default = None).
     **kwargs
@@ -76,8 +73,6 @@ class Synapse(object):
         See parameter description.
     max_delay
         See parameter description.
-    modulatory
-        See parameter description.
     synapse_type
         See parameter description.
 
@@ -90,7 +85,6 @@ class Synapse(object):
                  max_delay: Optional[float] = None,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
-                 modulatory: bool = False,
                  synapse_type: Optional[str] = None,
                  **kernel_function_args: float
                  ) -> None:
@@ -116,7 +110,6 @@ class Synapse(object):
         self.bin_size = bin_size
         self.epsilon = epsilon
         self.max_delay = max_delay
-        self.modulatory = modulatory
         self.kernel_function = kernel_function
         self.kernel_function_args = kernel_function_args
 
@@ -360,8 +353,6 @@ class DoubleExponentialSynapse(Synapse):
         See documentation of parameter `conductivity_based` in :class:`Synapse`.
     reversal_potential
         See documentation of parameter `reversal_potential` in :class:`Synapse`.
-    modulatory
-        See documentation of parameter `modulatory` in :class:`Synapse`.
     synapse_type
         Name of synapse type (default = None).
 
@@ -380,7 +371,6 @@ class DoubleExponentialSynapse(Synapse):
                  max_delay: Optional[float] = None,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
-                 modulatory: bool = False,
                  synapse_type: Optional[str] = None
                  ) -> None:
 
@@ -400,7 +390,6 @@ class DoubleExponentialSynapse(Synapse):
                          max_delay=max_delay,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         modulatory=modulatory,
                          synapse_type=synapse_type,
                          tau_rise=tau_rise,
                          tau_decay=tau_decay)
@@ -486,9 +475,5 @@ class ExponentialSynapse(Synapse):
                          max_delay=max_delay,
                          synapse_type=synapse_type,
                          conductivity_based=False,
-                         modulatory=False,
                          tau=tau)
 
-
-if __name__ == "__main__":
-    synapse = Synapse(kernel_function=lambda time_points: np.exp(-time_points), efficacy=1, bin_size=1)
