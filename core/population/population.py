@@ -171,12 +171,6 @@ class Population(RepresentationBase):
         self.max_population_delay = int(max_population_delay)
         self.label = label
 
-        self.init_state = init_state
-        self.synapse_params = synapse_params
-        self.axon_params = axon_params
-        self.synapse_class = synapse_class
-        self.axon_class = axon_class
-
         # set initial states
         if type(init_state) not in (list, np.ndarray):
             self.state_variables.append([init_state])

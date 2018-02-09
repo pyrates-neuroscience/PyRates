@@ -3,22 +3,7 @@
         "__module__": "core.circuit.templates",
         "__name__": "JansenRitCircuit"
     },
-    "step_size": 0.0001,
-    "delays": [
-        [
-            0,
-            0,
-            0
-        ],
-        [
-            0,
-            0,
-            0
-        ],
-        [
-            0,
-            0,
-            0
-        ]
+    "args": [
+        0.0001
     ]
 }
