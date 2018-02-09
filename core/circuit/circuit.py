@@ -53,7 +53,7 @@ class Circuit(RepresentationBase):
         See description of parameter `delays`.
     step_size
         See description of parameter `step_size`.
-    N
+    n_populations
         Number of populations in circuit.
     n_synapses
         Number of synapse types in circuit.
@@ -99,7 +99,7 @@ class Circuit(RepresentationBase):
 
         # circuit properties
         self.step_size = step_size
-        self.N = len(populations)
+        self.n_populations = len(populations)
         self.n_synapses = connectivity.shape[2]
         self.t = 0.
         self.active_synapses = list()
@@ -107,13 +107,11 @@ class Circuit(RepresentationBase):
         # circuit structure
         self.populations = populations
         self.C = connectivity
-        self.connectivity = self.C  # alias for repr and json functionality
         self.D = delays
-        self.delays = self.D  # alias for repr and json functionality
-        self.delay_distributions = delay_distributions
+        # self.delay_distributions = delay_distributions
 
         # population specific properties
-        for i in range(self.N):
+        for i in range(self.n_populations):
 
             # make sure state variable history will be saved on population
             self.populations[i].store_state_variables = True
@@ -136,11 +134,11 @@ class Circuit(RepresentationBase):
         self.network_graph = MultiDiGraph()
 
         # add population as network node
-        for i in range(self.N):
+        for i in range(self.n_populations):
             self.network_graph.add_node(i, data=self.populations[i])
 
         # add connections to other network nodes as edges
-        for i in range(self.N):
+        for i in range(self.n_populations):
             current_population = self.populations[i]
             new_synapses = list()
 
@@ -148,7 +146,7 @@ class Circuit(RepresentationBase):
             for k2, k in enumerate(self.active_synapses[i]):
 
                 # loop over all network nodes
-                for j in range(self.N):
+                for j in range(self.n_populations):
 
                     # check whether node j connects to current_population via synapse k
                     if self.C[i, j, k] > 0:
@@ -198,6 +196,12 @@ class Circuit(RepresentationBase):
 
             self.active_synapses[i] += new_synapses
 
+    # noinspection PyPep8Naming
+    @property
+    def N(self):
+        """Read-only value for number of populations. Just keeping this as a safeguard for legacy code."""
+        return self.n_populations
+
     def run(self,
             synaptic_inputs: np.ndarray,
             simulation_time: float,
@@ -235,7 +239,7 @@ class Circuit(RepresentationBase):
         # synaptic inputs
         if synaptic_inputs.shape[0] != simulation_time_steps:
             raise ValueError('First dimension of synaptic input has to match the number of simulation time steps!')
-        if synaptic_inputs.shape[1] != self.N:
+        if synaptic_inputs.shape[1] != self.n_populations:
             raise ValueError('Second dimension of synaptic input has to match the number of populations in the '
                              'circuit!')
         if synaptic_inputs.shape[2] != self.n_synapses:
@@ -244,22 +248,22 @@ class Circuit(RepresentationBase):
 
         # extrinsic currents
         if extrinsic_current is None:
-            extrinsic_current = np.zeros((simulation_time_steps, self.N))
+            extrinsic_current = np.zeros((simulation_time_steps, self.n_populations))
         else:
             if extrinsic_current.shape[0] != simulation_time_steps:
                 raise ValueError('First dimension of extrinsic current has to match the number of simulation time '
                                  'steps!')
-            if extrinsic_current.shape[1] != self.N:
+            if extrinsic_current.shape[1] != self.n_populations:
                 raise ValueError('Second dimension of extrinsic current has to match the number of populations!')
 
         # extrinsic modulation
         if not extrinsic_modulation:
-            extrinsic_modulation = np.ones((simulation_time_steps, self.N))
+            extrinsic_modulation = np.ones((simulation_time_steps, self.n_populations))
         else:
             if extrinsic_modulation.shape[0] != simulation_time_steps:
                 raise ValueError('First dimension of extrinsic modulation has to match the number of simulation '
                                  'time steps!')
-            if extrinsic_modulation.shape[1] != self.N:
+            if extrinsic_modulation.shape[1] != self.n_populations:
                 raise ValueError('Second dimension of extrinsic modulation has to match the number of populations!')
 
         # simulate network
@@ -303,7 +307,7 @@ class Circuit(RepresentationBase):
 
         """
 
-        for i in range(self.N):
+        for i in range(self.n_populations):
             self.populations[i].state_update(synaptic_input=synaptic_inputs[i, self.active_synapses[i][0:self.
                                              n_synapses]],
                                              extrinsic_current=extrinsic_current[i],
@@ -313,7 +317,7 @@ class Circuit(RepresentationBase):
         """Passes current population firing rates through circuit.
         """
 
-        for i in range(self.N):
+        for i in range(self.n_populations):
             self.project_to_populations(i)
 
     def project_to_populations(self, pop: int) -> None:
@@ -375,7 +379,7 @@ class Circuit(RepresentationBase):
             raise ValueError('Time constants cannot be negative.')
 
         if not population_idx:
-            population_idx = [i for i in range(self.N)]
+            population_idx = [i for i in range(self.n_populations)]
 
         # extract state variables from populations
         ##########################################
@@ -433,7 +437,7 @@ class Circuit(RepresentationBase):
         ######################
 
         if population_idx is None:
-            population_idx = range(self.N)
+            population_idx = range(self.n_populations)
 
         # get population states
         #######################
@@ -546,29 +550,6 @@ class CircuitFromScratch(Circuit):
                  ) -> None:
         """Instantiates circuit from synapse/axon types and parameters.
         """
-
-        # save input to attributes locals
-        #################################
-
-        self.synapses = synapses
-        self.axons = axons
-        self.synapse_params = synapse_params
-        self.max_synaptic_delay = max_synaptic_delay
-        self.synaptic_modulation_direction = synaptic_modulation_direction
-        self.synapse_class = synapse_class
-        self.axon_params = axon_params
-        self.axon_class = axon_class
-        self.population_class = population_class
-        self.membrane_capacitance = membrane_capacitance
-        self.tau_leak = tau_leak
-        self.resting_potential = resting_potential
-        self.init_states = init_states
-        self.population_labels = population_labels
-        self.axon_plasticity_function = axon_plasticity_function
-        self.axon_plasticity_target_param = axon_plasticity_target_param
-        self.axon_plasticity_function_params = axon_plasticity_function_params
-        self.synapse_plasticity_function = synapse_plasticity_function
-        self.synapse_plasticity_function_params = synapse_plasticity_function_params
 
         # check input parameters
         ########################
@@ -772,19 +753,6 @@ class CircuitFromPopulations(Circuit):
                  ) -> None:
         """Instantiates circuit from population types and parameters.
         """
-        # save input to attributes locals
-        #################################
-
-        self.population_types = population_types
-        self.max_synaptic_delay = max_synaptic_delay
-        self.synaptic_modulation_direction = synaptic_modulation_direction
-        self.population_class = population_class
-        self.membrane_capacitance = membrane_capacitance
-        self.tau_leak = tau_leak
-        self.resting_potential = resting_potential
-        self.init_states = init_states
-        self.population_labels = population_labels
-
 
         # check input parameters
         ########################
@@ -913,13 +881,6 @@ class CircuitFromCircuit(Circuit):
                  ) -> None:
         """Instantiates circuit from population types and parameters.
         """
-        # save input to attributes locals
-        #################################
-
-        self.circuits = circuits
-        self.input_populations = input_populations
-        self.output_populations = output_populations
-        self.circuit_labels = circuit_labels
 
         # check input parameters
         ########################
@@ -960,13 +921,13 @@ class CircuitFromCircuit(Circuit):
         for i in range(n_circuits):
 
             # collect population count
-            n_populations[i + 1] = n_populations[i] + circuits[i].N
+            n_populations[i + 1] = n_populations[i] + circuits[i].n_populations
 
             # collect connectivity matrix
             connectivity_tmp = circuits[i].C
             n_synapses_diff = connectivity.shape[2] - connectivity_tmp.shape[2]
             if n_synapses_diff > 0:
-                connectivity_tmp = np.append(connectivity_tmp, np.zeros((circuits[i].N, circuits[i].N)), axis=2)
+                connectivity_tmp = np.append(connectivity_tmp, np.zeros((circuits[i].n_populations, circuits[i].n_populations)), axis=2)
             connectivity_coll.append(connectivity_tmp)
 
             # collect delay matrix

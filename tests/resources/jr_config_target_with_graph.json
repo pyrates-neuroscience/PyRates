@@ -3,23 +3,8 @@
         "__module__": "core.circuit.templates",
         "__name__": "JansenRitCircuit"
     },
-    "step_size": 0.0001,
-    "delays": [
-        [
-            0,
-            0,
-            0
-        ],
-        [
-            0,
-            0,
-            0
-        ],
-        [
-            0,
-            0,
-            0
-        ]
+    "args": [
+        0.0001
     ],
     "network_graph": {
         "directed": true,
@@ -33,36 +18,24 @@
                         "__name__": "SecondOrderPopulation"
                     },
                     "synapses": [
-                        {
-                            "class": {
-                                "__module__": "core.synapse.templates",
-                                "__name__": "JansenRitExcitatorySynapse"
-                            },
-                            "bin_size": 0.0001
-                        },
-                        {
-                            "class": {
-                                "__module__": "core.synapse.templates",
-                                "__name__": "JansenRitInhibitorySynapse"
-                            },
-                            "bin_size": 0.0001
-                        }
+                        "JansenRitExcitatorySynapse",
+                        "JansenRitInhibitorySynapse"
                     ],
-                    "axon": {
-                        "class": {
-                            "__module__": "core.axon.templates",
-                            "__name__": "JansenRitAxon"
-                        }
-                    },
+                    "axon": "JansenRitAxon",
+                    "init_state": 0.0,
+                    "step_size": 0.0001,
+                    "max_synaptic_delay": null,
+                    "max_population_delay": 0,
                     "synapse_params": [
                         null,
                         null
                     ],
+                    "axon_params": null,
                     "synapse_class": [
                         "ExponentialSynapse",
                         "ExponentialSynapse"
                     ],
-                    "store_state_variables": true,
+                    "axon_class": "SigmoidAxon",
                     "label": "JR_PCs"
                 },
                 "id": 0
@@ -74,27 +47,21 @@
                         "__name__": "SecondOrderPopulation"
                     },
                     "synapses": [
-                        {
-                            "class": {
-                                "__module__": "core.synapse.templates",
-                                "__name__": "JansenRitExcitatorySynapse"
-                            },
-                            "bin_size": 0.0001
-                        }
+                        "JansenRitExcitatorySynapse"
                     ],
-                    "axon": {
-                        "class": {
-                            "__module__": "core.axon.templates",
-                            "__name__": "JansenRitAxon"
-                        }
-                    },
+                    "axon": "JansenRitAxon",
+                    "init_state": 0.0,
+                    "step_size": 0.0001,
+                    "max_synaptic_delay": null,
+                    "max_population_delay": 0,
                     "synapse_params": [
                         null
                     ],
+                    "axon_params": null,
                     "synapse_class": [
                         "ExponentialSynapse"
                     ],
-                    "store_state_variables": true,
+                    "axon_class": "SigmoidAxon",
                     "label": "JR_EINs"
                 },
                 "id": 1
@@ -106,27 +73,21 @@
                         "__name__": "SecondOrderPopulation"
                     },
                     "synapses": [
-                        {
-                            "class": {
-                                "__module__": "core.synapse.templates",
-                                "__name__": "JansenRitExcitatorySynapse"
-                            },
-                            "bin_size": 0.0001
-                        }
+                        "JansenRitExcitatorySynapse"
                     ],
-                    "axon": {
-                        "class": {
-                            "__module__": "core.axon.templates",
-                            "__name__": "JansenRitAxon"
-                        }
-                    },
+                    "axon": "JansenRitAxon",
+                    "init_state": 0.0,
+                    "step_size": 0.0001,
+                    "max_synaptic_delay": null,
+                    "max_population_delay": 0,
                     "synapse_params": [
                         null
                     ],
+                    "axon_params": null,
                     "synapse_class": [
                         "ExponentialSynapse"
                     ],
-                    "store_state_variables": true,
+                    "axon_class": "SigmoidAxon",
                     "label": "JR_IINs"
                 },
                 "id": 2
