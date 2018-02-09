@@ -194,6 +194,70 @@ def test_construct_circuit_from_repr_eval():
     assert repr(circuit) == repr(new_circuit)
 
 
+@pytest.mark.xfail
+def test_save_run_data_to_file():
+    """Run a simulation and save the states to file."""
+
+    from core.utility.construct import construct_circuit_from_file
+    from core.utility.json_filestorage import get_simulation_data
+
+
+    # set parameters
+    ################
+    path = "resources/"
+    filename = "JR_runtest_config_I.json"
+
+    # recreate circuit from file
+    circuit = construct_circuit_from_file(filename, path)
+    n_pop = circuit.n_populations
+    n_syn = circuit.n_synapses
+    # save a new config, if necessary
+    # circuit.to_json(path=path, filename=filename)
+
+    # simulation parameters
+    simulation_time = 1.0  # s
+    step_size = circuit.step_size  # s
+
+    # synaptic inputs
+    start_stim = 0.3  # s
+    start_stim = int(start_stim / step_size)
+    len_stim = 0.05  # s
+    end_stim = int(start_stim / step_size + len_stim / step_size)
+    mag_stim = 200.0  # 1/s
+
+    n_time_steps = int(simulation_time / step_size)
+
+    synaptic_inputs = np.zeros((n_time_steps, n_pop, n_syn))
+    synaptic_inputs[start_stim:end_stim, 1, 0] = mag_stim
+
+    # run network simulation
+    ########################
+
+    # print('| Test VII - Jansen-Rit Circuit |')
+
+    circuit.run(synaptic_inputs=synaptic_inputs,
+                simulation_time=simulation_time)
+
+    # noinspection PyTypeChecker
+    states = circuit.get_population_states(state_variable_idx=0) - 0.075  # type: np.ndarray
+    states = states[1:, :]
+    # for some reason, the get_population_states function returns one more time point than the input.
+
+    assert states.shape == (n_time_steps, n_pop)
+
+    # Now try to save data to a file
+    run_info, original_sim_data = get_simulation_data(circuit, state_variable_idx=0,
+                                                      pop_indices=None, time_window=None)
+    import os
+    filename = "JR_simulation_data.json"
+    filepath = os.path.join("output/", filename)
+    original_sim_data.to_json(filepath, orient="split")
+
+    save_simulation_data_to_file(circuit, filename, path, state_variable_idx, pop_indices, include_config)
+    saved_sim_data = read_simulation_data_from_file(filename, path)
+    assert deep_compare(original_sim_data == saved_sim_data)
+
+
 def deep_compare(left, right):
     """Hack to compare the config dictionaries"""
 

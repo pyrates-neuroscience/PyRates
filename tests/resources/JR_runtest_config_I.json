@@ -1,0 +1,8 @@
+{
+    "class": {
+        "__module__": "core.circuit.templates",
+        "__name__": "JansenRitCircuit"
+    },
+    "step_size": 0.0005,
+    "max_synaptic_delay": 0.15
+}

@@ -2,7 +2,7 @@
 and read/construct circuit from JSON.
 """
 from collections import OrderedDict
-from typing import Generator, Tuple, Any
+from typing import Generator, Tuple, Any, Union
 
 from networkx import node_link_data
 
@@ -13,6 +13,7 @@ __status__ = "Development"
 from inspect import getsource
 import numpy as np
 import json
+from pandas import DataFrame
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -69,6 +70,7 @@ class RepresentationBase(object):
         from copy import copy
         init_dict = copy(self._init_dict)
 
+        args = ""
         if "args" in init_dict:
             args = init_dict.pop("args", None)
             args = ", ".join((f"{value!r}" for value in args))
@@ -167,3 +169,22 @@ class RepresentationBase(object):
 
         # return json as string
         return json.dumps(_dict, cls=CustomEncoder, indent=2)
+
+
+def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple, list]=None, time_window: tuple = None
+                        ) -> Tuple[dict, DataFrame]:
+    """Obtain all simulation data from a circuit, including run parameters"""
+
+    run_info = circuit.run_info
+    states = circuit.get_population_states(state_variable_idx=state_variable_idx, population_idx=pop_indices,
+                                           time_window=time_window)
+
+    labels = []
+    for pop in circuit.populations:
+        labels.append(pop.label)
+
+    labeled_states = DataFrame(data=states, columns=labels)
+
+    return run_info, labeled_states
+
+
