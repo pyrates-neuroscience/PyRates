@@ -170,14 +170,13 @@ def test_construct_circuit_from_file_or_dict():
     # test_circuit.run(synaptic_inputs, simulation_time)
 
 
-@pytest.mark.xfail
-def test_compare_circuit_repr_and_constructor():
-    # load_json
-    # load_reference_circuit
-    assert repr(circuit) == circuit_constructor_str
+# @pytest.mark.xfail
+# def test_compare_circuit_repr_and_constructor():
+#     # load_json
+#     # load_reference_circuit
+#     assert repr(circuit) == circuit_constructor_str
 
 
-@pytest.mark.xfail
 def test_construct_circuit_from_repr_eval():
     from core.circuit import JansenRitCircuit
 
@@ -186,9 +185,13 @@ def test_construct_circuit_from_repr_eval():
     circuit = JansenRitCircuit(step_size)
 
     _repr = repr(circuit)
+    prefix, *suffix = _repr.split("(")
+    cls = prefix.split(".")[-1]
+    suffix = "(" + "(".join(suffix)
+    _repr = cls + suffix
     new_circuit = eval(_repr)
 
-    assert circuit == new_circuit
+    assert repr(circuit) == repr(new_circuit)
 
 
 def deep_compare(left, right):

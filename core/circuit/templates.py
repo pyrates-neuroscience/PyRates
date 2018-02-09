@@ -186,11 +186,6 @@ class JansenRitCircuit(CircuitFromScratch):
         """Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory
         interneurons.
         """
-        # save input to attributes locals
-        #################################
-
-        self.connectivity_scaling = connectivity_scaling
-        self.feedback_strength = feedback_strength
 
         # set parameters
         ################
@@ -335,8 +330,8 @@ class GeneralizedJansenRitCircuit(Circuit):
                                            axon_params=axon_params[i],
                                            init_states=init_states[i])
 
-            connectivity[:, i*circuit_tmp.N:(i+1)*circuit_tmp.N, :] = np.tile(weights[i] *
-                                                                              circuit_tmp.C, (n_circuits, 1, 1))
+            connectivity[:, i*circuit_tmp.n_populations:(i + 1) * circuit_tmp.n_populations, :] = np.tile(weights[i] *
+                                                                                                          circuit_tmp.C, (n_circuits, 1, 1))
             populations += circuit_tmp.populations
 
         super().__init__(populations=populations,

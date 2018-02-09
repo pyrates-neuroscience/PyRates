@@ -35,7 +35,7 @@ def circuit_wrapper(circuit_type, circuit_params, simulation_params, target_var_
 
     # check state variable extraction params
     if not population_idx:
-        population_idx = range(circuit.N)
+        population_idx = range(circuit.n_populations)
     if not time_window:
         time_window = [0., simulation_params['simulation_time']]
 
