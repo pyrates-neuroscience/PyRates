@@ -28,7 +28,7 @@ def construct_circuit_from_file(filename: str, path: str="") -> Circuit:
     return circuit
 
 
-def construct_instance_from_dict(config_dict: dict) -> Union[Population, Axon, Synapse, Circuit]:
+def construct_instance_from_dict(config_dict: dict, include_defaults=False) -> Union[Population, Axon, Synapse, Circuit]:
     """Construct a class instance from a dictionary that describes class name and input"""
 
     from importlib import import_module
@@ -45,8 +45,27 @@ def construct_instance_from_dict(config_dict: dict) -> Union[Population, Axon, S
     # parse items
     #############
 
+    # obtain positional arguments
+    args = ()
+    if "args" in config_dict:
+        args = config_dict.pop("args", None)
+        for i, arg in enumerate(args):
+            if isinstance(arg, list):
+                args[i] = np.asarray(arg)
+                # this maps every list to a numpy array... might not always be the desired behavior
+
+    # obtain default values
+    defaults = {}
+    if "defaults" in config_dict:
+        if include_defaults:
+            defaults = config_dict.pop("defaults")
+        else:
+            # ignore defaults in construction
+            config_dict.pop("defaults")
+
+    # obtain keyword arguments
     for key, item in config_dict.items():
         if isinstance(item, list):
             config_dict[key] = np.array(item)
 
-    return cls(**config_dict)
+    return cls(*args, **config_dict, **defaults)
