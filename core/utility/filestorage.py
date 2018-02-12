@@ -188,3 +188,17 @@ def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple,
     return run_info, labeled_states
 
 
+def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
+                                 filename: str, path: str = "", out_format: str = "csv"):
+    """Save simulation output and inputs that were given to the run function to a file."""
+
+    import os
+
+    filename = f"{filename}.{out_format}"
+    if path:
+        filename = os.path.join(path, filename)
+
+    if out_format == "json":
+        output_data.to_json(filename, orient="split")
+    elif out_format == "csv":
+        output_data.to_csv(filename, sep="\t")

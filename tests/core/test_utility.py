@@ -248,13 +248,9 @@ def test_save_run_data_to_file():
     # Now try to save data to a file
     run_info, original_sim_data = get_simulation_data(circuit, state_variable_idx=0,
                                                       pop_indices=None, time_window=None)
-    import os
-    # filename = "JR_simulation_data.json"
-    # filepath = os.path.join("output/", filename)
-    # original_sim_data.to_json(filepath, orient="split")
+
     filename = "JR_simulation_data.csv"
     filepath = os.path.join("output/", filename)
-    original_sim_data.to_csv(filepath, sep="\t")
 
     save_simulation_data_to_file(circuit, filename, path, state_variable_idx, pop_indices, include_config)
     saved_sim_data = read_simulation_data_from_file(filename, path)
