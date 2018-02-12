@@ -9,7 +9,7 @@ from typing import List, Optional, Union, TypeVar, Callable
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.utility import check_nones, set_instance
-from core.utility.json_filestorage import RepresentationBase
+from core.utility.filestorage import RepresentationBase
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
