@@ -76,6 +76,9 @@ class Axon(object):
         # TODO: use functools.partial to convert transfer function to compute_firing_rate function?
         return self.transfer_function(membrane_potential, **self.transfer_function_args)  # type: ignore
 
+    def clear(self):
+        pass
+
     def plot_transfer_function(self,
                                membrane_potentials: np.ndarray,
                                create_plot: bool = True,
@@ -309,6 +312,7 @@ class BurstingAxon(Axon):
                  axon_type: Optional[str] = None,
                  epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
+                 resting_potential: float = -0.075,
                  kernel_function_args: Optional[List[dict]] = None,
                  **transfer_function_args: float
                  ) -> None:
@@ -335,6 +339,7 @@ class BurstingAxon(Axon):
         self.bin_size = bin_size
         self.epsilon = epsilon
         self.max_delay = max_delay
+        self.resting_potential = resting_potential
         self.kernel_function = kernel_functions[0]
         self.kernel_function_args = kernel_function_args[0] if kernel_function_args else dict()
         self.kernel_nonlinearity = kernel_functions[1] if len(kernel_functions) > 1 else lambda x: x
@@ -355,7 +360,7 @@ class BurstingAxon(Axon):
         # initialize membrane potential buffer
         ######################################
 
-        self.membrane_potentials = np.zeros(len(self.axon_kernel))
+        self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
 
     def build_kernel(self) -> np.ndarray:
         """Builds axonal kernel.
@@ -464,20 +469,37 @@ class BurstingAxon(Axon):
 
         return kernel_value * super().compute_firing_rate(membrane_potential)
 
+    def clear(self):
+        """Function that clears membrane potential inputs.
+        """
 
-args1 = {'membrane_potential_threshold': -0.069,
-         'sigmoid_steepness': 560.,
-         'max_firing_rate': 5.}
-args2 = {'membrane_potential_threshold': -0.075,
-         'sigmoid_steepness': -300.,
-         'max_firing_rate': 700.}
+        self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
 
-# kernel = lambda t: (np.exp(-t/0.02) - np.exp(-t/0.01)) * 0.06
-# ba = BurstingAxon(parametric_sigmoid, [kernel, parametric_sigmoid], kernel_function_args=[dict(), args2],
-#                   bin_size=1e-3, max_delay=0.5, **args1)
-# f0 = ba.compute_firing_rate(-0.09)
-# f1 = ba.compute_firing_rate(-0.075)
-# f2 = ba.compute_firing_rate(-0.07)
-# f3 = ba.compute_firing_rate(-0.065)
-# f4 = ba.compute_firing_rate(-0.065)
-# ba.plot_transfer_function(np.arange(-0.09, -0.05, 0.002))
+
+#################
+# try-out stuff #
+#################
+
+
+def kernel(t, n1, n2):
+    return (np.exp(-t * n1) - np.exp(-t * n2)) * ((n1 * n2)/(n2 - n1))
+
+
+def nonlinearity(x, theta, sigma, e):
+    return e / (1 + np.exp((x - theta)/sigma))
+
+
+resting_potential = -0.065
+nl_n = {'theta': resting_potential-0.016,
+        'sigma': 0.006,
+        'e': 1.}
+nl_m = {'theta': resting_potential+0.006,
+        'sigma': -0.0015,
+        'e': 800.}
+kernel_args = {'n1': 10.,
+               'n2': 20.}
+
+ba = BurstingAxon(nonlinearity, [kernel, nonlinearity], kernel_function_args=[kernel_args, nl_n],
+                  bin_size=5e-4, max_delay=1., resting_potential=resting_potential, **nl_m)
+membrane_potentials = np.arange(-0.09, -0.03, 0.001)
+ba.plot_transfer_function(membrane_potentials=membrane_potentials)
