@@ -152,17 +152,10 @@ class RepresentationBase(object):
 
         if filename:
             import os
-            import errno
-
             filepath = os.path.join(path, filename)
 
             # create directory if necessary
-            if not os.path.exists(os.path.dirname(filepath)):
-                try:
-                    os.makedirs(os.path.dirname(filepath))
-                except OSError as exc:  # Guard against race condition
-                    if exc.errno != errno.EEXIST:
-                        raise
+            create_directory(filepath)
 
             with open(filepath, "w") as outfile:
                 json.dump(_dict, outfile, cls=CustomEncoder, indent=4)
@@ -183,22 +176,65 @@ def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple,
     for pop in circuit.populations:
         labels.append(pop.label)
 
+    # for key, item in run_info.items():
+    #     if isinstance(item, np.ndarray):
+    #         run_info[key] = DataFrame(data=item, columns=labels)
+
     labeled_states = DataFrame(data=states, columns=labels)
 
     return run_info, labeled_states
 
 
 def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
-                                 filename: str, path: str = "", out_format: str = "csv"):
+                                 dirname: str, path: str = "", out_format: str = "csv"):
     """Save simulation output and inputs that were given to the run function to a file."""
 
     import os
 
-    filename = f"{filename}.{out_format}"
-    if path:
-        filename = os.path.join(path, filename)
+    dirname = os.path.join(path, dirname) + "/"
 
+    # create directory if necessary
+    create_directory(dirname)
+
+    # save output data
+    ##################
+
+    filename = f"output.{out_format}"
+    filepath = os.path.join(dirname, filename)
     if out_format == "json":
-        output_data.to_json(filename, orient="split")
+        output_data.to_json(filepath, orient="split")
     elif out_format == "csv":
-        output_data.to_csv(filename, sep="\t")
+        output_data.to_csv(filepath, sep="\t")
+    else:
+        raise ValueError(f"Unknown output format '{out_format}'")
+
+    # save run information
+    ######################
+
+    if "simulation_time" in run_info:
+        run_info.pop("simulation_time")
+
+    for key, item in run_info.items():
+        filename = f"{key}.{out_format}"
+        filepath = os.path.join(dirname, filename)
+        if isinstance(item, np.ndarray):
+            np.savetxt(filepath, item, delimiter="\t")
+        else:
+            if out_format == "json":
+                item.to_json(filepath, orient="split")
+            else:
+                item.to_csv(filepath, sep="\t")
+
+
+def create_directory(path):
+    """check if a directory exists and create it otherwise"""
+
+    import os
+    import errno
+
+    if not os.path.exists(os.path.dirname(path)):
+        try:
+            os.makedirs(os.path.dirname(path))
+        except OSError as exc:  # Guard against race condition
+            if exc.errno != errno.EEXIST:
+                raise

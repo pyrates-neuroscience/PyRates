@@ -200,6 +200,8 @@ def test_save_run_data_to_file():
 
     from core.utility.construct import construct_circuit_from_file
     from core.utility.filestorage import get_simulation_data
+    from core.utility.filestorage import save_simulation_data_to_file
+
 
 
     # set parameters
@@ -249,12 +251,13 @@ def test_save_run_data_to_file():
     run_info, original_sim_data = get_simulation_data(circuit, state_variable_idx=0,
                                                       pop_indices=None, time_window=None)
 
-    filename = "JR_simulation_data.csv"
-    filepath = os.path.join("output/", filename)
+    dirname = "JR_simulation_data"
+    path = "output/"
 
-    save_simulation_data_to_file(circuit, filename, path, state_variable_idx, pop_indices, include_config)
+    save_simulation_data_to_file(output_data=original_sim_data, run_info=run_info,
+                                 dirname=dirname, path=path, out_format="csv")  # implement include_config?
     saved_sim_data = read_simulation_data_from_file(filename, path)
-    assert deep_compare(original_sim_data == saved_sim_data)
+    assert deep_compare(original_sim_data, saved_sim_data)
 
 
 def deep_compare(left, right):
