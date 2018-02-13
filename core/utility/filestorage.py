@@ -2,7 +2,7 @@
 and read/construct circuit from JSON.
 """
 from collections import OrderedDict
-from typing import Generator, Tuple, Any, Union
+from typing import Generator, Tuple, Any, Union, List, Dict
 
 from networkx import node_link_data
 
@@ -13,7 +13,8 @@ __status__ = "Development"
 from inspect import getsource
 import numpy as np
 import json
-from pandas import DataFrame, MultiIndex
+from pandas import DataFrame
+import pandas as pd
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -251,3 +252,43 @@ def create_directory(path):
         except OSError as exc:  # Guard against race condition
             if exc.errno != errno.EEXIST:
                 raise
+
+
+def read_simulation_data_from_file(dirname: str, path="", filenames: list = None) -> Dict[str, DataFrame]:
+    """Read simulation data from files. The assumed data structure is:
+    <path>/<dirname>/
+        output.csv
+        synaptic_inputs.csv
+        extrinsic_current.csv
+        extrinsic_modulation.csv
+
+    This is the expected output from 'save_simulation_data_to_file', but if 'names' is specified, other data
+    may also be read.
+    """
+
+    import os
+
+    if filenames is None:
+        filenames = ["output", "synaptic_inputs", "extrinsic_current", "extrinsic_modulation"]
+        ignore_missing = True
+    else:
+        ignore_missing = False
+
+    data = {}
+    path = os.path.join(path, dirname)
+
+    for label in filenames:
+        if label == "output":
+            header = 0
+        else:
+            header = [0, 1]
+        filename = label + ".csv"
+        filepath = os.path.join(path, filename)
+
+        try:
+            data[label] = pd.read_csv(filepath, sep="\t", header=header, index_col=0)
+        except FileNotFoundError:
+            if not ignore_missing:
+                raise
+
+    return data

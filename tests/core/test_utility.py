@@ -201,8 +201,7 @@ def test_save_run_data_to_file():
     from core.utility.construct import construct_circuit_from_file
     from core.utility.filestorage import get_simulation_data
     from core.utility.filestorage import save_simulation_data_to_file
-
-
+    from core.utility.filestorage import read_simulation_data_from_file
 
     # set parameters
     ################
@@ -256,28 +255,31 @@ def test_save_run_data_to_file():
 
     save_simulation_data_to_file(output_data=original_sim_data, run_info=run_info,
                                  dirname=dirname, path=path, out_format="csv")  # implement include_config?
-    saved_sim_data = read_simulation_data_from_file(filename, path)
+    saved_sim_data = read_simulation_data_from_file(dirname, path)["output"]
     assert deep_compare(original_sim_data, saved_sim_data)
 
 
 def deep_compare(left, right):
     """Hack to compare the config dictionaries"""
 
-    if isinstance(left, np.ndarray):
-        return (left == right).all()
+    result = False
+
+    if hasattr(left, "all"):
+        result = np.all((left == right).all())
     elif isinstance(left, dict):
-        for key in left:
-            return deep_compare(left[key], right[key])
+        result = np.all([deep_compare(left[key], right[key]) for key in left])
+    else:
+        # I think this is actually not stable
+        try:
+            if not left.__dict__:
+                result = left == right
 
-    # I think this is actually not stable
-    try:
-        if not left.__dict__:
-            return left == right
+            for key in left.__dict__:
+                if key not in right.__dict__:
+                    result = False
+                else:
+                    result = deep_compare(left[key], right[key])
+        except (AttributeError, TypeError):
+            result = left == right
 
-        for key in left.__dict__:
-            if key not in right.__dict__:
-                return False
-            else:
-                return deep_compare(left[key], right[key])
-    except (AttributeError, TypeError):
-        return left == right
+    return result
