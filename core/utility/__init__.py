@@ -9,6 +9,7 @@ from .helper_functions import update_param
 from .helper_functions import interpolate_array
 from .helper_functions import nmrse
 from .helper_functions import check_nones
+from .filestorage import get_simulation_data, save_simulation_data_to_file
 
 # from .json_filestorage import read_config_from_circuit
 
