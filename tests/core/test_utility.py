@@ -262,30 +262,24 @@ def test_save_run_data_to_file():
 def deep_compare(left, right, approx=False):
     """Hack to compare the config dictionaries"""
 
-    result = False
     if approx is True:
         approx = dict(rtol=1e-15, atol=0)
 
     if hasattr(left, "all"):
         if approx:
-            result = np.allclose(left, right, **approx)
-        else:
-            result = np.all(left == right)
-        # second 'all', because DataFrame.all() returns a Series
+            return np.allclose(left, right, **approx)
+        return np.all(left == right)
     elif isinstance(left, dict):
-        result = np.all([deep_compare(left[key], right[key]) for key in left])
-    else:
-        # I think this is actually not stable
-        try:
-            if not left.__dict__:
-                result = left == right
+        return np.all([deep_compare(left[key], right[key]) for key in left])
+    # I think this is actually not stable
+    try:
+        if not left.__dict__:
+            return left == right
 
-            for key in left.__dict__:
-                if key not in right.__dict__:
-                    result = False
-                else:
-                    result = deep_compare(left[key], right[key])
-        except (AttributeError, TypeError):
-            result = left == right
-
-    return result
+        for key in left.__dict__:
+            if key not in right.__dict__:
+                return False
+            else:
+                return deep_compare(left[key], right[key])
+    except (AttributeError, TypeError):
+        return left == right
