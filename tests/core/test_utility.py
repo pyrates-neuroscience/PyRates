@@ -265,6 +265,10 @@ def test_save_run_data_to_file():
     target_file = os.path.join(target_path, target_dirname, filename)
     test_file = os.path.join(path, dirname, filename)
 
+    # redo target data after syntax changes
+    # save_simulation_data_to_file(output_data=original_sim_data, run_info=run_info,
+    #                              dirname=target_dirname, path=target_path, out_format="csv")
+
     # compare files
     assert filecmp.cmp(target_file, test_file)
     filecmp.clear_cache()

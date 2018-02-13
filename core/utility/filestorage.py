@@ -181,9 +181,9 @@ def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple,
     #     if isinstance(item, np.ndarray):
     #         run_info[key] = DataFrame(data=item, columns=labels)
 
-    states = DataFrame(data=states, columns=labels)
+    states = DataFrame(data=states, index=run_info["time_vector"], columns=labels)
     for key, item in run_info.items():
-        if key == "simulation_time" or item is None:
+        if key == "time_vector" or item is None:
             continue
         if item.ndim == 3:
             # flatten 3D array
@@ -191,9 +191,9 @@ def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple,
             for pop_idx in range(item.shape[1]):
                 for syn_idx in range(item.shape[2]):
                     flattened[(f"{pop_idx} {labels[pop_idx]}", syn_idx)] = item[:, pop_idx, syn_idx]
-            run_info[key] = DataFrame(flattened)
+            run_info[key] = DataFrame(flattened, index=run_info["time_vector"][1:])
         elif item.ndim == 2:
-            run_info[key] = DataFrame(data=item, columns=labels)
+            run_info[key] = DataFrame(data=item, index=run_info["time_vector"][1:], columns=labels)
     # run_info = DataFrame.from_dict(run_info, "columns")
 
     return run_info, states
@@ -225,8 +225,9 @@ def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
     # save run information
     ######################
 
-    if "simulation_time" in run_info:
-        run_info.pop("simulation_time")
+    if "time_vector" in run_info:
+        # throw away time vector, since it is contained in all the other data
+        run_info.pop("time_vector")
 
     for key, item in run_info.items():
         filename = f"{key}.{out_format}"
