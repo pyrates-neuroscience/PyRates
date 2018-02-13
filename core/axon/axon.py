@@ -1,4 +1,4 @@
-"""Module that includes basic axon class plus parametrized derivations of it.
+"""Module that includes basic axon class plus derivations of it.
 
 This module includes a basic axon class and parametric sub-classes that can calculate average firing rates from
 average membrane potentials. Its behavior approximates the average axon hillok of a homogeneous neural population.
@@ -8,7 +8,7 @@ average membrane potentials. Its behavior approximates the average axon hillok o
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import numpy as np
-from typing import Optional, Callable, Union, Any, Dict, overload, List
+from typing import Optional, Callable, Union, overload, List
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
@@ -77,6 +77,9 @@ class Axon(object):
         return self.transfer_function(membrane_potential, **self.transfer_function_args)  # type: ignore
 
     def clear(self):
+        pass
+
+    def update(self):
         pass
 
     def plot_transfer_function(self,
@@ -303,6 +306,35 @@ class SigmoidAxon(Axon):
 
 class BurstingAxon(Axon):
     """Axon that features bursting behavior initialized by low-threshold spikes.
+    
+    Parameters
+    ----------
+    transfer_function
+        See description of parameter `transfer_function` of :class:`Axon`.
+    kernel_functions
+        List of two functions, with the first one being the kernel function and the second the non-linearity applied
+        to the membrane potential before convolving it with the kernel.
+    bin_size
+        time window one bin of the axonal kernel is representing [unit = s].
+    axon_type
+        See description of parameter `axon_type` of :class:`Axon`.
+    max_delay
+        Maximal time delay after which a certain membrane potential still affects the firing rate [unit = s].
+    epsilon
+        Accuracy of the synaptic kernel representation.
+    resting_potential
+        Resting membrane potential of the population the axon belongs to [unit = V].
+    kernel_function_args
+        List of parameter dictionaries (name-value pairs) for each of the kernel functions.
+    **transfer_function_args
+        See description of parameter `transfer_function_args` of :class:`Axon`.
+    
+    See Also
+    --------
+    :class:`Axon`: ... for a detailed description of the object attributes and methods.
+    
+    References
+    ----------
     """
 
     def __init__(self,
@@ -436,7 +468,7 @@ class BurstingAxon(Axon):
 
         return self.kernel_function(time_points, **self.kernel_function_args)
 
-    def compute_firing_rate(self, membrane_potential: float):
+    def compute_firing_rate(self, membrane_potential: float) -> float:
         """Computes average firing rate from membrane potential based on transfer function and axonal kernel.
 
         Parameters
@@ -461,8 +493,8 @@ class BurstingAxon(Axon):
         #######################
 
         # multiply membrane potentials with kernel
-        kernel_value = self.kernel_nonlinearity(self.membrane_potentials,
-                                                **self.kernel_nonlinearity_args) * self.axon_kernel
+        kernel_value = self.kernel_nonlinearity(self.membrane_potentials, **self.kernel_nonlinearity_args)[0:
+            len(self.axon_kernel)] * self.axon_kernel
 
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
@@ -475,31 +507,46 @@ class BurstingAxon(Axon):
 
         self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
 
+    def update(self):
+        """Updates axon attributes.
+        """
+
+        # update kernel
+        self.build_kernel()
+
+        # update buffer
+        # TODO: implement interpolation from old to new array
+        self.membrane_potentials = np.zeros(int(self.max_delay / self.bin_size)) + self.resting_potential
 
 #################
 # try-out stuff #
 #################
 
 
-def kernel(t, n1, n2):
-    return (np.exp(-t * n1) - np.exp(-t * n2)) * ((n1 * n2)/(n2 - n1))
-
-
-def nonlinearity(x, theta, sigma, e):
-    return e / (1 + np.exp((x - theta)/sigma))
-
-
-resting_potential = -0.065
-nl_n = {'theta': resting_potential-0.016,
-        'sigma': 0.006,
-        'e': 1.}
-nl_m = {'theta': resting_potential+0.006,
-        'sigma': -0.0015,
-        'e': 800.}
-kernel_args = {'n1': 10.,
-               'n2': 20.}
-
-ba = BurstingAxon(nonlinearity, [kernel, nonlinearity], kernel_function_args=[kernel_args, nl_n],
-                  bin_size=5e-4, max_delay=1., resting_potential=resting_potential, **nl_m)
-membrane_potentials = np.arange(-0.09, -0.03, 0.001)
-ba.plot_transfer_function(membrane_potentials=membrane_potentials)
+# def kernel(t, n1, n2):
+#     return (np.exp(-t * n1) - np.exp(-t * n2)) * ((n1 * n2)/(n2 - n1))
+#
+#
+# def nonlinearity(x, theta, sigma, e):
+#     return e / (1 + np.exp((x - theta)/sigma))
+#
+#
+# resting_potential = -0.065
+# nl_n = {'theta': resting_potential-0.016,
+#         'sigma': 0.006,
+#         'e': 1.}
+# nl_m = {'theta': resting_potential+0.006,
+#         'sigma': -0.0015,
+#         'e': 800.}
+# kernel_args = {'n1': 10.,
+#                'n2': 20.}
+#
+# ba1 = BurstingAxon(nonlinearity, [kernel, nonlinearity], kernel_function_args=[kernel_args, nl_n],
+#                   bin_size=1e-3, max_delay=.3, resting_potential=resting_potential, **nl_m)
+# ba2 = SigmoidAxon(5., resting_potential+0.006, 560.)
+# membrane_potentials = np.arange(-0.09, -0.03, 0.001)
+# from matplotlib.pyplot import *
+# fig, axes = subplots()
+# axes = ba1.plot_transfer_function(membrane_potentials=membrane_potentials, axes=axes)
+# axes = ba2.plot_transfer_function(membrane_potentials=membrane_potentials, axes=axes)
+# fig.show()

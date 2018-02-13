@@ -12,8 +12,8 @@ from matplotlib.axes import Axes
 from typing import List, Optional, Union, Dict, Callable, TypeVar
 
 
-from core.axon import Axon, SigmoidAxon
-from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse
+from core.axon import Axon, SigmoidAxon, BurstingAxon
+from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse
 from core.utility import set_instance, check_nones
 
 FloatLike = Union[float, np.float64]
@@ -22,8 +22,6 @@ SynapseLike = TypeVar('SynapseLike', bound=Synapse, covariant=True)
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
-
-# TODO: Rework set-up of state vector to have fixed positions for certain state variables (i.e. use fixed size vector)
 
 
 ##############################
@@ -89,19 +87,12 @@ class Population(object):
             1) membrane potential [unit = V]
         current_firing_rate : float
             Current average firing rate of population [unit = 1/s].
-        synaptic_input : np.ndarray
-            Vector containing synaptic input over time for each synapse [unit = 1/s].
-        current_input_idx : np.ndarary
-            Index referring to position in `synaptic_input` that corresponds to time `t` of the population for each
-            synapse [unit = 1].
         synaptic_currents : np.ndarray
             Vector with synaptic currents produced by the non-modulatory synapses at time-point `t`.
         extrinsic_current : float
             Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
         n_synapses : int
             Number of different synapse types in network.
-        kernel_lengths : np.ndarray
-            Lengths of the synaptic kernels.
         max_population_delay : float
             Maximum delay with which other populations project to this population [unit = s] (default = 0.).
         max_synaptic_delay : np.ndarray
@@ -167,7 +158,6 @@ class Population(object):
         self.resting_potential = resting_potential
         self.step_size = step_size
         self.membrane_capacitance = membrane_capacitance
-        self.max_population_delay = int(max_population_delay)
         self.label = label
 
         # set initial states
@@ -183,25 +173,23 @@ class Population(object):
         self.n_synapses = len(synapses) if synapses else len(synapse_params)
 
         if max_synaptic_delay is None:
-            self.max_synaptic_delay = np.array(check_nones(max_synaptic_delay, self.n_synapses))
-        elif isinstance(max_synaptic_delay, np.ndarray):
-            self.max_synaptic_delay = max_synaptic_delay
-        else:
-            self.max_synaptic_delay = np.zeros(self.n_synapses) + max_synaptic_delay
+            max_synaptic_delay = np.array(check_nones(max_synaptic_delay, self.n_synapses))
+        elif not isinstance(max_synaptic_delay, np.ndarray):
+            max_synaptic_delay = np.zeros(self.n_synapses) + max_synaptic_delay
 
         # instantiate synapses
         self._set_synapses(synapse_subtypes=synapses,
                            synapse_params=synapse_params,
-                           synapse_types=synapse_class)
+                           synapse_types=synapse_class,
+                           max_synaptic_delay=max_synaptic_delay)
 
-        # set synapse dependencies
-        self.set_synapse_dependencies(update=False)
+        # set synaptic current vector
+        self.synaptic_currents = np.zeros(self.n_synapses)
 
         # set axon
         ##########
 
         self._set_axon(axon, axon_params=axon_params, axon_type=axon_class)
-        self.current_firing_rate = self.get_firing_rate()
 
         # initialize extrinsic influences
         #################################
@@ -212,7 +200,8 @@ class Population(object):
     def _set_synapses(self,
                       synapse_subtypes: Optional[List[str]] = None,
                       synapse_types: Union[str, List[str]] = 'DoubleExponentialSynapse',
-                      synapse_params: Optional[List[dict]] = None
+                      synapse_params: Optional[List[dict]] = None,
+                      max_synaptic_delay: Optional[np.ndarray] = None
                       ) -> None:
         """Instantiates synapses.
 
@@ -247,25 +236,27 @@ class Population(object):
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   bin_size=self.step_size,
-                                                  max_delay=self.max_synaptic_delay[i]))
+                                                  max_delay=max_synaptic_delay[i]))
             elif synapse_types[i] == 'ExponentialSynapse':
                 self.synapses.append(set_instance(ExponentialSynapse,
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   bin_size=self.step_size,
-                                                  max_delay=self.max_synaptic_delay[i]))
+                                                  max_delay=max_synaptic_delay[i]))
+            elif synapse_types[i] == 'TransformedInputSynapse':
+                self.synapses.append(set_instance(TransformedInputSynapse,
+                                                  synapse_subtypes[i],
+                                                  synapse_params[i],
+                                                  bin_size=self.step_size,
+                                                  max_delay=max_synaptic_delay[i]))
             elif synapse_types[i] == 'Synapse':
                 self.synapses.append(set_instance(Synapse,
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   bin_size=self.step_size,
-                                                  max_delay=self.max_synaptic_delay[i]))
+                                                  max_delay=max_synaptic_delay[i]))
             else:
                 raise AttributeError('Invalid synapse type!')
-
-            # re-build synaptic kernel if synapse params have been passed
-            if synapse_params[i]:
-                self.synapses[-1].synaptic_kernel = self.synapses[-1].build_kernel()
 
     def _set_axon(self,
                   axon_subtype: Optional[str] = None,
@@ -287,44 +278,15 @@ class Population(object):
 
         if axon_type == 'SigmoidAxon':
             self.axon = set_instance(SigmoidAxon, axon_subtype, axon_params)  # type: ignore
+        elif axon_type == 'BurstingAxon':
+            self.axon = set_instance(BurstingAxon, axon_subtype, axon_params)  # type: ignore
+            # re-build axonal kernel if synapse params have been passed
+            if axon_params:
+                self.axon.axon_kernel = self.axon.build_kernel()
         elif axon_type == 'Axon':
             self.axon = set_instance(Axon, axon_subtype, axon_params)  # type: ignore
         else:
             raise AttributeError('Invalid axon type!')
-
-    def set_synapse_dependencies(self,
-                                 update: bool = False):
-        """Re-initiates all population attributes that depend on synapse properties.
-        """
-
-        # number of synapses
-        self.n_synapses = len(self.synapses)
-
-        # get relevant information from each synapse instance
-        self.kernel_lengths = np.array([len(syn.synaptic_kernel) for syn in self.synapses])
-
-        # set synaptic input array
-        if update:
-            synaptic_input_tmp = self.synaptic_input
-
-        self.synaptic_input = np.zeros((self.max_population_delay + np.max(self.kernel_lengths) + 1, self.n_synapses))
-
-        if update:
-            self.synaptic_input[0:synaptic_input_tmp.shape[0], 0:synaptic_input_tmp.shape[1]] = synaptic_input_tmp
-
-        self.dummy_input = np.zeros((1, self.n_synapses))
-
-        # set input index for each synapse
-        if update:
-            input_idx_tmp = self.current_input_idx
-
-        self.current_input_idx = np.zeros(self.n_synapses, dtype=int)
-
-        if update:
-            self.current_input_idx[0:len(input_idx_tmp)] = input_idx_tmp
-
-        # set synaptic current vector
-        self.synaptic_currents = np.zeros(self.n_synapses)
 
     def get_firing_rate(self) -> FloatLike:
         """Calculate the current average firing rate of the population.
@@ -385,8 +347,7 @@ class Population(object):
         # calculate synaptic currents for each additive synapse
         for i, syn in enumerate(self.synapses):
 
-            self.synaptic_currents[i] = syn.get_synaptic_current(
-                self.synaptic_input[0:self.current_input_idx[i] + 1, i], membrane_potential)
+            self.synaptic_currents[i] = syn.get_synaptic_current(membrane_potential)
 
         return self.synaptic_currents @ self.extrinsic_synaptic_modulation.T
 
@@ -410,7 +371,6 @@ class Population(object):
         return (self.resting_potential - membrane_potential) * self.membrane_capacitance / self.tau_leak
 
     def state_update(self,
-                     synaptic_input: np.ndarray,
                      extrinsic_current: FloatLike = 0.,
                      extrinsic_synaptic_modulation: Optional[np.ndarray] = None
                      ) -> None:
@@ -418,8 +378,6 @@ class Population(object):
 
         Parameters
         ----------
-        synaptic_input
-            Vector with additional synaptic input per synapse arriving at the time of the state update [unit = 1/s].
         extrinsic_current
             Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
             (default = 0.) [unit = A].
@@ -432,13 +390,12 @@ class Population(object):
         # add inputs to internal state variables
         ########################################
 
-        # synaptic inputs
-        self.synaptic_input[self.current_input_idx, 0:len(synaptic_input)] += synaptic_input
+        # extrinsic current
+        #self.extrinsic_current = extrinsic_current
 
-        # extrinsic inputs
-        self.extrinsic_current = extrinsic_current
-        if extrinsic_synaptic_modulation is not None:
-            self.extrinsic_synaptic_modulation = extrinsic_synaptic_modulation
+        # extrinsic modulation
+        #if extrinsic_synaptic_modulation is not None:
+        #    self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
 
         # compute average membrane potential
         ####################################
@@ -452,25 +409,10 @@ class Population(object):
         # update state variables
         ########################
 
-        # firing rate of population
-        self.current_firing_rate = self.get_firing_rate()
-
-        # state history of population
+        # TODO: Implement observer system here!!!
         self.state_variables.append(state_vars)
         if not self.store_state_variables:
             self.state_variables.pop(0)
-
-        # rotate synaptic input vector
-        ##############################
-
-        # check which synaptic input vectors need to be rotated
-        idx = self.current_input_idx < self.kernel_lengths-1
-        not_idx = np.invert(idx)
-
-        # either rotate synaptic input vector or increase input index
-        self.current_input_idx[idx] += 1
-        self.synaptic_input[0:-1, not_idx] = self.synaptic_input[1:, not_idx]
-        self.synaptic_input[-1, not_idx] = self.dummy_input[0, not_idx]
 
     def take_step(self,
                   f: Callable,
@@ -531,18 +473,47 @@ class Population(object):
         self.synapses.append(synapse)
 
         # update synapse dependencies
-        self.set_synapse_dependencies(update=False)
+        #############################
+
+        self.n_synapses = len(self.synapses)
+
+        # current vector
+        self.synaptic_currents = np.zeros(self.n_synapses)
+
+        # extrinsic modulation vector
+        ext_syn_mod = self.extrinsic_synaptic_modulation
+        self.extrinsic_synaptic_modulation = np.ones(self.n_synapses)
+        if synapse_idx:
+            self.extrinsic_synaptic_modulation[0:-1] = ext_syn_mod
+            self.extrinsic_synaptic_modulation[-1] = ext_syn_mod[synapse_idx]
 
     def clear(self):
         """Clears states stored on population and synaptic input.
         """
 
+        # population attributes
         init_state = self.state_variables[0]
         self.state_variables.clear()
         self.state_variables.append(init_state)
-        self.synaptic_input[:] = np.zeros_like(self.synaptic_input)
         self.current_firing_rate = self.get_firing_rate()
-        self.current_input_idx[:] = np.zeros_like(self.current_input_idx)
+
+        # synapse attributes
+        for syn in self.synapses:
+            syn.clear()
+
+        # axon attributes
+        self.axon.clear()
+
+    def update(self) -> None:
+        """update population attributes.
+        """
+
+        # update synapses
+        for syn in self.synapses:
+            syn.update()
+
+        # update axon
+        self.axon.update()
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]]=None, create_plot: Optional[bool]=True,
                               axes: Axes=None) -> object:
@@ -1095,3 +1066,30 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
         """
 
         return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current
+
+
+class DummyPopulation(object):
+    """Population object used to pass certain inputs to other populations in a network.
+    
+    Parameters
+    ----------
+    output
+        Firing rates to be passed through network
+    
+    """
+
+    def __init__(self, output: np.ndarray):
+        """Instantiate dummy population.
+        """
+
+        self.output = output
+        self.idx = 0
+
+    def get_firing_rate(self):
+        """Pass output at current index position.
+        """
+
+        output = self.output[self.idx]
+        self.idx += 1
+
+        return output

@@ -2,7 +2,10 @@
 """
 
 import numpy as np
-from core.axon import SigmoidAxon, Axon  # type: ignore
+from core.axon import SigmoidAxon, Axon, BurstingAxon  # type: ignore
+from core.axon import parametric_sigmoid
+from core.synapse import double_exponential
+from typing import Optional, List
 
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
@@ -156,3 +159,89 @@ class MoranAxon(Axon):
                          membrane_potential_threshold=membrane_potential_threshold,
                          sigmoid_steepness=sigmoid_steepness,
                          adaptation=adaptation)
+
+
+#################
+# bursting axon #
+#################
+
+
+class SuffczynskiAxon(BurstingAxon):
+    """Bursting axon including low-threshold spikes as described in [1]_.
+    
+    Parameters
+    ----------
+    bin_size
+        time window one bin of the axonal kernel is representing [unit = s].
+    axon_type
+        See description of parameter `axon_type` of :class:`Axon`.
+    max_delay
+        Maximal time delay after which a certain membrane potential still affects the firing rate [unit = s].
+    epsilon
+        Accuracy of the synaptic kernel representation.
+    resting_potential
+        Resting membrane potential of the population the axon belongs to [unit = V].
+    tau_rise
+        Rise time of the axonal kernel [unit = s].
+    tau_decay
+        Decay time of the axonal kernel [unit = s].
+    max_firing_rate
+        Maximum firing rate of the axon [unit = 1/s].
+    activation_threshold
+        Membrane potential threshold for activating normal firing [unit = V].
+    activation_steepness
+        Steepness of sigmoid representing the standard transfer function [unit = V].
+    lts_threshold
+        Membrane potential threshold for de-activating LTS firing [unit = V].
+    lts_steepness
+        Steepness of sigmoid representing the LTS bursts [unit = V].
+    
+    See Also
+    --------
+    :class:`BurstingAxon`: ... for a detailed description of the parameters, methods and attributes.
+    
+    References
+    ----------
+    """
+
+    def __init__(self,
+                 bin_size: float = 1e-3,
+                 axon_type: Optional[str] = None,
+                 epsilon: float = 1e-10,
+                 max_delay: Optional[float] = None,
+                 resting_potential: float = -0.065,
+                 tau_rise: float = 0.05,
+                 tau_decay: float = 0.1,
+                 max_firing_rate: float = 800.,
+                 activation_threshold: float = -0.059,
+                 activation_steepness: float = 670.,
+                 lts_threshold: float = -0.081,
+                 lts_steepness: float = 170.,
+                 ) -> None:
+        """Instantiates suffczynski axon.
+        """
+
+        # define kernel function attributes
+        ###################################
+
+        double_exp_args = {'tau_rise': tau_rise,
+                           'tau_decay': tau_decay}
+        sigmoid_args = {'membrane_potential_threshold': lts_threshold,
+                        'sigmoid_steepness': lts_steepness,
+                        'max_firing_rate': 1.}
+
+        # call super method
+        ###################
+
+        super().__init__(transfer_function=parametric_sigmoid,
+                         kernel_functions=[double_exponential, parametric_sigmoid],
+                         bin_size=bin_size,
+                         axon_type=axon_type,
+                         epsilon=epsilon,
+                         max_delay=max_delay,
+                         resting_potential=resting_potential,
+                         kernel_function_args=[double_exp_args, sigmoid_args],
+                         membrane_potential_threshold=activation_threshold,
+                         sigmoid_steepness=activation_steepness,
+                         max_firing_rate=max_firing_rate
+                         )

@@ -52,16 +52,14 @@ def set_instance(class_handle: type,
 
     """
 
-    ##########################
-    # check input parameters #
-    ##########################
+    # check input parameters
+    ########################
 
     if not instance_type and not instance_params:
         raise AttributeError('Either instance type or instance params have to be passed!')
 
-    #################################################
-    # if passed, instantiate pre-implemented object #
-    #################################################
+    # if passed, instantiate pre-implemented object
+    ###############################################
 
     if instance_type:
 
@@ -80,19 +78,20 @@ def set_instance(class_handle: type,
             else:
                 i += 1
 
-    #################################################################
-    # if passed, instantiate/update object with instance parameters #
-    #################################################################
+            if instance_params:
 
-    if instance_params and instance_type:
+                # fetch attributes on object
+                attributes = inspect.getmembers(instance, lambda a: not (inspect.isroutine(a)))
+                attributes = [a for a in attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-        # fetch attributes on object
-        attributes = inspect.getmembers(instance, lambda a: not (inspect.isroutine(a)))
-        attributes = [a for a in attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
+                # update passed parameters of instance
+                for attr in attributes:
+                    instance = update_param(attr[0], instance_params, instance)
 
-        # update passed parameters of instance
-        for attr in attributes:
-            instance = update_param(attr[0], instance_params, instance)
+                instance.update()  # type: ignore
+
+    # if passed, instantiate/update object with instance parameters
+    ###############################################################
 
     elif instance_params:
 

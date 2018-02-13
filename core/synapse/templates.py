@@ -3,7 +3,9 @@
 
 from typing import Optional
 
-from core.synapse import DoubleExponentialSynapse, ExponentialSynapse
+from core.synapse import DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse
+from core.synapse import double_exponential
+from core.axon import parametric_sigmoid
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
@@ -105,6 +107,73 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
                          max_delay=max_delay,
                          epsilon=epsilon,
                          synapse_type='GABAA_current'
+                         )
+
+
+class GABABCurrentSynapse(TransformedInputSynapse):
+    """Defines a current-based synapse with GABAB neuroreceptor.
+    
+    Parameters
+    ----------
+    bin_size
+        See documentation of parameter `bin_size` of :class:`Synapse`.
+    max_delay
+        See documentation of parameter `max_delay` of :class:`Synapse`.
+    epsilon
+        See documentation of parameter `epsilon` of :class:`Synapse`.
+    efficacy
+        See documentation of parameter `efficacy` of :class:`Synapse`.
+    tau_decay
+        See documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
+    tau_rise
+        See documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
+    input_transform_threshold
+        Threshold of the sigmoidal transform applied to input of the synapse.
+    input_transform_steepness
+        Steepness of the sigmoidal transform applied to input of the synapse.
+
+    See Also
+    --------
+    :class:`TransformedInputSynapse`: Detailed documentation of parameters of synapses with additional input transform.
+    :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+    
+    """
+
+    def __init__(self,
+                 bin_size: float,
+                 max_delay: Optional[float] = None,
+                 epsilon: float = 1e-15,
+                 efficacy: float = -1.273 * 1e-12,
+                 tau_decay: float = 0.02,
+                 tau_rise: float = 0.0004,
+                 input_transform_threshold: float = 11.,
+                 input_transform_steepness: float = 100.,
+                 ) -> None:
+        """
+        Instantiates current-based synapse with GABA_B receptor.
+        """
+
+        # define input transform attributes
+        ###################################
+
+        input_transform_args = {'membrane_potential_threshold': input_transform_threshold,
+                                'sigmoid_steepness': input_transform_steepness,
+                                'max_firing_rate': 1.0}
+
+        # call super method
+        ###################
+
+        super().__init__(kernel_function=double_exponential,
+                         input_transform=parametric_sigmoid,
+                         efficacy=efficacy,
+                         max_delay=max_delay,
+                         bin_size=bin_size,
+                         epsilon=epsilon,
+                         conductivity_based=False,
+                         synapse_type='GABAB_current',
+                         input_transform_args=input_transform_args,
+                         tau_decay=tau_decay,
+                         tau_rise=tau_rise
                          )
 
 
