@@ -13,7 +13,7 @@ __status__ = "Development"
 from inspect import getsource
 import numpy as np
 import json
-from pandas import DataFrame
+from pandas import DataFrame, MultiIndex
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -164,7 +164,7 @@ class RepresentationBase(object):
         return json.dumps(_dict, cls=CustomEncoder, indent=2)
 
 
-def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple, list]=None, time_window: tuple = None
+def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple, list] = None, time_window: tuple = None
                         ) -> Tuple[dict, DataFrame]:
     """Obtain all simulation data from a circuit, including run parameters"""
 
@@ -180,9 +180,22 @@ def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple,
     #     if isinstance(item, np.ndarray):
     #         run_info[key] = DataFrame(data=item, columns=labels)
 
-    labeled_states = DataFrame(data=states, columns=labels)
+    states = DataFrame(data=states, columns=labels)
+    for key, item in run_info.items():
+        if key == "simulation_time" or item is None:
+            continue
+        if item.ndim == 3:
+            # flatten 3D array
+            flattened = {}
+            for pop_idx in range(item.shape[1]):
+                for syn_idx in range(item.shape[2]):
+                    flattened[(f"{pop_idx} {labels[pop_idx]}", syn_idx)] = item[:, pop_idx, syn_idx]
+            run_info[key] = DataFrame(flattened)
+        elif item.ndim == 2:
+            run_info[key] = DataFrame(data=item, columns=labels)
+    # run_info = DataFrame.from_dict(run_info, "columns")
 
-    return run_info, labeled_states
+    return run_info, states
 
 
 def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
@@ -217,13 +230,13 @@ def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
     for key, item in run_info.items():
         filename = f"{key}.{out_format}"
         filepath = os.path.join(dirname, filename)
-        if isinstance(item, np.ndarray):
-            np.savetxt(filepath, item, delimiter="\t")
+        if item is None:
+            continue
+
+        if out_format == "json":
+            item.to_json(filepath, orient="split")
         else:
-            if out_format == "json":
-                item.to_json(filepath, orient="split")
-            else:
-                item.to_csv(filepath, sep="\t")
+            item.to_csv(filepath, sep="\t")
 
 
 def create_directory(path):

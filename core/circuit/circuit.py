@@ -228,6 +228,12 @@ class Circuit(RepresentationBase):
 
         """
 
+        # save run parameters to instance variable
+        ##########################################
+
+        self.run_info = dict(synaptic_inputs=synaptic_inputs, simulation_time=simulation_time,
+                             extrinsic_current=extrinsic_current, extrinsic_modulation=extrinsic_modulation)
+
         # check input parameters
         ########################
 
@@ -265,12 +271,6 @@ class Circuit(RepresentationBase):
                                  'time steps!')
             if extrinsic_modulation.shape[1] != self.n_populations:
                 raise ValueError('Second dimension of extrinsic modulation has to match the number of populations!')
-
-        # save run parameters to instance variable
-        ##########################################
-
-        self.run_info = dict(synaptic_inputs=synaptic_inputs, simulation_time=simulation_time,
-                             extrinsic_current=extrinsic_current, extrinsic_modulation=extrinsic_modulation)
 
         # simulate network
         ##################

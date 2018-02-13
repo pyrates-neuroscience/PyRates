@@ -194,7 +194,7 @@ def test_construct_circuit_from_repr_eval():
     assert repr(circuit) == repr(new_circuit)
 
 
-@pytest.mark.xfail
+# @pytest.mark.xfail
 def test_save_run_data_to_file():
     """Run a simulation and save the states to file."""
 
