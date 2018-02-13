@@ -256,16 +256,22 @@ def test_save_run_data_to_file():
     save_simulation_data_to_file(output_data=original_sim_data, run_info=run_info,
                                  dirname=dirname, path=path, out_format="csv")  # implement include_config?
     saved_sim_data = read_simulation_data_from_file(dirname, path)["output"]
-    assert deep_compare(original_sim_data, saved_sim_data)
+    assert deep_compare(original_sim_data, saved_sim_data, approx=True)
 
 
-def deep_compare(left, right):
+def deep_compare(left, right, approx=False):
     """Hack to compare the config dictionaries"""
 
     result = False
+    if approx is True:
+        approx = dict(rtol=1e-15, atol=0)
 
     if hasattr(left, "all"):
-        result = np.all((left == right).all())
+        if approx:
+            result = np.allclose(left, right, **approx)
+        else:
+            result = np.all(left == right)
+        # second 'all', because DataFrame.all() returns a Series
     elif isinstance(left, dict):
         result = np.all([deep_compare(left[key], right[key]) for key in left])
     else:
