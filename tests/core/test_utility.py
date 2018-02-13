@@ -194,7 +194,6 @@ def test_construct_circuit_from_repr_eval():
     assert repr(circuit) == repr(new_circuit)
 
 
-# @pytest.mark.xfail
 def test_save_run_data_to_file():
     """Run a simulation and save the states to file."""
 
@@ -206,7 +205,7 @@ def test_save_run_data_to_file():
     # set parameters
     ################
     path = "resources/"
-    filename = "JR_runtest_config_I.json"
+    filename = "JR_runtest_config.json"
 
     # recreate circuit from file
     circuit = construct_circuit_from_file(filename, path)
@@ -250,11 +249,27 @@ def test_save_run_data_to_file():
     run_info, original_sim_data = get_simulation_data(circuit, state_variable_idx=0,
                                                       pop_indices=None, time_window=None)
 
-    dirname = "JR_simulation_data"
+    # test output
+    dirname = "JR_runtest_output_data"
     path = "output/"
 
     save_simulation_data_to_file(output_data=original_sim_data, run_info=run_info,
                                  dirname=dirname, path=path, out_format="csv")  # implement include_config?
+
+    import filecmp
+    import os
+    # reference
+    target_dirname = "JR_runtest_reference_data"
+    target_path = "resources/"
+    filename = "output.csv"
+    target_file = os.path.join(target_path, target_dirname, filename)
+    test_file = os.path.join(path, dirname, filename)
+
+    # compare files
+    assert filecmp.cmp(target_file, test_file)
+    filecmp.clear_cache()
+
+    # compare saved and memory data
     saved_sim_data = read_simulation_data_from_file(dirname, path)["output"]
     assert deep_compare(original_sim_data, saved_sim_data, approx=True)
 
