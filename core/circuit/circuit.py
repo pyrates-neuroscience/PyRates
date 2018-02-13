@@ -9,7 +9,7 @@ from typing import List, Optional, Union, TypeVar, Callable
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.utility import check_nones, set_instance
-from core.utility.json_filestorage import RepresentationBase
+from core.utility.filestorage import RepresentationBase
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -103,6 +103,7 @@ class Circuit(RepresentationBase):
         self.n_synapses = connectivity.shape[2]
         self.t = 0.
         self.active_synapses = list()
+        self.run_info = dict()
 
         # circuit structure
         self.populations = populations
@@ -227,6 +228,12 @@ class Circuit(RepresentationBase):
 
         """
 
+        # save run parameters to instance variable
+        ##########################################
+
+        self.run_info = dict(synaptic_inputs=synaptic_inputs, simulation_time=simulation_time,
+                             extrinsic_current=extrinsic_current, extrinsic_modulation=extrinsic_modulation)
+
         # check input parameters
         ########################
 
@@ -310,7 +317,8 @@ class Circuit(RepresentationBase):
                                              n_synapses]],
                                              extrinsic_current=extrinsic_current[i],
                                              extrinsic_synaptic_modulation=extrinsic_modulation[i,
-                                             self.active_synapses[i][0:self.n_synapses]])
+                                                                                                self.active_synapses[i][
+                                                                                                0:self.n_synapses]])
 
     def pass_through_circuit(self):
         """Passes current population firing rates through circuit.
@@ -378,7 +386,7 @@ class Circuit(RepresentationBase):
             raise ValueError('Time constants cannot be negative.')
 
         if not population_idx:
-            population_idx = [i for i in range(self.n_populations)]
+            population_idx = range(self.n_populations)
 
         # extract state variables from populations
         ##########################################
@@ -920,7 +928,8 @@ class CircuitFromCircuit(Circuit):
             connectivity_tmp = circuits[i].C
             n_synapses_diff = connectivity.shape[2] - connectivity_tmp.shape[2]
             if n_synapses_diff > 0:
-                connectivity_tmp = np.append(connectivity_tmp, np.zeros((circuits[i].n_populations, circuits[i].n_populations)), axis=2)
+                connectivity_tmp = np.append(connectivity_tmp,
+                                             np.zeros((circuits[i].n_populations, circuits[i].n_populations)), axis=2)
             connectivity_coll.append(connectivity_tmp)
 
             # collect delay matrix

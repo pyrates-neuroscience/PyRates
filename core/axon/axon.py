@@ -10,7 +10,7 @@ from matplotlib.axes import Axes
 import numpy as np
 from typing import Optional, Callable, Union, Any, Dict, overload
 
-from core.utility.json_filestorage import RepresentationBase
+from core.utility.filestorage import RepresentationBase
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"

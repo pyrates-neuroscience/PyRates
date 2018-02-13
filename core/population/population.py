@@ -15,7 +15,7 @@ from typing import List, Optional, Union, Dict, Callable, TypeVar
 from core.axon import Axon, SigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse
 from core.utility import set_instance, check_nones
-from core.utility.json_filestorage import RepresentationBase
+from core.utility.filestorage import RepresentationBase
 
 FloatLike = Union[float, np.float64]
 AxonLike = TypeVar('AxonLike', bound=Axon, covariant=True)

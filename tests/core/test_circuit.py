@@ -110,12 +110,12 @@ def test_4_2_jr_circuit_ii():
     ################
 
     # circuit parameters
-    N = 3
+    n_populations = 3
     n_synapses = 2
 
     # simulations parameters
     simulation_time = 1.0  # s
-    cutoff_time = 0.0  # s
+    # cutoff_time = 0.0  # s
     step_size = 5.0e-4  # s
 
     # synaptic inputs
@@ -123,7 +123,7 @@ def test_4_2_jr_circuit_ii():
     len_stim = 0.05  # s
     mag_stim = 300.0  # 1/s
 
-    synaptic_inputs = np.zeros((int(simulation_time / step_size), N, n_synapses))
+    synaptic_inputs = np.zeros((int(simulation_time / step_size), n_populations, n_synapses))
     synaptic_inputs[int(start_stim / step_size):int(start_stim / step_size + len_stim / step_size), 1, 0] = mag_stim
     synaptic_inputs[:, 0, 0] = mag_stim / 3.
 
@@ -411,6 +411,7 @@ def test_4_5_circuit_run_method():
     ######################
 
     # TODO: think of a simple case to check for (like a test population/test circuit)
+
 
 def test_circuit_run_verbosity(capsys):
 

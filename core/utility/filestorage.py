@@ -2,7 +2,7 @@
 and read/construct circuit from JSON.
 """
 from collections import OrderedDict
-from typing import Generator, Tuple, Any
+from typing import Generator, Tuple, Any, Union, List, Dict
 
 from networkx import node_link_data
 
@@ -13,6 +13,8 @@ __status__ = "Development"
 from inspect import getsource
 import numpy as np
 import json
+from pandas import DataFrame
+import pandas as pd
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -69,6 +71,7 @@ class RepresentationBase(object):
         from copy import copy
         init_dict = copy(self._init_dict)
 
+        args = ""
         if "args" in init_dict:
             args = init_dict.pop("args", None)
             args = ", ".join((f"{value!r}" for value in args))
@@ -150,20 +153,142 @@ class RepresentationBase(object):
 
         if filename:
             import os
-            import errno
-
             filepath = os.path.join(path, filename)
 
             # create directory if necessary
-            if not os.path.exists(os.path.dirname(filepath)):
-                try:
-                    os.makedirs(os.path.dirname(filepath))
-                except OSError as exc:  # Guard against race condition
-                    if exc.errno != errno.EEXIST:
-                        raise
+            create_directory(filepath)
 
             with open(filepath, "w") as outfile:
                 json.dump(_dict, outfile, cls=CustomEncoder, indent=4)
 
         # return json as string
         return json.dumps(_dict, cls=CustomEncoder, indent=2)
+
+
+def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple, list] = None, time_window: tuple = None
+                        ) -> Tuple[dict, DataFrame]:
+    """Obtain all simulation data from a circuit, including run parameters"""
+
+    run_info = circuit.run_info
+    states = circuit.get_population_states(state_variable_idx=state_variable_idx, population_idx=pop_indices,
+                                           time_window=time_window)
+
+    labels = []
+    for pop in circuit.populations:
+        labels.append(pop.label)
+
+    # for key, item in run_info.items():
+    #     if isinstance(item, np.ndarray):
+    #         run_info[key] = DataFrame(data=item, columns=labels)
+
+    states = DataFrame(data=states, columns=labels)
+    for key, item in run_info.items():
+        if key == "simulation_time" or item is None:
+            continue
+        if item.ndim == 3:
+            # flatten 3D array
+            flattened = {}
+            for pop_idx in range(item.shape[1]):
+                for syn_idx in range(item.shape[2]):
+                    flattened[(f"{pop_idx} {labels[pop_idx]}", syn_idx)] = item[:, pop_idx, syn_idx]
+            run_info[key] = DataFrame(flattened)
+        elif item.ndim == 2:
+            run_info[key] = DataFrame(data=item, columns=labels)
+    # run_info = DataFrame.from_dict(run_info, "columns")
+
+    return run_info, states
+
+
+def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
+                                 dirname: str, path: str = "", out_format: str = "csv"):
+    """Save simulation output and inputs that were given to the run function to a file."""
+
+    import os
+
+    dirname = os.path.join(path, dirname) + "/"
+
+    # create directory if necessary
+    create_directory(dirname)
+
+    # save output data
+    ##################
+
+    filename = f"output.{out_format}"
+    filepath = os.path.join(dirname, filename)
+    if out_format == "json":
+        output_data.to_json(filepath, orient="split")
+    elif out_format == "csv":
+        output_data.to_csv(filepath, sep="\t")
+    else:
+        raise ValueError(f"Unknown output format '{out_format}'")
+
+    # save run information
+    ######################
+
+    if "simulation_time" in run_info:
+        run_info.pop("simulation_time")
+
+    for key, item in run_info.items():
+        filename = f"{key}.{out_format}"
+        filepath = os.path.join(dirname, filename)
+        if item is None:
+            continue
+
+        if out_format == "json":
+            item.to_json(filepath, orient="split")
+        else:
+            item.to_csv(filepath, sep="\t")
+
+
+def create_directory(path):
+    """check if a directory exists and create it otherwise"""
+
+    import os
+    import errno
+
+    if not os.path.exists(os.path.dirname(path)):
+        try:
+            os.makedirs(os.path.dirname(path))
+        except OSError as exc:  # Guard against race condition
+            if exc.errno != errno.EEXIST:
+                raise
+
+
+def read_simulation_data_from_file(dirname: str, path="", filenames: list = None) -> Dict[str, DataFrame]:
+    """Read simulation data from files. The assumed data structure is:
+    <path>/<dirname>/
+        output.csv
+        synaptic_inputs.csv
+        extrinsic_current.csv
+        extrinsic_modulation.csv
+
+    This is the expected output from 'save_simulation_data_to_file', but if 'names' is specified, other data
+    may also be read.
+    """
+
+    import os
+
+    if filenames is None:
+        filenames = ["output", "synaptic_inputs", "extrinsic_current", "extrinsic_modulation"]
+        ignore_missing = True
+    else:
+        ignore_missing = False
+
+    data = {}
+    path = os.path.join(path, dirname)
+
+    for label in filenames:
+        if label == "output":
+            header = 0
+        else:
+            header = [0, 1]
+        filename = label + ".csv"
+        filepath = os.path.join(path, filename)
+
+        try:
+            data[label] = pd.read_csv(filepath, sep="\t", header=header, index_col=0)
+        except FileNotFoundError:
+            if not ignore_missing:
+                raise
+
+    return data

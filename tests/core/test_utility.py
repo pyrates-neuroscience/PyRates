@@ -194,15 +194,98 @@ def test_construct_circuit_from_repr_eval():
     assert repr(circuit) == repr(new_circuit)
 
 
-def deep_compare(left, right):
+def test_save_run_data_to_file():
+    """Run a simulation and save the states to file."""
+
+    from core.utility.construct import construct_circuit_from_file
+    from core.utility.filestorage import get_simulation_data
+    from core.utility.filestorage import save_simulation_data_to_file
+    from core.utility.filestorage import read_simulation_data_from_file
+
+    # set parameters
+    ################
+    path = "resources/"
+    filename = "JR_runtest_config.json"
+
+    # recreate circuit from file
+    circuit = construct_circuit_from_file(filename, path)
+    n_pop = circuit.n_populations
+    n_syn = circuit.n_synapses
+    # save a new config, if necessary
+    # circuit.to_json(path=path, filename=filename)
+
+    # simulation parameters
+    simulation_time = 1.0  # s
+    step_size = circuit.step_size  # s
+
+    # synaptic inputs
+    start_stim = 0.3  # s
+    start_stim = int(start_stim / step_size)
+    len_stim = 0.05  # s
+    end_stim = int(start_stim / step_size + len_stim / step_size)
+    mag_stim = 200.0  # 1/s
+
+    n_time_steps = int(simulation_time / step_size)
+
+    synaptic_inputs = np.zeros((n_time_steps, n_pop, n_syn))
+    synaptic_inputs[start_stim:end_stim, 1, 0] = mag_stim
+
+    # run network simulation
+    ########################
+
+    # print('| Test VII - Jansen-Rit Circuit |')
+
+    circuit.run(synaptic_inputs=synaptic_inputs,
+                simulation_time=simulation_time)
+
+    # noinspection PyTypeChecker
+    states = circuit.get_population_states(state_variable_idx=0) - 0.075  # type: np.ndarray
+    states = states[1:, :]
+    # for some reason, the get_population_states function returns one more time point than the input.
+
+    assert states.shape == (n_time_steps, n_pop)
+
+    # Now try to save data to a file
+    run_info, original_sim_data = get_simulation_data(circuit, state_variable_idx=0,
+                                                      pop_indices=None, time_window=None)
+
+    # test output
+    dirname = "JR_runtest_output_data"
+    path = "output/"
+
+    save_simulation_data_to_file(output_data=original_sim_data, run_info=run_info,
+                                 dirname=dirname, path=path, out_format="csv")  # implement include_config?
+
+    import filecmp
+    import os
+    # reference
+    target_dirname = "JR_runtest_reference_data"
+    target_path = "resources/"
+    filename = "output.csv"
+    target_file = os.path.join(target_path, target_dirname, filename)
+    test_file = os.path.join(path, dirname, filename)
+
+    # compare files
+    assert filecmp.cmp(target_file, test_file)
+    filecmp.clear_cache()
+
+    # compare saved and memory data
+    saved_sim_data = read_simulation_data_from_file(dirname, path)["output"]
+    assert deep_compare(original_sim_data, saved_sim_data, approx=True)
+
+
+def deep_compare(left, right, approx=False):
     """Hack to compare the config dictionaries"""
 
-    if isinstance(left, np.ndarray):
-        return (left == right).all()
-    elif isinstance(left, dict):
-        for key in left:
-            return deep_compare(left[key], right[key])
+    if approx is True:
+        approx = dict(rtol=1e-15, atol=0)
 
+    if hasattr(left, "all"):
+        if approx:
+            return np.allclose(left, right, **approx)
+        return np.all(left == right)
+    elif isinstance(left, dict):
+        return np.all([deep_compare(left[key], right[key]) for key in left])
     # I think this is actually not stable
     try:
         if not left.__dict__:

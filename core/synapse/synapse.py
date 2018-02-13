@@ -11,7 +11,7 @@ from typing import Optional, Union, Callable, overload
 
 from matplotlib.axes import Axes
 
-from core.utility.json_filestorage import RepresentationBase
+from core.utility.filestorage import RepresentationBase
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
