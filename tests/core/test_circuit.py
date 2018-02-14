@@ -68,6 +68,7 @@ def test_4_1_jr_circuit_bifurcation(test_case):
                                    for pop in columns.levels[0]]
                                   for syn in columns.levels[1]])
     # resulting shape: (n_syn, n_pop, n_time_steps)
+
     # swap axes
     synaptic_inputs = np.swapaxes(synaptic_inputs, 0, 2)  # --> (n_time_steps, n_pop, n_syn)
 
@@ -76,11 +77,28 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # simulations parameters
     simulation_time = 1.0  # s
 
+    # interpolate to new time step
+    # time_vec = np.arange(0, simulation_time, 0.001)
+    # from scipy import interpolate
+    # func = interpolate.interp1d(time_vec, synaptic_inputs, axis=0, fill_value="extrapolate")
+    # new_time_vec = np.arange(0, simulation_time, circuit.step_size)
+    # new_synaptic_inputs = func(new_time_vec)
+
     circuit.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time)
 
     states = circuit.get_population_states(state_variable_idx=0)  # - 0.075
     # fixme: do we need to keep the - 0.075 there?
+
+    # Save new data, if necessary due to syntax change
+    ##################################################
+    # from core.utility import get_simulation_data, save_simulation_data_to_file
+    #
+    # run_info, states_frame = get_simulation_data(circuit)
+    # save_simulation_data_to_file(output_data=states_frame, run_info=run_info,
+    #                              dirname=dirname, path=path)
+
+
 
     # calculate nmrse between time-series
     #####################################
@@ -91,7 +109,7 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # perform unit test
     ###################
 
-    assert deep_compare(states, target_data["output"], approx={"rtol": 1e-12, "atol": 0})
+    assert deep_compare(states, target_data["output"], approx={"rtol": 1e-11, "atol": 0})
 
 
 @pytest.mark.skip

@@ -4,6 +4,8 @@
 import numpy as np
 
 # from core.utility.json_filestorage import CustomEncoder, get_attrs
+import pytest
+
 from core.utility import deep_compare
 
 __author__ = "Daniel Rose"
@@ -32,7 +34,7 @@ def test_store_circuit_config():
     from core.circuit import JansenRitCircuit
     import json
 
-    step_size = 1e-4
+    step_size = 1/1024
 
     circuit = JansenRitCircuit(step_size)
 
@@ -86,7 +88,7 @@ def test_store_circuit_config_dict_as_json():
 
     from core.circuit import JansenRitCircuit
 
-    step_size = 1e-4
+    step_size = 1/1024
 
     circuit = JansenRitCircuit(step_size)
 
@@ -133,7 +135,7 @@ def test_construct_circuit_from_file_or_dict():
     from core.circuit import JansenRitCircuit
     from core.utility.construct import construct_circuit_from_file
 
-    step_size = 1e-4
+    step_size = 1/1024
     # TODO: move step_size definition to pytest fixture
 
     target_circuit = JansenRitCircuit(step_size)
@@ -160,7 +162,7 @@ def test_construct_circuit_from_file_or_dict():
     test_config_dict = test_circuit.to_dict()
 
     assert deep_compare(test_config_dict, target_config_dict)
-    assert repr(test_circuit) == repr(target_circuit)
+    assert repr(test_circuit) == repr(target_circuit)  # not really useful at this point.
 
     # test if the resulting circuit actually runs
     #############################################
@@ -177,10 +179,13 @@ def test_construct_circuit_from_file_or_dict():
 #     assert repr(circuit) == circuit_constructor_str
 
 
+@pytest.mark.skip
 def test_construct_circuit_from_repr_eval():
+    """Test whether the representation of a circuit can be evaluated to recreate the same circuit again.
+    Currently not working and might not be implemented again, because it blows up the output of repr(circuit)"""
     from core.circuit import JansenRitCircuit
 
-    step_size = 1e-4
+    step_size = 1/1024
 
     circuit = JansenRitCircuit(step_size)
 

@@ -71,13 +71,14 @@ class RepresentationBase(object):
         from copy import copy
         init_dict = copy(self._init_dict)
 
-        args = ""
-        if "args" in init_dict:
-            args = init_dict.pop("args", None)
-            args = ", ".join((f"{value!r}" for value in args))
-
-        kwargs = ", ".join((f"{name}={value!r}" for name, value in init_dict))
-        param_str = f"{args}, {kwargs}"
+        # args = ""
+        # if "args" in init_dict:
+        #     args = init_dict.pop("args", None)
+        #     args = ", ".join((f"{value!r}" for value in args))
+        #
+        # kwargs = ", ".join((f"{name}={value!r}" for name, value in init_dict.items()))
+        # param_str = f"{args}, {kwargs}"
+        param_str = "*args, **kwargs"
         _module = self.__class__.__module__
         _class = self.__class__.__name__
         return f"{_module}.{_class}({param_str})"
