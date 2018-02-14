@@ -158,6 +158,9 @@ class RepresentationBase(object):
             # create directory if necessary
             create_directory(filepath)
 
+            if not filepath.lower().endswith(".json"):
+                filepath = f"{filepath}.json"
+
             with open(filepath, "w") as outfile:
                 json.dump(_dict, outfile, cls=CustomEncoder, indent=4)
 
@@ -239,6 +242,9 @@ def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
             item.to_json(filepath, orient="split")
         else:
             item.to_csv(filepath, sep="\t")
+
+    # TODO: think about float vs. decimal representation: Possibly save float data as hex or fraction
+    # TODO: choose time step as exact float (e.g. 0.0005 --> 2**-11=0.00048828125)
 
 
 def create_directory(path):

@@ -9,7 +9,7 @@ import pickle
 # Utility #
 ###########
 
-from core.utility import nmrse
+from core.utility import nmrse, deep_compare
 
 
 def setup_module():
@@ -25,15 +25,16 @@ def setup_module():
 
 
 # noinspection PyTypeChecker
-@pytest.mark.xfail
-def test_4_1_jr_circuit_i():
-    """Tests whether current implementation shows expected behavior when standard Jansen-Rit circuit ([1]_)is fed
-    with step-function input targeted onto the excitatory interneurons.
+# @pytest.mark.xfail
+@pytest.mark.parametrize("test_case", ["alpha", "spiking", "flat"])
+def test_4_1_jr_circuit_bifurcation(test_case):
+    """Tests whether current implementation shows expected behavior when standard Jansen-Rit circuit ([1]_) with three
+    sets of synaptic input corresponding to alpha oscillation, spiking neurons or flat output, respectively.
 
     See Also
     --------
     :class:`JansenRitCircuit`: Documentation of Jansen-Rit NMM parametrization
-    :class:`NeuralMassModel`: Detailed documentation of NMM parameters, attributes and methods.
+    :class:`Circuit`: Detailed documentation of NMM parameters, attributes and methods.
 
     References
     ----------
@@ -42,62 +43,58 @@ def test_4_1_jr_circuit_i():
 
     """
 
-    from core.circuit import JansenRitCircuit
+    from core.utility.construct import construct_circuit_from_file
+    from core.utility import read_simulation_data_from_file
 
-    # set parameters
-    ################
+    # Construct from file and test against template
+    ###############################################
 
-    N = 3
-    n_synapses = 2
-    max_synaptic_delay = 0.15  # s
+    path = "resources/"
+    dirname = f"test_4_1_JR_{test_case}_data"
+    filename = f"test_4_1_JR_{test_case}.json"
+
+    circuit = construct_circuit_from_file(filename, path)
+
+    # Load target data from file
+    ################################
+
+    target_data = read_simulation_data_from_file(dirname, path)
+
+    synaptic_inputs = target_data["synaptic_inputs"]
+    # unstack DataFrame
+    time_vec = synaptic_inputs.index
+    columns = synaptic_inputs.columns
+    synaptic_inputs = np.asarray([[synaptic_inputs[pop][syn]
+                                   for pop in columns.levels[0]]
+                                  for syn in columns.levels[1]])
+    # resulting shape: (n_syn, n_pop, n_time_steps)
+    # swap axes
+    synaptic_inputs = np.swapaxes(synaptic_inputs, 0, 2)  # --> (n_time_steps, n_pop, n_syn)
+
+    # simulation_time = time_vec[-1].round(1)
 
     # simulations parameters
     simulation_time = 1.0  # s
-    step_size = 5e-4  # s
-
-    # synaptic inputs
-    start_stim = 0.3  # s
-    len_stim = 0.05  # s
-    mag_stim = 200.0  # 1/s
-
-    synaptic_inputs = np.zeros((int(simulation_time / step_size), N, n_synapses))
-    synaptic_inputs[int(start_stim / step_size):int(start_stim / step_size + len_stim / step_size), 1, 0] = mag_stim
-
-    # initialize neural mass network
-    ################################
-
-    circuit = JansenRitCircuit(step_size=step_size, max_synaptic_delay=max_synaptic_delay)
-
-    # run network simulation
-    ########################
-
-    # print('| Test VII - Jansen-Rit Circuit |')
 
     circuit.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time)
 
-    states = circuit.get_population_states(state_variable_idx=0) - 0.075
-
-    # load target data
-    ##################
-
-    with open('../resources/JR_results_I.pickle', 'rb') as f:
-        target_states = pickle.load(f)
+    states = circuit.get_population_states(state_variable_idx=0)  # - 0.075
+    # fixme: do we need to keep the - 0.075 there?
 
     # calculate nmrse between time-series
     #####################################
 
-    error = nmrse(states[1:, :], target_states)
-    error = np.mean(error)
+    # error = nmrse(states[1:, :], target_states)
+    # error = np.mean(error)
 
     # perform unit test
     ###################
 
-    # test response to step-function input to EINs
-    assert pytest.approx(0, abs=0.5) == error
+    assert deep_compare(states, target_data["output"], approx={"rtol": 1e-12, "atol": 0})
 
 
-@pytest.mark.xfail
+@pytest.mark.skip
 def test_4_2_jr_circuit_ii():
     """
     Tests whether current implementation shows expected behavior when standard Jansen-Rit circuit is fed with step-
@@ -165,7 +162,6 @@ def test_4_3_jr_circuit_iii():
     """
     Tests whether expected bifurcation occurs when synaptic efficiency of JR circuit is altered (given constant
     input).
-    This test actually succeeds but takes too long. It is also not clear whether the result correct or not.
     """
 
     from core.circuit import CircuitFromScratch
@@ -414,7 +410,6 @@ def test_4_5_circuit_run_method():
 
 
 def test_circuit_run_verbosity(capsys):
-
     from core.circuit import JansenRitCircuit
 
     # set parameters
@@ -452,5 +447,3 @@ def test_circuit_run_verbosity(capsys):
               'simulation progress: 80 %\n' \
               'simulation progress: 90 %\n'
     assert out == exp_out
-
-

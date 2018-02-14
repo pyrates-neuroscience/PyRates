@@ -255,3 +255,29 @@ def check_nones(param, n):
     """
 
     return [None for _ in range(n)] if param is None else param
+
+
+def deep_compare(left, right, approx=False):
+    """Hack to compare the config dictionaries"""
+
+    if approx is True:
+        approx = dict(rtol=1e-15, atol=0)
+
+    if hasattr(left, "all"):
+        if approx:
+            return np.allclose(left, right, **approx)
+        return np.all(left == right)
+    elif isinstance(left, dict):
+        return np.all([deep_compare(left[key], right[key]) for key in left])
+    # I think this is actually not stable
+    try:
+        if not left.__dict__:
+            return left == right
+
+        for key in left.__dict__:
+            if key not in right.__dict__:
+                return False
+            else:
+                return deep_compare(left[key], right[key])
+    except (AttributeError, TypeError):
+        return left == right

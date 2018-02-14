@@ -20,6 +20,9 @@ def construct_circuit_from_file(filename: str, path: str="") -> Circuit:
 
     filepath = os.path.join(path, filename)
 
+    if not filepath.lower().endswith(".json"):
+        filepath = f"{filepath}.json"
+
     with open(filepath, "r") as json_file:
         config_dict = json.load(json_file)
 

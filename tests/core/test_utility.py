@@ -1,10 +1,10 @@
 """ Testing utility functions
 """
 
-import pytest
 import numpy as np
 
 # from core.utility.json_filestorage import CustomEncoder, get_attrs
+from core.utility import deep_compare
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -218,7 +218,7 @@ def test_save_run_data_to_file():
     simulation_time = 1.0  # s
     step_size = circuit.step_size  # s
 
-    # synaptic inputs
+    # synaptic simulation inputs
     start_stim = 0.3  # s
     start_stim = int(start_stim / step_size)
     len_stim = 0.05  # s
@@ -239,15 +239,18 @@ def test_save_run_data_to_file():
                 simulation_time=simulation_time)
 
     # noinspection PyTypeChecker
-    states = circuit.get_population_states(state_variable_idx=0) - 0.075  # type: np.ndarray
-    states = states[1:, :]
+    states = circuit.get_population_states(state_variable_idx=0)  # - 0.075  # type: np.ndarray
+    # states = states[1:, :]
     # for some reason, the get_population_states function returns one more time point than the input.
 
-    assert states.shape == (n_time_steps, n_pop)
+    assert states.shape == (n_time_steps + 1, n_pop)
 
     # Now try to save data to a file
     run_info, original_sim_data = get_simulation_data(circuit, state_variable_idx=0,
                                                       pop_indices=None, time_window=None)
+
+    # test whether get_simulation_data yields the correct results
+    assert np.all(states == original_sim_data)
 
     # test output
     dirname = "JR_runtest_output_data"
@@ -278,27 +281,3 @@ def test_save_run_data_to_file():
     assert deep_compare(original_sim_data, saved_sim_data, approx=True)
 
 
-def deep_compare(left, right, approx=False):
-    """Hack to compare the config dictionaries"""
-
-    if approx is True:
-        approx = dict(rtol=1e-15, atol=0)
-
-    if hasattr(left, "all"):
-        if approx:
-            return np.allclose(left, right, **approx)
-        return np.all(left == right)
-    elif isinstance(left, dict):
-        return np.all([deep_compare(left[key], right[key]) for key in left])
-    # I think this is actually not stable
-    try:
-        if not left.__dict__:
-            return left == right
-
-        for key in left.__dict__:
-            if key not in right.__dict__:
-                return False
-            else:
-                return deep_compare(left[key], right[key])
-    except (AttributeError, TypeError):
-        return left == right
