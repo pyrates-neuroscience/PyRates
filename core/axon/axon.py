@@ -162,8 +162,7 @@ def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
 
     """
 
-    return max_firing_rate / (1 + np.exp(sigmoid_steepness *
-                                         (membrane_potential_threshold - membrane_potential)))
+    return max_firing_rate / (1 + np.exp(sigmoid_steepness * (membrane_potential_threshold - membrane_potential)))
 
 
 class SigmoidAxon(Axon):
@@ -493,8 +492,8 @@ class BurstingAxon(Axon):
         #######################
 
         # multiply membrane potentials with kernel
-        kernel_value = self.kernel_nonlinearity(self.membrane_potentials, **self.kernel_nonlinearity_args)[0:
-            len(self.axon_kernel)] * self.axon_kernel
+        kernel_value = self.kernel_nonlinearity(self.membrane_potentials[0:len(self.axon_kernel)],
+                                                **self.kernel_nonlinearity_args) * self.axon_kernel
 
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
@@ -512,11 +511,11 @@ class BurstingAxon(Axon):
         """
 
         # update kernel
-        self.build_kernel()
+        self.axon_kernel = self.build_kernel()
 
         # update buffer
         # TODO: implement interpolation from old to new array
-        self.membrane_potentials = np.zeros(int(self.max_delay / self.bin_size)) + self.resting_potential
+        self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
 
 #################
 # try-out stuff #

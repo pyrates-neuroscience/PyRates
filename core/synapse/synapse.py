@@ -44,6 +44,8 @@ class Synapse(object):
     max_delay
         Maximum time after which incoming synaptic input still affects the synapse [unit = s] (default = None). If set,
         epsilon will be ignored.
+    buffer_size
+        Maximum time that information passed to the synapse needs to affect the synapse [unit = s] (default = 0.).
     conductivity_based
         If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
         conductivity. Else translation to synaptic current will be direct (default = False).
@@ -148,8 +150,8 @@ class Synapse(object):
         # build input buffer
         ####################
 
-        self.synaptic_input = np.zeros(int((len(self.synaptic_kernel) + self.buffer_size) / self.bin_size))
-        self.input_position = len(self.synaptic_kernel) + 1
+        self.synaptic_input = np.zeros(int(self.buffer_size / self.bin_size) + len(self.synaptic_kernel))
+        self.input_position = len(self.synaptic_kernel)
 
     def build_kernel(self) -> np.ndarray:
         """Builds synaptic kernel.
@@ -271,7 +273,7 @@ class Synapse(object):
             
         """
 
-        self.synaptic_input[self.input_position + delay] = synaptic_input
+        self.synaptic_input[self.input_position + delay - 1] += synaptic_input
 
     def clear(self):
         """Clears synaptic input and depression.
@@ -285,11 +287,11 @@ class Synapse(object):
         """
 
         # update kernel
-        self.build_kernel()
+        self.synaptic_kernel = self.build_kernel()
 
         # update buffer
         # TODO: implement interpolation from old to new array
-        self.synaptic_input = np.zeros(int((self.max_delay + self.buffer_size) / self.bin_size))
+        self.synaptic_input = np.zeros(int(self.buffer_size / self.bin_size) + len(self.synaptic_kernel))
         self.input_position = len(self.synaptic_kernel)
 
     def plot_synaptic_kernel(self,
@@ -385,6 +387,8 @@ class DoubleExponentialSynapse(Synapse):
         See documentation of parameter `bin_size` in :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` in :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` in :class:`Synapse`.
     conductivity_based
         See documentation of parameter `conductivity_based` in :class:`Synapse`.
     reversal_potential
@@ -405,6 +409,7 @@ class DoubleExponentialSynapse(Synapse):
                  bin_size: float,
                  epsilon: float = 1e-14,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
                  synapse_type: Optional[str] = None
@@ -424,6 +429,7 @@ class DoubleExponentialSynapse(Synapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
                          synapse_type=synapse_type,
@@ -472,6 +478,8 @@ class ExponentialSynapse(Synapse):
         See documentation of parameter `bin_size` in :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` in :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` in :class:`Synapse`.
     synapse_type
         Name of synapse type (default = None).
 
@@ -492,6 +500,7 @@ class ExponentialSynapse(Synapse):
                  bin_size: float = 5e-4,
                  epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  synapse_type: Optional[str] = None
                  ) -> None:
 
@@ -509,6 +518,7 @@ class ExponentialSynapse(Synapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          synapse_type=synapse_type,
                          conductivity_based=False,
                          tau=tau)
@@ -536,6 +546,8 @@ class TransformedInputSynapse(Synapse):
         See description of parameter `epsilon` of :class:`Synapse`.
     max_delay
         See description of parameter `max_delay` of :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` in :class:`Synapse`.
     conductivity_based
        See description of parameter `conductivity_based` of :class:`Synapse`.
     reversal_potential
@@ -556,6 +568,7 @@ class TransformedInputSynapse(Synapse):
                  bin_size: float,
                  epsilon: float = 1e-14,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
                  synapse_type: Optional[str] = None,
@@ -573,6 +586,7 @@ class TransformedInputSynapse(Synapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
                          synapse_type=synapse_type,

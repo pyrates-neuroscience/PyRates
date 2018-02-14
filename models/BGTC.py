@@ -109,7 +109,7 @@ class Thalamus(Circuit):
             fb = np.zeros(n_populations) if feedback is None else feedback
             c = connectivity_scaling
             connectivity = np.zeros((n_populations, n_populations, n_synapses))
-            connectivity[:, :, 0] = [[fb[0] * c, 1.],      # AMPA
+            connectivity[:, :, 0] = [[fb[0] * c, 0.],      # AMPA
                                      [1.0 * c, 0.]]
             connectivity[:, :, 1] = [[0., 0.4 * c],        # GABAA
                                      [0., fb[1] * c]]
@@ -128,7 +128,9 @@ class Thalamus(Circuit):
                             'tau_decay': 0.025}
             gabab_params = {'efficacy': -0.018,
                             'tau_rise': 0.07,
-                            'tau_decay': 0.125}
+                            'tau_decay': 0.125,
+                            'threshold': 11.,
+                            'steepness': 100.}
             synapse_params = [ampa_params, gabaa_params, gabab_params]
 
         # axons
@@ -140,21 +142,21 @@ class Thalamus(Circuit):
                           'max_delay': max_synaptic_delay,
                           'tau_rise': 0.05,
                           'tau_decay': 0.1,
-                          'max_firing_rate': 800.,
+                          'activation_fr': 800.,
                           'activation_threshold': 0.006,
                           'activation_steepness': 670.,
-                          'lts_threshold': -0.016,
-                          'lts_steepness': 170.}
+                          'inactivation_threshold': -0.016,
+                          'inactivation_steepness': 170.}
             re_params = {'bin_size': step_size,
                          'epsilon': epsilon,
                          'max_delay': max_synaptic_delay,
                          'tau_rise': 0.05,
                          'tau_decay': 0.1,
-                         'max_firing_rate': 800.,
+                         'activation_fr': 800.,
                          'activation_threshold': 0.016,
                          'activation_steepness': 670.,
-                         'lts_threshold': -0.006,
-                         'lts_steepness': 170.}
+                         'inactivation_threshold': -0.006,
+                         'inactivation_steepness': 170.}
             axon_params = [tcr_params, re_params]
 
         # initial condition
@@ -164,8 +166,6 @@ class Thalamus(Circuit):
         # delays
         if delays is None:
             delays = np.zeros((n_populations, n_populations))
-        else:
-            delays = np.array(delays / step_size, dtype=int)
 
         # populations
         TCR = SecondOrderPopulation(synapses=synapse_types,
@@ -196,17 +196,5 @@ class Thalamus(Circuit):
         super().__init__(populations=[TCR, RE],
                          connectivity=connectivity,
                          delays=delays,
-                         step_size=step_size)
-
-
-###############
-# tryout area #
-###############
-
-th = Thalamus(max_synaptic_delay=0.5)
-synaptic_input = np.zeros((1000, 2, 3))
-synaptic_input[:, 0, 0] = 10 * np.random.randn(1000) + 100.
-th.run(synaptic_input, 1.)
-th.plot_population_states()
-
-
+                         step_size=step_size,
+                         synapse_types=['AMPA', 'GABAA', 'GABAB'])

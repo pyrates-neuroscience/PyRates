@@ -81,7 +81,7 @@ def test_4_1_jr_circuit_i():
     # load target data
     ##################
 
-    with open('../resources/JR_results_I.pickle', 'rb') as f:
+    with open('resources/JR_results_I.pickle', 'rb') as f:
         target_states = pickle.load(f)
 
     # calculate nmrse between time-series
@@ -143,7 +143,7 @@ def test_4_2_jr_circuit_ii():
     # load target data
     ###################
 
-    with open('../resources/JR_results_II.pickle', 'rb') as f:
+    with open('resources/JR_results_II.pickle', 'rb') as f:
         target_states = pickle.load(f)
 
     # calculate nmrse between time-series

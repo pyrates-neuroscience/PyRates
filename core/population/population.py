@@ -159,6 +159,7 @@ class Population(object):
         self.step_size = step_size
         self.membrane_capacitance = membrane_capacitance
         self.label = label
+        self.max_population_delay = max_population_delay
 
         # set initial states
         if type(init_state) not in (list, np.ndarray):
@@ -213,7 +214,9 @@ class Population(object):
             Names of synapse classes to instantiate.
         synapse_params
             Dictionaries with synapse parameter name-value pairs.
-
+        max_synaptic_delay
+            Array with maximal length of synaptic responses [unit = s].
+        
         """
 
         # check synapse parameter formats
@@ -224,6 +227,7 @@ class Population(object):
 
         synapse_subtypes = check_nones(synapse_subtypes, self.n_synapses)
         synapse_params = check_nones(synapse_params, self.n_synapses)
+        self.synapse_labels = list()
 
         # set all given synapses
         ########################
@@ -236,27 +240,32 @@ class Population(object):
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   bin_size=self.step_size,
-                                                  max_delay=max_synaptic_delay[i]))
+                                                  max_delay=max_synaptic_delay[i],
+                                                  buffer_size=self.max_population_delay))
             elif synapse_types[i] == 'ExponentialSynapse':
                 self.synapses.append(set_instance(ExponentialSynapse,
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   bin_size=self.step_size,
-                                                  max_delay=max_synaptic_delay[i]))
+                                                  max_delay=max_synaptic_delay[i],
+                                                  buffer_size=self.max_population_delay))
             elif synapse_types[i] == 'TransformedInputSynapse':
                 self.synapses.append(set_instance(TransformedInputSynapse,
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   bin_size=self.step_size,
-                                                  max_delay=max_synaptic_delay[i]))
+                                                  max_delay=max_synaptic_delay[i],
+                                                  buffer_size=self.max_population_delay))
             elif synapse_types[i] == 'Synapse':
                 self.synapses.append(set_instance(Synapse,
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   bin_size=self.step_size,
-                                                  max_delay=max_synaptic_delay[i]))
+                                                  max_delay=max_synaptic_delay[i],
+                                                  buffer_size=self.max_population_delay))
             else:
                 raise AttributeError('Invalid synapse type!')
+            self.synapse_labels.append(self.synapses[-1].synapse_type)
 
     def _set_axon(self,
                   axon_subtype: Optional[str] = None,
@@ -391,11 +400,11 @@ class Population(object):
         ########################################
 
         # extrinsic current
-        #self.extrinsic_current = extrinsic_current
+        self.extrinsic_current = extrinsic_current
 
         # extrinsic modulation
-        #if extrinsic_synaptic_modulation is not None:
-        #    self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
+        if extrinsic_synaptic_modulation is not None:
+            self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
 
         # compute average membrane potential
         ####################################
@@ -510,9 +519,13 @@ class Population(object):
 
         # update synapses
         for syn in self.synapses:
+            syn.bin_size = self.step_size
+            syn.buffer_size = self.max_population_delay
             syn.update()
 
         # update axon
+        if hasattr(self.axon, 'bin_size'):
+            self.axon.bin_size = self.step_size
         self.axon.update()
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]]=None, create_plot: Optional[bool]=True,
