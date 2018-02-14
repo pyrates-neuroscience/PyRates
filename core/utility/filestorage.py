@@ -29,8 +29,8 @@ class CustomEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
-        # elif hasattr(obj, "to_json"):
-        #     return obj.to_dict()
+        elif hasattr(obj, "to_json"):
+            return obj.to_dict()
         # elif isinstance(obj, Synapse):
         #     attr_dict = obj.to_dict()
         #     # remove synaptic_kernel from dict, if kernel_function is specified

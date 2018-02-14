@@ -783,6 +783,7 @@ class CircuitFromScratch(Circuit):
 
         super().__init__(populations=populations,
                          connectivity=connectivity,
+                         synapse_types=synapses,
                          delays=delays,
                          delay_distributions=delay_distributions,
                          step_size=step_size)
@@ -832,6 +833,7 @@ class CircuitFromPopulations(Circuit):
     def __init__(self,
                  population_types: List[str],
                  connectivity: np.ndarray,
+                 synapse_types: Optional[list] = None,
                  delays: Optional[np.ndarray] = None,
                  delay_distributions: Optional[np.ndarray] = None,
                  step_size: float = 5e-4,
@@ -922,6 +924,7 @@ class CircuitFromPopulations(Circuit):
 
         super().__init__(populations=populations,
                          connectivity=connectivity,
+                         synapse_types=synapse_types,
                          delays=delays,
                          delay_distributions=delay_distributions,
                          step_size=step_size)
@@ -1086,6 +1089,7 @@ class CircuitFromCircuit(Circuit):
 
         super().__init__(populations=populations,
                          connectivity=connectivity_new,
+                         synapse_types=circuits[0].synapse_types,
                          delays=delays_new,
                          step_size=circuits[0].step_size)
 

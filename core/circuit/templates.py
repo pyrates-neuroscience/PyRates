@@ -330,8 +330,8 @@ class GeneralizedJansenRitCircuit(Circuit):
                                            axon_params=axon_params[i],
                                            init_states=init_states[i])
 
-            connectivity[:, i*circuit_tmp.n_populations:(i + 1) * circuit_tmp.n_populations, :] = np.tile(weights[i] *
-                                                                                                          circuit_tmp.C, (n_circuits, 1, 1))
+            connectivity[:, i*circuit_tmp.n_populations:(i + 1) * circuit_tmp.n_populations, :] = \
+                np.tile(weights[i] * circuit_tmp.C, (n_circuits, 1, 1))
             populations += circuit_tmp.populations
 
         super().__init__(populations=populations,
@@ -536,7 +536,7 @@ class MoranCircuit(Circuit):
 
         # delays
         if delays is None:
-            delays = np.zeros((N, N)) + 2e-3 / step_size
+            delays = np.zeros((N, N)) + 2e-3
 
         # synapse params
         synapse_params = {'epsilon': epsilon}
