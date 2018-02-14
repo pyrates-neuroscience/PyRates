@@ -123,6 +123,7 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
                          synapses=synapse_types,
                          synapse_params=synapse_params,
                          synapse_class=synapse_class,
+                         synapse_types=['AMPA', 'GABAA'],
                          axons=axon_types,
                          axon_params=axon_params,
                          axon_class=axon_class,

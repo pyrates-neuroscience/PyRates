@@ -629,6 +629,7 @@ class CircuitFromScratch(Circuit):
                  synapses: Optional[List[str]] = None,
                  axons: Optional[List[str]] = None,
                  synapse_params: Optional[List[dict]] = None,
+                 synapse_types: Optional[list] = None,
                  max_synaptic_delay: Union[float, List[float]] = 0.05,
                  synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
                  axon_params: Optional[List[dict]] = None,
@@ -783,7 +784,7 @@ class CircuitFromScratch(Circuit):
 
         super().__init__(populations=populations,
                          connectivity=connectivity,
-                         synapse_types=synapses,
+                         synapse_types=synapse_types,
                          delays=delays,
                          delay_distributions=delay_distributions,
                          step_size=step_size)

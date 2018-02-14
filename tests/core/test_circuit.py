@@ -109,7 +109,7 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # perform unit test
     ###################
 
-    assert deep_compare(states, target_data["output"], approx={"rtol": 1e-11, "atol": 0})
+    assert deep_compare(states, target_data["output"], approx={"rtol": 1e-10, "atol": 0})
 
 
 @pytest.mark.skip
