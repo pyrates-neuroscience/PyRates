@@ -19,7 +19,7 @@ Interpreter options: -B -m cProfile -o profile.prof
 
 import numpy as np
 import time
-from memory_profiler import memory_usage
+# from memory_profiler import memory_usage
 from scipy.io import loadmat
 
 from core.circuit import JansenRitCircuit
@@ -32,7 +32,7 @@ __status__ = "Development"
 #######################
 
 
-def run_JR_circuit_benchmark(simulation_time=1.0, step_size=5e-4, param_names=None, param_values=None,
+def run_JR_circuit_benchmark(simulation_time=1.0, step_size=1/2048, param_names=None, param_values=None,
                              synaptic_inputs=None, verbose=False, max_synaptic_delay=0.05):
     """
     Runs a benchmark on a single Jansen-Rit type microcircuit (3 interconnected neural populations).
@@ -124,7 +124,7 @@ def run_JR_circuit_benchmark(simulation_time=1.0, step_size=5e-4, param_names=No
 #     if C is None:
 #
 #         # load connectivity matrix
-#         C_tmp = loadmat('SC')['SC']
+#         C_tmp = loadmat('../resources/SC')['SC']
 #         C_tmp *= connectivity_scaling
 #
 #         # create full connectivity matrix
@@ -205,45 +205,47 @@ def run_JR_circuit_benchmark(simulation_time=1.0, step_size=5e-4, param_names=No
 #
 #     return simulation_duration
 
-######################
-# perform benchmarks #
-######################
+if __name__ == "__main__":
 
-# parameters
-simulation_duration = 10.0
-step_size = 5e-4
-verbose = True
-D = False
-velocity = 2.0
-connectivity_scaling = 50.0
-max_synaptic_delay = 0.05
+    ######################
+    # perform benchmarks #
+    ######################
 
-# single JR circuit
-sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
-                                              step_size=step_size,
-                                              verbose=verbose,
-                                              max_synaptic_delay=max_synaptic_delay)
+    # parameters
+    simulation_duration = 10.0
+    step_size = 5e-4
+    verbose = True
+    D = False
+    velocity = 2.0
+    connectivity_scaling = 50.0
+    max_synaptic_delay = 0.05
 
-# JR network (33 connected JR circuits)
-#sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
-#                                              step_size=step_size,
-#                                              D=D,
-#                                              velocity=velocity,
-#                                              connectivity_scaling=connectivity_scaling,
-#                                              verbose=verbose,
-#                                              variable_step_size=variable_step_size,
-#                                              synaptic_kernel_length=synaptic_kernel_length)
+    # single JR circuit
+    sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
+                                                  step_size=step_size,
+                                                  verbose=verbose,
+                                                  max_synaptic_delay=max_synaptic_delay)
 
-################
-# memory usage #
-################
+    # JR network (33 connected JR circuits)
+    #sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
+    #                                              step_size=step_size,
+    #                                              D=D,
+    #                                              velocity=velocity,
+    #                                              connectivity_scaling=connectivity_scaling,
+    #                                              verbose=verbose,
+    #                                              variable_step_size=variable_step_size,
+    #                                              synaptic_kernel_length=synaptic_kernel_length)
 
-# single JR circuit
-#mem_use_JR_circuit = memory_usage((run_JR_circuit_benchmark, (simulation_duration, step_size)))
-#print("%.2f" % simulation_duration, 's simulation of Jansen-Rit circuit used ',
-#      "%.2f" % (np.sum(mem_use_JR_circuit) * 1e-2), ' MB RAM.')
+    ################
+    # memory usage #
+    ################
 
-# JR network (33 connected JR circuits)
-#mem_use_JR_network = memory_usage((run_JR_network_benchmark, (simulation_duration, step_size)))
-#print("%.2f" % simulation_duration, 's simulation of network with 33 JR circuits used ',
-#      "%.2f" % (np.sum(mem_use_JR_network) * 1e-2), ' MB RAM.')
+    # single JR circuit
+    #mem_use_JR_circuit = memory_usage((run_JR_circuit_benchmark, (simulation_duration, step_size)))
+    #print("%.2f" % simulation_duration, 's simulation of Jansen-Rit circuit used ',
+    #      "%.2f" % (np.sum(mem_use_JR_circuit) * 1e-2), ' MB RAM.')
+
+    # JR network (33 connected JR circuits)
+    #mem_use_JR_network = memory_usage((run_JR_network_benchmark, (simulation_duration, step_size)))
+    #print("%.2f" % simulation_duration, 's simulation of network with 33 JR circuits used ',
+    #      "%.2f" % (np.sum(mem_use_JR_network) * 1e-2), ' MB RAM.')
