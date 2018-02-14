@@ -231,7 +231,7 @@ class Circuit(RepresentationBase):
         # save run parameters to instance variable
         ##########################################
 
-        self.run_info = dict(synaptic_inputs=synaptic_inputs, simulation_time=simulation_time,
+        self.run_info = dict(synaptic_inputs=synaptic_inputs, time_vector=[self.t],
                              extrinsic_current=extrinsic_current, extrinsic_modulation=extrinsic_modulation)
 
         # check input parameters
@@ -293,6 +293,7 @@ class Circuit(RepresentationBase):
 
             # update time-variant variables
             self.t += self.step_size
+            self.run_info["time_vector"].append(self.t)
 
     def update_population_states(self,
                                  synaptic_inputs: np.ndarray,

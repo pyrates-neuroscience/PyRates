@@ -71,13 +71,14 @@ class RepresentationBase(object):
         from copy import copy
         init_dict = copy(self._init_dict)
 
-        args = ""
-        if "args" in init_dict:
-            args = init_dict.pop("args", None)
-            args = ", ".join((f"{value!r}" for value in args))
-
-        kwargs = ", ".join((f"{name}={value!r}" for name, value in init_dict))
-        param_str = f"{args}, {kwargs}"
+        # args = ""
+        # if "args" in init_dict:
+        #     args = init_dict.pop("args", None)
+        #     args = ", ".join((f"{value!r}" for value in args))
+        #
+        # kwargs = ", ".join((f"{name}={value!r}" for name, value in init_dict.items()))
+        # param_str = f"{args}, {kwargs}"
+        param_str = "*args, **kwargs"
         _module = self.__class__.__module__
         _class = self.__class__.__name__
         return f"{_module}.{_class}({param_str})"
@@ -158,6 +159,9 @@ class RepresentationBase(object):
             # create directory if necessary
             create_directory(filepath)
 
+            if not filepath.lower().endswith(".json"):
+                filepath = f"{filepath}.json"
+
             with open(filepath, "w") as outfile:
                 json.dump(_dict, outfile, cls=CustomEncoder, indent=4)
 
@@ -181,9 +185,9 @@ def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple,
     #     if isinstance(item, np.ndarray):
     #         run_info[key] = DataFrame(data=item, columns=labels)
 
-    states = DataFrame(data=states, columns=labels)
+    states = DataFrame(data=states, index=run_info["time_vector"], columns=labels)
     for key, item in run_info.items():
-        if key == "simulation_time" or item is None:
+        if key == "time_vector" or item is None:
             continue
         if item.ndim == 3:
             # flatten 3D array
@@ -191,9 +195,9 @@ def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple,
             for pop_idx in range(item.shape[1]):
                 for syn_idx in range(item.shape[2]):
                     flattened[(f"{pop_idx} {labels[pop_idx]}", syn_idx)] = item[:, pop_idx, syn_idx]
-            run_info[key] = DataFrame(flattened)
+            run_info[key] = DataFrame(flattened, index=run_info["time_vector"][1:])
         elif item.ndim == 2:
-            run_info[key] = DataFrame(data=item, columns=labels)
+            run_info[key] = DataFrame(data=item, index=run_info["time_vector"][1:], columns=labels)
     # run_info = DataFrame.from_dict(run_info, "columns")
 
     return run_info, states
@@ -225,8 +229,9 @@ def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
     # save run information
     ######################
 
-    if "simulation_time" in run_info:
-        run_info.pop("simulation_time")
+    if "time_vector" in run_info:
+        # throw away time vector, since it is contained in all the other data
+        run_info.pop("time_vector")
 
     for key, item in run_info.items():
         filename = f"{key}.{out_format}"
@@ -238,6 +243,9 @@ def save_simulation_data_to_file(output_data: DataFrame, run_info: dict,
             item.to_json(filepath, orient="split")
         else:
             item.to_csv(filepath, sep="\t")
+
+    # TODO: think about float vs. decimal representation: Possibly save float data as hex or fraction
+    # TODO: choose time step as exact float (e.g. 0.0005 --> 2**-11=0.00048828125)
 
 
 def create_directory(path):

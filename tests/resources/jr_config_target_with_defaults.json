@@ -4,7 +4,7 @@
         "__name__": "JansenRitCircuit"
     },
     "args": [
-        0.0001
+        0.0009765625
     ],
     "defaults": {
         "step_size": 0.0005,

@@ -1,10 +1,12 @@
 """ Testing utility functions
 """
 
-import pytest
 import numpy as np
 
 # from core.utility.json_filestorage import CustomEncoder, get_attrs
+import pytest
+
+from core.utility import deep_compare
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -32,7 +34,7 @@ def test_store_circuit_config():
     from core.circuit import JansenRitCircuit
     import json
 
-    step_size = 1e-4
+    step_size = 1/1024
 
     circuit = JansenRitCircuit(step_size)
 
@@ -86,7 +88,7 @@ def test_store_circuit_config_dict_as_json():
 
     from core.circuit import JansenRitCircuit
 
-    step_size = 1e-4
+    step_size = 1/1024
 
     circuit = JansenRitCircuit(step_size)
 
@@ -133,7 +135,7 @@ def test_construct_circuit_from_file_or_dict():
     from core.circuit import JansenRitCircuit
     from core.utility.construct import construct_circuit_from_file
 
-    step_size = 1e-4
+    step_size = 1/1024
     # TODO: move step_size definition to pytest fixture
 
     target_circuit = JansenRitCircuit(step_size)
@@ -160,7 +162,7 @@ def test_construct_circuit_from_file_or_dict():
     test_config_dict = test_circuit.to_dict()
 
     assert deep_compare(test_config_dict, target_config_dict)
-    assert repr(test_circuit) == repr(target_circuit)
+    assert repr(test_circuit) == repr(target_circuit)  # not really useful at this point.
 
     # test if the resulting circuit actually runs
     #############################################
@@ -177,10 +179,13 @@ def test_construct_circuit_from_file_or_dict():
 #     assert repr(circuit) == circuit_constructor_str
 
 
+@pytest.mark.skip
 def test_construct_circuit_from_repr_eval():
+    """Test whether the representation of a circuit can be evaluated to recreate the same circuit again.
+    Currently not working and might not be implemented again, because it blows up the output of repr(circuit)"""
     from core.circuit import JansenRitCircuit
 
-    step_size = 1e-4
+    step_size = 1/1024
 
     circuit = JansenRitCircuit(step_size)
 
@@ -218,7 +223,7 @@ def test_save_run_data_to_file():
     simulation_time = 1.0  # s
     step_size = circuit.step_size  # s
 
-    # synaptic inputs
+    # synaptic simulation inputs
     start_stim = 0.3  # s
     start_stim = int(start_stim / step_size)
     len_stim = 0.05  # s
@@ -239,15 +244,18 @@ def test_save_run_data_to_file():
                 simulation_time=simulation_time)
 
     # noinspection PyTypeChecker
-    states = circuit.get_population_states(state_variable_idx=0) - 0.075  # type: np.ndarray
-    states = states[1:, :]
+    states = circuit.get_population_states(state_variable_idx=0)  # - 0.075  # type: np.ndarray
+    # states = states[1:, :]
     # for some reason, the get_population_states function returns one more time point than the input.
 
-    assert states.shape == (n_time_steps, n_pop)
+    assert states.shape == (n_time_steps + 1, n_pop)
 
     # Now try to save data to a file
     run_info, original_sim_data = get_simulation_data(circuit, state_variable_idx=0,
                                                       pop_indices=None, time_window=None)
+
+    # test whether get_simulation_data yields the correct results
+    assert np.all(states == original_sim_data)
 
     # test output
     dirname = "JR_runtest_output_data"
@@ -265,6 +273,10 @@ def test_save_run_data_to_file():
     target_file = os.path.join(target_path, target_dirname, filename)
     test_file = os.path.join(path, dirname, filename)
 
+    # redo target data after syntax changes
+    # save_simulation_data_to_file(output_data=original_sim_data, run_info=run_info,
+    #                              dirname=target_dirname, path=target_path, out_format="csv")
+
     # compare files
     assert filecmp.cmp(target_file, test_file)
     filecmp.clear_cache()
@@ -274,27 +286,3 @@ def test_save_run_data_to_file():
     assert deep_compare(original_sim_data, saved_sim_data, approx=True)
 
 
-def deep_compare(left, right, approx=False):
-    """Hack to compare the config dictionaries"""
-
-    if approx is True:
-        approx = dict(rtol=1e-15, atol=0)
-
-    if hasattr(left, "all"):
-        if approx:
-            return np.allclose(left, right, **approx)
-        return np.all(left == right)
-    elif isinstance(left, dict):
-        return np.all([deep_compare(left[key], right[key]) for key in left])
-    # I think this is actually not stable
-    try:
-        if not left.__dict__:
-            return left == right
-
-        for key in left.__dict__:
-            if key not in right.__dict__:
-                return False
-            else:
-                return deep_compare(left[key], right[key])
-    except (AttributeError, TypeError):
-        return left == right

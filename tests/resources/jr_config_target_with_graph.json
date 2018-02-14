@@ -4,7 +4,7 @@
         "__name__": "JansenRitCircuit"
     },
     "args": [
-        0.0001
+        0.0009765625
     ],
     "network_graph": {
         "directed": true,
@@ -23,7 +23,7 @@
                     ],
                     "axon": "JansenRitAxon",
                     "init_state": 0.0,
-                    "step_size": 0.0001,
+                    "step_size": 0.0009765625,
                     "max_synaptic_delay": null,
                     "max_population_delay": 0,
                     "synapse_params": [
@@ -51,7 +51,7 @@
                     ],
                     "axon": "JansenRitAxon",
                     "init_state": 0.0,
-                    "step_size": 0.0001,
+                    "step_size": 0.0009765625,
                     "max_synaptic_delay": null,
                     "max_population_delay": 0,
                     "synapse_params": [
@@ -77,7 +77,7 @@
                     ],
                     "axon": "JansenRitAxon",
                     "init_state": 0.0,
-                    "step_size": 0.0001,
+                    "step_size": 0.0009765625,
                     "max_synaptic_delay": null,
                     "max_population_delay": 0,
                     "synapse_params": [
