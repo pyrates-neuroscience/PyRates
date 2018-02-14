@@ -299,9 +299,10 @@ def test_4_4_jr_network_i():
     C2[:, :, 0] = inter_circuit_conns
 
     # delay matrix
-    D = np.zeros((2, 2))
-    D[0, 1] = 0.001
-    D[1, 0] = 0.001
+    D = np.asarray([[0., 0.001],
+                 [0.001, 0]])
+    # D[0, 1] = 0.001
+    # D[1, 0] = 0.001
 
     # neural mass circuits
     from core.circuit import JansenRitCircuit

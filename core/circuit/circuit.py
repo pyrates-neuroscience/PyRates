@@ -889,8 +889,9 @@ class CircuitFromCircuit(Circuit):
 
         # attribute dimensions
         if len(circuits) != connectivity.shape[0] or len(circuits) != connectivity.shape[1]:
-            raise AttributeError('First and second dimension of connectivity need to match the number of circuits. '
-                                 'See parameter docstring for further information.')
+            raise AttributeError(f'First and second dimension of connectivity need to match the number of circuits. '
+                                 f'See parameter docstring for further information. Connectivity dimensions: '
+                                 f'{connectivity.shape}, circuits: {len(circuits)}')
         if delays is not None and (len(circuits) != delays.shape[0] or len(circuits) != delays.shape[1]):
             raise AttributeError('First and second dimension of delays need to match the number of circuits. '
                                  'See parameter docstring for further information.')
@@ -959,7 +960,7 @@ class CircuitFromCircuit(Circuit):
         #########################################
 
         # set input populations
-        if not input_populations:
+        if input_populations is None:
             input_populations = np.zeros((n_circuits, n_circuits, 1), dtype=int).tolist()
 
         # set output populations

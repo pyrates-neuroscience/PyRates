@@ -73,7 +73,8 @@ def set_instance(class_handle: type,
         i = 0
         while True:
             if i >= len(preimplemented_types):
-                raise AttributeError('Passed type is no pre-implemented parametrization of given object!')
+                raise AttributeError(f'Passed type `{instance_type}` is no pre-implemented parametrization '
+                                     f'of class `{class_handle.__name__}`!')
             elif preimplemented_types[i] == instance_type:
                 instance = type_objects[i](**kwargs)
                 break
