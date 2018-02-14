@@ -1,4 +1,4 @@
-"""Module that includes basic axon class plus parametrized derivations of it.
+"""Module that includes basic axon class plus derivations of it.
 
 This module includes a basic axon class and parametric sub-classes that can calculate average firing rates from
 average membrane potentials. Its behavior approximates the average axon hillok of a homogeneous neural population.
@@ -8,7 +8,7 @@ average membrane potentials. Its behavior approximates the average axon hillok o
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import numpy as np
-from typing import Optional, Callable, Union, Any, Dict, overload
+from typing import Optional, Callable, Union, overload, List
 
 from core.utility.filestorage import RepresentationBase
 
@@ -60,15 +60,7 @@ class Axon(RepresentationBase):
         self.axon_type = 'custom' if axon_type is None else axon_type
         self.transfer_function_args = transfer_function_args
 
-    @overload
     def compute_firing_rate(self, membrane_potential: float) -> float:
-        ...
-
-    @overload
-    def compute_firing_rate(self, membrane_potential: np.ndarray) -> np.ndarray:
-        ...
-
-    def compute_firing_rate(self, membrane_potential):
         """Computes average firing rate from membrane potential based on transfer function.
 
         Parameters
@@ -85,6 +77,12 @@ class Axon(RepresentationBase):
 
         # TODO: use functools.partial to convert transfer function to compute_firing_rate function?
         return self.transfer_function(membrane_potential, **self.transfer_function_args)  # type: ignore
+
+    def clear(self):
+        pass
+
+    def update(self):
+        pass
 
     def plot_transfer_function(self,
                                membrane_potentials: np.ndarray,
@@ -112,7 +110,7 @@ class Axon(RepresentationBase):
         # calculate firing rates
         ########################
 
-        firing_rates = self.compute_firing_rate(membrane_potentials)
+        firing_rates = np.array([self.compute_firing_rate(v) for v in membrane_potentials])
 
         # plot firing rates over membrane potentials
         ############################################
@@ -166,8 +164,7 @@ def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
 
     """
 
-    return max_firing_rate / (1 + np.exp(sigmoid_steepness *
-                                         (membrane_potential_threshold - membrane_potential)))
+    return max_firing_rate / (1 + np.exp(sigmoid_steepness * (membrane_potential_threshold - membrane_potential)))
 
 
 class SigmoidAxon(Axon):
@@ -301,3 +298,256 @@ class SigmoidAxon(Axon):
         super().plot_transfer_function(membrane_potentials=membrane_potentials,
                                        create_plot=create_plot,
                                        axes=axes)
+
+
+##################
+# bursting axons #
+##################
+
+
+class BurstingAxon(Axon):
+    """Axon that features bursting behavior initialized by low-threshold spikes.
+    
+    Parameters
+    ----------
+    transfer_function
+        See description of parameter `transfer_function` of :class:`Axon`.
+    kernel_functions
+        List of two functions, with the first one being the kernel function and the second the non-linearity applied
+        to the membrane potential before convolving it with the kernel.
+    bin_size
+        time window one bin of the axonal kernel is representing [unit = s].
+    axon_type
+        See description of parameter `axon_type` of :class:`Axon`.
+    max_delay
+        Maximal time delay after which a certain membrane potential still affects the firing rate [unit = s].
+    epsilon
+        Accuracy of the synaptic kernel representation.
+    resting_potential
+        Resting membrane potential of the population the axon belongs to [unit = V].
+    kernel_function_args
+        List of parameter dictionaries (name-value pairs) for each of the kernel functions.
+    **transfer_function_args
+        See description of parameter `transfer_function_args` of :class:`Axon`.
+    
+    See Also
+    --------
+    :class:`Axon`: ... for a detailed description of the object attributes and methods.
+    
+    References
+    ----------
+    """
+
+    def __init__(self,
+                 transfer_function: Callable[..., float],
+                 kernel_functions: List[Callable[..., float]],
+                 bin_size: float = 1e-3,
+                 axon_type: Optional[str] = None,
+                 epsilon: float = 1e-10,
+                 max_delay: Optional[float] = None,
+                 resting_potential: float = -0.075,
+                 kernel_function_args: Optional[List[dict]] = None,
+                 **transfer_function_args: float
+                 ) -> None:
+        """Instantiate bursting axon.
+        """
+
+        # check input parameters
+        ########################
+
+        if bin_size <= 0 or (max_delay is not None and max_delay <= 0):
+            raise ValueError('Time constants (bin_size, max_delay) cannot be negative or zero. '
+                             'See docstring for further information.')
+
+        if epsilon <= 0:
+            raise ValueError('Epsilon is an absolute error term that cannot be negative or zero.')
+
+        if (len(kernel_functions) != len(kernel_function_args)) or len(kernel_functions) > 2:
+            raise ValueError('Number of kernel functions can be either 1 or 2 and the number of provided argument'
+                             'dictionaries has to be equal to the number of functions passed.')
+
+        # set attributes
+        ################
+
+        self.bin_size = bin_size
+        self.epsilon = epsilon
+        self.max_delay = max_delay
+        self.resting_potential = resting_potential
+        self.kernel_function = kernel_functions[0]
+        self.kernel_function_args = kernel_function_args[0] if kernel_function_args else dict()
+        self.kernel_nonlinearity = kernel_functions[1] if len(kernel_functions) > 1 else lambda x: x
+        self.kernel_nonlinearity_args = kernel_function_args[1] if len(kernel_functions) > 1 else dict()
+
+        # call super init
+        #################
+
+        super().__init__(transfer_function=transfer_function,
+                         axon_type=axon_type,
+                         **transfer_function_args)
+
+        # build axonal kernel
+        #####################
+
+        self.axon_kernel = self.build_kernel()
+
+        # initialize membrane potential buffer
+        ######################################
+
+        self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
+
+    def build_kernel(self) -> np.ndarray:
+        """Builds axonal kernel.
+        
+        Returns
+        -------
+        np.ndarray
+            Axonal kernel value at each t [unit = Hz]
+            
+        """
+
+        # check whether to build kernel or just evaluate it at time_points
+        ##################################################################
+
+        if self.max_delay:
+
+            # create time vector from max_delay
+            time_points = np.arange(0., self.max_delay + 0.5 * self.bin_size, self.bin_size)
+
+        else:
+
+            # create time vector from epsilon
+            time_points = [0.]
+            kernel_val = self.evaluate_kernel(time_points[-1])
+
+            while time_points[-1] < 100:  # cuts off at a maximum delay of 100 s (which is already too long)
+
+                # calculate kernel value for next time-step
+                time_points.append(time_points[-1] + self.bin_size)
+                kernel_val_tmp = self.evaluate_kernel(time_points[-1])
+
+                # check whether kernel value is decaying towards zero
+                if (kernel_val_tmp - kernel_val) < 0.:
+
+                    # if yes, check whether kernel value is already smaller epsilon
+                    if abs(kernel_val_tmp) < self.epsilon:
+                        break
+
+                kernel_val = kernel_val_tmp
+            else:
+                raise ValueError("The synaptic kernel reached the break condition of 100s. This could either mean that "
+                                 "your `kernel_function` does not decay to zero (fast enough) or your chosen `epsilon`"
+                                 "error is too small. If you want to have a synapse with a longer synaptic memory than "
+                                 "100s, you have to specify a `max_delay` accordingly.")
+
+        # flip time points array
+        time_points = np.flip(np.array(time_points), axis=0)
+
+        # noinspection PyTypeChecker
+        return self.kernel_function(time_points, **self.kernel_function_args)
+
+    @overload
+    def evaluate_kernel(self, time_points: float = 0.) -> float:
+        ...
+
+    @overload
+    def evaluate_kernel(self, time_points: np.ndarray = 0.) -> np.ndarray:
+        ...
+
+    def evaluate_kernel(self, time_points=0.):
+        """Builds axonal kernel or computes value of it at specified time point(s).
+
+        Parameters
+        ----------
+        time_points
+            Time(s) at which to evaluate kernel. Only necessary if build_kernel is False (default = None) [unit = s].
+
+        Returns
+        -------
+        np.ndarray, float
+            Synaptic kernel value at each t [unit = A or S]
+        """
+
+        return self.kernel_function(time_points, **self.kernel_function_args)
+
+    def compute_firing_rate(self, membrane_potential: float) -> float:
+        """Computes average firing rate from membrane potential based on transfer function and axonal kernel.
+
+        Parameters
+        ----------
+        membrane_potential
+            current average membrane potential of neural mass [unit = V].
+
+        Returns
+        -------
+        float
+            average firing rate at axon hillok [unit = 1/s]
+
+        """
+
+        # update membrane potential buffer
+        ##################################
+
+        self.membrane_potentials[0:-1] = self.membrane_potentials[1:]
+        self.membrane_potentials[-1] = membrane_potential
+
+        # apply synaptic kernel
+        #######################
+
+        # multiply membrane potentials with kernel
+        kernel_value = self.kernel_nonlinearity(self.membrane_potentials[0:len(self.axon_kernel)],
+                                                **self.kernel_nonlinearity_args) * self.axon_kernel
+
+        # integrate over time
+        kernel_value = np.trapz(kernel_value, dx=self.bin_size)
+
+        return kernel_value * super().compute_firing_rate(membrane_potential)
+
+    def clear(self):
+        """Function that clears membrane potential inputs.
+        """
+
+        self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
+
+    def update(self):
+        """Updates axon attributes.
+        """
+
+        # update kernel
+        self.axon_kernel = self.build_kernel()
+
+        # update buffer
+        # TODO: implement interpolation from old to new array
+        self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
+
+#################
+# try-out stuff #
+#################
+
+
+# def kernel(t, n1, n2):
+#     return (np.exp(-t * n1) - np.exp(-t * n2)) * ((n1 * n2)/(n2 - n1))
+#
+#
+# def nonlinearity(x, theta, sigma, e):
+#     return e / (1 + np.exp((x - theta)/sigma))
+#
+#
+# resting_potential = -0.065
+# nl_n = {'theta': resting_potential-0.016,
+#         'sigma': 0.006,
+#         'e': 1.}
+# nl_m = {'theta': resting_potential+0.006,
+#         'sigma': -0.0015,
+#         'e': 800.}
+# kernel_args = {'n1': 10.,
+#                'n2': 20.}
+#
+# ba1 = BurstingAxon(nonlinearity, [kernel, nonlinearity], kernel_function_args=[kernel_args, nl_n],
+#                   bin_size=1e-3, max_delay=.3, resting_potential=resting_potential, **nl_m)
+# ba2 = SigmoidAxon(5., resting_potential+0.006, 560.)
+# membrane_potentials = np.arange(-0.09, -0.03, 0.001)
+# from matplotlib.pyplot import *
+# fig, axes = subplots()
+# axes = ba1.plot_transfer_function(membrane_potentials=membrane_potentials, axes=axes)
+# axes = ba2.plot_transfer_function(membrane_potentials=membrane_potentials, axes=axes)
+# fig.show()

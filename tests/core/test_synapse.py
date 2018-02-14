@@ -205,12 +205,23 @@ def test_2_4_ampa_current_synapse():
     # calculate synaptic currents
     #############################
 
-    synaptic_current_1 = synapse.get_synaptic_current(firing_rates_1)
-    synaptic_current_2 = synapse.get_synaptic_current(firing_rates_2)
+    for i in range(len(firing_rates_1)):
+        synapse.pass_input(firing_rates_1[i])
+        synapse.get_synaptic_current()
+    synaptic_current_1 = synapse.get_synaptic_current()
+    synapse.clear()
+    for i in range(len(firing_rates_2)):
+        synapse.pass_input(firing_rates_2[i])
+        synapse.get_synaptic_current()
+    synaptic_current_2 = synapse.get_synaptic_current()
+    synapse.clear()
 
     # get synaptic current at each incoming firing rate of firing_rates_3
     idx = np.arange(1, len(firing_rates_3))
-    synaptic_current_3 = np.array([synapse.get_synaptic_current(firing_rates_3[0:i]) for i in idx])
+    synaptic_current_3 = np.zeros(len(idx))
+    for i in range(len(idx)):
+        synapse.pass_input(firing_rates_3[i])
+        synaptic_current_3[i] = synapse.get_synaptic_current()
 
     # perform unit tests
     ####################
@@ -273,13 +284,23 @@ def test_2_5_gabaa_current_synapse():
 
     # calculate synaptic currents
     #############################
-
-    synaptic_current_1 = synapse.get_synaptic_current(firing_rates_1)
-    synaptic_current_2 = synapse.get_synaptic_current(firing_rates_2)
+    for i in range(len(firing_rates_1)):
+        synapse.pass_input(firing_rates_1[i])
+        synapse.get_synaptic_current()
+    synaptic_current_1 = synapse.get_synaptic_current()
+    synapse.clear()
+    for i in range(len(firing_rates_2)):
+        synapse.pass_input(firing_rates_2[i])
+        synapse.get_synaptic_current()
+    synaptic_current_2 = synapse.get_synaptic_current()
+    synapse.clear()
 
     # get synaptic current at each incoming firing rate of firing_rates_3
     idx = np.arange(1, len(firing_rates_3))
-    synaptic_current_3 = np.array([synapse.get_synaptic_current(firing_rates_3[0:i]) for i in idx])
+    synaptic_current_3 = np.zeros(len(idx))
+    for i in range(len(idx)):
+        synapse.pass_input(firing_rates_3[i])
+        synaptic_current_3[i] = synapse.get_synaptic_current()
 
     # perform unit tests
     ####################
@@ -327,24 +348,35 @@ def test_2_6_ampa_conductivity_synapse():
 
     synapse = AMPAConductanceSynapse(bin_size=step_size)
 
-    # define firing rate inputs
-    ###########################
+    # define firing rate inputs and membrane potential
+    ##################################################
 
     firing_rates_1 = np.zeros_like(synapse.synaptic_kernel)
     firing_rates_2 = np.ones_like(synapse.synaptic_kernel) * 300.0
     firing_rates_3 = np.zeros_like(synapse.synaptic_kernel)
     firing_rates_3[40:70] = 300.0
 
+    membrane_potential = -0.09
+
     # calculate synaptic currents
     #############################
-
-    synaptic_current_1 = synapse.get_synaptic_current(firing_rates_1, membrane_potential=-0.09)
-    synaptic_current_2 = synapse.get_synaptic_current(firing_rates_2, membrane_potential=-0.09)
+    for i in range(len(firing_rates_1)):
+        synapse.pass_input(firing_rates_1[i])
+        synapse.get_synaptic_current()
+    synaptic_current_1 = synapse.get_synaptic_current(membrane_potential=membrane_potential)
+    synapse.clear()
+    for i in range(len(firing_rates_2)):
+        synapse.pass_input(firing_rates_2[i])
+        synapse.get_synaptic_current()
+    synaptic_current_2 = synapse.get_synaptic_current(membrane_potential=membrane_potential)
+    synapse.clear()
 
     # get synaptic current at each incoming firing rate of firing_rates_3
     idx = np.arange(1, len(firing_rates_3))
-    synaptic_current_3 = np.array([synapse.get_synaptic_current(firing_rates_3[0:i],
-                                                                membrane_potential=-0.09) for i in idx])
+    synaptic_current_3 = np.zeros(len(idx))
+    for i in range(len(idx)):
+        synapse.pass_input(firing_rates_3[i])
+        synaptic_current_3[i] = synapse.get_synaptic_current(membrane_potential=membrane_potential)
 
     # perform unit tests
     ####################

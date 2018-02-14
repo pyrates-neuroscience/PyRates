@@ -1,9 +1,12 @@
 """Templates for specific synapse parametrizations.
 """
 
-from typing import Optional
+from typing import Optional, Union
+import numpy as np
 
-from core.synapse import DoubleExponentialSynapse, ExponentialSynapse
+from core.synapse import DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse
+from core.synapse import double_exponential
+from core.axon import parametric_sigmoid
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
@@ -23,6 +26,8 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
         See documentation of parameter `bin_size` of :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` of :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` of :class:`Synapse`.
     epsilon
         See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
@@ -42,6 +47,7 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
     def __init__(self,
                  bin_size: float,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  epsilon: float = 1e-15,
                  efficacy: float = 1.273 * 3e-13,
                  tau_decay: float = 0.006,
@@ -56,6 +62,7 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          bin_size=bin_size,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          epsilon=epsilon,
                          synapse_type='AMPA_current'
                          )
@@ -70,6 +77,8 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
         See documentation of parameter `bin_size` of :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` of :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` of :class:`Synapse`.
     epsilon
         See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
@@ -89,6 +98,7 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
     def __init__(self,
                  bin_size: float,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  epsilon: float = 1e-15,
                  efficacy: float = -1.273 * 1e-12,
                  tau_decay: float = 0.02,
@@ -103,8 +113,104 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          bin_size=bin_size,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          epsilon=epsilon,
                          synapse_type='GABAA_current'
+                         )
+
+
+def gabab_sigmoid(firing_rate: Union[float, np.ndarray],
+                  threshold: float,
+                  steepness: float
+                  ) -> Union[float, np.ndarray]:
+    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
+
+    Parameters
+    ----------
+    firing_rate
+        Membrane potential for which to calculate firing rate [unit = V].
+    threshold
+        See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
+    steepness
+        See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
+
+    Returns
+    -------
+    float
+        average firing rate [unit = 1/s]
+
+    """
+
+    return 1 / (1 + np.exp(steepness * (threshold - firing_rate)))
+
+
+class GABABCurrentSynapse(TransformedInputSynapse):
+    """Defines a current-based synapse with GABAB neuroreceptor.
+    
+    Parameters
+    ----------
+    bin_size
+        See documentation of parameter `bin_size` of :class:`Synapse`.
+    max_delay
+        See documentation of parameter `max_delay` of :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` of :class:`Synapse`.
+    epsilon
+        See documentation of parameter `epsilon` of :class:`Synapse`.
+    efficacy
+        See documentation of parameter `efficacy` of :class:`Synapse`.
+    tau_decay
+        See documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
+    tau_rise
+        See documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
+    threshold
+        Threshold of the sigmoidal transform applied to input of the synapse.
+    steepness
+        Steepness of the sigmoidal transform applied to input of the synapse.
+
+    See Also
+    --------
+    :class:`TransformedInputSynapse`: Detailed documentation of parameters of synapses with additional input transform.
+    :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+    
+    """
+
+    def __init__(self,
+                 bin_size: float,
+                 max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
+                 epsilon: float = 1e-15,
+                 efficacy: float = -1.273 * 1e-12,
+                 tau_decay: float = 0.02,
+                 tau_rise: float = 0.0004,
+                 threshold: float = 11.,
+                 steepness: float = 100.,
+                 ) -> None:
+        """
+        Instantiates current-based synapse with GABA_B receptor.
+        """
+
+        # define input transform attributes
+        ###################################
+
+        input_transform_args = {'threshold': threshold,
+                                'steepness': steepness}
+
+        # call super method
+        ###################
+
+        super().__init__(kernel_function=double_exponential,
+                         input_transform=gabab_sigmoid,
+                         efficacy=efficacy,
+                         max_delay=max_delay,
+                         buffer_size=buffer_size,
+                         bin_size=bin_size,
+                         epsilon=epsilon,
+                         conductivity_based=False,
+                         synapse_type='GABAB_current',
+                         input_transform_args=input_transform_args,
+                         tau_decay=tau_decay,
+                         tau_rise=tau_rise
                          )
 
 
@@ -117,6 +223,8 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
         See documentation of parameter `bin_size` of :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` of :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` of :class:`Synapse`.
     epsilon
         See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
@@ -138,6 +246,7 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
     def __init__(self,
                  bin_size: float,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  epsilon: float = 1e-13,
                  efficacy: float = 7.2e-10,  # * 1.273
                  tau_decay: float = 0.0015,
@@ -153,6 +262,7 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          bin_size=bin_size,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
                          synapse_type='AMPA_conductance',
@@ -168,6 +278,8 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
         See documentation of parameter `bin_size` of :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` of :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` of :class:`Synapse`.
     epsilon
         See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
@@ -189,6 +301,7 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
     def __init__(self,
                  bin_size: float,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  epsilon: float = 1e-13,
                  efficacy: float = 4e-11,  # * 1.358
                  tau_decay: float = 0.008,  # 0.02
@@ -204,6 +317,7 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          bin_size=bin_size,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
                          synapse_type='GABAA_current',
@@ -226,6 +340,8 @@ class JansenRitExcitatorySynapse(ExponentialSynapse):
             See documentation of parameter `epsilon` of :class:`Synapse`.
         max_delay
             See documentation of parameter `max_delay` of :class:`Synapse`.
+        buffer_size
+            See documentation of parameter `buffer_size` of :class:`Synapse`.
         efficacy
             Default = 3.25 * 1e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
         tau
@@ -247,6 +363,7 @@ class JansenRitExcitatorySynapse(ExponentialSynapse):
                  bin_size: float,
                  epsilon: float = 5e-5,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  efficacy: float = 3.25 * 1e-3,
                  tau: float = 0.01
                  ) -> None:
@@ -258,6 +375,7 @@ class JansenRitExcitatorySynapse(ExponentialSynapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          synapse_type='JR_excitatory')
 
 
@@ -272,6 +390,8 @@ class JansenRitInhibitorySynapse(ExponentialSynapse):
             See documentation of parameter `epsilon` of :class:`Synapse`.
         max_delay
             See documentation of parameter `max_delay` of :class:`Synapse`.
+        buffer_size
+            See documentation of parameter `buffer_size` of :class:`Synapse`.
         efficacy
             Default = -22 * 1e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
         tau
@@ -293,6 +413,7 @@ class JansenRitInhibitorySynapse(ExponentialSynapse):
                  bin_size: float,
                  epsilon: float = 5e-5,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  efficacy: float = -22e-3,
                  tau: float = 0.02
                  ) -> None:
@@ -304,6 +425,7 @@ class JansenRitInhibitorySynapse(ExponentialSynapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          synapse_type='JR_inhibitory')
 
 
@@ -318,6 +440,8 @@ class MoranExcitatorySynapse(ExponentialSynapse):
             See documentation of parameter `epsilon` of :class:`Synapse`.
         max_delay
             See documentation of parameter `max_delay` of :class:`Synapse`.
+        buffer_size
+            See documentation of parameter `buffer_size` of :class:`Synapse`.
         efficacy
             Default = 4e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
         tau
@@ -339,6 +463,7 @@ class MoranExcitatorySynapse(ExponentialSynapse):
                  bin_size: float,
                  epsilon: float = 5e-5,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  efficacy: float = 4e-3,
                  tau: float = 4e-3
                  ) -> None:
@@ -350,6 +475,7 @@ class MoranExcitatorySynapse(ExponentialSynapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          synapse_type='Moran_excitatory')
 
 
@@ -385,6 +511,7 @@ class MoranInhibitorySynapse(ExponentialSynapse):
                  bin_size: float,
                  epsilon: float = 5e-5,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  efficacy: float = -32e-3,
                  tau: float = 16e-3
                  ) -> None:
@@ -396,4 +523,5 @@ class MoranInhibitorySynapse(ExponentialSynapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          synapse_type='Moran_inhibitory')

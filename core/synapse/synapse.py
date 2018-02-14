@@ -16,7 +16,6 @@ from core.utility.filestorage import RepresentationBase
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
-# TODO: find out reversal potentials for conductance based synapses
 
 #############
 # Type info #
@@ -47,6 +46,8 @@ class Synapse(RepresentationBase):
     max_delay
         Maximum time after which incoming synaptic input still affects the synapse [unit = s] (default = None). If set,
         epsilon will be ignored.
+    buffer_size
+        Maximum time that information passed to the synapse needs to affect the synapse [unit = s] (default = 0.).
     conductivity_based
         If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
         conductivity. Else translation to synaptic current will be direct (default = False).
@@ -85,6 +86,7 @@ class Synapse(RepresentationBase):
                  bin_size: float,
                  epsilon: float = 1e-14,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
                  synapse_type: Optional[str] = None,
@@ -114,6 +116,7 @@ class Synapse(RepresentationBase):
         self.max_delay = max_delay
         self.kernel_function = kernel_function
         self.kernel_function_args = kernel_function_args
+        self.buffer_size = buffer_size
 
         # set synapse type
         ##################
@@ -146,12 +149,14 @@ class Synapse(RepresentationBase):
 
         self.synaptic_kernel = self.build_kernel()
 
+        # build input buffer
+        ####################
+
+        self.synaptic_input = np.zeros(int(self.buffer_size / self.bin_size) + len(self.synaptic_kernel))
+        self.input_position = len(self.synaptic_kernel)
+
     def build_kernel(self) -> np.ndarray:
-
         """Builds synaptic kernel.
-
-        Parameters
-        ----------
 
         Returns
         -------
@@ -199,7 +204,7 @@ class Synapse(RepresentationBase):
         time_points = np.flip(np.array(time_points), axis=0)
 
         # noinspection PyTypeChecker
-        return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
+        return self.evaluate_kernel(time_points)
 
     @overload
     def evaluate_kernel(self, time_points: float = 0.) -> float: ...
@@ -208,7 +213,7 @@ class Synapse(RepresentationBase):
     def evaluate_kernel(self, time_points: np.ndarray = 0.) -> np.ndarray: ...
 
     def evaluate_kernel(self, time_points=0.):
-        """Builds synaptic kernel or computes value of it at specified time point(s).
+        """Computes synaptic kernel or computes value of it at specified time point(s).
 
         Parameters
         ----------
@@ -224,15 +229,12 @@ class Synapse(RepresentationBase):
         return self.kernel_function(time_points, **self.kernel_function_args) * self.efficacy
 
     def get_synaptic_current(self,
-                             synaptic_input: np.ndarray,
                              membrane_potential: Union[float, np.float64] = -0.075
                              ) -> Union[np.float64, float]:
         """Applies synaptic kernel to synaptic input (should be incoming firing rate).
 
         Parameters
         ----------
-        synaptic_input
-            Vector of incoming firing rates over time. [unit = 1/s].
         membrane_potential
             Membrane potential of post-synapse. Only to be used for conductivity based synapses (default = None)
             [unit = V].
@@ -249,12 +251,50 @@ class Synapse(RepresentationBase):
 
         # multiply firing rate input with kernel
         # noinspection PyTypeChecker
-        kernel_value = synaptic_input * self.synaptic_kernel[-len(synaptic_input):]
+        kernel_value = self.synaptic_input[0:self.input_position] * self.synaptic_kernel
 
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
+        # update synaptic input buffer
+        self.synaptic_input[0:-1] = self.synaptic_input[1:]
+        self.synaptic_input[-1] = 0.
+
         return kernel_value * self.kernel_scaling(membrane_potential)
+
+    def pass_input(self, synaptic_input: float, delay: int = 0
+                   ) -> None:
+        """Passes synaptic input to synaptic_input array.
+        
+        Parameters
+        ----------
+        synaptic_input
+            Incoming firing rate input [unit = 1/s].
+        delay
+            Number of time steps after which the input will arrive at synapse [unit = 1].
+            
+        """
+
+        self.synaptic_input[self.input_position + delay - 1] += synaptic_input
+
+    def clear(self):
+        """Clears synaptic input and depression.
+        """
+
+        self.synaptic_input[:] = 0.
+        self.depression = 1.0
+
+    def update(self):
+        """Updates synapse attributes.
+        """
+
+        # update kernel
+        self.synaptic_kernel = self.build_kernel()
+
+        # update buffer
+        # TODO: implement interpolation from old to new array
+        self.synaptic_input = np.zeros(int(self.buffer_size / self.bin_size) + len(self.synaptic_kernel))
+        self.input_position = len(self.synaptic_kernel)
 
     def plot_synaptic_kernel(self,
                              create_plot: bool = True,
@@ -291,9 +331,7 @@ class Synapse(RepresentationBase):
 
         # set figure labels
         axes.set_xlabel('time-steps')
-        if self.modulatory:
-            axes.set_ylabel('modulation strength')
-        elif self.conductivity_based:
+        if self.conductivity_based:
             axes.set_ylabel('synaptic conductivity [S]')
         else:
             axes.set_ylabel('synaptic current [A]')
@@ -351,6 +389,8 @@ class DoubleExponentialSynapse(Synapse):
         See documentation of parameter `bin_size` in :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` in :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` in :class:`Synapse`.
     conductivity_based
         See documentation of parameter `conductivity_based` in :class:`Synapse`.
     reversal_potential
@@ -371,6 +411,7 @@ class DoubleExponentialSynapse(Synapse):
                  bin_size: float,
                  epsilon: float = 1e-14,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
                  synapse_type: Optional[str] = None
@@ -390,6 +431,7 @@ class DoubleExponentialSynapse(Synapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
                          synapse_type=synapse_type,
@@ -438,6 +480,8 @@ class ExponentialSynapse(Synapse):
         See documentation of parameter `bin_size` in :class:`Synapse`.
     max_delay
         See documentation of parameter `max_delay` in :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` in :class:`Synapse`.
     synapse_type
         Name of synapse type (default = None).
 
@@ -458,6 +502,7 @@ class ExponentialSynapse(Synapse):
                  bin_size: float = 5e-4,
                  epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
                  synapse_type: Optional[str] = None
                  ) -> None:
 
@@ -475,7 +520,98 @@ class ExponentialSynapse(Synapse):
                          bin_size=bin_size,
                          epsilon=epsilon,
                          max_delay=max_delay,
+                         buffer_size=buffer_size,
                          synapse_type=synapse_type,
                          conductivity_based=False,
                          tau=tau)
 
+
+################################################
+# synapse with additional input transformation #
+################################################
+
+
+class TransformedInputSynapse(Synapse):
+    """Synapse class that enables an additional transform of the synaptic input previous to the kernel convolution.
+    
+    Parameters
+    ----------
+    kernel_function
+        See description of parameter `kernel_function` of :class:`Synapse`.
+    input_transform
+        Non-linear function that is applied to synaptic input before convolving it with the synaptic kernel.
+    efficacy
+        See description of parameter `efficacy` of :class:`Synapse`.
+    bin_size
+        See description of parameter `bin_size` of :class:`Synapse`.
+    epsilon
+        See description of parameter `epsilon` of :class:`Synapse`.
+    max_delay
+        See description of parameter `max_delay` of :class:`Synapse`.
+    buffer_size
+        See documentation of parameter `buffer_size` in :class:`Synapse`.
+    conductivity_based
+       See description of parameter `conductivity_based` of :class:`Synapse`.
+    reversal_potential
+        See description of parameter `reversal_potential` of :class:`Synapse`.
+    synapse_type
+        See description of parameter `synapse_type` of :class:`Synapse`.
+    input_transform_args
+        Dictionary with name-value pairs used as arguments for the input_transform.
+    **kernel_function_args
+        See description of parameter `kwargs` of :class:`Synapse`.
+        
+    """
+
+    def __init__(self,
+                 kernel_function: Callable[..., FloatOrArray],
+                 input_transform: Callable[..., FloatOrArray],
+                 efficacy: float,
+                 bin_size: float,
+                 epsilon: float = 1e-14,
+                 max_delay: Optional[float] = None,
+                 buffer_size: float = 0.,
+                 conductivity_based: bool = False,
+                 reversal_potential: float = -0.075,
+                 synapse_type: Optional[str] = None,
+                 input_transform_args: Optional[dict] = None,
+                 **kernel_function_args: float
+                 ) -> None:
+        """Instantiates base synapse.
+        """
+
+        # call super init
+        #################
+
+        super().__init__(kernel_function=kernel_function,
+                         efficacy=efficacy,
+                         bin_size=bin_size,
+                         epsilon=epsilon,
+                         max_delay=max_delay,
+                         buffer_size=buffer_size,
+                         conductivity_based=conductivity_based,
+                         reversal_potential=reversal_potential,
+                         synapse_type=synapse_type,
+                         **kernel_function_args)
+
+        # add input transform
+        #####################
+
+        self.input_transform = input_transform
+        self.input_transform_args = input_transform_args if input_transform_args else dict()
+
+    def pass_input(self, synaptic_input: float, delay: int = 0
+                   ) -> None:
+        """Passes synaptic input to synaptic_input array.
+        
+        See Also
+        --------
+        :class:`Synapse`: ...for a detailed description of the method's parameters
+        
+        """
+
+        # transform synaptic input
+        # TODO: enable dependence of input transform on membrane potential of population
+        synaptic_input = self.input_transform(synaptic_input, **self.input_transform_args)
+
+        return super().pass_input(synaptic_input, delay)
