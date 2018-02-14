@@ -209,6 +209,21 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
 
 
 if __name__ == "__main__":
+
+    import sys
+
+    print(sys.argv)
+    arg = sys.argv[1]
+    if arg == '1':
+        run_first = True
+        run_second = False
+    elif arg == '2':
+        run_second = True
+        run_first = False
+    elif arg == "both":
+        run_first = run_second = True
+    else:
+        run_first = run_second = False
     ######################
     # perform benchmarks #
     ######################
@@ -222,20 +237,22 @@ if __name__ == "__main__":
     connectivity_scaling = 50.0
     max_synaptic_delay = 0.05
 
-    # single JR circuit
-    # sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
-    #                                               step_size=step_size,
-    #                                               verbose=verbose,
-    #                                               max_synaptic_delay=max_synaptic_delay)
+    if run_first:
+        # single JR circuit
+        sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
+                                                      step_size=step_size,
+                                                      verbose=verbose,
+                                                      max_synaptic_delay=max_synaptic_delay)
 
-    # JR network (33 connected JR circuits)
-    sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
-                                                  step_size=step_size,
-                                                  D=D,
-                                                  velocity=velocity,
-                                                  connectivity_scaling=connectivity_scaling,
-                                                  verbose=verbose,
-                                                  max_synaptic_delay=0.05)
+    if run_second:
+        # JR network (33 connected JR circuits)
+        sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
+                                                      step_size=step_size,
+                                                      D=D,
+                                                      velocity=velocity,
+                                                      connectivity_scaling=connectivity_scaling,
+                                                      verbose=verbose,
+                                                      max_synaptic_delay=0.05)
 
     ################
     # memory usage #
