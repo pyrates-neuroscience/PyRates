@@ -305,13 +305,23 @@ class Circuit(RepresentationBase):
         targets = self.network_graph[pop]
 
         # loop over target populations connected to source
-        for _, target in targets.items():
+        popul = self.network_graph.nodes[pop]['data']
+        for i, syn in enumerate(popul.conn_targets):
+            syn.pass_input(source_fr * popul.conn_weights[i], delay=popul.conn_delays[i])
 
-            # loop over existing connections between source node and target node
-            for __, conn in target.items():
-
-                # transfer input to target node
-                conn['synapse'].pass_input(source_fr * conn['weight'], delay=conn['delay'])
+        # for _, target in targets.items():
+        #
+        #     # loop over existing connections between source node and target node
+        #     for i, conn in target.items():
+        #
+        #         # transfer input to target node
+        #         syn = conn["synapse"]
+        #         weight = popul.conn_weights[i]
+        #         a = syn.input_weights[i]
+        #         b = conn['weight']
+        #         # assert syn.input_weights[i] == conn["weight"]
+        #         # assert syn.input_delays[i] == conn["delay"]
+        #         syn.pass_input(source_fr * conn['weight'], delay=conn['delay'])
 
     def get_population_states(self,
                               state_variable_idx: int,
