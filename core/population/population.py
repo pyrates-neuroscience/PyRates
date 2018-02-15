@@ -78,16 +78,14 @@ class Population(RepresentationBase):
 
         Attributes
         ----------
-        synapses : :obj:`list` of :class:`Synapse` objects
+        synapses : :obj:`list` of :class:`Synapse` instances
             Synapse instances. See documentation of :class:`Synapse`.
-        axon : :class:`Axon` object
+        axon : :class:`Axon` instance
             Axon instance. See documentation of :class:`Axon`.
         state_variables : :obj:`list` of :obj:`np.ndarray`
             Collection of state variable vectors over state updates. Vector entries represent the following state
             variables:
             1) membrane potential [unit = V]
-        current_firing_rate : float
-            Current average firing rate of population [unit = 1/s].
         synaptic_currents : np.ndarray
             Vector with synaptic currents produced by the non-modulatory synapses at time-point `t`.
         extrinsic_current : float
@@ -505,7 +503,6 @@ class Population(RepresentationBase):
         init_state = self.state_variables[0]
         self.state_variables.clear()
         self.state_variables.append(init_state)
-        self.current_firing_rate = self.get_firing_rate()
 
         # synapse attributes
         for syn in self.synapses:
@@ -716,7 +713,6 @@ class PlasticPopulation(Population):
                     self.state_variables[-1] += [self.synapses[i].depression]
 
     def state_update(self,
-                     synaptic_input: np.ndarray,
                      extrinsic_current: FloatLike = 0.,
                      extrinsic_synaptic_modulation: Optional[np.ndarray] = None,
                      ) -> None:
@@ -737,8 +733,7 @@ class PlasticPopulation(Population):
         # call super state update
         #########################
 
-        super().state_update(synaptic_input=synaptic_input,
-                             extrinsic_current=extrinsic_current,
+        super().state_update(extrinsic_current=extrinsic_current,
                              extrinsic_synaptic_modulation=extrinsic_synaptic_modulation)
 
         # update axonal transfer function
@@ -751,7 +746,7 @@ class PlasticPopulation(Population):
                 Population.take_step(self,
                                      f=self.axon_plasticity_function,
                                      y_old=self.axon.transfer_function_args[self.axon_plasticity_target_param],
-                                     firing_rate_target=self.current_firing_rate,
+                                     firing_rate_target=self.get_firing_rate(),
                                      **self.axon_plasticity_function_params)
 
             # update state vector
@@ -770,8 +765,8 @@ class PlasticPopulation(Population):
                     self.synapses[i].depression = Population.take_step(self,
                                                                        f=self.synapse_plasticity_function,
                                                                        y_old=self.synapses[i].depression,
-                                                                       firing_rate=self.synaptic_input[
-                                                                            self.current_input_idx[i] - 1, i],
+                                                                       firing_rate=self.synapses[i].synaptic_input
+                                                                       [self.synapses[i].input_position],
                                                                        **self.synapse_plasticity_function_params[i])
                     # update state vector
                     self.state_variables[-1] += [self.synapses[i].depression]

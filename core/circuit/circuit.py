@@ -396,7 +396,7 @@ class Circuit(RepresentationBase):
 
                         # if syn is a plastic synapse, add copies of it to target for each connection on syn
                         if isinstance(self.populations[target], PlasticPopulation) and \
-                                self.populations[target].plastic_synapses[syn]:
+                                self.populations[target].synapse_plasticity_function_params[syn]:
 
                             # add synapse copy to population
                             self.populations[target].add_plastic_synapse(synapse_idx=syn,
@@ -436,7 +436,7 @@ class Circuit(RepresentationBase):
         if not plasticity_on_input:
             for pop in self.populations:
                 for syn in range(len(pop.synapses[0:self.n_synapses])):
-                    pop.plastic_synapses[syn] = False
+                    pop.synapse_plasticity_function_params[syn] = False
 
         return network_graph
 
