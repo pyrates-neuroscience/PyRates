@@ -4,13 +4,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-from networkx import MultiDiGraph
+# from networkx import MultiDiGraph
 from typing import List, Optional, Union, TypeVar, Callable
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.population import DummyPopulation
 from core.utility import check_nones, set_instance
 from core.utility.filestorage import RepresentationBase
+from core.utility.networkx_wrapper import WrappedMultiDiGraph
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -139,6 +140,7 @@ class Circuit(RepresentationBase):
             # TODO: make sure that population step-size corresponds to circuit step-size
 
         # transform delays into steps
+        # TODO: check for dtype inside array
         self.D = np.array(self.D / self.step_size, dtype=int)
 
         # create network graph
@@ -228,7 +230,7 @@ class Circuit(RepresentationBase):
 
         for i in range(self.n_populations):
             for j in range(self.n_synapses):
-                if np.sum(synaptic_inputs[:, i, j]) > 0:
+                if np.any(synaptic_inputs[:, i, j]):
                     self.add_node(DummyPopulation(synaptic_inputs[:, i, j].squeeze()),
                                   target_nodes=[i],
                                   conn_weights=[1.],
@@ -238,7 +240,7 @@ class Circuit(RepresentationBase):
         # simulate network
         ##################
 
-        for n in range(simulation_time_steps):
+        for n in range(simulation_time_steps):  # can't think of a way to remove that loop.
 
             # pass information through circuit
             self.pass_through_circuit()
@@ -370,7 +372,7 @@ class Circuit(RepresentationBase):
         #############################
 
         # create empty directed multi-graph
-        network_graph = MultiDiGraph()
+        network_graph = WrappedMultiDiGraph()
 
         # add populations as network nodes
         for i in range(self.n_populations):
@@ -390,6 +392,7 @@ class Circuit(RepresentationBase):
 
                     # check whether source connects to target via syn
                     if self.C[target, source, idx] > 0.:
+                        # fixme: this can be != 0, right?
 
                         # add edge with edge information depending on a synapse being plastic or not and multiple
                         # axonal delays being passed or not

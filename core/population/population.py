@@ -29,8 +29,29 @@ __status__ = "Development"
 # leaky capacitor population #
 ##############################
 
+class AbstractBasePopulation(RepresentationBase):
+    """Very base class that includes DummyPopulation, to ensure consistency"""
+    def __init__(self):
+        self.targets = []
 
-class Population(RepresentationBase):
+    def connect(self, target_synapse: Synapse, weight: float, delay: int):
+        """Connect to a given synapse at a target population with a given weight and delay.
+
+        Parameters
+        ----------
+        target_synapse
+            Synapse that population is supposed to connect to
+        weight
+            Weight that is to be applied to the connection (=connectivity)
+        delay
+            Index (=time delay) at which the output is supposed to arrive at the target synapse"""
+
+        self.targets.append(target_synapse)
+        target_synapse.input_weights.append(weight)
+        target_synapse.input_delays.append(delay)
+
+
+class Population(AbstractBasePopulation):
     """Base neural mass or population class, behaving like a leaky capacitor.
 
         A population is defined via a number of synapses and an axon.
@@ -130,6 +151,7 @@ class Population(RepresentationBase):
                  ) -> None:
         """Instantiation of base population.
         """
+        super().__init__()
 
         # check input parameters
         ########################
@@ -1078,7 +1100,7 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
         return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current
 
 
-class DummyPopulation(object):
+class DummyPopulation(AbstractBasePopulation):
     """Population object used to pass certain inputs to other populations in a network.
     
     Parameters
@@ -1091,6 +1113,7 @@ class DummyPopulation(object):
     def __init__(self, output: np.ndarray):
         """Instantiate dummy population.
         """
+        super().__init__()
 
         self.output = output
         self.idx = 0

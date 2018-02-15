@@ -117,6 +117,8 @@ class Synapse(RepresentationBase):
         self.kernel_function = kernel_function
         self.kernel_function_args = kernel_function_args
         self.buffer_size = buffer_size
+        self.input_weights = []
+        self.input_delays = []
 
         # set synapse type
         ##################
