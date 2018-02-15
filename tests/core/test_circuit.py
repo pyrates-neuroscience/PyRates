@@ -72,10 +72,12 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # swap axes
     synaptic_inputs = np.swapaxes(synaptic_inputs, 0, 2)  # --> (n_time_steps, n_pop, n_syn)
 
-    # simulation_time = time_vec[-1].round(1)
-
     # simulations parameters
     simulation_time = 1.0  # s
+    # simulation_time = time_vec[-1]
+
+    # just checking if thus gives the correct result, assuming default 1
+    assert simulation_time == 1.
 
     # interpolate to new time step
     # time_vec = np.arange(0, simulation_time, 0.001)
@@ -83,6 +85,8 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # func = interpolate.interp1d(time_vec, synaptic_inputs, axis=0, fill_value="extrapolate")
     # new_time_vec = np.arange(0, simulation_time, circuit.step_size)
     # new_synaptic_inputs = func(new_time_vec)
+    # circuit.run(synaptic_inputs=new_synaptic_inputs,
+    #             simulation_time=simulation_time)
 
     circuit.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time)
@@ -97,8 +101,6 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # run_info, states_frame = get_simulation_data(circuit)
     # save_simulation_data_to_file(output_data=states_frame, run_info=run_info,
     #                              dirname=dirname, path=path)
-
-
 
     # calculate nmrse between time-series
     #####################################

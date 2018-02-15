@@ -97,7 +97,15 @@
             {
                 "weight": 135.0,
                 "delay": 0,
-                "synapse_index": 0,
+                "synapse": {
+                    "class": {
+                        "__module__": "core.synapse.templates",
+                        "__name__": "JansenRitExcitatorySynapse"
+                    },
+                    "bin_size": 0.0009765625,
+                    "max_delay": null,
+                    "buffer_size": 0
+                },
                 "source": 0,
                 "target": 1,
                 "key": 0
@@ -105,7 +113,15 @@
             {
                 "weight": 33.75,
                 "delay": 0,
-                "synapse_index": 0,
+                "synapse": {
+                    "class": {
+                        "__module__": "core.synapse.templates",
+                        "__name__": "JansenRitExcitatorySynapse"
+                    },
+                    "bin_size": 0.0009765625,
+                    "max_delay": null,
+                    "buffer_size": 0
+                },
                 "source": 0,
                 "target": 2,
                 "key": 0
@@ -113,7 +129,15 @@
             {
                 "weight": 108.0,
                 "delay": 0,
-                "synapse_index": 0,
+                "synapse": {
+                    "class": {
+                        "__module__": "core.synapse.templates",
+                        "__name__": "JansenRitExcitatorySynapse"
+                    },
+                    "bin_size": 0.0009765625,
+                    "max_delay": null,
+                    "buffer_size": 0
+                },
                 "source": 1,
                 "target": 0,
                 "key": 0
@@ -121,7 +145,15 @@
             {
                 "weight": 33.75,
                 "delay": 0,
-                "synapse_index": 1,
+                "synapse": {
+                    "class": {
+                        "__module__": "core.synapse.templates",
+                        "__name__": "JansenRitInhibitorySynapse"
+                    },
+                    "bin_size": 0.0009765625,
+                    "max_delay": null,
+                    "buffer_size": 0
+                },
                 "source": 2,
                 "target": 0,
                 "key": 0

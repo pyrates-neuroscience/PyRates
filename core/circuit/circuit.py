@@ -193,7 +193,8 @@ class Circuit(RepresentationBase):
 
         # synaptic inputs
         if synaptic_inputs.shape[0] != simulation_time_steps:
-            raise ValueError('First dimension of synaptic input has to match the number of simulation time steps!')
+            raise ValueError('First dimension of synaptic input has to match the number of simulation time steps! \n'
+                             f'input: {synaptic_inputs.shape[0]}, time_steps: {simulation_time_steps}')
         if synaptic_inputs.shape[1] != self.n_populations:
             raise ValueError('Second dimension of synaptic input has to match the number of populations in the '
                              'circuit!')
