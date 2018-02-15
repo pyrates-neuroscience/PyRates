@@ -720,8 +720,6 @@ class PlasticPopulation(Population):
 
         Parameters
         ----------
-        synaptic_input
-            Vector with additional synaptic input per synapse arriving at the time of the state update [unit = 1/s].
         extrinsic_current
             Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
             (default = 0.) [unit = A].
