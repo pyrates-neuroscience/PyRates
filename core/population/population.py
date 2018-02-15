@@ -356,8 +356,9 @@ class Population(RepresentationBase):
         for i, syn in enumerate(self.synapses):
 
             self.synaptic_currents[i] = syn.get_synaptic_current(membrane_potential)
-
+        # TODO: multiplying with a vector of 1s by default costs computation time.
         return self.synaptic_currents @ self.extrinsic_synaptic_modulation.T
+
 
     def get_leak_current(self,
                          membrane_potential: FloatLike
@@ -404,6 +405,8 @@ class Population(RepresentationBase):
         # extrinsic modulation
         if extrinsic_synaptic_modulation is not None:
             self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
+        # fixme: this is called with arrays of 1s, although no acutal extrinsic synaptic modulation is defined.
+        # fixme: --> performance
 
         # compute average membrane potential
         ####################################
@@ -764,7 +767,7 @@ class PlasticPopulation(Population):
                                                                        f=self.synapse_plasticity_function,
                                                                        y_old=self.synapses[i].depression,
                                                                        firing_rate=self.synapses[i].synaptic_input
-                                                                       [self.synapses[i].input_position],
+                                                                       [self.synapses[i].kernel_length],
                                                                        **self.synapse_plasticity_function_params[i])
                     # update state vector
                     self.state_variables[-1] += [self.synapses[i].depression]

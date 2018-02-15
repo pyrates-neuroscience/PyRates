@@ -153,7 +153,7 @@ class Synapse(RepresentationBase):
         ####################
 
         self.synaptic_input = np.zeros(int(self.buffer_size / self.bin_size) + len(self.synaptic_kernel))
-        self.input_position = len(self.synaptic_kernel)
+        self.kernel_length = len(self.synaptic_kernel)
 
     def build_kernel(self) -> np.ndarray:
         """Builds synaptic kernel.
@@ -251,7 +251,7 @@ class Synapse(RepresentationBase):
 
         # multiply firing rate input with kernel
         # noinspection PyTypeChecker
-        kernel_value = self.synaptic_input[0:self.input_position] * self.synaptic_kernel
+        kernel_value = self.synaptic_input[0:self.kernel_length] * self.synaptic_kernel
 
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
@@ -275,7 +275,7 @@ class Synapse(RepresentationBase):
             
         """
 
-        self.synaptic_input[self.input_position + delay - 1] += synaptic_input
+        self.synaptic_input[self.kernel_length + delay - 1] += synaptic_input
 
     def clear(self):
         """Clears synaptic input and depression.
@@ -294,7 +294,7 @@ class Synapse(RepresentationBase):
         # update buffer
         # TODO: implement interpolation from old to new array
         self.synaptic_input = np.zeros(int(self.buffer_size / self.bin_size) + len(self.synaptic_kernel))
-        self.input_position = len(self.synaptic_kernel)
+        self.kernel_length = len(self.synaptic_kernel)
 
     def plot_synaptic_kernel(self,
                              create_plot: bool = True,
