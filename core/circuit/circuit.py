@@ -109,7 +109,7 @@ class Circuit(RepresentationBase):
         self.n_populations = len(populations)
         self.n_synapses = connectivity.shape[2]
         self.t = 0.
-        self.synapse_mapping = np.zeros((self.N, self.n_synapses), dtype=int) - 999
+        self.synapse_mapping = np.zeros((self.n_populations, self.n_synapses), dtype=int) - 999
         self.synapse_types = synapse_types if synapse_types else ['excitatory', 'inhibitory']
         self.run_info = dict()
 
@@ -226,7 +226,7 @@ class Circuit(RepresentationBase):
         # add dummy population to graph for synaptic input distribution
         ################################################################
 
-        for i in range(self.N):
+        for i in range(self.n_populations):
             for j in range(self.n_synapses):
                 if np.sum(synaptic_inputs[:, i, j]) > 0:
                     self.add_node(DummyPopulation(synaptic_inputs[:, i, j].squeeze()),
@@ -373,17 +373,17 @@ class Circuit(RepresentationBase):
         network_graph = MultiDiGraph()
 
         # add populations as network nodes
-        for i in range(self.N):
+        for i in range(self.n_populations):
             network_graph.add_node(i, data=self.populations[i])
 
         # build edges
         #############
 
         # loop over all network nodes
-        for source in range(self.N):
+        for source in range(self.n_populations):
 
             # loop over all potential target nodes
-            for target in range(self.N):
+            for target in range(self.n_populations):
 
                 # loop over all synapses
                 for idx, syn in enumerate(self.synapse_mapping[target]):
