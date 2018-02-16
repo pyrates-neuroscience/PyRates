@@ -252,6 +252,10 @@ class Circuit(RepresentationBase):
                                            extrinsic_modulation)
         # just to shorten the line
         simulation_time_steps, extrinsic_current, extrinsic_modulation = prepared_input
+        # TODO: Why are extrinsic current and extrinsic modulation defined as lists of lists?
+
+        extrinsic_current = np.asarray(extrinsic_current)
+        extrinsic_modulation = np.asarray(extrinsic_modulation)
 
         # simulate network
         ##################
@@ -266,10 +270,11 @@ class Circuit(RepresentationBase):
             # pass information through circuit
             for source_pop in active_populations:
                 source_pop.project_to_targets()
+
             # update all population states
             for i, pop in enumerate(self.populations):
-                pop.state_update(extrinsic_current=extrinsic_current[n][i],
-                                 extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
+                pop.state_update(extrinsic_current=extrinsic_current[n, i],
+                                 extrinsic_synaptic_modulation=extrinsic_modulation[n, i])
             # display simulation progress
             if verbose:
                 if n == 0 or (n % (simulation_time_steps // 10)) == 0:

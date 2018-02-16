@@ -68,10 +68,10 @@ class AbstractBasePopulation(RepresentationBase):
         #####################################################
 
         # extract network connections
-        targets = self.targets
+        # targets = self.targets
 
         # loop over target populations connected to source
-        for i, syn in enumerate(targets):
+        for i, syn in enumerate(self.targets):
             syn.pass_input(source_fr * self.target_weights[i], delay=self.target_delays[i])
             # it would be possible to wrap this function using functools.partial to remove the delay lookup
 
@@ -407,11 +407,10 @@ class Population(AbstractBasePopulation):
 
         # calculate synaptic currents for each additive synapse
         for i, syn in enumerate(self.synapses):
-
             self.synaptic_currents[i] = syn.get_synaptic_current(membrane_potential)
+
         # TODO: multiplying with a vector of 1s by default costs computation time.
         return self.synaptic_currents @ self.extrinsic_synaptic_modulation.T
-
 
     def get_leak_current(self,
                          membrane_potential: FloatLike
@@ -458,7 +457,7 @@ class Population(AbstractBasePopulation):
         # extrinsic modulation
         if extrinsic_synaptic_modulation is not None:
             self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
-        # fixme: this is called with arrays of 1s, although no acutal extrinsic synaptic modulation is defined.
+        # fixme: this is called with arrays of 1s, although no actual extrinsic synaptic modulation is defined.
         # fixme: --> performance
 
         # compute average membrane potential
