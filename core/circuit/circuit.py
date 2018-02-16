@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 # from networkx import MultiDiGraph
-from typing import List, Optional, Union, TypeVar, Callable
+from typing import List, Optional, Union, TypeVar, Callable, Tuple
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.population import DummyPopulation
@@ -154,30 +154,13 @@ class Circuit(RepresentationBase):
         """Read-only value for number of populations. Just keeping this as a safeguard for legacy code."""
         return self.n_populations
 
-    def run(self,
-            synaptic_inputs: np.ndarray,
-            simulation_time: float,
-            extrinsic_current: Optional[np.ndarray] = None,
-            extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
-            verbose: bool = False
-            ) -> None:
-        """Simulates circuit behavior over time.
-
-        Parameters
-        ----------
-        synaptic_inputs
-            3D array (n_timesteps x n_populations x n_synapses) of synaptic input [unit = 1/s].
-            # fixme: why have global 3D arrays for synaptic input?
-        simulation_time
-            Total simulation time [unit = s].
-        extrinsic_current
-            2D array (n_timesteps x n_populations) of current extrinsically applied to the populations [unit = A].
-        extrinsic_modulation
-            List of list of vectors (n_timesteps x n_populations x n_synapses) with synapse scalings [unit = 1].
-        verbose
-            If true, simulation progress will be printed to console.
-
-        """
+    def _prepare_run(self,
+                     synaptic_inputs: np.ndarray,
+                     simulation_time: float,
+                     extrinsic_current: Optional[np.ndarray] = None,
+                     extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
+                     ) -> Tuple[int, np.ndarray, List[List[np.ndarray]]]:
+        """Helper method to check inputs to run, but keep run function a bit cleaner."""
 
         # save run parameters to instance variable
         ##########################################
@@ -237,10 +220,43 @@ class Circuit(RepresentationBase):
                                   conn_targets=[self.populations[i].synapses[self.synapse_mapping[i, j]]],
                                   add_to_population_list=False)
 
+        return simulation_time_steps, extrinsic_current, extrinsic_modulation
+
+    def run(self,
+            synaptic_inputs: np.ndarray,
+            simulation_time: float,
+            extrinsic_current: Optional[np.ndarray] = None,
+            extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
+            verbose: bool = False
+            ) -> None:
+        """Simulates circuit behavior over time.
+
+        Parameters
+        ----------
+        synaptic_inputs
+            3D array (n_timesteps x n_populations x n_synapses) of synaptic input [unit = 1/s].
+        simulation_time
+            Total simulation time [unit = s].
+        extrinsic_current
+            2D array (n_timesteps x n_populations) of current extrinsically applied to the populations [unit = A].
+        extrinsic_modulation
+            List of list of vectors (n_timesteps x n_populations x n_synapses) with synapse scalings [unit = 1].
+        verbose
+            If true, simulation progress will be printed to console.
+
+        """
+
+        prepared_input = self._prepare_run(synaptic_inputs,
+                                           simulation_time,
+                                           extrinsic_current,
+                                           extrinsic_modulation)
+        # just to shorten the line
+        simulation_time_steps, extrinsic_current, extrinsic_modulation = prepared_input
+
         # simulate network
         ##################
 
-        for n in range(simulation_time_steps):  # can't think of a way to remove that loop.
+        for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
 
             # pass information through circuit
             self.pass_through_circuit()
@@ -273,6 +289,7 @@ class Circuit(RepresentationBase):
             Extrinsic synaptic scalings for each synapse of each population.
             
         """
+        # TODO: move this function back into run?
 
         for i in range(self.n_populations):
             self.populations[i].state_update(extrinsic_current=extrinsic_current[i],
@@ -281,6 +298,7 @@ class Circuit(RepresentationBase):
     def pass_through_circuit(self):
         """Passes current population firing rates through circuit.
         """
+        # TODO: move this function back into run?
 
         for _, node in self.network_graph.nodes(data=True):
             pop = node["data"]
@@ -291,7 +309,8 @@ class Circuit(RepresentationBase):
                               population_idx: Optional[Union[list, range]] = None,
                               time_window: Optional[List[float]] = None
                               ) -> np.ndarray:
-        """Extracts specified state variable from populations and puts them into matrix.
+        """Extracts specified state variable from populations and puts them into matrix. This serves the purpose of
+        collecting data for later analysis.
 
         Parameters
         ----------
@@ -379,7 +398,7 @@ class Circuit(RepresentationBase):
                             self.populations[target].add_plastic_synapse(synapse_idx=syn,
                                                                          max_firing_rate=self.populations[source].axon.
                                                                          transfer_function_args['max_firing_rate'] *
-                                                                         self.C[target, source, idx])
+                                                                                         self.C[target, source, idx])
 
                             # create one edge for each delay between source and target
                             if self.D_pdfs is None:
