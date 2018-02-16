@@ -81,7 +81,12 @@ class RepresentationBase(object):
         param_str = "*args, **kwargs"
         _module = self.__class__.__module__
         _class = self.__class__.__name__
-        return f"{_module}.{_class}({param_str})"
+        # return f"{_module}.{_class}({param_str})"
+
+        try:
+            return f"{_class} '{self.label}'"
+        except AttributeError:
+            return f"{_class}"
 
     def _defaults(self) -> Generator[Tuple[str, Any], None, None]:
         """Inspects the __init__ special method and yields tuples of init parameters and their default values."""

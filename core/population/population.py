@@ -29,8 +29,60 @@ __status__ = "Development"
 # leaky capacitor population #
 ##############################
 
+class AbstractBasePopulation(RepresentationBase):
+    """Very base class that includes DummyPopulation, to ensure consistency"""
+    def __init__(self):
+        self.targets = []
+        self.target_weights = []
+        self.target_delays = []
 
-class Population(RepresentationBase):
+    def connect(self, target_synapse: Synapse, weight: float, delay: int):
+        """Connect to a given synapse at a target population with a given weight and delay.
+
+        Parameters
+        ----------
+        target_synapse
+            Synapse that population is supposed to connect to
+        weight
+            Weight that is to be applied to the connection (=connectivity)
+        delay
+            Index (=time delay) at which the output is supposed to arrive at the target synapse"""
+
+        self.targets.append(target_synapse)
+        self.target_weights.append(weight)
+        self.target_delays.append(delay)
+
+    def project_to_targets(self) -> None:
+        """Projects output of given population to the other circuit populations its connected to.
+
+        Parameters
+        ----------
+
+
+        """
+
+        # get source firing rate
+        source_fr = self.get_firing_rate()
+
+        # project source firing rate to connected populations
+        #####################################################
+
+        # extract network connections
+        # targets = self.targets
+
+        # loop over target populations connected to source
+        for i, syn in enumerate(self.targets):
+            syn.pass_input(source_fr * self.target_weights[i], delay=self.target_delays[i])
+            # it would be possible to wrap this function using functools.partial to remove the delay lookup
+
+    def get_firing_rate(self):
+        """Returns the firing rate as output of the population."""
+
+        raise NotImplementedError("Method `get_firing_rate` needs to be implemented in subclass.")
+        # a cleaner way would be to introduce a metaclass and decorate with abc.abstractmethod
+
+
+class Population(AbstractBasePopulation):
     """Base neural mass or population class, behaving like a leaky capacitor.
 
         A population is defined via a number of synapses and an axon.
@@ -130,6 +182,7 @@ class Population(RepresentationBase):
                  ) -> None:
         """Instantiation of base population.
         """
+        super().__init__()
 
         # check input parameters
         ########################
@@ -354,11 +407,10 @@ class Population(RepresentationBase):
 
         # calculate synaptic currents for each additive synapse
         for i, syn in enumerate(self.synapses):
-
             self.synaptic_currents[i] = syn.get_synaptic_current(membrane_potential)
+
         # TODO: multiplying with a vector of 1s by default costs computation time.
         return self.synaptic_currents @ self.extrinsic_synaptic_modulation.T
-
 
     def get_leak_current(self,
                          membrane_potential: FloatLike
@@ -405,7 +457,7 @@ class Population(RepresentationBase):
         # extrinsic modulation
         if extrinsic_synaptic_modulation is not None:
             self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
-        # fixme: this is called with arrays of 1s, although no acutal extrinsic synaptic modulation is defined.
+        # fixme: this is called with arrays of 1s, although no actual extrinsic synaptic modulation is defined.
         # fixme: --> performance
 
         # compute average membrane potential
@@ -1078,7 +1130,7 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
         return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current
 
 
-class DummyPopulation(object):
+class DummyPopulation(AbstractBasePopulation):
     """Population object used to pass certain inputs to other populations in a network.
     
     Parameters
@@ -1091,6 +1143,7 @@ class DummyPopulation(object):
     def __init__(self, output: np.ndarray):
         """Instantiate dummy population.
         """
+        super().__init__()
 
         self.output = output
         self.idx = 0
