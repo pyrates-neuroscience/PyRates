@@ -282,46 +282,32 @@ class Circuit(RepresentationBase):
         """Passes current population firing rates through circuit.
         """
 
-        for i in range(len(self.network_graph.nodes)):
-            self.project_to_populations(i)
+        for _, node in self.network_graph.nodes(data=True):
+            self.project_to_populations(node["data"])
 
-    def project_to_populations(self, pop: int) -> None:
+    def project_to_populations(self, source: Population) -> None:
         """Projects output of given population to the other circuit populations its connected to.
 
         Parameters
         ----------
-        pop
-            Index of population where projection origins.
+        source
+            population where projection originates.
 
         """
 
         # get source firing rate
-        source_fr = self.network_graph.nodes[pop]['data'].get_firing_rate()
+        source_fr = source.get_firing_rate()
 
         # project source firing rate to connected populations
         #####################################################
 
         # extract network connections
-        targets = self.network_graph[pop]
+        targets = source.targets
 
         # loop over target populations connected to source
-        popul = self.network_graph.nodes[pop]['data']
-        for i, syn in enumerate(popul.conn_targets):
-            syn.pass_input(source_fr * popul.conn_weights[i], delay=popul.conn_delays[i])
-
-        # for _, target in targets.items():
-        #
-        #     # loop over existing connections between source node and target node
-        #     for i, conn in target.items():
-        #
-        #         # transfer input to target node
-        #         syn = conn["synapse"]
-        #         weight = popul.conn_weights[i]
-        #         a = syn.input_weights[i]
-        #         b = conn['weight']
-        #         # assert syn.input_weights[i] == conn["weight"]
-        #         # assert syn.input_delays[i] == conn["delay"]
-        #         syn.pass_input(source_fr * conn['weight'], delay=conn['delay'])
+        for i, syn in enumerate(targets):
+            syn.pass_input(source_fr * source.target_weights[i], delay=source.target_delays[i])
+            # it would be possible to wrap this function using functools.partial to remove the delay lookup
 
     def get_population_states(self,
                               state_variable_idx: int,

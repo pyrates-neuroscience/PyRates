@@ -32,9 +32,9 @@ __status__ = "Development"
 class AbstractBasePopulation(RepresentationBase):
     """Very base class that includes DummyPopulation, to ensure consistency"""
     def __init__(self):
-        self.conn_targets = []
-        self.conn_weights = []
-        self.conn_delays = []
+        self.targets = []
+        self.target_weights = []
+        self.target_delays = []
 
     def connect(self, target_synapse: Synapse, weight: float, delay: int):
         """Connect to a given synapse at a target population with a given weight and delay.
@@ -48,9 +48,9 @@ class AbstractBasePopulation(RepresentationBase):
         delay
             Index (=time delay) at which the output is supposed to arrive at the target synapse"""
 
-        self.conn_targets.append(target_synapse)
-        self.conn_weights.append(weight)
-        self.conn_delays.append(delay)
+        self.targets.append(target_synapse)
+        self.target_weights.append(weight)
+        self.target_delays.append(delay)
 
 
 
