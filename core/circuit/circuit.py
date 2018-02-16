@@ -256,15 +256,20 @@ class Circuit(RepresentationBase):
         # simulate network
         ##################
 
+        # remove some of the overhead of reading everything from the graph.
+        active_populations = []
+        for _, node in self.network_graph.nodes(data=True):
+            active_populations.append(node["data"])
+
         for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
 
             # pass information through circuit
-            self.pass_through_circuit()
-
+            for source_pop in active_populations:
+                source_pop.project_to_targets()
             # update all population states
-            self.update_population_states(extrinsic_current=extrinsic_current[n],
-                                          extrinsic_modulation=extrinsic_modulation[n])  # type: ignore
-
+            for i, pop in enumerate(self.populations):
+                pop.state_update(extrinsic_current=extrinsic_current[n][i],
+                                 extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
             # display simulation progress
             if verbose:
                 if n == 0 or (n % (simulation_time_steps // 10)) == 0:
@@ -274,35 +279,6 @@ class Circuit(RepresentationBase):
             # update time-variant variables
             self.t += self.step_size
             self.run_info["time_vector"].append(self.t)
-
-    def update_population_states(self,
-                                 extrinsic_current: np.ndarray,
-                                 extrinsic_modulation: List[np.ndarray]
-                                 ) -> None:
-        """Updates states of all populations.
-        
-        Parameters
-        ----------
-        extrinsic_current
-            Extrinsic currents for each population [unit = A].
-        extrinsic_modulation
-            Extrinsic synaptic scalings for each synapse of each population.
-            
-        """
-        # TODO: move this function back into run?
-
-        for i in range(self.n_populations):
-            self.populations[i].state_update(extrinsic_current=extrinsic_current[i],
-                                             extrinsic_synaptic_modulation=extrinsic_modulation[i])
-
-    def pass_through_circuit(self):
-        """Passes current population firing rates through circuit.
-        """
-        # TODO: move this function back into run?
-
-        for _, node in self.network_graph.nodes(data=True):
-            pop = node["data"]
-            pop.project_to_targets()
 
     def get_population_states(self,
                               state_variable_idx: int,
