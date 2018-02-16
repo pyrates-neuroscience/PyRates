@@ -283,31 +283,8 @@ class Circuit(RepresentationBase):
         """
 
         for _, node in self.network_graph.nodes(data=True):
-            self.project_to_populations(node["data"])
-
-    def project_to_populations(self, source: Population) -> None:
-        """Projects output of given population to the other circuit populations its connected to.
-
-        Parameters
-        ----------
-        source
-            population where projection originates.
-
-        """
-
-        # get source firing rate
-        source_fr = source.get_firing_rate()
-
-        # project source firing rate to connected populations
-        #####################################################
-
-        # extract network connections
-        targets = source.targets
-
-        # loop over target populations connected to source
-        for i, syn in enumerate(targets):
-            syn.pass_input(source_fr * source.target_weights[i], delay=source.target_delays[i])
-            # it would be possible to wrap this function using functools.partial to remove the delay lookup
+            pop = node["data"]
+            pop.project_to_targets()
 
     def get_population_states(self,
                               state_variable_idx: int,

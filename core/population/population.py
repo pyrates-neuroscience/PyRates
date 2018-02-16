@@ -52,7 +52,34 @@ class AbstractBasePopulation(RepresentationBase):
         self.target_weights.append(weight)
         self.target_delays.append(delay)
 
+    def project_to_targets(self) -> None:
+        """Projects output of given population to the other circuit populations its connected to.
 
+        Parameters
+        ----------
+
+
+        """
+
+        # get source firing rate
+        source_fr = self.get_firing_rate()
+
+        # project source firing rate to connected populations
+        #####################################################
+
+        # extract network connections
+        targets = self.targets
+
+        # loop over target populations connected to source
+        for i, syn in enumerate(targets):
+            syn.pass_input(source_fr * self.target_weights[i], delay=self.target_delays[i])
+            # it would be possible to wrap this function using functools.partial to remove the delay lookup
+
+    def get_firing_rate(self):
+        """Returns the firing rate as output of the population."""
+
+        raise NotImplementedError("Method `get_firing_rate` needs to be implemented in subclass.")
+        # a cleaner way would be to introduce a metaclass and decorate with abc.abstractmethod
 
 
 class Population(AbstractBasePopulation):
