@@ -6,6 +6,7 @@ __author__ = 'Richard Gast'
 import numpy as np
 from core.circuit import Circuit, CircuitFromScratch, CircuitFromCircuit
 from core.population import SecondOrderPopulation, PlasticPopulation, JansenRitPyramidalCells, JansenRitInterneurons
+from core.utility import update_param
 
 
 #####################
@@ -93,7 +94,7 @@ class Thalamus(Circuit):
 
     def __init__(self, step_size=1e-3, max_synaptic_delay=None, epsilon=1e-10, connectivity=None,
                  connectivity_scaling=20., feedback=None, delays=None, synapse_params=None,
-                 axon_params=None, init_states=None):
+                 axon_params=None, init_states=None, resting_potentials=None):
         """Instantiates thalamus model.
         """
 
@@ -115,53 +116,68 @@ class Thalamus(Circuit):
                                      [0., fb[1] * c]]
             connectivity[:, :, 2] = [[0., 0.4 * c],        # GABAB
                                      [0., fb[1] * c]]
+        # resting potentials
+        if not resting_potentials:
+            resting_potentials = [-0.065, -0.070]
 
         # synapses
         synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse', 'GABABCurrentSynapse']
         synapse_classes = ['DoubleExponentialSynapse', 'DoubleExponentialSynapse', 'TransformedInputSynapse']
-        if not synapse_params:
-            ampa_params = {'efficacy': 0.006,
-                           'tau_rise': 0.0077,
-                           'tau_decay': 0.017}
-            gabaa_params = {'efficacy': -0.001,
-                            'tau_rise': 0.0077,
-                            'tau_decay': 0.025}
-            gabab_params = {'efficacy': -0.018,
-                            'tau_rise': 0.07,
-                            'tau_decay': 0.125,
-                            'threshold': 11.,
-                            'steepness': 100.}
-            synapse_params = [ampa_params, gabaa_params, gabab_params]
+
+        ampa_params = {'efficacy': 0.006,
+                       'tau_rise': 1./130,
+                       'tau_decay': 1./60}
+        gabaa_params = {'efficacy': -0.001,
+                        'tau_rise': 1./130,
+                        'tau_decay': 1./40}
+        gabab_params = {'efficacy': -0.018,
+                        'tau_rise': 1./15,
+                        'tau_decay': 1./8,
+                        'threshold': 11.,
+                        'steepness': -0.01}
+        synapse_params_tmp = [ampa_params, gabaa_params, gabab_params]
+
+        if synapse_params:
+            for i, syn in enumerate(synapse_params):
+                for key, val in syn.items():
+                    synapse_params_tmp[i][key] = val
 
         # axons
         axon_types = ['SuffczynskiAxon', 'SuffczynskiAxon']
         axon_class = 'BurstingAxon'
-        if not axon_params:
-            tcr_params = {'bin_size': step_size,
-                          'epsilon': epsilon,
-                          'max_delay': max_synaptic_delay,
-                          'tau_rise': 0.05,
-                          'tau_decay': 0.1,
-                          'activation_fr': 800.,
-                          'activation_threshold': 0.006,
-                          'activation_steepness': 670.,
-                          'inactivation_threshold': -0.016,
-                          'inactivation_steepness': 170.}
-            re_params = {'bin_size': step_size,
-                         'epsilon': epsilon,
-                         'max_delay': max_synaptic_delay,
-                         'tau_rise': 0.05,
-                         'tau_decay': 0.1,
-                         'activation_fr': 800.,
-                         'activation_threshold': 0.016,
-                         'activation_steepness': 670.,
-                         'inactivation_threshold': -0.006,
-                         'inactivation_steepness': 170.}
-            axon_params = [tcr_params, re_params]
+
+        tcr_params = {'bin_size': step_size,
+                      'epsilon': epsilon,
+                      'max_delay': max_synaptic_delay,
+                      'resting_potential': resting_potentials[0],
+                      'tau_rise': 1./20,
+                      'tau_decay': 1/10.,
+                      'max_firing_rate': 800.,
+                      'activation_threshold': resting_potentials[0]+0.006,
+                      'activation_steepness': -0.0015,
+                      'inactivation_threshold': resting_potentials[0]-0.016,
+                      'inactivation_steepness': 0.006}
+        re_params = {'bin_size': step_size,
+                     'epsilon': epsilon,
+                     'max_delay': max_synaptic_delay,
+                     'resting_potential': resting_potentials[1],
+                     'tau_rise': 1./20,
+                     'tau_decay': 1/10.,
+                     'max_firing_rate': 800.,
+                     'activation_threshold': resting_potentials[1]+0.016,
+                     'activation_steepness': -0.0015,
+                     'inactivation_threshold': resting_potentials[1]-0.006,
+                     'inactivation_steepness': 0.006}
+        axon_params_tmp = [tcr_params, re_params]
+
+        if axon_params:
+            for i, ax in enumerate(axon_params):
+                for key, val in ax.items():
+                    axon_params_tmp[i][key] = val
 
         # initial condition
         if init_states is None:
-            init_states = np.zeros(n_populations)
+            init_states = np.array(resting_potentials)
 
         # delays
         if delays is None:
@@ -173,22 +189,24 @@ class Thalamus(Circuit):
                                     init_state=init_states[0],
                                     step_size=step_size,
                                     max_synaptic_delay=max_synaptic_delay,
-                                    synapse_params=synapse_params,
-                                    axon_params=axon_params[0],
+                                    synapse_params=synapse_params_tmp,
+                                    axon_params=axon_params_tmp[0],
                                     synapse_class=synapse_classes,
                                     axon_class=axon_class,
-                                    label=population_labels[0])
+                                    label=population_labels[0],
+                                    resting_potential=resting_potentials[0])
 
         RE = SecondOrderPopulation(synapses=synapse_types[0:2],
                                    axon=axon_types[1],
                                    init_state=init_states[1],
                                    step_size=step_size,
                                    max_synaptic_delay=max_synaptic_delay,
-                                   synapse_params=synapse_params[0:2],
-                                   axon_params=axon_params[1],
+                                   synapse_params=synapse_params_tmp[0:2],
+                                   axon_params=axon_params_tmp[1],
                                    synapse_class=synapse_classes[0:2],
                                    axon_class=axon_class,
-                                   label=population_labels[1])
+                                   label=population_labels[1],
+                                   resting_potential=resting_potentials[1])
 
         # call super init
         #################

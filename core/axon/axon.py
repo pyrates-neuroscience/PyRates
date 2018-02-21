@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import numpy as np
 from typing import Optional, Callable, Union, overload, List
+from core.utility import parametric_sigmoid, normalized_sigmoid, plastic_sigmoid, plastic_normalized_sigmoid
 
 from core.utility.filestorage import RepresentationBase
 
@@ -118,6 +119,8 @@ class Axon(RepresentationBase):
         # check whether new figure needs to be created
         if axes is None:
             fig, axes = plt.subplots(num='Wave-To-Pulse-Function')
+        else:
+            fig = axes.get_figure()
 
         # plot firing rates over membrane potentials
         axes.plot(membrane_potentials, firing_rates)
@@ -129,42 +132,14 @@ class Axon(RepresentationBase):
 
         # show plot
         if create_plot:
-            fig = axes.get_figure()
             fig.show()
 
         return axes
 
 
-##################
-# sigmoidal axon #
-##################
-
-def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
-                       max_firing_rate: float,
-                       membrane_potential_threshold: float,
-                       sigmoid_steepness: float
-                       ) -> Union[float, np.ndarray]:
-    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
-
-    Parameters
-    ----------
-    membrane_potential
-        Membrane potential for which to calculate firing rate [unit = V].
-    max_firing_rate
-        See parameter description of `max_firing_rate` of :class:`SigmoidAxon`.
-    membrane_potential_threshold
-        See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
-    sigmoid_steepness
-        See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
-
-    Returns
-    -------
-    float
-        average firing rate [unit = 1/s]
-
-    """
-
-    return max_firing_rate / (1 + np.exp(sigmoid_steepness * (membrane_potential_threshold - membrane_potential)))
+###################
+# sigmoidal axons #
+###################
 
 
 class SigmoidAxon(Axon):
@@ -179,6 +154,8 @@ class SigmoidAxon(Axon):
     sigmoid_steepness
         Determines steepness of the sigmoidal transfer function mapping membrane potential to firing rate
         [unit = 1/V].
+    normalize
+        If true, firing rate will be normalized to be zero at membrane potential threshold.
     axon_type
         See documentation of parameter `axon_type` in :class:`Axon`
 
@@ -197,6 +174,7 @@ class SigmoidAxon(Axon):
                  max_firing_rate: float,
                  membrane_potential_threshold: float,
                  sigmoid_steepness: float,
+                 normalize: bool = False,
                  axon_type: Optional[str] = None
                  ) -> None:
         """Initializes sigmoid axon instance.
@@ -214,7 +192,7 @@ class SigmoidAxon(Axon):
         # call super init
         #################
 
-        super().__init__(transfer_function=parametric_sigmoid,
+        super().__init__(transfer_function=parametric_sigmoid if not normalize else normalized_sigmoid,
                          axon_type=axon_type,
                          max_firing_rate=max_firing_rate,
                          membrane_potential_threshold=membrane_potential_threshold,
@@ -295,9 +273,72 @@ class SigmoidAxon(Axon):
         # call super method
         ###################
 
-        super().plot_transfer_function(membrane_potentials=membrane_potentials,
-                                       create_plot=create_plot,
-                                       axes=axes)
+        axes = super().plot_transfer_function(membrane_potentials=membrane_potentials,
+                                              create_plot=create_plot,
+                                              axes=axes)
+
+        return axes
+
+
+class PlasticSigmoidAxon(Axon):
+    """Sigmoid axon class. Represents average firing behavior at axon hillok via sigmoid as described by [1]_. with
+    spike frequency adaptation enabled as described in [2]_.
+
+    Parameters
+    ----------
+    max_firing_rate
+        Determines maximum firing rate of axon [unit = 1/s].
+    membrane_potential_threshold
+        Determines membrane potential for which output firing rate is half the maximum firing rate [unit = V].
+    sigmoid_steepness
+        Determines steepness of the sigmoidal transfer function mapping membrane potential to firing rate
+        [unit = 1/V].
+    normalize
+        If true, firing rate will be normalized to be zero at membrane potential threshold.
+    axon_type
+        See documentation of parameter `axon_type` in :class:`Axon`
+
+    See Also
+    --------
+    :class:`Axon`: documentation for a detailed description of the object attributes and methods.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+    .. [2] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
+       Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
+
+    """
+
+    def __init__(self,
+                 max_firing_rate: float,
+                 membrane_potential_threshold: float,
+                 sigmoid_steepness: float,
+                 normalize: bool = False,
+                 axon_type: Optional[str] = None
+                 ) -> None:
+        """Initializes sigmoid axon instance.
+        """
+
+        # check input parameters
+        ########################
+
+        if max_firing_rate < 0:
+            raise ValueError('Maximum firing rate cannot be negative.')
+
+        if sigmoid_steepness < 0:
+            raise ValueError('Sigmoid steepness cannot be negative.')
+
+        # call super init
+        #################
+
+        super().__init__(transfer_function=plastic_sigmoid if not normalize else plastic_normalized_sigmoid,
+                         axon_type=axon_type,
+                         max_firing_rate=max_firing_rate,
+                         membrane_potential_threshold=membrane_potential_threshold,
+                         sigmoid_steepness=sigmoid_steepness,
+                         adaptation=0.)
 
 
 ##################
@@ -321,6 +362,8 @@ class BurstingAxon(Axon):
         See description of parameter `axon_type` of :class:`Axon`.
     max_delay
         Maximal time delay after which a certain membrane potential still affects the firing rate [unit = s].
+    max_firing_rate
+        Maximum firing rate of axon [unit = 1/s] (default = 800.).
     epsilon
         Accuracy of the synaptic kernel representation.
     resting_potential
@@ -345,6 +388,7 @@ class BurstingAxon(Axon):
                  axon_type: Optional[str] = None,
                  epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
+                 max_firing_rate: float = 800.,
                  resting_potential: float = -0.075,
                  kernel_function_args: Optional[List[dict]] = None,
                  **transfer_function_args: float
@@ -372,6 +416,7 @@ class BurstingAxon(Axon):
         self.bin_size = bin_size
         self.epsilon = epsilon
         self.max_delay = max_delay
+        self.max_firing_rate = max_firing_rate
         self.resting_potential = resting_potential
         self.kernel_function = kernel_functions[0]
         self.kernel_function_args = kernel_function_args[0] if kernel_function_args else dict()
@@ -389,6 +434,7 @@ class BurstingAxon(Axon):
         #####################
 
         self.axon_kernel = self.build_kernel()
+        self.kernel_length = len(self.axon_kernel)
 
         # initialize membrane potential buffer
         ######################################
@@ -494,13 +540,13 @@ class BurstingAxon(Axon):
         #######################
 
         # multiply membrane potentials with kernel
-        kernel_value = self.kernel_nonlinearity(self.membrane_potentials[0:len(self.axon_kernel)],
+        kernel_value = self.kernel_nonlinearity(self.membrane_potentials[0:self.kernel_length],
                                                 **self.kernel_nonlinearity_args) * self.axon_kernel
 
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
-        return kernel_value * super().compute_firing_rate(membrane_potential)
+        return kernel_value * super().compute_firing_rate(membrane_potential) * self.max_firing_rate
 
     def clear(self):
         """Function that clears membrane potential inputs.
@@ -514,40 +560,8 @@ class BurstingAxon(Axon):
 
         # update kernel
         self.axon_kernel = self.build_kernel()
+        self.kernel_length = len(self.axon_kernel)
 
         # update buffer
         # TODO: implement interpolation from old to new array
         self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
-
-#################
-# try-out stuff #
-#################
-
-
-# def kernel(t, n1, n2):
-#     return (np.exp(-t * n1) - np.exp(-t * n2)) * ((n1 * n2)/(n2 - n1))
-#
-#
-# def nonlinearity(x, theta, sigma, e):
-#     return e / (1 + np.exp((x - theta)/sigma))
-#
-#
-# resting_potential = -0.065
-# nl_n = {'theta': resting_potential-0.016,
-#         'sigma': 0.006,
-#         'e': 1.}
-# nl_m = {'theta': resting_potential+0.006,
-#         'sigma': -0.0015,
-#         'e': 800.}
-# kernel_args = {'n1': 10.,
-#                'n2': 20.}
-#
-# ba1 = BurstingAxon(nonlinearity, [kernel, nonlinearity], kernel_function_args=[kernel_args, nl_n],
-#                   bin_size=1e-3, max_delay=.3, resting_potential=resting_potential, **nl_m)
-# ba2 = SigmoidAxon(5., resting_potential+0.006, 560.)
-# membrane_potentials = np.arange(-0.09, -0.03, 0.001)
-# from matplotlib.pyplot import *
-# fig, axes = subplots()
-# axes = ba1.plot_transfer_function(membrane_potentials=membrane_potentials, axes=axes)
-# axes = ba2.plot_transfer_function(membrane_potentials=membrane_potentials, axes=axes)
-# fig.show()

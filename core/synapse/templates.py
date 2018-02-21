@@ -5,8 +5,7 @@ from typing import Optional, Union
 import numpy as np
 
 from core.synapse import DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse
-from core.synapse import double_exponential
-from core.axon import parametric_sigmoid
+from core.utility import synaptic_sigmoid, double_exponential
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
@@ -119,31 +118,6 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
                          )
 
 
-def gabab_sigmoid(firing_rate: Union[float, np.ndarray],
-                  threshold: float,
-                  steepness: float
-                  ) -> Union[float, np.ndarray]:
-    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
-
-    Parameters
-    ----------
-    firing_rate
-        Membrane potential for which to calculate firing rate [unit = V].
-    threshold
-        See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
-    steepness
-        See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
-
-    Returns
-    -------
-    float
-        average firing rate [unit = 1/s]
-
-    """
-
-    return 1 / (1 + np.exp(steepness * (threshold - firing_rate)))
-
-
 class GABABCurrentSynapse(TransformedInputSynapse):
     """Defines a current-based synapse with GABAB neuroreceptor.
     
@@ -200,7 +174,7 @@ class GABABCurrentSynapse(TransformedInputSynapse):
         ###################
 
         super().__init__(kernel_function=double_exponential,
-                         input_transform=gabab_sigmoid,
+                         input_transform=synaptic_sigmoid,
                          efficacy=efficacy,
                          max_delay=max_delay,
                          buffer_size=buffer_size,
@@ -228,7 +202,7 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
     epsilon
         See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
-        Default = 1.273 * 7.2e-10 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
+        Default = 7.2e-10 S. See Also documentation of parameter `efficacy` of :class:`Synapse`.
     tau_decay
         Default = 0.0015 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
     tau_rise
@@ -248,9 +222,9 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
                  max_delay: Optional[float] = None,
                  buffer_size: float = 0.,
                  epsilon: float = 1e-13,
-                 efficacy: float = 7.2e-10,  # * 1.273
-                 tau_decay: float = 0.0015,
-                 tau_rise: float = 0.000009,
+                 efficacy: float = 7.2e-10 * 1.273,
+                 tau_decay: float = 1.0e-3,
+                 tau_rise: float = 2e-4,
                  reversal_potential: float = 0.0
                  ) -> None:
         """
@@ -283,7 +257,7 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
     epsilon
         See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
-        Default = 1.358 * -4e-11 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
+        Default = 4e-11 S. See Also documentation of parameter `efficacy` of :class:`Synapse`.
     tau_decay
         Default = 0.02 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
     tau_rise
@@ -303,9 +277,9 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                  max_delay: Optional[float] = None,
                  buffer_size: float = 0.,
                  epsilon: float = 1e-13,
-                 efficacy: float = 4e-11,  # * 1.358
-                 tau_decay: float = 0.008,  # 0.02
-                 tau_rise: float = 0.0004,
+                 efficacy: float = 4e-11 * 1.358,
+                 tau_decay: float = 6e-3,  # 0.02
+                 tau_rise: float = 3e-4,
                  reversal_potential: float = -0.080
                  ) -> None:
         """
@@ -320,7 +294,7 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                          buffer_size=buffer_size,
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
-                         synapse_type='GABAA_current',
+                         synapse_type='GABAA_conductance',
                          conductivity_based=True)
 
 

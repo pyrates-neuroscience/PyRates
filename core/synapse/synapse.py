@@ -12,6 +12,7 @@ from typing import Optional, Union, Callable, overload
 from matplotlib.axes import Axes
 
 from core.utility.filestorage import RepresentationBase
+from core.utility import exponential, double_exponential
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -139,10 +140,10 @@ class Synapse(RepresentationBase):
 
         # set decorator for synaptic current getter (only relevant for conductivity based synapses)
         if conductivity_based:
-            self.kernel_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential) \
-                                                             * self.depression
+
+            self.kernel_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
         else:
-            self.kernel_scaling = lambda membrane_potential: self.depression
+            self.kernel_scaling = lambda membrane_potential: 1.0
 
         # build synaptic kernel
         #######################
@@ -260,7 +261,7 @@ class Synapse(RepresentationBase):
         self.synaptic_input[0:-1] = self.synaptic_input[1:]
         self.synaptic_input[-1] = 0.
 
-        return kernel_value * self.kernel_scaling(membrane_potential)
+        return kernel_value * self.kernel_scaling(membrane_potential) * self.depression
 
     def pass_input(self, synaptic_input: float, delay: int = 0
                    ) -> None:
@@ -349,31 +350,6 @@ class Synapse(RepresentationBase):
 ##############################
 
 
-def double_exponential(time_points: Union[float, np.ndarray],
-                       tau_decay: float,
-                       tau_rise: float
-                       ) -> Union[float, np.ndarray]:
-    """Uses double exponential function to calculate synaptic kernel value for each passed time-point.
-
-    Parameters
-    ----------
-    time_points : Union[float, np.ndarray]
-        Vector of time-points for which to calculate kernel value [unit = s].
-    tau_decay
-        See parameter documentation of `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        See parameter documentation of `tau_rise` of :class:`DoubleExponentialSynapse`.
-
-    Returns
-    -------
-    Union[float, np.ndarray]
-        Kernel values at the time-points [unit = S if conductivity based else A].
-
-    """
-
-    return np.exp(-time_points / tau_decay) - np.exp(-time_points / tau_rise)
-
-
 class DoubleExponentialSynapse(Synapse):
     """Basic synapse class. Represents average behavior of a defined post-synapse of a population.
 
@@ -442,28 +418,6 @@ class DoubleExponentialSynapse(Synapse):
 #######################
 # exponential synapse #
 #######################
-
-
-def exponential(time_points: Union[float, np.ndarray],
-                tau: float,
-                ) -> Union[float, np.ndarray]:
-    """Uses exponential function to calculate synaptic kernel value for each passed time-point.
-
-    Parameters
-    ----------
-    time_points : Union[float, np.ndarray]
-        Vector of time-points for which to calculate kernel value [unit = s].
-    tau
-        See parameter documentation of `tau` of :class:`ExponentialSynapse`.
-
-    Returns
-    -------
-    Union[float, np.ndarray]
-        Kernel values at the time-points [unit = S if conductivity based else A].
-
-    """
-
-    return time_points * np.exp(-time_points / tau) / tau
 
 
 class ExponentialSynapse(Synapse):

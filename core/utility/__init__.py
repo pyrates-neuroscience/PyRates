@@ -10,9 +10,11 @@ from .helper_functions import interpolate_array
 from .helper_functions import nmrse
 from .helper_functions import check_nones
 from .helper_functions import deep_compare
+from .bio_features import *
 from .filestorage import get_simulation_data
 from .filestorage import save_simulation_data_to_file
 from .filestorage import read_simulation_data_from_file
+
 # from .construct import construct_circuit_from_file  # this one fails tests due to circular import
 
 

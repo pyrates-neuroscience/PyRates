@@ -144,7 +144,7 @@ class Circuit(RepresentationBase):
         # create network graph
         ######################
 
-        self.network_graph = self.build_graph(plasticity_on_input=True)
+        self.network_graph = self.build_graph(plasticity_on_input=False)
 
     # noinspection PyPep8Naming
     @property
@@ -362,7 +362,7 @@ class Circuit(RepresentationBase):
         return _states
 
     def build_graph(self,
-                    plasticity_on_input: bool = True):
+                    plasticity_on_input: bool = False):
         """Builds graph from circuit information.
         """
 
@@ -373,7 +373,9 @@ class Circuit(RepresentationBase):
         network_graph = MultiDiGraph()
 
         # add populations as network nodes
+        n_synapses_old = np.zeros(self.n_populations, dtype=int)
         for i in range(self.n_populations):
+            n_synapses_old[i] = self.populations[i].n_synapses
             network_graph.add_node(i, data=self.populations[i])
 
         # build edges
@@ -397,7 +399,7 @@ class Circuit(RepresentationBase):
 
                         # if syn is a plastic synapse, add copies of it to target for each connection on syn
                         if isinstance(self.populations[target], PlasticPopulation) and \
-                                self.populations[target].synapse_plasticity_function_params[syn]:
+                                self.populations[target].synapse_efficacy_adaptation[syn]:
 
                             # add synapse copy to population
                             self.populations[target].add_plastic_synapse(synapse_idx=syn,
@@ -435,9 +437,11 @@ class Circuit(RepresentationBase):
 
         # turn of plasticity at original synapse if wished
         if not plasticity_on_input:
-            for pop in self.populations:
-                for syn in range(len(pop.synapses[0:self.n_synapses])):
-                    pop.synapse_plasticity_function_params[syn] = False
+            for i, pop in enumerate(self.populations):
+                for syn in range(n_synapses_old[i]):
+                    if type(pop) is PlasticPopulation and pop.synapse_efficacy_adaptation[syn]:
+                        pop.synapse_efficacy_adaptation[syn] = None
+                        pop.state_variables[-1].pop(-1)
 
         return network_graph
 
@@ -506,7 +510,7 @@ class Circuit(RepresentationBase):
     def plot_population_states(self,
                                population_idx: Optional[Union[List[int], range]] = None,
                                state_idx: int = 0,
-                               time_window: Optional[np.ndarray] = None,
+                               time_window: Optional[Union[np.ndarray, list]] = None,
                                create_plot: bool = True,
                                axes: Optional[Axes] = None
                                ) -> object:
@@ -548,7 +552,6 @@ class Circuit(RepresentationBase):
 
         if axes is None:
             fig, axes = plt.subplots(num='Population States')
-
         else:
             fig = axes.get_figure()
 
@@ -641,11 +644,10 @@ class CircuitFromScratch(Circuit):
                  resting_potential: Union[float, List[float]] = -0.075,
                  init_states: Union[float, np.ndarray] = 0.,
                  population_labels: Optional[List[str]] = None,
-                 axon_plasticity_function: Optional[List[Callable[[float], float]]] = None,
-                 axon_plasticity_target_param: Optional[List[str]] = None,
-                 axon_plasticity_function_params: Optional[List[dict]] = None,
-                 synapse_plasticity_function: Optional[List[Callable[[float], float]]] = None,
-                 synapse_plasticity_function_params: Optional[List[List[dict]]] = None,
+                 spike_frequency_adaptation: Optional[List[Callable[[float], float]]] = None,
+                 spike_frequency_adaptation_args: Optional[List[dict]] = None,
+                 synapse_efficacy_adaptation: Optional[List[List[Callable[[float], float]]]] = None,
+                 synapse_efficacy_adaptation_args: Optional[List[List[dict]]] = None
                  ) -> None:
         """Instantiates circuit from synapse/axon types and parameters.
         """
@@ -712,14 +714,14 @@ class CircuitFromScratch(Circuit):
         synapse_params = check_nones(synapse_params, n_synapses)
         axons = check_nones(axons, N)
         axon_params = check_nones(axon_params, N)
-        axon_plasticity_function = check_nones(axon_plasticity_function, N)
-        axon_plasticity_target_param = check_nones(axon_plasticity_target_param, N)
-        axon_plasticity_function_params = check_nones(axon_plasticity_function_params, N)
-        synapse_plasticity_function = check_nones(synapse_plasticity_function, N)
-        synapse_plasticity_function_params = check_nones(synapse_plasticity_function_params, N)
-        for i, syn in enumerate(synapse_plasticity_function_params):
+        spike_frequency_adaptation = check_nones(spike_frequency_adaptation, N)
+        spike_frequency_adaptation_args = check_nones(spike_frequency_adaptation_args, N)
+        synapse_efficacy_adaptation = check_nones(synapse_efficacy_adaptation, N)
+        synapse_efficacy_adaptation_args = check_nones(synapse_efficacy_adaptation_args, N)
+
+        for i, syn in enumerate(synapse_efficacy_adaptation_args):
             syn = check_nones(syn, n_synapses)
-            synapse_plasticity_function_params[i] = syn
+            synapse_efficacy_adaptation_args[i] = syn
         if not population_labels:
             population_labels = ['Custom' for _ in range(N)]
         if isinstance(synapse_class, str):
@@ -741,7 +743,7 @@ class CircuitFromScratch(Circuit):
             synapses_tmp = [synapses[j] for j in idx]
             synapse_params_tmp = [synapse_params[j] for j in idx]
             synapse_class_tmp = [synapse_class[j] for j in idx]
-            synapse_plasticity_function_params_tmp = [synapse_plasticity_function_params[i][j] for j in idx]
+            synapse_efficacy_adaptation_args_tmp = [synapse_efficacy_adaptation_args[i][j] for j in idx]
 
             # create dictionary with relevant parameters
             pop_params = {'synapses': synapses_tmp,
@@ -758,11 +760,10 @@ class CircuitFromScratch(Circuit):
 
             # add plasticity parameters if necessary
             if population_class[i] == 'SecondOrderPlasticPopulation' or population_class[i] == 'PlasticPopulation':
-                pop_params['axon_plasticity_function'] = axon_plasticity_function[i]
-                pop_params['axon_plasticity_target_param'] = axon_plasticity_target_param[i]
-                pop_params['axon_plasticity_function_params'] = axon_plasticity_function_params[i]
-                pop_params['synapse_plasticity_function'] = synapse_plasticity_function[i]
-                pop_params['synapse_plasticity_function_params'] = synapse_plasticity_function_params_tmp
+                pop_params['spike_frequency_adaptation'] = spike_frequency_adaptation[i]
+                pop_params['spike_frequency_adaptation_args'] = spike_frequency_adaptation_args[i]
+                pop_params['synapse_efficacy_adaptation'] = synapse_efficacy_adaptation[i]
+                pop_params['synapse_efficacy_adaptation_args'] = synapse_efficacy_adaptation_args_tmp
 
             # add first-order parameters if necessary
             if population_class[i] == 'Population' or population_class[i] == 'PlasticPopulation':
@@ -1053,7 +1054,7 @@ class CircuitFromCircuit(Circuit):
             input_populations = np.zeros((n_circuits, n_circuits, 1), dtype=int).tolist()
 
         # set output populations
-        if not output_populations:
+        if output_populations is None:
             output_populations = np.zeros((n_circuits, n_circuits), dtype=int)
 
         # initialize stuff

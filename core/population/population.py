@@ -12,7 +12,7 @@ from matplotlib.axes import Axes
 from typing import List, Optional, Union, Dict, Callable, TypeVar
 
 
-from core.axon import Axon, SigmoidAxon, BurstingAxon
+from core.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse
 from core.utility import set_instance, check_nones
 from core.utility.filestorage import RepresentationBase
@@ -359,7 +359,6 @@ class Population(RepresentationBase):
         # TODO: multiplying with a vector of 1s by default costs computation time.
         return self.synaptic_currents @ self.extrinsic_synaptic_modulation.T
 
-
     def get_leak_current(self,
                          membrane_potential: FloatLike
                          ) -> FloatLike:
@@ -652,14 +651,13 @@ class PlasticPopulation(Population):
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
-                 axon_class: str = 'SigmoidAxon',
+                 axon_class: str = 'PlasticSigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Custom',
-                 axon_plasticity_function: Optional[Callable[[float], float]] = None,
-                 axon_plasticity_target_param: Optional[str] = None,
-                 axon_plasticity_function_params: Optional[Dict[str, float]] = None,
-                 synapse_plasticity_function: Callable[[float], float] = None,
-                 synapse_plasticity_function_params: List[dict] = None,
+                 spike_frequency_adaptation: Optional[Callable[[float], float]] = None,
+                 spike_frequency_adaptation_args: Optional[dict] = None,
+                 synapse_efficacy_adaptation: Optional[List[Callable[[float], float]]] = None,
+                 synapse_efficacy_adaptation_args: Optional[List[dict]] = None
                  ) -> None:
         """Instantiation of plastic population.
         """
@@ -687,33 +685,48 @@ class PlasticPopulation(Population):
         ###########################
 
         # for axon
-        if axon_plasticity_function:
-            if not axon_plasticity_target_param or not axon_plasticity_function_params:
-                raise ValueError("If an axon_plasticity_function was given, then also axon_plasticity_target_param and "
-                                 "axon_plasticity_function_params need to be specified.")
-            self.axon_plasticity_target_param = axon_plasticity_target_param
-            if axon_plasticity_function_params:
-                self.axon_plasticity_function_params = axon_plasticity_function_params
-            else:
-                self.axon_plasticity_function_params = dict()
-            self.state_variables[-1] += [self.axon.transfer_function_args[self.axon_plasticity_target_param]]
-        self.axon_plasticity_function = axon_plasticity_function
+        self.spike_frequency_adaptation = spike_frequency_adaptation
+        if self.spike_frequency_adaptation:
+            self.spike_frequency_adaptation_args = spike_frequency_adaptation_args if spike_frequency_adaptation_args \
+                else dict()
+            self.state_variables[-1] += [self.axon.transfer_function_args['adaptation']]
 
-        # for synapses
-        self.synapse_plasticity_function = synapse_plasticity_function
-        if synapse_plasticity_function_params:
-            if len(synapse_plasticity_function_params) == 1:
-                self.synapse_plasticity_function_params = [synapse_plasticity_function_params[0]
-                                                           for _ in range(self.n_synapses)]
-            else:
-                self.synapse_plasticity_function_params = synapse_plasticity_function_params
+        # synaptic plasticity function
+        if synapse_efficacy_adaptation and (type(synapse_efficacy_adaptation) is not list):
+            self.synapse_efficacy_adaptation = [synapse_efficacy_adaptation for _ in range(self.n_synapses)]
+        elif synapse_efficacy_adaptation and (len(synapse_efficacy_adaptation) != self.n_synapses):
+            raise ValueError('If list of synaptic plasticity functions is passed, its length must correspond to the'
+                             'number of synapses of the population.')
+        elif not synapse_efficacy_adaptation:
+            self.synapse_efficacy_adaptation = [None for _ in range(self.n_synapses)]
         else:
-            self.synapse_plasticity_function_params = check_nones(synapse_plasticity_function_params, self.n_synapses)
+            self.synapse_efficacy_adaptation = synapse_efficacy_adaptation
 
-        if self.synapse_plasticity_function:
-            for i in range(self.n_synapses):
-                if self.synapse_plasticity_function_params[i]:
-                    self.state_variables[-1] += [self.synapses[i].depression]
+        # synaptic plasticity state variables
+        for i in range(self.n_synapses):
+            if self.synapse_efficacy_adaptation[i]:
+                self.state_variables[-1] += [self.synapses[i].depression]
+
+        # synaptic plasticity function arguments
+        if synapse_efficacy_adaptation_args is None or type(synapse_efficacy_adaptation_args) is dict:
+            self.synapse_efficacy_adaptation_args = [synapse_efficacy_adaptation_args for _ in range(self.n_synapses)]
+        else:
+            self.synapse_efficacy_adaptation_args = synapse_efficacy_adaptation_args
+
+        if len(self.synapse_efficacy_adaptation) != len(self.synapse_efficacy_adaptation_args):
+            raise AttributeError('Number of synaptic plasticity functions and plasticity function parameter '
+                                 'dictionaries has to be equal.')
+
+    def _set_axon(self,
+                  axon_subtype: Optional[str] = None,
+                  axon_type: str = 'SigmoidAxon',
+                  axon_params: Optional[dict] = None
+                  ):
+
+        if axon_type == 'PlasticSigmoidAxon':
+            self.axon = set_instance(PlasticSigmoidAxon, axon_subtype, axon_params)  # type: ignore
+        else:
+            super()._set_axon(axon_subtype, axon_type, axon_params)
 
     def state_update(self,
                      extrinsic_current: FloatLike = 0.,
@@ -740,37 +753,43 @@ class PlasticPopulation(Population):
         # update axonal transfer function
         #################################
 
-        if self.axon_plasticity_function:
+        if self.spike_frequency_adaptation:
 
-            # update axon
-            self.axon.transfer_function_args[self.axon_plasticity_target_param] = \
-                Population.take_step(self,
-                                     f=self.axon_plasticity_function,
-                                     y_old=self.axon.transfer_function_args[self.axon_plasticity_target_param],
-                                     firing_rate_target=self.get_firing_rate(),
-                                     **self.axon_plasticity_function_params)
-
-            # update state vector
-            self.state_variables[-1] += [self.axon.transfer_function_args[self.axon_plasticity_target_param]]
+            self.axon_update()
+            self.state_variables[-1] += [self.axon.transfer_function_args['adaptation']]
 
         # update synaptic scaling
         #########################
 
-        if self.synapse_plasticity_function:
+        for i in range(self.n_synapses):
 
-            for i in range(self.n_synapses):
+            if self.synapse_efficacy_adaptation[i]:
 
-                if self.synapse_plasticity_function_params[i]:
+                self.synapse_update(i)
+                self.state_variables[-1] += [self.synapses[i].depression]
 
-                    # update synaptic depression
-                    self.synapses[i].depression = Population.take_step(self,
-                                                                       f=self.synapse_plasticity_function,
-                                                                       y_old=self.synapses[i].depression,
-                                                                       firing_rate=self.synapses[i].synaptic_input
-                                                                       [self.synapses[i].kernel_length],
-                                                                       **self.synapse_plasticity_function_params[i])
-                    # update state vector
-                    self.state_variables[-1] += [self.synapses[i].depression]
+    def axon_update(self):
+        """Updates adaptation field of axon.
+        """
+
+        self.axon.transfer_function_args['adaptation'] = self.take_step(f=self.spike_frequency_adaptation,
+                                                                        y_old=self.axon.transfer_function_args
+                                                                        ['adaptation'],
+                                                                        **self.spike_frequency_adaptation_args)
+
+    def synapse_update(self, idx: int):
+        """Updates depression field of synapse.
+        
+        Parameters
+        ----------
+        idx
+            Synapse index.
+            
+        """
+
+        self.synapses[idx].depression = self.take_step(f=self.synapse_efficacy_adaptation[idx],
+                                                       y_old=self.synapses[idx].depression,
+                                                       **self.synapse_efficacy_adaptation_args[idx])
 
     def add_plastic_synapse(self,
                             synapse_idx: int,
@@ -803,8 +822,10 @@ class PlasticPopulation(Population):
         if max_firing_rate is None:
             max_firing_rate = self.axon.transfer_function_args['max_firing_rate']
 
-        self.synapse_plasticity_function_params.append(self.synapse_plasticity_function_params[synapse_idx])
-        self.synapse_plasticity_function_params[-1]['max_firing_rate'] = max_firing_rate
+        self.synapse_efficacy_adaptation.append(self.synapse_efficacy_adaptation[synapse_idx])
+        self.synapse_efficacy_adaptation_args.append(self.synapse_efficacy_adaptation_args[synapse_idx])
+        self.synapse_efficacy_adaptation_args[-1]['max_firing_rate'] = max_firing_rate
+        self.state_variables[-1] += [self.synapses[synapse_idx].depression]
 
 
 ##############################
@@ -909,7 +930,7 @@ class SecondOrderPopulation(Population):
 
         """
 
-        return f(y_old, **kwargs)
+        return f(y_old, **kwargs) + self.resting_potential
 
     def get_delta_membrane_potential(self,
                                      membrane_potential: FloatLike
@@ -1000,14 +1021,13 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
-                 axon_class: str = 'SigmoidAxon',
+                 axon_class: str = 'PlasticSigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Custom',
-                 axon_plasticity_function: Callable[[float], float] = None,
-                 axon_plasticity_target_param: str = None,
-                 axon_plasticity_function_params: dict = None,
-                 synapse_plasticity_function: Callable[[float], float] = None,
-                 synapse_plasticity_function_params: Optional[List[dict]] = None,
+                 spike_frequency_adaptation: Optional[Callable[[float], float]] = None,
+                 spike_frequency_adaptation_args: Optional[dict] = None,
+                 synapse_efficacy_adaptation: Optional[List[Callable[[float], float]]] = None,
+                 synapse_efficacy_adaptation_args: Optional[List[dict]] = None
                  ) -> None:
         """Instantiation of second order population.
         """
@@ -1026,11 +1046,10 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
                                    axon_class=axon_class,
                                    store_state_variables=store_state_variables,
                                    label=label,
-                                   axon_plasticity_function=axon_plasticity_function,
-                                   axon_plasticity_target_param=axon_plasticity_target_param,
-                                   axon_plasticity_function_params=axon_plasticity_function_params,
-                                   synapse_plasticity_function=synapse_plasticity_function,
-                                   synapse_plasticity_function_params=synapse_plasticity_function_params)
+                                   spike_frequency_adaptation=spike_frequency_adaptation,
+                                   spike_frequency_adaptation_args=spike_frequency_adaptation_args,
+                                   synapse_efficacy_adaptation=synapse_efficacy_adaptation,
+                                   synapse_efficacy_adaptation_args=synapse_efficacy_adaptation_args)
 
     def take_step(self,
                   f: Callable,

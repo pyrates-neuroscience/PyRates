@@ -212,12 +212,6 @@ class JansenRitCircuit(CircuitFromScratch):
                                 [0, 0, 0],
                                 [0, 0, fb[2] * c]]
 
-        # delays
-        # if delays is None:
-        #     delays = np.zeros((N, N))
-        # else:
-        #     delays = np.array(delays / step_size, dtype=int)
-
         # synapses
         synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
         synapse_class = 'ExponentialSynapse'
@@ -364,6 +358,8 @@ class WangKnoescheCircuit(Circuit):
         Default = 0.05 s.
     tau_recycle
         Default = 0.5 s.
+    plastic_synapses
+        Optional list that indicates whether plasticity should be enabled at 
 
     See Also
     --------
@@ -383,11 +379,15 @@ class WangKnoescheCircuit(Circuit):
                  delays: Optional[np.ndarray] = None,
                  init_states: np.ndarray = np.zeros(5),
                  tau_depression: float = 0.05,
-                 tau_recycle: float = 0.5
+                 tau_recycle: float = 0.5,
+                 plastic_synapses: Optional[List[bool]] = None
                  ) -> None:
         """Initializes a basic Wang-Knoesche circuit of pyramidal cells and inhibitory interneurons in layer 2/3 as well
         as layer 5/6 plus a layer 4 excitatory interneuron population.
         """
+
+        if not plastic_synapses:
+            plastic_synapses = [True, False]
 
         # set parameters
         ################
@@ -401,13 +401,14 @@ class WangKnoescheCircuit(Circuit):
                                     init_state=init_states[0],
                                     label='L23_PCs',
                                     tau_depression=tau_depression,
-                                    tau_recycle=tau_recycle)
+                                    tau_recycle=tau_recycle,
+                                    plastic_synapses=plastic_synapses)
         l23_iins = WangKnoescheCells(step_size=step_size,
                                      max_synaptic_delay=max_synaptic_delay,
                                      init_state=init_states[1],
                                      label='L23_IIns',
                                      synapses=['JansenRitExcitatorySynapse'],
-                                     plastic_synapses=[True],
+                                     plastic_synapses=[plastic_synapses[0]],
                                      tau_depression=tau_depression,
                                      tau_recycle=tau_recycle)
         l4_eins = WangKnoescheCells(step_size=step_size,
@@ -415,13 +416,14 @@ class WangKnoescheCircuit(Circuit):
                                     init_state=init_states[2],
                                     label='L4_EINs',
                                     synapses=['JansenRitExcitatorySynapse'],
-                                    plastic_synapses=[True],
+                                    plastic_synapses=[plastic_synapses[0]],
                                     tau_depression=tau_depression,
                                     tau_recycle=tau_recycle)
         l56_pcs = WangKnoescheCells(step_size=step_size,
                                     max_synaptic_delay=max_synaptic_delay,
                                     init_state=init_states[3],
                                     label='L56_PCs',
+                                    plastic_synapses=plastic_synapses,
                                     tau_depression=tau_depression,
                                     tau_recycle=tau_recycle)
         l56_iins = WangKnoescheCells(step_size=step_size,
@@ -429,7 +431,7 @@ class WangKnoescheCircuit(Circuit):
                                      init_state=init_states[4],
                                      label='L56_IINs',
                                      synapses=['JansenRitExcitatorySynapse'],
-                                     plastic_synapses=[True],
+                                     plastic_synapses=[plastic_synapses[0]],
                                      tau_depression=tau_depression,
                                      tau_recycle=tau_recycle)
 
@@ -481,6 +483,8 @@ class MoranCircuit(Circuit):
         Default = 1e-5 V.
     delays
         Default = None
+    tau
+        Time-scale of the spike-frequency adaptation [unit = s] (default = 0.512).
     init_states
         Default = np.zeros(3)
 
@@ -501,6 +505,7 @@ class MoranCircuit(Circuit):
                  max_synaptic_delay: Optional[float] = None,
                  epsilon: float = 1e-5,
                  delays: Optional[np.ndarray] = None,
+                 tau: Optional[float] = 0.512,
                  init_states: np.ndarray = np.zeros(3)
                  ) -> None:
         """Initializes a basic Moran circuit of pyramidal cells (plastic + non-plastic), excitatory and inhibitory
@@ -531,9 +536,6 @@ class MoranCircuit(Circuit):
                                 [0., 0., 0., 64.],
                                 [0., 0., 0., 0.],
                                 [0., 0., 0., 16.]]
-
-        # spike-frequency adaptation time constant
-        tau = 0.512
 
         # delays
         if delays is None:

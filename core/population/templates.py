@@ -3,7 +3,8 @@
 
 from typing import Optional, List, Dict, Union
 import numpy as np
-from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation
+from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation, Population
+from core.utility import moran_spike_frequency_adaptation, synaptic_efficacy_adaptation, spike_frequency_adaptation
 
 
 __author__ = "Richard Gast, Daniel Rose"
@@ -178,31 +179,6 @@ class JansenRitInterneurons(SecondOrderPopulation):
 #####################################################
 
 
-def spike_frequency_adaptation(adaptation: float,
-                               firing_rate_target: float,
-                               tau: float
-                               ) -> float:
-    """Calculates adaption in sigmoid threshold of axonal transfer function.
-
-    Parameters
-    ----------
-    adaptation
-        Determines strength of spike-frequency-adaptation [unit = V].
-    firing_rate_target
-        Target firing rate towards which spike frequency is adapted [unit = 1/s].
-    tau
-        Time constant of adaptation process [unit = s].
-
-    Returns
-    -------
-    float
-        Change in threshold of sigmoidal axonal transfer function.
-
-    """
-
-    return (firing_rate_target - adaptation) / tau
-
-
 class MoranPyramidalCells(SecondOrderPlasticPopulation):
     """Population of pyramidal cells as described in [1]_.
 
@@ -252,7 +228,7 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
-                 axon_class: str = 'Axon',
+                 axon_class: str = 'PlasticSigmoidAxon',
                  tau: Optional[float] = None,
                  store_state_variables: bool = False,
                  label: str = 'Moran_PCs'
@@ -275,6 +251,12 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
 
         params = {'tau': tau}
 
+        # axon params
+        #############
+
+        if not axon_params:
+            axon_params = [{'normalize': True} for _ in range(len(synapses))]
+
         # call super init
         #################
 
@@ -289,15 +271,25 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
                          axon_params=axon_params,
                          synapse_class=synapse_class,
                          axon_class=axon_class,
-                         axon_plasticity_function=spike_frequency_adaptation if tau else None,
-                         axon_plasticity_target_param='adaptation',
-                         axon_plasticity_function_params=params,
+                         spike_frequency_adaptation=moran_spike_frequency_adaptation if tau else None,
+                         spike_frequency_adaptation_args=params,
                          store_state_variables=store_state_variables,
                          label=label
                          )
 
+    def axon_update(self):
+        """Updates adaptation field of axon.
+        """
 
-class MoranExcitatoryInterneurons(SecondOrderPopulation):
+        self.axon.transfer_function_args['adaptation'] = Population.take_step(self,
+                                                                              f=self.spike_frequency_adaptation,
+                                                                              y_old=self.axon.transfer_function_args
+                                                                              ['adaptation'],
+                                                                              firing_rate_target=self.get_firing_rate(),
+                                                                              **self.spike_frequency_adaptation_args)
+
+
+class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
     """Population of excitatory interneurons as defined in [1]_.
 
     Parameters
@@ -345,7 +337,7 @@ class MoranExcitatoryInterneurons(SecondOrderPopulation):
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
-                 axon_class: str = 'Axon',
+                 axon_class: str = 'PlasticSigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Moran_EINs'
                  ) -> None:
@@ -361,6 +353,10 @@ class MoranExcitatoryInterneurons(SecondOrderPopulation):
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
             synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
+
+        # axon params
+        if not axon_params:
+            axon_params = [{'normalize': True} for _ in range(len(synapses))]
 
         # call super init
         #################
@@ -380,7 +376,7 @@ class MoranExcitatoryInterneurons(SecondOrderPopulation):
                          label=label)
 
 
-class MoranInhibitoryInterneurons(SecondOrderPopulation):
+class MoranInhibitoryInterneurons(SecondOrderPlasticPopulation):
     """Population of inhibitory interneurons without spike-frequency-adaptation (see [1]_).
 
     Parameters
@@ -428,13 +424,11 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
-                 axon_class: str = 'Axon',
+                 axon_class: str = 'PlasticSigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Moran_IINs'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
-
-
         """
 
         # check synapse parameters
@@ -448,6 +442,10 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
         # synapse delay
         if not max_synaptic_delay and not synapse_params:
             synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
+
+        # axon params
+        if not axon_params:
+            axon_params = [{'normalize': True} for _ in range(len(synapses))]
 
         # call super init
         #################
@@ -471,40 +469,6 @@ class MoranInhibitoryInterneurons(SecondOrderPopulation):
 #####################################################
 # wang-knoesche population with synaptic plasticity #
 #####################################################
-
-
-def synaptic_efficacy_adaptation(efficacy: float,
-                                 firing_rate: float,
-                                 max_firing_rate: float,
-                                 tau_depression: float,
-                                 tau_recycle: float
-                                 ) -> float:
-    """Calculates synaptic efficacy change.
-
-    Parameters
-    ----------
-    efficacy
-        Synaptic efficacy, See 'efficacy' parameter documentation of :class:`Synapse`.
-    firing_rate
-        Pre-synaptic firing rate [unit = 1/s].
-    max_firing_rate
-        Maximum pre-synaptic firing rate [unit = 1/s].
-    tau_depression
-        Defines synaptic depression time constant [unit = s].
-    tau_recycle
-        Defines synaptic recycling time constant [unit = s].
-
-    Returns
-    -------
-    float
-        Synaptic efficacy change.
-
-    """
-
-    depression_rate = (efficacy * firing_rate) / (max_firing_rate * tau_depression)
-    recycle_rate = (1 - efficacy) / tau_recycle
-
-    return recycle_rate - depression_rate if firing_rate > 0. else recycle_rate
 
 
 class WangKnoescheCells(SecondOrderPlasticPopulation):
@@ -592,11 +556,21 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
         params = {'tau_depression': tau_depression,
                   'tau_recycle': tau_recycle}
         param_list = list()
+        func_list = list()
+
         for p in plastic_synapses:
             if p:
                 param_list.append(params)
+                func_list.append(synaptic_efficacy_adaptation)
             else:
                 param_list.append(None)
+                func_list.append(None)
+
+        # axon params
+        #############
+
+        if axon_params is None:
+            axon_params = {'normalize': True}
 
         # call super init
         #################
@@ -614,18 +588,23 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
                          axon_class=axon_class,
                          store_state_variables=store_state_variables,
                          label=label,
-                         synapse_plasticity_function=synaptic_efficacy_adaptation,
-                         synapse_plasticity_function_params=param_list
+                         synapse_efficacy_adaptation=func_list,
+                         synapse_efficacy_adaptation_args=param_list
                          )
 
-    def get_firing_rate(self) -> Union[float, np.float64]:
-        """Calculate the current average firing rate of the population.
+    def synapse_update(self, idx: int):
+        """Updates depression field of synapse.
 
-        Returns
-        -------
-        float
-            Average firing rate of population [unit = 1/s].
+                Parameters
+                ----------
+                idx
+                    Synapse index.
 
-        """
+                """
 
-        return self.axon.compute_firing_rate(self.state_variables[-1][0]) - self.axon.compute_firing_rate(0.)
+        self.synapses[idx].depression = Population.take_step(self,
+                                                             f=self.synapse_efficacy_adaptation[idx],
+                                                             y_old=self.synapses[idx].depression,
+                                                             firing_rate=self.synapses[idx].synaptic_input[
+                                                                 self.synapses[idx].kernel_length-2],
+                                                             **self.synapse_efficacy_adaptation_args[idx])
