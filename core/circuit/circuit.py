@@ -4,13 +4,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-from networkx import MultiDiGraph
-from typing import List, Optional, Union, TypeVar, Callable
+# from networkx import MultiDiGraph
+from typing import List, Optional, Union, TypeVar, Callable, Tuple
 
 from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
 from core.population import DummyPopulation
 from core.utility import check_nones, set_instance
 from core.utility.filestorage import RepresentationBase
+from core.utility.networkx_wrapper import WrappedMultiDiGraph
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -139,6 +140,7 @@ class Circuit(RepresentationBase):
             # TODO: make sure that population step-size corresponds to circuit step-size
 
         # transform delays into steps
+        # TODO: check for dtype inside array
         self.D = np.array(self.D / self.step_size, dtype=int)
 
         # create network graph
@@ -152,30 +154,13 @@ class Circuit(RepresentationBase):
         """Read-only value for number of populations. Just keeping this as a safeguard for legacy code."""
         return self.n_populations
 
-    def run(self,
-            synaptic_inputs: np.ndarray,
-            simulation_time: float,
-            extrinsic_current: Optional[np.ndarray] = None,
-            extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
-            verbose: bool = False
-            ) -> None:
-        """Simulates circuit behavior over time.
-
-        Parameters
-        ----------
-        synaptic_inputs
-            3D array (n_timesteps x n_populations x n_synapses) of synaptic input [unit = 1/s].
-            # fixme: why have global 3D arrays for synaptic input?
-        simulation_time
-            Total simulation time [unit = s].
-        extrinsic_current
-            2D array (n_timesteps x n_populations) of current extrinsically applied to the populations [unit = A].
-        extrinsic_modulation
-            List of list of vectors (n_timesteps x n_populations x n_synapses) with synapse scalings [unit = 1].
-        verbose
-            If true, simulation progress will be printed to console.
-
-        """
+    def _prepare_run(self,
+                     synaptic_inputs: np.ndarray,
+                     simulation_time: float,
+                     extrinsic_current: Optional[np.ndarray] = None,
+                     extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
+                     ) -> Tuple[int, np.ndarray, List[List[np.ndarray]]]:
+        """Helper method to check inputs to run, but keep run function a bit cleaner."""
 
         # save run parameters to instance variable
         ##########################################
@@ -228,25 +213,65 @@ class Circuit(RepresentationBase):
 
         for i in range(self.n_populations):
             for j in range(self.n_synapses):
-                if np.sum(synaptic_inputs[:, i, j]) > 0:
+                if np.any(synaptic_inputs[:, i, j]):
                     self.add_node(DummyPopulation(synaptic_inputs[:, i, j].squeeze()),
                                   target_nodes=[i],
                                   conn_weights=[1.],
                                   conn_targets=[self.populations[i].synapses[self.synapse_mapping[i, j]]],
                                   add_to_population_list=False)
 
+        return simulation_time_steps, extrinsic_current, extrinsic_modulation
+
+    def run(self,
+            synaptic_inputs: np.ndarray,
+            simulation_time: float,
+            extrinsic_current: Optional[np.ndarray] = None,
+            extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
+            verbose: bool = False
+            ) -> None:
+        """Simulates circuit behavior over time.
+
+        Parameters
+        ----------
+        synaptic_inputs
+            3D array (n_timesteps x n_populations x n_synapses) of synaptic input [unit = 1/s].
+        simulation_time
+            Total simulation time [unit = s].
+        extrinsic_current
+            2D array (n_timesteps x n_populations) of current extrinsically applied to the populations [unit = A].
+        extrinsic_modulation
+            List of list of vectors (n_timesteps x n_populations x n_synapses) with synapse scalings [unit = 1].
+        verbose
+            If true, simulation progress will be printed to console.
+
+        """
+
+        prepared_input = self._prepare_run(synaptic_inputs,
+                                           simulation_time,
+                                           extrinsic_current,
+                                           extrinsic_modulation)
+        # just to shorten the line
+        simulation_time_steps, extrinsic_current, extrinsic_modulation = prepared_input
+        # TODO: Why are extrinsic current and extrinsic modulation defined as lists of lists?
+
         # simulate network
         ##################
 
-        for n in range(simulation_time_steps):
+        # remove some of the overhead of reading everything from the graph.
+        active_populations = []
+        for _, node in self.network_graph.nodes(data=True):
+            active_populations.append(node["data"])
+
+        for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
 
             # pass information through circuit
-            self.pass_through_circuit()
+            for source_pop in active_populations:
+                source_pop.project_to_targets()
 
             # update all population states
-            self.update_population_states(extrinsic_current=extrinsic_current[n],
-                                          extrinsic_modulation=extrinsic_modulation[n])  # type: ignore
-
+            for i, pop in enumerate(self.populations):
+                pop.state_update(extrinsic_current=extrinsic_current[n, i],
+                                 extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
             # display simulation progress
             if verbose:
                 if n == 0 or (n % (simulation_time_steps // 10)) == 0:
@@ -257,66 +282,13 @@ class Circuit(RepresentationBase):
             self.t += self.step_size
             self.run_info["time_vector"].append(self.t)
 
-    def update_population_states(self,
-                                 extrinsic_current: np.ndarray,
-                                 extrinsic_modulation: List[np.ndarray]
-                                 ) -> None:
-        """Updates states of all populations.
-        
-        Parameters
-        ----------
-        extrinsic_current
-            Extrinsic currents for each population [unit = A].
-        extrinsic_modulation
-            Extrinsic synaptic scalings for each synapse of each population.
-            
-        """
-
-        for i in range(self.n_populations):
-            self.populations[i].state_update(extrinsic_current=extrinsic_current[i],
-                                             extrinsic_synaptic_modulation=extrinsic_modulation[i])
-
-    def pass_through_circuit(self):
-        """Passes current population firing rates through circuit.
-        """
-
-        for i in range(len(self.network_graph.nodes)):
-            self.project_to_populations(i)
-
-    def project_to_populations(self, pop: int) -> None:
-        """Projects output of given population to the other circuit populations its connected to.
-
-        Parameters
-        ----------
-        pop
-            Index of population where projection origins.
-
-        """
-
-        # get source firing rate
-        source_fr = self.network_graph.nodes[pop]['data'].get_firing_rate()
-
-        # project source firing rate to connected populations
-        #####################################################
-
-        # extract network connections
-        targets = self.network_graph[pop]
-
-        # loop over target populations connected to source
-        for _, target in targets.items():
-
-            # loop over existing connections between source node and target node
-            for __, conn in target.items():
-
-                # transfer input to target node
-                conn['synapse'].pass_input(source_fr * conn['weight'], delay=conn['delay'])
-
     def get_population_states(self,
                               state_variable_idx: int,
                               population_idx: Optional[Union[list, range]] = None,
                               time_window: Optional[List[float]] = None
                               ) -> np.ndarray:
-        """Extracts specified state variable from populations and puts them into matrix.
+        """Extracts specified state variable from populations and puts them into matrix. This serves the purpose of
+        collecting data for later analysis.
 
         Parameters
         ----------
@@ -370,7 +342,7 @@ class Circuit(RepresentationBase):
         #############################
 
         # create empty directed multi-graph
-        network_graph = MultiDiGraph()
+        network_graph = WrappedMultiDiGraph()
 
         # add populations as network nodes
         n_synapses_old = np.zeros(self.n_populations, dtype=int)
@@ -392,6 +364,7 @@ class Circuit(RepresentationBase):
 
                     # check whether source connects to target via syn
                     if self.C[target, source, idx] > 0.:
+                        # fixme: this can be != 0, right?
 
                         # add edge with edge information depending on a synapse being plastic or not and multiple
                         # axonal delays being passed or not
@@ -405,7 +378,7 @@ class Circuit(RepresentationBase):
                             self.populations[target].add_plastic_synapse(synapse_idx=syn,
                                                                          max_firing_rate=self.populations[source].axon.
                                                                          transfer_function_args['max_firing_rate'] *
-                                                                         self.C[target, source, idx])
+                                                                                         self.C[target, source, idx])
 
                             # create one edge for each delay between source and target
                             if self.D_pdfs is None:

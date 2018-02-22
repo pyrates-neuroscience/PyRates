@@ -212,8 +212,12 @@ if __name__ == "__main__":
 
     import sys
 
-    print(sys.argv)
-    arg = sys.argv[1]
+    class CallError(Exception):
+        pass
+    try:
+        arg = sys.argv[1]
+    except IndexError:
+        arg = "both"
     if arg == '1':
         run_first = True
         run_second = False
