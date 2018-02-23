@@ -78,7 +78,7 @@ class AbstractBasePopulation(RepresentationBase):
     def get_firing_rate(self):
         """Returns the firing rate as output of the population."""
 
-        raise NotImplementedError("Method `get_firing_rate` needs to be implemented in subclass.")
+        raise NotImplementedError("Method `_get_firing_rate` needs to be implemented in subclass.")
         # a cleaner way would be to introduce a metaclass and decorate with abc.abstractmethod
 
 
@@ -213,12 +213,6 @@ class Population(AbstractBasePopulation):
         self.label = label
         self.max_population_delay = max_population_delay
 
-        # set initial states
-        if type(init_state) not in (list, np.ndarray):
-            self.state_variables.append([init_state])
-        else:
-            self.state_variables.append(init_state)
-
         # set synapses
         ##############
 
@@ -243,6 +237,14 @@ class Population(AbstractBasePopulation):
         ##########
 
         self._set_axon(axon, axon_params=axon_params, axon_type=axon_class)
+
+        # set initial states
+        if type(init_state) not in (list, np.ndarray):
+            self.state_variables.append([init_state])
+        else:
+            self.state_variables.append(init_state)
+
+        self.axon.compute_firing_rate(self.state_variables[-1][0])
 
         # initialize extrinsic influences
         #################################
@@ -359,7 +361,7 @@ class Population(AbstractBasePopulation):
 
         """
 
-        return self.axon.compute_firing_rate(self.state_variables[-1][0])
+        return self.axon.firing_rate
 
     def get_delta_membrane_potential(self,
                                      membrane_potential: FloatLike
@@ -468,6 +470,11 @@ class Population(AbstractBasePopulation):
                                             y_old=membrane_potential)
 
         state_vars = [membrane_potential]
+
+        # compute average firing rate
+        #############################
+
+        self.axon.compute_firing_rate(membrane_potential)
 
         # update state variables
         ########################
@@ -1127,7 +1134,7 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
 
         """
 
-        return f(y_old, **kwargs)
+        return f(y_old, **kwargs) + self.resting_potential
 
     def get_delta_membrane_potential(self,
                                      membrane_potential: FloatLike
@@ -1169,10 +1176,9 @@ class DummyPopulation(AbstractBasePopulation):
         self.idx = 0
 
     def get_firing_rate(self):
-        """Pass output at current index position.
+        """Update output firing rate.
         """
 
-        output = self.output[self.idx]
         self.idx += 1
 
-        return output
+        return self.output[self.idx - 1]

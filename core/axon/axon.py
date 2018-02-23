@@ -60,6 +60,7 @@ class Axon(RepresentationBase):
         self.transfer_function = transfer_function
         self.axon_type = 'custom' if axon_type is None else axon_type
         self.transfer_function_args = transfer_function_args
+        self.firing_rate = 0.
 
     def compute_firing_rate(self, membrane_potential: float) -> float:
         """Computes average firing rate from membrane potential based on transfer function.
@@ -77,10 +78,13 @@ class Axon(RepresentationBase):
         """
 
         # TODO: use functools.partial to convert transfer function to compute_firing_rate function?
-        return self.transfer_function(membrane_potential, **self.transfer_function_args)  # type: ignore
+        self.firing_rate = self.transfer_function(membrane_potential, **self.transfer_function_args)  # type: ignore
+
+        return self.firing_rate
 
     def clear(self):
-        pass
+
+        self.firing_rate = 0.
 
     def update(self):
         pass
@@ -546,12 +550,15 @@ class BurstingAxon(Axon):
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
-        return kernel_value * super().compute_firing_rate(membrane_potential) * self.max_firing_rate
+        self.firing_rate = kernel_value * super().compute_firing_rate(membrane_potential) * self.max_firing_rate
+
+        return self.firing_rate
 
     def clear(self):
         """Function that clears membrane potential inputs.
         """
 
+        super().clear()
         self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
 
     def update(self):

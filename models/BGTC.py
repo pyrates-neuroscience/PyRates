@@ -30,38 +30,58 @@ class M1(CircuitFromScratch):
     """Model of the primary motor cortex (M1/BA4).
     """
 
-    def __init__(self, step_size=1e-3, max_synaptic_delay=None, connectivity=None, connectivity_scaling=135.,
-                 feedback=None, delays=None, synapse_params=None, conductance_based=False, axon_params=None,
-                 tau_leak=0.016, resting_potential=-0.075, init_states=None
+    def __init__(self,
+                 step_size=1e-3,
+                 max_synaptic_delay=None,
+                 connectivity=None,
+                 feedback=None,
+                 delays=None,
+                 synapse_params=None,
+                 synapse_types=None,
+                 synapse_class='ExponentialSynapse',
+                 axon_params=None,
+                 axon_types=None,
+                 axon_class='SigmoidAxon',
+                 tau_leak=0.016,
+                 resting_potential=-0.075,
+                 init_states=None,
+                 population_class='SecondOrderPopulation'
                  ):
 
         # set parameters
         ################
 
-        n_populations = 3
+        n_populations = 4
         n_synapses = 2
-        population_labels = ['L23_PCs', 'L5_PCs', 'IINs']
+        population_labels = ['S_PCs', 'M_PCs', 'D_PCs', 'IINs']
 
         # connection strengths
         if connectivity is None:
             fb = np.zeros(n_populations) if feedback is None else feedback
-            c = connectivity_scaling
             connectivity = np.zeros((n_populations, n_populations, n_synapses))
-            connectivity[:, :, 0] = [[fb[0] * c, 0.5 * c, 0.],
-                                     [1.0 * c, fb[1] * c, 0.],
-                                     [0.2 * c, 0.05 * c, fb[2] * c]]
-            connectivity[:, :, 1] = [[0., 0., 0.2 * c],
-                                     [0., 0., 0.2 * c],
-                                     [0., 0., fb[2] * c]]
+            connectivity[:, :, 0] = [[0., 4.+0.185, 2.+0.200, 0.],
+                                     [4.+0.139, 0., 0., 0.],
+                                     [2.+0.438, 0., 0., 0.],
+                                     [4.-0.179, 4.-0.407, 2.-0.318, 0.]]
+            connectivity[:, :, 1] = [[4.-0.125, 0., 0., 4.-0.177],
+                                     [0., 4.-0.026, 0., 4.-0.119],
+                                     [0., 0., 1.-0.084, 2.+0.110],
+                                     [0., 0., 0., 4.-0.114]]
+            #connectivity = np.exp(connectivity)
 
         # synapses
-        if conductance_based:
-            synapse_types = ['AMPAConductanceSynapse', 'GABAAConductanceSynapse']
-        else:
-            synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse']
+        if not synapse_types:
+            synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
+        if not synapse_class:
+            synapse_class = 'ExponentialSynapse'
+        if not synapse_params:
+            synapse_params = [{'efficacy': 1., 'tau': 8e-3}, {'efficacy': -1., 'tau': 8e-3}]
 
         # axons
-        axon_types = ['KnoescheAxon' for _ in range(n_populations)]
+        if not axon_types:
+            axon_types = ['JansenRitAxon' for _ in range(n_populations)]
+        if not axon_class:
+            axon_class = 'SigmoidAxon'
 
         # initial condition
         if init_states is None:
@@ -74,12 +94,13 @@ class M1(CircuitFromScratch):
                          delays=delays,
                          step_size=step_size,
                          synapses=synapse_types,
-                         synapse_class='DoubleExponentialSynapse',
+                         synapse_class=synapse_class,
                          synapse_params=synapse_params,
                          axons=axon_types,
                          axon_params=axon_params,
+                         axon_class=axon_class,
                          max_synaptic_delay=max_synaptic_delay,
-                         population_class='Population',
+                         population_class=population_class,
                          membrane_capacitance=1e-12,
                          tau_leak=tau_leak,
                          resting_potential=resting_potential,

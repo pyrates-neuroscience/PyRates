@@ -147,6 +147,7 @@ class Circuit(RepresentationBase):
         ######################
 
         self.network_graph = self.build_graph(plasticity_on_input=False)
+        self.n_nodes = len(self.network_graph.nodes)
 
     # noinspection PyPep8Naming
     @property
@@ -272,6 +273,7 @@ class Circuit(RepresentationBase):
             for i, pop in enumerate(self.populations):
                 pop.state_update(extrinsic_current=extrinsic_current[n, i],
                                  extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
+
             # display simulation progress
             if verbose:
                 if n == 0 or (n % (simulation_time_steps // 10)) == 0:
@@ -364,7 +366,6 @@ class Circuit(RepresentationBase):
 
                     # check whether source connects to target via syn
                     if self.C[target, source, idx] > 0.:
-                        # fixme: this can be != 0, right?
 
                         # add edge with edge information depending on a synapse being plastic or not and multiple
                         # axonal delays being passed or not
@@ -466,6 +467,8 @@ class Circuit(RepresentationBase):
                                         weight=weight,
                                         delay=delay,
                                         synapse=syn)
+
+        self.n_nodes += 1
 
         # add to population list
         ########################
@@ -944,7 +947,8 @@ class CircuitFromCircuit(Circuit):
                  delay_distributions: Optional[np.ndarray] = None,
                  input_populations: Optional[np.ndarray] = None,
                  output_populations: Optional[np.ndarray] = None,
-                 circuit_labels: Optional[List[str]] = None
+                 circuit_labels: Optional[List[str]] = None,
+                 synapse_types: Optional[List[str]] = None
                  ) -> None:
         """Instantiates circuit from population types and parameters.
         """
@@ -960,6 +964,15 @@ class CircuitFromCircuit(Circuit):
         if delays is not None and (len(circuits) != delays.shape[0] or len(circuits) != delays.shape[1]):
             raise AttributeError('First and second dimension of delays need to match the number of circuits. '
                                  'See parameter docstring for further information.')
+
+        # synapse types in circuit
+        if not synapse_types and connectivity.shape[2] != 2:
+            raise AttributeError('If last dimension of connectivity matrix refers to more or less than two synapses,'
+                                 'synapse_types have to be passed.')
+        elif synapse_types and len(synapse_types) != connectivity.shape[2]:
+            raise AttributeError('Number of passed synapse types has to match the last dimension of connectivity.')
+
+        synapse_types = synapse_types if synapse_types else ['excitatory', 'inhibitory']
 
         # fetch important circuit attributes
         ####################################
@@ -982,6 +995,7 @@ class CircuitFromCircuit(Circuit):
         delays_coll = list()
         populations = list()
         n_synapses = np.zeros(n_circuits, dtype=int)
+        synapse_mapping = list()
 
         # loop over circuits
         for i in range(n_circuits):
@@ -990,12 +1004,7 @@ class CircuitFromCircuit(Circuit):
             n_populations[i + 1] = n_populations[i] + circuits[i].n_populations
 
             # collect connectivity matrix
-            connectivity_tmp = circuits[i].C
-            n_synapses_diff = connectivity.shape[2] - connectivity_tmp.shape[2]
-            if n_synapses_diff > 0:
-                connectivity_tmp = np.append(connectivity_tmp,
-                                             np.zeros((circuits[i].n_populations, circuits[i].n_populations)), axis=2)
-            connectivity_coll.append(connectivity_tmp)
+            connectivity_coll.append(circuits[i].C)
 
             # collect delay matrix
             delays_coll.append(circuits[i].D * circuits[i].step_size)
@@ -1014,6 +1023,13 @@ class CircuitFromCircuit(Circuit):
 
                 # add population
                 populations.append(pop)
+
+            # extract synapse types
+            synapse_types_tmp = circuits[i].synapse_types
+            synapse_mapping_tmp = list()
+            for syn in synapse_types_tmp:
+                synapse_mapping_tmp.append(synapse_types.index(syn))
+            synapse_mapping.append(synapse_mapping_tmp)
 
         # check whether synapse dimensions match
         if any(n_synapses) > connectivity.shape[2]:
@@ -1038,8 +1054,8 @@ class CircuitFromCircuit(Circuit):
         for i in range(n_circuits):
 
             # set intra-circuit connectivity of circuit i
-            connectivity_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1], :] = \
-                connectivity_coll[i]
+            connectivity_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1],
+                             synapse_mapping[i]] = connectivity_coll[i]
 
             # set intra-circuit delays of circuit i
             delays_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1]] = delays_coll[i]
@@ -1053,19 +1069,19 @@ class CircuitFromCircuit(Circuit):
                     # loop over each input population in circuit i,j
                     for k in range(len(input_populations[i][j])):
                         # set inter-circuit connectivities
-                        connectivity_new[n_populations[j] + input_populations[i][j][k],
-                        n_populations[i] + output_populations[i, j], :] = connectivity[i, j, :]
+                        connectivity_new[n_populations[i] + input_populations[i][j][k],
+                        n_populations[j] + output_populations[i, j], :] = connectivity[i, j, :]
 
                         # set inter-circuit delays
-                        delays_new[n_populations[j] + input_populations[i][j][k],
-                                   n_populations[i] + output_populations[i, j]] = delays[i, j]
+                        delays_new[n_populations[i] + input_populations[i][j][k],
+                                   n_populations[j] + output_populations[i, j]] = delays[i, j]
 
         # call super init
         #################
 
         super().__init__(populations=populations,
                          connectivity=connectivity_new,
-                         synapse_types=circuits[0].synapse_types,
+                         synapse_types=synapse_types,
                          delays=delays_new,
                          step_size=circuits[0].step_size)
 

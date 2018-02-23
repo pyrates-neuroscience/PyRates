@@ -295,7 +295,7 @@ def test_4_4_jr_network_i():
     ################
 
     # connectivity matrices
-    inter_circuit_conns = np.array([[0, 1], [0, 0]]) * 100.
+    inter_circuit_conns = np.array([[0, 0], [1, 0]]) * 100.
     C1 = np.zeros((2, 2, 2))
     C2 = np.zeros((2, 2, 2))
     C2[:, :, 0] = inter_circuit_conns
