@@ -180,7 +180,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     from core.circuit import CircuitFromPopulations
     from core.circuit import CircuitFromCircuit
     nmm = CircuitFromCircuit(circuits=circuits,
-                             connectivity=C,
+                             connection_strengths=C,
                              delays=delays,
                              # input_populations=np.array([1 for _ in range(33)]),
                              # output_populations=np.array([0 for _ in range(33)])

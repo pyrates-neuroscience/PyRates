@@ -190,9 +190,6 @@ class SigmoidAxon(Axon):
         if max_firing_rate < 0:
             raise ValueError('Maximum firing rate cannot be negative.')
 
-        if sigmoid_steepness < 0:
-            raise ValueError('Sigmoid steepness cannot be negative.')
-
         # call super init
         #################
 
@@ -255,7 +252,10 @@ class SigmoidAxon(Axon):
             membrane_potential = list()
             membrane_potential.append(self.transfer_function_args['membrane_potential_threshold'])
             firing_rate = self.compute_firing_rate(membrane_potential[-1])
-            while firing_rate > epsilon:
+            if firing_rate == 0.:
+                raise ValueError('Automatic range detection not implemented for normalized axons yet. '
+                                 'Please pass a membrane potential vector to plotting function.')
+            while np.abs(firing_rate) > epsilon:
                 membrane_potential.append(membrane_potential[-1] - bin_size)
                 firing_rate = self.compute_firing_rate(membrane_potential[-1])
             membrane_potential_1 = np.array(membrane_potential)
@@ -266,7 +266,7 @@ class SigmoidAxon(Axon):
             membrane_potential = list()
             membrane_potential.append(self.transfer_function_args['membrane_potential_threshold'] + bin_size)
             firing_rate = self.compute_firing_rate(membrane_potential[-1])
-            while firing_rate <= self.transfer_function_args['max_firing_rate'] - epsilon:
+            while np.abs(firing_rate) <= self.transfer_function_args['max_firing_rate'] - epsilon:
                 membrane_potential.append(membrane_potential[-1] + bin_size)
                 firing_rate = self.compute_firing_rate(membrane_potential[-1])
             membrane_potential_2 = np.array(membrane_potential)

@@ -294,17 +294,14 @@ def test_4_4_jr_network_i():
     # set parameters
     ################
 
-    # connectivity matrices
-    inter_circuit_conns = np.array([[0, 0], [1, 0]]) * 100.
-    C1 = np.zeros((2, 2, 2))
-    C2 = np.zeros((2, 2, 2))
-    C2[:, :, 0] = inter_circuit_conns
+    # connections
+    connection_strengths_1 = [0.]
+    connection_strengths_2 = [100.]
+    source_populations = [0]
+    target_populations = [3]
 
-    # delay matrix
-    D = np.asarray([[0., 0.001],
-                 [0.001, 0]])
-    # D[0, 1] = 0.001
-    # D[1, 0] = 0.001
+    # delays
+    delays = [0.001]
 
     # neural mass circuits
     from core.circuit import JansenRitCircuit
@@ -330,12 +327,16 @@ def test_4_4_jr_network_i():
     ########################
     from core.circuit import CircuitFromCircuit
     circuit1 = CircuitFromCircuit(circuits=[nmm1, nmm2],
-                                  connectivity=C1,
-                                  delays=D,
+                                  connection_strengths=connection_strengths_1,
+                                  source_populations=source_populations,
+                                  target_populations=target_populations,
+                                  delays=delays,
                                   circuit_labels=['NMM1', 'NMM2'])
     circuit2 = CircuitFromCircuit(circuits=[nmm3, nmm4],
-                                  connectivity=C2,
-                                  delays=D,
+                                  connection_strengths=connection_strengths_2,
+                                  source_populations=source_populations,
+                                  target_populations=target_populations,
+                                  delays=delays,
                                   circuit_labels=['NMM1', 'NMM2'])
 
     # run network simulations

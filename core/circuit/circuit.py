@@ -921,16 +921,18 @@ class CircuitFromCircuit(Circuit):
         ----------
         circuits
             List of circuit instances.
-        connectivity
-            See docstring for parameter `connectivity` of :class:`Circuit`.
+        connection_strengths
+            List with connection strengths for each connection between circuits
         delays
             See docstring for parameter `delays` of :class:`Circuit`.
         delay_distributions
             See docstring for parameter `delay_distributions` of :class:`Circuit`.
-        input_populations
-            3D list of indices for the input populations (3.dim) of each pair-wise connection (1. + 2.dim).
-        output_populations
-            2D array of indices for the output population of each pair-wise connection.
+        target_populations
+            List of indices for the input populations of each pair-wise connection.
+        source_populations
+            List of indices for the output population of each pair-wise connection.
+        target_synapses
+            List of synapse indices for each connection.
         circuit_labels
             List of strings with circuit labels.
 
@@ -942,11 +944,12 @@ class CircuitFromCircuit(Circuit):
 
     def __init__(self,
                  circuits: List[Circuit],
-                 connectivity: np.ndarray,
-                 delays: Optional[np.ndarray] = None,
-                 delay_distributions: Optional[np.ndarray] = None,
-                 input_populations: Optional[np.ndarray] = None,
-                 output_populations: Optional[np.ndarray] = None,
+                 connection_strengths: List[float],
+                 source_populations: List[int],
+                 target_populations: List[int],
+                 target_synapses: Optional[List[int]] = None,
+                 delays: Optional[List[Union[np.ndarray, float]]] = None,
+                 delay_distributions: Optional[List[np.ndarray]] = None,
                  circuit_labels: Optional[List[str]] = None,
                  synapse_types: Optional[List[str]] = None
                  ) -> None:
@@ -955,22 +958,6 @@ class CircuitFromCircuit(Circuit):
 
         # check input parameters
         ########################
-
-        # attribute dimensions
-        if len(circuits) != connectivity.shape[0] or len(circuits) != connectivity.shape[1]:
-            raise AttributeError(f'First and second dimension of connectivity need to match the number of circuits. '
-                                 f'See parameter docstring for further information. Connectivity dimensions: '
-                                 f'{connectivity.shape}, circuits: {len(circuits)}')
-        if delays is not None and (len(circuits) != delays.shape[0] or len(circuits) != delays.shape[1]):
-            raise AttributeError('First and second dimension of delays need to match the number of circuits. '
-                                 'See parameter docstring for further information.')
-
-        # synapse types in circuit
-        if not synapse_types and connectivity.shape[2] != 2:
-            raise AttributeError('If last dimension of connectivity matrix refers to more or less than two synapses,'
-                                 'synapse_types have to be passed.')
-        elif synapse_types and len(synapse_types) != connectivity.shape[2]:
-            raise AttributeError('Number of passed synapse types has to match the last dimension of connectivity.')
 
         synapse_types = synapse_types if synapse_types else ['excitatory', 'inhibitory']
 
@@ -984,15 +971,21 @@ class CircuitFromCircuit(Circuit):
 
         # set delays
         if delays is None:
-            delays = np.zeros((n_circuits, n_circuits), dtype=int)
+            delays = [0 for _ in range(len(connection_strengths))]
+            delay_distributions = [1 for _ in range(len(connection_strengths))]
+
+        # set target synapses
+        if target_synapses is None:
+            target_synapses = [0 for _ in range(len(connection_strengths))]
 
         # set maximum transfer delay for each population
-        max_population_delay = np.max(delays, axis=1)
+        max_population_delay = np.max(delays)
 
         # initialize stuff
         n_populations = np.zeros(n_circuits + 1, dtype=int)
         connectivity_coll = list()
         delays_coll = list()
+        delay_distributions_coll = list()
         populations = list()
         n_synapses = np.zeros(n_circuits, dtype=int)
         synapse_mapping = list()
@@ -1006,8 +999,9 @@ class CircuitFromCircuit(Circuit):
             # collect connectivity matrix
             connectivity_coll.append(circuits[i].C)
 
-            # collect delay matrix
+            # collect delay matrix and delay distributions
             delays_coll.append(circuits[i].D * circuits[i].step_size)
+            delay_distributions_coll.append(circuits[i].D_pdfs)
 
             # collect number of synapses
             n_synapses[i] = circuits[i].n_synapses
@@ -1018,7 +1012,7 @@ class CircuitFromCircuit(Circuit):
                 pop.label = circuit_labels[i] + '_' + pop.label
 
                 # update population delay
-                pop.synaptic_input = np.zeros((int((len(pop.synapses[0].synaptic_kernel) + max_population_delay[i])),
+                pop.synaptic_input = np.zeros((int((len(pop.synapses[0].synaptic_kernel) + max_population_delay)),
                                                len(pop.synapses)))
 
                 # add population
@@ -1031,58 +1025,93 @@ class CircuitFromCircuit(Circuit):
                 synapse_mapping_tmp.append(synapse_types.index(syn))
             synapse_mapping.append(synapse_mapping_tmp)
 
-        # check whether synapse dimensions match
-        if any(n_synapses) > connectivity.shape[2]:
-            raise AttributeError('Cannot connect circuits that have more synapses than outer connectivity matrix!')
+        # calculate number of synapse types in circuit
+        n_synapses = np.max(n_synapses)
+        n_synapses = np.max(n_synapses, np.max(target_synapses))
 
-        # build new connectivity and delay matrix
-        #########################################
+        # build connectivity matrix
+        ###########################
 
-        # set input populations
-        if input_populations is None:
-            input_populations = np.zeros((n_circuits, n_circuits, 1), dtype=int).tolist()
-
-        # set output populations
-        if output_populations is None:
-            output_populations = np.zeros((n_circuits, n_circuits), dtype=int)
-
-        # initialize stuff
-        connectivity_new = np.zeros((n_populations[-1], n_populations[-1], connectivity.shape[2]))
-        delays_new = np.zeros((n_populations[-1], n_populations[-1]), dtype=int)
+        connectivity = np.zeros((n_populations[-1], n_populations[-1], n_synapses))
 
         # loop over all circuits
         for i in range(n_circuits):
 
             # set intra-circuit connectivity of circuit i
-            connectivity_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1],
-                             synapse_mapping[i]] = connectivity_coll[i]
+            connectivity[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1],
+                         synapse_mapping[i]] = connectivity_coll[i]
 
-            # set intra-circuit delays of circuit i
-            delays_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1]] = delays_coll[i]
+        # loop over new connections
+        for i, conn in enumerate(connection_strengths):
 
-            # loop again over all circuits
-            for j in range(n_circuits):
+            # set inter-circuit connections
+            connectivity[target_populations[i], source_populations[i], :] = conn
 
-                # for other circuits
-                if i != j:
+        # build delay matrix
+        ####################
 
-                    # loop over each input population in circuit i,j
-                    for k in range(len(input_populations[i][j])):
-                        # set inter-circuit connectivities
-                        connectivity_new[n_populations[i] + input_populations[i][j][k],
-                        n_populations[j] + output_populations[i, j], :] = connectivity[i, j, :]
+        if delay_distributions is None:
 
-                        # set inter-circuit delays
-                        delays_new[n_populations[i] + input_populations[i][j][k],
-                                   n_populations[j] + output_populations[i, j]] = delays[i, j]
+            delays_new = np.zeros((n_populations[-1], n_populations[-1]))
+            delay_distributions_new = None
+
+            # loop over all circuits
+            for i in range(n_circuits):
+
+                # set intra-circuit delays of circuit i
+                delays_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1]] = delays_coll[
+                    i]
+
+            # loop over new connections
+            for i, delay in enumerate(delays):
+
+                # set inter-circuit delays
+                delays_new[target_populations[i], source_populations[i]] = delay
+
+        else:
+
+            # calculate maximum number of delays per connection in network
+            n_delays = 1
+            for d in delay_distributions:
+                n_del = len(d)
+                n_delays = n_del if n_del > n_delays else n_delays
+            for d in delays_coll:
+                n_del = d.shape[2]
+                n_delays = n_del if n_del > n_delays else n_delays
+
+            delays_new = np.zeros((n_populations[-1], n_populations[-1]), n_delays)
+            delay_distributions_new = np.ones((n_populations[-1], n_populations[-1]), n_delays)
+
+            # loop over all circuits
+            for i in range(n_circuits):
+
+                # set intra-circuit delays of circuit i
+                if len(delays_coll[i].shape) == 2:
+                    delays_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1], 0] = \
+                        delays_coll[i]
+                else:
+                    delays_new[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1],
+                               0:delays_coll[i].shape[2]] = delays_coll[i]
+                    delay_distributions_new[n_populations[i]:n_populations[i + 1],
+                                            n_populations[i]:n_populations[i + 1],
+                                            0:delays_coll[i].shape[2]] = delay_distributions_coll[i]
+
+            # loop over new connections
+            for i, delay in enumerate(delays):
+
+                # set inter-circuit delays
+                delays_new[source_populations[i], target_populations[i], 0:len(delay)] = delay
+                delay_distributions_new[source_populations[i], target_populations[i], 0:len(delay)] = \
+                    delay_distributions[i]
 
         # call super init
         #################
 
         super().__init__(populations=populations,
-                         connectivity=connectivity_new,
+                         connectivity=connectivity,
                          synapse_types=synapse_types,
                          delays=delays_new,
+                         delay_distributions=delay_distributions_new,
                          step_size=circuits[0].step_size)
 
 # def update_step_size(self, new_step_size, synaptic_inputs, update_threshold=1e-2, extrinsic_current=None,
