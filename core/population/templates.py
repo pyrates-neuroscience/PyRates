@@ -277,17 +277,6 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
                          label=label
                          )
 
-    def axon_update(self):
-        """Updates adaptation field of axon.
-        """
-
-        self.axon.transfer_function_args['adaptation'] = Population.take_step(self,
-                                                                              f=self.spike_frequency_adaptation,
-                                                                              y_old=self.axon.transfer_function_args
-                                                                              ['adaptation'],
-                                                                              firing_rate_target=self.get_firing_rate(),
-                                                                              **self.spike_frequency_adaptation_args)
-
 
 class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
     """Population of excitatory interneurons as defined in [1]_.
@@ -591,20 +580,3 @@ class WangKnoescheCells(SecondOrderPlasticPopulation):
                          synapse_efficacy_adaptation=func_list,
                          synapse_efficacy_adaptation_args=param_list
                          )
-
-    def synapse_update(self, idx: int):
-        """Updates depression field of synapse.
-
-                Parameters
-                ----------
-                idx
-                    Synapse index.
-
-                """
-
-        self.synapses[idx].depression = Population.take_step(self,
-                                                             f=self.synapse_efficacy_adaptation[idx],
-                                                             y_old=self.synapses[idx].depression,
-                                                             firing_rate=self.synapses[idx].synaptic_input[
-                                                                 self.synapses[idx].kernel_length-2],
-                                                             **self.synapse_efficacy_adaptation_args[idx])

@@ -293,7 +293,7 @@ def axon_exponential(time_points: Union[float, np.ndarray],
 
 
 def moran_spike_frequency_adaptation(adaptation: float,
-                                     firing_rate_target: float,
+                                     firing_rate: float,
                                      tau: float
                                      ) -> float:
     """Calculates adaption in sigmoid threshold of axonal transfer function.
@@ -302,8 +302,8 @@ def moran_spike_frequency_adaptation(adaptation: float,
     ----------
     adaptation
         Determines strength of spike-frequency-adaptation [unit = V].
-    firing_rate_target
-        Target firing rate towards which spike frequency is adapted [unit = 1/s].
+    firing_rate
+        Current firing rate towards which spike frequency is adapted [unit = 1/s].
     tau
         Time constant of adaptation process [unit = s].
 
@@ -314,7 +314,7 @@ def moran_spike_frequency_adaptation(adaptation: float,
 
     """
 
-    return (firing_rate_target - adaptation) / tau
+    return (firing_rate - adaptation) / tau
 
 
 def spike_frequency_adaptation(adaptation: float,

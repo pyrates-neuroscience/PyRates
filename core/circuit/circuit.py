@@ -719,7 +719,12 @@ class CircuitFromScratch(Circuit):
             synapses_tmp = [synapses[j] for j in idx]
             synapse_params_tmp = [synapse_params[j] for j in idx]
             synapse_class_tmp = [synapse_class[j] for j in idx]
-            synapse_efficacy_adaptation_args_tmp = [synapse_efficacy_adaptation_args[i][j] for j in idx]
+            if synapse_efficacy_adaptation[i]:
+                synapse_efficacy_adaptation_args_tmp = [synapse_efficacy_adaptation_args[i][j] for j in idx]
+                synapse_efficacy_adaptation_tmp = [synapse_efficacy_adaptation[i][j] for j in idx]
+            else:
+                synapse_efficacy_adaptation_args_tmp = None
+                synapse_efficacy_adaptation_tmp = None
 
             # create dictionary with relevant parameters
             pop_params = {'synapses': synapses_tmp,
@@ -738,7 +743,7 @@ class CircuitFromScratch(Circuit):
             if population_class[i] == 'SecondOrderPlasticPopulation' or population_class[i] == 'PlasticPopulation':
                 pop_params['spike_frequency_adaptation'] = spike_frequency_adaptation[i]
                 pop_params['spike_frequency_adaptation_args'] = spike_frequency_adaptation_args[i]
-                pop_params['synapse_efficacy_adaptation'] = synapse_efficacy_adaptation[i]
+                pop_params['synapse_efficacy_adaptation'] = synapse_efficacy_adaptation_tmp
                 pop_params['synapse_efficacy_adaptation_args'] = synapse_efficacy_adaptation_args_tmp
 
             # add first-order parameters if necessary
@@ -972,7 +977,6 @@ class CircuitFromCircuit(Circuit):
         # set delays
         if delays is None:
             delays = [0 for _ in range(len(connection_strengths))]
-            delay_distributions = [1 for _ in range(len(connection_strengths))]
 
         # set target synapses
         if target_synapses is None:
@@ -1027,7 +1031,8 @@ class CircuitFromCircuit(Circuit):
 
         # calculate number of synapse types in circuit
         n_synapses = np.max(n_synapses)
-        n_synapses = np.max(n_synapses, np.max(target_synapses))
+        n_synapses = np.max((n_synapses, np.max(target_synapses)))
+        n_synapses = np.max((n_synapses, len(synapse_types)))
 
         # build connectivity matrix
         ###########################
@@ -1039,13 +1044,13 @@ class CircuitFromCircuit(Circuit):
 
             # set intra-circuit connectivity of circuit i
             connectivity[n_populations[i]:n_populations[i + 1], n_populations[i]:n_populations[i + 1],
-                         synapse_mapping[i]] = connectivity_coll[i]
+                         np.array(synapse_mapping[i])] = connectivity_coll[i]
 
         # loop over new connections
         for i, conn in enumerate(connection_strengths):
 
             # set inter-circuit connections
-            connectivity[target_populations[i], source_populations[i], :] = conn
+            connectivity[target_populations[i], source_populations[i], target_synapses[i]] = conn
 
         # build delay matrix
         ####################

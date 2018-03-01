@@ -835,6 +835,7 @@ class PlasticPopulation(Population):
         self.axon.transfer_function_args['adaptation'] = self.take_step(f=self.spike_frequency_adaptation,
                                                                         y_old=self.axon.transfer_function_args
                                                                         ['adaptation'],
+                                                                        firing_rate=self.get_firing_rate(),
                                                                         **self.spike_frequency_adaptation_args)
 
     def synapse_update(self, idx: int):
@@ -849,6 +850,8 @@ class PlasticPopulation(Population):
 
         self.synapses[idx].depression = self.take_step(f=self.synapse_efficacy_adaptation[idx],
                                                        y_old=self.synapses[idx].depression,
+                                                       firing_rate=self.synapses[idx].synaptic_input[
+                                                                   self.synapses[idx].kernel_length-2],
                                                        **self.synapse_efficacy_adaptation_args[idx])
 
     def add_plastic_synapse(self,
