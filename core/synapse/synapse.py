@@ -25,9 +25,9 @@ __status__ = "Development"
 FloatOrArray = Union[float, np.ndarray]
 
 
-###################
-# generic synapse #
-###################
+####################
+# generic synapses #
+####################
 
 
 class Synapse(RepresentationBase):
@@ -346,6 +346,144 @@ class Synapse(RepresentationBase):
         return axes
 
 
+class DESynapse(RepresentationBase):
+    """Differential equation version of synapse class. Represents average behavior of a defined post-synapse
+     of a population.
+
+    Parameters
+    ----------
+    efficacy
+        Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
+    tau
+        Lumped time delay constant that determines the shape of the exponential synaptic kernel [unit = s].
+    buffer_size
+        Maximum time that information passed to the synapse needs to affect the synapse [unit = s] (default = 0.).
+    conductivity_based
+        If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
+        conductivity. Else translation to synaptic current will be direct (default = False).
+    reversal_potential
+        Synaptic reversal potential. Only needed for conductivity based synapses (default = -0.075) [unit = V].
+    synapse_type
+        Name of synapse type (default = None).
+
+    Attributes
+    ----------
+    tau
+        See parameter description.
+    efficacy
+        Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
+    conductivity_based
+        See parameter description.
+    reversal_potential
+        See parameter description.
+    synapse_type
+        See parameter description.
+
+    """
+
+    def __init__(self,
+                 efficacy: float,
+                 buffer_size: int = 0,
+                 conductivity_based: bool = False,
+                 reversal_potential: float = -0.075,
+                 synapse_type: Optional[str] = None
+                 ) -> None:
+        """Instantiates base synapse.
+        """
+
+        # set attributes
+        ################
+
+        self.efficacy = efficacy
+        self.conductivity_based = conductivity_based
+        self.reversal_potential = reversal_potential
+        self.buffer_size = buffer_size
+
+        # set synapse type
+        ##################
+
+        if synapse_type is None:
+
+            # define synapse type via synaptic kernel efficacy and type (current- vs conductivity-based)
+            if conductivity_based:
+                self.reversal_potential = reversal_potential
+                self.synapse_type = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
+            else:
+                self.synapse_type = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
+
+        else:
+
+            self.synapse_type = synapse_type
+
+        # set synaptic depression (for plasticity mechanisms)
+        self.depression = 1.0
+
+        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+        if conductivity_based:
+            self.current_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
+        else:
+            self.current_scaling = lambda membrane_potential: 1.0
+
+        # build input buffer
+        ####################
+
+        self.kernel_length = 1
+        self.synaptic_input = np.zeros(self.buffer_size + self.kernel_length)
+
+    def get_delta_synaptic_current(self,
+                                   synaptic_current_old: Union[float, np.float64],
+                                   membrane_potential: Union[float, np.float64]
+                                   ) -> Union[np.float64, float]:
+        """Calculates change in synaptic current from synaptic input (should be incoming firing rate).
+
+        Parameters
+        ----------
+        synaptic_current_old
+            Synaptic current from last time-step [unit = A].
+        membrane_potential
+            Membrane potential of post-synapse. Only to be used for conductivity based synapses (default = None)
+            [unit = V].
+
+        Returns
+        -------
+        float
+            Resulting synaptic current [unit = A].
+
+        """
+
+        raise AttributeError('This method needs to be implemented in child classes for the synapse to work!')
+
+    def pass_input(self, synaptic_input: float, delay: int = 0
+                   ) -> None:
+        """Passes synaptic input to synaptic_input array.
+
+        Parameters
+        ----------
+        synaptic_input
+            Incoming firing rate input [unit = 1/s].
+        delay
+            Number of time steps after which the input will arrive at synapse [unit = 1].
+
+        """
+
+        self.synaptic_input[self.kernel_length + delay - 1] += synaptic_input
+
+    def clear(self):
+        """Clears synaptic input and depression.
+        """
+
+        self.synaptic_input[:] = 0.
+        self.depression = 1.0
+
+    def update(self):
+        """Updates synapse attributes.
+        """
+
+        # update buffer
+        # TODO: implement interpolation from old to new array
+        self.synaptic_input = np.zeros(self.buffer_size + 1)
+
+
 ##############################
 # double exponential synapse #
 ##############################
@@ -479,6 +617,103 @@ class ExponentialSynapse(Synapse):
                          synapse_type=synapse_type,
                          conductivity_based=False,
                          tau=tau)
+
+
+class DEExponentialSynapse(DESynapse):
+    """Differential equation version of exponential synapse class. Represents average behavior of a defined post-synapse
+     of a population.
+
+    Parameters
+    ----------
+    efficacy
+        Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
+    tau
+        Lumped time delay constant that determines the shape of the exponential synaptic kernel [unit = s].
+    buffer_size
+        Maximum time that information passed to the synapse needs to affect the synapse [unit = s] (default = 0.).
+    conductivity_based
+        If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
+        conductivity. Else translation to synaptic current will be direct (default = False).
+    reversal_potential
+        Synaptic reversal potential. Only needed for conductivity based synapses (default = -0.075) [unit = V].
+    synapse_type
+        Name of synapse type (default = None).
+
+    Attributes
+    ----------
+    tau
+        See parameter description.
+    efficacy
+        Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
+    conductivity_based
+        See parameter description.
+    reversal_potential
+        See parameter description.
+    synapse_type
+        See parameter description.
+
+    """
+
+    def __init__(self,
+                 efficacy: float,
+                 tau: float,
+                 buffer_size: int = 0,
+                 conductivity_based: bool = False,
+                 reversal_potential: float = -0.075,
+                 synapse_type: Optional[str] = None
+                 ) -> None:
+        """Instantiates base synapse.
+        """
+
+        # set exponential time constant
+        self.tau = tau
+
+        # call super init
+        #################
+
+        super().__init__(efficacy=efficacy,
+                         buffer_size=buffer_size,
+                         conductivity_based=conductivity_based,
+                         reversal_potential=reversal_potential,
+                         synapse_type=synapse_type)
+
+    def get_delta_synaptic_current(self,
+                                   synaptic_current_old: Union[float, np.float64],
+                                   membrane_potential: Union[float, np.float64]
+                                   ) -> Union[np.float64, float]:
+        """Calculates change in synaptic current from synaptic input (should be incoming firing rate).
+
+        Parameters
+        ----------
+        synaptic_current_old
+            Synaptic current from last time-step [unit = A].
+        membrane_potential
+            Membrane potential of post-synapse. Only to be used for conductivity based synapses (default = None)
+            [unit = V].
+
+        Returns
+        -------
+        float
+            Resulting synaptic current [unit = A].
+
+        """
+
+        # calculate delta current
+        #########################
+
+        input_effect = (self.efficacy / self.tau) * self.synaptic_input[self.kernel_length - 1]
+        first_derivative = (1. / self.tau**2) * membrane_potential
+        second_derivative = (2. / self.tau) * synaptic_current_old
+
+        delta_current = input_effect - second_derivative - first_derivative
+
+        # update synaptic input buffer
+        ##############################
+
+        self.synaptic_input[0:-1] = self.synaptic_input[1:]
+        self.synaptic_input[-1] = 0.
+
+        return delta_current * self.current_scaling(membrane_potential) * self.depression
 
 
 ################################################

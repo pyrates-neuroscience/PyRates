@@ -214,7 +214,7 @@ class JansenRitCircuit(CircuitFromScratch):
 
         # synapses
         synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
-        synapse_class = 'ExponentialSynapse'
+        synapse_class = 'DEExponentialSynapse'
 
         # axon
         axon_types = ['JansenRitAxon', 'JansenRitAxon', 'JansenRitAxon']
@@ -578,3 +578,10 @@ class MoranCircuit(Circuit):
                          connectivity=connections,
                          delays=delays,
                          step_size=step_size)
+
+
+jrc = JansenRitCircuit(step_size=1e-4)
+inp = np.zeros((10000, 3, 2))
+inp[:, 0, 0] = np.random.uniform(120, 320, 10000)
+jrc.run(inp, 1.)
+jrc.plot_population_states([0], time_window=[1., 2.])

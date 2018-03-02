@@ -13,7 +13,8 @@ from typing import List, Optional, Union, Dict, Callable, TypeVar
 
 
 from core.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
-from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse
+from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
+    DEExponentialSynapse, DESynapse
 from core.utility import set_instance, check_nones
 from core.utility.filestorage import RepresentationBase
 
@@ -203,7 +204,7 @@ class Population(AbstractBasePopulation):
         # set population parameters
         ###########################
 
-        self.synapses = []  # type: List[Synapse]
+        self.synapses = []  # type: List[Union[Synapse, DESynapse]]
         self.state_variables = []  # type: List[List[FloatLike]]
         self.store_state_variables = store_state_variables
         self.tau_leak = tau_leak
@@ -569,6 +570,7 @@ class Population(AbstractBasePopulation):
         # synapse attributes
         for syn in self.synapses:
             syn.clear()
+        self.synaptic_currents[:] = 0.
 
         # axon attributes
         self.axon.clear()
@@ -911,8 +913,6 @@ class SecondOrderPopulation(Population):
         See docstring of :class`PlasticPopulation`.
     step_size
         See docstring of :class:`Population`.
-    max_synaptic_delay
-        See docstring of :class:`Population`.
     resting_potential
         See docstring of :class:`Population`.
     max_population_delay
@@ -941,13 +941,13 @@ class SecondOrderPopulation(Population):
                  synapses: Optional[List[str]] = None,
                  axon: Optional[str] = None,
                  init_state: FloatLike = 0.,
-                 step_size: float = 0.0001,
-                 max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
+                 step_size: float = 1e-4,
                  resting_potential: float = 0.,
                  max_population_delay: FloatLike = 0.,
+                 max_synaptic_delay: Optional[float]=None,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
+                 synapse_class: Union[str, List[str]] = 'DEExponentialSynapse',
                  axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Custom'
@@ -955,45 +955,70 @@ class SecondOrderPopulation(Population):
         """Instantiation of second order population.
         """
 
-        Population.__init__(self,
-                            synapses=synapses,
-                            axon=axon,
-                            init_state=init_state,
-                            step_size=step_size,
-                            max_synaptic_delay=max_synaptic_delay,
-                            resting_potential=resting_potential,
-                            max_population_delay=max_population_delay,
-                            synapse_params=synapse_params,
-                            axon_params=axon_params,
-                            synapse_class=synapse_class,
-                            axon_class=axon_class,
-                            store_state_variables=store_state_variables,
-                            label=label)
+        # call super init
+        #################
 
-    def take_step(self,
-                  f: Callable,
-                  y_old: Union[FloatLike, np.ndarray],
-                  **kwargs
-                  ) -> FloatLike:
-        """Takes a step of an ODE with right-hand-side f using Euler formalism.
+        super().__init__(synapses=synapses,
+                         axon=axon,
+                         init_state=init_state,
+                         step_size=step_size,
+                         resting_potential=resting_potential,
+                         max_population_delay=max_population_delay,
+                         synapse_params=synapse_params,
+                         axon_params=axon_params,
+                         synapse_class=synapse_class,
+                         axon_class=axon_class,
+                         store_state_variables=store_state_variables,
+                         label=label)
+
+        # set old synaptic current vector
+        #################################
+
+        self.synaptic_currents_old = np.zeros_like(self.synaptic_currents)
+
+    def _set_synapses(self,
+                      synapse_subtypes: Optional[List[str]] = None,
+                      synapse_types: Union[str, List[str]] = 'DEExponentialSynapse',
+                      synapse_params: Optional[List[dict]] = None,
+                      max_synaptic_delay: Optional[float] = None,
+                      ) -> None:
+        """Instantiates synapses.
 
         Parameters
         ----------
-        f
-            Function that represents right-hand-side of ODE and takes `t` plus `y_old` as an argument.
-        y_old
-            Old value of y that needs to be updated according to dy(t)/dt = f(t, y)
-        **kwargs
-            Name-value pairs that are passed as parameters to f.
-
-        Returns
-        -------
-        float
-            Updated value of left-hand-side (y).
+        synapse_subtypes
+            Names of pre-parametrized synapse sub-classes.
+        synapse_types
+            Names of synapse classes to instantiate.
+        synapse_params
+            Dictionaries with synapse parameter name-value pairs.
 
         """
 
-        return f(y_old, **kwargs) + self.resting_potential
+        # check synapse parameter formats
+        #################################
+
+        if isinstance(synapse_types, str):
+            synapse_types = [synapse_types for _ in range(self.n_synapses)]
+
+        synapse_subtypes = check_nones(synapse_subtypes, self.n_synapses)
+        synapse_params = check_nones(synapse_params, self.n_synapses)
+        self.synapse_labels = list()
+
+        # set all given synapses
+        ########################
+
+        for i in range(self.n_synapses):
+
+            # instantiate synapse
+            if synapse_types[i] == 'DEExponentialSynapse':
+                self.synapses.append(set_instance(DEExponentialSynapse,
+                                                  synapse_subtypes[i],
+                                                  synapse_params[i],
+                                                  buffer_size=int(self.max_population_delay / self.step_size)))
+            else:
+                raise AttributeError('Invalid synapse type!')
+            self.synapse_labels.append(self.synapses[-1].synapse_type)
 
     def get_delta_membrane_potential(self,
                                      membrane_potential: FloatLike
@@ -1015,6 +1040,111 @@ class SecondOrderPopulation(Population):
 
         return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current
 
+    def get_synaptic_currents(self,
+                              membrane_potential: FloatLike
+                              ) -> Union[FloatLike, np.ndarray]:
+        """Calculates the net synaptic current over all synapses.
+
+        Parameters
+        ----------
+        membrane_potential
+            Current membrane potential of population [unit = V].
+
+        Returns
+        -------
+        float
+            Net synaptic current [unit = A].
+
+        """
+
+        # update synaptic currents
+        ###########################
+
+        # update synaptic currents old
+        self.synaptic_currents_old[:] = self.synaptic_currents[:]
+
+        # calculate synaptic currents for each additive synapse
+        for i, syn in enumerate(self.synapses):
+            self.synaptic_currents[i] = self.take_step(f=syn.get_delta_synaptic_current,
+                                                       y_old=self.synaptic_currents_old[i],
+                                                       membrane_potential=membrane_potential)
+
+        # TODO: multiplying with a vector of 1s by default costs computation time.
+        return self.synaptic_currents_old @ self.extrinsic_synaptic_modulation.T
+
+    def update(self) -> None:
+        """update population attributes.
+        """
+
+        # update synapses
+        for syn in self.synapses:
+            syn.buffer_size = int(self.max_population_delay / self.step_size)
+            syn.update()
+
+        # update axon
+        if hasattr(self.axon, 'bin_size'):
+            self.axon.bin_size = self.step_size
+        self.axon.update()
+
+    def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]] = None, create_plot: Optional[bool] = True,
+                              axes: Axes = None) -> object:
+        """Creates plot of all specified synapses over time.
+
+        Parameters
+        ----------
+        synapse_idx
+            Index of synapses for which to plot kernel.
+        create_plot
+            If true, plot will be shown.
+        axes
+            Can be used to pass figure handle of figure to plot into.
+
+        Returns
+        -------
+        figure handle
+            Handle of newly created or updated figure.
+
+        """
+
+        # check parameters
+        ##################
+
+        assert synapse_idx is None or isinstance(synapse_idx, list)
+
+        # check positional argument
+        ###########################
+
+        if synapse_idx is None:
+            synapse_idx = list(range(self.n_synapses))
+
+        # plot synaptic kernels
+        #######################
+
+        if axes is None:
+            fig, axes = plt.subplots(num='Synaptic Kernel Functions')
+        else:
+            fig = axes.get_figure()
+
+        self.clear()
+        synapse_types = list()
+        for i in synapse_idx:
+            synaptic_response = list()
+            synaptic_response.append(self.state_variables[-1][0] + self.step_size * self.synaptic_currents[i])
+            self.synapses[i].synaptic_input[0] = 1.
+            self.state_update()
+            synaptic_response.append(self.state_variables[-1][0] + self.step_size * self.synaptic_currents[i])
+            while np.abs(synaptic_response[-1]) > 1e-10:
+                self.state_update()
+                synaptic_response.append(self.state_variables[-1][0] + self.step_size * self.synaptic_currents[i])
+            axes.plot(np.array(synaptic_response))
+            synapse_types.append(self.synapses[i].synapse_type)
+
+        plt.legend(synapse_types)
+
+        if create_plot:
+            fig.show()
+
+        return axes
 
 ######################################
 # plastic jansen-rit type population #
@@ -1158,6 +1288,11 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
         """
 
         return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current
+
+
+######################################################################
+# dummy population that passes input to other populations in network #
+######################################################################
 
 
 class DummyPopulation(AbstractBasePopulation):

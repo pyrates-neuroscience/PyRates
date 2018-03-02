@@ -1016,7 +1016,7 @@ class CircuitFromCircuit(Circuit):
                 pop.label = circuit_labels[i] + '_' + pop.label
 
                 # update population delay
-                pop.synaptic_input = np.zeros((int((len(pop.synapses[0].synaptic_kernel) + max_population_delay)),
+                pop.synaptic_input = np.zeros((int((pop.synapses[0].kernel_length + max_population_delay)),
                                                len(pop.synapses)))
 
                 # add population

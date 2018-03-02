@@ -29,8 +29,6 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
         Default = 0 V.
     step_size
         Default = 0.0005 s.
-    max_synaptic_delay
-        Default = 0.1 s.
     max_population_delay
         Default = 0.
     synapse_params
@@ -74,10 +72,6 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
         # synapse type
         synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
 
-        # synapse delay
-        if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 1e-10} for i in range(len(synapses))]
-
         # call super init
         #################
 
@@ -85,13 +79,12 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
                          axon=axon,
                          init_state=init_state,
                          step_size=step_size,
-                         max_synaptic_delay=max_synaptic_delay,
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
                          store_state_variables=store_state_variables,
                          label=label,
-                         synapse_class='ExponentialSynapse',
+                         synapse_class='DEExponentialSynapse',
                          axon_class='SigmoidAxon')
 
 
@@ -108,8 +101,6 @@ class JansenRitInterneurons(SecondOrderPopulation):
         Default = 0 V.
     step_size
         Default = 0.0005 s.
-    max_synaptic_delay
-        Default = 0.1 s.
     max_population_delay
         Default = 0.
     synapse_params
@@ -153,10 +144,6 @@ class JansenRitInterneurons(SecondOrderPopulation):
         # synapse type
         synapses = ['JansenRitExcitatorySynapse'] if not synapses else synapses
 
-        # synapse delay
-        if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 1e-10} for i in range(len(synapses))]
-
         # call super init
         #################
 
@@ -164,13 +151,12 @@ class JansenRitInterneurons(SecondOrderPopulation):
                          axon=axon,
                          init_state=init_state,
                          step_size=step_size,
-                         max_synaptic_delay=max_synaptic_delay,
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
                          store_state_variables=store_state_variables,
                          label=label,
-                         synapse_class='ExponentialSynapse',
+                         synapse_class='DEExponentialSynapse',
                          axon_class='SigmoidAxon')
 
 

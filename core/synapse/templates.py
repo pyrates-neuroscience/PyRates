@@ -4,7 +4,7 @@
 from typing import Optional, Union
 import numpy as np
 
-from core.synapse import DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse
+from core.synapse import DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, DEExponentialSynapse
 from core.utility import synaptic_sigmoid, double_exponential
 
 __author__ = "Richard Gast, Daniel F. Rose"
@@ -303,17 +303,11 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
 ###########################
 
 
-class JansenRitExcitatorySynapse(ExponentialSynapse):
+class JansenRitExcitatorySynapse(DEExponentialSynapse):
     """Excitatory second-order synapse as defined in [1]_.
 
         Parameters
         ----------
-        bin_size
-            See documentation of parameter `bin_size` of :class:`Synapse`.
-        epsilon
-            See documentation of parameter `epsilon` of :class:`Synapse`.
-        max_delay
-            See documentation of parameter `max_delay` of :class:`Synapse`.
         buffer_size
             See documentation of parameter `buffer_size` of :class:`Synapse`.
         efficacy
@@ -334,11 +328,8 @@ class JansenRitExcitatorySynapse(ExponentialSynapse):
         """
 
     def __init__(self,
-                 bin_size: float,
-                 epsilon: float = 5e-5,
-                 max_delay: Optional[float] = None,
-                 buffer_size: float = 0.,
-                 efficacy: float = 3.25 * 1e-3,
+                 buffer_size: int = 0,
+                 efficacy: float = 3.25e-3,
                  tau: float = 0.01
                  ) -> None:
         """Initializes excitatory exponential synapse as defined in [1]_.
@@ -346,24 +337,15 @@ class JansenRitExcitatorySynapse(ExponentialSynapse):
 
         super().__init__(efficacy=efficacy,
                          tau=tau,
-                         bin_size=bin_size,
-                         epsilon=epsilon,
-                         max_delay=max_delay,
                          buffer_size=buffer_size,
                          synapse_type='JR_excitatory')
 
 
-class JansenRitInhibitorySynapse(ExponentialSynapse):
+class JansenRitInhibitorySynapse(DEExponentialSynapse):
     """Inhibitory second-order synapse as defined in [1]_.
 
         Parameters
         ----------
-        bin_size
-            See documentation of parameter `bin_size` of :class:`Synapse`.
-        epsilon
-            See documentation of parameter `epsilon` of :class:`Synapse`.
-        max_delay
-            See documentation of parameter `max_delay` of :class:`Synapse`.
         buffer_size
             See documentation of parameter `buffer_size` of :class:`Synapse`.
         efficacy
@@ -384,10 +366,7 @@ class JansenRitInhibitorySynapse(ExponentialSynapse):
         """
 
     def __init__(self,
-                 bin_size: float,
-                 epsilon: float = 5e-5,
-                 max_delay: Optional[float] = None,
-                 buffer_size: float = 0.,
+                 buffer_size: int = 0,
                  efficacy: float = -22e-3,
                  tau: float = 0.02
                  ) -> None:
@@ -396,9 +375,6 @@ class JansenRitInhibitorySynapse(ExponentialSynapse):
 
         super().__init__(efficacy=efficacy,
                          tau=tau,
-                         bin_size=bin_size,
-                         epsilon=epsilon,
-                         max_delay=max_delay,
                          buffer_size=buffer_size,
                          synapse_type='JR_inhibitory')
 

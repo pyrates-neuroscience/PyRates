@@ -287,6 +287,7 @@ def axon_exponential(time_points: Union[float, np.ndarray],
 
     return (np.exp(-n1 * time_points) - np.exp(-n2 * time_points)) * normalization
 
+
 ########################
 # plasticity functions #
 ########################
