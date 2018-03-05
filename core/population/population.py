@@ -971,10 +971,11 @@ class SecondOrderPopulation(Population):
                          store_state_variables=store_state_variables,
                          label=label)
 
-        # set old synaptic current vector
-        #################################
+        # set additional synapse handling vectors
+        #########################################
 
         self.synaptic_currents_old = np.zeros_like(self.synaptic_currents)
+        self.PSPs = np.zeros_like(self.synaptic_currents) + init_state
 
     def _set_synapses(self,
                       synapse_subtypes: Optional[List[str]] = None,
@@ -1020,17 +1021,69 @@ class SecondOrderPopulation(Population):
                 raise AttributeError('Invalid synapse type!')
             self.synapse_labels.append(self.synapses[-1].synapse_type)
 
-    def get_delta_membrane_potential(self,
-                                     membrane_potential: FloatLike
-                                     ) -> FloatLike:
+    def state_update(self,
+                     extrinsic_current: FloatLike = 0.,
+                     extrinsic_synaptic_modulation: Optional[np.ndarray] = None
+                     ) -> None:
+        """Updates state of population by making a single step forward in time.
+
+        Parameters
+        ----------
+        extrinsic_current
+            Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
+            (default = 0.) [unit = A].
+        extrinsic_synaptic_modulation
+            Modulatory (multiplicatory) input to each synapse. Vector with len = number of synapses
+            (default = None) [unit = 1].
+
+        """
+
+        # add inputs to internal state variables
+        ########################################
+
+        # extrinsic current
+        self.extrinsic_current = extrinsic_current
+
+        # extrinsic modulation
+        if extrinsic_synaptic_modulation is not None:
+            self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
+        # fixme: this is called with arrays of 1s, although no actual extrinsic synaptic modulation is defined.
+        # fixme: --> performance
+
+        # compute average membrane potential
+        ####################################
+
+        for i, psp in enumerate(self.PSPs):
+            self.PSPs[i] = self.take_step(f=self.get_delta_psp, y_old=self.PSPs[i], synapse_idx=i)
+        membrane_potential = np.sum(self.PSPs)
+        state_vars = [membrane_potential]
+
+        # compute average firing rate
+        #############################
+
+        self.axon.compute_firing_rate(membrane_potential)
+
+        # update state variables
+        ########################
+
+        # TODO: Implement observer system here!!!
+        self.state_variables.append(state_vars)
+        if not self.store_state_variables:
+            self.state_variables.pop(0)
+
+    def get_delta_psp(self,
+                      psp: FloatLike,
+                      synapse_idx: int
+                      ) -> FloatLike:
         """Calculates change in membrane potential as function of synaptic current, leak current and
         extrinsic current.
 
         Parameters
         ----------
-        membrane_potential
+        psp
             Current membrane potential of population [unit = V].
-
+        synapse_idx
+            Index of synapse for which to calculate the PSP.
         Returns
         -------
         float
@@ -1038,17 +1091,19 @@ class SecondOrderPopulation(Population):
 
         """
 
-        return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current
+        return self.get_synaptic_current(psp, synapse_idx) + self.extrinsic_current
 
-    def get_synaptic_currents(self,
-                              membrane_potential: FloatLike
-                              ) -> Union[FloatLike, np.ndarray]:
+    def get_synaptic_current(self,
+                             psp: FloatLike,
+                             synapse_idx: int
+                             ) -> Union[FloatLike, np.ndarray]:
         """Calculates the net synaptic current over all synapses.
 
         Parameters
         ----------
-        membrane_potential
+        psp
             Current membrane potential of population [unit = V].
+        synapse_idx
 
         Returns
         -------
@@ -1061,16 +1116,15 @@ class SecondOrderPopulation(Population):
         ###########################
 
         # update synaptic currents old
-        self.synaptic_currents_old[:] = self.synaptic_currents[:]
+        self.synaptic_currents_old[synapse_idx] = self.synaptic_currents[synapse_idx]
 
-        # calculate synaptic currents for each additive synapse
-        for i, syn in enumerate(self.synapses):
-            self.synaptic_currents[i] = self.take_step(f=syn.get_delta_synaptic_current,
-                                                       y_old=self.synaptic_currents_old[i],
-                                                       membrane_potential=membrane_potential)
+        # calculate synaptic current
+        self.synaptic_currents[synapse_idx] = self.take_step(f=self.synapses[synapse_idx].get_delta_synaptic_current,
+                                                             y_old=self.synaptic_currents_old[synapse_idx],
+                                                             membrane_potential=psp)
 
         # TODO: multiplying with a vector of 1s by default costs computation time.
-        return self.synaptic_currents_old @ self.extrinsic_synaptic_modulation.T
+        return self.synaptic_currents_old[synapse_idx] * self.extrinsic_synaptic_modulation[synapse_idx]
 
     def update(self) -> None:
         """update population attributes.
@@ -1086,8 +1140,62 @@ class SecondOrderPopulation(Population):
             self.axon.bin_size = self.step_size
         self.axon.update()
 
+    def add_synapse(self,
+                    synapse: Synapse,
+                    synapse_idx: Optional[int] = None,
+                    ) -> None:
+        """Adds copy of specified synapse to population.
+
+        Parameters
+        ----------
+        synapse
+            Synapse object to add (default = None)
+        synapse_idx
+            Index of synapse to copy (default = None).
+
+        """
+
+        # add synapse
+        self.synapses.append(synapse)
+
+        # update synapse dependencies
+        #############################
+
+        self.n_synapses = len(self.synapses)
+
+        # current vector
+        self.synaptic_currents = np.zeros(self.n_synapses)
+        self.synaptic_currents_old = np.zeros_like(self.synaptic_currents)
+        self.PSPs = np.zeros_like(self.synaptic_currents)
+
+        # extrinsic modulation vector
+        ext_syn_mod = self.extrinsic_synaptic_modulation
+        self.extrinsic_synaptic_modulation = np.ones(self.n_synapses)
+        if synapse_idx:
+            self.extrinsic_synaptic_modulation[0:-1] = ext_syn_mod
+            self.extrinsic_synaptic_modulation[-1] = ext_syn_mod[synapse_idx]
+
+    def clear(self):
+        """Clears states stored on population and synaptic input.
+        """
+
+        # population attributes
+        init_state = self.state_variables[0]
+        self.state_variables.clear()
+        self.state_variables.append(init_state)
+
+        # synapse attributes
+        for syn in self.synapses:
+            syn.clear()
+        self.synaptic_currents[:] = 0.
+        self.synaptic_currents_old[:] = 0.
+        self.PSPs[:] = 0.
+
+        # axon attributes
+        self.axon.clear()
+
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]] = None, create_plot: Optional[bool] = True,
-                              axes: Axes = None) -> object:
+                              axes: Axes = None, max_kernel_length: Optional[float] = None) -> object:
         """Creates plot of all specified synapses over time.
 
         Parameters
@@ -1098,6 +1206,8 @@ class SecondOrderPopulation(Population):
             If true, plot will be shown.
         axes
             Can be used to pass figure handle of figure to plot into.
+        max_kernel_length
+            Maximum length for which to plot synaptic kernel [unit = s].
 
         Returns
         -------
@@ -1125,17 +1235,24 @@ class SecondOrderPopulation(Population):
         else:
             fig = axes.get_figure()
 
-        self.clear()
         synapse_types = list()
         for i in synapse_idx:
+            self.clear()
             synaptic_response = list()
             synaptic_response.append(self.state_variables[-1][0] + self.step_size * self.synaptic_currents[i])
             self.synapses[i].synaptic_input[0] = 1.
             self.state_update()
             synaptic_response.append(self.state_variables[-1][0] + self.step_size * self.synaptic_currents[i])
-            while np.abs(synaptic_response[-1]) > 1e-10:
-                self.state_update()
-                synaptic_response.append(self.state_variables[-1][0] + self.step_size * self.synaptic_currents[i])
+            if not max_kernel_length:
+                while np.abs(synaptic_response[-1]) > 1e-14:
+                    self.state_update()
+                    synaptic_response.append(self.state_variables[-1][0] + self.step_size * self.synaptic_currents[i])
+            else:
+                t = 0.
+                while t < max_kernel_length:
+                    self.state_update()
+                    synaptic_response.append(self.state_variables[-1][0] + self.step_size * self.synaptic_currents[i])
+                    t += self.step_size
             axes.plot(np.array(synaptic_response))
             synapse_types.append(self.synapses[i].synapse_type)
 

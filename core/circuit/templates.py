@@ -579,9 +579,13 @@ class MoranCircuit(Circuit):
                          delays=delays,
                          step_size=step_size)
 
-
+# try-out stuff
+###############
+from time import time
 jrc = JansenRitCircuit(step_size=1e-4)
-inp = np.zeros((10000, 3, 2))
-inp[:, 0, 0] = np.random.uniform(120, 320, 10000)
-jrc.run(inp, 1.)
-jrc.plot_population_states([0], time_window=[1., 2.])
+inp = np.zeros((100000, 3, 2))
+inp[:, 0, 0] = np.random.uniform(120, 320, 100000)
+t_start = time()
+jrc.run(inp, 10.)
+t_end = time()
+print('computation_time: ' + str(t_end - t_start))
