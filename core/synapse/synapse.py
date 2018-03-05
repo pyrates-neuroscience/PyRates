@@ -665,9 +665,6 @@ class DEExponentialSynapse(DESynapse):
         """Instantiates base synapse.
         """
 
-        # set exponential time constant
-        self.tau = tau
-
         # call super init
         #################
 
@@ -676,6 +673,17 @@ class DEExponentialSynapse(DESynapse):
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
                          synapse_type=synapse_type)
+
+        # set additional attributes
+        ###########################
+
+        # time constant
+        self.tau = tau
+
+        # pre-calculate DE constants
+        self.input_scaling = self.efficacy / self.tau
+        self.d1_scaling = 1 / self.tau ** 2
+        self.d2_scaling = 2 / self.tau
 
     def get_delta_synaptic_current(self,
                                    synaptic_current_old: Union[float, np.float64],
@@ -701,11 +709,8 @@ class DEExponentialSynapse(DESynapse):
         # calculate delta current
         #########################
 
-        input_effect = (self.efficacy / self.tau) * self.synaptic_input[self.kernel_length - 1]
-        first_derivative = (1. / self.tau**2) * membrane_potential
-        second_derivative = (2. / self.tau) * synaptic_current_old
-
-        delta_current = input_effect - second_derivative - first_derivative
+        delta_current = self.input_scaling * self.synaptic_input[self.kernel_length - 1] - \
+                        self.d1_scaling * membrane_potential - self.d2_scaling * synaptic_current_old
 
         # update synaptic input buffer
         ##############################
