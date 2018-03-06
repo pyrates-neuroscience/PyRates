@@ -544,7 +544,7 @@ class BurstingAxon(Axon):
         #######################
 
         # multiply membrane potentials with kernel
-        kernel_value = self.kernel_nonlinearity(self.membrane_potentials[0:self.kernel_length],
+        kernel_value = self.kernel_nonlinearity(self.membrane_potentials,
                                                 **self.kernel_nonlinearity_args) * self.axon_kernel
 
         # integrate over time
@@ -559,7 +559,7 @@ class BurstingAxon(Axon):
         """
 
         super().clear()
-        self.membrane_potentials = np.zeros(len(self.axon_kernel)) + self.resting_potential
+        self.membrane_potentials = np.zeros(self.kernel_length) + self.resting_potential
 
     def update(self):
         """Updates axon attributes.

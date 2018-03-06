@@ -184,7 +184,8 @@ def inactivation_sigmoid(membrane_potential: Union[float, np.ndarray],
 def synaptic_sigmoid(firing_rate: Union[float, np.ndarray],
                      max_firing_rate: float,
                      threshold: float,
-                     steepness: float
+                     steepness: float,
+                     max_firing_rate: float
                      ) -> Union[float, np.ndarray]:
     """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
 
@@ -198,6 +199,8 @@ def synaptic_sigmoid(firing_rate: Union[float, np.ndarray],
         See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
     steepness
         See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
+    max_firing_rate
+        See parameter description of `max_firing_rate` of :class:`SigmoidAxon`.
 
     Returns
     -------
