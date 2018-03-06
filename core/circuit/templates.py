@@ -578,4 +578,3 @@ class MoranCircuit(Circuit):
                          connectivity=connections,
                          delays=delays,
                          step_size=step_size)
-

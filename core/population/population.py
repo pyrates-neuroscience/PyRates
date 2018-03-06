@@ -14,7 +14,7 @@ from typing import List, Optional, Union, Dict, Callable, TypeVar
 
 from core.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
-    DEExponentialSynapse, DESynapse
+    DEExponentialSynapse, DESynapse, DEDoubleExponentialSynapse
 from core.utility import set_instance, check_nones
 from core.utility.filestorage import RepresentationBase
 
@@ -179,7 +179,8 @@ class Population(AbstractBasePopulation):
                  synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
                  axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = True,
-                 label: str = 'Custom'
+                 label: str = 'Custom',
+                 synapse_labels: Optional[list] = None
                  ) -> None:
         """Instantiation of base population.
         """
@@ -229,7 +230,8 @@ class Population(AbstractBasePopulation):
         self._set_synapses(synapse_subtypes=synapses,
                            synapse_params=synapse_params,
                            synapse_types=synapse_class,
-                           max_synaptic_delay=max_synaptic_delay)
+                           max_synaptic_delay=max_synaptic_delay,
+                           synapse_labels=synapse_labels)
 
         # set synaptic current vector
         self.synaptic_currents = np.zeros(self.n_synapses)
@@ -257,7 +259,8 @@ class Population(AbstractBasePopulation):
                       synapse_subtypes: Optional[List[str]] = None,
                       synapse_types: Union[str, List[str]] = 'DoubleExponentialSynapse',
                       synapse_params: Optional[List[dict]] = None,
-                      max_synaptic_delay: Optional[np.ndarray] = None
+                      max_synaptic_delay: Optional[np.ndarray] = None,
+                      synapse_labels: Optional[List[str]] = None
                       ) -> None:
         """Instantiates synapses.
 
@@ -271,6 +274,7 @@ class Population(AbstractBasePopulation):
             Dictionaries with synapse parameter name-value pairs.
         max_synaptic_delay
             Array with maximal length of synaptic responses [unit = s].
+        synapse_labels
         
         """
 
@@ -282,6 +286,7 @@ class Population(AbstractBasePopulation):
 
         synapse_subtypes = check_nones(synapse_subtypes, self.n_synapses)
         synapse_params = check_nones(synapse_params, self.n_synapses)
+        synapse_labels = check_nones(synapse_labels, self.n_synapses)
         self.synapse_labels = list()
 
         # set all given synapses
@@ -320,6 +325,8 @@ class Population(AbstractBasePopulation):
                                                   buffer_size=self.max_population_delay))
             else:
                 raise AttributeError('Invalid synapse type!')
+            if synapse_labels[i]:
+                self.synapses[i].synapse_type = synapse_labels[i]
             self.synapse_labels.append(self.synapses[-1].synapse_type)
 
     def _set_axon(self,
@@ -341,14 +348,14 @@ class Population(AbstractBasePopulation):
         """
 
         if axon_type == 'SigmoidAxon':
-            self.axon = set_instance(SigmoidAxon, axon_subtype, axon_params)  # type: ignore
+            self.axon = set_instance(SigmoidAxon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
         elif axon_type == 'BurstingAxon':
-            self.axon = set_instance(BurstingAxon, axon_subtype, axon_params)  # type: ignore
+            self.axon = set_instance(BurstingAxon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
             # re-build axonal kernel if synapse params have been passed
             if axon_params:
                 self.axon.axon_kernel = self.axon.build_kernel()
         elif axon_type == 'Axon':
-            self.axon = set_instance(Axon, axon_subtype, axon_params)  # type: ignore
+            self.axon = set_instance(Axon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
         else:
             raise AttributeError('Invalid axon type!')
 
@@ -663,15 +670,13 @@ class PlasticPopulation(Population):
         1)      membrane potential (default = 0.0) [unit = V].
         2)      membrane potential threshold (default = -0.07) [unit = V].
         3,...)  efficacy scalings of plastic synapses (default = 1.0) [unit = 1].
-    axon_plasticity_function
+    spike_frequency_adaptation
         Function defining the axonal plasticity mechanisms to be used on population.
-    axon_plasticity_target_param
-        Target parameter of the axon to which the axonal plasticity function is applied.
-    axon_plasticity_function_params
+    spike_frequency_adaptation_args
         Name-value pairs defining the parameters for the axonal plasticity function.
-    synapse_plasticity_function
+    synapse_efficacy_adaptation
         Function defining the synaptic plasticity mechanisms to be used on population.
-    synapse_plasticity_function_params
+    synapse_efficacy_adaptation_args
         Name-value pairs defining the parameters for the synaptic plasticity function.
     step_size
         See docstring of :class:`Population`.
@@ -786,7 +791,7 @@ class PlasticPopulation(Population):
                   ):
 
         if axon_type == 'PlasticSigmoidAxon':
-            self.axon = set_instance(PlasticSigmoidAxon, axon_subtype, axon_params)  # type: ignore
+            self.axon = set_instance(PlasticSigmoidAxon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
         else:
             super()._set_axon(axon_subtype, axon_type, axon_params)
 
@@ -925,7 +930,9 @@ class SecondOrderPopulation(Population):
         See docstring of :class:`Population`.
     label
         See docstring of :class:`Population`.
-
+    synapse_labels
+        See docstring of :class:`Population`.
+        
     See Also
     --------
     :class:`Population`: Detailed description of parameters, attributes and methods.
@@ -950,7 +957,8 @@ class SecondOrderPopulation(Population):
                  synapse_class: Union[str, List[str]] = 'DEExponentialSynapse',
                  axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = False,
-                 label: str = 'Custom'
+                 label: str = 'Custom',
+                 synapse_labels: Optional[List[str]] = None
                  ) -> None:
         """Instantiation of second order population.
         """
@@ -969,7 +977,8 @@ class SecondOrderPopulation(Population):
                          synapse_class=synapse_class,
                          axon_class=axon_class,
                          store_state_variables=store_state_variables,
-                         label=label)
+                         label=label,
+                         synapse_labels=synapse_labels)
 
         # set additional synapse handling vectors
         #########################################
@@ -982,6 +991,7 @@ class SecondOrderPopulation(Population):
                       synapse_types: Union[str, List[str]] = 'DEExponentialSynapse',
                       synapse_params: Optional[List[dict]] = None,
                       max_synaptic_delay: Optional[float] = None,
+                      synapse_labels: Optional[List[str]] = None
                       ) -> None:
         """Instantiates synapses.
 
@@ -993,6 +1003,7 @@ class SecondOrderPopulation(Population):
             Names of synapse classes to instantiate.
         synapse_params
             Dictionaries with synapse parameter name-value pairs.
+        synapse_labels
 
         """
 
@@ -1004,6 +1015,7 @@ class SecondOrderPopulation(Population):
 
         synapse_subtypes = check_nones(synapse_subtypes, self.n_synapses)
         synapse_params = check_nones(synapse_params, self.n_synapses)
+        synapse_labels = check_nones(synapse_labels, self.n_synapses)
         self.synapse_labels = list()
 
         # set all given synapses
@@ -1017,8 +1029,15 @@ class SecondOrderPopulation(Population):
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   buffer_size=int(self.max_population_delay / self.step_size)))
+            elif synapse_types[i] == 'DEDoubleExponentialSynapse':
+                self.synapses.append(set_instance(DEDoubleExponentialSynapse,
+                                                  synapse_subtypes[i],
+                                                  synapse_params[i],
+                                                  buffer_size=int(self.max_population_delay / self.step_size)))
             else:
                 raise AttributeError('Invalid synapse type!')
+            if synapse_labels[i]:
+                self.synapses[i].synapse_type = synapse_labels[i]
             self.synapse_labels.append(self.synapses[-1].synapse_type)
 
     def state_update(self,
@@ -1134,44 +1153,31 @@ class SecondOrderPopulation(Population):
 
         """
 
-        # add synapse
-        self.synapses.append(synapse)
+        # call super method
+        ###################
 
-        # update synapse dependencies
-        #############################
+        super().add_synapse(synapse, synapse_idx)
 
-        self.n_synapses = len(self.synapses)
+        # additional state vector updates
+        #################################
 
-        # current vector
-        self.synaptic_currents = np.zeros(self.n_synapses)
         self.synaptic_currents_old = np.zeros_like(self.synaptic_currents)
         self.PSPs = np.zeros_like(self.synaptic_currents)
-
-        # extrinsic modulation vector
-        ext_syn_mod = self.extrinsic_synaptic_modulation
-        self.extrinsic_synaptic_modulation = np.ones(self.n_synapses)
-        if synapse_idx:
-            self.extrinsic_synaptic_modulation[0:-1] = ext_syn_mod
-            self.extrinsic_synaptic_modulation[-1] = ext_syn_mod[synapse_idx]
 
     def clear(self):
         """Clears states stored on population and synaptic input.
         """
 
-        # population attributes
-        init_state = self.state_variables[0]
-        self.state_variables.clear()
-        self.state_variables.append(init_state)
+        # call super method
+        ###################
 
-        # synapse attributes
-        for syn in self.synapses:
-            syn.clear()
-        self.synaptic_currents[:] = 0.
+        super().clear()
+
+        # additional state vector clearing
+        ##################################
+
         self.synaptic_currents_old[:] = 0.
         self.PSPs[:] = 0.
-
-        # axon attributes
-        self.axon.clear()
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]] = None, create_plot: Optional[bool] = True,
                               axes: Axes = None, max_kernel_length: Optional[float] = None) -> object:
@@ -1276,16 +1282,14 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
         See docstring of :class:`Population`.
     label
         See docstring of :class:`Population`.
-    axon_plasticity_function
-        See docstring of :class`PlasticPopulation`.
-    axon_plasticity_target_param
-        See docstring of :class`PlasticPopulation`.
-    axon_plasticity_function_params
-        See docstring of :class`PlasticPopulation`.
-    synapse_plasticity_function
-        See docstring of :class`PlasticPopulation`.
-    synapse_plasticity_function_params
-        See docstring of :class`PlasticPopulation`.
+    spike_frequency_adaptation
+        See docstring of :class:`PlasticPopulation`.
+    spike_frequency_adaptation_args
+        See docstring of :class:`PlasticPopulation`.
+    synapse_efficacy_adaptation
+        See docstring of :class:`PlasticPopulation`.
+    synapse_efficacy_adaptation_args
+        See docstring of :class:`PlasticPopulation`.
 
     See Also
     --------

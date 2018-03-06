@@ -1,10 +1,11 @@
 """Templates for specific synapse parametrizations.
 """
 
-from typing import Optional, Union
+from typing import Optional, Union, Callable
 import numpy as np
 
-from core.synapse import DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, DEExponentialSynapse
+from core.synapse import DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
+    DEExponentialSynapse, DEDoubleExponentialSynapse
 from core.utility import synaptic_sigmoid, double_exponential
 
 __author__ = "Richard Gast, Daniel F. Rose"
@@ -475,3 +476,86 @@ class MoranInhibitorySynapse(ExponentialSynapse):
                          max_delay=max_delay,
                          buffer_size=buffer_size,
                          synapse_type='Moran_inhibitory')
+
+
+class GABABDESynapse(DEDoubleExponentialSynapse):
+    """Defines a current-based synapse with GABAB neuroreceptor.
+
+    Parameters
+    ----------
+    buffer_size
+        See documentation of parameter `buffer_size` of :class:`Synapse`.
+    epsilon
+        See documentation of parameter `epsilon` of :class:`Synapse`.
+    efficacy
+        See documentation of parameter `efficacy` of :class:`Synapse`.
+    tau_decay
+        See documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
+    tau_rise
+        See documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
+    max_firing_rate
+         Maximum output of the sigmoidal transform applied to input of the synapse.
+    threshold
+        Threshold of the sigmoidal transform applied to input of the synapse.
+    steepness
+        Steepness of the sigmoidal transform applied to input of the synapse.
+
+    See Also
+    --------
+    :class:`TransformedInputSynapse`: Detailed documentation of parameters of synapses with additional input transform.
+    :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+
+    """
+
+    def __init__(self,
+                 buffer_size: int = 0,
+                 efficacy: float = -1.273 * 1e-12,
+                 tau_decay: float = 0.02,
+                 tau_rise: float = 0.0004,
+                 max_firing_rate: float = 1.,
+                 threshold: float = 11.,
+                 steepness: float = 100.
+                 ) -> None:
+        """
+        Instantiates current-based synapse with GABA_B receptor.
+        """
+
+        # define input transform attributes
+        ###################################
+
+        input_transform_args = {'threshold': threshold,
+                                'steepness': steepness,
+                                'max_firing_rate': max_firing_rate}
+
+        # call super method
+        ###################
+
+        super().__init__(efficacy=efficacy,
+                         buffer_size=buffer_size,
+                         conductivity_based=False,
+                         synapse_type='GABAB_DE',
+                         tau_decay=tau_decay,
+                         tau_rise=tau_rise
+                         )
+
+        # add input transform
+        #####################
+
+        self.input_transform = synaptic_sigmoid
+        self.input_transform_args = input_transform_args
+
+    def pass_input(self, synaptic_input: float, delay: int = 0
+                   ) -> None:
+        """Passes synaptic input to synaptic_input array.
+
+        See Also
+        --------
+        :class:`Synapse`: ...for a detailed description of the method's parameters
+
+        """
+
+        # transform synaptic input
+        # TODO: enable dependence of input transform on membrane potential of population
+        synaptic_input = self.input_transform(synaptic_input, **self.input_transform_args)
+
+        return super().pass_input(synaptic_input, delay)

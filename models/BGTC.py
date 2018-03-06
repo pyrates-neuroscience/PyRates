@@ -196,15 +196,17 @@ class Thalamus(Circuit):
                                      [1.0 * c, 0.]]
             connectivity[:, :, 1] = [[0., 0.4 * c],        # GABAA
                                      [0., fb[1] * c]]
-            connectivity[:, :, 2] = [[0., 0.4 * c],        # GABAB
-                                     [0., fb[1] * c]]
+            connectivity[:, :, 2] = [[0., 1.0],            # GABAB
+                                     [0., 0.]]
+
         # resting potentials
         if not resting_potentials:
-            resting_potentials = [-0.065, -0.070]
+            resting_potentials = [0., 0.]
 
         # synapses
-        synapse_types = ['AMPACurrentSynapse', 'GABAACurrentSynapse', 'GABABCurrentSynapse']
-        synapse_classes = ['DoubleExponentialSynapse', 'DoubleExponentialSynapse', 'TransformedInputSynapse']
+        synapse_types = [None, None, 'GABABDESynapse']
+        synapse_labels = ['AMPA', 'GABAA', 'GABAB']
+        synapse_classes = ['DEDoubleExponentialSynapse', 'DEDoubleExponentialSynapse', 'DEDoubleExponentialSynapse']
 
         ampa_params = {'efficacy': 0.006,
                        'tau_rise': 1./130,
@@ -213,8 +215,9 @@ class Thalamus(Circuit):
                         'tau_rise': 1./130,
                         'tau_decay': 1./40}
         gabab_params = {'efficacy': -0.018,
-                        'tau_rise': 1./15,
-                        'tau_decay': 1./8,
+                        'tau_rise': 1/15,
+                        'tau_decay': 1/8,
+                        'max_firing_rate': 0.4 * connectivity_scaling,
                         'threshold': 11.,
                         'steepness': -0.01}
         synapse_params_tmp = [ampa_params, gabaa_params, gabab_params]
@@ -276,7 +279,8 @@ class Thalamus(Circuit):
                                     synapse_class=synapse_classes,
                                     axon_class=axon_class,
                                     label=population_labels[0],
-                                    resting_potential=resting_potentials[0])
+                                    resting_potential=resting_potentials[0],
+                                    synapse_labels=synapse_labels)
 
         RE = SecondOrderPopulation(synapses=synapse_types[0:2],
                                    axon=axon_types[1],
@@ -288,7 +292,8 @@ class Thalamus(Circuit):
                                    synapse_class=synapse_classes[0:2],
                                    axon_class=axon_class,
                                    label=population_labels[1],
-                                   resting_potential=resting_potentials[1])
+                                   resting_potential=resting_potentials[1],
+                                   synapse_labels=synapse_labels[0:2])
 
         # call super init
         #################
@@ -297,7 +302,7 @@ class Thalamus(Circuit):
                          connectivity=connectivity,
                          delays=delays,
                          step_size=step_size,
-                         synapse_types=['AMPA', 'GABAA', 'GABAB'])
+                         synapse_types=synapse_labels)
 
 
 class BasalGanglia(Circuit):
@@ -413,3 +418,33 @@ class BasalGanglia(Circuit):
                          step_size=step_size,
                          synapse_types=synapse_types
                          )
+
+
+# step_size = 1e-3
+# th = Thalamus(step_size=step_size, resting_potentials=[0., 0.])
+#
+# # simulation parameters
+# simulation_time = 10.
+# cutoff_time = 2.
+# input_start = int(5. / step_size)
+# simulation_steps = int(simulation_time / step_size)
+#
+# # input parameters
+# sensory_inp_mean = 150.
+# sensory_inp_var = 4.
+# cortical_inp = 25.
+# modulatory_inp = 15.
+# lateral_inhibition = 20.
+#
+# # input definition
+# synaptic_input = np.zeros((simulation_steps, 2, 3))
+# synaptic_input[:, 0, 0] += sensory_inp_var * np.random.randn(simulation_steps) + sensory_inp_mean
+# synaptic_input[:, 0, 0] += cortical_inp
+# synaptic_input[:, 1, 0] += 2 * cortical_inp
+# synaptic_input[input_start:, 0, 0] += modulatory_inp
+# synaptic_input[input_start:, 1, 1] += modulatory_inp * 6.
+# synaptic_input[:, 1, 1] += lateral_inhibition
+#
+# # simulation
+# th.run(synaptic_input, simulation_time)
+# th.plot_population_states(time_window=[cutoff_time, simulation_time])

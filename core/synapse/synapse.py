@@ -554,6 +554,117 @@ class DoubleExponentialSynapse(Synapse):
                          tau_decay=tau_decay)
 
 
+class DEDoubleExponentialSynapse(DESynapse):
+    """Differential equation version of bi-exponential synapse class. Represents average behavior of a defined 
+    post-synapse of a population.
+
+    Parameters
+    ----------
+    efficacy
+        See documentation of parameter `efficacy` in :class:`Synapse`.
+    tau_decay
+        Lumped time delay constant that determines how fast the exponential synaptic kernel decays [unit = s].
+    tau_rise
+        Lumped time delay constant that determines how fast the exponential synaptic kernel rises [unit = s].
+    buffer_size
+        See documentation of parameter `buffer_size` in :class:`Synapse`.
+    conductivity_based
+        See documentation of parameter `conductivity_based` in :class:`Synapse`.
+    reversal_potential
+        See documentation of parameter `reversal_potential` in :class:`Synapse`.
+    synapse_type
+        Name of synapse type (default = None).
+
+    See Also
+    --------
+    :class:`Synapse`: documentation for a detailed description of the object attributes and methods.
+
+    """
+
+    def __init__(self,
+                 efficacy: float,
+                 tau_decay: float,
+                 tau_rise: float,
+                 buffer_size: int = 0,
+                 conductivity_based: bool = False,
+                 reversal_potential: float = -0.075,
+                 synapse_type: Optional[str] = None
+                 ) -> None:
+        """Instantiates base synapse.
+        """
+
+        # call super init
+        #################
+
+        super().__init__(efficacy=efficacy,
+                         buffer_size=buffer_size,
+                         conductivity_based=conductivity_based,
+                         reversal_potential=reversal_potential,
+                         synapse_type=synapse_type)
+
+        # set additional attributes
+        ###########################
+
+        # time constant
+        self.tau_decay = tau_decay
+        self.tau_rise = tau_rise
+
+        # pre-calculate DE constants
+        self.input_scaling = self.efficacy / (self.tau_decay - self.tau_rise)
+        self.d1_scaling = 1 / (self.tau_decay**2 - self.tau_rise**2)
+        self.d2_scaling = 2 / (self.tau_decay - self.tau_rise)
+
+    def get_delta_synaptic_current(self,
+                                   synaptic_current_old: Union[float, np.float64],
+                                   membrane_potential: Union[float, np.float64]
+                                   ) -> Union[np.float64, float]:
+        """Calculates change in synaptic current from synaptic input (should be incoming firing rate).
+
+        Parameters
+        ----------
+        synaptic_current_old
+            Synaptic current from last time-step [unit = A].
+        membrane_potential
+            Membrane potential of post-synapse. Only to be used for conductivity based synapses (default = None)
+            [unit = V].
+
+        Returns
+        -------
+        float
+            Resulting synaptic current [unit = A].
+
+        """
+
+        # calculate delta current
+        #########################
+
+        delta_current = self.input_scaling * self.synaptic_input[self.kernel_length - 1] - \
+                        self.d1_scaling * membrane_potential - self.d2_scaling * synaptic_current_old
+
+        # update synaptic input buffer
+        ##############################
+
+        self.synaptic_input[0:-1] = self.synaptic_input[1:]
+        self.synaptic_input[-1] = 0.
+
+        return delta_current * self.current_scaling(membrane_potential) * self.depression
+
+    def update(self):
+        """Updates attributes depending on current synapse state.
+        """
+
+        # call super method
+        ###################
+
+        super().update()
+
+        # re-calculate DE constants
+        ###########################
+
+        self.input_scaling = self.efficacy / (self.tau_decay - self.tau_rise)
+        self.d1_scaling = 1 / (self.tau_decay ** 2 - self.tau_rise ** 2)
+        self.d2_scaling = 2 / (self.tau_decay - self.tau_rise)
+
 #######################
 # exponential synapse #
 #######################
@@ -720,6 +831,21 @@ class DEExponentialSynapse(DESynapse):
 
         return delta_current * self.current_scaling(membrane_potential) * self.depression
 
+    def update(self):
+        """Updates attributes depending on current synapse state.
+        """
+
+        # call super method
+        ###################
+
+        super().update()
+
+        # re-calculate DE constants
+        ###########################
+
+        self.input_scaling = self.efficacy / self.tau
+        self.d1_scaling = 1 / self.tau ** 2
+        self.d2_scaling = 2 / self.tau
 
 ################################################
 # synapse with additional input transformation #

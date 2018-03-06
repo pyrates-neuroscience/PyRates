@@ -158,7 +158,23 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
 
     else:
 
-        D = None
+        D = np.zeros((33, 33))
+
+    # connection arguments
+    connection_strengths = list()
+    source_populations = list()
+    target_populations = list()
+    target_synapses = list()
+    delays = list()
+    for i in range(C.shape[0]):
+        for j in range(C.shape[1]):
+            for k in range(C.shape[2]):
+                if C[i, j, k] > 0:
+                    connection_strengths.append(C[i, j, k])
+                    source_populations.append(j*3)
+                    target_populations.append(i*3)
+                    target_synapses.append(k)
+                    delays.append(D[i, j] / velocity)
 
     # network input
     n_pops = 3
@@ -170,20 +186,20 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
         synaptic_input[:, idx_eins, 0] = 22 * np.random.randn(int(np.ceil(simulation_time / step_size)), N) + 200.0
 
     # circuits
-    circuits = [JansenRitCircuit(step_size=step_size,max_synaptic_delay=max_synaptic_delay) for _ in range(33)]
+    circuits = [JansenRitCircuit(step_size=step_size, max_synaptic_delay=max_synaptic_delay) for _ in range(33)]
 
     ################
     # set up model #
     ################
 
-    delays = D / velocity
     from core.circuit import CircuitFromPopulations
     from core.circuit import CircuitFromCircuit
     nmm = CircuitFromCircuit(circuits=circuits,
-                             connection_strengths=C,
+                             connection_strengths=connection_strengths,
+                             source_populations=source_populations,
+                             target_populations=target_populations,
+                             target_synapses=target_synapses,
                              delays=delays,
-                             # input_populations=np.array([1 for _ in range(33)]),
-                             # output_populations=np.array([0 for _ in range(33)])
                              )
 
     #####################

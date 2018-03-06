@@ -182,6 +182,7 @@ def inactivation_sigmoid(membrane_potential: Union[float, np.ndarray],
 
 
 def synaptic_sigmoid(firing_rate: Union[float, np.ndarray],
+                     max_firing_rate: float,
                      threshold: float,
                      steepness: float
                      ) -> Union[float, np.ndarray]:
@@ -191,6 +192,8 @@ def synaptic_sigmoid(firing_rate: Union[float, np.ndarray],
     ----------
     firing_rate
         Membrane potential for which to calculate firing rate [unit = V].
+    max_firing_rate
+        Maximum firing rate entering into the synaptic kernel [unit = 1/s].
     threshold
         See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
     steepness
@@ -203,7 +206,7 @@ def synaptic_sigmoid(firing_rate: Union[float, np.ndarray],
 
     """
 
-    return 1 / (1 + np.exp((firing_rate - threshold) / steepness))
+    return firing_rate * max_firing_rate / (1 + np.exp((firing_rate - threshold) / steepness))
 
 
 ###########
