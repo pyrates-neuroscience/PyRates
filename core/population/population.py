@@ -1074,7 +1074,7 @@ class SecondOrderPopulation(Population):
 
         for i, psp in enumerate(self.PSPs):
             self.PSPs[i] = self.take_step(f=self.get_delta_psp, y_old=self.PSPs[i], synapse_idx=i)
-        membrane_potential = np.sum(self.PSPs)
+        membrane_potential = np.sum(self.PSPs).squeeze()
         state_vars = [membrane_potential]
 
         # compute average firing rate
@@ -1177,7 +1177,7 @@ class SecondOrderPopulation(Population):
         ##################################
 
         self.synaptic_currents_old[:] = 0.
-        self.PSPs[:] = 0.
+        self.PSPs[:] = self.resting_potential
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]] = None, create_plot: Optional[bool] = True,
                               axes: Axes = None, max_kernel_length: Optional[float] = None) -> object:

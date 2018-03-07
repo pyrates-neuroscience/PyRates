@@ -209,11 +209,11 @@ class Thalamus(Circuit):
         synapse_classes = ['DEDoubleExponentialSynapse', 'DEDoubleExponentialSynapse', 'DEDoubleExponentialSynapse']
 
         ampa_params = {'efficacy': 0.006,
-                       'tau_rise': 1./130,
-                       'tau_decay': 1./60}
+                       'tau_rise': 1/130,
+                       'tau_decay': 1/60}
         gabaa_params = {'efficacy': -0.001,
-                        'tau_rise': 1./130,
-                        'tau_decay': 1./40}
+                        'tau_rise': 1/130,
+                        'tau_decay': 1/40}
         gabab_params = {'efficacy': -0.018,
                         'tau_rise': 1/15,
                         'tau_decay': 1/8,
@@ -235,8 +235,8 @@ class Thalamus(Circuit):
                       'epsilon': epsilon,
                       'max_delay': max_synaptic_delay,
                       'resting_potential': resting_potentials[0],
-                      'tau_rise': 1./20,
-                      'tau_decay': 1/10.,
+                      'tau_rise': 1/20,
+                      'tau_decay': 1/10,
                       'max_firing_rate': 800.,
                       'activation_threshold': resting_potentials[0]+0.006,
                       'activation_steepness': -0.0015,
@@ -246,8 +246,8 @@ class Thalamus(Circuit):
                      'epsilon': epsilon,
                      'max_delay': max_synaptic_delay,
                      'resting_potential': resting_potentials[1],
-                     'tau_rise': 1./20,
-                     'tau_decay': 1/10.,
+                     'tau_rise': 1/20,
+                     'tau_decay': 1/10,
                      'max_firing_rate': 800.,
                      'activation_threshold': resting_potentials[1]+0.016,
                      'activation_steepness': -0.0015,
@@ -421,7 +421,7 @@ class BasalGanglia(Circuit):
 
 
 # step_size = 1e-3
-# th = Thalamus(step_size=step_size, resting_potentials=[0., 0.])
+# th = Thalamus(step_size=step_size)
 #
 # # simulation parameters
 # simulation_time = 10.

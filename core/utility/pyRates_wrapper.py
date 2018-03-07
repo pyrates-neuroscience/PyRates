@@ -9,6 +9,11 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
+#####################
+# wrapper functions #
+#####################
+
+
 def circuit_wrapper(circuit_type, circuit_params, simulation_params, target_var_idx=0, population_idx=None,
                     time_window=None):
     """Instantiates circuit and returns its simulated behavior.
@@ -43,7 +48,9 @@ def circuit_wrapper(circuit_type, circuit_params, simulation_params, target_var_
 
 
 def jansenrit_wrapper(rand_vars, step_size=1e-3, max_synaptic_delay=0.5, input_mean=220, input_var=22,
-                      simulation_time=1.0):
+                      simulation_time=2.0):
+    """Uses circuit_wrapper to simulate JR circuit behavior for a specified excitatory synapse efficacy and 
+    connectivity scaling."""
 
     synapse_params = [{'efficacy': rand_vars[1]}, dict()]
     circuit_params = {'connectivity_scaling': rand_vars[0], 'step_size': step_size,
@@ -53,17 +60,52 @@ def jansenrit_wrapper(rand_vars, step_size=1e-3, max_synaptic_delay=0.5, input_m
     synaptic_input[:, 0, 0] = input_var * np.random.randn(sim_steps) + input_mean
     simulation_params = {'simulation_time': simulation_time, 'synaptic_inputs': synaptic_input}
 
-    return circuit_wrapper('JansenRitCircuit', circuit_params, simulation_params, population_idx=[0])
+    return np.mean(circuit_wrapper('JansenRitCircuit', circuit_params, simulation_params,
+                                   population_idx=[0], time_window=[simulation_time-1, simulation_time]))
 
 
-# from pygpc.ni import run_reg_adaptive2
-# from matplotlib.pyplot import *
-#
-# gpc_vars = ['connectivity_scaling', 'He']
-# pdftype = ['norm', 'norm']
-# pdfshape = [[150., 3.25e-3], [10., 5e-4]]
-# limits = [[10., 1e-3], [290., 6e-3]]
-# eps = 1e-3
-#
-# gpc_obj, gpc_output = run_reg_adaptive2(gpc_vars, pdftype, pdfshape, limits, jansenrit_wrapper, order_start=2)
-# matshow(gpc_output)
+###############
+# GPC example #
+###############
+
+from pygpc.ni import run_reg_adaptive2
+from pygpc.grid import norm
+from matplotlib.pyplot import *
+
+# parameter definition
+######################
+
+# random variables
+gpc_vars = ['connectivity_scaling', 'He']
+pdftype = ['norm', 'norm']
+pdfshape = [[150., 3.25e-3], [10., 5e-4]]
+limits = [[10., 1e-3], [290., 6e-3]]
+
+# gpc params
+eps = 1e-3
+order_start = 2
+
+# perform gpx analysis
+######################
+
+gpc_obj, gpc_output = run_reg_adaptive2(gpc_vars, pdftype, pdfshape, limits, jansenrit_wrapper,
+                                        order_start=order_start, eps=eps)
+
+# create target values to compare gpc output against
+####################################################
+
+params = gpc_obj.grid.coords
+target_vals = np.zeros(params.shape[0])
+for i in range(params.shape[0]):
+    target_vals[i] = jansenrit_wrapper(params[i, :])
+
+# estimate gpc predictions for above defined parameter values
+#############################################################
+
+params_normalized = norm(params, pdftype, pdfshape, limits)
+gpc_coefs= gpc_obj.expand(gpc_output)
+predicted_vals = gpc_obj.evaluate(gpc_coefs, params_normalized)
+
+# plot results
+##############
+
