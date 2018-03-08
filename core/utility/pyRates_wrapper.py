@@ -74,8 +74,7 @@ def jansenrit_wrapper(rand_vars, step_size=1e-3, max_synaptic_delay=0.5, input_m
 # GPC example #
 ###############
 
-from pygpc.ni import run_reg_adaptive2
-from pygpc.grid import norm
+import pygpc
 from matplotlib.pyplot import *
 
 # parameter definition
@@ -83,25 +82,35 @@ from matplotlib.pyplot import *
 
 # random variables
 gpc_vars = ['connectivity_scaling', 'He']
-pdftype = ['norm', 'norm']
-pdfshape = [[150., 3.25e-3], [10., 5e-4]]
-limits = [[10., 1e-3], [290., 6e-3]]
+pdftype = ['beta', 'beta']
+pdfshape = [[3., 3.], [3., 3.]]
+limits = [[80., 1e-3], [180., 6e-3]]
 
 # gpc params
 eps = 1e-3
-order_start = 2
+order = [7, 7]
+order_max = 7
+interaction_order = 2
 
-# perform gpx analysis
+# perform gpc analysis
 ######################
 
-gpc_obj, gpc_output = run_reg_adaptive2(gpc_vars, pdftype, pdfshape, limits, jansenrit_wrapper,
-                                        order_start=order_start, eps=eps)
+# create gpc object
+N_coeffs = pygpc.calc_Nc_sparse(p_d=order, p_g=order_max, p_i=interaction_order, dim=2)
+grid = pygpc.randomgrid(pdftype, pdfshape, limits, np.ceil(N_coeffs*5.5), seed=None)
+gpc_obj = pygpc.reg(pdftype, pdfshape, limits, order, order_max, interaction_order, grid, random_vars=gpc_vars)
+
+# create training values for gpc to fit
+training_vals = list()
+params = gpc_obj.grid.coords
+for p in params:
+    training_vals.append([jansenrit_wrapper(p)])
+
+# fit gpc to training data
+gpc_coefs = gpc_obj.expand(np.array(training_vals))
 
 # create target values to compare gpc output against
 ####################################################
-
-# extract parameter samples used for training the gpc
-params = gpc_obj.grid.coords
 
 # create new test parameter values within the range of the training data
 n_samples = 10
@@ -119,10 +128,7 @@ for i, c in enumerate(params_test[:, 0]):
 #############################################################
 
 # normalize the parameter values to [-1, 1]
-params_normalized = norm(params_test, pdftype, pdfshape, limits)
-
-# extract the fitted coefficients from gpc object
-gpc_coefs= gpc_obj.expand(gpc_output)
+params_normalized = pygpc.grid.norm(params_test, pdftype, pdfshape, limits)
 
 # predict model behavior given the fitted coefficients and normalized parameter values
 predicted_vals = np.zeros((n_samples, n_samples))
