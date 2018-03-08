@@ -52,9 +52,15 @@ def jansenrit_wrapper(rand_vars, step_size=1e-3, max_synaptic_delay=0.5, input_m
     """Uses circuit_wrapper to simulate JR circuit behavior for a specified excitatory synapse efficacy and 
     connectivity scaling."""
 
+    # define parameters to call circuit_wrapper with
+    ################################################
+
+    # circuit parameters
     synapse_params = [{'efficacy': rand_vars[1]}, dict()]
     circuit_params = {'connectivity_scaling': rand_vars[0], 'step_size': step_size,
                       'max_synaptic_delay': max_synaptic_delay, 'synapse_params': synapse_params}
+
+    # simulation parameters
     sim_steps = int(simulation_time / step_size)
     synaptic_input = np.zeros((sim_steps, 3, 2))
     synaptic_input[:, 0, 0] = input_var * np.random.randn(sim_steps) + input_mean
@@ -94,18 +100,84 @@ gpc_obj, gpc_output = run_reg_adaptive2(gpc_vars, pdftype, pdfshape, limits, jan
 # create target values to compare gpc output against
 ####################################################
 
+# extract parameter samples used for training the gpc
 params = gpc_obj.grid.coords
-target_vals = np.zeros(params.shape[0])
-for i in range(params.shape[0]):
-    target_vals[i] = jansenrit_wrapper(params[i, :])
+
+# create new test parameter values within the range of the training data
+n_samples = 10
+params_test = np.zeros((n_samples, 2))
+params_test[:, 0] = np.linspace(np.min(params[:, 0]), np.max(params[:, 0]), n_samples)
+params_test[:, 1] = np.linspace(np.min(params[:, 1]), np.max(params[:, 1]), n_samples)
+
+# loop over each parameter combination and simulate model behavior (target data)
+target_vals = np.zeros((n_samples, n_samples))
+for i, c in enumerate(params_test[:, 0]):
+    for j, e in enumerate(params_test[:, 1]):
+        target_vals[i, j] = jansenrit_wrapper([c, e])
 
 # estimate gpc predictions for above defined parameter values
 #############################################################
 
-params_normalized = norm(params, pdftype, pdfshape, limits)
+# normalize the parameter values to [-1, 1]
+params_normalized = norm(params_test, pdftype, pdfshape, limits)
+
+# extract the fitted coefficients from gpc object
 gpc_coefs= gpc_obj.expand(gpc_output)
-predicted_vals = gpc_obj.evaluate(gpc_coefs, params_normalized)
+
+# predict model behavior given the fitted coefficients and normalized parameter values
+predicted_vals = np.zeros((n_samples, n_samples))
+for i, c in enumerate(params_normalized[:, 0]):
+    for j, e in enumerate(params_normalized[:, 1]):
+        predicted_vals[i, j] = gpc_obj.evaluate(gpc_coefs, np.array([[c, e]]))
 
 # plot results
 ##############
 
+fig, axes = subplots(1, 4, figsize=(15, 6), gridspec_kw={'width_ratios': [5, 1, 5, 1]})
+
+# plot target data
+im1 = axes[0].matshow(target_vals)
+axes[0].set_title('Goal Function')
+axes[0].set_xlabel('Connectivity Scaling')
+axes[0].set_ylabel('Excitatory Synaptic Efficacy')
+
+# set axis ticks and colorbar
+x_tick_labels = list()
+y_tick_labels = list()
+x_ticks = axes[0].get_xticks()
+y_ticks = axes[0].get_yticks()
+for x, y in zip(x_ticks, y_ticks):
+    if (x < 0) or (x >= n_samples):
+        x_tick_labels.append('')
+        y_tick_labels.append('')
+    else:
+        x_tick_labels.append(round(params_test[int(x), 0], 1))
+        y_tick_labels.append(round(params_test[int(y), 1], 4))
+axes[0].set_xticklabels(x_tick_labels)
+axes[0].set_yticklabels(y_tick_labels)
+fig.colorbar(im1, cax=axes[1], orientation='vertical')
+
+# plot gpc predictions
+im2 = axes[2].matshow(predicted_vals)
+axes[2].set_title('Goal Function')
+axes[2].set_xlabel('Connectivity Scaling')
+axes[2].set_ylabel('Excitatory Synaptic Efficacy')
+
+# set axis ticks and colorbar
+x_tick_labels = list()
+y_tick_labels = list()
+x_ticks = axes[0].get_xticks()
+y_ticks = axes[0].get_yticks()
+for x, y in zip(x_ticks, y_ticks):
+    if (x < 0) or (x >= n_samples):
+        x_tick_labels.append('')
+        y_tick_labels.append('')
+    else:
+        x_tick_labels.append(round(params_test[int(x), 0], 1))
+        y_tick_labels.append(round(params_test[int(y), 1], 4))
+axes[2].set_xticklabels(x_tick_labels)
+axes[2].set_yticklabels(y_tick_labels)
+fig.colorbar(im2, cax=axes[3], orientation='vertical')
+
+tight_layout()
+fig.show()
