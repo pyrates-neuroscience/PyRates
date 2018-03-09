@@ -625,10 +625,9 @@ class CircuitFromScratch(Circuit):
                  synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
                  axon_params: Optional[List[dict]] = None,
                  axon_class: Union[str, List[str]] = 'SigmoidAxon',
-                 population_class: Union[List[str], str] = 'Population',
-                 membrane_capacitance: Union[float, List[float]] = 1e-12,
-                 tau_leak: Union[float, List[float]] = 0.016,
-                 resting_potential: Union[float, List[float]] = -0.075,
+                 membrane_capacitance: Optional[Union[float, List[float]]] = None,
+                 tau_leak: Optional[Union[float, List[float]]] = None,
+                 resting_potential: Optional[Union[float, List[float]]] = None,
                  init_states: Union[float, np.ndarray] = 0.,
                  population_labels: Optional[List[str]] = None,
                  spike_frequency_adaptation: Optional[List[Callable[[float], float]]] = None,
@@ -689,12 +688,18 @@ class CircuitFromScratch(Circuit):
 
         if isinstance(tau_leak, float):
             tau_leak = np.zeros(N) + tau_leak
+        elif tau_leak is None:
+            tau_leak = check_nones(tau_leak, N)
 
         if isinstance(resting_potential, float):
             resting_potential = np.zeros(N) + resting_potential
+        elif resting_potential is None:
+            resting_potential = check_nones(resting_potential, N)
 
         if isinstance(membrane_capacitance, float):
             membrane_capacitance = np.zeros(N) + membrane_capacitance
+        elif membrane_capacitance is None:
+            membrane_capacitance = check_nones(membrane_capacitance, N)
 
         # make None and str variables iterable
         synapses = check_nones(synapses, n_synapses)
@@ -715,8 +720,6 @@ class CircuitFromScratch(Circuit):
             synapse_class = [synapse_class for _ in range(n_synapses)]
         if isinstance(axon_class, str):
             axon_class = [axon_class for _ in range(N)]
-        if isinstance(population_class, str):
-            population_class = [population_class for _ in range(N)]
 
         # instantiate each population
         populations = list()  # type: List[Population]
@@ -750,28 +753,44 @@ class CircuitFromScratch(Circuit):
                           'axon_class': axon_class[i],
                           'label': population_labels[i]}
 
-            # add plasticity parameters if necessary
-            if population_class[i] == 'SecondOrderPlasticPopulation' or population_class[i] == 'PlasticPopulation':
+            # choose appropriate populations class and instantiate population
+            n_diff_syns = 0
+            for syn_class in synapse_class_tmp:
+                if syn_class == 'ExponentialSynapse' or syn_class == 'DoubleExponentialSynapse':
+                    n_diff_syns += 1
+
+            if spike_frequency_adaptation[i] or synapse_efficacy_adaptation[i]:
+
                 pop_params['spike_frequency_adaptation'] = spike_frequency_adaptation[i]
                 pop_params['spike_frequency_adaptation_args'] = spike_frequency_adaptation_args[i]
                 pop_params['synapse_efficacy_adaptation'] = synapse_efficacy_adaptation_tmp
                 pop_params['synapse_efficacy_adaptation_args'] = synapse_efficacy_adaptation_args_tmp
 
-            # add first-order parameters if necessary
-            if population_class[i] == 'Population' or population_class[i] == 'PlasticPopulation':
-                pop_params['tau_leak'] = tau_leak[i]
-                pop_params['resting_potential'] = resting_potential[i]
-                pop_params['membrane_capacitance'] = membrane_capacitance[i]
+                if n_diff_syns == len(synapse_class_tmp) and not tau_leak[i]:
 
-            # instantiate population
-            if population_class[i] == 'SecondOrderPlasticPopulation':
-                populations.append(SecondOrderPlasticPopulation(**pop_params))
-            elif population_class[i] == 'SecondOrderPopulation':
-                populations.append(SecondOrderPopulation(**pop_params))
-            elif population_class[i] == 'PlasticPopulation':
-                populations.append(PlasticPopulation(**pop_params))
+                    populations.append(SecondOrderPlasticPopulation(**pop_params))
+
+                else:
+
+                    pop_params['tau_leak'] = tau_leak[i] if tau_leak[i] else 0.016
+                    pop_params['resting_potential'] = resting_potential[i] if resting_potential[i] else -0.075
+                    pop_params['membrane_capacitance'] = membrane_capacitance[i] if membrane_capacitance else 1e-12
+
+                    populations.append(PlasticPopulation(**pop_params))
+
             else:
-                populations.append(Population(**pop_params))
+
+                if n_diff_syns == len(synapse_class_tmp) and not tau_leak[i]:
+
+                    populations.append(SecondOrderPopulation(**pop_params))
+
+                else:
+
+                    pop_params['tau_leak'] = tau_leak[i] if tau_leak[i] else 0.016
+                    pop_params['resting_potential'] = resting_potential[i] if resting_potential[i] else -0.075
+                    pop_params['membrane_capacitance'] = membrane_capacitance[i] if membrane_capacitance else 1e-12
+
+                    populations.append(Population(**pop_params))
 
         # call super init
         #################

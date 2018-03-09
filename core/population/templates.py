@@ -84,7 +84,7 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
                          axon_params=axon_params,
                          store_state_variables=store_state_variables,
                          label=label,
-                         synapse_class='DEExponentialSynapse',
+                         synapse_class='ExponentialSynapse',
                          axon_class='SigmoidAxon')
 
 
@@ -156,7 +156,7 @@ class JansenRitInterneurons(SecondOrderPopulation):
                          axon_params=axon_params,
                          store_state_variables=store_state_variables,
                          label=label,
-                         synapse_class='DEExponentialSynapse',
+                         synapse_class='ExponentialSynapse',
                          axon_class='SigmoidAxon')
 
 

@@ -1024,12 +1024,12 @@ class SecondOrderPopulation(Population):
         for i in range(self.n_synapses):
 
             # instantiate synapse
-            if synapse_types[i] == 'DEExponentialSynapse':
+            if synapse_types[i] == 'ExponentialSynapse':
                 self.synapses.append(set_instance(DEExponentialSynapse,
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   buffer_size=int(self.max_population_delay / self.step_size)))
-            elif synapse_types[i] == 'DEDoubleExponentialSynapse':
+            elif synapse_types[i] == 'DoubleExponentialSynapse':
                 self.synapses.append(set_instance(DEDoubleExponentialSynapse,
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
