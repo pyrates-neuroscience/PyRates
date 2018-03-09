@@ -199,11 +199,8 @@ def test_5_4_construct_circuit_from_repr_eval():
     assert repr(circuit) == repr(new_circuit)
 
 
-@pytest.mark.xfail
 def test_5_5_save_run_data_to_file():
     """Run a simulation and save the states to file."""
-    # fixme: marked as xfail, since the reason why target and test output is different, is not yet clear
-    # needs to be reviewed later on
 
     from core.utility.construct import construct_circuit_from_file
     from core.utility.filestorage import get_simulation_data

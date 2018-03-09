@@ -32,8 +32,8 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "ExponentialSynapse",
-                        "ExponentialSynapse"
+                        "DEExponentialSynapse",
+                        "DEExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_PCs"
@@ -59,7 +59,7 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "ExponentialSynapse"
+                        "DEExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_EINs"
@@ -85,7 +85,7 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "ExponentialSynapse"
+                        "DEExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_IINs"
@@ -102,8 +102,6 @@
                         "__module__": "core.synapse.templates",
                         "__name__": "JansenRitExcitatorySynapse"
                     },
-                    "bin_size": 0.0009765625,
-                    "max_delay": null,
                     "buffer_size": 0
                 },
                 "source": 0,
@@ -118,8 +116,6 @@
                         "__module__": "core.synapse.templates",
                         "__name__": "JansenRitExcitatorySynapse"
                     },
-                    "bin_size": 0.0009765625,
-                    "max_delay": null,
                     "buffer_size": 0
                 },
                 "source": 0,
@@ -134,8 +130,6 @@
                         "__module__": "core.synapse.templates",
                         "__name__": "JansenRitExcitatorySynapse"
                     },
-                    "bin_size": 0.0009765625,
-                    "max_delay": null,
                     "buffer_size": 0
                 },
                 "source": 1,
@@ -150,8 +144,6 @@
                         "__module__": "core.synapse.templates",
                         "__name__": "JansenRitInhibitorySynapse"
                     },
-                    "bin_size": 0.0009765625,
-                    "max_delay": null,
                     "buffer_size": 0
                 },
                 "source": 2,

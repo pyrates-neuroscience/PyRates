@@ -327,6 +327,8 @@ class GeneralizedJansenRitCircuit(Circuit):
 
             connectivity[:, i*circuit_tmp.n_populations:(i + 1) * circuit_tmp.n_populations, :] = \
                 np.tile(weights[i] * circuit_tmp.C, (n_circuits, 1, 1))
+            for pop in circuit_tmp.populations:
+                pop.targets = list()
             populations += circuit_tmp.populations
 
         super().__init__(populations=populations,
