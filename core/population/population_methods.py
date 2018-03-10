@@ -43,7 +43,7 @@ def state_update(self,
 
     membrane_potential = self.state_variables[-1][0]
     membrane_potential = self.take_step(f=self.get_delta_membrane_potential,
-                                              y_old=membrane_potential)
+                                        y_old=membrane_potential)
 
     state_vars = [membrane_potential]
 
@@ -87,7 +87,7 @@ def state_update_no_modulation(self,
 
     membrane_potential = self.state_variables[-1][0]
     membrane_potential = self.take_step(f=self.get_delta_membrane_potential,
-                                              y_old=membrane_potential)
+                                        y_old=membrane_potential)
 
     state_vars = [membrane_potential]
 
@@ -133,7 +133,6 @@ def state_update_plastic(self,
     #################################
 
     if self.spike_frequency_adaptation:
-
         self.axon_update()
         self.state_variables[-1] += [self.axon.transfer_function_args['adaptation']]
 
@@ -143,7 +142,6 @@ def state_update_plastic(self,
     for i in range(self.n_synapses):
 
         if self.synapse_efficacy_adaptation[i]:
-
             self.synapse_update(i)
             self.state_variables[-1] += [self.synapses[i].depression]
 
@@ -172,7 +170,6 @@ def state_update_plastic_no_modulation(self,
     #################################
 
     if self.spike_frequency_adaptation:
-
         self.axon_update()
         self.state_variables[-1] += [self.axon.transfer_function_args['adaptation']]
 
@@ -182,7 +179,6 @@ def state_update_plastic_no_modulation(self,
     for i in range(self.n_synapses):
 
         if self.synapse_efficacy_adaptation[i]:
-
             self.synapse_update(i)
             self.state_variables[-1] += [self.synapses[i].depression]
 
@@ -520,10 +516,10 @@ def get_delta_psp(self,
 
     # calculate synaptic current
     self.synaptic_currents[synapse_idx] = self.take_step(f=self.synapses
-                                                                     [synapse_idx].get_delta_synaptic_current,
-                                                                     y_old=self.synaptic_currents_old
-                                                                     [synapse_idx],
-                                                                     membrane_potential=psp)
+    [synapse_idx].get_delta_synaptic_current,
+                                                         y_old=self.synaptic_currents_old
+                                                         [synapse_idx],
+                                                         membrane_potential=psp)
 
     return self.synaptic_currents_old[synapse_idx] * self.extrinsic_synaptic_modulation[synapse_idx]
 
@@ -558,9 +554,102 @@ def get_delta_psp_no_modulation(self,
 
     # calculate synaptic current
     self.synaptic_currents[synapse_idx] = self.take_step(f=self.synapses
-                                                                     [synapse_idx].get_delta_synaptic_current,
-                                                                     y_old=self.synaptic_currents_old
-                                                                     [synapse_idx],
-                                                                     membrane_potential=psp)
+    [synapse_idx].get_delta_synaptic_current,
+                                                         y_old=self.synaptic_currents_old
+                                                         [synapse_idx],
+                                                         membrane_potential=psp)
 
     return self.synaptic_currents_old[synapse_idx]
+
+
+def construct_state_update_function(leaky_capacitor=False,
+                                    spike_frequency_adaptation=False,
+                                    synapse_efficacy_adaptation=False,
+                                    enable_modulation=False,
+                                    integro_differential=False,
+                                    store_state_variables=True
+                                    ):
+    if integro_differential:
+        membrane_potential_update_snippet = """membrane_potential = self.state_variables[-1][0]
+    membrane_potential = self.take_step(f=self.get_delta_membrane_potential,
+                                        y_old=membrane_potential)"""
+    else:  # pure differential equations
+        if leaky_capacitor:
+            membrane_potential_update_snippet = """for i, psp in enumerate(self.PSPs):
+        self.PSPs[i] = self.take_step(f=self.get_delta_psp, y_old=self.PSPs[i], synapse_idx=i)
+    leak_current = self.take_step(f=self.get_leak_current, y_old=self.leak_current)
+    membrane_potential = np.sum(self.PSPs).squeeze() + leak_current + self.extrinsic_current
+    """
+        else:
+            membrane_potential_update_snippet = """for i, psp in enumerate(self.PSPs):
+        self.PSPs[i] = self.take_step(f=self.get_delta_psp, y_old=self.PSPs[i], synapse_idx=i)
+    membrane_potential = np.sum(self.PSPs).squeeze() + self.extrinsic_current
+    """
+
+    if spike_frequency_adaptation:
+        spike_frequency_adaption_snippet = """# update axonal transfer function
+    #################################
+
+    self.axon_update()
+    self.state_variables[-1] += [self.axon.transfer_function_args['adaptation']]"""
+    else:
+        spike_frequency_adaption_snippet = ""
+
+    if synapse_efficacy_adaptation:
+        synaptic_efficacy_adaptation_snippet = """# update synaptic scaling
+    #########################
+
+    for i in range(self.n_synapses):
+
+        if self.synapse_efficacy_adaptation[i]:
+            self.synapse_update(i)
+            self.state_variables[-1] += [self.synapses[i].depression]"""
+    else:
+        synaptic_efficacy_adaptation_snippet = ""
+
+    if enable_modulation:
+        synaptic_modulation_snippet = """if extrinsic_synaptic_modulation is not None:
+        self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation"""
+        modulation_declaration_snippet = """,
+                 extrinsic_synaptic_modulation"""
+    else:
+        synaptic_modulation_snippet = ""
+        modulation_declaration_snippet = ""
+
+    if store_state_variables:
+        store_states_snippet = """self.state_variables.append(state_vars)"""
+    else:
+        store_states_snippet = """self.state_variables[0] = state_vars"""
+
+    func_string = f"""
+def state_update(self, extrinsic_current{modulation_declaration_snippet}
+                 ) -> None: 
+
+    self.extrinsic_current = extrinsic_current
+
+    {synaptic_modulation_snippet}
+
+    # compute average membrane potential
+    ####################################
+
+    {membrane_potential_update_snippet}
+
+    state_vars = [membrane_potential]
+
+    # compute average firing rate
+    #############################
+
+    self.axon.compute_firing_rate(membrane_potential)
+
+    # update state variables
+    ########################
+
+    # TODO: Implement observer system here!!!
+    {store_states_snippet}
+
+    {spike_frequency_adaption_snippet}
+
+    {synaptic_efficacy_adaptation_snippet}
+"""
+    exec(func_string)
+    return state_update
