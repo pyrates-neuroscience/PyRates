@@ -199,10 +199,7 @@ class Circuit(RepresentationBase):
                 raise ValueError('Second dimension of extrinsic current has to match the number of populations!')
 
         # extrinsic modulation
-        if not extrinsic_modulation:
-            extrinsic_modulation = [[np.ones(self.populations[i].n_synapses) for i in range(self.n_populations)]
-                                    for _ in range(simulation_time_steps)]
-        else:
+        if extrinsic_modulation:
             if len(extrinsic_modulation) != simulation_time_steps:
                 raise ValueError('First dimension of extrinsic modulation has to match the number of simulation '
                                  'time steps!')
@@ -263,26 +260,50 @@ class Circuit(RepresentationBase):
         for _, node in self.network_graph.nodes(data=True):
             active_populations.append(node["data"])
 
-        for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
+        if extrinsic_modulation:
 
-            # pass information through circuit
-            for source_pop in active_populations:
-                source_pop.project_to_targets()
+            for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
 
-            # update all population states
-            for i, pop in enumerate(self.populations):
-                pop.state_update(extrinsic_current=extrinsic_current[n, i],
-                                 extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
+                # pass information through circuit
+                for source_pop in active_populations:
+                    source_pop.project_to_targets()
 
-            # display simulation progress
-            if verbose:
-                if n == 0 or (n % (simulation_time_steps // 10)) == 0:
-                    simulation_progress = (self.t / simulation_time) * 100.
-                    print(f'simulation progress: {simulation_progress:.0f} %')
+                # update all population states
+                for i, pop in enumerate(self.populations):
+                    pop.state_update(extrinsic_current=extrinsic_current[n, i],
+                                     extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
 
-            # update time-variant variables
-            self.t += self.step_size
-            self.run_info["time_vector"].append(self.t)
+                # display simulation progress
+                if verbose:
+                    if n == 0 or (n % (simulation_time_steps // 10)) == 0:
+                        simulation_progress = (self.t / simulation_time) * 100.
+                        print(f'simulation progress: {simulation_progress:.0f} %')
+
+                # update time-variant variables
+                self.t += self.step_size
+                self.run_info["time_vector"].append(self.t)
+
+        else:
+
+            for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
+
+                # pass information through circuit
+                for source_pop in active_populations:
+                    source_pop.project_to_targets()
+
+                # update all population states
+                for i, pop in enumerate(self.populations):
+                    pop.state_update(extrinsic_current=extrinsic_current[n, i])
+
+                # display simulation progress
+                if verbose:
+                    if n == 0 or (n % (simulation_time_steps // 10)) == 0:
+                        simulation_progress = (self.t / simulation_time) * 100.
+                        print(f'simulation progress: {simulation_progress:.0f} %')
+
+                # update time-variant variables
+                self.t += self.step_size
+                self.run_info["time_vector"].append(self.t)
 
         self.clean_run()
 

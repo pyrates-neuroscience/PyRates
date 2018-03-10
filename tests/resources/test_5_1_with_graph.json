@@ -32,8 +32,8 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "DEExponentialSynapse",
-                        "DEExponentialSynapse"
+                        "ExponentialSynapse",
+                        "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_PCs"
@@ -59,7 +59,7 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "DEExponentialSynapse"
+                        "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_EINs"
@@ -85,7 +85,7 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "DEExponentialSynapse"
+                        "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_IINs"

@@ -10,12 +10,14 @@ import numpy as np
 from copy import deepcopy
 from matplotlib.axes import Axes
 from typing import List, Optional, Union, Dict, Callable, TypeVar
+from types import MethodType
 
 
 from core.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
 from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
     DEExponentialSynapse, DESynapse, DEDoubleExponentialSynapse
 from core.utility import set_instance, check_nones
+from core.population.population_methods import *
 from core.utility.filestorage import RepresentationBase
 
 FloatLike = Union[float, np.float64]
@@ -170,7 +172,7 @@ class Population(AbstractBasePopulation):
                  init_state: FloatLike = 0.,
                  step_size: float = 0.0001,
                  max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
-                 tau_leak: float = 0.016,
+                 tau_leak: Optional[float] = None,
                  resting_potential: float = -0.075,
                  membrane_capacitance: float = 1e-12,
                  max_population_delay: FloatLike = 0.,
@@ -180,7 +182,8 @@ class Population(AbstractBasePopulation):
                  axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = True,
                  label: str = 'Custom',
-                 synapse_labels: Optional[list] = None
+                 synapse_labels: Optional[list] = None,
+                 enable_modulation: bool = False
                  ) -> None:
         """Instantiation of base population.
         """
@@ -196,7 +199,7 @@ class Population(AbstractBasePopulation):
             raise AttributeError('Either axon or axon_params have to be passed!')
 
         # check attribute values
-        if step_size < 0 or tau_leak < 0 or max_population_delay < 0:
+        if step_size < 0 or max_population_delay < 0 or (tau_leak and tau_leak < 0):
             raise ValueError('Time constants (tau, step_size, max_delay) cannot be negative. '
                              'See parameter docstring for further information.')
         if membrane_capacitance < 0:
@@ -208,10 +211,7 @@ class Population(AbstractBasePopulation):
         self.synapses = []  # type: List[Union[Synapse, DESynapse]]
         self.state_variables = []  # type: List[List[FloatLike]]
         self.store_state_variables = store_state_variables
-        self.tau_leak = tau_leak
-        self.resting_potential = resting_potential
         self.step_size = step_size
-        self.membrane_capacitance = membrane_capacitance
         self.label = label
         self.max_population_delay = max_population_delay
 
@@ -249,11 +249,38 @@ class Population(AbstractBasePopulation):
 
         self.axon.compute_firing_rate(self.state_variables[-1][0])
 
+        # set appropriate state update functions
+        ########################################
+
+        # choose between leaky-capacitor or kernel description of change in membrane potential
+        if tau_leak:
+
+            self.tau_leak = tau_leak
+            self.membrane_capacitance = membrane_capacitance
+            self.resting_potential = resting_potential
+
+            self.get_delta_membrane_potential = MethodType(get_delta_membrane_potential_lc, self)
+
+        else:
+
+            self.get_delta_membrane_potential = MethodType(get_delta_membrane_potential, self)
+
+        # choose between enabling modulatory influences or not
+        if enable_modulation:
+
+            self.state_update = MethodType(state_update, self)
+            self.extrinsic_synaptic_modulation = np.ones(self.n_synapses)
+            self.get_synaptic_currents = MethodType(get_synaptic_currents, self)
+
+        else:
+
+            self.state_update = MethodType(state_update_no_modulation, self)
+            self.get_synaptic_currents = MethodType(get_synaptic_currents_no_modulation, self)
+
         # initialize extrinsic influences
         #################################
 
         self.extrinsic_current = 0.
-        self.extrinsic_synaptic_modulation = np.ones(self.n_synapses)
 
     def _set_synapses(self,
                       synapse_subtypes: Optional[List[str]] = None,
@@ -371,57 +398,6 @@ class Population(AbstractBasePopulation):
 
         return self.axon.firing_rate
 
-    def get_delta_membrane_potential(self,
-                                     membrane_potential: FloatLike
-                                     ) -> FloatLike:
-        """Calculates change in membrane potential as function of synaptic current, leak current and
-        extrinsic current.
-
-        Parameters
-        ----------
-        membrane_potential
-            Current membrane potential of population [unit = V].
-
-        Returns
-        -------
-        float
-            Delta membrane potential [unit = V].
-
-        """
-
-        net_current = self.get_synaptic_currents(membrane_potential) \
-                      + self.get_leak_current(membrane_potential) \
-                      + self.extrinsic_current
-
-        return net_current / self.membrane_capacitance
-
-    def get_synaptic_currents(self,
-                              membrane_potential: FloatLike
-                              ) -> Union[FloatLike, np.ndarray]:
-        """Calculates the net synaptic current over all synapses.
-
-        Parameters
-        ----------
-        membrane_potential
-            Current membrane potential of population [unit = V].
-
-        Returns
-        -------
-        float
-            Net synaptic current [unit = A].
-
-        """
-
-        # compute synaptic currents and modulations
-        ###########################################
-
-        # calculate synaptic currents for each additive synapse
-        for i, syn in enumerate(self.synapses):
-            self.synaptic_currents[i] = syn.get_synaptic_current(membrane_potential)
-
-        # TODO: multiplying with a vector of 1s by default costs computation time.
-        return self.synaptic_currents @ self.extrinsic_synaptic_modulation.T
-
     def get_leak_current(self,
                          membrane_potential: FloatLike
                          ) -> FloatLike:
@@ -440,57 +416,6 @@ class Population(AbstractBasePopulation):
         """
 
         return (self.resting_potential - membrane_potential) * self.membrane_capacitance / self.tau_leak
-
-    def state_update(self,
-                     extrinsic_current: FloatLike = 0.,
-                     extrinsic_synaptic_modulation: Optional[np.ndarray] = None
-                     ) -> None:
-        """Updates state of population by making a single step forward in time.
-
-        Parameters
-        ----------
-        extrinsic_current
-            Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
-            (default = 0.) [unit = A].
-        extrinsic_synaptic_modulation
-            Modulatory (multiplicatory) input to each synapse. Vector with len = number of synapses 
-            (default = None) [unit = 1].
-
-        """
-
-        # add inputs to internal state variables
-        ########################################
-
-        # extrinsic current
-        self.extrinsic_current = extrinsic_current
-
-        # extrinsic modulation
-        if extrinsic_synaptic_modulation is not None:
-            self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
-        # fixme: this is called with arrays of 1s, although no actual extrinsic synaptic modulation is defined.
-        # fixme: --> performance
-
-        # compute average membrane potential
-        ####################################
-
-        membrane_potential = self.state_variables[-1][0]
-        membrane_potential = self.take_step(f=self.get_delta_membrane_potential,
-                                            y_old=membrane_potential)
-
-        state_vars = [membrane_potential]
-
-        # compute average firing rate
-        #############################
-
-        self.axon.compute_firing_rate(membrane_potential)
-
-        # update state variables
-        ########################
-
-        # TODO: Implement observer system here!!!
-        self.state_variables.append(state_vars)
-        if not self.store_state_variables:
-            self.state_variables.pop(0)
 
     def take_step(self,
                   f: Callable,
@@ -721,6 +646,7 @@ class PlasticPopulation(Population):
                  axon_class: str = 'PlasticSigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Custom',
+                 enable_modulation: bool = False,
                  spike_frequency_adaptation: Optional[Callable[[float], float]] = None,
                  spike_frequency_adaptation_args: Optional[dict] = None,
                  synapse_efficacy_adaptation: Optional[List[Callable[[float], float]]] = None,
@@ -746,7 +672,8 @@ class PlasticPopulation(Population):
                          synapse_class=synapse_class,
                          axon_class=axon_class,
                          store_state_variables=store_state_variables,
-                         label=label)
+                         label=label,
+                         enable_modulation=enable_modulation)
 
         # set plasticity attributes
         ###########################
@@ -784,6 +711,14 @@ class PlasticPopulation(Population):
             raise AttributeError('Number of synaptic plasticity functions and plasticity function parameter '
                                  'dictionaries has to be equal.')
 
+        # overwrite state update function
+        #################################
+
+        if enable_modulation:
+            self.state_update = MethodType(state_update_plastic, self)
+        else:
+            self.state_update = MethodType(state_update_plastic_no_modulation, self)
+
     def _set_axon(self,
                   axon_subtype: Optional[str] = None,
                   axon_type: str = 'SigmoidAxon',
@@ -794,46 +729,6 @@ class PlasticPopulation(Population):
             self.axon = set_instance(PlasticSigmoidAxon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
         else:
             super()._set_axon(axon_subtype, axon_type, axon_params)
-
-    def state_update(self,
-                     extrinsic_current: FloatLike = 0.,
-                     extrinsic_synaptic_modulation: Optional[np.ndarray] = None,
-                     ) -> None:
-        """Updates state of population by making a single step forward in time.
-
-        Parameters
-        ----------
-        extrinsic_current
-            Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
-            (default = 0.) [unit = A].
-        extrinsic_synaptic_modulation
-            Modulatory input to each synapse. Vector with len = number of synapses (default = 1.0) [unit = 1].
-
-        """
-
-        # call super state update
-        #########################
-
-        super().state_update(extrinsic_current=extrinsic_current,
-                             extrinsic_synaptic_modulation=extrinsic_synaptic_modulation)
-
-        # update axonal transfer function
-        #################################
-
-        if self.spike_frequency_adaptation:
-
-            self.axon_update()
-            self.state_variables[-1] += [self.axon.transfer_function_args['adaptation']]
-
-        # update synaptic scaling
-        #########################
-
-        for i in range(self.n_synapses):
-
-            if self.synapse_efficacy_adaptation[i]:
-
-                self.synapse_update(i)
-                self.state_variables[-1] += [self.synapses[i].depression]
 
     def axon_update(self):
         """Updates adaptation field of axon.
@@ -949,7 +844,9 @@ class SecondOrderPopulation(Population):
                  axon: Optional[str] = None,
                  init_state: FloatLike = 0.,
                  step_size: float = 1e-4,
+                 tau_leak: Optional[float] = None,
                  resting_potential: float = 0.,
+                 membrane_capacitance: float = 1e-12,
                  max_population_delay: FloatLike = 0.,
                  max_synaptic_delay: Optional[float]=None,
                  synapse_params: Optional[List[dict]] = None,
@@ -958,6 +855,7 @@ class SecondOrderPopulation(Population):
                  axon_class: str = 'SigmoidAxon',
                  store_state_variables: bool = False,
                  label: str = 'Custom',
+                 enable_modulation: bool = False,
                  synapse_labels: Optional[List[str]] = None
                  ) -> None:
         """Instantiation of second order population.
@@ -978,13 +876,37 @@ class SecondOrderPopulation(Population):
                          axon_class=axon_class,
                          store_state_variables=store_state_variables,
                          label=label,
-                         synapse_labels=synapse_labels)
+                         enable_modulation=enable_modulation,
+                         synapse_labels=synapse_labels,
+                         tau_leak=tau_leak,
+                         membrane_capacitance=membrane_capacitance)
 
         # set additional synapse handling vectors
         #########################################
 
         self.synaptic_currents_old = np.zeros_like(self.synaptic_currents)
         self.PSPs = np.zeros_like(self.synaptic_currents) + init_state
+
+        # set appropriate state update methods
+        ######################################
+
+        if enable_modulation:
+
+            self.get_delta_psp = MethodType(get_delta_psp, self)
+
+            if tau_leak:
+                self.state_update = MethodType(state_update_differential_lc, self)
+            else:
+                self.state_update = MethodType(state_update_differential, self)
+
+        else:
+
+            self.get_delta_psp = MethodType(get_delta_psp_no_modulation, self)
+
+            if tau_leak:
+                self.state_update = MethodType(state_update_differential_lc_no_modulation, self)
+            else:
+                self.state_update = MethodType(state_update_differential_no_modulation, self)
 
     def _set_synapses(self,
                       synapse_subtypes: Optional[List[str]] = None,
@@ -1039,90 +961,6 @@ class SecondOrderPopulation(Population):
             if synapse_labels[i]:
                 self.synapses[i].synapse_type = synapse_labels[i]
             self.synapse_labels.append(self.synapses[-1].synapse_type)
-
-    def state_update(self,
-                     extrinsic_current: FloatLike = 0.,
-                     extrinsic_synaptic_modulation: Optional[np.ndarray] = None
-                     ) -> None:
-        """Updates state of population by making a single step forward in time.
-
-        Parameters
-        ----------
-        extrinsic_current
-            Extrinsic current arriving at time-point `t`, affecting the membrane potential of the population.
-            (default = 0.) [unit = A].
-        extrinsic_synaptic_modulation
-            Modulatory (multiplicatory) input to each synapse. Vector with len = number of synapses
-            (default = None) [unit = 1].
-
-        """
-
-        # add inputs to internal state variables
-        ########################################
-
-        # extrinsic current
-        self.extrinsic_current = extrinsic_current
-
-        # extrinsic modulation
-        if extrinsic_synaptic_modulation is not None:
-            self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation
-        # fixme: this is called with arrays of 1s, although no actual extrinsic synaptic modulation is defined.
-        # fixme: --> performance
-
-        # compute average membrane potential
-        ####################################
-
-        for i, psp in enumerate(self.PSPs):
-            self.PSPs[i] = self.take_step(f=self.get_delta_psp, y_old=self.PSPs[i], synapse_idx=i)
-        membrane_potential = np.sum(self.PSPs).squeeze()
-        state_vars = [membrane_potential]
-
-        # compute average firing rate
-        #############################
-
-        self.axon.compute_firing_rate(membrane_potential)
-
-        # update state variables
-        ########################
-
-        # TODO: Implement observer system here!!!
-        self.state_variables.append(state_vars)
-        if not self.store_state_variables:
-            self.state_variables.pop(0)
-
-    def get_delta_psp(self,
-                      psp: FloatLike,
-                      synapse_idx: int
-                      ) -> FloatLike:
-        """Calculates change in membrane potential as function of synaptic current, leak current and
-        extrinsic current.
-
-        Parameters
-        ----------
-        psp
-            Current membrane potential of population [unit = V].
-        synapse_idx
-            Index of synapse for which to calculate the PSP.
-        Returns
-        -------
-        float
-            Delta membrane potential [unit = V].
-
-        """
-
-        # update synaptic currents
-        ###########################
-
-        # update synaptic currents old
-        self.synaptic_currents_old[synapse_idx] = self.synaptic_currents[synapse_idx]
-
-        # calculate synaptic current
-        self.synaptic_currents[synapse_idx] = self.take_step(f=self.synapses[synapse_idx].get_delta_synaptic_current,
-                                                             y_old=self.synaptic_currents_old[synapse_idx],
-                                                             membrane_potential=psp)
-
-        return self.synaptic_currents_old[synapse_idx] * self.extrinsic_synaptic_modulation[synapse_idx] + \
-               self.extrinsic_current
 
     def update(self) -> None:
         """update population attributes.
@@ -1354,7 +1192,7 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
 
     def _set_synapses(self,
                       synapse_subtypes: Optional[List[str]] = None,
-                      synapse_types: Union[str, List[str]] = 'DEExponentialSynapse',
+                      synapse_types: Union[str, List[str]] = 'ExponentialSynapse',
                       synapse_params: Optional[List[dict]] = None,
                       max_synaptic_delay: Optional[float] = None,
                       ) -> None:
@@ -1387,8 +1225,13 @@ class SecondOrderPlasticPopulation(PlasticPopulation):
         for i in range(self.n_synapses):
 
             # instantiate synapse
-            if synapse_types[i] == 'DEExponentialSynapse':
+            if synapse_types[i] == 'ExponentialSynapse':
                 self.synapses.append(set_instance(DEExponentialSynapse,
+                                                  synapse_subtypes[i],
+                                                  synapse_params[i],
+                                                  buffer_size=int(self.max_population_delay / self.step_size)))
+            elif synapse_types[i] == 'DoubleExponentialSynapse':
+                self.synapses.append(set_instance(DEDoubleExponentialSynapse,
                                                   synapse_subtypes[i],
                                                   synapse_params[i],
                                                   buffer_size=int(self.max_population_delay / self.step_size)))
