@@ -652,4 +652,29 @@ def state_update(self, extrinsic_current{modulation_declaration_snippet}
     {synaptic_efficacy_adaptation_snippet}
 """
     exec(func_string)
-    return state_update
+    # the resulting constructor string is returned. exec(func_string) needs (for some reason) to be called
+    # outside this function. then 'state_update' is available in the respective context.
+    # possible alternative: execute the string with locals-argument set the respective class index.
+    return func_string
+
+
+def construct_get_delta_membrane_potential_function(leaky_capacitor=True):
+    """Construct the get_delta_membrane_potential method from string snippets depending on init parameters.
+
+    execute the code with exec(func_string). Then the function 'get_delta_membrane_potential' should be available."""
+    if leaky_capacitor:
+        snippet = """net_current = self.get_synaptic_currents(membrane_potential) \
+                  + self.get_leak_current(membrane_potential) \
+                  + self.extrinsic_current
+
+    return net_current / self.membrane_capacitance"""
+    else:
+        snippet = """return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current"""
+
+    func_string = f"""def get_delta_membrane_potential_lc(self,
+                                    membrane_potential: Union[float, np.float64]
+                                    ) -> Union[float, np.float64]:
+
+    {snippet}"""
+
+    return func_string
