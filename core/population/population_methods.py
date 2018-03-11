@@ -671,10 +671,32 @@ def construct_get_delta_membrane_potential_function(leaky_capacitor=True):
     else:
         snippet = """return self.get_synaptic_currents(membrane_potential) + self.extrinsic_current"""
 
-    func_string = f"""def get_delta_membrane_potential_lc(self,
+    func_string = f"""def get_delta_membrane_potential(self,
                                     membrane_potential: Union[float, np.float64]
                                     ) -> Union[float, np.float64]:
 
     {snippet}"""
+
+    return func_string
+
+
+def construct_get_synaptic_currents_function(enable_modulation=False):
+    if enable_modulation:
+        modulation_snippet = "@ self.extrinsic_synaptic_modulation.T"
+    else:
+        modulation_snippet = ""
+
+    func_string = f"""def get_synaptic_currents(self,
+                          membrane_potential: Union[float, np.float64]
+                          ) -> Union[Union[float, np.float64], np.ndarray]:
+
+    # compute synaptic currents and modulations
+    ###########################################
+
+    # calculate synaptic currents for each additive synapse
+    for i, syn in enumerate(self.synapses):
+        self.synaptic_currents[i] = syn.get_synaptic_current(membrane_potential)
+
+    return self.synaptic_currents {modulation_snippet}"""
 
     return func_string
