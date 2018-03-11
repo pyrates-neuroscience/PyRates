@@ -553,8 +553,7 @@ def get_delta_psp_no_modulation(self,
     self.synaptic_currents_old[synapse_idx] = self.synaptic_currents[synapse_idx]
 
     # calculate synaptic current
-    self.synaptic_currents[synapse_idx] = self.take_step(f=self.synapses
-    [synapse_idx].get_delta_synaptic_current,
+    self.synaptic_currents[synapse_idx] = self.take_step(f=self.synapses[synapse_idx].get_delta_synaptic_current,
                                                          y_old=self.synaptic_currents_old
                                                          [synapse_idx],
                                                          membrane_potential=psp)
@@ -698,5 +697,36 @@ def construct_get_synaptic_currents_function(enable_modulation=False):
         self.synaptic_currents[i] = syn.get_synaptic_current(membrane_potential)
 
     return self.synaptic_currents {modulation_snippet}"""
+
+    return func_string
+
+
+def construct_get_delta_psp_function(enable_modulation=False):
+    """Construct the method get_delta_psp. Builds the code from string snippets."""
+
+    if enable_modulation:
+        modulation_snippet = "* self.extrinsic_synaptic_modulation[synapse_idx]"
+    else:
+        modulation_snippet = ""
+
+    func_string = f"""def get_delta_psp(self,
+                  psp: Union[float, np.float64],
+                  synapse_idx: int
+                  ) -> Union[float, np.float64]:
+
+    # update synaptic currents
+    ###########################
+
+    # update synaptic currents old
+    self.synaptic_currents_old[synapse_idx] = self.synaptic_currents[synapse_idx]
+
+    # calculate synaptic current
+    self.synaptic_currents[synapse_idx] = self.take_step(f=self.synapses
+    [synapse_idx].get_delta_synaptic_current,
+                                                         y_old=self.synaptic_currents_old
+                                                         [synapse_idx],
+                                                         membrane_potential=psp)
+
+    return self.synaptic_currents_old[synapse_idx] {modulation_snippet}"""
 
     return func_string
