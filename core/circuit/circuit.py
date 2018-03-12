@@ -284,6 +284,17 @@ class Circuit(RepresentationBase):
             self.t += self.step_size
             self.run_info["time_vector"].append(self.t)
 
+        self.clean_run()
+
+    def clean_run(self):
+        """Cleans up any fields not needed after run anymore.
+        """
+
+        # remove input dummy nodes from graph
+        for i in np.arange(self.n_populations, self.n_nodes):
+            self.network_graph.remove_node(i)
+            self.n_nodes -= 1
+
     def get_population_states(self,
                               state_variable_idx: int,
                               population_idx: Optional[Union[list, range]] = None,

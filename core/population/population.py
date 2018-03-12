@@ -1177,7 +1177,7 @@ class SecondOrderPopulation(Population):
         ##################################
 
         self.synaptic_currents_old[:] = 0.
-        self.PSPs[:] = self.resting_potential
+        self.PSPs[:] = self.state_variables[0][0]
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]] = None, create_plot: Optional[bool] = True,
                               axes: Axes = None, max_kernel_length: Optional[float] = None) -> object:
