@@ -3,7 +3,7 @@
 
 from typing import Optional, List, Dict, Union
 import numpy as np
-from core.population import SecondOrderPopulation, SecondOrderPlasticPopulation, Population
+from core.population import Population
 from core.utility import moran_spike_frequency_adaptation, synaptic_efficacy_adaptation, spike_frequency_adaptation
 
 
@@ -16,7 +16,7 @@ __status__ = "Development"
 ##################################
 
 
-class JansenRitPyramidalCells(SecondOrderPopulation):
+class JansenRitPyramidalCells(Population):
     """Pyramidal cell population with excitatory and inhibitory synapse as defined in [1]_.
 
     Parameters
@@ -88,7 +88,7 @@ class JansenRitPyramidalCells(SecondOrderPopulation):
                          axon_class='SigmoidAxon')
 
 
-class JansenRitInterneurons(SecondOrderPopulation):
+class JansenRitInterneurons(Population):
     """Interneuron population with excitatory synapse as defined in [1]_.
 
     Parameters
@@ -165,7 +165,7 @@ class JansenRitInterneurons(SecondOrderPopulation):
 #####################################################
 
 
-class MoranPyramidalCells(SecondOrderPlasticPopulation):
+class MoranPyramidalCells(Population):
     """Population of pyramidal cells as described in [1]_.
 
     Parameters
@@ -264,7 +264,7 @@ class MoranPyramidalCells(SecondOrderPlasticPopulation):
                          )
 
 
-class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
+class MoranExcitatoryInterneurons(Population):
     """Population of excitatory interneurons as defined in [1]_.
 
     Parameters
@@ -351,7 +351,7 @@ class MoranExcitatoryInterneurons(SecondOrderPlasticPopulation):
                          label=label)
 
 
-class MoranInhibitoryInterneurons(SecondOrderPlasticPopulation):
+class MoranInhibitoryInterneurons(Population):
     """Population of inhibitory interneurons without spike-frequency-adaptation (see [1]_).
 
     Parameters
@@ -446,7 +446,7 @@ class MoranInhibitoryInterneurons(SecondOrderPlasticPopulation):
 #####################################################
 
 
-class WangKnoescheCells(SecondOrderPlasticPopulation):
+class WangKnoescheCells(Population):
     """Population of cells with synaptic-efficacy-adaptation (see [1]_).
 
     Parameters

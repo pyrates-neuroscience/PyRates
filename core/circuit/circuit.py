@@ -7,7 +7,7 @@ from matplotlib.axes import Axes
 # from networkx import MultiDiGraph
 from typing import List, Optional, Union, TypeVar, Callable, Tuple
 
-from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
+from core.population import Population
 from core.population import DummyPopulation
 from core.utility import check_nones, set_instance
 from core.utility.filestorage import RepresentationBase
@@ -122,6 +122,9 @@ class Circuit(RepresentationBase):
 
         # population specific properties
         for i in range(self.n_populations):
+
+            # clear all past information stored on population
+            self.populations[i].clear(disconnect=True)
 
             # make sure state variable history will be saved on population
             self.populations[i].store_state_variables = True
@@ -404,14 +407,14 @@ class Circuit(RepresentationBase):
                         #########################################################################################
 
                         # if syn is a plastic synapse, add copies of it to target for each connection on syn
-                        if isinstance(self.populations[target], PlasticPopulation) and \
+                        if self.populations[target].synaptic_plasticity and \
                                 self.populations[target].synapse_efficacy_adaptation[syn]:
 
                             # add synapse copy to population
-                            self.populations[target].add_plastic_synapse(synapse_idx=syn,
-                                                                         max_firing_rate=self.populations[source].axon.
-                                                                         transfer_function_args['max_firing_rate'] *
-                                                                                         self.C[target, source, idx])
+                            self.populations[target].copy_synapse(synapse_idx=syn,
+                                                                  max_firing_rate=self.populations[source].axon.
+                                                                  transfer_function_args['max_firing_rate'] *
+                                                                                  self.C[target, source, idx])
 
                             # create one edge for each delay between source and target
                             if self.D_pdfs is None:
@@ -445,7 +448,7 @@ class Circuit(RepresentationBase):
         if not plasticity_on_input:
             for i, pop in enumerate(self.populations):
                 for syn in range(n_synapses_old[i]):
-                    if type(pop) is PlasticPopulation and pop.synapse_efficacy_adaptation[syn]:
+                    if pop.synaptic_plasticity and pop.synapse_efficacy_adaptation[syn]:
                         pop.synapse_efficacy_adaptation[syn] = None
                         pop.state_variables[-1].pop(-1)
 
@@ -762,56 +765,20 @@ class CircuitFromScratch(Circuit):
                 synapse_efficacy_adaptation_tmp = None
 
             # create dictionary with relevant parameters
-            pop_params = {'synapses': synapses_tmp,
-                          'axon': axons[i],
-                          'init_state': init_states[i],
-                          'step_size': step_size,
-                          'max_synaptic_delay': max_synaptic_delay[i],
-                          'max_population_delay': max_population_delay[i],
-                          'synapse_params': synapse_params_tmp,
-                          'axon_params': axon_params[i],
-                          'synapse_class': synapse_class_tmp,
-                          'axon_class': axon_class[i],
-                          'label': population_labels[i]}
+            pop_params = {'synapses': synapses_tmp, 'axon': axons[i], 'init_state': init_states[i],
+                          'step_size': step_size, 'max_synaptic_delay': max_synaptic_delay[i],
+                          'max_population_delay': max_population_delay[i], 'synapse_params': synapse_params_tmp,
+                          'axon_params': axon_params[i], 'synapse_class': synapse_class_tmp,
+                          'axon_class': axon_class[i], 'label': population_labels[i],
+                          'spike_frequency_adaptation': spike_frequency_adaptation[i],
+                          'spike_frequency_adaptation_args': spike_frequency_adaptation_args[i],
+                          'synapse_efficacy_adaptation': synapse_efficacy_adaptation_tmp,
+                          'synapse_efficacy_adaptation_args': synapse_efficacy_adaptation_args_tmp,
+                          'tau_leak': tau_leak[i],
+                          'resting_potential': resting_potential[i],
+                          'membrane_capacitance': membrane_capacitance[i]}
 
-            # choose appropriate populations class and instantiate population
-            n_diff_syns = 0
-            for syn_class in synapse_class_tmp:
-                if syn_class == 'ExponentialSynapse' or syn_class == 'DoubleExponentialSynapse':
-                    n_diff_syns += 1
-
-            if spike_frequency_adaptation[i] or synapse_efficacy_adaptation[i]:
-
-                pop_params['spike_frequency_adaptation'] = spike_frequency_adaptation[i]
-                pop_params['spike_frequency_adaptation_args'] = spike_frequency_adaptation_args[i]
-                pop_params['synapse_efficacy_adaptation'] = synapse_efficacy_adaptation_tmp
-                pop_params['synapse_efficacy_adaptation_args'] = synapse_efficacy_adaptation_args_tmp
-
-                if n_diff_syns == len(synapse_class_tmp) and not tau_leak[i]:
-
-                    populations.append(SecondOrderPlasticPopulation(**pop_params))
-
-                else:
-
-                    pop_params['tau_leak'] = tau_leak[i] if tau_leak[i] else 0.016
-                    pop_params['resting_potential'] = resting_potential[i] if resting_potential[i] else -0.075
-                    pop_params['membrane_capacitance'] = membrane_capacitance[i] if membrane_capacitance else 1e-12
-
-                    populations.append(PlasticPopulation(**pop_params))
-
-            else:
-
-                if n_diff_syns == len(synapse_class_tmp) and not tau_leak[i]:
-
-                    populations.append(SecondOrderPopulation(**pop_params))
-
-                else:
-
-                    pop_params['tau_leak'] = tau_leak[i] if tau_leak[i] else 0.016
-                    pop_params['resting_potential'] = resting_potential[i] if resting_potential[i] else -0.075
-                    pop_params['membrane_capacitance'] = membrane_capacitance[i] if membrane_capacitance else 1e-12
-
-                    populations.append(Population(**pop_params))
+            populations.append(Population(**pop_params))
 
         # call super init
         #################
