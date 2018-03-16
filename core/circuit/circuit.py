@@ -841,10 +841,9 @@ class CircuitFromPopulations(Circuit):
                  step_size: float = 5e-4,
                  max_synaptic_delay: Union[float, List[float]] = 0.05,
                  membrane_capacitance: Union[float, List[float]] = 1e-12,
-                 tau_leak: Union[float, List[float]] = 0.016,
+                 tau_leak: Optional[Union[float, List[float]]] = None,
                  resting_potential: Union[float, List[float]] = -0.075,
                  init_states: Union[float, np.ndarray] = 0.,
-                 population_class: Union[List[str], str] = 'Population',
                  population_labels: Optional[List[str]] = None
                  ) -> None:
         """Instantiates circuit from population types and parameters.
@@ -879,6 +878,8 @@ class CircuitFromPopulations(Circuit):
             max_synaptic_delay = check_nones(max_synaptic_delay, N)
         if isinstance(tau_leak, float):
             tau_leak = np.zeros(N) + tau_leak
+        elif tau_leak is None:
+            tau_leak = check_nones(tau_leak, N)
         if isinstance(resting_potential, float):
             resting_potential = np.zeros(N) + resting_potential
         if isinstance(membrane_capacitance, float):
@@ -887,8 +888,6 @@ class CircuitFromPopulations(Circuit):
         # make None/str variables iterable
         if not population_labels:
             population_labels = ['Custom' for _ in range(N)]
-        if isinstance(population_class, str):
-            population_class = [population_class for _ in range(N)]
 
         # instantiate each population
         populations = list()
@@ -899,27 +898,15 @@ class CircuitFromPopulations(Circuit):
                           'step_size': step_size,
                           'max_synaptic_delay': max_synaptic_delay[i],
                           'max_population_delay': max_population_delay[i],
-                          'label': population_labels[i]}
+                          'label': population_labels[i],
+                          }
 
-            # pass parameters to instantiation function
-            if population_class[i] == 'SecondOrderPlasticPopulation':
-                populations.append(set_instance(SecondOrderPlasticPopulation, population_types[i], **pop_params))
+            if tau_leak[i]:
+                pop_params['tau_leak'] = tau_leak[i]
+                pop_params['resting_potential'] = resting_potential[i]
+                pop_params['membrane_capacitance'] = membrane_capacitance[i]
 
-            elif population_class[i] == 'SecondOrderPopulation':
-                populations.append(set_instance(SecondOrderPopulation, population_types[i], **pop_params))
-
-            else:
-
-                # add first order population parameters
-                pop_params['tau_leak'] = tau_leak
-                pop_params['resting_potential'] = resting_potential
-                pop_params['membrane_capacitance'] = membrane_capacitance
-
-                if population_class[i] == 'PlasticPopulation':
-                    populations.append(set_instance(PlasticPopulation, population_types[i], **pop_params))
-
-                else:
-                    populations.append(set_instance(Population, population_types[i], **pop_params))
+            populations.append(set_instance(Population, population_types[i], **pop_params))
 
         # call super init
         #################
