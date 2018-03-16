@@ -15,7 +15,7 @@
                 "data": {
                     "class": {
                         "__module__": "core.population.population",
-                        "__name__": "SecondOrderPopulation"
+                        "__name__": "Population"
                     },
                     "synapses": [
                         "JansenRitExcitatorySynapse",
@@ -32,11 +32,18 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "DEExponentialSynapse",
-                        "DEExponentialSynapse"
+                        "ExponentialSynapse",
+                        "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
-                    "label": "JR_PCs"
+                    "label": "JR_PCs",
+                    "spike_frequency_adaptation": null,
+                    "spike_frequency_adaptation_args": null,
+                    "synapse_efficacy_adaptation": null,
+                    "synapse_efficacy_adaptation_args": null,
+                    "tau_leak": null,
+                    "resting_potential": null,
+                    "membrane_capacitance": null
                 },
                 "id": 0
             },
@@ -44,7 +51,7 @@
                 "data": {
                     "class": {
                         "__module__": "core.population.population",
-                        "__name__": "SecondOrderPopulation"
+                        "__name__": "Population"
                     },
                     "synapses": [
                         "JansenRitExcitatorySynapse"
@@ -59,10 +66,17 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "DEExponentialSynapse"
+                        "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
-                    "label": "JR_EINs"
+                    "label": "JR_EINs",
+                    "spike_frequency_adaptation": null,
+                    "spike_frequency_adaptation_args": null,
+                    "synapse_efficacy_adaptation": null,
+                    "synapse_efficacy_adaptation_args": null,
+                    "tau_leak": null,
+                    "resting_potential": null,
+                    "membrane_capacitance": null
                 },
                 "id": 1
             },
@@ -70,7 +84,7 @@
                 "data": {
                     "class": {
                         "__module__": "core.population.population",
-                        "__name__": "SecondOrderPopulation"
+                        "__name__": "Population"
                     },
                     "synapses": [
                         "JansenRitExcitatorySynapse"
@@ -85,10 +99,17 @@
                     ],
                     "axon_params": null,
                     "synapse_class": [
-                        "DEExponentialSynapse"
+                        "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
-                    "label": "JR_IINs"
+                    "label": "JR_IINs",
+                    "spike_frequency_adaptation": null,
+                    "spike_frequency_adaptation_args": null,
+                    "synapse_efficacy_adaptation": null,
+                    "synapse_efficacy_adaptation_args": null,
+                    "tau_leak": null,
+                    "resting_potential": null,
+                    "membrane_capacitance": null
                 },
                 "id": 2
             }

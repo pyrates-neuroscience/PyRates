@@ -184,22 +184,21 @@ def test_2_4_ampa_current_synapse():
 
     # efficacy = 1.273 * 3e-13  # unit = A
     # tau_decay = 0.006  # unit = s
+    step_size = 5e-4     # unit = s
     # tau_rise = 0.0006  # unit = s
-    step_size = 5.e-4  # unit = s
-    synaptic_kernel_length = 0.05  # unit = s
     # conductivity_based = False
 
     # initialize synapse
     ####################
 
-    synapse = AMPACurrentSynapse(bin_size=step_size,
-                                 max_delay=synaptic_kernel_length)
+    synapse = AMPACurrentSynapse(bin_size=step_size)
 
     # define firing rate inputs
     ###########################
-    firing_rates_1 = np.zeros_like(synapse.synaptic_kernel)
-    firing_rates_2 = np.ones_like(synapse.synaptic_kernel) * 300.0
-    firing_rates_3 = np.zeros_like(synapse.synaptic_kernel)
+    input_steps = synapse.kernel_length
+    firing_rates_1 = np.zeros(input_steps)
+    firing_rates_2 = np.zeros(input_steps) + 300.0
+    firing_rates_3 = np.zeros(input_steps)
     firing_rates_3[40:70] = 300.0
 
     # calculate synaptic currents
@@ -265,7 +264,7 @@ def test_2_5_gabaa_current_synapse():
     # efficacy = 1.273 * -1e-12  # unit = A
     # tau_decay = 0.02  # unit = s
     # tau_rise = 0.0004  # unit = s
-    step_size = 5.e-4  # unit = s
+    step_size = 5e-4  # unit = s
     # epsilon = 1e-13  # unit = V or A or [conductivity]
     # max_delay = None  # unit = s
     # conductivity_based = False
@@ -277,9 +276,10 @@ def test_2_5_gabaa_current_synapse():
 
     # define firing rate inputs
     ###########################
-    firing_rates_1 = np.zeros_like(synapse.synaptic_kernel)
-    firing_rates_2 = np.ones_like(synapse.synaptic_kernel) * 300.0
-    firing_rates_3 = np.zeros_like(synapse.synaptic_kernel)
+    input_steps = synapse.kernel_length
+    firing_rates_1 = np.zeros(input_steps)
+    firing_rates_2 = np.zeros(input_steps) + 300.0
+    firing_rates_3 = np.zeros(input_steps)
     firing_rates_3[40:70] = 300.0
 
     # calculate synaptic currents
@@ -339,7 +339,7 @@ def test_2_6_ampa_conductivity_synapse():
     # efficacy = 1.273 * 7.2e-10  # unit = S
     # tau_decay = 0.0015  # unit = s
     # tau_rise = 0.000009  # unit = s
-    step_size = 5.e-4  # unit = s
+    step_size = 5e-4  # unit = s
     # synaptic_kernel_length = 0.05  # unit = s
     # conductivity_based = True
 
@@ -350,10 +350,10 @@ def test_2_6_ampa_conductivity_synapse():
 
     # define firing rate inputs and membrane potential
     ##################################################
-
-    firing_rates_1 = np.zeros_like(synapse.synaptic_kernel)
-    firing_rates_2 = np.ones_like(synapse.synaptic_kernel) * 300.0
-    firing_rates_3 = np.zeros_like(synapse.synaptic_kernel)
+    input_steps = synapse.kernel_length
+    firing_rates_1 = np.zeros(input_steps)
+    firing_rates_2 = np.zeros(input_steps) + 300.0
+    firing_rates_3 = np.zeros(input_steps)
     firing_rates_3[40:70] = 300.0
 
     membrane_potential = -0.09

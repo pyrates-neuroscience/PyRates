@@ -56,26 +56,31 @@ def test_3_1_population_init():
                      max_synaptic_delay=synaptic_kernel_length,
                      tau_leak=tau_leak,
                      resting_potential=resting_potential)
-    syn1 = AMPACurrentSynapse(bin_size=step_size,
-                              max_delay=synaptic_kernel_length)
-    syn2 = GABAACurrentSynapse(bin_size=step_size,
-                               max_delay=synaptic_kernel_length)
+    syn1 = AMPACurrentSynapse(bin_size=step_size)
+    syn2 = GABAACurrentSynapse(bin_size=step_size)
     axon = KnoescheAxon()
 
     # define firing rate input and membrane potential
     #################################################
 
     time_steps = int(0.05 / step_size)
-    firing_rate = np.zeros(time_steps) + 300.0
+    firing_rate = 300.0
     membrane_potential = -0.06
 
     # calculate population, synapse and axon response
     #################################################
 
-    pop_syn1_response = pop.synapses[0].get_synaptic_current(firing_rate)
-    pop_syn2_response = pop.synapses[1].get_synaptic_current(firing_rate)
-    syn1_response = syn1.get_synaptic_current(firing_rate)
-    syn2_response = syn2.get_synaptic_current(firing_rate)
+    # pass input
+    pop.synapses[0].pass_input(firing_rate)
+    pop.synapses[1].pass_input(firing_rate)
+    syn1.pass_input(firing_rate)
+    syn2.pass_input(firing_rate)
+
+    # calculate synaptic response
+    pop_syn1_response = pop.synapses[0].get_synaptic_current()
+    pop_syn2_response = pop.synapses[1].get_synaptic_current()
+    syn1_response = syn1.get_synaptic_current()
+    syn2_response = syn2.get_synaptic_current()
 
     pop_ax_response = pop.axon.compute_firing_rate(membrane_potential)
     ax_response = axon.compute_firing_rate(membrane_potential)
@@ -114,7 +119,7 @@ def test_3_2_population_dynamics():
     tau_leak = 0.016  # unit = s
     resting_potential = -0.075  # unit = V
     membrane_capacitance = 1e-12  # unit = q/V
-    init_state = resting_potential  # unit = (V, 1/s)
+    init_state = 0.  # unit = (A)
 
     # define population input
     #########################
@@ -162,7 +167,7 @@ def test_3_2_population_dynamics():
     assert states[2, 0, -1] < resting_potential
 
     # test whether extrinsic current leads to expected change in membrane potential
-    assert states[0, 1, 0] == pytest.approx(init_state + step_size * (1e-14 / membrane_capacitance), rel=1e-4)
+    assert states[0, 1, 0] == pytest.approx(resting_potential + step_size * (1e-14 / membrane_capacitance), rel=1e-4)
 
     # test whether membrane potential goes back to resting potential after step-function input
     assert states[3, 0, -1], pytest.approx(resting_potential, rel=1e-4)

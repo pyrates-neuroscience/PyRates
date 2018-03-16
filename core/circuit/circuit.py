@@ -7,7 +7,7 @@ from matplotlib.axes import Axes
 # from networkx import MultiDiGraph
 from typing import List, Optional, Union, TypeVar, Callable, Tuple
 
-from core.population import Population, PlasticPopulation, SecondOrderPopulation, SecondOrderPlasticPopulation
+from core.population import Population
 from core.population import DummyPopulation
 from core.utility import check_nones, set_instance
 from core.utility.filestorage import RepresentationBase
@@ -123,6 +123,9 @@ class Circuit(RepresentationBase):
         # population specific properties
         for i in range(self.n_populations):
 
+            # clear all past information stored on population
+            self.populations[i].clear(disconnect=True)
+
             # make sure state variable history will be saved on population
             self.populations[i].store_state_variables = True
 
@@ -199,10 +202,7 @@ class Circuit(RepresentationBase):
                 raise ValueError('Second dimension of extrinsic current has to match the number of populations!')
 
         # extrinsic modulation
-        if not extrinsic_modulation:
-            extrinsic_modulation = [[np.ones(self.populations[i].n_synapses) for i in range(self.n_populations)]
-                                    for _ in range(simulation_time_steps)]
-        else:
+        if extrinsic_modulation:
             if len(extrinsic_modulation) != simulation_time_steps:
                 raise ValueError('First dimension of extrinsic modulation has to match the number of simulation '
                                  'time steps!')
@@ -263,26 +263,50 @@ class Circuit(RepresentationBase):
         for _, node in self.network_graph.nodes(data=True):
             active_populations.append(node["data"])
 
-        for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
+        if extrinsic_modulation:
 
-            # pass information through circuit
-            for source_pop in active_populations:
-                source_pop.project_to_targets()
+            for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
 
-            # update all population states
-            for i, pop in enumerate(self.populations):
-                pop.state_update(extrinsic_current=extrinsic_current[n, i],
-                                 extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
+                # pass information through circuit
+                for source_pop in active_populations:
+                    source_pop.project_to_targets()
 
-            # display simulation progress
-            if verbose:
-                if n == 0 or (n % (simulation_time_steps // 10)) == 0:
-                    simulation_progress = (self.t / simulation_time) * 100.
-                    print(f'simulation progress: {simulation_progress:.0f} %')
+                # update all population states
+                for i, pop in enumerate(self.populations):
+                    pop.state_update(extrinsic_current=extrinsic_current[n, i],
+                                     extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
 
-            # update time-variant variables
-            self.t += self.step_size
-            self.run_info["time_vector"].append(self.t)
+                # display simulation progress
+                if verbose:
+                    if n == 0 or (n % (simulation_time_steps // 10)) == 0:
+                        simulation_progress = (self.t / simulation_time) * 100.
+                        print(f'simulation progress: {simulation_progress:.0f} %')
+
+                # update time-variant variables
+                self.t += self.step_size
+                self.run_info["time_vector"].append(self.t)
+
+        else:
+
+            for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
+
+                # pass information through circuit
+                for source_pop in active_populations:
+                    source_pop.project_to_targets()
+
+                # update all population states
+                for i, pop in enumerate(self.populations):
+                    pop.state_update(extrinsic_current=extrinsic_current[n, i])
+
+                # display simulation progress
+                if verbose:
+                    if n == 0 or (n % (simulation_time_steps // 10)) == 0:
+                        simulation_progress = (self.t / simulation_time) * 100.
+                        print(f'simulation progress: {simulation_progress:.0f} %')
+
+                # update time-variant variables
+                self.t += self.step_size
+                self.run_info["time_vector"].append(self.t)
 
         self.clean_run()
 
@@ -383,14 +407,14 @@ class Circuit(RepresentationBase):
                         #########################################################################################
 
                         # if syn is a plastic synapse, add copies of it to target for each connection on syn
-                        if isinstance(self.populations[target], PlasticPopulation) and \
+                        if self.populations[target].synaptic_plasticity and \
                                 self.populations[target].synapse_efficacy_adaptation[syn]:
 
                             # add synapse copy to population
-                            self.populations[target].add_plastic_synapse(synapse_idx=syn,
-                                                                         max_firing_rate=self.populations[source].axon.
-                                                                         transfer_function_args['max_firing_rate'] *
-                                                                                         self.C[target, source, idx])
+                            self.populations[target].copy_synapse(synapse_idx=syn,
+                                                                  max_firing_rate=self.populations[source].axon.
+                                                                  transfer_function_args['max_firing_rate'] *
+                                                                                  self.C[target, source, idx])
 
                             # create one edge for each delay between source and target
                             if self.D_pdfs is None:
@@ -424,7 +448,7 @@ class Circuit(RepresentationBase):
         if not plasticity_on_input:
             for i, pop in enumerate(self.populations):
                 for syn in range(n_synapses_old[i]):
-                    if type(pop) is PlasticPopulation and pop.synapse_efficacy_adaptation[syn]:
+                    if pop.synaptic_plasticity and pop.synapse_efficacy_adaptation[syn]:
                         pop.synapse_efficacy_adaptation[syn] = None
                         pop.state_variables[-1].pop(-1)
 
@@ -625,10 +649,9 @@ class CircuitFromScratch(Circuit):
                  synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
                  axon_params: Optional[List[dict]] = None,
                  axon_class: Union[str, List[str]] = 'SigmoidAxon',
-                 population_class: Union[List[str], str] = 'Population',
-                 membrane_capacitance: Union[float, List[float]] = 1e-12,
-                 tau_leak: Union[float, List[float]] = 0.016,
-                 resting_potential: Union[float, List[float]] = -0.075,
+                 membrane_capacitance: Optional[Union[float, List[float]]] = None,
+                 tau_leak: Optional[Union[float, List[float]]] = None,
+                 resting_potential: Optional[Union[float, List[float]]] = None,
                  init_states: Union[float, np.ndarray] = 0.,
                  population_labels: Optional[List[str]] = None,
                  spike_frequency_adaptation: Optional[List[Callable[[float], float]]] = None,
@@ -689,12 +712,18 @@ class CircuitFromScratch(Circuit):
 
         if isinstance(tau_leak, float):
             tau_leak = np.zeros(N) + tau_leak
+        elif tau_leak is None:
+            tau_leak = check_nones(tau_leak, N)
 
         if isinstance(resting_potential, float):
             resting_potential = np.zeros(N) + resting_potential
+        elif resting_potential is None:
+            resting_potential = check_nones(resting_potential, N)
 
         if isinstance(membrane_capacitance, float):
             membrane_capacitance = np.zeros(N) + membrane_capacitance
+        elif membrane_capacitance is None:
+            membrane_capacitance = check_nones(membrane_capacitance, N)
 
         # make None and str variables iterable
         synapses = check_nones(synapses, n_synapses)
@@ -715,8 +744,6 @@ class CircuitFromScratch(Circuit):
             synapse_class = [synapse_class for _ in range(n_synapses)]
         if isinstance(axon_class, str):
             axon_class = [axon_class for _ in range(N)]
-        if isinstance(population_class, str):
-            population_class = [population_class for _ in range(N)]
 
         # instantiate each population
         populations = list()  # type: List[Population]
@@ -738,40 +765,20 @@ class CircuitFromScratch(Circuit):
                 synapse_efficacy_adaptation_tmp = None
 
             # create dictionary with relevant parameters
-            pop_params = {'synapses': synapses_tmp,
-                          'axon': axons[i],
-                          'init_state': init_states[i],
-                          'step_size': step_size,
-                          'max_synaptic_delay': max_synaptic_delay[i],
-                          'max_population_delay': max_population_delay[i],
-                          'synapse_params': synapse_params_tmp,
-                          'axon_params': axon_params[i],
-                          'synapse_class': synapse_class_tmp,
-                          'axon_class': axon_class[i],
-                          'label': population_labels[i]}
+            pop_params = {'synapses': synapses_tmp, 'axon': axons[i], 'init_state': init_states[i],
+                          'step_size': step_size, 'max_synaptic_delay': max_synaptic_delay[i],
+                          'max_population_delay': max_population_delay[i], 'synapse_params': synapse_params_tmp,
+                          'axon_params': axon_params[i], 'synapse_class': synapse_class_tmp,
+                          'axon_class': axon_class[i], 'label': population_labels[i],
+                          'spike_frequency_adaptation': spike_frequency_adaptation[i],
+                          'spike_frequency_adaptation_args': spike_frequency_adaptation_args[i],
+                          'synapse_efficacy_adaptation': synapse_efficacy_adaptation_tmp,
+                          'synapse_efficacy_adaptation_args': synapse_efficacy_adaptation_args_tmp,
+                          'tau_leak': tau_leak[i],
+                          'resting_potential': resting_potential[i],
+                          'membrane_capacitance': membrane_capacitance[i]}
 
-            # add plasticity parameters if necessary
-            if population_class[i] == 'SecondOrderPlasticPopulation' or population_class[i] == 'PlasticPopulation':
-                pop_params['spike_frequency_adaptation'] = spike_frequency_adaptation[i]
-                pop_params['spike_frequency_adaptation_args'] = spike_frequency_adaptation_args[i]
-                pop_params['synapse_efficacy_adaptation'] = synapse_efficacy_adaptation_tmp
-                pop_params['synapse_efficacy_adaptation_args'] = synapse_efficacy_adaptation_args_tmp
-
-            # add first-order parameters if necessary
-            if population_class[i] == 'Population' or population_class[i] == 'PlasticPopulation':
-                pop_params['tau_leak'] = tau_leak[i]
-                pop_params['resting_potential'] = resting_potential[i]
-                pop_params['membrane_capacitance'] = membrane_capacitance[i]
-
-            # instantiate population
-            if population_class[i] == 'SecondOrderPlasticPopulation':
-                populations.append(SecondOrderPlasticPopulation(**pop_params))
-            elif population_class[i] == 'SecondOrderPopulation':
-                populations.append(SecondOrderPopulation(**pop_params))
-            elif population_class[i] == 'PlasticPopulation':
-                populations.append(PlasticPopulation(**pop_params))
-            else:
-                populations.append(Population(**pop_params))
+            populations.append(Population(**pop_params))
 
         # call super init
         #################
@@ -834,10 +841,9 @@ class CircuitFromPopulations(Circuit):
                  step_size: float = 5e-4,
                  max_synaptic_delay: Union[float, List[float]] = 0.05,
                  membrane_capacitance: Union[float, List[float]] = 1e-12,
-                 tau_leak: Union[float, List[float]] = 0.016,
+                 tau_leak: Optional[Union[float, List[float]]] = None,
                  resting_potential: Union[float, List[float]] = -0.075,
                  init_states: Union[float, np.ndarray] = 0.,
-                 population_class: Union[List[str], str] = 'Population',
                  population_labels: Optional[List[str]] = None
                  ) -> None:
         """Instantiates circuit from population types and parameters.
@@ -872,6 +878,8 @@ class CircuitFromPopulations(Circuit):
             max_synaptic_delay = check_nones(max_synaptic_delay, N)
         if isinstance(tau_leak, float):
             tau_leak = np.zeros(N) + tau_leak
+        elif tau_leak is None:
+            tau_leak = check_nones(tau_leak, N)
         if isinstance(resting_potential, float):
             resting_potential = np.zeros(N) + resting_potential
         if isinstance(membrane_capacitance, float):
@@ -880,8 +888,6 @@ class CircuitFromPopulations(Circuit):
         # make None/str variables iterable
         if not population_labels:
             population_labels = ['Custom' for _ in range(N)]
-        if isinstance(population_class, str):
-            population_class = [population_class for _ in range(N)]
 
         # instantiate each population
         populations = list()
@@ -892,27 +898,15 @@ class CircuitFromPopulations(Circuit):
                           'step_size': step_size,
                           'max_synaptic_delay': max_synaptic_delay[i],
                           'max_population_delay': max_population_delay[i],
-                          'label': population_labels[i]}
+                          'label': population_labels[i],
+                          }
 
-            # pass parameters to instantiation function
-            if population_class[i] == 'SecondOrderPlasticPopulation':
-                populations.append(set_instance(SecondOrderPlasticPopulation, population_types[i], **pop_params))
+            if tau_leak[i]:
+                pop_params['tau_leak'] = tau_leak[i]
+                pop_params['resting_potential'] = resting_potential[i]
+                pop_params['membrane_capacitance'] = membrane_capacitance[i]
 
-            elif population_class[i] == 'SecondOrderPopulation':
-                populations.append(set_instance(SecondOrderPopulation, population_types[i], **pop_params))
-
-            else:
-
-                # add first order population parameters
-                pop_params['tau_leak'] = tau_leak
-                pop_params['resting_potential'] = resting_potential
-                pop_params['membrane_capacitance'] = membrane_capacitance
-
-                if population_class[i] == 'PlasticPopulation':
-                    populations.append(set_instance(PlasticPopulation, population_types[i], **pop_params))
-
-                else:
-                    populations.append(set_instance(Population, population_types[i], **pop_params))
+            populations.append(set_instance(Population, population_types[i], **pop_params))
 
         # call super init
         #################

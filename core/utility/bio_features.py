@@ -2,7 +2,7 @@
 """
 
 import numpy as np
-from typing import Union
+from typing import Union, Optional
 
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
@@ -331,7 +331,7 @@ def spike_frequency_adaptation(adaptation: float,
     Parameters
     ----------
     firing_rate
-        Current firing rate of population [unit = 1/s].
+        Current firing rate of self [unit = 1/s].
     firing_rate_target
         Target firing rate towards which spike frequency is adapted [unit = 1/s].
     tau

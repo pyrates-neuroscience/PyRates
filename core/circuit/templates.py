@@ -128,7 +128,6 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
                          axon_params=axon_params,
                          axon_class=axon_class,
                          population_labels=population_labels,
-                         population_class=population_class,
                          step_size=step_size,
                          max_synaptic_delay=max_synaptic_delay,
                          init_states=init_states,
@@ -214,7 +213,7 @@ class JansenRitCircuit(CircuitFromScratch):
 
         # synapses
         synapse_types = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse']
-        synapse_class = 'DEExponentialSynapse'
+        synapse_class = 'ExponentialSynapse'
 
         # axon
         axon_types = ['JansenRitAxon', 'JansenRitAxon', 'JansenRitAxon']
@@ -232,7 +231,6 @@ class JansenRitCircuit(CircuitFromScratch):
                          axon_params=axon_params,
                          axon_class=axon_class,
                          population_labels=population_labels,
-                         population_class=population_class,
                          step_size=step_size,
                          max_synaptic_delay=max_synaptic_delay,
                          init_states=init_states
