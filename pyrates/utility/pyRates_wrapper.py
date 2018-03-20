@@ -96,7 +96,7 @@ limits = [[80., 1e-3], [180., 6e-3]]
 
 # gpc params
 eps = 1e-3
-order = [3, 5, 7, 9, 11, 13]
+order = [5]#[3, 5, 7, 9, 11, 13]
 interaction_order = 2
 
 # create target values to compare gpc output against
