@@ -2,9 +2,9 @@
 """
 
 import numpy as np
-from core.axon import SigmoidAxon, Axon, BurstingAxon, PlasticSigmoidAxon  # type: ignore
-from core.utility import plastic_sigmoid, plastic_normalized_sigmoid, activation_sigmoid, inactivation_sigmoid
-from core.utility import axon_exponential
+from pyrates.axon import SigmoidAxon, Axon, BurstingAxon, PlasticSigmoidAxon  # type: ignore
+from pyrates.utility import plastic_sigmoid, plastic_normalized_sigmoid, activation_sigmoid, inactivation_sigmoid
+from pyrates.utility import axon_exponential
 from typing import Optional, List, Union
 
 __author__ = "Daniel F. Rose, Richard Gast"

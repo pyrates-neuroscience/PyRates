@@ -4,9 +4,9 @@
 __author__ = 'Richard Gast'
 
 import numpy as np
-from core.circuit import Circuit, CircuitFromScratch, CircuitFromCircuit
-from core.population import Population, JansenRitPyramidalCells, JansenRitInterneurons
-from core.utility import update_param
+from pyrates.circuit import Circuit, CircuitFromScratch, CircuitFromCircuit
+from pyrates.population import Population, JansenRitPyramidalCells, JansenRitInterneurons
+from pyrates.utility import update_param
 from typing import Optional, List
 
 

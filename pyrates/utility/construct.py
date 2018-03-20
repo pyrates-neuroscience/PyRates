@@ -3,11 +3,11 @@
 import json
 from typing import Union
 
-from core.axon import Axon
-from core.circuit import Circuit
-from core.population import Population
-from core.synapse import Synapse
-# from core.utility.json_filestorage import RepresentationBase
+from pyrates.axon import Axon
+from pyrates.circuit import Circuit
+from pyrates.population import Population
+from pyrates.synapse import Synapse
+# from pyrates.utility.json_filestorage import RepresentationBase
 
 __author__ = "Daniel Rose"
 __status__ = "Development"

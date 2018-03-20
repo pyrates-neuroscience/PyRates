@@ -33,9 +33,9 @@ def test_3_1_population_init():
 
     """
 
-    from core.population import Population
-    from core.synapse import AMPACurrentSynapse, GABAACurrentSynapse
-    from core.axon import KnoescheAxon
+    from pyrates.population import Population
+    from pyrates.synapse import AMPACurrentSynapse, GABAACurrentSynapse
+    from pyrates.axon import KnoescheAxon
 
     # population parameters
     #######################
@@ -107,7 +107,7 @@ def test_3_2_population_dynamics():
 
     """
 
-    from core.population import Population
+    from pyrates.population import Population
 
     # set population parameters
     ###########################

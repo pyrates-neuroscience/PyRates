@@ -20,8 +20,8 @@ import pandas as pd
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
 
-        # from core.population import Population
-        # from core.synapse import Synapse
+        # from pyrates.population import Population
+        # from pyrates.synapse import Synapse
 
         if isinstance(obj, np.integer):
             return int(obj)
@@ -153,7 +153,7 @@ class RepresentationBase(object):
     def to_json(self, include_defaults=False, include_graph=False, path="", filename=""):
         """Parse a dictionary into """
 
-        # from core.utility.json_filestorage import CustomEncoder
+        # from pyrates.utility.json_filestorage import CustomEncoder
 
         _dict = self.to_dict(include_defaults=include_defaults, include_graph=include_graph, recursive=True)
 

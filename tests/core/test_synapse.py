@@ -4,7 +4,7 @@
 import numpy as np
 import pytest
 
-from core.synapse import Synapse
+from pyrates.synapse import Synapse
 
 ###########
 # Utility #
@@ -177,7 +177,7 @@ def test_2_4_ampa_current_synapse():
 
     """
 
-    from core.synapse import AMPACurrentSynapse
+    from pyrates.synapse import AMPACurrentSynapse
 
     # synapse parameters
     ####################
@@ -207,11 +207,13 @@ def test_2_4_ampa_current_synapse():
     for i in range(len(firing_rates_1)):
         synapse.pass_input(firing_rates_1[i])
         synapse.get_synaptic_current()
+        synapse.rotate_input()
     synaptic_current_1 = synapse.get_synaptic_current()
     synapse.clear()
     for i in range(len(firing_rates_2)):
         synapse.pass_input(firing_rates_2[i])
         synapse.get_synaptic_current()
+        synapse.rotate_input()
     synaptic_current_2 = synapse.get_synaptic_current()
     synapse.clear()
 
@@ -221,6 +223,7 @@ def test_2_4_ampa_current_synapse():
     for i in range(len(idx)):
         synapse.pass_input(firing_rates_3[i])
         synaptic_current_3[i] = synapse.get_synaptic_current()
+        synapse.rotate_input()
 
     # perform unit tests
     ####################
@@ -256,7 +259,7 @@ def test_2_5_gabaa_current_synapse():
 
     """
 
-    from core.synapse import GABAACurrentSynapse
+    from pyrates.synapse import GABAACurrentSynapse
 
     # synapse parameters
     ####################
@@ -287,11 +290,13 @@ def test_2_5_gabaa_current_synapse():
     for i in range(len(firing_rates_1)):
         synapse.pass_input(firing_rates_1[i])
         synapse.get_synaptic_current()
+        synapse.rotate_input()
     synaptic_current_1 = synapse.get_synaptic_current()
     synapse.clear()
     for i in range(len(firing_rates_2)):
         synapse.pass_input(firing_rates_2[i])
         synapse.get_synaptic_current()
+        synapse.rotate_input()
     synaptic_current_2 = synapse.get_synaptic_current()
     synapse.clear()
 
@@ -301,6 +306,7 @@ def test_2_5_gabaa_current_synapse():
     for i in range(len(idx)):
         synapse.pass_input(firing_rates_3[i])
         synaptic_current_3[i] = synapse.get_synaptic_current()
+        synapse.rotate_input()
 
     # perform unit tests
     ####################
@@ -331,7 +337,7 @@ def test_2_6_ampa_conductivity_synapse():
 
     """
 
-    from core.synapse import AMPAConductanceSynapse
+    from pyrates.synapse import AMPAConductanceSynapse
 
     # synapse parameters
     ####################
@@ -363,11 +369,13 @@ def test_2_6_ampa_conductivity_synapse():
     for i in range(len(firing_rates_1)):
         synapse.pass_input(firing_rates_1[i])
         synapse.get_synaptic_current()
+        synapse.rotate_input()
     synaptic_current_1 = synapse.get_synaptic_current(membrane_potential=membrane_potential)
     synapse.clear()
     for i in range(len(firing_rates_2)):
         synapse.pass_input(firing_rates_2[i])
         synapse.get_synaptic_current()
+        synapse.rotate_input()
     synaptic_current_2 = synapse.get_synaptic_current(membrane_potential=membrane_potential)
     synapse.clear()
 
@@ -377,6 +385,7 @@ def test_2_6_ampa_conductivity_synapse():
     for i in range(len(idx)):
         synapse.pass_input(firing_rates_3[i])
         synaptic_current_3[i] = synapse.get_synaptic_current(membrane_potential=membrane_potential)
+        synapse.rotate_input()
 
     # perform unit tests
     ####################

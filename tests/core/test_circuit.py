@@ -9,7 +9,7 @@ import pickle
 # Utility #
 ###########
 
-from core.utility import nmrse, deep_compare
+from pyrates.utility import nmrse, deep_compare
 
 
 def setup_module():
@@ -43,8 +43,8 @@ def test_4_1_jr_circuit_bifurcation(test_case):
 
     """
 
-    from core.utility.construct import construct_circuit_from_file
-    from core.utility import read_simulation_data_from_file
+    from pyrates.utility.construct import construct_circuit_from_file
+    from pyrates.utility import read_simulation_data_from_file
 
     # Construct from file and test against template
     ###############################################
@@ -96,7 +96,7 @@ def test_4_1_jr_circuit_bifurcation(test_case):
 
     # Save new data, if necessary due to syntax change
     ##################################################
-    # from core.utility import get_simulation_data, save_simulation_data_to_file
+    # from pyrates.utility import get_simulation_data, save_simulation_data_to_file
     #
     # run_info, states_frame = get_simulation_data(circuit)
     # save_simulation_data_to_file(output_data=states_frame, run_info=run_info,
@@ -121,7 +121,7 @@ def test_4_2_jr_circuit_ii():
     function input to the excitatory interneurons plus constant input to the pyramidal cells.
     """
 
-    from core.circuit import JansenRitCircuit
+    from pyrates.circuit import JansenRitCircuit
 
     # set parameters
     ################
@@ -184,7 +184,7 @@ def test_4_3_jr_circuit_iii():
     input).
     """
 
-    from core.circuit import CircuitFromScratch
+    from pyrates.circuit import CircuitFromScratch
 
     # set parameters
     ################
@@ -304,7 +304,7 @@ def test_4_4_jr_network_i():
     delays = [0.001]
 
     # neural mass circuits
-    from core.circuit import JansenRitCircuit
+    from pyrates.circuit import JansenRitCircuit
     nmm1 = JansenRitCircuit()
     nmm2 = JansenRitCircuit()
     nmm3 = JansenRitCircuit()
@@ -325,7 +325,7 @@ def test_4_4_jr_network_i():
 
     # initialize nmm network
     ########################
-    from core.circuit import CircuitFromCircuit
+    from pyrates.circuit import CircuitFromCircuit
     circuit1 = CircuitFromCircuit(circuits=[nmm1, nmm2],
                                   connection_strengths=connection_strengths_1,
                                   source_populations=source_populations,
@@ -361,7 +361,7 @@ def test_4_4_jr_network_i():
 def test_4_5_circuit_run_method():
     """Testing whether the method Circuit.run does what it is supposed to"""
 
-    from core.circuit import JansenRitCircuit
+    from pyrates.circuit import JansenRitCircuit
 
     # set parameters
     ################
@@ -432,7 +432,7 @@ def test_4_5_circuit_run_method():
 
 
 def test_circuit_run_verbosity(capsys):
-    from core.circuit import JansenRitCircuit
+    from pyrates.circuit import JansenRitCircuit
 
     # set parameters
     ################

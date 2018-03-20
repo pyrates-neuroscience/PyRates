@@ -22,7 +22,7 @@ import time
 # from memory_profiler import memory_usage
 from scipy.io import loadmat
 
-from core.circuit import JansenRitCircuit
+from pyrates.circuit import JansenRitCircuit
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -192,8 +192,8 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     # set up model #
     ################
 
-    from core.circuit import CircuitFromPopulations
-    from core.circuit import CircuitFromCircuit
+    from pyrates.circuit import CircuitFromPopulations
+    from pyrates.circuit import CircuitFromCircuit
     nmm = CircuitFromCircuit(circuits=circuits,
                              connection_strengths=connection_strengths,
                              source_populations=source_populations,

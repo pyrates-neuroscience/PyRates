@@ -660,6 +660,12 @@ def state_update(self, extrinsic_current{modulation_declaration_snippet}
     {spike_frequency_adaption_snippet}
 
     {synaptic_efficacy_adaptation_snippet}
+    
+    # update synaptic input buffer
+    ##############################
+    
+    for syn in self.synapses:
+        syn.rotate_input()
 """
     # the resulting constructor string is returned. exec(func_string) needs (for some reason) to be called
     # outside this function. then 'state_update' is available in the respective context.

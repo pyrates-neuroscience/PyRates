@@ -3,10 +3,10 @@
 
 import numpy as np
 
-# from core.utility.json_filestorage import CustomEncoder, get_attrs
+# from pyrates.utility.json_filestorage import CustomEncoder, get_attrs
 import pytest
 
-from core.utility import deep_compare
+from pyrates.utility import deep_compare
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -31,7 +31,7 @@ def setup_module():
 def test_5_1_store_circuit_config():
     """As title says."""
 
-    from core.circuit import JansenRitCircuit
+    from pyrates.circuit import JansenRitCircuit
     import json
 
     step_size = 1/1024
@@ -86,7 +86,7 @@ def test_5_1_store_circuit_config():
 def test_5_2_store_circuit_config_dict_as_json():
     """As title says."""
 
-    from core.circuit import JansenRitCircuit
+    from pyrates.circuit import JansenRitCircuit
 
     step_size = 1/1024
 
@@ -114,8 +114,8 @@ def test_5_2_store_circuit_config_dict_as_json():
 # def test_read_circuit_config_from_file():
 #     """As title says."""
 #
-#     from core.circuit import JansenRitCircuit
-#     from core.utility import read_config_from_file, read_config_from_circuit
+#     from pyrates.circuit import JansenRitCircuit
+#     from pyrates.utility import read_config_from_file, read_config_from_circuit
 #
 #     step_size = 1e-4
 #
@@ -132,8 +132,8 @@ def test_5_2_store_circuit_config_dict_as_json():
 def test_5_3_construct_circuit_from_file_or_dict():
     """As title says."""
 
-    from core.circuit import JansenRitCircuit
-    from core.utility.construct import construct_circuit_from_file
+    from pyrates.circuit import JansenRitCircuit
+    from pyrates.utility.construct import construct_circuit_from_file
 
     step_size = 1/1024
     # TODO: move step_size definition to pytest fixture
@@ -183,7 +183,7 @@ def test_5_3_construct_circuit_from_file_or_dict():
 def test_5_4_construct_circuit_from_repr_eval():
     """Test whether the representation of a circuit can be evaluated to recreate the same circuit again.
     Currently not working and might not be implemented again, because it blows up the output of repr(circuit)"""
-    from core.circuit import JansenRitCircuit
+    from pyrates.circuit import JansenRitCircuit
 
     step_size = 1/1024
 
@@ -202,10 +202,10 @@ def test_5_4_construct_circuit_from_repr_eval():
 def test_5_5_save_run_data_to_file():
     """Run a simulation and save the states to file."""
 
-    from core.utility.construct import construct_circuit_from_file
-    from core.utility.filestorage import get_simulation_data
-    from core.utility.filestorage import save_simulation_data_to_file
-    from core.utility.filestorage import read_simulation_data_from_file
+    from pyrates.utility.construct import construct_circuit_from_file
+    from pyrates.utility.filestorage import get_simulation_data
+    from pyrates.utility.filestorage import save_simulation_data_to_file
+    from pyrates.utility.filestorage import read_simulation_data_from_file
 
     # set parameters
     ################

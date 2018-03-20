@@ -11,8 +11,8 @@ from typing import Optional, Union, Callable, overload
 
 from matplotlib.axes import Axes
 
-from core.utility.filestorage import RepresentationBase
-from core.utility import exponential, double_exponential
+from pyrates.utility.filestorage import RepresentationBase
+from pyrates.utility import exponential, double_exponential
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -258,10 +258,6 @@ class Synapse(RepresentationBase):
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
-        # update synaptic input buffer
-        self.synaptic_input[0:-1] = self.synaptic_input[1:]
-        self.synaptic_input[-1] = 0.
-
         return kernel_value * self.kernel_scaling(membrane_potential) * self.depression
 
     def pass_input(self, synaptic_input: float, delay: int = 0
@@ -278,6 +274,13 @@ class Synapse(RepresentationBase):
         """
 
         self.synaptic_input[self.kernel_length + delay - 1] += synaptic_input
+
+    def rotate_input(self):
+        """Shifts input values in synaptic input vector one position to the left.
+        """
+
+        self.synaptic_input[0:-1] = self.synaptic_input[1:]
+        self.synaptic_input[-1] = 0.
 
     def clear(self):
         """Clears synaptic input and depression.
@@ -468,6 +471,13 @@ class DESynapse(RepresentationBase):
 
         self.synaptic_input[self.kernel_length + delay - 1] += synaptic_input
 
+    def rotate_input(self):
+        """Shifts input values in synaptic input vector one position to the left.
+        """
+
+        self.synaptic_input[0:-1] = self.synaptic_input[1:]
+        self.synaptic_input[-1] = 0.
+
     def clear(self):
         """Clears synaptic input and depression.
         """
@@ -481,7 +491,7 @@ class DESynapse(RepresentationBase):
 
         # update buffer
         # TODO: implement interpolation from old to new array
-        self.synaptic_input = np.zeros(self.buffer_size + 1)
+        self.synaptic_input = np.zeros(self.buffer_size + self.kernel_length)
 
 
 ##############################
@@ -822,12 +832,6 @@ class DEExponentialSynapse(DESynapse):
 
         delta_current = self.input_scaling * self.synaptic_input[self.kernel_length - 1] - \
                         self.d1_scaling * membrane_potential - self.d2_scaling * synaptic_current_old
-
-        # update synaptic input buffer
-        ##############################
-
-        self.synaptic_input[0:-1] = self.synaptic_input[1:]
-        self.synaptic_input[-1] = 0.
 
         return delta_current * self.current_scaling(membrane_potential) * self.depression
 

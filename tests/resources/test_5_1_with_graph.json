@@ -1,6 +1,6 @@
 {
     "class": {
-        "__module__": "core.circuit.templates",
+        "__module__": "pyrates.circuit.templates",
         "__name__": "JansenRitCircuit"
     },
     "args": [
@@ -14,7 +14,7 @@
             {
                 "data": {
                     "class": {
-                        "__module__": "core.population.population",
+                        "__module__": "pyrates.population.population",
                         "__name__": "Population"
                     },
                     "synapses": [
@@ -50,7 +50,7 @@
             {
                 "data": {
                     "class": {
-                        "__module__": "core.population.population",
+                        "__module__": "pyrates.population.population",
                         "__name__": "Population"
                     },
                     "synapses": [
@@ -83,7 +83,7 @@
             {
                 "data": {
                     "class": {
-                        "__module__": "core.population.population",
+                        "__module__": "pyrates.population.population",
                         "__name__": "Population"
                     },
                     "synapses": [
@@ -120,7 +120,7 @@
                 "delay": 0,
                 "synapse": {
                     "class": {
-                        "__module__": "core.synapse.templates",
+                        "__module__": "pyrates.synapse.templates",
                         "__name__": "JansenRitExcitatorySynapse"
                     },
                     "buffer_size": 0
@@ -134,7 +134,7 @@
                 "delay": 0,
                 "synapse": {
                     "class": {
-                        "__module__": "core.synapse.templates",
+                        "__module__": "pyrates.synapse.templates",
                         "__name__": "JansenRitExcitatorySynapse"
                     },
                     "buffer_size": 0
@@ -148,7 +148,7 @@
                 "delay": 0,
                 "synapse": {
                     "class": {
-                        "__module__": "core.synapse.templates",
+                        "__module__": "pyrates.synapse.templates",
                         "__name__": "JansenRitExcitatorySynapse"
                     },
                     "buffer_size": 0
@@ -162,7 +162,7 @@
                 "delay": 0,
                 "synapse": {
                     "class": {
-                        "__module__": "core.synapse.templates",
+                        "__module__": "pyrates.synapse.templates",
                         "__name__": "JansenRitInhibitorySynapse"
                     },
                     "buffer_size": 0

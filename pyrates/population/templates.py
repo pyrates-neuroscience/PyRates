@@ -3,8 +3,8 @@
 
 from typing import Optional, List, Dict, Union
 import numpy as np
-from core.population import Population
-from core.utility import moran_spike_frequency_adaptation, synaptic_efficacy_adaptation, spike_frequency_adaptation
+from pyrates.population import Population
+from pyrates.utility import moran_spike_frequency_adaptation, synaptic_efficacy_adaptation, spike_frequency_adaptation
 
 
 __author__ = "Richard Gast, Daniel Rose"
@@ -178,8 +178,6 @@ class MoranPyramidalCells(Population):
         Default = 0 V.
     step_size
         Default = 0.0005 s.
-    max_synaptic_delay
-        Default = None
     max_population_delay
         Default = 0.
     synapse_params
@@ -208,7 +206,6 @@ class MoranPyramidalCells(Population):
                  axon: str = 'MoranAxon',
                  init_state: float = 0.,
                  step_size: float = 5e-4,
-                 max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
                  resting_potential: float = 0.,
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[dict]] = None,
@@ -216,7 +213,7 @@ class MoranPyramidalCells(Population):
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'PlasticSigmoidAxon',
                  tau: Optional[float] = None,
-                 store_state_variables: bool = False,
+                 store_state_variables: bool = True,
                  label: str = 'Moran_PCs'
                  ) -> None:
         """Instantiates a population as defined in [1]_.
@@ -227,10 +224,6 @@ class MoranPyramidalCells(Population):
 
         # synapse type
         synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
-
-        # synapse delay
-        if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         # spike frequency adaptation params
         ###################################
@@ -250,7 +243,6 @@ class MoranPyramidalCells(Population):
                          axon=axon,
                          init_state=init_state,
                          step_size=step_size,
-                         max_synaptic_delay=max_synaptic_delay,
                          resting_potential=resting_potential,
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
@@ -277,8 +269,6 @@ class MoranExcitatoryInterneurons(Population):
         Default = 0 V.
     step_size
         Default = 0.0005 s.
-    max_synaptic_delay
-        Default = None
     max_population_delay
         Default = 0.
     synapse_params
@@ -305,15 +295,14 @@ class MoranExcitatoryInterneurons(Population):
                  synapses: Optional[List[str]] = None,
                  axon: str = 'MoranAxon',
                  init_state: float = 0.,
-                 step_size: float = 0.0001,
-                 max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
+                 step_size: float = 5e-4,
                  resting_potential: float = 0.,
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'PlasticSigmoidAxon',
-                 store_state_variables: bool = False,
+                 store_state_variables: bool = True,
                  label: str = 'Moran_EINs'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
@@ -324,10 +313,6 @@ class MoranExcitatoryInterneurons(Population):
 
         # synapse type
         synapses = ['MoranExcitatorySynapse'] if not synapses else synapses
-
-        # synapse delay
-        if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         # axon params
         if not axon_params:
@@ -340,7 +325,6 @@ class MoranExcitatoryInterneurons(Population):
                          axon=axon,
                          init_state=init_state,
                          step_size=step_size,
-                         max_synaptic_delay=max_synaptic_delay,
                          resting_potential=resting_potential,
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
@@ -364,8 +348,6 @@ class MoranInhibitoryInterneurons(Population):
         Default = 0 V.
     step_size
         Default = 0.0005 s.
-    max_synaptic_delay
-        Default = None
     max_population_delay
         Default = 0.
     synapse_params
@@ -392,15 +374,14 @@ class MoranInhibitoryInterneurons(Population):
                  synapses: Optional[List[str]] = None,
                  axon: str = 'MoranAxon',
                  init_state: float = 0.,
-                 step_size: float = 0.0001,
-                 max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
+                 step_size: float = 5e-4,
                  resting_potential: float = 0.,
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'PlasticSigmoidAxon',
-                 store_state_variables: bool = False,
+                 store_state_variables: bool = True,
                  label: str = 'Moran_IINs'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
@@ -414,10 +395,6 @@ class MoranInhibitoryInterneurons(Population):
         if not synapses:
             synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
 
-        # synapse delay
-        if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
-
         # axon params
         if not axon_params:
             axon_params = [{'normalize': True} for _ in range(len(synapses))]
@@ -429,7 +406,6 @@ class MoranInhibitoryInterneurons(Population):
                          axon=axon,
                          init_state=init_state,
                          step_size=step_size,
-                         max_synaptic_delay=max_synaptic_delay,
                          resting_potential=resting_potential,
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
@@ -493,14 +469,13 @@ class WangKnoescheCells(Population):
                  axon: str = 'JansenRitAxon',
                  init_state: float = 0.,
                  step_size: float = 5e-4,
-                 max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
                  resting_potential: float = 0.,
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'SigmoidAxon',
-                 store_state_variables: bool = False,
+                 store_state_variables: bool = True,
                  label: str = 'WangKnoeschePopulation',
                  tau_depression: float = 0.05,
                  tau_recycle: float = 0.5,
@@ -520,10 +495,6 @@ class WangKnoescheCells(Population):
         # synaptic plasticity
         if not plastic_synapses:  # A list [False] evaluates correctly
             plastic_synapses = [True, False] if not plastic_synapses else plastic_synapses
-
-        # synapse delay
-        if not max_synaptic_delay and not synapse_params:
-            synapse_params = [{'epsilon': 5e-5} for _ in range(len(synapses))]
 
         # synaptic plasticity params
         ############################
@@ -554,7 +525,6 @@ class WangKnoescheCells(Population):
                          axon=axon,
                          init_state=init_state,
                          step_size=step_size,
-                         max_synaptic_delay=max_synaptic_delay,
                          resting_potential=resting_potential,
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,

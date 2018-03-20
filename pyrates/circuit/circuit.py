@@ -7,11 +7,11 @@ from matplotlib.axes import Axes
 # from networkx import MultiDiGraph
 from typing import List, Optional, Union, TypeVar, Callable, Tuple
 
-from core.population import Population
-from core.population import DummyPopulation
-from core.utility import check_nones, set_instance
-from core.utility.filestorage import RepresentationBase
-from core.utility.networkx_wrapper import WrappedMultiDiGraph
+from pyrates.population import Population
+from pyrates.population import DummyPopulation
+from pyrates.utility import check_nones, set_instance
+from pyrates.utility.filestorage import RepresentationBase
+from pyrates.utility.networkx_wrapper import WrappedMultiDiGraph
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -821,8 +821,6 @@ class CircuitFromPopulations(Circuit):
         Population resting-state membrane potential [unit = V].
     init_states
         2D array containing the initial values for each state variable (2.dim) of each population (1.dim).
-    population_class
-        Class names the population types refer to.
     population_labels
         Label of each population.
 

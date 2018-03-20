@@ -30,7 +30,7 @@ def test_1_1_axon_transfer_function():
     - with and without transfer_function_args as captured in the init
     - called with a scalar or with an array"""
 
-    from core.axon import Axon
+    from pyrates.axon import Axon
 
     scalar = 5
     array = np.arange(0, 5, 0.1)
@@ -92,7 +92,7 @@ def test_1_2_jr_sigmoid_axon():
     # initialize axon
     #################
 
-    from core.axon import SigmoidAxon
+    from pyrates.axon import SigmoidAxon
     axon = SigmoidAxon(max_firing_rate=max_firing_rate,
                        membrane_potential_threshold=membrane_potential_threshold,
                        sigmoid_steepness=sigmoid_steepness)

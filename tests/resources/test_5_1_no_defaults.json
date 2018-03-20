@@ -1,6 +1,6 @@
 {
     "class": {
-        "__module__": "core.circuit.templates",
+        "__module__": "pyrates.circuit.templates",
         "__name__": "JansenRitCircuit"
     },
     "args": [

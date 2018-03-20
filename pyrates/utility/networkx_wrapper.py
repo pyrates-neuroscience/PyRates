@@ -5,7 +5,7 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 from networkx import MultiDiGraph
-from core.population import Population
+from pyrates.population import Population
 
 
 class WrappedMultiDiGraph(MultiDiGraph):

@@ -1,8 +1,8 @@
 """Includes functions that wrap PyRates functionalities to use them with other tools
 """
 
-from core.circuit import *
-from core.utility import set_instance
+from pyrates.circuit import *
+from pyrates.utility import set_instance
 import numpy as np
 
 __author__ = "Richard Gast, Daniel Rose"

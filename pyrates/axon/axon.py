@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import numpy as np
 from typing import Optional, Callable, Union, overload, List
-from core.utility import parametric_sigmoid, normalized_sigmoid, plastic_sigmoid, plastic_normalized_sigmoid
+from pyrates.utility import parametric_sigmoid, normalized_sigmoid, plastic_sigmoid, plastic_normalized_sigmoid
 
-from core.utility.filestorage import RepresentationBase
+from pyrates.utility.filestorage import RepresentationBase
 
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"

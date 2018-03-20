@@ -13,14 +13,14 @@ from typing import List, Optional, Union, Dict, Callable, TypeVar
 from types import MethodType
 
 
-from core.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
-from core.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
+from pyrates.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
+from pyrates.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
     DEExponentialSynapse, DESynapse, DEDoubleExponentialSynapse
-from core.utility import set_instance, check_nones
-from core.population.population_methods import construct_state_update_function, \
+from pyrates.utility import set_instance, check_nones
+from pyrates.population.population_methods import construct_state_update_function, \
     construct_get_delta_membrane_potential_function
 
-from core.utility.filestorage import RepresentationBase
+from pyrates.utility.filestorage import RepresentationBase
 
 FloatLike = Union[float, np.float64]
 AxonLike = TypeVar('AxonLike', bound=Axon, covariant=True)
@@ -104,13 +104,13 @@ class PopulationOld(AbstractBasePopulation):
         ----------
         synapses
             Can be set to use default synapse types. These include:
-            :class:`core.synapse.templates.AMPACurrentSynapse`,
-            :class:`core.synapse.templates.GABAACurrentSynapse`,
-            :class:`core.synapse.templates.AMPAConductanceSynapse`,
-            :class:`core.synapse.templates.GABAAConductanceSynapse`.
+            :class:`pyrates.synapse.templates.AMPACurrentSynapse`,
+            :class:`pyrates.synapse.templates.GABAACurrentSynapse`,
+            :class:`pyrates.synapse.templates.AMPAConductanceSynapse`,
+            :class:`pyrates.synapse.templates.GABAAConductanceSynapse`.
         axon
             Can be set to use default axon types. These include:
-            :class:`core.axon.templates.JansenRitAxon`.
+            :class:`pyrates.axon.templates.JansenRitAxon`.
         init_state
             Vector defining initial state of the population. Vector entries represent the following state variables:
             1) membrane potential (default = 0.0) [unit = V].
@@ -1163,7 +1163,7 @@ class SecondOrderPlasticPopulationOld(PlasticPopulationOld):
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'PlasticSigmoidAxon',
-                 store_state_variables: bool = False,
+                 store_state_variables: bool = True,
                  label: str = 'Custom',
                  spike_frequency_adaptation: Optional[Callable[[float], float]] = None,
                  spike_frequency_adaptation_args: Optional[dict] = None,
@@ -1533,13 +1533,13 @@ class Population(AbstractBasePopulation):
         ----------
         synapses
             Can be set to use default synapse types. These include:
-            :class:`core.synapse.templates.AMPACurrentSynapse`,
-            :class:`core.synapse.templates.GABAACurrentSynapse`,
-            :class:`core.synapse.templates.AMPAConductanceSynapse`,
-            :class:`core.synapse.templates.GABAAConductanceSynapse`.
+            :class:`pyrates.synapse.templates.AMPACurrentSynapse`,
+            :class:`pyrates.synapse.templates.GABAACurrentSynapse`,
+            :class:`pyrates.synapse.templates.AMPAConductanceSynapse`,
+            :class:`pyrates.synapse.templates.GABAAConductanceSynapse`.
         axon
             Can be set to use default axon types. These include:
-            :class:`core.axon.templates.JansenRitAxon`.
+            :class:`pyrates.axon.templates.JansenRitAxon`.
         init_state
             Vector defining initial state of the population. Vector entries represent the following state variables:
             1) membrane potential (default = 0.0) [unit = V].
@@ -2115,7 +2115,7 @@ class Population(AbstractBasePopulation):
         self.synapses[idx].depression = self.take_step(f=self.synapse_efficacy_adaptation[idx],
                                                        y_old=self.synapses[idx].depression,
                                                        firing_rate=self.synapses[idx].synaptic_input[
-                                                           self.synapses[idx].kernel_length - 2],
+                                                           self.synapses[idx].kernel_length - 1],
                                                        **self.synapse_efficacy_adaptation_args[idx])
 
     def plot_synaptic_kernels(self, synapse_idx: Optional[List[int]] = None, create_plot: Optional[bool] = True,
