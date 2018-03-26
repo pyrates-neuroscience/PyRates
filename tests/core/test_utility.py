@@ -244,7 +244,7 @@ def test_5_5_save_run_data_to_file():
                 simulation_time=simulation_time)
 
     # noinspection PyTypeChecker
-    states = circuit.get_population_states(state_variable_idx=0)  # - 0.075  # type: np.ndarray
+    states = circuit.get_population_states(state_variable='membrane_potential')  # - 0.075  # type: np.ndarray
     # states = states[1:, :]
     # for some reason, the get_population_states function returns one more time point than the input.
 

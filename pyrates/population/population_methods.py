@@ -592,8 +592,7 @@ def get_leak_current(self,
 def construct_state_update_function(spike_frequency_adaptation=False,
                                     synapse_efficacy_adaptation=False,
                                     enable_modulation=False,
-                                    leaky_capacitor=False,
-                                    store_state_variables=True
+                                    leaky_capacitor=False
                                     ):
     if leaky_capacitor:
         membrane_potential_update_snippet = """membrane_potential = self.take_step(f=self.get_delta_membrane_potential,
@@ -603,7 +602,7 @@ def construct_state_update_function(spike_frequency_adaptation=False,
 
     if spike_frequency_adaptation:
         spike_frequency_adaption_snippet = """self.axon_update()
-    self.state_variables[-1] += [self.axon.transfer_function_args['adaptation']]"""
+    self.state_variables['spike_frequency_adaptation] = self.axon.transfer_function_args['adaptation']"""
     else:
         spike_frequency_adaption_snippet = ""
 
@@ -612,7 +611,7 @@ def construct_state_update_function(spike_frequency_adaptation=False,
 
         if self.synapse_efficacy_adaptation[i]:
             self.synapse_update(i)
-            self.state_variables[-1] += [self.synapses[i].depression]"""
+            self.state_variables['synapse_efficacy_adaptation' + str(i)] = self.synapses[i].depression"""
     else:
         synaptic_efficacy_adaptation_snippet = ""
 
@@ -625,11 +624,6 @@ def construct_state_update_function(spike_frequency_adaptation=False,
         synaptic_modulation_snippet = ""
         modulation_declaration_snippet = ""
 
-    if store_state_variables:
-        store_states_snippet = """self.state_variables.append(state_vars)"""
-    else:
-        store_states_snippet = """self.state_variables[0] = state_vars"""
-
     func_string = f"""
 def state_update(self, extrinsic_current{modulation_declaration_snippet}
                  ) -> None: 
@@ -641,21 +635,18 @@ def state_update(self, extrinsic_current{modulation_declaration_snippet}
     # compute average membrane potential
     ####################################
     
-    membrane_potential = self.state_variables[-1][0]
+    membrane_potential = self.state_variables['membrane_potential']
     {membrane_potential_update_snippet}
 
-    state_vars = [membrane_potential]
+    self.state_variables['membrane_potential'] = membrane_potential
 
     # compute average firing rate
     #############################
 
-    self.axon.compute_firing_rate(membrane_potential)
+    self.state_variables['firing_rate'] = self.get_firing_rate()
 
-    # update state variables
-    ########################
-
-    # TODO: Implement observer system here!!!
-    {store_states_snippet}
+    # plasticity mechanisms
+    #######################
 
     {spike_frequency_adaption_snippet}
 
