@@ -34,6 +34,7 @@ class CircuitObserver(object):
             self.states[target] = list()
         self.times = list()
         self.precision = int(np.log10(1 / self.sampling_step_size)) + 2
+        self.population_labels = [pop.label for pop in circuit.populations]
 
     def update(self,
                circuit: object,
@@ -81,7 +82,7 @@ class ExternalObserver(object):
     """
 
     def __init__(self,
-                 circuit: object,
+                 observer: CircuitObserver,
                  target_populations: Optional[list] = None,
                  target_population_weights: Optional[Union[List[list], list]] = None,
                  target_state: str = 'membrane_potential'
@@ -92,9 +93,10 @@ class ExternalObserver(object):
         # set attributes
         ################
 
-        self.sampling_step_size = circuit.observer.sampling_step_size
-        self.states = np.array(circuit.observer.states[target_state])
-        self.times = circuit.observer.times
+        self.sampling_step_size = observer.sampling_step_size
+        self.states = np.array(observer.states[target_state])
+        self.times = observer.times
+        self.population_labels = observer.population_labels
 
         # reduce states to indicated populations
         ########################################
@@ -107,20 +109,16 @@ class ExternalObserver(object):
             target_population_weights = [[1.0 for __ in range(len(target_populations[0]))]
                                          for _ in range(len(target_populations))]
 
-        # extract population labels
-        population_labels = [pop.label for pop in circuit.populations]
-        states_new = list()
-
         # loop over all groups of target populations
+        states_new = list()
         for i, target_group in enumerate(target_populations):
 
-            states_group = list()
-
             # loop over each population in group
+            states_group = list()
             for j, target in enumerate(target_group):
 
                 # get all populations that contain target label and weight them as indicated
-                idx = [k for k, test in enumerate(population_labels) if target in test]
+                idx = [k for k, test in enumerate(self.population_labels) if target in test]
                 states_group.append(self.states[:, idx] * target_population_weights[i][j])
 
             # calculate weighted average over grouped populations

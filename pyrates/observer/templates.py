@@ -9,7 +9,7 @@ import numpy as np
 from typing import Union, Optional, Callable, List
 FloatLike = Union[float, np.float64]
 
-from pyrates.observer import ExternalObserver
+from pyrates.observer import ExternalObserver, CircuitObserver
 
 
 #################
@@ -22,7 +22,7 @@ class fMRIObserver(ExternalObserver):
     """
 
     def __init__(self,
-                 circuit: object,
+                 observer: CircuitObserver,
                  target_populations: Optional[list] = None,
                  target_population_weights: Optional[Union[List[list], list]] = None,
                  target_state: str = 'membrane_potential',
@@ -36,7 +36,7 @@ class fMRIObserver(ExternalObserver):
                  ) -> None:
 
         # call super init
-        super().__init__(circuit=circuit,
+        super().__init__(observer=observer,
                          target_populations=target_populations,
                          target_population_weights=target_population_weights,
                          target_state=target_state)
@@ -165,3 +165,48 @@ class fMRIObserver(ExternalObserver):
                              + k3 * (1 - self.bwk_states[:, 2])
 
         return (100. * v0 * hemodynamic_signal) / self.p
+
+
+class EEGMEGObserver(ExternalObserver):
+    """Generates the source- or sensor-space EEG/MEG signal from the circuit states.
+    """
+
+    def __init__(self,
+                 observer: CircuitObserver,
+                 target_populations: Optional[list] = None,
+                 target_population_weights: Optional[Union[List[list], list]] = None,
+                 target_state: str = 'membrane_potential',
+                 signal_space: str = 'source',
+                 lead_field_matrix: Optional[np.ndarray] = None,
+                 source_positions: Optional[np.ndarray] = None,
+                 dipole_positions: Optional[np.ndarray] = None,
+                 distance_metric: str = 'euclidean'
+                 ) -> None:
+
+        # call super init
+        #################
+
+        super().__init__(observer=observer,
+                         target_populations=target_populations,
+                         target_population_weights=target_population_weights,
+                         target_state=target_state)
+
+        # project states into source space if wished for
+        ################################################
+
+        if signal_space == 'sensor':
+
+            # get leadfield matrix into correct shape
+            if lead_field_matrix.shape[0] != self.states.shape[1]:
+                lead_field_matrix = lead_field_matrix.T
+
+            # if source + dipole positions are given, reduce leadfield matrix to the given sources
+            if source_positions is not None:
+
+                from scipy.spatial.distance import cdist
+                distances = cdist(source_positions, dipole_positions, metric=distance_metric)
+                dipole_idx = np.argmin(distances, axis=1)
+                lead_field_matrix = lead_field_matrix[dipole_idx, :]
+
+            # apply leadfield matrix
+            self.states = self.states @ lead_field_matrix
