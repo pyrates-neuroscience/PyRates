@@ -97,6 +97,7 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # Save new data, if necessary due to syntax change
     ##################################################
     # from pyrates.utility import get_simulation_data, save_simulation_data_to_file
+
     #
     # run_info, states_frame = get_simulation_data(circuit)
     # save_simulation_data_to_file(output_data=states_frame, run_info=run_info,
@@ -111,7 +112,7 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # perform unit test
     ###################
 
-    test_data = target_data['output'].as_matrix()[1:, :]
+    test_data = target_data['output'].as_matrix()
     assert deep_compare(states, test_data, approx={"rtol": 1e-10, "atol": 0})
 
 
@@ -265,7 +266,7 @@ def test_4_3_jr_circuit_iii():
         nmm.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time)
 
-        final_state[i] = nmm.get_population_states(state_variable_idx=0)[-1, 0]
+        final_state[i] = nmm.get_population_states(state_variable='membrane_potential')[-1, 0]
 
     # load target data
     ###################

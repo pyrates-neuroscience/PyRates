@@ -15,6 +15,19 @@ __author__ = "Richard Gast"
 
 class CircuitObserver(object):
     """Base circuit observer class. Manages how the population states are observed.
+
+    Parameters
+    ----------
+    circuit
+        Instance of :class:`pyrates.circuit.Circuit`, the observer will observe.
+    sampling_step_size
+        Step-size with which the circuit states will be stored (default = simulation step-size) [unit = s].
+    target_populations
+        Indices referring to the circuit populations, whose states should be observed. By default, all populations are.
+    target_states
+        Strings indicating the population state variables that should be observed. By default, only the membrane
+        potential is.
+
     """
 
     def __init__(self,
@@ -71,6 +84,13 @@ class CircuitObserver(object):
                 self.states[key].append(states_tmp)
 
             self.times.append(circuit.t)
+
+    def clear(self):
+        """Clears state history stored on observer.
+        """
+
+        for key in self.states.keys():
+            self.states[key].clear()
 
 ##########################
 # base external observer #

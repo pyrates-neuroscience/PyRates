@@ -40,7 +40,7 @@ def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
         states = observer.observe(store_observations=False).T
 
     sfreq = 1/observer.sampling_step_size
-    n_channels = len(states[0])
+    n_channels = states.shape[0]
 
     # channel information
     if type(ch_types) is str:
@@ -50,9 +50,9 @@ def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
 
     # epoch/event information
     if not epoch_start:
-        epoch_start = -0.2
+        epoch_start = -0.2 if not epoch_duration else 0.
     if not epoch_end:
-        epoch_end = 0.5
+        epoch_end = 0.5 if not epoch_duration else epoch_duration - 1/sfreq
 
     # create raw mne object
     #######################
@@ -141,9 +141,9 @@ def mne_from_csv(csv_dir: str,
 
     # epoch/event information
     if not epoch_start:
-        epoch_start = -0.2
+        epoch_start = -0.2 if not epoch_duration else 0.
     if not epoch_end:
-        epoch_end = 0.5
+        epoch_end = 0.5 if not epoch_duration else epoch_duration - 1 / sfreq
 
     # create raw mne object
     #######################
@@ -152,7 +152,7 @@ def mne_from_csv(csv_dir: str,
     info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=sfreq)
 
     # create raw object from info and circuit data
-    raw = mne.io.RawArray(data=states, info=info)
+    raw = mne.io.RawArray(data=states.T, info=info)
 
     # create final mne object
     #########################

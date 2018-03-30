@@ -170,7 +170,7 @@ class Circuit(RepresentationBase):
         # save run parameters to instance variable
         ##########################################
 
-        self.run_info = dict(synaptic_inputs=synaptic_inputs, time_vector=[self.t],
+        self.run_info = dict(synaptic_inputs=synaptic_inputs, time_vector=[],
                              extrinsic_current=extrinsic_current, extrinsic_modulation=extrinsic_modulation)
 
         # check input parameters
@@ -545,6 +545,8 @@ class Circuit(RepresentationBase):
 
         for pop in self.populations:
             pop.clear()
+
+        self.observer.clear()
 
     def plot_population_states(self,
                                population_idx: Optional[Union[List[int], range]] = None,
