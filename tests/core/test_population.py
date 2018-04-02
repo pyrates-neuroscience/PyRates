@@ -151,7 +151,7 @@ def test_3_2_population_dynamics():
                 pop.synapses[0].pass_input(synaptic_input=synaptic_inputs[k, 0, i].squeeze())
                 pop.synapses[1].pass_input(synaptic_input=synaptic_inputs[k, 1, i].squeeze())
                 pop.state_update(extrinsic_current=extrinsic_inputs[k, j])
-                states[i, j, k] = pop.state_variables[-1][0]
+                states[i, j, k] = pop.state_variables['membrane_potential']
 
     # perform unit tests
     ####################

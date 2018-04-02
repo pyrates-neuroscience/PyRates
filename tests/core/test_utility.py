@@ -244,14 +244,14 @@ def test_5_5_save_run_data_to_file():
                 simulation_time=simulation_time)
 
     # noinspection PyTypeChecker
-    states = circuit.get_population_states(state_variable_idx=0)  # - 0.075  # type: np.ndarray
+    states = circuit.get_population_states(state_variable='membrane_potential')  # - 0.075  # type: np.ndarray
     # states = states[1:, :]
     # for some reason, the get_population_states function returns one more time point than the input.
 
-    assert states.shape == (n_time_steps + 1, n_pop)
+    assert states.shape == (n_time_steps, n_pop)
 
     # Now try to save data to a file
-    run_info, original_sim_data = get_simulation_data(circuit, state_variable_idx=0,
+    run_info, original_sim_data = get_simulation_data(circuit, state_variable='membrane_potential',
                                                       pop_indices=None, time_window=None)
 
     # test whether get_simulation_data yields the correct results

@@ -132,7 +132,7 @@ class Axon(RepresentationBase):
         # set figure labels
         axes.set_xlabel('membrane potential [V]')
         axes.set_ylabel('firing rate [Hz]')
-        axes.set_title('Axon Hillok Transfer Function')
+        axes.set_title('Axon Hillock Transfer Function')
 
         # show plot
         if create_plot:

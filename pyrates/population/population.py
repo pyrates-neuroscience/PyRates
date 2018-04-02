@@ -75,7 +75,7 @@ class AbstractBasePopulation(RepresentationBase):
         """
 
         # get source firing rate
-        source_fr = self.get_firing_rate()
+        source_fr = self.state_variables['firing_rate']
 
         # project source firing rate to connected populations
         #####################################################
@@ -87,12 +87,6 @@ class AbstractBasePopulation(RepresentationBase):
         for i, syn in enumerate(self.targets):
             syn.pass_input(source_fr * self.target_weights[i], delay=self.target_delays[i])
             # it would be possible to wrap this function using functools.partial to remove the delay lookup
-
-    def get_firing_rate(self):
-        """Returns the firing rate as output of the population."""
-
-        raise NotImplementedError("Method `_get_firing_rate` needs to be implemented in subclass.")
-        # a cleaner way would be to introduce a metaclass and decorate with abc.abstractmethod
 
 
 class PopulationOld(AbstractBasePopulation):
@@ -1507,17 +1501,24 @@ class DummyPopulation(AbstractBasePopulation):
         """
         super().__init__()
 
+        self.state_variables = dict()
         self.output = output
         self.idx = 0
+        self.state_variables['firing_rate'] = self.output[self.idx]
 
-    def get_firing_rate(self):
+    def project_to_targets(self):
         """Update output firing rate.
         """
 
-        self.idx += 1
+        # call super method
+        super().project_to_targets()
 
-        return self.output[self.idx - 1]
-
+        # advance in output array
+        try:
+            self.idx += 1
+            self.state_variables['firing_rate'] = self.output[self.idx]
+        except IndexError:
+            pass
 
 ################################
 # new, all-covering population #
@@ -1590,8 +1591,6 @@ class Population(AbstractBasePopulation):
             Maximum delay with which other populations project to this population [unit = s] (default = 0.).
         max_synaptic_delay : np.ndarray
             See documentation of parameter `max_synaptic_delay`.
-        store_state_variables
-            See documentation of parameter `store_state_variables`.
         resting_potential
             See documentation of parameter `resting_potential`.
         tau_leak
@@ -1619,7 +1618,6 @@ class Population(AbstractBasePopulation):
                  membrane_capacitance: float = 1e-12,
                  max_population_delay: FloatLike = 0.,
                  max_synaptic_delay: Optional[Union[float, np.ndarray]] = None,
-                 store_state_variables: bool = True,
                  label: str = 'Custom',
                  synapse_labels: Optional[list] = None,
                  enable_modulation: bool = False,
@@ -1662,8 +1660,7 @@ class Population(AbstractBasePopulation):
         ###############################
 
         self.synapses = []  # type: List[Union[Synapse, DESynapse]]
-        self.state_variables = []  # type: List[List[FloatLike]]
-        self.store_state_variables = store_state_variables
+        self.state_variables = dict()
         self.step_size = step_size
         self.label = label
         self.max_population_delay = max_population_delay
@@ -1739,8 +1736,7 @@ class Population(AbstractBasePopulation):
         exec(construct_state_update_function(spike_frequency_adaptation=self.axonal_plasticity,
                                              synapse_efficacy_adaptation=self.synaptic_plasticity,
                                              enable_modulation=self.modulatory_influences_enabled,
-                                             leaky_capacitor=self.leaky_capacitor,
-                                             store_state_variables=store_state_variables))
+                                             leaky_capacitor=self.leaky_capacitor))
 
         self.state_update = MethodType(locals()['state_update'], self)
 
@@ -1775,12 +1771,12 @@ class Population(AbstractBasePopulation):
         self._set_axon(axon, axon_params=axon_params, axon_type=axon_class)
 
         # set initial states
-        if type(init_state) not in (list, np.ndarray):
-            self.state_variables.append([init_state])
+        if type(init_state) is not dict:
+            self.state_variables['membrane_potential'] = init_state
         else:
-            self.state_variables.append(init_state)
-
-        self.axon.compute_firing_rate(self.state_variables[-1][0])
+            for key, state in init_state.items():
+                self.state_variables[key] = state
+        self.state_variables['firing_rate'] = self.get_firing_rate()
 
         # set plasticity attributes
         ###########################
@@ -1789,7 +1785,7 @@ class Population(AbstractBasePopulation):
         if self.spike_frequency_adaptation:
             self.spike_frequency_adaptation_args = spike_frequency_adaptation_args if spike_frequency_adaptation_args \
                 else dict()
-            self.state_variables[-1] += [self.axon.transfer_function_args['adaptation']]
+            self.state_variables['spike_frequency_adaptation'] = self.axon.transfer_function_args['adaptation']
 
         # synaptic plasticity function
         if synapse_efficacy_adaptation and (type(synapse_efficacy_adaptation) is not list):
@@ -1805,7 +1801,7 @@ class Population(AbstractBasePopulation):
         # synaptic plasticity state variables
         for i in range(self.n_synapses):
             if self.synapse_efficacy_adaptation[i]:
-                self.state_variables[-1] += [self.synapses[i].depression]
+                self.state_variables['synapse_efficacy_adaptation_' + str(i)] = self.synapses[i].depression
 
         # synaptic plasticity function arguments
         if synapse_efficacy_adaptation_args is None or type(synapse_efficacy_adaptation_args) is dict:
@@ -1943,7 +1939,7 @@ class Population(AbstractBasePopulation):
 
         """
 
-        return self.axon.firing_rate
+        return self.axon.compute_firing_rate(self.state_variables['membrane_potential'])
 
     def get_delta_psp(self, psp: FloatLike, synapse_idx: int) -> FloatLike:
         """Calculates the change in PSP.
@@ -2046,16 +2042,21 @@ class Population(AbstractBasePopulation):
             self.synapse_efficacy_adaptation.append(self.synapse_efficacy_adaptation[synapse_idx])
             self.synapse_efficacy_adaptation_args.append(self.synapse_efficacy_adaptation_args[synapse_idx])
             self.synapse_efficacy_adaptation_args[-1]['max_firing_rate'] = max_firing_rate
-            self.state_variables[-1] += [self.synapses[synapse_idx].depression]
+            self.state_variables['synapse_efficacy_adaptation_' + str(self.n_synapses-1)] += \
+                self.synapses[synapse_idx].depression
 
-    def clear(self, disconnect: bool = False):
+    def clear(self, disconnect: bool = False,
+              init_state: Optional[dict] = None):
         """Clears states stored on population and synaptic input.
         """
 
-        # population attributes
-        init_state = self.state_variables[0]
-        self.state_variables.clear()
-        self.state_variables.append(init_state)
+        # population states
+        if init_state:
+            for key, state in init_state.items():
+                self.state_variables[key] = state
+        else:
+            for state in self.state_variables:
+                self.state_variables[state] = 0.
 
         # synapse attributes
         for syn in self.synapses:
@@ -2064,11 +2065,11 @@ class Population(AbstractBasePopulation):
         self.PSPs[:] = 0.
         if not self.integro_differential:
             self.synaptic_currents_new[:] = 0.
-            self.PSPs[:] = self.state_variables[0][0]
+            self.PSPs[:] = self.state_variables['membrane_potential']
 
         # axon attributes
         self.axon.clear()
-        self.axon.compute_firing_rate(self.state_variables[-1][0])
+        self.state_variables['firing_rate'] = self.get_firing_rate()
 
         # network connections
         if disconnect:
@@ -2099,7 +2100,7 @@ class Population(AbstractBasePopulation):
         self.axon.transfer_function_args['adaptation'] = self.take_step(f=self.spike_frequency_adaptation,
                                                                         y_old=self.axon.transfer_function_args
                                                                         ['adaptation'],
-                                                                        firing_rate=self.get_firing_rate(),
+                                                                        firing_rate=self.state_variables['firing_rate'],
                                                                         **self.spike_frequency_adaptation_args)
 
     def synapse_update(self, idx: int):

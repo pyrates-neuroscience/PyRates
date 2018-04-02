@@ -174,12 +174,12 @@ class RepresentationBase(object):
         return json.dumps(_dict, cls=CustomEncoder, indent=2)
 
 
-def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple, list] = None, time_window: tuple = None
-                        ) -> Tuple[dict, DataFrame]:
+def get_simulation_data(circuit, state_variable='membrane_potential', pop_indices: Union[tuple, list] = None,
+                        time_window: tuple = None) -> Tuple[dict, DataFrame]:
     """Obtain all simulation data from a circuit, including run parameters"""
 
     run_info = circuit.run_info
-    states = circuit.get_population_states(state_variable_idx=state_variable_idx, population_idx=pop_indices,
+    states = circuit.get_population_states(state_variable=state_variable, population_idx=pop_indices,
                                            time_window=time_window)
 
     labels = []
@@ -200,9 +200,9 @@ def get_simulation_data(circuit, state_variable_idx=0, pop_indices: Union[tuple,
             for pop_idx in range(item.shape[1]):
                 for syn_idx in range(item.shape[2]):
                     flattened[(f"{pop_idx} {labels[pop_idx]}", syn_idx)] = item[:, pop_idx, syn_idx]
-            run_info[key] = DataFrame(flattened, index=run_info["time_vector"][1:])
+            run_info[key] = DataFrame(flattened, index=run_info["time_vector"])
         elif item.ndim == 2:
-            run_info[key] = DataFrame(data=item, index=run_info["time_vector"][1:], columns=labels)
+            run_info[key] = DataFrame(data=item, index=run_info["time_vector"], columns=labels)
     # run_info = DataFrame.from_dict(run_info, "columns")
 
     return run_info, states

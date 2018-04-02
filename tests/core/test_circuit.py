@@ -91,12 +91,13 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     circuit.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time)
 
-    states = circuit.get_population_states(state_variable_idx=0)  # - 0.075
+    states = circuit.get_population_states(state_variable='membrane_potential')  # - 0.075
     # fixme: do we need to keep the - 0.075 there?
 
     # Save new data, if necessary due to syntax change
     ##################################################
     # from pyrates.utility import get_simulation_data, save_simulation_data_to_file
+
     #
     # run_info, states_frame = get_simulation_data(circuit)
     # save_simulation_data_to_file(output_data=states_frame, run_info=run_info,
@@ -111,7 +112,8 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # perform unit test
     ###################
 
-    assert deep_compare(states, target_data["output"], approx={"rtol": 1e-10, "atol": 0})
+    test_data = target_data['output'].as_matrix()
+    assert deep_compare(states, test_data, approx={"rtol": 1e-10, "atol": 0})
 
 
 @pytest.mark.skip
@@ -264,7 +266,7 @@ def test_4_3_jr_circuit_iii():
         nmm.run(synaptic_inputs=synaptic_inputs,
                 simulation_time=simulation_time)
 
-        final_state[i] = nmm.get_population_states(state_variable_idx=0)[-1, 0]
+        final_state[i] = nmm.get_population_states(state_variable='membrane_potential')[-1, 0]
 
     # load target data
     ###################
@@ -303,15 +305,15 @@ def test_4_4_jr_network_i():
     # delays
     delays = [0.001]
 
-    # neural mass circuits
-    from pyrates.circuit import JansenRitCircuit
-    nmm1 = JansenRitCircuit()
-    nmm2 = JansenRitCircuit()
-    nmm3 = JansenRitCircuit()
-    nmm4 = JansenRitCircuit()
-
     # simulation step-size
     step_size = 5e-4
+
+    # neural mass circuits
+    from pyrates.circuit import JansenRitCircuit
+    nmm1 = JansenRitCircuit(step_size=step_size)
+    nmm2 = JansenRitCircuit(step_size=step_size)
+    nmm3 = JansenRitCircuit(step_size=step_size)
+    nmm4 = JansenRitCircuit(step_size=step_size)
 
     # simulation time
     simulation_time = 1.
@@ -348,8 +350,8 @@ def test_4_4_jr_network_i():
     # perform unit tests
     ####################
 
-    states1 = circuit1.get_population_states(state_variable_idx=0)
-    states2 = circuit2.get_population_states(state_variable_idx=0)
+    states1 = circuit1.get_population_states(state_variable='membrane_potential')
+    states2 = circuit2.get_population_states(state_variable='membrane_potential')
 
     error = nmrse(states1, states2)
     error = np.mean(error)

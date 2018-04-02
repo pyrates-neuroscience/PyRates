@@ -12,6 +12,7 @@ from pyrates.population import DummyPopulation
 from pyrates.utility import check_nones, set_instance
 from pyrates.utility.filestorage import RepresentationBase
 from pyrates.utility.networkx_wrapper import WrappedMultiDiGraph
+from pyrates.observer import CircuitObserver
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -126,9 +127,6 @@ class Circuit(RepresentationBase):
             # clear all past information stored on population
             self.populations[i].clear(disconnect=True)
 
-            # make sure state variable history will be saved on population
-            self.populations[i].store_state_variables = True
-
             # create mapping between last dimension of connectivity matrix and synapses existing at each population
             for j in range(self.n_synapses):
                 for k in range(self.populations[i].n_synapses):
@@ -163,13 +161,16 @@ class Circuit(RepresentationBase):
                      simulation_time: float,
                      extrinsic_current: Optional[np.ndarray] = None,
                      extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
+                     sampling_size: Optional[float] = None,
+                     target_populations: Optional[List[int]] = None,
+                     target_states: Optional[List[int]] = None
                      ) -> Tuple[int, np.ndarray, List[List[np.ndarray]]]:
         """Helper method to check inputs to run, but keep run function a bit cleaner."""
 
         # save run parameters to instance variable
         ##########################################
 
-        self.run_info = dict(synaptic_inputs=synaptic_inputs, time_vector=[self.t],
+        self.run_info = dict(synaptic_inputs=synaptic_inputs, time_vector=[],
                              extrinsic_current=extrinsic_current, extrinsic_modulation=extrinsic_modulation)
 
         # check input parameters
@@ -221,6 +222,22 @@ class Circuit(RepresentationBase):
                                   conn_targets=[self.populations[i].synapses[self.synapse_mapping[i, j]]],
                                   add_to_population_list=False)
 
+        # set up observer system
+        ########################
+        if hasattr(self, 'observer'):
+
+            self.observer.update(circuit=self,
+                                 sampling_step_size=sampling_size,
+                                 target_populations=target_populations,
+                                 target_states=target_states)
+
+        else:
+
+            self.observer = CircuitObserver(circuit=self,
+                                            sampling_step_size=sampling_size,
+                                            target_populations=target_populations,
+                                            target_states=target_states)
+
         return simulation_time_steps, extrinsic_current, extrinsic_modulation
 
     def run(self,
@@ -228,7 +245,10 @@ class Circuit(RepresentationBase):
             simulation_time: float,
             extrinsic_current: Optional[np.ndarray] = None,
             extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
-            verbose: bool = False
+            verbose: bool = False,
+            sampling_size: Optional[float] = None,
+            target_populations: Optional[List[int]] = None,
+            target_states: Optional[List[int]] = None
             ) -> None:
         """Simulates circuit behavior over time.
 
@@ -250,7 +270,11 @@ class Circuit(RepresentationBase):
         prepared_input = self._prepare_run(synaptic_inputs,
                                            simulation_time,
                                            extrinsic_current,
-                                           extrinsic_modulation)
+                                           extrinsic_modulation,
+                                           sampling_size,
+                                           target_populations,
+                                           target_states)
+
         # just to shorten the line
         simulation_time_steps, extrinsic_current, extrinsic_modulation = prepared_input
         # TODO: Why are extrinsic current and extrinsic modulation defined as lists of lists?
@@ -286,6 +310,9 @@ class Circuit(RepresentationBase):
                 self.t += self.step_size
                 self.run_info["time_vector"].append(self.t)
 
+                # observe system variables
+                self.observer.store_state_variables(circuit=self)
+
         else:
 
             for n in range(simulation_time_steps):  # can't think of a way to remove that loop. ;-)
@@ -308,6 +335,9 @@ class Circuit(RepresentationBase):
                 self.t += self.step_size
                 self.run_info["time_vector"].append(self.t)
 
+                # observe system variables
+                self.observer.store_state_variables(circuit=self)
+
         self.clean_run()
 
     def clean_run(self):
@@ -320,7 +350,7 @@ class Circuit(RepresentationBase):
             self.n_nodes -= 1
 
     def get_population_states(self,
-                              state_variable_idx: int,
+                              state_variable: str = 'membrane_potential',
                               population_idx: Optional[Union[list, range]] = None,
                               time_window: Optional[List[float]] = None
                               ) -> np.ndarray:
@@ -329,8 +359,8 @@ class Circuit(RepresentationBase):
 
         Parameters
         ----------
-        state_variable_idx
-            Index of state variable that is to be extracted.
+        state_variable
+            Name of state variable that is to be extracted.
         population_idx
             List with population indices for which to extract states.
         time_window
@@ -346,8 +376,6 @@ class Circuit(RepresentationBase):
         # check input parameters
         ########################
 
-        if state_variable_idx < 0:
-            raise ValueError('Index cannot be negative.')
         if time_window and any(time_window) < 0:
             raise ValueError('Time constants cannot be negative.')
 
@@ -358,17 +386,17 @@ class Circuit(RepresentationBase):
         ##########################################
 
         # get states from populations for all time-steps
-        states = list()
-        for idx in population_idx:
-            states.append(np.array(self.populations[idx].state_variables, ndmin=2)[:, state_variable_idx])
+        states = np.array(self.observer.states[state_variable])
 
-        _states = np.array(states, ndmin=2).T
+        # reduce to indicated populations and state variables
+        if population_idx:
+            states = states[:, population_idx]
 
         # reduce states to time-window
         if time_window:
-            _states = _states[int(time_window[0] / self.step_size):int(time_window[1] / self.step_size), :]
+            states = states[int(time_window[0] / self.step_size):int(time_window[1] / self.step_size), :]
 
-        return _states
+        return states
 
     def build_graph(self,
                     plasticity_on_input: bool = False):
@@ -518,9 +546,11 @@ class Circuit(RepresentationBase):
         for pop in self.populations:
             pop.clear()
 
+        self.observer.clear()
+
     def plot_population_states(self,
                                population_idx: Optional[Union[List[int], range]] = None,
-                               state_idx: int = 0,
+                               state_variable: str = 'membrane_potential',
                                time_window: Optional[Union[np.ndarray, list]] = None,
                                create_plot: bool = True,
                                axes: Optional[Axes] = None
@@ -556,7 +586,7 @@ class Circuit(RepresentationBase):
         # get population states
         #######################
 
-        population_states = self.get_population_states(state_idx, population_idx, time_window)
+        population_states = self.get_population_states(state_variable, population_idx, time_window)
 
         # plot population states over time
         ##################################
