@@ -32,7 +32,7 @@ class Axon(RepresentationBase):
         [unit = V] as input and returns average firing rates [unit = 1/s].
     axon_type
         Name of axon type.
-    **transfer_function_args
+    **transfer_function_kwargs
         Keyword arguments for the transfer function
 
     Attributes
@@ -42,14 +42,16 @@ class Axon(RepresentationBase):
     axon_type
         See `axon_type` in parameters section.
     transfer_function_args
-        Keyword arguments will be saved as dict on the object.
+        Keyword arguments of transfer function saved as dict on the object.
+    firing_rate
+        Current average firing rate of axon hillock [unit = 1/s].
 
     """
 
     def __init__(self,
                  transfer_function: Callable[..., float],
                  axon_type: Optional[str] = None,
-                 **transfer_function_args: float
+                 **transfer_function_kwargs: float
                  ) -> None:
         """Instantiates base axon.
         """
@@ -58,8 +60,8 @@ class Axon(RepresentationBase):
         ################
 
         self.transfer_function = transfer_function
-        self.axon_type = 'custom' if axon_type is None else axon_type
-        self.transfer_function_args = transfer_function_args
+        self.axon_type = '' if axon_type is None else axon_type
+        self.transfer_function_args = transfer_function_kwargs
         self.firing_rate = 0.
 
     def compute_firing_rate(self, membrane_potential: float) -> float:
@@ -83,16 +85,21 @@ class Axon(RepresentationBase):
         return self.firing_rate
 
     def clear(self):
+        """Clears all time-dependent variables of axon.
+        """
 
         self.firing_rate = 0.
 
     def update(self):
+        """Updates all time-dependent parameters/methods of axon.
+        """
+
         pass
 
     def plot_transfer_function(self,
                                membrane_potentials: np.ndarray,
                                create_plot: bool = True,
-                               axes: Optional[Axes] = None
+                               axis: Optional[Axes] = None
                                ) -> object:
         """Creates figure of the transfer function transforming membrane potentials into output firing rates.
 
@@ -102,13 +109,13 @@ class Axon(RepresentationBase):
             Membrane potential values for which to plot transfer function value [unit = V].
         create_plot
             If false, plot will bot be shown (default = True).
-        axes
+        axis
             If passed, plot will be created in respective figure axis (default = None).
 
         Returns
         -------
-        figure handle
-            Handle of the newly created or updated figure.
+        axis
+            Handle of the axis in which transfer function was plotted.
 
         """
 
@@ -121,24 +128,24 @@ class Axon(RepresentationBase):
         ############################################
 
         # check whether new figure needs to be created
-        if axes is None:
-            fig, axes = plt.subplots(num='Wave-To-Pulse-Function')
+        if axis is None:
+            fig, axis = plt.subplots(num='Wave-To-Pulse-Function')
         else:
-            fig = axes.get_figure()
+            fig = axis.get_figure()
 
         # plot firing rates over membrane potentials
-        axes.plot(membrane_potentials, firing_rates)
+        axis.plot(membrane_potentials, firing_rates)
 
         # set figure labels
-        axes.set_xlabel('membrane potential [V]')
-        axes.set_ylabel('firing rate [Hz]')
-        axes.set_title('Axon Hillock Transfer Function')
+        axis.set_xlabel('membrane potential [V]')
+        axis.set_ylabel('firing rate [Hz]')
+        axis.set_title('Axon Hillock Transfer Function')
 
         # show plot
         if create_plot:
             fig.show()
 
-        return axes
+        return axis
 
 
 ###################
@@ -204,7 +211,7 @@ class SigmoidAxon(Axon):
                                epsilon: float = 1e-4,
                                bin_size: float = 0.001,
                                create_plot: bool = True,
-                               axes: Optional[Axes] = None):
+                               axis: Optional[Axes] = None):
         """Plots axon hillok sigmoidal transfer function.
 
         Parameters
@@ -219,7 +226,7 @@ class SigmoidAxon(Axon):
             [unit = V] (default = 0.001).
         create_plot
             See method docstring of :class:`Axon`.
-        axes
+        axis
             See method docstring of :class:`Axon`.
 
 
@@ -277,11 +284,11 @@ class SigmoidAxon(Axon):
         # call super method
         ###################
 
-        axes = super().plot_transfer_function(membrane_potentials=membrane_potentials,
+        axis = super().plot_transfer_function(membrane_potentials=membrane_potentials,
                                               create_plot=create_plot,
-                                              axes=axes)
+                                              axis=axis)
 
-        return axes
+        return axis
 
 
 class PlasticSigmoidAxon(Axon):

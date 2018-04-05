@@ -227,6 +227,7 @@ class JansenRitCircuit(CircuitFromScratch):
                          synapses=synapse_types,
                          synapse_params=synapse_params,
                          synapse_class=synapse_class,
+                         synapse_types=['excitatory', 'inhibitory'],
                          axons=axon_types,
                          axon_params=axon_params,
                          axon_class=axon_class,

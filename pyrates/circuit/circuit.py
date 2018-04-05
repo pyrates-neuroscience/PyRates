@@ -111,32 +111,31 @@ class Circuit(RepresentationBase):
         self.n_populations = len(populations)
         self.n_synapses = connectivity.shape[2]
         self.t = 0.
-        self.synapse_mapping = np.zeros((self.n_populations, self.n_synapses), dtype=int) - 999
         self.synapse_types = synapse_types if synapse_types else ['excitatory', 'inhibitory']
         self.run_info = dict()
 
         # circuit structure
-        self.populations = populations
         self.C = connectivity
         self.D = delays
         self.D_pdfs = delay_distributions
 
+        # circuit populations
+        self.populations = dict()
+        for i, pop in enumerate(populations):
+            if pop.label:
+                self.populations[pop.label] = pop
+            else:
+                self.populations[str(i)] = pop
+
         # population specific properties
-        for i in range(self.n_populations):
+        for i, pop in enumerate(self.populations.keys()):
 
             # clear all past information stored on population
-            self.populations[i].clear(disconnect=True)
-
-            # create mapping between last dimension of connectivity matrix and synapses existing at each population
-            for j in range(self.n_synapses):
-                for k in range(self.populations[i].n_synapses):
-                    if self.synapse_types[j] in self.populations[i].synapse_labels[k]:
-                        self.synapse_mapping[i, j] = k
-                        break
+            self.populations[pop].clear(disconnect=True)
 
             # update max_population_delays according to information in D
-            self.populations[i].max_population_delay = np.max(self.D[i, :])
-            self.populations[i].update()
+            self.populations[pop].max_population_delay = np.max(self.D[i, :])
+            self.populations[pop].update()
 
             # TODO: make sure that population step-size corresponds to circuit step-size
 
@@ -147,7 +146,48 @@ class Circuit(RepresentationBase):
         # create network graph
         ######################
 
-        self.network_graph = self.build_graph(plasticity_on_input=False)
+        # turn matrices into lists
+        pop_labels = list(self.populations.keys())
+        source_pops = list()
+        target_pops = list()
+        target_syns = list()
+        delays = list()
+        weights = list()
+        if delay_distributions is None:
+            for source in range(self.C.shape[0]):
+                for target in range(self.C.shape[1]):
+                    syn_labels = list(self.populations[pop_labels[target]].synapses.keys())
+                    for syn in np.where(self.C[target, source] > 0.)[0]:
+                        for key in syn_labels:
+                            if self.synapse_types[syn] in key:
+                                break
+                        source_pops.append(pop_labels[source])
+                        target_pops.append(pop_labels[target])
+                        target_syns.append(key)
+                        delays.append(self.D[target, source])
+                        weights.append(self.C[target, source, syn])
+        else:
+            for source in range(self.C.shape[0]):
+                for target in range(self.C.shape[1]):
+                    syn_labels = list(self.populations[pop_labels[target]].synapses.keys())
+                    for syn in np.where(self.C[target, source] > 0.):
+                        for key in syn_labels:
+                            if self.synapse_types[syn] in key:
+                                break
+                        for delay, delay_weight in zip(self.D[target, source], self.D_pdfs[target, source]):
+                            source_pops.append(pop_labels[source])
+                            target_pops.append(pop_labels[target])
+                            target_syns.append(key)
+                            delays.append(delay)
+                            weights.append(self.C[target, source, syn] * delay_weight)
+
+        # build graph from lists
+        self.network_graph = self.build_graph(plasticity_on_input=False,
+                                              source_pops=source_pops,
+                                              target_pops=target_pops,
+                                              target_syns=target_syns,
+                                              conn_strengths=weights,
+                                              conn_delays=delays)
         self.n_nodes = len(self.network_graph.nodes)
 
     # noinspection PyPep8Naming
@@ -162,8 +202,8 @@ class Circuit(RepresentationBase):
                      extrinsic_current: Optional[np.ndarray] = None,
                      extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
                      sampling_size: Optional[float] = None,
-                     target_populations: Optional[List[int]] = None,
-                     target_states: Optional[List[int]] = None
+                     target_populations: Optional[List[str]] = None,
+                     target_states: Optional[List[str]] = None
                      ) -> Tuple[int, np.ndarray, List[List[np.ndarray]]]:
         """Helper method to check inputs to run, but keep run function a bit cleaner."""
 
@@ -213,14 +253,17 @@ class Circuit(RepresentationBase):
         # add dummy population to graph for synaptic input distribution
         ################################################################
 
-        for i in range(self.n_populations):
+        count = 0
+        for i, pop in enumerate(self.populations.keys()):
             for j in range(self.n_synapses):
                 if np.any(synaptic_inputs[:, i, j]):
                     self.add_node(DummyPopulation(synaptic_inputs[:, i, j].squeeze()),
-                                  target_nodes=[i],
+                                  target_nodes=[pop],
                                   conn_weights=[1.],
-                                  conn_targets=[self.populations[i].synapses[self.synapse_mapping[i, j]]],
-                                  add_to_population_list=False)
+                                  conn_targets=[self.synapse_types[j]],
+                                  add_to_population_list=False,
+                                  label='Dummy_' + str(count))
+                    count += 1
 
         # set up observer system
         ########################
@@ -247,8 +290,8 @@ class Circuit(RepresentationBase):
             extrinsic_modulation: Optional[List[List[np.ndarray]]] = None,
             verbose: bool = False,
             sampling_size: Optional[float] = None,
-            target_populations: Optional[List[int]] = None,
-            target_states: Optional[List[int]] = None
+            target_populations: Optional[List[str]] = None,
+            target_states: Optional[List[str]] = None
             ) -> None:
         """Simulates circuit behavior over time.
 
@@ -285,7 +328,7 @@ class Circuit(RepresentationBase):
         # remove some of the overhead of reading everything from the graph.
         active_populations = []
         for _, node in self.network_graph.nodes(data=True):
-            active_populations.append(node["data"])
+            active_populations.append(node['data'])
 
         if extrinsic_modulation:
 
@@ -296,7 +339,7 @@ class Circuit(RepresentationBase):
                     source_pop.project_to_targets()
 
                 # update all population states
-                for i, pop in enumerate(self.populations):
+                for i, (_, pop) in enumerate(self.populations.items()):
                     pop.state_update(extrinsic_current=extrinsic_current[n, i],
                                      extrinsic_synaptic_modulation=extrinsic_modulation[n][i])
 
@@ -322,7 +365,7 @@ class Circuit(RepresentationBase):
                     source_pop.project_to_targets()
 
                 # update all population states
-                for i, pop in enumerate(self.populations):
+                for i, (_, pop) in enumerate(self.populations.items()):
                     pop.state_update(extrinsic_current=extrinsic_current[n, i])
 
                 # display simulation progress
@@ -345,13 +388,15 @@ class Circuit(RepresentationBase):
         """
 
         # remove input dummy nodes from graph
-        for i in np.arange(self.n_populations, self.n_nodes):
-            self.network_graph.remove_node(i)
-            self.n_nodes -= 1
+        nodes = list(self.network_graph.nodes.keys())
+        for node in nodes:
+            if 'Dummy' in node:
+                self.network_graph.remove_node(node)
+                self.n_nodes -= 1
 
     def get_population_states(self,
                               state_variable: str = 'membrane_potential',
-                              population_idx: Optional[Union[list, range]] = None,
+                              population_keys: Optional[List[str]] = None,
                               time_window: Optional[List[float]] = None
                               ) -> np.ndarray:
         """Extracts specified state variable from populations and puts them into matrix. This serves the purpose of
@@ -361,8 +406,8 @@ class Circuit(RepresentationBase):
         ----------
         state_variable
             Name of state variable that is to be extracted.
-        population_idx
-            List with population indices for which to extract states.
+        population_keys
+            List with population keys for which to extract states.
         time_window
             Start and end of time window for which to extract the state variables [unit = s].
 
@@ -379,18 +424,17 @@ class Circuit(RepresentationBase):
         if time_window and any(time_window) < 0:
             raise ValueError('Time constants cannot be negative.')
 
-        if not population_idx:
-            population_idx = range(self.n_populations)
+        if not population_keys:
+            population_keys = list(self.populations.keys())
 
         # extract state variables from populations
         ##########################################
 
-        # get states from populations for all time-steps
-        states = np.array(self.observer.states[state_variable])
+        state_idx = self.observer.target_states.index(state_variable)
+        population_idx = [self.observer.target_populations.index(key) for key in population_keys]
 
-        # reduce to indicated populations and state variables
-        if population_idx:
-            states = states[:, population_idx]
+        # get states from populations for all time-steps
+        states = np.array([self.observer.states[state_idx][pop] for pop in population_idx]).squeeze().T
 
         # reduce states to time-window
         if time_window:
@@ -399,6 +443,11 @@ class Circuit(RepresentationBase):
         return states
 
     def build_graph(self,
+                    source_pops: List[str],
+                    target_pops: List[str],
+                    target_syns: List[str],
+                    conn_strengths: List[float],
+                    conn_delays: List[int],
                     plasticity_on_input: bool = False):
         """Builds graph from circuit information.
         """
@@ -410,83 +459,51 @@ class Circuit(RepresentationBase):
         network_graph = WrappedMultiDiGraph()
 
         # add populations as network nodes
-        n_synapses_old = np.zeros(self.n_populations, dtype=int)
-        for i in range(self.n_populations):
-            n_synapses_old[i] = self.populations[i].n_synapses
-            network_graph.add_node(i, data=self.populations[i])
+        for key in self.populations:
+            network_graph.add_node(key, data=self.populations[key])
 
         # build edges
         #############
 
-        # loop over all network nodes
-        for source in range(self.n_populations):
+        # loop over all connections
+        for source, target, weight, delay, syn in zip(source_pops, target_pops, conn_strengths, conn_delays,
+                                                      target_syns):
 
-            # loop over all potential target nodes
-            for target in range(self.n_populations):
+            # check whether target synapse is plastic or not
+            if self.populations[target].features['synaptic_plasticity'] and \
+                    self.populations[target].synapse_efficacy_adaptation[syn]:
 
-                # loop over all synapses
-                for idx, syn in enumerate(self.synapse_mapping[target]):
+                syn_copy = self.populations[target].copy_synapse(syn,
+                                                                 max_firing_rate=self.populations
+                                                                 [source].axon.transfer_function_args
+                                                                 ['max_firing_rate'])
+                network_graph.add_edge(source, target, weight=weight, delay=delay, synapse=syn_copy)
 
-                    # check whether source connects to target via syn
-                    if self.C[target, source, idx] > 0.:
+            else:
 
-                        # add edge with edge information depending on a synapse being plastic or not and multiple
-                        # axonal delays being passed or not
-                        #########################################################################################
-
-                        # if syn is a plastic synapse, add copies of it to target for each connection on syn
-                        if self.populations[target].synaptic_plasticity and \
-                                self.populations[target].synapse_efficacy_adaptation[syn]:
-
-                            # add synapse copy to population
-                            self.populations[target].copy_synapse(synapse_idx=syn,
-                                                                  max_firing_rate=self.populations[source].axon.
-                                                                  transfer_function_args['max_firing_rate'] *
-                                                                                  self.C[target, source, idx])
-
-                            # create one edge for each delay between source and target
-                            if self.D_pdfs is None:
-                                network_graph.add_edge(source, target,
-                                                       weight=float(self.C[target, source, idx]),
-                                                       delay=int(self.D[source, target]),
-                                                       synapse=self.populations[target].synapses[-1])
-                            else:
-                                for w, d in zip(self.D_pdfs[target, source, :], self.D[target, source, :]):
-                                    network_graph.add_edge(source, target,
-                                                           weight=float(self.C[target, source, idx]) * w,
-                                                           delay=int(d),
-                                                           synapse=self.populations[target].synapses[-1])
-
-                        else:
-
-                            # create one edge for each delay between source and target
-                            if self.D_pdfs is None:
-                                network_graph.add_edge(source, target,
-                                                       weight=float(self.C[target, source, idx]),
-                                                       delay=int(self.D[source, target]),
-                                                       synapse=self.populations[target].synapses[syn])
-                            else:
-                                for w, d in zip(self.D_pdfs[target, source, :], self.D[target, source, :]):
-                                    network_graph.add_edge(source, target,
-                                                           weight=float(self.C[target, source, idx]) * w,
-                                                           delay=int(d),
-                                                           synapse=self.populations[target].synapses[syn])
+                network_graph.add_edge(source, target, weight=weight, delay=delay,
+                                       synapse=self.populations[target].synapses[syn])
 
         # turn of plasticity at original synapse if wished
+        ##################################################
+
         if not plasticity_on_input:
-            for i, pop in enumerate(self.populations):
-                for syn in range(n_synapses_old[i]):
-                    if pop.synaptic_plasticity and pop.synapse_efficacy_adaptation[syn]:
+            for i, (key, pop) in enumerate(self.populations.items()):
+                for syn in pop.synapses.keys():
+                    if pop.features['synaptic_plasticity'] and pop.synapse_efficacy_adaptation[syn] and \
+                            not 'copy' in syn:
                         pop.synapse_efficacy_adaptation[syn] = None
-                        pop.state_variables[-1].pop(-1)
+                        pop.state_variables['synapse_efficacy_adaptation'].pop(syn)
 
         return network_graph
 
-    def add_node(self, data: Union[Population, DummyPopulation],
-                 target_nodes: List[int],
+    def add_node(self,
+                 data: Union[Population, DummyPopulation],
+                 target_nodes: List[str],
                  conn_weights: List[float],
-                 conn_targets: List[object],
+                 conn_targets: List[str],
                  conn_delays: Optional[List[float]] = None,
+                 label: Optional[str] = None,
                  add_to_population_list: bool = False
                  ) -> None:
         """Adds node to network graph (and if wished to population list).
@@ -500,10 +517,12 @@ class Circuit(RepresentationBase):
         conn_weights
             List with weight for each target population.
         conn_targets
-            List with entries indicating the target objects on the respective populations. Each target has to have a 
+            List with labels indicating the target objects on the respective populations. Each target has to have a
             `pass_input` method.
         conn_delays
             Delays for each connection.
+        label
+            Custom label for graph node. If None, integer index will be used.
         add_to_population_list
             If true, element will be added to the circuit's population list.
             
@@ -515,21 +534,18 @@ class Circuit(RepresentationBase):
         if conn_delays is None:
             conn_delays = [0 for _ in range(len(conn_weights))]
 
+        if not label:
+            label = str(len(self.network_graph.nodes))
+
         # add to network graph
         ######################
 
-        # check current number of nodes
-        n_nodes = len(self.network_graph.nodes)
-
         # add node
-        self.network_graph.add_node(n_nodes, data=data)
+        self.network_graph.add_node(label, data=data)
 
         # add edges
         for target, weight, delay, syn in zip(target_nodes, conn_weights, conn_delays, conn_targets):
-            self.network_graph.add_edge(n_nodes, target,
-                                        weight=weight,
-                                        delay=delay,
-                                        synapse=syn)
+            self.add_edge(label, target, weight=weight, delay=delay, synapse=syn)
 
         self.n_nodes += 1
 
@@ -537,7 +553,61 @@ class Circuit(RepresentationBase):
         ########################
 
         if add_to_population_list:
-            self.populations.append(data)
+            self.populations[label] = data
+
+    def add_edge(self,
+                 source: str,
+                 target: str,
+                 weight: float,
+                 delay: float,
+                 synapse: str,
+                 copy_synapse: bool = False,
+                 copy_label: Optional[str] = None
+                 ) -> None:
+        """Adds an edge to the network graph.
+
+        Parameters
+        ----------
+        source
+            Label of source node.
+        target
+            Label of target node.
+        weight
+            Connection strength.
+        delay
+            Information transfer delay.
+        synapse
+            Label of synapse on target population.
+        copy_synapse
+            If true, a copy of the given synapse will be created and used to connect source to target.
+        copy_label
+            Label of new synapse. If None, 'synapse.label' + '_copy' will be used.
+
+        """
+
+        # check passed synapse type
+        ###########################
+
+        if synapse not in self.populations[target].synapses.keys():
+            for syn in self.populations[target].synapses.keys():
+                if synapse in syn:
+                    break
+            synapse = syn
+
+        # add edge
+        ##########
+        if copy_synapse:
+
+            synapse_copy = self.populations[target].copy_synapse(synapse,
+                                                                 max_firing_rate=self.populations
+                                                                 [source].axon.transfer_function_args
+                                                                 ['max_firing_rate'])
+            self.network_graph.add_edge(source, target, weight=weight, delay=delay, synapse=synapse_copy)
+
+        else:
+
+            self.network_graph.add_edge(source, target, weight=weight, delay=delay,
+                                        synapse=self.populations[target].synapses[synapse])
 
     def clear(self):
         """Clears states of all populations
@@ -549,7 +619,7 @@ class Circuit(RepresentationBase):
         self.observer.clear()
 
     def plot_population_states(self,
-                               population_idx: Optional[Union[List[int], range]] = None,
+                               population_keys: Optional[List[str]] = None,
                                state_variable: str = 'membrane_potential',
                                time_window: Optional[Union[np.ndarray, list]] = None,
                                create_plot: bool = True,
@@ -559,10 +629,10 @@ class Circuit(RepresentationBase):
 
         Parameters
         ----------
-        population_idx
-            Index of populations for which to plot states over time.
-        state_idx
-            State variable index.
+        population_keys
+            Labels of populations for which to plot states over time.
+        state_variable
+            State variable name.
         time_window
             Start and end time point for which to plot population states.
         create_plot
@@ -577,16 +647,13 @@ class Circuit(RepresentationBase):
 
         """
 
-        # check population idx
-        ######################
-
-        if population_idx is None:
-            population_idx = range(self.n_populations)
-
         # get population states
         #######################
 
-        population_states = self.get_population_states(state_variable, population_idx, time_window)
+        if not population_keys:
+            population_keys = list(self.populations.keys())
+
+        population_states = self.get_population_states(state_variable, population_keys, time_window)
 
         # plot population states over time
         ##################################
@@ -597,9 +664,9 @@ class Circuit(RepresentationBase):
             fig = axes.get_figure()
 
         legend_labels = []
-        for i in range(len(population_idx)):
+        for i in range(population_states.shape[1]):
             axes.plot(population_states[:, i])
-            legend_labels.append(self.populations[population_idx[i]].label)
+            legend_labels.append(self.populations[population_keys[i]])
 
         axes.legend(legend_labels)
         axes.set_ylabel('membrane potential [V]')
@@ -800,6 +867,7 @@ class CircuitFromScratch(Circuit):
                           'max_population_delay': max_population_delay[i], 'synapse_params': synapse_params_tmp,
                           'axon_params': axon_params[i], 'synapse_class': synapse_class_tmp,
                           'axon_class': axon_class[i], 'label': population_labels[i],
+                          'synapse_labels': synapse_types[0:len(synapses_tmp)],
                           'spike_frequency_adaptation': spike_frequency_adaptation[i],
                           'spike_frequency_adaptation_args': spike_frequency_adaptation_args[i],
                           'synapse_efficacy_adaptation': synapse_efficacy_adaptation_tmp,
@@ -1005,7 +1073,7 @@ class CircuitFromCircuit(Circuit):
         n_circuits = len(circuits)
 
         if not circuit_labels:
-            circuit_labels = ['' for i in range(n_circuits)]
+            circuit_labels = ['Circ' + str(i) for i in range(n_circuits)]
 
         # set delays
         if delays is None:
@@ -1044,13 +1112,14 @@ class CircuitFromCircuit(Circuit):
             n_synapses[i] = circuits[i].n_synapses
 
             # collect populations
-            for pop in circuits[i].populations:
+            for label, pop in circuits[i].populations.items():
+
                 # update population label
-                pop.label = circuit_labels[i] + '_' + pop.label
+                pop.label = circuit_labels[i] + '_' + label
 
                 # update population delay
-                pop.synaptic_input = np.zeros((int((pop.synapses[0].kernel_length + max_population_delay)),
-                                               len(pop.synapses)))
+                pop.synaptic_input = np.zeros((int((pop.synapses[pop.synapse_labels[0]].kernel_length +
+                                                    max_population_delay)), len(pop.synapses)))
 
                 # add population
                 populations.append(pop)

@@ -3,6 +3,7 @@
 
 import numpy as np
 from typing import Union, Optional, List
+from pandas import DataFrame, concat, Series
 
 __status__ = "development"
 __author__ = "Richard Gast"
@@ -33,41 +34,53 @@ class CircuitObserver(object):
     def __init__(self,
                  circuit: object,
                  sampling_step_size: Optional[float] = None,
-                 target_populations: Optional[Union[np.ndarray, list]] = None,
+                 target_populations: Optional[List[str]] = None,
                  target_states: Optional[List[str]] = None
                  ) -> None:
         """Instantiates base circuit observer.
         """
 
         self.sampling_step_size = sampling_step_size if sampling_step_size else circuit.step_size
-        self.target_populations = target_populations if target_populations else range(circuit.n_populations)
-        self.target_states = target_states if target_states else ['membrane_potential']
-        self.states = dict()
-        for target in self.target_states:
-            self.states[target] = list()
-        self.times = list()
+        if not target_populations:
+            self.target_populations = [pop for pop in circuit.populations.keys()]
+        else:
+            self.target_populations = target_populations
+        if not target_states:
+            self.target_states = ['membrane_potential', 'firing_rate']
+        else:
+            self.target_states = target_states
+
+        self.states = [[[] for _ in self.target_populations] for __ in self.target_states]
+
         self.precision = int(np.log10(1 / self.sampling_step_size)) + 2
-        self.population_labels = [pop.label for pop in circuit.populations]
+        self.time = list()
 
     def update(self,
                circuit: object,
                sampling_step_size: Optional[float] = None,
-               target_populations: Optional[Union[np.ndarray, list]] = None,
+               target_populations: Optional[List[str]] = None,
                target_states: Optional[List[str]] = None
                ) -> None:
         """Updates observer system to prepare a new run.
         """
 
         self.sampling_step_size = sampling_step_size if sampling_step_size else circuit.step_size
-        self.target_populations = target_populations if target_populations else range(circuit.n_populations)
+        if not target_populations:
+            target_populations = [pop for pop in circuit.populations.keys()]
+        if not target_states:
+            target_states = list(self.states[target_populations[0]].keys())
         self.precision = int(np.log10(1 / self.sampling_step_size)) + 2
 
         # state dictionary
-        if target_states:
-            self.target_states = target_states
-            for target in target_states:
-                if target not in self.states.keys():
-                    self.states[target] = [0.] * len(self.states['membrane_potential'])
+        for state in target_states:
+            if state not in self.states.keys():
+                self.states[state] = dict()
+                for pop in target_populations:
+                    self.states[state][pop] = [None] * len(self.time)
+            else:
+                for pop in target_populations:
+                    if pop not in self.states[state].keys():
+                        self.states[state][pop] = [None] * len(self.time)
 
     def store_state_variables(self, circuit: object):
         """Goes through all target populations and adds the target state variables to the observer.
@@ -75,22 +88,20 @@ class CircuitObserver(object):
 
         if circuit.t % self.sampling_step_size < self.precision:
 
-            for key in self.target_states:
+            for i, state in enumerate(self.target_states):
 
-                states_tmp = list()
-                for p in self.target_populations:
-                    states_tmp.append(circuit.populations[p].state_variables[key])
+                for j, pop in enumerate(self.target_populations):
+                    self.states[i][j].append(getattr(circuit.populations[pop], state))
 
-                self.states[key].append(states_tmp)
-
-            self.times.append(circuit.t)
+            self.time.append(circuit.t)
 
     def clear(self):
         """Clears state history stored on observer.
         """
 
-        for key in self.states.keys():
-            self.states[key].clear()
+        for state in self.states:
+            for pop in state:
+                pop.clear()
 
 ##########################
 # base external observer #
@@ -114,9 +125,9 @@ class ExternalObserver(object):
         ################
 
         self.sampling_step_size = observer.sampling_step_size
-        self.states = np.array(observer.states[target_state])
-        self.times = observer.times
-        self.population_labels = observer.population_labels
+        self.states = DataFrame.from_dict(observer.states)
+        self.times = observer.time
+        self.population_labels = observer.states[list(observer.states.keys())[0]].keys()
 
         # reduce states to indicated populations
         ########################################

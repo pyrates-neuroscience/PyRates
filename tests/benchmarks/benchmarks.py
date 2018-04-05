@@ -244,6 +244,7 @@ if __name__ == "__main__":
         run_first = run_second = True
     else:
         run_first = run_second = False
+
     ######################
     # perform benchmarks #
     ######################

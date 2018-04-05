@@ -174,17 +174,17 @@ class RepresentationBase(object):
         return json.dumps(_dict, cls=CustomEncoder, indent=2)
 
 
-def get_simulation_data(circuit, state_variable='membrane_potential', pop_indices: Union[tuple, list] = None,
+def get_simulation_data(circuit, state_variable='membrane_potential', pop_keys: Union[tuple, list] = None,
                         time_window: tuple = None) -> Tuple[dict, DataFrame]:
     """Obtain all simulation data from a circuit, including run parameters"""
 
     run_info = circuit.run_info
-    states = circuit.get_population_states(state_variable=state_variable, population_idx=pop_indices,
+    states = circuit.get_population_states(state_variable=state_variable, population_keys=pop_keys,
                                            time_window=time_window)
 
     labels = []
-    for pop in circuit.populations:
-        labels.append(pop.label)
+    for pop in circuit.populations.keys():
+        labels.append(pop)
 
     # for key, item in run_info.items():
     #     if isinstance(item, np.ndarray):

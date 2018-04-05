@@ -37,6 +37,10 @@
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_PCs",
+                    "synapse_labels": [
+                        "excitatory",
+                        "inhibitory"
+                    ],
                     "spike_frequency_adaptation": null,
                     "spike_frequency_adaptation_args": null,
                     "synapse_efficacy_adaptation": null,
@@ -45,7 +49,7 @@
                     "resting_potential": null,
                     "membrane_capacitance": null
                 },
-                "id": 0
+                "id": "JR_PCs"
             },
             {
                 "data": {
@@ -70,6 +74,9 @@
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_EINs",
+                    "synapse_labels": [
+                        "excitatory"
+                    ],
                     "spike_frequency_adaptation": null,
                     "spike_frequency_adaptation_args": null,
                     "synapse_efficacy_adaptation": null,
@@ -78,7 +85,7 @@
                     "resting_potential": null,
                     "membrane_capacitance": null
                 },
-                "id": 1
+                "id": "JR_EINs"
             },
             {
                 "data": {
@@ -103,6 +110,9 @@
                     ],
                     "axon_class": "SigmoidAxon",
                     "label": "JR_IINs",
+                    "synapse_labels": [
+                        "excitatory"
+                    ],
                     "spike_frequency_adaptation": null,
                     "spike_frequency_adaptation_args": null,
                     "synapse_efficacy_adaptation": null,
@@ -111,7 +121,7 @@
                     "resting_potential": null,
                     "membrane_capacitance": null
                 },
-                "id": 2
+                "id": "JR_IINs"
             }
         ],
         "links": [
@@ -125,8 +135,8 @@
                     },
                     "buffer_size": 0
                 },
-                "source": 0,
-                "target": 1,
+                "source": "JR_PCs",
+                "target": "JR_EINs",
                 "key": 0
             },
             {
@@ -139,8 +149,8 @@
                     },
                     "buffer_size": 0
                 },
-                "source": 0,
-                "target": 2,
+                "source": "JR_PCs",
+                "target": "JR_IINs",
                 "key": 0
             },
             {
@@ -153,8 +163,8 @@
                     },
                     "buffer_size": 0
                 },
-                "source": 1,
-                "target": 0,
+                "source": "JR_EINs",
+                "target": "JR_PCs",
                 "key": 0
             },
             {
@@ -167,8 +177,8 @@
                     },
                     "buffer_size": 0
                 },
-                "source": 2,
-                "target": 0,
+                "source": "JR_IINs",
+                "target": "JR_PCs",
                 "key": 0
             }
         ]

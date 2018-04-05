@@ -252,7 +252,7 @@ def test_5_5_save_run_data_to_file():
 
     # Now try to save data to a file
     run_info, original_sim_data = get_simulation_data(circuit, state_variable='membrane_potential',
-                                                      pop_indices=None, time_window=None)
+                                                      pop_keys=None, time_window=None)
 
     # test whether get_simulation_data yields the correct results
     assert np.all(states == original_sim_data)

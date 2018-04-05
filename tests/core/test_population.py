@@ -55,7 +55,8 @@ def test_3_1_population_init():
                      step_size=step_size,
                      max_synaptic_delay=synaptic_kernel_length,
                      tau_leak=tau_leak,
-                     resting_potential=resting_potential)
+                     resting_potential=resting_potential,
+                     )
     syn1 = AMPACurrentSynapse(bin_size=step_size)
     syn2 = GABAACurrentSynapse(bin_size=step_size)
     axon = KnoescheAxon()
@@ -71,14 +72,14 @@ def test_3_1_population_init():
     #################################################
 
     # pass input
-    pop.synapses[0].pass_input(firing_rate)
-    pop.synapses[1].pass_input(firing_rate)
+    pop.synapses['0'].pass_input(firing_rate)
+    pop.synapses['1'].pass_input(firing_rate)
     syn1.pass_input(firing_rate)
     syn2.pass_input(firing_rate)
 
     # calculate synaptic response
-    pop_syn1_response = pop.synapses[0].get_synaptic_current()
-    pop_syn2_response = pop.synapses[1].get_synaptic_current()
+    pop_syn1_response = pop.synapses['0'].get_synaptic_current()
+    pop_syn2_response = pop.synapses['1'].get_synaptic_current()
     syn1_response = syn1.get_synaptic_current()
     syn2_response = syn2.get_synaptic_current()
 
@@ -148,10 +149,10 @@ def test_3_2_population_dynamics():
                              resting_potential=resting_potential,
                              membrane_capacitance=membrane_capacitance)
             for k in range(synaptic_inputs.shape[0]):
-                pop.synapses[0].pass_input(synaptic_input=synaptic_inputs[k, 0, i].squeeze())
-                pop.synapses[1].pass_input(synaptic_input=synaptic_inputs[k, 1, i].squeeze())
+                pop.synapses['0'].pass_input(synaptic_input=synaptic_inputs[k, 0, i].squeeze())
+                pop.synapses['1'].pass_input(synaptic_input=synaptic_inputs[k, 1, i].squeeze())
                 pop.state_update(extrinsic_current=extrinsic_inputs[k, j])
-                states[i, j, k] = pop.state_variables['membrane_potential']
+                states[i, j, k] = pop.membrane_potential
 
     # perform unit tests
     ####################
