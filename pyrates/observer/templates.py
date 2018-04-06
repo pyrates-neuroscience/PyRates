@@ -7,6 +7,8 @@ __author__ = "Richard Gast"
 
 import numpy as np
 from typing import Union, Optional, Callable, List
+from pandas import DataFrame
+
 FloatLike = Union[float, np.float64]
 
 from pyrates.observer import ExternalObserver, CircuitObserver
@@ -43,8 +45,8 @@ class fMRIObserver(ExternalObserver):
 
         # normalize population states
         if normalize:
-            self.states[:] = self.states[:] - np.min(self.states[:])
-            self.states[:] = self.states[:] / np.max(self.states[:])
+            self.states.iloc[:] = self.states.iloc[:] - np.min(self.states.iloc[:])
+            self.states.iloc[:] = self.states.iloc[:] / np.max(self.states.iloc[:])
 
         # set balloon-windkessel parameters
         self.beta = beta
@@ -75,34 +77,34 @@ class fMRIObserver(ExternalObserver):
             stop = int(time_window[1] / self.sampling_step_size)
         else:
             start = 0
-            stop = int(self.times[-1] / self.sampling_step_size)
+            stop = int(self.time[-1] / self.sampling_step_size)
 
         output_length = stop - start
-        output = np.zeros((output_length, self.N))
+        output = DataFrame(data=np.zeros((output_length, self.N)), columns=list(self.states.keys()))
 
         if observation_variable == 'BOLD':
 
             for t in range(start, stop):
                 self.bwk_states = self.take_step(f=self.get_delta_bwk_states, y_old=self.bwk_states,
-                                                 neural_activity=self.states[t, :])
+                                                 neural_activity=self.states.iloc[t, :].values)
 
-                output[t, :] = self.calculate_bold()
+                output.iloc[t, :] = self.calculate_bold()
 
         elif observation_variable == 'CBF':
 
             for t in range(start, stop):
                 self.bwk_states = self.take_step(f=self.get_delta_bwk_states, y_old=self.bwk_states,
-                                                 neural_activity=self.states[t, :])
+                                                 neural_activity=self.states.iloc[t, :].values)
 
-                output[t, :] = self.bwk_states[:, 1]
+                output.iloc[t, :] = self.bwk_states[:, 1]
 
         elif observation_variable == 'CBV':
 
             for t in range(start, stop):
                 self.bwk_states = self.take_step(f=self.get_delta_bwk_states, y_old=self.bwk_states,
-                                                 neural_activity=self.states[t, :])
+                                                 neural_activity=self.states.iloc[t, :].values)
 
-                output[t, :] = self.bwk_states[:, 2]
+                output.iloc[t, :] = self.bwk_states[:, 2]
 
         return output
 
@@ -180,7 +182,8 @@ class EEGMEGObserver(ExternalObserver):
                  lead_field_matrix: Optional[np.ndarray] = None,
                  source_positions: Optional[np.ndarray] = None,
                  dipole_positions: Optional[np.ndarray] = None,
-                 distance_metric: str = 'euclidean'
+                 distance_metric: str = 'euclidean',
+                 sensor_labels: Optional[list] = None
                  ) -> None:
 
         # call super init
@@ -209,4 +212,9 @@ class EEGMEGObserver(ExternalObserver):
                 lead_field_matrix = lead_field_matrix[dipole_idx, :]
 
             # apply leadfield matrix
-            self.states = self.states @ lead_field_matrix
+            states_tmp = self.states.values @ lead_field_matrix
+
+            # create new dataframe with sensor space data
+            if not sensor_labels:
+                sensor_labels = ['S' + str(i) for i in range(states_tmp.shape[1])]
+            self.states = DataFrame(data=states_tmp, columns=sensor_labels)

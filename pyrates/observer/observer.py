@@ -116,7 +116,8 @@ class ExternalObserver(object):
                  observer: CircuitObserver,
                  target_populations: Optional[list] = None,
                  target_population_weights: Optional[Union[List[list], list]] = None,
-                 target_state: str = 'membrane_potential'
+                 target_state: str = 'membrane_potential',
+                 group_labels: Optional[list] = None
                  ):
         """Instantiates external observer.
         """
@@ -124,10 +125,14 @@ class ExternalObserver(object):
         # set attributes
         ################
 
+        # general
+        self.time = observer.time
         self.sampling_step_size = observer.sampling_step_size
-        self.states = DataFrame.from_dict(observer.states)
-        self.times = observer.time
-        self.population_labels = observer.states[list(observer.states.keys())[0]].keys()
+        self.population_labels = observer.target_populations
+
+        # create dataframe including all states plus the simulation time
+        state_idx = observer.target_states.index(target_state)
+        self.states = DataFrame(data=np.array(observer.states[state_idx]).T, columns=observer.target_populations)
 
         # reduce states to indicated populations
         ########################################
@@ -141,23 +146,31 @@ class ExternalObserver(object):
                                          for _ in range(len(target_populations))]
 
         # loop over all groups of target populations
-        states_new = list()
         for i, target_group in enumerate(target_populations):
 
+            target_col = list()
+
             # loop over each population in group
-            states_group = list()
             for j, target in enumerate(target_group):
 
                 # get all populations that contain target label and weight them as indicated
-                idx = [k for k, test in enumerate(self.population_labels) if target in test]
-                states_group.append(self.states[:, idx] * target_population_weights[i][j])
+                target_pops = np.array([key for k, key in enumerate(self.population_labels) if target in key])
+                self.states.loc[target_pops] *= target_population_weights[i][j]
+                self.states[target] = self.states.loc[target_pops].sum()
+                self.states.drop(target_pops, axis=1)
 
-            # calculate weighted average over grouped populations
-            states_new.append(np.sum(np.array(states_group), axis=0))
+                target_col.append(target)
 
-        # create new states array
-        states_new = np.array(states_new)
-        self.states = np.reshape(states_new, (states_new.shape[1], states_new.shape[0]*states_new.shape[2]))
+            # combine grouped populations into single column
+            if group_labels:
+                group_key = group_labels[i]
+            else:
+                group_key = target.split('_')[0]
+                if group_key in self.states.keys():
+                    group_key = group_key + '_' + str(i)
+
+            self.states[group_key] = self.states.loc(target_col).sum()
+            self.states.drop(target_col, axis=1)
 
     def observe(self,
                 store_observations: bool=False,
@@ -173,12 +186,6 @@ class ExternalObserver(object):
             stop = int(time_window[1] / self.sampling_step_size)
         else:
             start = 0
-            stop = int(self.times[-1] / self.sampling_step_size)
+            stop = int(self.time[-1] / self.sampling_step_size)
 
-        output_length = stop - start
-
-        output = np.zeros((output_length, self.states.shape[1]))
-        for t in range(start, stop):
-            output[t, :] = self.states[t, :]
-
-        return output
+        return self.states.iloc[start:stop, :]
