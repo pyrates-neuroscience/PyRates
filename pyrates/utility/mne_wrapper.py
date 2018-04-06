@@ -20,6 +20,7 @@ from pyrates.observer import CircuitObserver, EEGMEGObserver
 def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
                       ch_types: Union[str, List[str]] = 'eeg',
                       ch_names: Optional[Union[str, List[str]]] = None,
+                      target_variable: str = 'membrane_potential',
                       events: Optional[np.ndarray] = None,
                       event_labels: Optional[List[str]] = None,
                       epoch_start: Optional[float] = None,
@@ -35,18 +36,18 @@ def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
 
     # circuit information
     if type(observer) is CircuitObserver:
-        states = np.array(observer.states['membrane_potential']).T
+        states = np.array(observer.states)
+        states = states[observer.target_states.index(target_variable), :, :].squeeze()
     else:
-        states = observer.observe(store_observations=False).T
+        states = observer.observe(store_observations=False).values.T
 
     sfreq = 1/observer.sampling_step_size
-    n_channels = states.shape[0]
 
     # channel information
-    if type(ch_types) is str:
-        ch_types = [ch_types for _ in range(n_channels)]
     if not ch_names:
         ch_names = observer.population_labels
+    if type(ch_types) is str:
+        ch_types = [ch_types for _ in range(len(ch_names))]
 
     # epoch/event information
     if not epoch_start:

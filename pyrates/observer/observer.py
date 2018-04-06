@@ -42,15 +42,15 @@ class CircuitObserver(object):
 
         self.sampling_step_size = sampling_step_size if sampling_step_size else circuit.step_size
         if not target_populations:
-            self.target_populations = [pop for pop in circuit.populations.keys()]
+            self.population_labels = [pop for pop in circuit.populations.keys()]
         else:
-            self.target_populations = target_populations
+            self.population_labels = target_populations
         if not target_states:
             self.target_states = ['membrane_potential']
         else:
             self.target_states = target_states
 
-        self.states = [[[] for _ in self.target_populations] for __ in self.target_states]
+        self.states = [[[] for _ in self.population_labels] for __ in self.target_states]
 
         self.precision = int(np.log10(1 / self.sampling_step_size)) + 2
         self.time = list()
@@ -68,19 +68,20 @@ class CircuitObserver(object):
         if not target_populations:
             target_populations = [pop for pop in circuit.populations.keys()]
         if not target_states:
-            target_states = list(self.states[target_populations[0]].keys())
+            target_states = self.target_states
         self.precision = int(np.log10(1 / self.sampling_step_size)) + 2
 
         # state dictionary
-        for state in target_states:
-            if state not in self.states.keys():
-                self.states[state] = dict()
+        for i, state in enumerate(target_states):
+            if state not in self.target_states:
+                state_list = list()
                 for pop in target_populations:
-                    self.states[state][pop] = [None] * len(self.time)
+                    state_list.append([None] * len(self.time))
+                self.states.append(state_list)
             else:
                 for pop in target_populations:
-                    if pop not in self.states[state].keys():
-                        self.states[state][pop] = [None] * len(self.time)
+                    if pop not in self.population_labels:
+                        self.states[i].append([None] * len(self.time))
 
     def store_state_variables(self, circuit: object):
         """Goes through all target populations and adds the target state variables to the observer.
@@ -90,7 +91,7 @@ class CircuitObserver(object):
 
             for i, state in enumerate(self.target_states):
 
-                for j, pop in enumerate(self.target_populations):
+                for j, pop in enumerate(self.population_labels):
                     self.states[i][j].append(getattr(circuit.populations[pop], state))
 
             self.time.append(circuit.t)
@@ -128,11 +129,11 @@ class ExternalObserver(object):
         # general
         self.time = observer.time
         self.sampling_step_size = observer.sampling_step_size
-        self.population_labels = observer.target_populations
+        self.population_labels = observer.population_labels
 
         # create dataframe including all states plus the simulation time
         state_idx = observer.target_states.index(target_state)
-        self.states = DataFrame(data=np.array(observer.states[state_idx]).T, columns=observer.target_populations)
+        self.states = DataFrame(data=np.array(observer.states[state_idx]).T, columns=observer.population_labels)
 
         # reduce states to indicated populations
         ########################################

@@ -431,7 +431,7 @@ class Circuit(RepresentationBase):
         ##########################################
 
         state_idx = self.observer.target_states.index(state_variable)
-        population_idx = [self.observer.target_populations.index(key) for key in population_keys]
+        population_idx = [self.observer.population_labels.index(key) for key in population_keys]
 
         # get states from populations for all time-steps
         states = np.array([self.observer.states[state_idx][pop] for pop in population_idx]).squeeze().T
