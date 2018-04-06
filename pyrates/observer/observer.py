@@ -46,7 +46,7 @@ class CircuitObserver(object):
         else:
             self.target_populations = target_populations
         if not target_states:
-            self.target_states = ['membrane_potential', 'firing_rate']
+            self.target_states = ['membrane_potential']
         else:
             self.target_states = target_states
 
@@ -139,8 +139,8 @@ class ExternalObserver(object):
 
         # check target populations and population weights
         if not target_populations:
-            target_populations = [['PCs']]
-            target_population_weights = [[1.0]]
+            target_populations = [[pop] for pop in self.population_labels]
+            target_population_weights = [[1.0] for _ in self.population_labels]
         if not target_population_weights:
             target_population_weights = [[1.0 for __ in range(len(target_populations[0]))]
                                          for _ in range(len(target_populations))]
@@ -154,12 +154,12 @@ class ExternalObserver(object):
             for j, target in enumerate(target_group):
 
                 # get all populations that contain target label and weight them as indicated
-                target_pops = np.array([key for k, key in enumerate(self.population_labels) if target in key])
-                self.states.loc[target_pops] *= target_population_weights[i][j]
-                self.states[target] = self.states.loc[target_pops].sum()
-                self.states.drop(target_pops, axis=1)
+                target_pops = [key for k, key in enumerate(self.population_labels) if target in key]
+                self.states.loc[:, target_pops].mul(target_population_weights[i][j])
+                self.states[target + '_tmp'] = self.states.loc[:, target_pops].sum(axis=1)
+                self.states.drop(columns=target_pops, inplace=True)
 
-                target_col.append(target)
+                target_col.append(target + '_tmp')
 
             # combine grouped populations into single column
             if group_labels:
@@ -169,15 +169,15 @@ class ExternalObserver(object):
                 if group_key in self.states.keys():
                     group_key = group_key + '_' + str(i)
 
-            self.states[group_key] = self.states.loc(target_col).sum()
-            self.states.drop(target_col, axis=1)
+            self.states[group_key] = self.states.loc[:, target_col].sum(axis=1)
+            self.states.drop(columns=target_col, inplace=True)
 
     def observe(self,
                 store_observations: bool=False,
                 filename: Optional[str] = None,
                 path: Optional[str] = None,
                 time_window: Optional[list] = None
-                ) -> np.ndarray:
+                ) -> DataFrame:
         """Generates observation data from population states.
         """
 

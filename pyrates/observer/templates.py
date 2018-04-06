@@ -28,6 +28,7 @@ class fMRIObserver(ExternalObserver):
                  target_populations: Optional[list] = None,
                  target_population_weights: Optional[Union[List[list], list]] = None,
                  target_state: str = 'membrane_potential',
+                 group_labels: Optional[list] = None,
                  beta: float = 1/0.65,
                  gamma: float = 1/0.41,
                  tau: float = 0.98,
@@ -41,7 +42,8 @@ class fMRIObserver(ExternalObserver):
         super().__init__(observer=observer,
                          target_populations=target_populations,
                          target_population_weights=target_population_weights,
-                         target_state=target_state)
+                         target_state=target_state,
+                         group_labels=group_labels)
 
         # normalize population states
         if normalize:
@@ -68,7 +70,7 @@ class fMRIObserver(ExternalObserver):
                 filename: Optional[str] = None,
                 path: Optional[str] = None,
                 time_window: Optional[list] = None,
-                ) -> np.ndarray:
+                ) -> DataFrame:
         """Generates observation data from population states.
         """
 
@@ -178,6 +180,7 @@ class EEGMEGObserver(ExternalObserver):
                  target_populations: Optional[list] = None,
                  target_population_weights: Optional[Union[List[list], list]] = None,
                  target_state: str = 'membrane_potential',
+                 group_labels: Optional[list] = None,
                  signal_space: str = 'source',
                  lead_field_matrix: Optional[np.ndarray] = None,
                  source_positions: Optional[np.ndarray] = None,
@@ -192,7 +195,8 @@ class EEGMEGObserver(ExternalObserver):
         super().__init__(observer=observer,
                          target_populations=target_populations,
                          target_population_weights=target_population_weights,
-                         target_state=target_state)
+                         target_state=target_state,
+                         group_labels=group_labels)
 
         # project states into source space if wished for
         ################################################

@@ -557,11 +557,3 @@ class MoranCircuit(Circuit):
                          connectivity=connections,
                          delays=delays,
                          step_size=step_size)
-
-
-jrc = JansenRitCircuit(step_size=1e-3)
-inp = np.zeros((1000, 3, 2))
-inp[:, 0, 0] = np.random.uniform(120, 320, 1000)
-jrc.run(inp, 1.)
-from pyrates.observer import ExternalObserver
-obs = ExternalObserver(observer=jrc.observer)
