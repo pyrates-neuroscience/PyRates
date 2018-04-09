@@ -251,7 +251,7 @@ if __name__ == "__main__":
 
     # parameters
     simulation_duration = 10.0
-    step_size = 5e-4
+    step_size = 1e-3
     verbose = True
     D = True
     velocity = 2.0

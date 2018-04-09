@@ -42,7 +42,7 @@ class CircuitObserver(object):
 
         self.sampling_step_size = sampling_step_size if sampling_step_size else circuit.step_size
         if not target_populations:
-            self.population_labels = [pop for pop in circuit.populations.keys()]
+            self.population_labels = [pop for pop in circuit.populations.keys() if 'dummy' not in pop]
         else:
             self.population_labels = target_populations
         if not target_states:

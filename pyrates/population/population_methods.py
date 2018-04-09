@@ -591,7 +591,6 @@ def get_leak_current(self,
 
 def construct_state_update_function(spike_frequency_adaptation=False,
                                     synapse_efficacy_adaptation=False,
-                                    enable_modulation=False,
                                     leaky_capacitor=False
                                     ):
     if leaky_capacitor:
@@ -615,23 +614,8 @@ def construct_state_update_function(spike_frequency_adaptation=False,
     else:
         synaptic_efficacy_adaptation_snippet = ""
 
-    if enable_modulation:
-        synaptic_modulation_snippet = """if extrinsic_synaptic_modulation is not None:
-        self.extrinsic_synaptic_modulation
-        [0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation"""
-        modulation_declaration_snippet = """,
-                 extrinsic_synaptic_modulation"""
-    else:
-        synaptic_modulation_snippet = ""
-        modulation_declaration_snippet = ""
-
     func_string = f"""
-def state_update(self, extrinsic_current{modulation_declaration_snippet}
-                 ) -> None: 
-
-    self.extrinsic_current = extrinsic_current
-
-    {synaptic_modulation_snippet}
+def state_update(self) -> None: 
 
     # compute average membrane potential
     ####################################

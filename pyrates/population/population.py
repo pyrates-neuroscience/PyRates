@@ -35,25 +35,27 @@ __status__ = "Development"
 ##############################
 
 class AbstractBasePopulation(RepresentationBase):
-    """Very base class that includes DummyPopulation, to ensure consistency"""
+    """Very base class that includes DummyPopulation, to ensure consistency.
+    """
+
     def __init__(self):
         self.targets = []
         self.target_weights = []
         self.target_delays = []
 
-    def connect(self, target_synapse: Synapse, weight: float, delay: int):
+    def connect(self, target: object, weight: float, delay: int):
         """Connect to a given synapse at a target population with a given weight and delay.
 
         Parameters
         ----------
-        target_synapse
-            Synapse that population is supposed to connect to
+        target
+            Synapse or population that population is supposed to connect to
         weight
             Weight that is to be applied to the connection (=connectivity)
         delay
             Index (=time delay) at which the output is supposed to arrive at the target synapse"""
 
-        self.targets.append(target_synapse)
+        self.targets.append(target)
         self.target_weights.append(weight)
         self.target_delays.append(delay)
 
@@ -67,11 +69,6 @@ class AbstractBasePopulation(RepresentationBase):
 
     def project_to_targets(self) -> None:
         """Projects output of given population to the other circuit populations its connected to.
-
-        Parameters
-        ----------
-
-
         """
 
         # get source firing rate
@@ -1481,12 +1478,12 @@ class SecondOrderPlasticPopulationOld(PlasticPopulationOld):
         return axes
 
 
-######################################################################
-# dummy population that passes input to other populations in network #
-######################################################################
+#####################################################################
+# dummy populations that pass input to other populations in network #
+#####################################################################
 
 
-class DummyPopulation(AbstractBasePopulation):
+class SynapticInputPopulation(AbstractBasePopulation):
     """Population object used to pass certain inputs to other populations in a network.
     
     Parameters
@@ -1496,28 +1493,92 @@ class DummyPopulation(AbstractBasePopulation):
     
     """
 
-    def __init__(self, output: np.ndarray):
+    def __init__(self, output: np.ndarray, label: Optional[str] = None):
         """Instantiate dummy population.
         """
         super().__init__()
 
         self.output = output
         self.idx = 0
-        self.firing_rate = self.output[self.idx]
+        self.label = label if label else 'dummy_synaptic_input'
 
     def project_to_targets(self):
-        """Update output firing rate.
+        """Project output to pass synapse function of target.
         """
 
-        # call super method
-        super().project_to_targets()
+        self.targets[0].pass_input(self.output[self.idx])
 
-        # advance in output array
-        try:
-            self.idx += 1
-            self.firing_rate = self.output[self.idx]
-        except IndexError:
-            pass
+    def state_update(self):
+        """Advance in output array by one position.
+        """
+
+        self.idx += 1
+
+
+class ExtrinsicCurrentPopulation(AbstractBasePopulation):
+    """Population object used to pass certain inputs to other populations in a network.
+
+    Parameters
+    ----------
+    output
+        Firing rates to be passed through network
+
+    """
+
+    def __init__(self, output: np.ndarray, label: Optional[str] = None):
+        """Instantiate dummy population.
+        """
+
+        super().__init__()
+
+        self.output = output
+        self.idx = 0
+        self.label = label if label else 'dummy_extrinsic_current'
+
+    def project_to_targets(self):
+        """Pass extrinsic current to target.
+        """
+
+        self.targets[0].extrinsic_current = self.output[self.idx]
+
+    def state_update(self):
+        """Advance in output array by one position.
+        """
+
+        self.idx += 1
+
+
+class ExtrinsicModulationPopulation(AbstractBasePopulation):
+    """Population object used to pass certain inputs to other populations in a network.
+
+    Parameters
+    ----------
+    output
+        Firing rates to be passed through network
+
+    """
+
+    def __init__(self, output: np.ndarray, label: Optional[str] = None):
+        """Instantiate dummy population.
+        """
+        super().__init__()
+
+        self.output = output
+        self.idx = 0
+        self.label = label if label else 'dummy_extrinsic_modulation'
+
+    def project_to_targets(self):
+        """Project extrinsic synaptic modulation to target.
+        """
+
+        self.targets[0].extrinsic_synaptic_modulation = self.output[self.idx]
+
+    def state_update(self):
+        """Advance in output array by one position.
+        """
+
+        self.idx += 1
+
 
 ################################
 # new, all-covering population #
@@ -1525,24 +1586,35 @@ class DummyPopulation(AbstractBasePopulation):
 
 
 class Population(AbstractBasePopulation):
-    """Base neural mass or population class, behaving like a leaky capacitor.
-
-        A population is defined via a number of synapses and an axon.
+    """Base neural mass or population class, defined via a number of synapses and an axon.
 
         Parameters
         ----------
         synapses
-            Can be set to use default synapse types. These include:
-            :class:`pyrates.synapse.templates.AMPACurrentSynapse`,
-            :class:`pyrates.synapse.templates.GABAACurrentSynapse`,
-            :class:`pyrates.synapse.templates.AMPAConductanceSynapse`,
-            :class:`pyrates.synapse.templates.GABAAConductanceSynapse`.
+            Can be passed to use default synapse types. These include:
+                :class:`pyrates.synapse.templates.AMPACurrentSynapse`,
+                :class:`pyrates.synapse.templates.GABAACurrentSynapse`,
+                :class:`pyrates.synapse.templates.AMPAConductanceSynapse`,
+                :class:`pyrates.synapse.templates.GABAAConductanceSynapse`
+                :class:`pyrates.synapse.templates.JansenRitExcitatorySynapse`
+                :class:`pyrates.synapse.templates.JansenRitInhibitorySynapse`.
         axon
-            Can be set to use default axon types. These include:
-            :class:`pyrates.axon.templates.JansenRitAxon`.
+            Can be passed to use default axon types. These include:
+                :class:`pyrates.axon.templates.JansenRitAxon`
+                :class:`pyrates.axon.templates.KnoescheAxon`
+                :class:`pyrates.axon.templates.PlasticKnoescheAxon`
+                :class:`pyrates.axon.templates.SuffczynskiAxon`
+                :class:`pyrates.axon.templates.MoranAxon`.
         init_state
-            Vector defining initial state of the population. Vector entries represent the following state variables:
-            1) membrane potential (default = 0.0) [unit = V].
+            Dictionary or scalar defining the initial state of the population (default = None).
+            If a scalar is passed, it will be used as the initial membrane potential of the population.
+            If a dictionary is passed, the following key-value pairs can be used:
+                1) 'membrane_potential': scalar [unit = V].
+                2) 'firing_rate': scalar [unit = 1/s].
+                3) 'PSPs': scalar array with length equal to number of synapses [unit = V].
+                4) 'synaptic_currents': scalar array with length equal to number of synapses [unit = A].
+                5) 'extrinsic_current': scalar [unit = V or A].
+                6) 'extrinsic_synaptic_modulation': scalar array with length equal to number of synapses [unit = 1].
         step_size
             Time step-size of a single state update (default = 0.0001) [unit = s].
         max_synaptic_delay
@@ -1561,14 +1633,12 @@ class Population(AbstractBasePopulation):
             (default = 0) [unit = s]
         synapse_params
             List of dictionaries containing parameters for custom synapse type. For parameter explanation see
-            documentation of respective synapse class (:class:`DoubleExponentialSynapse`) (default = None).
+            documentation of respective synapse class (default = None).
         axon_params
             Parameters for custom axon type. For parameter explanation see documentation of respective axon type
-            (:class:`SigmoidAxon`) (default = False).
-        store_state_variables
-            If false, old state variables will be erased after each state-update (default = False).
+            (default = False).
         label
-            Can be used to label the population (default = 'Custom').
+            If passed, will be used as (unique) identifier of the population.
 
         Attributes
         ----------
@@ -1576,10 +1646,6 @@ class Population(AbstractBasePopulation):
             Synapse instances. See documentation of :class:`Synapse`.
         axon : :class:`Axon` instance
             Axon instance. See documentation of :class:`Axon`.
-        state_variables : :obj:`list` of :obj:`np.ndarray`
-            Collection of state variable vectors over state updates. Vector entries represent the following state
-            variables:
-            1) membrane potential [unit = V]
         synaptic_currents : np.ndarray
             Vector with synaptic currents produced by the non-modulatory synapses at time-point `t`.
         extrinsic_current : float
@@ -1714,12 +1780,40 @@ class Population(AbstractBasePopulation):
             else:
                 self.features['integro_differential'] = True
 
+        # display the features of the population
+        if self.features['leaky_capacitor']:
+            lc_snippet = 'The membrane potential dynamics will be described via the leaky-capacitor formalism.'
+        else:
+            lc_snippet = 'The membrane potential dynamics will be described by convolutions of the synaptic kernels ' \
+                         'with their respective input.'
+        if self.features['integro_differential']:
+            kernel_snippet = 'The synaptic kernels will be evaluated numerically.'
+        else:
+            kernel_snippet = 'The synaptic kernel convolutions will be evaluated analytically.'
+        if self.features['synaptic_plasticity'] and self.features['axonal_plasticity']:
+            plasticity_snippet = 'Both synaptic and axonal plasticity will be enabled.'
+        elif self.features['synaptic_plasticity']:
+            plasticity_snippet = 'Synaptic plasticity will be enabled.'
+        elif self.features['axonal_plasticity']:
+            plasticity_snippet = 'Axonal plasticity will be enabled.'
+        else:
+            plasticity_snippet = 'No short-term plasticity mechanisms will be enabled.'
+        if self.features['modulation_enabled']:
+            modulation_snippet = 'Extrinsic synaptic modulation will be enabled.'
+        else:
+            modulation_snippet = 'Extrinsic synaptic modulation will not be enabled.'
+
+        setup_msg = f"""Given the passed arguments, the population will be initialized with the following features:
+                a) {lc_snippet}
+                b) {kernel_snippet}
+                c) {plasticity_snippet}
+                d) {modulation_snippet}"""
+
         # build state update function
         #############################
 
         exec(construct_state_update_function(spike_frequency_adaptation=self.features['axonal_plasticity'],
                                              synapse_efficacy_adaptation=self.features['synaptic_plasticity'],
-                                             enable_modulation=self.features['modulation_enabled'],
                                              leaky_capacitor=self.features['leaky_capacitor'])
              )
 
@@ -1753,6 +1847,18 @@ class Population(AbstractBasePopulation):
 
         self.synapse_labels = list(self.synapses.keys())
 
+        # check whether synapse parameters fit with state-update formalism
+        for _, syn in self.synapses.items():
+            if self.features['leaky_capacitor'] and abs(syn.efficacy) > 1e-7:
+                raise Warning('The synaptic efficacy value does not seem to reflect a proper synaptic current.'
+                              'Consider to either change the synaptic parameters or turn of the leaky capacitor'
+                              'description of the populations membrane potential change by setting tau_leak = None.')
+            elif not self.features['leaky_capacitor'] and abs(syn.efficacy) < 1e-7:
+                raise Warning('The synaptic efficacy value does not seem to reflect a proper membrane potential.'
+                              'Consider to either change the synaptic parameters or turn on the leaky capacitor'
+                              'description of the populations membrane potential change by passing appropriate '
+                              'parameters for tau_leak, membrane_capacitance and resting_potential.')
+
         # set axon
         ##########
 
@@ -1773,7 +1879,7 @@ class Population(AbstractBasePopulation):
             self.leak_current = 0.
         if not self.features['integro_differential']:
             self.synaptic_currents_new = np.zeros(self.n_synapses)
-            self.PSPs_new =  np.zeros(self.n_synapses)
+            self.PSPs_new = np.zeros(self.n_synapses)
         if self.features['modulation_enabled']:
             self.extrinsic_synaptic_modulation = np.ones(self.n_synapses)
 
