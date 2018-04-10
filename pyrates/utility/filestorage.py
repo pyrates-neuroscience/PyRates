@@ -182,9 +182,7 @@ def get_simulation_data(circuit, state_variable='membrane_potential', pop_keys: 
     states = circuit.get_population_states(state_variable=state_variable, population_keys=pop_keys,
                                            time_window=time_window)
 
-    labels = []
-    for pop in circuit.populations.keys():
-        labels.append(pop)
+    labels = [pop for pop in circuit.populations.keys() if 'dummy' not in pop]
 
     # for key, item in run_info.items():
     #     if isinstance(item, np.ndarray):

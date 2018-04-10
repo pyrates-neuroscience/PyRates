@@ -11,7 +11,6 @@ from copy import deepcopy
 from matplotlib.axes import Axes
 from typing import List, Optional, Union, Dict, Callable, TypeVar
 from types import MethodType
-from pandas import DataFrame
 
 from pyrates.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
 from pyrates.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
@@ -2022,6 +2021,9 @@ class Population(AbstractBasePopulation):
             else:
                 raise AttributeError('Invalid synapse type!')
 
+            # store label of synapse on synapse
+            self.synapses[synapse_labels[i]].label = synapse_labels[i]
+
     def _set_axon(self,
                   axon_subtype: Optional[str] = None,
                   axon_type: str = 'SigmoidAxon',
@@ -2191,7 +2193,7 @@ class Population(AbstractBasePopulation):
 
         if self.features['synaptic_plasticity'] and copy_of:
 
-            idx = self.synapse_labels.find(copy_of)
+            idx = self.synapse_labels.index(copy_of)
             if self.synapse_efficacy_adaptation[idx]:
 
                 if max_firing_rate is None:

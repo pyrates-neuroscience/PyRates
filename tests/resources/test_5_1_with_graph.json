@@ -25,7 +25,6 @@
                     "init_state": 0.0,
                     "step_size": 0.0009765625,
                     "max_synaptic_delay": null,
-                    "max_population_delay": 0,
                     "synapse_params": [
                         null,
                         null
@@ -64,7 +63,6 @@
                     "init_state": 0.0,
                     "step_size": 0.0009765625,
                     "max_synaptic_delay": null,
-                    "max_population_delay": 0,
                     "synapse_params": [
                         null
                     ],
@@ -100,7 +98,6 @@
                     "init_state": 0.0,
                     "step_size": 0.0009765625,
                     "max_synaptic_delay": null,
-                    "max_population_delay": 0,
                     "synapse_params": [
                         null
                     ],

@@ -215,7 +215,6 @@ def test_5_5_save_run_data_to_file():
     # recreate circuit from file
     circuit = construct_circuit_from_file(filename, path)
     n_pop = circuit.n_populations
-    n_syn = circuit.n_synapses
     # save a new config, if necessary
     # circuit.to_json(path=path, filename=filename)
 
@@ -232,8 +231,8 @@ def test_5_5_save_run_data_to_file():
 
     n_time_steps = int(simulation_time / step_size)
 
-    synaptic_inputs = np.zeros((n_time_steps, n_pop, n_syn))
-    synaptic_inputs[start_stim:end_stim, 1, 0] = mag_stim
+    synaptic_inputs = np.zeros((n_time_steps, 1))
+    synaptic_inputs[start_stim:end_stim, 0] = mag_stim
 
     # run network simulation
     ########################
@@ -241,12 +240,12 @@ def test_5_5_save_run_data_to_file():
     # print('| Test VII - Jansen-Rit Circuit |')
 
     circuit.run(synaptic_inputs=synaptic_inputs,
+                synaptic_input_pops=['JR_EINs'],
+                synaptic_input_syns=['excitatory'],
                 simulation_time=simulation_time)
 
     # noinspection PyTypeChecker
-    states = circuit.get_population_states(state_variable='membrane_potential')  # - 0.075  # type: np.ndarray
-    # states = states[1:, :]
-    # for some reason, the get_population_states function returns one more time point than the input.
+    states = circuit.get_population_states(state_variable='membrane_potential')  # type: np.ndarray
 
     assert states.shape == (n_time_steps, n_pop)
 
