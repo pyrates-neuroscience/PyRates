@@ -4,8 +4,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-# from networkx import MultiDiGraph
+from pandas import DataFrame
 from typing import List, Optional, Union, Callable
+from networkx import relabel_nodes
 
 from pyrates.population import Population
 from pyrates.population import SynapticInputPopulation, ExtrinsicCurrentPopulation, ExtrinsicModulationPopulation
@@ -159,7 +160,7 @@ class Circuit(RepresentationBase):
                                 source_pops.append(pop_labels[source])
                                 target_pops.append(pop_labels[target])
                                 target_syns.append(key)
-                                delays_tmp.append(int(delay / step_size))
+                                delays_tmp.append(delay)
                                 connectivity_tmp.append(connectivity[target, source, syn] * delay_weight)
 
                         else:
@@ -174,12 +175,6 @@ class Circuit(RepresentationBase):
             connectivity = connectivity_tmp
             delays = delays_tmp
 
-        else:
-
-            # turn delay information into number of time-steps
-            for i, d in enumerate(delays):
-                delays[i] = int(d / step_size)
-
         # set population specific properties
         ####################################
 
@@ -189,8 +184,13 @@ class Circuit(RepresentationBase):
             self.populations[pop].clear(disconnect=True)
 
             # update max_population_delays according to information in D
-            self.populations[pop].max_population_delay = max([delays[j] for j in range(len(delays))
-                                                              if target_pops[j] == pop])
+            target_delays = list()
+            for t in range(len(delays)):
+                for snippet in target_pops[t].split('_'):
+                    if snippet not in pop:
+                        break
+                target_delays.append(delays[t])
+            self.populations[pop].max_population_delay = max(target_delays)
 
             # set population step size to circuit step size
             self.populations[pop].step_size = step_size
@@ -222,14 +222,36 @@ class Circuit(RepresentationBase):
     def C(self):
         """Read-only value for the connectivity matrix.
         """
-        raise AttributeError('Not implement yet')
+
+        connectivity = np.zeros((self.n_populations, self.n_populations))
+        nodes = list(self.network_graph.nodes.keys())
+        for i, source in enumerate(nodes):
+            conns = self.network_graph.adj[source]
+            for target in conns.keys():
+                val = 0
+                for _, conn in conns[target].items():
+                    val += conn['weight']
+                connectivity[nodes.index(target), i] = val
+
+        return connectivity
 
     # noinspection PyPep8Naming
     @property
     def D(self):
         """Read-only value for the delay matrix.
         """
-        raise AttributeError('Not implement yet')
+
+        delays = np.zeros((self.n_populations, self.n_populations))
+        nodes = list(self.network_graph.nodes.keys())
+        for i, source in enumerate(nodes):
+            conns = self.network_graph.adj[source]
+            for target in conns.keys():
+                val = list()
+                for _, conn in conns[target].items():
+                    val.append(conn['delay'])
+                delays[nodes.index(target), i] = np.mean(val)
+
+        return delays
 
     def _prepare_run(self,
                      synaptic_inputs: np.ndarray,
@@ -249,8 +271,11 @@ class Circuit(RepresentationBase):
         # save run parameters to instance variable
         ##########################################
 
-        self.run_info = dict(synaptic_inputs=synaptic_inputs, time_vector=[],
-                             extrinsic_current=extrinsic_current, extrinsic_modulation=extrinsic_modulation)
+        self.run_info = dict(synaptic_inputs=synaptic_inputs, synaptic_input_pops=synaptic_input_pops,
+                             synaptic_input_syns=synaptic_input_syns, time_vector=[],
+                             extrinsic_current=extrinsic_current, extrinsic_current_pops=extrinsic_current_pops,
+                             extrinsic_modulation=extrinsic_modulation,
+                             extrinsic_modulation_pops=extrinsic_modulation_pops)
 
         # check input parameters
         ########################
@@ -284,6 +309,18 @@ class Circuit(RepresentationBase):
                                  'time steps!')
             if len(extrinsic_modulation) != extrinsic_modulation_pops:
                 raise ValueError('For each synaptic modulation array, a target population has to be passed!')
+
+        # save run parameters to instance variable
+        ##########################################
+
+        time = (np.arange(0, simulation_time_steps, 1) * self.step_size + self.step_size).tolist()
+        cols = [synaptic_input_pops[i] + '_' + synaptic_input_syns[i] for i in range(synaptic_inputs.shape[1])]
+        self.run_info = DataFrame(data=synaptic_inputs, index=time, columns=cols)
+
+        if extrinsic_current_pops:
+            self.run_info[extrinsic_current_pops] = extrinsic_current
+        if extrinsic_modulation_pops:
+            self.run_info[extrinsic_modulation_pops] = extrinsic_modulation
 
         # add dummy populations to graph
         ################################
@@ -413,7 +450,6 @@ class Circuit(RepresentationBase):
 
             # update time-variant variables
             self.t += self.step_size
-            self.run_info["time_vector"].append(self.t)
 
             # observe system variables
             self.observer.store_state_variables(circuit=self)
@@ -430,6 +466,9 @@ class Circuit(RepresentationBase):
             if 'dummy' in node:
                 self.network_graph.remove_node(node)
                 self.n_nodes -= 1
+                if node in self.populations.keys():
+                    self.populations.pop(node)
+                    self.n_populations -= 1
 
     def get_population_states(self,
                               state_variable: str = 'membrane_potential',
@@ -508,15 +547,25 @@ class Circuit(RepresentationBase):
         for source, target, weight, delay, syn in zip(source_pops, target_pops, conn_strengths, conn_delays,
                                                       target_syns):
 
+            # turn unit of delays from second into step-size
+            delay = int(delay / self.step_size)
+
             # check for populations matching the passed source & population strings
             source_matches = list()
             target_matches = list()
             for pop_label in pop_labels:
 
+                pop_label_split = pop_label.split('_')
+
                 # check for match in source string
                 append = True
                 for s in source.split('_'):
-                    if s not in pop_label:
+                    s_found = False
+                    for p in pop_label_split:
+                        if s == p:
+                            s_found = True
+                            break
+                    if not s_found:
                         append = False
                         break
                 if append:
@@ -525,7 +574,12 @@ class Circuit(RepresentationBase):
                 # check for match in target string
                 append = True
                 for t in target.split('_'):
-                    if t not in pop_label:
+                    t_found = False
+                    for p in pop_label_split:
+                        if t == p:
+                            t_found = True
+                            break
+                    if not t_found:
                         append = False
                         break
                 if append:
@@ -613,7 +667,7 @@ class Circuit(RepresentationBase):
 
         # add edges
         for target, weight, delay, syn in zip(target_nodes, conn_weights, conn_delays, conn_targets):
-            self.add_edge(label, target, weight=weight, delay=delay, synapse=syn)
+            self.add_edge(label, target, weight=weight, delay=int(delay / self.step_size), synapse=syn)
 
         self.n_nodes += 1
 
@@ -622,6 +676,7 @@ class Circuit(RepresentationBase):
 
         if add_to_population_list:
             self.populations[label] = data
+            self.n_populations += 1
 
     def add_edge(self,
                  source: str,
@@ -1130,8 +1185,8 @@ class CircuitFromCircuit(Circuit):
     def __init__(self,
                  circuits: List[Circuit],
                  connectivity: Union[List[float], np.ndarray],
-                 source_populations: List[str],
-                 target_populations: List[str],
+                 source_populations: Optional[List[str]] = None,
+                 target_populations: Optional[List[str]] = None,
                  target_synapses: Optional[List[str]] = None,
                  delays: Optional[Union[np.ndarray, List[float]]] = None,
                  delay_distributions: Optional[np.ndarray] = None,
@@ -1164,22 +1219,26 @@ class CircuitFromCircuit(Circuit):
         # loop over circuits
         for i in range(n_circuits):
 
-            # collect information from each population
+            # collect populations of circuit and update their label
             for label, pop in circuits[i].populations.items():
 
-                # update population label
-                pop.label = circuit_labels[i] + '_' + label
-
-                # collect connectivity information
-                for j, target in enumerate(circuits[i].network_graph.adj[label]):
-                    connectivity_coll.append(pop.target_weights[j])
-                    delays_coll.append(pop.target_delays[j] * step_size)
-                    source_pops.append(pop.label)
-                    target_pops.append(circuit_labels[i] + '_' + target)
-                    target_syns.append(pop.targets[j].label)
+                # label updates
+                new_label = circuit_labels[i] + '_' + label
+                pop.label = new_label
+                circuits[i].network_graph = relabel_nodes(circuits[i].network_graph, mapping={label: new_label})
+                circuits[i].populations[new_label] = circuits[i].populations.pop(label)
 
                 # add population
                 populations.append(pop)
+
+            # collect connectivity information from each circuit
+            for label, pop in circuits[i].populations.items():
+                for j, target in enumerate(circuits[i].network_graph.adj[label]):
+                    connectivity_coll.append(pop.target_weights[j])
+                    delays_coll.append(pop.target_delays[j] * step_size)
+                    source_pops.append(label)
+                    target_pops.append(target)
+                    target_syns.append(pop.targets[j].label)
 
         # set inter-circuit connectivity
         ################################
@@ -1215,17 +1274,24 @@ class CircuitFromCircuit(Circuit):
                         count += 1
 
             # flatten all matrices
-            connectivity = connectivity.flatten()
+            idx = connectivity > 0
+            idx_delays = np.sum(idx, axis=2) > 0
+            connectivity = connectivity[idx]
             if delays is None:
                 delays = [0.] * len(connectivity)
             elif isinstance(delays, np.ndarray):
                 if len(delays.shape) == 2:
-                    delays = delays.flatten()
+                    delays = delays[idx_delays]
                 else:
-                    delays = np.reshape(delays, (delays.shape[0] * delays.shape[1], delays.shape[2]))
+                    delays = list()
+                    for d in range(delays.shape[2]):
+                        delays_tmp = delays[:, :, d].squeeze()
+                        delays.append(delays_tmp[idx_delays])
             if delay_distributions is not None:
-                delay_distributions = np.reshape(delay_distributions,
-                                                 (delays.shape[0] * delays.shape[1], delays.shape[2]))
+                delay_distributions = list()
+                for d in range(delays.shape[2]):
+                    delay_dists = delay_distributions[:, :, d].squeeze()
+                    delay_distributions.append(delay_dists[idx_delays])
 
         # loop over all connections and add information to coll lists
         for i, (conn, delay, source, target, syn) in enumerate(zip(connectivity, delays, source_populations,

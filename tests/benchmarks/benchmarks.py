@@ -34,7 +34,8 @@ __status__ = "Development"
 
 
 def run_JR_circuit_benchmark(simulation_time=1.0, step_size=1 / 2048, param_names=None, param_values=None,
-                             synaptic_inputs=None, verbose=False, max_synaptic_delay=0.05):
+                             synaptic_inputs=None, synaptic_input_pops=None, synaptic_input_syns=None,
+                             verbose=False):
     """
     Runs a benchmark on a single Jansen-Rit type microcircuit (3 interconnected neural populations).
 
@@ -57,15 +58,17 @@ def run_JR_circuit_benchmark(simulation_time=1.0, step_size=1 / 2048, param_name
         # synaptic inputs
         mu_stim = 200.0
         std_stim = 20.0
-        synaptic_inputs = np.zeros((int(simulation_time / step_size), 3, 2))
-        synaptic_inputs[:, 1, 0] = std_stim * np.random.random(synaptic_inputs.shape[0]) + mu_stim
-        synaptic_inputs[:, 0, 0] = 0 * np.random.random(synaptic_inputs.shape[0]) + mu_stim / 2.
+        synaptic_inputs = np.zeros((int(simulation_time / step_size), 2))
+        synaptic_inputs[:, 0] = std_stim * np.random.random(synaptic_inputs.shape[0]) + mu_stim
+        synaptic_inputs[:, 1] = 0 * np.random.random(synaptic_inputs.shape[0]) + mu_stim / 2.
+        synaptic_input_pops = ['JR_EINs', 'JR_PCs']
+        synaptic_input_syns = ['excitatory', 'excitatory']
 
     #########################
     # initialize JR circuit #
     #########################
 
-    nmm = JansenRitCircuit(step_size=step_size, max_synaptic_delay=max_synaptic_delay)
+    nmm = JansenRitCircuit(step_size=step_size)
 
     if param_names:
 
@@ -76,12 +79,14 @@ def run_JR_circuit_benchmark(simulation_time=1.0, step_size=1 / 2048, param_name
     # perform benchmark #
     #####################
 
-    print('Starting simulation of single Jansen Rit Cirucit...')
+    print('Starting simulation of single Jansen Rit Circuit...')
 
     start_time = time.clock()
 
     nmm.run(simulation_time=simulation_time,
             synaptic_inputs=synaptic_inputs,
+            synaptic_input_pops=synaptic_input_pops,
+            synaptic_input_syns=synaptic_input_syns,
             verbose=verbose)
 
     end_time = time.clock()
@@ -94,7 +99,8 @@ def run_JR_circuit_benchmark(simulation_time=1.0, step_size=1 / 2048, param_name
 
 
 def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None, connectivity_scaling=100.0, D=True,
-                             velocity=1.0, synaptic_input=None, verbose=False, max_synaptic_delay=0.05):
+                             velocity=1.0, synaptic_input=None, synaptic_input_pops=None,
+                             synaptic_input_syns=None, verbose=False):
     """
     Runs benchmark for a number of JR circuits connected in a network.
 
@@ -107,8 +113,6 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     :param velocity:
     :param synaptic_input:
     :param verbose:
-    :param variable_step_size:
-    :param max_synaptic_delay:
 
     :return: simulation duration [unit = s]
 
@@ -118,6 +122,9 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     # set simulation parameters #
     #############################
 
+    # number of JRCs
+    n_circuits = 33
+
     # connectivity matrix
     if C is None:
 
@@ -126,9 +133,8 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
         C *= connectivity_scaling
 
         # hack because, currently a third dimension is expected
-        C = np.array([C, np.zeros_like(C)])
-        print(C.shape)
-        C = C.reshape((33, 33, 2))
+        C = np.reshape(C, (C.shape[0], C.shape[1], 1))
+        C = np.concatenate((C, np.zeros_like(C)), axis=2)
 
         # create full connectivity matrix
         # n_pops = 3
@@ -150,6 +156,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     if D:
 
         D = loadmat('../resources/D')['D']
+        D /= velocity * 1e3
 
         # D = np.zeros([N * n_pops, N * n_pops])
         # for i in range(N):
@@ -158,48 +165,27 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
 
     else:
 
-        D = np.zeros((33, 33))
-
-    # connection arguments
-    connection_strengths = list()
-    source_populations = list()
-    target_populations = list()
-    target_synapses = list()
-    delays = list()
-    for i in range(C.shape[0]):
-        for j in range(C.shape[1]):
-            for k in range(C.shape[2]):
-                if C[i, j, k] > 0:
-                    connection_strengths.append(C[i, j, k])
-                    source_populations.append(j*3)
-                    target_populations.append(i*3)
-                    target_synapses.append(k)
-                    delays.append(D[i, j] / velocity)
+        D = np.zeros((n_circuits, n_circuits))
 
     # network input
-    n_pops = 3
     if synaptic_input is None:
-        synaptic_input = np.zeros([int(np.ceil(simulation_time / step_size)), N * n_pops, 2])
-        idx_pcs = np.mod(np.arange(N * n_pops), n_pops) == 0
-        idx_eins = np.mod(np.arange(N * n_pops), n_pops) == 1
-        synaptic_input[:, idx_pcs, 0] = np.random.randn(int(np.ceil(simulation_time / step_size)), N) + 100.0
-        synaptic_input[:, idx_eins, 0] = 22 * np.random.randn(int(np.ceil(simulation_time / step_size)), N) + 200.0
+        simulation_steps = int(np.ceil(simulation_time / step_size))
+        synaptic_input = np.random.uniform(120, 320, (simulation_steps, n_circuits))
+        synaptic_input_pops = ['Circ' + str(i) + '_JR_PCs' for i in range(n_circuits)]
+        synaptic_input_syns = ['excitatory' for _ in range(n_circuits)]
 
     # circuits
-    circuits = [JansenRitCircuit(step_size=step_size, max_synaptic_delay=max_synaptic_delay) for _ in range(33)]
+    circuits = [JansenRitCircuit(step_size=step_size) for _ in range(n_circuits)]
 
     ################
     # set up model #
     ################
 
-    from pyrates.circuit import CircuitFromPopulations
     from pyrates.circuit import CircuitFromCircuit
     nmm = CircuitFromCircuit(circuits=circuits,
-                             connection_strengths=connection_strengths,
-                             source_populations=source_populations,
-                             target_populations=target_populations,
-                             target_synapses=target_synapses,
-                             delays=delays,
+                             connectivity=C,
+                             delays=D,
+                             synapse_types=['excitatory', 'inhibitory']
                              )
 
     #####################
@@ -211,6 +197,8 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     start_time = time.clock()
 
     nmm.run(synaptic_inputs=synaptic_input,
+            synaptic_input_pops=synaptic_input_pops,
+            synaptic_input_syns=synaptic_input_syns,
             simulation_time=simulation_time,
             verbose=verbose)
 
@@ -251,19 +239,17 @@ if __name__ == "__main__":
 
     # parameters
     simulation_duration = 10.0
-    step_size = 1e-3
+    step_size = 5e-4
     verbose = True
     D = True
     velocity = 2.0
     connectivity_scaling = 50.0
-    max_synaptic_delay = 0.05
 
     if run_first:
         # single JR circuit
         sim_dur_JR_circuit = run_JR_circuit_benchmark(simulation_time=simulation_duration,
                                                       step_size=step_size,
-                                                      verbose=verbose,
-                                                      max_synaptic_delay=max_synaptic_delay)
+                                                      verbose=verbose)
 
     if run_second:
         # JR network (33 connected JR circuits)
@@ -272,8 +258,7 @@ if __name__ == "__main__":
                                                       D=D,
                                                       velocity=velocity,
                                                       connectivity_scaling=connectivity_scaling,
-                                                      verbose=verbose,
-                                                      max_synaptic_delay=0.05)
+                                                      verbose=verbose)
 
     ################
     # memory usage #

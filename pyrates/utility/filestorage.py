@@ -184,24 +184,7 @@ def get_simulation_data(circuit, state_variable='membrane_potential', pop_keys: 
 
     labels = [pop for pop in circuit.populations.keys() if 'dummy' not in pop]
 
-    # for key, item in run_info.items():
-    #     if isinstance(item, np.ndarray):
-    #         run_info[key] = DataFrame(data=item, columns=labels)
-
-    states = DataFrame(data=states, index=run_info["time_vector"], columns=labels)
-    for key, item in run_info.items():
-        if key == "time_vector" or item is None:
-            continue
-        if item.ndim == 3:
-            # flatten 3D array
-            flattened = {}
-            for pop_idx in range(item.shape[1]):
-                for syn_idx in range(item.shape[2]):
-                    flattened[(f"{pop_idx} {labels[pop_idx]}", syn_idx)] = item[:, pop_idx, syn_idx]
-            run_info[key] = DataFrame(flattened, index=run_info["time_vector"])
-        elif item.ndim == 2:
-            run_info[key] = DataFrame(data=item, index=run_info["time_vector"], columns=labels)
-    # run_info = DataFrame.from_dict(run_info, "columns")
+    states = DataFrame(data=states, index=run_info.index, columns=labels)
 
     return run_info, states
 
