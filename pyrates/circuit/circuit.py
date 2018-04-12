@@ -292,7 +292,7 @@ class Circuit(RepresentationBase):
             synaptic_inputs = np.array(synaptic_inputs_tmp).T if synaptic_inputs_tmp else None
 
         # check synaptic input arguments for correct dimensionalities
-        if synaptic_inputs:
+        if synaptic_inputs is not None:
             if synaptic_inputs.shape[0] != simulation_time_steps:
                 raise ValueError('First dimension of synaptic input has to match the number of simulation time steps!\n'
                                  f'input: {synaptic_inputs.shape[0]}, time_steps: {simulation_time_steps}')
@@ -339,7 +339,8 @@ class Circuit(RepresentationBase):
 
         time = (np.arange(0, simulation_time_steps, 1) * self.step_size + self.step_size).tolist()
         if synaptic_inputs is not None:
-            cols = [synaptic_input_pops[i] + '_' + synaptic_input_syns[i] for i in range(synaptic_inputs.shape[1])]
+            cols = [synaptic_input_pops[i] + '_' + synaptic_input_syns[i] + '_inp'
+                    for i in range(synaptic_inputs.shape[1])]
             self.run_info = DataFrame(data=synaptic_inputs, index=time, columns=cols)
         else:
             self.run_info = DataFrame(data=np.zeros((simulation_time_steps, 1)), index=time,
@@ -347,10 +348,12 @@ class Circuit(RepresentationBase):
 
         if extrinsic_current_pops:
             for i, pop in enumerate(extrinsic_current_pops):
-                self.run_info[pop] = extrinsic_current[:, i]
+                self.run_info[pop + '_curr'] = extrinsic_current[:, i]
         if extrinsic_modulation_pops:
             for i, pop in enumerate(extrinsic_modulation_pops):
-                self.run_info[pop] = extrinsic_modulation[i]
+                for syn in range(extrinsic_modulation[i].shape[1]):
+                    syn_keys = list(self.populations[pop].synapses.keys())
+                    self.run_info[pop + '_' + syn_keys[syn] + '_mod'] = extrinsic_modulation[i][:, syn]
 
         # add dummy populations to graph
         ################################
@@ -375,7 +378,6 @@ class Circuit(RepresentationBase):
                                                          label='extrinsic_current_dummy_' + str(count)),
                               target_nodes=[pop],
                               conn_weights=[1.],
-                              conn_targets=[pop],
                               add_to_population_list=True,
                               label='extrinsic_current_dummy_' + str(count))
                 count += 1
@@ -388,7 +390,6 @@ class Circuit(RepresentationBase):
                                                             label='extrinsic_modulation_dummy_' + str(count)),
                               target_nodes=[pop],
                               conn_weights=[1.],
-                              conn_targets=[pop],
                               add_to_population_list=True,
                               label='extrinsic_modulation_dummy_' + str(count))
                 count += 1
@@ -653,7 +654,7 @@ class Circuit(RepresentationBase):
                              ExtrinsicModulationPopulation],
                  target_nodes: List[str],
                  conn_weights: List[float],
-                 conn_targets: List[str],
+                 conn_targets: Optional[List[str]] = None,
                  conn_delays: Optional[List[float]] = None,
                  label: Optional[str] = None,
                  add_to_population_list: bool = False
@@ -689,6 +690,8 @@ class Circuit(RepresentationBase):
         if not label:
             label = str(len(self.network_graph.nodes))
 
+        conn_targets = check_nones(conn_targets, len(target_nodes))
+
         # add to network graph
         ######################
 
@@ -713,7 +716,7 @@ class Circuit(RepresentationBase):
                  target: str,
                  weight: float,
                  delay: float,
-                 synapse: str,
+                 synapse: Optional[str] = None,
                  copy_synapse: bool = False,
                  copy_label: Optional[str] = None
                  ) -> None:
@@ -741,27 +744,38 @@ class Circuit(RepresentationBase):
         # check passed synapse type
         ###########################
 
-        if synapse not in self.populations[target].synapses.keys():
-            for syn in self.populations[target].synapses.keys():
+        synapse_keys = list(self.populations[target].synapses.keys())
+        if synapse and synapse not in synapse_keys:
+            for i, syn in enumerate(synapse_keys):
                 if synapse in syn:
+                    synapse = syn
                     break
-            synapse = syn
+                elif i >= len(synapse_keys):
+                    raise ValueError('No matching synapse was found on population ' + target + ' for synapse key '
+                                     + synapse)
 
         # add edge
         ##########
-        if copy_synapse:
 
-            synapse_copy = self.populations[target].copy_synapse(synapse,
-                                                                 copy_key=copy_label,
-                                                                 max_firing_rate=self.populations
-                                                                 [source].axon.transfer_function_args
-                                                                 ['max_firing_rate'])
-            self.network_graph.add_edge(source, target, weight=weight, delay=delay, synapse=synapse_copy)
+        if synapse:
+
+            if copy_synapse:
+
+                synapse_copy = self.populations[target].copy_synapse(synapse,
+                                                                     copy_key=copy_label,
+                                                                     max_firing_rate=self.populations
+                                                                     [source].axon.transfer_function_args
+                                                                     ['max_firing_rate'])
+                self.network_graph.add_edge(source, target, weight=weight, delay=delay, synapse=synapse_copy)
+
+            else:
+
+                self.network_graph.add_edge(source, target, weight=weight, delay=delay,
+                                            synapse=self.populations[target].synapses[synapse])
 
         else:
 
-            self.network_graph.add_edge(source, target, weight=weight, delay=delay,
-                                        synapse=self.populations[target].synapses[synapse])
+            self.network_graph.add_edge(source, target, weight=weight, delay=delay)
 
     def clear(self):
         """Clears states of all populations
@@ -902,7 +916,8 @@ class CircuitFromScratch(Circuit):
                  spike_frequency_adaptation: Optional[List[Callable[[float], float]]] = None,
                  spike_frequency_adaptation_args: Optional[List[dict]] = None,
                  synapse_efficacy_adaptation: Optional[List[List[Callable[[float], float]]]] = None,
-                 synapse_efficacy_adaptation_args: Optional[List[List[dict]]] = None
+                 synapse_efficacy_adaptation_args: Optional[List[List[dict]]] = None,
+                 enable_modulation: bool = False
                  ) -> None:
         """Instantiates circuit from synapse/axon types and parameters.
         """
@@ -1033,7 +1048,7 @@ class CircuitFromScratch(Circuit):
                           'synapse_efficacy_adaptation': synapse_efficacy_adaptation_tmp,
                           'synapse_efficacy_adaptation_args': synapse_efficacy_adaptation_args_tmp,
                           'tau_leak': tau_leak[i], 'resting_potential': resting_potential[i],
-                          'membrane_capacitance': membrane_capacitance[i]}
+                          'membrane_capacitance': membrane_capacitance[i], 'enable_modulation': enable_modulation}
 
             populations.append(Population(**pop_params))
 

@@ -46,7 +46,8 @@
                     "synapse_efficacy_adaptation_args": null,
                     "tau_leak": null,
                     "resting_potential": null,
-                    "membrane_capacitance": null
+                    "membrane_capacitance": null,
+                    "enable_modulation": false
                 },
                 "id": "JR_PCs"
             },
@@ -81,7 +82,8 @@
                     "synapse_efficacy_adaptation_args": null,
                     "tau_leak": null,
                     "resting_potential": null,
-                    "membrane_capacitance": null
+                    "membrane_capacitance": null,
+                    "enable_modulation": false
                 },
                 "id": "JR_EINs"
             },
@@ -116,7 +118,8 @@
                     "synapse_efficacy_adaptation_args": null,
                     "tau_leak": null,
                     "resting_potential": null,
-                    "membrane_capacitance": null
+                    "membrane_capacitance": null,
+                    "enable_modulation": false
                 },
                 "id": "JR_IINs"
             }

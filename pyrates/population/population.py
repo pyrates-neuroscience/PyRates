@@ -1665,6 +1665,8 @@ class Population(AbstractBasePopulation):
             See documentation of parameter `membrane_capacitance`.
         label
             See documentation of parameter 'label'.
+        verbose
+            If true, a summary of the population features will be displayed during the initialization.
 
         """
 
@@ -1688,7 +1690,8 @@ class Population(AbstractBasePopulation):
                  spike_frequency_adaptation: Optional[Callable[[float], float]] = None,
                  spike_frequency_adaptation_args: Optional[dict] = None,
                  synapse_efficacy_adaptation: Optional[List[Callable[[float], float]]] = None,
-                 synapse_efficacy_adaptation_args: Optional[List[dict]] = None
+                 synapse_efficacy_adaptation_args: Optional[List[dict]] = None,
+                 verbose: bool = False
                  ) -> None:
         """Instantiation of base population.
         """
@@ -1802,11 +1805,15 @@ class Population(AbstractBasePopulation):
         else:
             modulation_snippet = 'Extrinsic synaptic modulation will not be enabled.'
 
-        setup_msg = f"""Given the passed arguments, the population will be initialized with the following features:
+        setup_msg = f"""Given the passed arguments, the population {label} will be initialized with the following 
+        features:
                 a) {lc_snippet}
                 b) {kernel_snippet}
                 c) {plasticity_snippet}
                 d) {modulation_snippet}"""
+        if verbose:
+            print(setup_msg)
+            print('\n')
 
         # build state update function
         #############################

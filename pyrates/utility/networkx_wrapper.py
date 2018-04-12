@@ -14,15 +14,18 @@ class WrappedMultiDiGraph(MultiDiGraph):
     def add_edge(self, source, target, weight=1, delay=0, synapse=None):
 
         if synapse is None:
-            raise ValueError("No Synapse was passed, please pass a target synapse.")
+
+            # connect source to target population (directly)
+            source_pop = self.nodes[source]["data"]  # type: Population
+            source_pop.connect(self.nodes[target]["data"], weight, delay)
+
+        else:
+
+            # connect source population to synapse on target population
+            source_pop = self.nodes[source]["data"]  # type: Population
+            source_pop.connect(synapse, weight, delay)
 
         super().add_edge(source, target, weight=weight, delay=delay, synapse=synapse)
-
-        # add edge also to source population directly without breaking code
-        source_pop = self.nodes[source]["data"]  # type: Population
-        source_pop.connect(synapse, weight, delay)
-
-
 
 
 

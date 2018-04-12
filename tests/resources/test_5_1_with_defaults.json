@@ -22,6 +22,7 @@
             0.0
         ],
         "synapse_params": null,
-        "axon_params": null
+        "axon_params": null,
+        "enable_modulation": false
     }
 }
