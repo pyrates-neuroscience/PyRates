@@ -90,7 +90,7 @@ class Synapse(RepresentationBase):
                  buffer_size: float = 0.,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None,
+                 label: Optional[str] = None,
                  **kernel_function_args: float
                  ) -> None:
         """Instantiates base synapse.
@@ -118,23 +118,22 @@ class Synapse(RepresentationBase):
         self.kernel_function = kernel_function
         self.kernel_function_args = kernel_function_args
         self.buffer_size = buffer_size
-        # self.input_map = {}  # pop: {weights: [], delays: []}
 
         # set synapse type
         ##################
 
-        if synapse_type is None:
+        if label is None:
 
             # define synapse type via synaptic kernel efficacy and type (current- vs conductivity-based)
             if conductivity_based:
                 self.reversal_potential = reversal_potential
-                self.synapse_type = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
+                self.label = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
             else:
-                self.synapse_type = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
+                self.label = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
 
         else:
 
-            self.synapse_type = synapse_type
+            self.label = label
 
         # set synaptic depression (for plasticity mechanisms)
         self.depression = 1.0
@@ -389,7 +388,7 @@ class DESynapse(RepresentationBase):
                  buffer_size: int = 0,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None
+                 label: Optional[str] = None
                  ) -> None:
         """Instantiates base synapse.
         """
@@ -405,18 +404,18 @@ class DESynapse(RepresentationBase):
         # set synapse type
         ##################
 
-        if synapse_type is None:
+        if label is None:
 
             # define synapse type via synaptic kernel efficacy and type (current- vs conductivity-based)
             if conductivity_based:
                 self.reversal_potential = reversal_potential
-                self.synapse_type = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
+                self.label = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
             else:
-                self.synapse_type = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
+                self.label = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
 
         else:
 
-            self.synapse_type = synapse_type
+            self.label = label
 
         # set synaptic depression (for plasticity mechanisms)
         self.depression = 1.0
@@ -539,7 +538,7 @@ class DoubleExponentialSynapse(Synapse):
                  buffer_size: float = 0.,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None
+                 label: Optional[str] = None
                  ) -> None:
 
         # check input parameters
@@ -559,7 +558,7 @@ class DoubleExponentialSynapse(Synapse):
                          buffer_size=buffer_size,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         synapse_type=synapse_type,
+                         label=label,
                          tau_rise=tau_rise,
                          tau_decay=tau_decay)
 
@@ -598,7 +597,7 @@ class DEDoubleExponentialSynapse(DESynapse):
                  buffer_size: int = 0,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None
+                 label: Optional[str] = None
                  ) -> None:
         """Instantiates base synapse.
         """
@@ -610,7 +609,7 @@ class DEDoubleExponentialSynapse(DESynapse):
                          buffer_size=buffer_size,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         synapse_type=synapse_type)
+                         label=label)
 
         # set additional attributes
         ###########################
@@ -717,7 +716,7 @@ class ExponentialSynapse(Synapse):
                  epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
                  buffer_size: float = 0.,
-                 synapse_type: Optional[str] = None
+                 label: Optional[str] = None
                  ) -> None:
 
         # check input parameters
@@ -735,7 +734,7 @@ class ExponentialSynapse(Synapse):
                          epsilon=epsilon,
                          max_delay=max_delay,
                          buffer_size=buffer_size,
-                         synapse_type=synapse_type,
+                         label=label,
                          conductivity_based=False,
                          tau=tau)
 
@@ -781,7 +780,7 @@ class DEExponentialSynapse(DESynapse):
                  buffer_size: int = 0,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None
+                 label: Optional[str] = None
                  ) -> None:
         """Instantiates base synapse.
         """
@@ -793,7 +792,7 @@ class DEExponentialSynapse(DESynapse):
                          buffer_size=buffer_size,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         synapse_type=synapse_type)
+                         label=label)
 
         # set additional attributes
         ###########################
@@ -898,7 +897,7 @@ class TransformedInputSynapse(Synapse):
                  buffer_size: float = 0.,
                  conductivity_based: bool = False,
                  reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None,
+                 label: Optional[str] = None,
                  input_transform_args: Optional[dict] = None,
                  **kernel_function_args: float
                  ) -> None:
@@ -916,7 +915,7 @@ class TransformedInputSynapse(Synapse):
                          buffer_size=buffer_size,
                          conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         synapse_type=synapse_type,
+                         label=label,
                          **kernel_function_args)
 
         # add input transform

@@ -255,9 +255,9 @@ class Circuit(RepresentationBase):
 
     def _prepare_run(self,
                      synaptic_inputs: np.ndarray,
-                     synaptic_input_pops: list,
-                     synaptic_input_syns: list,
                      simulation_time: float,
+                     synaptic_input_pops: Optional[List[str]] = None,
+                     synaptic_input_syns: Optional[List[str]] = None,
                      extrinsic_current: Optional[np.ndarray] = None,
                      extrinsic_current_pops: Optional[list] = None,
                      extrinsic_modulation: Optional[List[np.ndarray]] = None,
@@ -268,15 +268,6 @@ class Circuit(RepresentationBase):
                      ) -> int:
         """Helper method to check inputs to run, but keep run function a bit cleaner."""
 
-        # save run parameters to instance variable
-        ##########################################
-
-        self.run_info = dict(synaptic_inputs=synaptic_inputs, synaptic_input_pops=synaptic_input_pops,
-                             synaptic_input_syns=synaptic_input_syns, time_vector=[],
-                             extrinsic_current=extrinsic_current, extrinsic_current_pops=extrinsic_current_pops,
-                             extrinsic_modulation=extrinsic_modulation,
-                             extrinsic_modulation_pops=extrinsic_modulation_pops)
-
         # check input parameters
         ########################
 
@@ -285,42 +276,81 @@ class Circuit(RepresentationBase):
             raise ValueError('Simulation time cannot be negative.')
         simulation_time_steps = int(simulation_time / self.step_size)
 
-        # synaptic inputs
-        if synaptic_inputs.shape[0] != simulation_time_steps:
-            raise ValueError('First dimension of synaptic input has to match the number of simulation time steps! \n'
-                             f'input: {synaptic_inputs.shape[0]}, time_steps: {simulation_time_steps}')
-        if synaptic_inputs.shape[1] != len(synaptic_input_pops):
-            raise ValueError('For each vector of input over time, a target population has to be passed!')
-        if synaptic_inputs.shape[1] != len(synaptic_input_syns):
-            raise ValueError('For each vector of input over time, a target synapse has to be passed!')
+        # check whether synaptic inputs need to be transformed into new, key-based version
+        if len(synaptic_inputs.shape) > 2:
+            synaptic_inputs_tmp = list()
+            synaptic_input_pops = list()
+            synaptic_input_syns = list()
+            for p in range(synaptic_inputs.shape[1]):
+                inp_to_pop = synaptic_inputs[:, p, :]
+                for s in range(synaptic_inputs.shape[2]):
+                    inp_to_syn = inp_to_pop[:, s].squeeze()
+                    if np.sum(inp_to_syn != 0.) > 0.:
+                        synaptic_inputs_tmp.append(inp_to_syn)
+                        synaptic_input_pops.append(list(self.populations.keys())[p])
+                        synaptic_input_syns.append(self.synapse_types[s])
+            synaptic_inputs = np.array(synaptic_inputs_tmp).T if synaptic_inputs_tmp else None
 
-        # extrinsic currents
+        # check synaptic input arguments for correct dimensionalities
+        if synaptic_inputs:
+            if synaptic_inputs.shape[0] != simulation_time_steps:
+                raise ValueError('First dimension of synaptic input has to match the number of simulation time steps!\n'
+                                 f'input: {synaptic_inputs.shape[0]}, time_steps: {simulation_time_steps}')
+            if synaptic_inputs.shape[1] != len(synaptic_input_pops):
+                raise ValueError('For each vector of input over time, a target population has to be passed!')
+            if synaptic_inputs.shape[1] != len(synaptic_input_syns):
+                raise ValueError('For each vector of input over time, a target synapse has to be passed!')
+
+        # check whether extrinsic currents need to be transformed into new, key-based version
+        if extrinsic_current is not None and not extrinsic_current_pops:
+            extrinsic_current_tmp = list()
+            extrinsic_current_pops = list()
+            for p in range(extrinsic_current.shape[1]):
+                curr_tmp = extrinsic_current[:, p].squeeze()
+                if np.sum(curr_tmp != 0.) > 0.:
+                    extrinsic_current_tmp.append(curr_tmp)
+                    extrinsic_current_pops.append(list(self.populations.keys())[p])
+            extrinsic_current = np.array(extrinsic_current_tmp, ndmin=2).T
+
+        # extrinsic currents dimensionality check
         if extrinsic_current is not None:
             if extrinsic_current.shape[0] != simulation_time_steps:
                 raise ValueError('First dimension of extrinsic current has to match the number of simulation time '
                                  'steps!')
-            if extrinsic_current.shape[1] != extrinsic_current_pops:
+            if extrinsic_current.shape[1] != len(extrinsic_current_pops):
                 raise ValueError('For each vector of input current over time, a target population has to be passed!')
 
-        # extrinsic modulation
+        # check whether extrinsic modulations need to be transformed into new, key-based version
+        if extrinsic_modulation is not None and not extrinsic_modulation_pops:
+            extrinsic_modulation_pops = list()
+            for p in range(len(extrinsic_modulation)):
+                extrinsic_modulation_pops.append(list(self.populations.keys())[p])
+
+        # extrinsic modulation dimensionality check
         if extrinsic_modulation:
             if extrinsic_modulation[0].shape[0] != simulation_time_steps:
                 raise ValueError('First dimension of extrinsic modulation arrays has to match the number of simulation '
                                  'time steps!')
-            if len(extrinsic_modulation) != extrinsic_modulation_pops:
+            if len(extrinsic_modulation) != len(extrinsic_modulation_pops):
                 raise ValueError('For each synaptic modulation array, a target population has to be passed!')
 
         # save run parameters to instance variable
         ##########################################
 
         time = (np.arange(0, simulation_time_steps, 1) * self.step_size + self.step_size).tolist()
-        cols = [synaptic_input_pops[i] + '_' + synaptic_input_syns[i] for i in range(synaptic_inputs.shape[1])]
-        self.run_info = DataFrame(data=synaptic_inputs, index=time, columns=cols)
+        if synaptic_inputs is not None:
+            cols = [synaptic_input_pops[i] + '_' + synaptic_input_syns[i] for i in range(synaptic_inputs.shape[1])]
+            self.run_info = DataFrame(data=synaptic_inputs, index=time, columns=cols)
+        else:
+            self.run_info = DataFrame(data=np.zeros((simulation_time_steps, 1)), index=time,
+                                      columns=['synaptic_input_to_all_pops'])
 
         if extrinsic_current_pops:
-            self.run_info[extrinsic_current_pops] = extrinsic_current
+            for i, pop in enumerate(extrinsic_current_pops):
+                self.run_info[pop] = extrinsic_current[:, i]
         if extrinsic_modulation_pops:
-            self.run_info[extrinsic_modulation_pops] = extrinsic_modulation
+            for i, pop in enumerate(extrinsic_modulation_pops):
+                self.run_info[pop] = extrinsic_modulation[i]
 
         # add dummy populations to graph
         ################################
@@ -383,9 +413,9 @@ class Circuit(RepresentationBase):
 
     def run(self,
             synaptic_inputs: np.ndarray,
-            synaptic_input_pops: list,
-            synaptic_input_syns: list,
             simulation_time: float,
+            synaptic_input_pops: Optional[List[str]] = None,
+            synaptic_input_syns: Optional[List[str]] = None,
             extrinsic_current: Optional[np.ndarray] = None,
             extrinsic_current_pops: Optional[list] = None,
             extrinsic_modulation: Optional[List[np.ndarray]] = None,
@@ -510,7 +540,7 @@ class Circuit(RepresentationBase):
         population_idx = [self.observer.population_labels.index(key) for key in population_keys]
 
         # get states from populations for all time-steps
-        states = np.array([self.observer.states[state_idx][pop] for pop in population_idx]).squeeze().T
+        states = np.array([self.observer.states[state_idx][pop] for pop in population_idx]).T
 
         # reduce states to time-window
         if time_window:
@@ -737,10 +767,11 @@ class Circuit(RepresentationBase):
         """Clears states of all populations
         """
 
-        for pop in self.populations:
+        for _, pop in self.populations.items():
             pop.clear()
 
-        self.observer.clear()
+        if hasattr(self, 'observer'):
+            self.observer.clear()
 
     def plot_population_states(self,
                                population_keys: Optional[List[str]] = None,

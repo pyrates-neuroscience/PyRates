@@ -35,8 +35,6 @@ class JansenRitPyramidalCells(Population):
         Default = None.
     axon_params
         Default = None.
-    store_state_variables
-        Default = False.
     label
         Default = 'JR_PCs'
 
@@ -56,11 +54,9 @@ class JansenRitPyramidalCells(Population):
                  axon: str = 'JansenRitAxon',
                  init_state: float = 0.,
                  step_size: float = 5e-4,
-                 max_synaptic_delay: Optional[float] = None,
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 store_state_variables: bool = False,
                  label: str = 'JR_PCs'
                  ) -> None:
         """Instantiates JansenRit PC population with second order synapses and Jansen-Rit axon.
@@ -82,9 +78,9 @@ class JansenRitPyramidalCells(Population):
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
-                         store_state_variables=store_state_variables,
                          label=label,
                          synapse_class='ExponentialSynapse',
+                         synapse_labels=['excitatory', 'inhibitory'],
                          axon_class='SigmoidAxon')
 
 
@@ -107,8 +103,6 @@ class JansenRitInterneurons(Population):
         Default = None.
     axon_params
         Default = None.
-    store_state_variables
-        Default = False.
     label
         Default = 'JR_INs'
 
@@ -128,11 +122,9 @@ class JansenRitInterneurons(Population):
                  axon: str = 'JansenRitAxon',
                  init_state: float = 0.,
                  step_size: float = 5e-4,
-                 max_synaptic_delay: Optional[float] = None,
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 store_state_variables: bool = False,
                  label: str = 'JR_INs'
                  ) -> None:
         """Instantiates JansenRit interneuron population with second order synapse and Jansen-Rit axon.
@@ -154,9 +146,9 @@ class JansenRitInterneurons(Population):
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
-                         store_state_variables=store_state_variables,
                          label=label,
                          synapse_class='ExponentialSynapse',
+                         synapse_labels=['excitatory'],
                          axon_class='SigmoidAxon')
 
 
