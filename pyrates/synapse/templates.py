@@ -183,7 +183,6 @@ class GABABCurrentSynapse(TransformedInputSynapse):
                          buffer_size=buffer_size,
                          bin_size=bin_size,
                          epsilon=epsilon,
-                         conductivity_based=False,
                          label='GABAB_current',
                          input_transform_args=input_transform_args,
                          tau_decay=tau_decay,
@@ -242,8 +241,7 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
                          buffer_size=buffer_size,
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
-                         label='AMPA_conductance',
-                         conductivity_based=True)
+                         label='AMPA_conductance')
 
 
 class GABAAConductanceSynapse(DoubleExponentialSynapse):
@@ -297,8 +295,7 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                          buffer_size=buffer_size,
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
-                         label='GABAA_conductance',
-                         conductivity_based=True)
+                         label='GABAA_conductance')
 
 
 #########################
@@ -438,7 +435,6 @@ class GABABDESynapse(DEDoubleExponentialSynapse):
 
         super().__init__(efficacy=efficacy,
                          buffer_size=buffer_size,
-                         conductivity_based=False,
                          label='GABAB_DE',
                          tau_decay=tau_decay,
                          tau_rise=tau_rise
@@ -506,8 +502,7 @@ class AMPAConductanceDESynapse(DEDoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          buffer_size=buffer_size,
                          reversal_potential=reversal_potential,
-                         label='AMPA_conductance',
-                         conductivity_based=True)
+                         label='AMPA_conductance')
 
 
 class GABAAConductanceDESynapse(DEDoubleExponentialSynapse):
@@ -549,8 +544,7 @@ class GABAAConductanceDESynapse(DEDoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          buffer_size=buffer_size,
                          reversal_potential=reversal_potential,
-                         label='GABAA_conductance',
-                         conductivity_based=True)
+                         label='GABAA_conductance')
 
 
 ###########################
@@ -593,7 +587,7 @@ class JansenRitExcitatorySynapse(DEExponentialSynapse):
         super().__init__(efficacy=efficacy,
                          tau=tau,
                          buffer_size=buffer_size,
-                         label='JR_excitatory')
+                         label='excitatory')
 
 
 class JansenRitInhibitorySynapse(DEExponentialSynapse):
@@ -631,7 +625,7 @@ class JansenRitInhibitorySynapse(DEExponentialSynapse):
         super().__init__(efficacy=efficacy,
                          tau=tau,
                          buffer_size=buffer_size,
-                         label='JR_inhibitory')
+                         label='inhibitory')
 
 
 class MoranExcitatorySynapse(DEExponentialSynapse):

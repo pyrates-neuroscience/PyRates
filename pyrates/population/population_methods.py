@@ -601,14 +601,14 @@ def construct_state_update_function(spike_frequency_adaptation=False,
 
     if spike_frequency_adaptation:
         spike_frequency_adaption_snippet = """self.axon_update()
-    self.spike_frequency_adaptation = self.axon.transfer_function_args['adaptation']"""
+    self.axonal_adaptation = self.axon.transfer_function_args['adaptation']"""
     else:
         spike_frequency_adaption_snippet = ""
 
     if synapse_efficacy_adaptation:
         synaptic_efficacy_adaptation_snippet = """for idx, key in enumerate(self.synapse_labels):
 
-        if self.synapse_efficacy_adaptation[key]:
+        if self.synapse_efficacy_adaptation[idx]:
             self.synapse_update(key, idx)
             self.synaptic_depression[idx] = self.synapses[key].depression"""
     else:

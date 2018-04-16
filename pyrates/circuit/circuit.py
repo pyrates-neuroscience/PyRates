@@ -253,6 +253,35 @@ class Circuit(RepresentationBase):
 
         return delays
 
+    # noinspection PyPep8Naming
+    @property
+    def connectivity_lists(self):
+        """Read-only value for the connectivity information needed to re-build the circuit graph.
+        """
+
+        # initialize lists
+        connectivity = list()
+        delays = list()
+        source_pops = list()
+        target_pops = list()
+        target_syns = list()
+
+        # collect information
+        #####################
+
+        nodes = list(self.network_graph.nodes.keys())
+        for i, source in enumerate(nodes):
+            conns = self.network_graph.adj[source]
+            for target in conns.keys():
+                for _, conn in conns[target].items():
+                    connectivity.append(conn['weight'])
+                    delays.append(conn['delay'])
+                    source_pops.append(source)
+                    target_pops.append(target)
+                    target_syns.append(conn['synapse'].label)
+
+        return connectivity, delays, source_pops, target_pops, target_syns
+
     def _prepare_run(self,
                      synaptic_inputs: np.ndarray,
                      simulation_time: float,
@@ -286,9 +315,11 @@ class Circuit(RepresentationBase):
                 for s in range(synaptic_inputs.shape[2]):
                     inp_to_syn = inp_to_pop[:, s].squeeze()
                     if np.sum(inp_to_syn != 0.) > 0.:
+                        pop_key = list(self.populations.keys())[p]
+                        syn_key = list(self.populations[pop_key].synapses.keys())[s]
                         synaptic_inputs_tmp.append(inp_to_syn)
-                        synaptic_input_pops.append(list(self.populations.keys())[p])
-                        synaptic_input_syns.append(self.synapse_types[s])
+                        synaptic_input_pops.append(pop_key)
+                        synaptic_input_syns.append(syn_key)
             synaptic_inputs = np.array(synaptic_inputs_tmp).T if synaptic_inputs_tmp else None
 
         # check synaptic input arguments for correct dimensionalities
@@ -555,7 +586,7 @@ class Circuit(RepresentationBase):
                     target_syns: List[str],
                     conn_strengths: List[float],
                     conn_delays: List[int],
-                    plasticity_on_input: bool = False):
+                    plasticity_on_input: bool = True):
         """Builds graph from circuit information.
         """
 
@@ -622,13 +653,14 @@ class Circuit(RepresentationBase):
                 for t in target_matches:
 
                     # check whether target synapse is plastic or not
+                    syn_idx = list(self.populations[t].synapses.keys()).index(syn)
                     if self.populations[t].features['synaptic_plasticity'] and \
-                            self.populations[t].synapse_efficacy_adaptation[syn]:
+                            self.populations[t].synapse_efficacy_adaptation[syn_idx]:
 
                         syn_copy = self.populations[t].copy_synapse(syn,
                                                                     max_firing_rate=self.populations
                                                                     [source].axon.transfer_function_args
-                                                                    ['max_firing_rate'])
+                                                                    ['max_firing_rate'] * weight)
                         network_graph.add_edge(s, t, weight=weight, delay=delay, synapse=syn_copy)
 
                     else:
@@ -641,11 +673,11 @@ class Circuit(RepresentationBase):
 
         if not plasticity_on_input:
             for i, (key, pop) in enumerate(self.populations.items()):
-                for syn in pop.synapses.keys():
-                    if pop.features['synaptic_plasticity'] and pop.synapse_efficacy_adaptation[syn] and \
+                for j, syn in enumerate(pop.synapses.keys()):
+                    if pop.features['synaptic_plasticity'] and pop.synapse_efficacy_adaptation[j] and \
                             'copy' not in syn:
-                        pop.synapse_efficacy_adaptation[syn] = None
-                        pop.synapse_efficacy_adaptation.pop(syn)
+                        pop.synapse_efficacy_adaptation[j] = None
+                        pop.synapse_efficacy_adaptation_args[j] = None
 
         return network_graph
 
@@ -765,7 +797,7 @@ class Circuit(RepresentationBase):
                                                                      copy_key=copy_label,
                                                                      max_firing_rate=self.populations
                                                                      [source].axon.transfer_function_args
-                                                                     ['max_firing_rate'])
+                                                                     ['max_firing_rate'] * weight)
                 self.network_graph.add_edge(source, target, weight=weight, delay=delay, synapse=synapse_copy)
 
             else:
@@ -1042,7 +1074,8 @@ class CircuitFromScratch(Circuit):
                           'step_size': step_size, 'max_synaptic_delay': max_synaptic_delay[i],
                           'synapse_params': synapse_params_tmp, 'axon_params': axon_params[i],
                           'synapse_class': synapse_class_tmp, 'axon_class': axon_class[i],
-                          'label': population_labels[i], 'synapse_labels': synapse_types[0:len(synapses_tmp)],
+                          'label': population_labels[i],
+                          'synapse_labels': synapse_types[0:len(synapses_tmp)] if synapse_types else None,
                           'spike_frequency_adaptation': spike_frequency_adaptation[i],
                           'spike_frequency_adaptation_args': spike_frequency_adaptation_args[i],
                           'synapse_efficacy_adaptation': synapse_efficacy_adaptation_tmp,

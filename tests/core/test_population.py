@@ -72,14 +72,14 @@ def test_3_1_population_init():
     #################################################
 
     # pass input
-    pop.synapses['0'].pass_input(firing_rate)
-    pop.synapses['1'].pass_input(firing_rate)
+    pop.synapses['AMPA_current'].pass_input(firing_rate)
+    pop.synapses['GABAA_current'].pass_input(firing_rate)
     syn1.pass_input(firing_rate)
     syn2.pass_input(firing_rate)
 
     # calculate synaptic response
-    pop_syn1_response = pop.synapses['0'].get_synaptic_current()
-    pop_syn2_response = pop.synapses['1'].get_synaptic_current()
+    pop_syn1_response = pop.synapses['AMPA_current'].get_synaptic_current()
+    pop_syn2_response = pop.synapses['GABAA_current'].get_synaptic_current()
     syn1_response = syn1.get_synaptic_current()
     syn2_response = syn2.get_synaptic_current()
 
@@ -149,8 +149,8 @@ def test_3_2_population_dynamics():
                              resting_potential=resting_potential,
                              membrane_capacitance=membrane_capacitance)
             for k in range(synaptic_inputs.shape[0]):
-                pop.synapses['0'].pass_input(synaptic_input=synaptic_inputs[k, 0, i].squeeze())
-                pop.synapses['1'].pass_input(synaptic_input=synaptic_inputs[k, 1, i].squeeze())
+                pop.synapses['AMPA_current'].pass_input(synaptic_input=synaptic_inputs[k, 0, i].squeeze())
+                pop.synapses['GABAA_current'].pass_input(synaptic_input=synaptic_inputs[k, 1, i].squeeze())
                 pop.extrinsic_current = extrinsic_inputs[k, j]
                 pop.state_update()
                 states[i, j, k] = pop.membrane_potential

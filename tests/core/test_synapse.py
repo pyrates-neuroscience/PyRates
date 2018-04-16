@@ -71,16 +71,16 @@ def test_2_1_synapse_init():
     synapse = Synapse(kernel_function=exponential_decay, efficacy=-1, bin_size=1)
     assert synapse.label == "inhibitory_current"
 
-    synapse = Synapse(kernel_function=exponential_decay, efficacy=-1, bin_size=1, conductivity_based=True)
+    synapse = Synapse(kernel_function=exponential_decay, efficacy=-1, bin_size=1, reversal_potential=-0.075)
     assert synapse.label == "inhibitory_conductance"
 
-    synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, conductivity_based=True)
+    synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, reversal_potential=-0.075)
     assert synapse.label == "excitatory_conductance"
 
     # test kernel_scaling
     #####################
 
-    synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, conductivity_based=True)
+    synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, reversal_potential=-0.075)
     assert synapse.kernel_scaling(-0.075) == 0
 
     synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1)

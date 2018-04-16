@@ -1731,9 +1731,9 @@ class Population(AbstractBasePopulation):
         self.label = label
         self.max_population_delay = max_population_delay
         self.n_synapses = len(synapses) if synapses else len(synapse_params)
-        self.spike_frequency_adaptation = spike_frequency_adaptation
-        self.synapse_efficacy_adaptation = list()
-        self.synapse_efficacy_adaptation_args = list()
+        self.spike_frequency_adaptation = deepcopy(spike_frequency_adaptation)
+        self.synapse_efficacy_adaptation = deepcopy(synapse_efficacy_adaptation)
+        self.synapse_efficacy_adaptation_args = deepcopy(synapse_efficacy_adaptation_args)
         self.features = dict()
 
         # choose between different population set-ups based on passed parameters
@@ -1799,11 +1799,11 @@ class Population(AbstractBasePopulation):
         elif self.features['axonal_plasticity']:
             plasticity_snippet = 'Axonal plasticity will be enabled.'
         else:
-            plasticity_snippet = 'No short-term plasticity mechanisms will be enabled.'
+            plasticity_snippet = 'Short-term plasticity mechanisms will be disabled.'
         if self.features['modulation_enabled']:
             modulation_snippet = 'Extrinsic synaptic modulation will be enabled.'
         else:
-            modulation_snippet = 'Extrinsic synaptic modulation will not be enabled.'
+            modulation_snippet = 'Extrinsic synaptic modulation will be disabled.'
 
         setup_msg = f"""Given the passed arguments, the population {label} will be initialized with the following 
         features:
@@ -1902,26 +1902,22 @@ class Population(AbstractBasePopulation):
 
         # for axon
         if self.spike_frequency_adaptation:
-            self.spike_frequency_adaptation_args = spike_frequency_adaptation_args if spike_frequency_adaptation_args \
-                else dict()
-            self.spike_frequency_adaptation = self.axon.transfer_function_args['adaptation']
+            self.spike_frequency_adaptation_args = deepcopy(spike_frequency_adaptation_args) \
+                if spike_frequency_adaptation_args else dict()
+            self.axonal_adaptation = self.axon.transfer_function_args['adaptation']
 
         # synaptic plasticity function
         if synapse_efficacy_adaptation and (type(synapse_efficacy_adaptation) is not list):
-            self.synapse_efficacy_adaptation = [synapse_efficacy_adaptation for _ in range(self.n_synapses)]
+            self.synapse_efficacy_adaptation = [self.synapse_efficacy_adaptation for _ in range(self.n_synapses)]
         elif synapse_efficacy_adaptation and (len(synapse_efficacy_adaptation) != self.n_synapses):
             raise ValueError('If list of synaptic plasticity functions is passed, its length must correspond to the'
-                             'number of synapses of the population.')
+                             ' number of synapses of the population.')
         elif not synapse_efficacy_adaptation:
             self.synapse_efficacy_adaptation = [None for _ in range(self.n_synapses)]
-        else:
-            self.synapse_efficacy_adaptation = synapse_efficacy_adaptation
 
         # synaptic plasticity function arguments
         if synapse_efficacy_adaptation_args is None or type(synapse_efficacy_adaptation_args) is dict:
-            self.synapse_efficacy_adaptation_args = [synapse_efficacy_adaptation_args for _ in range(self.n_synapses)]
-        else:
-            self.synapse_efficacy_adaptation_args = synapse_efficacy_adaptation_args
+            self.synapse_efficacy_adaptation_args = [self.synapse_efficacy_adaptation_args for _ in range(self.n_synapses)]
 
         if len(self.synapse_efficacy_adaptation) != len(self.synapse_efficacy_adaptation_args):
             raise AttributeError('Number of synaptic plasticity functions and plasticity function parameter '
@@ -1966,70 +1962,75 @@ class Population(AbstractBasePopulation):
         synapse_subtypes = check_nones(synapse_subtypes, self.n_synapses)
         synapse_params = check_nones(synapse_params, self.n_synapses)
 
-        if not synapse_labels:
-            synapse_labels = [str(i) for i in range(self.n_synapses)]
-
         # set all given synapses
         ########################
 
         for i in range(self.n_synapses):
 
-            # define unique synapse key
-            occurrence = 0
-            for syn_idx in range(i):
-                if synapse_labels[syn_idx] == synapse_labels[i]:
-                    occurrence += 1
-            if occurrence > 0:
-                synapse_labels[i] = synapse_labels[i] + '(' + str(occurrence) + ')'
-
             # instantiate synapse
             if synapse_types[i] == 'DoubleExponentialSynapse':
                 if self.features['integro_differential']:
-                    self.synapses[synapse_labels[i]] = set_instance(DoubleExponentialSynapse,
-                                                                    synapse_subtypes[i],
-                                                                    synapse_params[i],
-                                                                    bin_size=self.step_size,
-                                                                    max_delay=max_synaptic_delay[i],
-                                                                    buffer_size=self.max_population_delay)
+                    synapse_instance = set_instance(DoubleExponentialSynapse,
+                                                    synapse_subtypes[i],
+                                                    synapse_params[i],
+                                                    bin_size=self.step_size,
+                                                    max_delay=max_synaptic_delay[i],
+                                                    buffer_size=self.max_population_delay)
                 else:
-                    self.synapses[synapse_labels[i]] = set_instance(DEDoubleExponentialSynapse,
-                                                                    synapse_subtypes[i],
-                                                                    synapse_params[i],
-                                                                    buffer_size=int(self.max_population_delay
-                                                                                    / self.step_size))
+                    synapse_instance = set_instance(DEDoubleExponentialSynapse,
+                                                    synapse_subtypes[i],
+                                                    synapse_params[i],
+                                                    buffer_size=int(self.max_population_delay / self.step_size))
             elif synapse_types[i] == 'ExponentialSynapse':
                 if self.features['integro_differential']:
-                    self.synapses[synapse_labels[i]] = set_instance(ExponentialSynapse,
-                                                                    synapse_subtypes[i],
-                                                                    synapse_params[i],
-                                                                    bin_size=self.step_size,
-                                                                    max_delay=max_synaptic_delay[i],
-                                                                    buffer_size=self.max_population_delay)
+                    synapse_instance = set_instance(ExponentialSynapse,
+                                                    synapse_subtypes[i],
+                                                    synapse_params[i],
+                                                    bin_size=self.step_size,
+                                                    max_delay=max_synaptic_delay[i],
+                                                    buffer_size=self.max_population_delay)
                 else:
-                    self.synapses[synapse_labels[i]] = set_instance(DEExponentialSynapse,
-                                                                    synapse_subtypes[i],
-                                                                    synapse_params[i],
-                                                                    buffer_size=int(self.max_population_delay
-                                                                                    / self.step_size))
+                    synapse_instance = set_instance(DEExponentialSynapse,
+                                                    synapse_subtypes[i],
+                                                    synapse_params[i],
+                                                    buffer_size=int(self.max_population_delay
+                                                                    / self.step_size))
             elif synapse_types[i] == 'TransformedInputSynapse':
-                self.synapses[synapse_labels[i]] = set_instance(TransformedInputSynapse,
-                                                                synapse_subtypes[i],
-                                                                synapse_params[i],
-                                                                bin_size=self.step_size,
-                                                                max_delay=max_synaptic_delay[i],
-                                                                buffer_size=self.max_population_delay)
+                synapse_instance = set_instance(TransformedInputSynapse,
+                                                synapse_subtypes[i],
+                                                synapse_params[i],
+                                                bin_size=self.step_size,
+                                                max_delay=max_synaptic_delay[i],
+                                                buffer_size=self.max_population_delay)
             elif synapse_types[i] == 'Synapse':
-                self.synapses[synapse_labels[i]] = set_instance(Synapse,
-                                                                synapse_subtypes[i],
-                                                                synapse_params[i],
-                                                                bin_size=self.step_size,
-                                                                max_delay=max_synaptic_delay[i],
-                                                                buffer_size=self.max_population_delay)
+                synapse_instance = set_instance(Synapse,
+                                                synapse_subtypes[i],
+                                                synapse_params[i],
+                                                bin_size=self.step_size,
+                                                max_delay=max_synaptic_delay[i],
+                                                buffer_size=self.max_population_delay)
             else:
                 raise AttributeError('Invalid synapse type!')
 
-            # store label of synapse on synapse
-            self.synapses[synapse_labels[i]].label = synapse_labels[i]
+            # bind instance to object
+            if synapse_labels:
+
+                # define unique synapse key
+                occurrence = 0
+                for syn_idx in range(i):
+                    if synapse_labels[syn_idx] == synapse_labels[i]:
+                        occurrence += 1
+                if occurrence > 0:
+                    synapse_labels[i] = synapse_labels[i] + '(' + str(occurrence) + ')'
+
+                # label synapse according to provided key
+                self.synapses[synapse_labels[i]] = synapse_instance
+                self.synapses[synapse_labels[i]].label = synapse_labels[i]
+
+            else:
+
+                # name synapse according to the instance's label
+                self.synapses[synapse_instance.label] = synapse_instance
 
     def _set_axon(self,
                   axon_subtype: Optional[str] = None,
@@ -2170,11 +2171,14 @@ class Population(AbstractBasePopulation):
                     else:
                         synapse_key[-1] = str(count)
                     count += 1
+                else:
+                    break
             except ValueError:
-                break
+                raise ValueError
 
         # add synapse
         self.synapses[synapse_key] = synapse
+        synapse.label = synapse_key
         self.synapse_labels += [synapse_key]
 
         # update synapse dependencies
