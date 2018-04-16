@@ -44,7 +44,7 @@ class KnoescheAxon(SigmoidAxon):
         super().__init__(max_firing_rate=max_firing_rate,
                          membrane_potential_threshold=membrane_potential_threshold,
                          sigmoid_steepness=sigmoid_steepness,
-                         axon_type='Knoesche')
+                         label='Knoesche')
 
 
 class PlasticKnoescheAxon(PlasticSigmoidAxon):
@@ -74,7 +74,7 @@ class PlasticKnoescheAxon(PlasticSigmoidAxon):
         """Instantiate plastic sigmoidal axon.
         """
 
-        super().__init__(axon_type='plastic_knoesche_axon',
+        super().__init__(label='plastic_knoesche_axon',
                          max_firing_rate=max_firing_rate,
                          membrane_potential_threshold=membrane_potential_threshold,
                          sigmoid_steepness=sigmoid_steepness,
@@ -118,7 +118,7 @@ class JansenRitAxon(SigmoidAxon):
         super().__init__(max_firing_rate=max_firing_rate,
                          membrane_potential_threshold=membrane_potential_threshold,
                          sigmoid_steepness=sigmoid_steepness,
-                         axon_type='JansenRit')
+                         label='JansenRit')
 
 
 class MoranAxon(PlasticSigmoidAxon):
@@ -156,7 +156,7 @@ class MoranAxon(PlasticSigmoidAxon):
                          membrane_potential_threshold=membrane_potential_threshold,
                          sigmoid_steepness=sigmoid_steepness,
                          normalize=True,
-                         axon_type='Moran_axon')
+                         label='Moran_axon')
 
 
 #################
@@ -204,7 +204,7 @@ class SuffczynskiAxon(BurstingAxon):
 
     def __init__(self,
                  bin_size: float = 1e-3,
-                 axon_type: Optional[str] = None,
+                 label: Optional[str] = None,
                  epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
                  resting_potential: float = -0.065,
@@ -233,7 +233,7 @@ class SuffczynskiAxon(BurstingAxon):
         super().__init__(transfer_function=activation_sigmoid,
                          kernel_functions=[axon_exponential, inactivation_sigmoid],
                          bin_size=bin_size,
-                         axon_type=axon_type,
+                         label=label,
                          epsilon=epsilon,
                          max_delay=max_delay,
                          max_firing_rate=max_firing_rate,

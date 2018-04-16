@@ -49,11 +49,8 @@ class Synapse(RepresentationBase):
         epsilon will be ignored.
     buffer_size
         Maximum time that information passed to the synapse needs to affect the synapse [unit = s] (default = 0.).
-    conductivity_based
-        If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
-        conductivity. Else translation to synaptic current will be direct (default = False).
     reversal_potential
-        Synaptic reversal potential. Only needed for conductivity based synapses (default = -0.075) [unit = V].
+        Synaptic reversal potential. If passed, synapse will be conductivity based (default = None) [unit = V].
     synapse_type
         Name of synapse type (default = None).
     **kwargs
@@ -69,8 +66,6 @@ class Synapse(RepresentationBase):
         Keyword arguments will be saved as dict on the object.
     efficacy
         Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
-    conductivity_based
-        See parameter description.
     reversal_potential
         See parameter description.
     bin_size
@@ -88,9 +83,8 @@ class Synapse(RepresentationBase):
                  epsilon: float = 1e-14,
                  max_delay: Optional[float] = None,
                  buffer_size: float = 0.,
-                 conductivity_based: bool = False,
-                 reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None,
+                 reversal_potential: Optional[float] = None,
+                 label: Optional[str] = None,
                  **kernel_function_args: float
                  ) -> None:
         """Instantiates base synapse.
@@ -110,7 +104,6 @@ class Synapse(RepresentationBase):
         ################
 
         self.efficacy = efficacy
-        self.conductivity_based = conductivity_based
         self.reversal_potential = reversal_potential
         self.bin_size = bin_size
         self.epsilon = epsilon
@@ -118,30 +111,28 @@ class Synapse(RepresentationBase):
         self.kernel_function = kernel_function
         self.kernel_function_args = kernel_function_args
         self.buffer_size = buffer_size
-        # self.input_map = {}  # pop: {weights: [], delays: []}
 
         # set synapse type
         ##################
 
-        if synapse_type is None:
+        if label is None:
 
             # define synapse type via synaptic kernel efficacy and type (current- vs conductivity-based)
-            if conductivity_based:
+            if reversal_potential:
                 self.reversal_potential = reversal_potential
-                self.synapse_type = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
+                self.label = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
             else:
-                self.synapse_type = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
+                self.label = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
 
         else:
 
-            self.synapse_type = synapse_type
+            self.label = label
 
         # set synaptic depression (for plasticity mechanisms)
         self.depression = 1.0
 
         # set decorator for synaptic current getter (only relevant for conductivity based synapses)
-        if conductivity_based:
-
+        if reversal_potential:
             self.kernel_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
         else:
             self.kernel_scaling = lambda membrane_potential: 1.0
@@ -301,6 +292,12 @@ class Synapse(RepresentationBase):
         self.synaptic_input = np.zeros(int(self.buffer_size / self.bin_size) + len(self.synaptic_kernel))
         self.kernel_length = len(self.synaptic_kernel)
 
+        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+        if self.reversal_potential:
+            self.kernel_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
+        else:
+            self.kernel_scaling = lambda membrane_potential: 1.0
+
     def plot_synaptic_kernel(self,
                              create_plot: bool = True,
                              axes: Optional[Axes] = None
@@ -336,7 +333,7 @@ class Synapse(RepresentationBase):
 
         # set figure labels
         axes.set_xlabel('time-steps')
-        if self.conductivity_based:
+        if self.reversal_potential:
             axes.set_ylabel('synaptic conductivity [S]')
         else:
             axes.set_ylabel('synaptic current [A]')
@@ -357,29 +354,20 @@ class DESynapse(RepresentationBase):
     ----------
     efficacy
         Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
-    tau
-        Lumped time delay constant that determines the shape of the exponential synaptic kernel [unit = s].
     buffer_size
         Maximum time that information passed to the synapse needs to affect the synapse [unit = s] (default = 0.).
-    conductivity_based
-        If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
-        conductivity. Else translation to synaptic current will be direct (default = False).
     reversal_potential
-        Synaptic reversal potential. Only needed for conductivity based synapses (default = -0.075) [unit = V].
-    synapse_type
+        Synaptic reversal potential. If passed synapse will be conductance based (default = None) [unit = V].
+    label
         Name of synapse type (default = None).
 
     Attributes
     ----------
-    tau
-        See parameter description.
     efficacy
         Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
-    conductivity_based
-        See parameter description.
     reversal_potential
         See parameter description.
-    synapse_type
+    label
         See parameter description.
 
     """
@@ -387,9 +375,8 @@ class DESynapse(RepresentationBase):
     def __init__(self,
                  efficacy: float,
                  buffer_size: int = 0,
-                 conductivity_based: bool = False,
-                 reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None
+                 reversal_potential: Optional[float] = None,
+                 label: Optional[str] = None
                  ) -> None:
         """Instantiates base synapse.
         """
@@ -398,31 +385,29 @@ class DESynapse(RepresentationBase):
         ################
 
         self.efficacy = efficacy
-        self.conductivity_based = conductivity_based
         self.reversal_potential = reversal_potential
         self.buffer_size = buffer_size
 
         # set synapse type
         ##################
 
-        if synapse_type is None:
+        if label is None:
 
             # define synapse type via synaptic kernel efficacy and type (current- vs conductivity-based)
-            if conductivity_based:
-                self.reversal_potential = reversal_potential
-                self.synapse_type = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
+            if reversal_potential:
+                self.label = 'excitatory_conductance' if efficacy >= 0 else 'inhibitory_conductance'
             else:
-                self.synapse_type = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
+                self.label = 'excitatory_current' if efficacy >= 0 else 'inhibitory_current'
 
         else:
 
-            self.synapse_type = synapse_type
+            self.label = label
 
         # set synaptic depression (for plasticity mechanisms)
         self.depression = 1.0
 
         # set decorator for synaptic current getter (only relevant for conductivity based synapses)
-        if conductivity_based:
+        if reversal_potential:
             self.current_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
         else:
             self.current_scaling = lambda membrane_potential: 1.0
@@ -493,6 +478,11 @@ class DESynapse(RepresentationBase):
         # TODO: implement interpolation from old to new array
         self.synaptic_input = np.zeros(self.buffer_size + self.kernel_length)
 
+        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+        if self.reversal_potential:
+            self.current_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
+        else:
+            self.current_scaling = lambda membrane_potential: 1.0
 
 ##############################
 # double exponential synapse #
@@ -516,11 +506,9 @@ class DoubleExponentialSynapse(Synapse):
         See documentation of parameter `max_delay` in :class:`Synapse`.
     buffer_size
         See documentation of parameter `buffer_size` in :class:`Synapse`.
-    conductivity_based
-        See documentation of parameter `conductivity_based` in :class:`Synapse`.
     reversal_potential
         See documentation of parameter `reversal_potential` in :class:`Synapse`.
-    synapse_type
+    label
         Name of synapse type (default = None).
 
     See Also
@@ -537,9 +525,8 @@ class DoubleExponentialSynapse(Synapse):
                  epsilon: float = 1e-14,
                  max_delay: Optional[float] = None,
                  buffer_size: float = 0.,
-                 conductivity_based: bool = False,
-                 reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None
+                 reversal_potential: Optional[float] = None,
+                 label: Optional[str] = None
                  ) -> None:
 
         # check input parameters
@@ -557,9 +544,8 @@ class DoubleExponentialSynapse(Synapse):
                          epsilon=epsilon,
                          max_delay=max_delay,
                          buffer_size=buffer_size,
-                         conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         synapse_type=synapse_type,
+                         label=label,
                          tau_rise=tau_rise,
                          tau_decay=tau_decay)
 
@@ -578,11 +564,9 @@ class DEDoubleExponentialSynapse(DESynapse):
         Lumped time delay constant that determines how fast the exponential synaptic kernel rises [unit = s].
     buffer_size
         See documentation of parameter `buffer_size` in :class:`Synapse`.
-    conductivity_based
-        See documentation of parameter `conductivity_based` in :class:`Synapse`.
     reversal_potential
         See documentation of parameter `reversal_potential` in :class:`Synapse`.
-    synapse_type
+    label
         Name of synapse type (default = None).
 
     See Also
@@ -596,9 +580,8 @@ class DEDoubleExponentialSynapse(DESynapse):
                  tau_decay: float,
                  tau_rise: float,
                  buffer_size: int = 0,
-                 conductivity_based: bool = False,
-                 reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None
+                 reversal_potential: Optional[float] = None,
+                 label: Optional[str] = None
                  ) -> None:
         """Instantiates base synapse.
         """
@@ -608,9 +591,8 @@ class DEDoubleExponentialSynapse(DESynapse):
 
         super().__init__(efficacy=efficacy,
                          buffer_size=buffer_size,
-                         conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         synapse_type=synapse_type)
+                         label=label)
 
         # set additional attributes
         ###########################
@@ -675,6 +657,13 @@ class DEDoubleExponentialSynapse(DESynapse):
         self.d1_scaling = 1 / (self.tau_decay ** 2 - self.tau_rise ** 2)
         self.d2_scaling = 2 / (self.tau_decay - self.tau_rise)
 
+        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+        if self.reversal_potential:
+            self.current_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
+        else:
+            self.current_scaling = lambda membrane_potential: 1.0
+
+
 #######################
 # exponential synapse #
 #######################
@@ -696,7 +685,7 @@ class ExponentialSynapse(Synapse):
         See documentation of parameter `max_delay` in :class:`Synapse`.
     buffer_size
         See documentation of parameter `buffer_size` in :class:`Synapse`.
-    synapse_type
+    label
         Name of synapse type (default = None).
 
     See Also
@@ -717,7 +706,8 @@ class ExponentialSynapse(Synapse):
                  epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
                  buffer_size: float = 0.,
-                 synapse_type: Optional[str] = None
+                 label: Optional[str] = None,
+                 reversal_potential: Optional[float] = None
                  ) -> None:
 
         # check input parameters
@@ -735,9 +725,9 @@ class ExponentialSynapse(Synapse):
                          epsilon=epsilon,
                          max_delay=max_delay,
                          buffer_size=buffer_size,
-                         synapse_type=synapse_type,
-                         conductivity_based=False,
-                         tau=tau)
+                         label=label,
+                         tau=tau,
+                         reversal_potential=reversal_potential)
 
 
 class DEExponentialSynapse(DESynapse):
@@ -752,12 +742,9 @@ class DEExponentialSynapse(DESynapse):
         Lumped time delay constant that determines the shape of the exponential synaptic kernel [unit = s].
     buffer_size
         Maximum time that information passed to the synapse needs to affect the synapse [unit = s] (default = 0.).
-    conductivity_based
-        If true, synaptic input will be translated into synaptic current indirectly via a change in synaptic
-        conductivity. Else translation to synaptic current will be direct (default = False).
     reversal_potential
-        Synaptic reversal potential. Only needed for conductivity based synapses (default = -0.075) [unit = V].
-    synapse_type
+        See parameter docstring of :class:`DESynapse`.
+    label
         Name of synapse type (default = None).
 
     Attributes
@@ -766,11 +753,9 @@ class DEExponentialSynapse(DESynapse):
         See parameter description.
     efficacy
         Determines strength and direction of the synaptic response to input [unit = S if synapse is modulatory else A].
-    conductivity_based
-        See parameter description.
     reversal_potential
         See parameter description.
-    synapse_type
+    label
         See parameter description.
 
     """
@@ -779,9 +764,8 @@ class DEExponentialSynapse(DESynapse):
                  efficacy: float,
                  tau: float,
                  buffer_size: int = 0,
-                 conductivity_based: bool = False,
-                 reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None
+                 reversal_potential: Optional[float] = None,
+                 label: Optional[str] = None
                  ) -> None:
         """Instantiates base synapse.
         """
@@ -791,9 +775,8 @@ class DEExponentialSynapse(DESynapse):
 
         super().__init__(efficacy=efficacy,
                          buffer_size=buffer_size,
-                         conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         synapse_type=synapse_type)
+                         label=label)
 
         # set additional attributes
         ###########################
@@ -851,6 +834,13 @@ class DEExponentialSynapse(DESynapse):
         self.d1_scaling = 1 / self.tau ** 2
         self.d2_scaling = 2 / self.tau
 
+        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+        if self.reversal_potential:
+            self.current_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
+        else:
+            self.current_scaling = lambda membrane_potential: 1.0
+
+
 ################################################
 # synapse with additional input transformation #
 ################################################
@@ -875,8 +865,6 @@ class TransformedInputSynapse(Synapse):
         See description of parameter `max_delay` of :class:`Synapse`.
     buffer_size
         See documentation of parameter `buffer_size` in :class:`Synapse`.
-    conductivity_based
-       See description of parameter `conductivity_based` of :class:`Synapse`.
     reversal_potential
         See description of parameter `reversal_potential` of :class:`Synapse`.
     synapse_type
@@ -896,9 +884,8 @@ class TransformedInputSynapse(Synapse):
                  epsilon: float = 1e-14,
                  max_delay: Optional[float] = None,
                  buffer_size: float = 0.,
-                 conductivity_based: bool = False,
-                 reversal_potential: float = -0.075,
-                 synapse_type: Optional[str] = None,
+                 reversal_potential: Optional[float] = None,
+                 label: Optional[str] = None,
                  input_transform_args: Optional[dict] = None,
                  **kernel_function_args: float
                  ) -> None:
@@ -914,9 +901,8 @@ class TransformedInputSynapse(Synapse):
                          epsilon=epsilon,
                          max_delay=max_delay,
                          buffer_size=buffer_size,
-                         conductivity_based=conductivity_based,
                          reversal_potential=reversal_potential,
-                         synapse_type=synapse_type,
+                         label=label,
                          **kernel_function_args)
 
         # add input transform

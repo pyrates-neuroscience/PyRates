@@ -591,59 +591,44 @@ def get_leak_current(self,
 
 def construct_state_update_function(spike_frequency_adaptation=False,
                                     synapse_efficacy_adaptation=False,
-                                    enable_modulation=False,
                                     leaky_capacitor=False
                                     ):
     if leaky_capacitor:
-        membrane_potential_update_snippet = """membrane_potential = self.take_step(f=self.get_delta_membrane_potential,
+        membrane_potential_update_snippet = """membrane_potential = self.take_step(f=self.get_delta_membrane_potential,\
                                         y_old=membrane_potential)"""
     else:
         membrane_potential_update_snippet = "membrane_potential = self.get_delta_membrane_potential(membrane_potential)"
 
     if spike_frequency_adaptation:
         spike_frequency_adaption_snippet = """self.axon_update()
-    self.state_variables['spike_frequency_adaptation] = self.axon.transfer_function_args['adaptation']"""
+    self.axonal_adaptation = self.axon.transfer_function_args['adaptation']"""
     else:
         spike_frequency_adaption_snippet = ""
 
     if synapse_efficacy_adaptation:
-        synaptic_efficacy_adaptation_snippet = """for i in range(self.n_synapses):
+        synaptic_efficacy_adaptation_snippet = """for idx, key in enumerate(self.synapse_labels):
 
-        if self.synapse_efficacy_adaptation[i]:
-            self.synapse_update(i)
-            self.state_variables['synapse_efficacy_adaptation' + str(i)] = self.synapses[i].depression"""
+        if self.synapse_efficacy_adaptation[idx]:
+            self.synapse_update(key, idx)
+            self.synaptic_depression[idx] = self.synapses[key].depression"""
     else:
         synaptic_efficacy_adaptation_snippet = ""
 
-    if enable_modulation:
-        synaptic_modulation_snippet = """if extrinsic_synaptic_modulation is not None:
-        self.extrinsic_synaptic_modulation[0:len(extrinsic_synaptic_modulation)] = extrinsic_synaptic_modulation"""
-        modulation_declaration_snippet = """,
-                 extrinsic_synaptic_modulation"""
-    else:
-        synaptic_modulation_snippet = ""
-        modulation_declaration_snippet = ""
-
     func_string = f"""
-def state_update(self, extrinsic_current{modulation_declaration_snippet}
-                 ) -> None: 
-
-    self.extrinsic_current = extrinsic_current
-
-    {synaptic_modulation_snippet}
+def state_update(self) -> None: 
 
     # compute average membrane potential
     ####################################
     
-    membrane_potential = self.state_variables['membrane_potential']
+    membrane_potential = self.membrane_potential
     {membrane_potential_update_snippet}
 
-    self.state_variables['membrane_potential'] = membrane_potential
+    self.membrane_potential = membrane_potential
 
     # compute average firing rate
     #############################
 
-    self.state_variables['firing_rate'] = self.get_firing_rate()
+    self.firing_rate = self.get_firing_rate()
 
     # plasticity mechanisms
     #######################
@@ -655,7 +640,7 @@ def state_update(self, extrinsic_current{modulation_declaration_snippet}
     # update synaptic input buffer
     ##############################
     
-    for syn in self.synapses:
+    for _, syn in self.synapses.items():
         syn.rotate_input()
 """
     # the resulting constructor string is returned. exec(func_string) needs (for some reason) to be called
@@ -674,16 +659,20 @@ def construct_get_delta_membrane_potential_function(leaky_capacitor=False, integ
     if integro_differential:
         synapse_update_snippet = ""
         if leaky_capacitor:
-            synaptic_current_snippet = """self.synaptic_currents[i] = syn.get_synaptic_current(membrane_potential)"""
+            synaptic_current_snippet = """self.synaptic_currents[idx] = \
+            syn.get_synaptic_current(membrane_potential)"""
         else:
-            synaptic_current_snippet = """self.PSPs[i] = syn.get_synaptic_current(membrane_potential)"""
+            synaptic_current_snippet = """self.PSPs[idx] = \
+            syn.get_synaptic_current(membrane_potential)"""
     else:
-        synapse_update_snippet = """self.synaptic_currents[:], self.PSPs[:] = self.synaptic_currents_new[:], \
+        synapse_update_snippet = """self.synaptic_currents[:], \
+        self.PSPs[:] = self.synaptic_currents_new[:], \
         self.PSPs_new[:]"""
-        synaptic_current_snippet = """self.PSPs_new[i] = self.take_step(f=self.get_delta_psp, y_old=self.PSPs[i], synapse_idx=i)
-        self.synaptic_currents_new[i] = self.take_step(f=syn.get_delta_synaptic_current,
-                                                   y_old=self.synaptic_currents[i],
-                                                   membrane_potential=self.PSPs[i])"""
+        synaptic_current_snippet = """self.PSPs_new[idx] = self.take_step(f=self.get_delta_psp, 
+        y_old=self.PSPs[idx], synapse_idx=idx)
+        self.synaptic_currents_new[idx] = self.take_step(f=syn.get_delta_synaptic_current,
+                                                         y_old=self.synaptic_currents[idx],
+                                                         membrane_potential=self.PSPs[idx])"""
 
     # combine synaptic currents into single value
     if enable_modulation:
@@ -692,9 +681,11 @@ def construct_get_delta_membrane_potential_function(leaky_capacitor=False, integ
                 synaptic_modulation_snippet = "syn_current = self.synaptic_currents.dot" \
                                               "(self.extrinsic_synaptic_modulation)"
             else:
-                synaptic_modulation_snippet = "syn_current = self.PSPs.dot(self.extrinsic_synaptic_modulation)"
+                synaptic_modulation_snippet = "syn_current = self.PSPs.dot"\
+                    "(self.extrinsic_synaptic_modulation)"
         else:
-            synaptic_modulation_snippet = "syn_current = self.PSPs.dot(self.extrinsic_synaptic_modulation)"
+            synaptic_modulation_snippet = "syn_current = self.PSPs.dot" \
+                "(self.extrinsic_synaptic_modulation)"
     else:
         if leaky_capacitor:
             if integro_differential:
@@ -708,7 +699,8 @@ def construct_get_delta_membrane_potential_function(leaky_capacitor=False, integ
     if leaky_capacitor:
         leak_current_snippet = """leak_current = (self.resting_potential - membrane_potential) * \
                    self.membrane_capacitance / self.tau_leak"""
-        net_current_snippet = "(syn_current + leak_current + self.extrinsic_current) / self.membrane_capacitance"
+        net_current_snippet = "(syn_current + leak_current + self.extrinsic_current) " \
+                              "/ self.membrane_capacitance"
     else:
         leak_current_snippet = ""
         net_current_snippet = "syn_current + self.extrinsic_current"
@@ -718,7 +710,7 @@ def construct_get_delta_membrane_potential_function(leaky_capacitor=False, integ
                                  membrane_potential: Union[float, np.float64]
                                  ) -> Union[float, np.float64]:
     # calculate synaptic currents for each additive synapse
-    for i, syn in enumerate(self.synapses):
+    for idx, (_, syn) in enumerate(self.synapses.items()):
         {synaptic_current_snippet}
     {synapse_update_snippet}
     

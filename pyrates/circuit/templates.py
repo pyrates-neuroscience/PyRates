@@ -158,6 +158,8 @@ class JansenRitCircuit(CircuitFromScratch):
         Default = None.
     axon_params
         Default = None.
+    enable_modulation
+        If true, extrinsic synaptic modulation can be defined in run function.
 
     See Also
     --------
@@ -182,6 +184,7 @@ class JansenRitCircuit(CircuitFromScratch):
                  init_states: np.ndarray = np.zeros(3),
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[List[dict]] = None,
+                 enable_modulation: bool = False
                  ) -> None:
         """Initializes a basic Jansen-Rit circuit of pyramidal cells, excitatory interneurons and inhibitory
         interneurons.
@@ -227,12 +230,14 @@ class JansenRitCircuit(CircuitFromScratch):
                          synapses=synapse_types,
                          synapse_params=synapse_params,
                          synapse_class=synapse_class,
+                         synapse_types=['excitatory', 'inhibitory'],
                          axons=axon_types,
                          axon_params=axon_params,
                          axon_class=axon_class,
                          population_labels=population_labels,
                          step_size=step_size,
                          max_synaptic_delay=max_synaptic_delay,
+                         enable_modulation=enable_modulation,
                          init_states=init_states
                          )
 

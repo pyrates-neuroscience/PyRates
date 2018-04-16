@@ -88,11 +88,12 @@ def test_4_1_jr_circuit_bifurcation(test_case):
     # circuit.run(synaptic_inputs=new_synaptic_inputs,
     #             simulation_time=simulation_time)
 
-    circuit.run(synaptic_inputs=synaptic_inputs,
+    synaptic_inputs = synaptic_inputs[:, 0, 0]
+    synaptic_inputs = np.reshape(synaptic_inputs, (synaptic_inputs.shape[0], 1))
+    circuit.run(synaptic_inputs=synaptic_inputs, synaptic_input_pops=['JR_PCs'], synaptic_input_syns=['excitatory'],
                 simulation_time=simulation_time)
 
-    states = circuit.get_population_states(state_variable='membrane_potential')  # - 0.075
-    # fixme: do we need to keep the - 0.075 there?
+    states = circuit.get_population_states(state_variable='membrane_potential')
 
     # Save new data, if necessary due to syntax change
     ##################################################
@@ -299,8 +300,8 @@ def test_4_4_jr_network_i():
     # connections
     connection_strengths_1 = [0.]
     connection_strengths_2 = [100.]
-    source_populations = [0]
-    target_populations = [3]
+    source_populations = ['NMM1_JR_PCs']
+    target_populations = ['NMM2_JR_PCs']
 
     # delays
     delays = [0.001]
@@ -322,30 +323,36 @@ def test_4_4_jr_network_i():
     # synaptic input
     stim_time = 0.3
     stim_timesteps = np.int(stim_time / step_size)
-    synaptic_input = np.zeros((timesteps, 6, 2))
-    synaptic_input[0:stim_timesteps, 1, 0] = 300.
+    synaptic_input = np.zeros((timesteps, 1))
+    synaptic_input[0:stim_timesteps, 0] = 300.
+    synaptic_input_pops = ['NMM1_JR_PCs']
+    synaptic_input_syns = ['excitatory']
 
     # initialize nmm network
     ########################
     from pyrates.circuit import CircuitFromCircuit
     circuit1 = CircuitFromCircuit(circuits=[nmm1, nmm2],
-                                  connection_strengths=connection_strengths_1,
+                                  connectivity=connection_strengths_1,
                                   source_populations=source_populations,
                                   target_populations=target_populations,
+                                  target_synapses=['excitatory'],
                                   delays=delays,
                                   circuit_labels=['NMM1', 'NMM2'])
     circuit2 = CircuitFromCircuit(circuits=[nmm3, nmm4],
-                                  connection_strengths=connection_strengths_2,
+                                  connectivity=connection_strengths_2,
                                   source_populations=source_populations,
                                   target_populations=target_populations,
+                                  target_synapses=['excitatory'],
                                   delays=delays,
                                   circuit_labels=['NMM1', 'NMM2'])
 
     # run network simulations
     #########################
 
-    circuit1.run(synaptic_inputs=synaptic_input, simulation_time=simulation_time)
-    circuit2.run(synaptic_inputs=synaptic_input, simulation_time=simulation_time)
+    circuit1.run(synaptic_inputs=synaptic_input, synaptic_input_pops=synaptic_input_pops,
+                 synaptic_input_syns=synaptic_input_syns, simulation_time=simulation_time)
+    circuit2.run(synaptic_inputs=synaptic_input, synaptic_input_pops=synaptic_input_pops,
+                 synaptic_input_syns=synaptic_input_syns, simulation_time=simulation_time)
 
     # perform unit tests
     ####################
@@ -369,13 +376,14 @@ def test_4_5_circuit_run_method():
     ################
 
     N = 3
-    n_synapses = 2
 
     # simulations parameters
     simulation_time = 1e-3  # s
     step_size = 5e-4  # s
     n_time_steps = int(simulation_time / step_size)
-    synaptic_inputs = np.zeros((n_time_steps, N, n_synapses))
+    synaptic_inputs = np.zeros((n_time_steps, 1))
+    synaptic_input_pops = ['JR_PCs']
+    synaptic_input_syns = ['excitatory']
 
     # initialize neural mass network
     ################################
@@ -387,45 +395,74 @@ def test_4_5_circuit_run_method():
 
     with pytest.raises(ValueError):
         circuit.run(synaptic_inputs=synaptic_inputs,
+                    synaptic_input_pops=synaptic_input_pops,
+                    synaptic_input_syns=synaptic_input_syns,
                     simulation_time=-1)
 
     # check if dimensions of synaptic input are correct
     ###################################################
 
-    indices = ((1, 0, 0),
-               (0, 1, 0),
-               (0, 0, 1))
-    for i, j, k in indices:
-        with pytest.raises(ValueError):
-            wrong_synaptic_inputs = synaptic_inputs[i:, j:, k:]
-            circuit.run(synaptic_inputs=wrong_synaptic_inputs,
-                        simulation_time=simulation_time)
+    with pytest.raises(ValueError):
+        wrong_synaptic_inputs = synaptic_inputs[1:, 0]
+        circuit.run(synaptic_inputs=wrong_synaptic_inputs,
+                    synaptic_input_pops=synaptic_input_pops,
+                    synaptic_input_syns=synaptic_input_syns,
+                    simulation_time=simulation_time)
+    with pytest.raises(ValueError):
+        wrong_synaptic_input_pops = ['JR_PCs', 'JR_EINs']
+        circuit.run(synaptic_inputs=synaptic_inputs,
+                    synaptic_input_pops=wrong_synaptic_input_pops,
+                    synaptic_input_syns=synaptic_input_syns,
+                    simulation_time=simulation_time)
+    with pytest.raises(ValueError):
+        wrong_synaptic_input_syns = ['excitatory', 'inhibitory']
+        circuit.run(synaptic_inputs=synaptic_inputs,
+                    synaptic_input_pops=synaptic_input_pops,
+                    synaptic_input_syns=wrong_synaptic_input_syns,
+                    simulation_time=simulation_time)
 
     # check shape of extrinsic current
     ##################################
 
-    ext_current = np.zeros((n_time_steps, N))
-    indices = ((1, 0),
-               (0, 1))
-    for i, j in indices:
-        with pytest.raises(ValueError):
-            wrong_ext_current = ext_current[i:, j:]
-            circuit.run(synaptic_inputs=synaptic_inputs,
-                        simulation_time=simulation_time,
-                        extrinsic_current=wrong_ext_current)
-
+    ext_current = np.zeros((n_time_steps, 1))
+    ext_current_pops = ['JR_PCs']
+    with pytest.raises(ValueError):
+        wrong_ext_current = ext_current[1:, 0]
+        circuit.run(synaptic_inputs=synaptic_inputs,
+                    synaptic_input_pops=synaptic_input_pops,
+                    synaptic_input_syns=synaptic_input_syns,
+                    simulation_time=simulation_time,
+                    extrinsic_current=wrong_ext_current,
+                    extrinsic_current_pops=ext_current_pops)
+    with pytest.raises(ValueError):
+        wrong_ext_current_pops = ['JR_PCs', 'JR_EINs']
+        circuit.run(synaptic_inputs=synaptic_inputs,
+                    synaptic_input_pops=synaptic_input_pops,
+                    synaptic_input_syns=synaptic_input_syns,
+                    simulation_time=simulation_time,
+                    extrinsic_current=ext_current,
+                    extrinsic_current_pops=wrong_ext_current_pops)
     # check extrinsic modulation
     ############################
 
-    ext_mod = np.ones((n_time_steps, N))
-    indices = ((1, 0),
-               (0, 1))
-    for i, j in indices:
-        with pytest.raises(ValueError):
-            wrong_ext_mod = ext_mod[i:, j:]
-            circuit.run(synaptic_inputs=synaptic_inputs,
-                        simulation_time=simulation_time,
-                        extrinsic_modulation=wrong_ext_mod)
+    # ext_mod = np.ones((n_time_steps, N))
+    # ext_mod_pops = ['JR_PCs']
+    # with pytest.raises(ValueError):
+    #     wrong_ext_mod = ext_mod[1:, 0]
+    #     circuit.run(synaptic_inputs=synaptic_inputs,
+    #                 synaptic_input_pops=synaptic_input_pops,
+    #                 synaptic_input_syns=synaptic_input_syns,
+    #                 simulation_time=simulation_time,
+    #                 extrinsic_modulation=wrong_ext_mod,
+    #                 extrinsic_modulation_pops=ext_mod_pops)
+    # with pytest.raises(ValueError):
+    #     wrong_ext_mod_pops = ['JR_PCs', 'JR_EINs']
+    #     circuit.run(synaptic_inputs=synaptic_inputs,
+    #                 synaptic_input_pops=synaptic_input_pops,
+    #                 synaptic_input_syns=synaptic_input_syns,
+    #                 simulation_time=simulation_time,
+    #                 extrinsic_modulation=ext_mod,
+    #                 extrinsic_modulation_pops=wrong_ext_mod_pops)
 
     # check actual runtime
     ######################
@@ -446,7 +483,7 @@ def test_circuit_run_verbosity(capsys):
     simulation_time = 0.1  # s
     step_size = 5e-4  # s
     n_time_steps = int(simulation_time / step_size)
-    synaptic_inputs = np.zeros((n_time_steps, N, n_synapses))
+    synaptic_inputs = np.zeros((n_time_steps, 1))
 
     # initialize neural mass network
     ################################
@@ -456,6 +493,8 @@ def test_circuit_run_verbosity(capsys):
     #################
 
     circuit.run(synaptic_inputs=synaptic_inputs,
+                synaptic_input_pops=['JR_PCs'],
+                synaptic_input_syns=['excitatory'],
                 simulation_time=simulation_time,
                 verbose=True)
 
