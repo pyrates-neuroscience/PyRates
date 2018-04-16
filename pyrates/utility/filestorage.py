@@ -84,7 +84,7 @@ class RepresentationBase(object):
         # return f"{_module}.{_class}({param_str})"
 
         try:
-            return f"{_class} '{self.label}'"
+            return f"{_class} '{self.key}'"
         except AttributeError:
             return f"{_class}"
 

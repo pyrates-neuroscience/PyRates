@@ -154,7 +154,7 @@ class ExternalObserver(object):
             # loop over each population in group
             for j, target in enumerate(target_group):
 
-                # get all populations that contain target label and weight them as indicated
+                # get all populations that contain target key and weight them as indicated
                 target_pops = [key for k, key in enumerate(self.population_labels) if target in key]
                 self.states.loc[:, target_pops].mul(target_population_weights[i][j])
                 self.states[target + '_tmp'] = self.states.loc[:, target_pops].sum(axis=1)

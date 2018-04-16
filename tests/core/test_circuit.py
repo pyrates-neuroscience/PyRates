@@ -258,7 +258,7 @@ def test_4_3_jr_circuit_iii():
                                  axon_params=axon_params,
                                  max_synaptic_delay=max_synaptic_delay,
                                  init_states=init_states,
-                                 population_labels=population_labels,
+                                 population_keys=population_labels,
                                  delays=None)
 
         # run network simulation
@@ -337,14 +337,14 @@ def test_4_4_jr_network_i():
                                   target_populations=target_populations,
                                   target_synapses=['excitatory'],
                                   delays=delays,
-                                  circuit_labels=['NMM1', 'NMM2'])
+                                  circuit_keys=['NMM1', 'NMM2'])
     circuit2 = CircuitFromCircuit(circuits=[nmm3, nmm4],
                                   connectivity=connection_strengths_2,
                                   source_populations=source_populations,
                                   target_populations=target_populations,
                                   target_synapses=['excitatory'],
                                   delays=delays,
-                                  circuit_labels=['NMM1', 'NMM2'])
+                                  circuit_keys=['NMM1', 'NMM2'])
 
     # run network simulations
     #########################

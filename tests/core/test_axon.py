@@ -94,8 +94,8 @@ def test_1_2_jr_sigmoid_axon():
 
     from pyrates.axon import SigmoidAxon
     axon = SigmoidAxon(max_firing_rate=max_firing_rate,
-                       membrane_potential_threshold=membrane_potential_threshold,
-                       sigmoid_steepness=sigmoid_steepness)
+                       firing_threshold=membrane_potential_threshold,
+                       slope=sigmoid_steepness)
 
     # define inputs (unit = V)
     ##########################
