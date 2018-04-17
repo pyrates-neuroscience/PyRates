@@ -1,16 +1,22 @@
 """Function to construct circuits or other types of instances from a file or dictionary
 """
+
+# external packages
 import json
 from typing import Union
 
+# pyrates internal imports
 from pyrates.axon import Axon
 from pyrates.circuit import Circuit
 from pyrates.population import Population
 from pyrates.synapse import Synapse
 # from pyrates.utility.json_filestorage import RepresentationBase
 
+# meta infos
 __author__ = "Daniel Rose"
 __status__ = "Development"
+
+# TODO: Update docstrings
 
 
 def construct_circuit_from_file(filename: str, path: str="") -> Circuit:

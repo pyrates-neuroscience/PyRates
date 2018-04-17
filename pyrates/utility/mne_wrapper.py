@@ -2,14 +2,17 @@
 objects.
 """
 
-__author__ = 'Richard Gast'
-__status__ = 'Development'
-
-
+# external packages
 import mne
 import numpy as np
 from typing import Union, Optional, List
+
+# pyrates internal imports
 from pyrates.observer import CircuitObserver, EEGMEGObserver
+
+# meta infos
+__author__ = 'Richard Gast'
+__status__ = 'Development'
 
 
 ############################################################
@@ -22,13 +25,51 @@ def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
                       ch_names: Optional[Union[str, List[str]]] = None,
                       target_variable: str = 'membrane_potential',
                       events: Optional[np.ndarray] = None,
-                      event_labels: Optional[List[str]] = None,
+                      event_keys: Optional[List[str]] = None,
                       epoch_start: Optional[float] = None,
                       epoch_end: Optional[float] = None,
                       epoch_duration: Optional[float] = None,
                       epoch_averaging: bool = False,
                       ) -> Union[mne.io.Raw, mne.Epochs, mne.Evoked]:
-    """Uses the data stored on circuit to create a raw/epoch/evoked mne object.
+    """Uses the data stored on a circuit to create a raw/epoch/evoked mne object.
+
+    Parameters
+    ----------
+    observer
+        Instance of an :class:`CircuitObserver` (found on every :class:`Circuit` instance on which `run()` was called)
+        or an :class:`EEGMEGObserver` (needs to be instantiated from an internal observer).
+    ch_types
+        Type of the channels, the observation time-series of the observers refer to.
+    ch_names
+        Name of each channel/observation time-series.
+    target_variable
+        State variable that is to be extracted from the observer. Only needed, if the observer is a
+        :class:'CircuitObserver'.
+    events
+        2D array defining events during the simulation. For a more detailed documentation, see the docstring for
+        parameter `events` of :class:`mne.Epochs`.
+    event_keys
+        Names of the events. For a more detailed documentation, see the docstring for parameter `event_id` of
+        :class:`mne.Epochs`.
+    epoch_start
+        Time, relative to event onset, at which an epoch should start [unit = s]. For a more detailed documentation,
+        see the docstring for parameter `tmin` of :class:`mne.Epochs`.
+    epoch_end
+        Time, relative to event onset, at which an epoch should end [unit = s]. For a more detailed documentation,
+        see the docstring for parameter `tmax` of :class:`mne.Epochs`.
+    epoch_duration
+        Instead of passing `events`, this parameter can be used to create epochs with a fixed duration [unit = s].
+        If this is used, do not pass `epoch_start` or `epoch_end`. For a more detailed documentation,
+        see the docstring for parameter `duration` of :function:`mne.make_fixed_length_events`.
+    epoch_averaging
+        Only relevant, if `events` or `event_duration` were passede. If true, an :class:`mne.EvokedArray` instance will
+        be returned that contains ttime-series averaged over all epochs.
+
+    Returns
+    -------
+    Union[mne.io.Raw, mne.Epochs, mne.Evoked]
+        MNE object that contains either the raw, epoched, or averaged (over epochs) data.
+
     """
 
     # extract information from arguments
@@ -75,13 +116,13 @@ def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
             events = mne.make_fixed_length_events(raw=raw, id=0, duration=epoch_duration)
 
         # check whether event labels still have to be created or not
-        if not event_labels:
-            event_labels = dict()
+        if not event_keys:
+            event_keys = dict()
             for event in np.unique(events[:, 2]):
-                event_labels['event_' + str(event)] = event
+                event_keys['event_' + str(event)] = event
 
         # create epoch object from raw data and event information
-        mne_object = mne.Epochs(raw=raw, events=events, event_id=event_labels, tmin=epoch_start, tmax=epoch_end)
+        mne_object = mne.Epochs(raw=raw, events=events, event_id=event_keys, tmin=epoch_start, tmax=epoch_end)
 
         # create Evoked object by averaging over epochs if epoch_averaging is true
         if epoch_averaging:
@@ -92,7 +133,7 @@ def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
             data = np.mean(data, axis=0)
 
             # create evoked object
-            mne_object = mne.EvokedArray(data=data, info=info, tmin=epoch_start, comment=event_labels['event_0'],
+            mne_object = mne.EvokedArray(data=data, info=info, tmin=epoch_start, comment=event_keys['event_0'],
                                          nave=n_epochs)
 
     # stick with Raw object
@@ -112,13 +153,48 @@ def mne_from_csv(csv_dir: str,
                  ch_types: Union[str, List[str]] = 'eeg',
                  ch_names: Optional[Union[str, List[str]]] = None,
                  events: Optional[np.ndarray] = None,
-                 event_labels: Optional[List[str]] = None,
+                 event_keys: Optional[List[str]] = None,
                  epoch_start: Optional[float] = None,
                  epoch_end: Optional[float] = None,
                  epoch_duration: Optional[float] = None,
                  epoch_averaging: bool = False,
                  ) -> Union[mne.io.Raw, mne.Epochs, mne.Evoked]:
     """Uses the data stored on circuit to create a raw/epoch/evoked mne object.
+
+    Parameters
+    ----------
+    csv_dir
+        Full path + filename of the csv file that contains the circuit outputs from which an MNE object should be
+        created.
+    ch_types
+        Type of the channels, the observation time-series of the observers refer to.
+    ch_names
+        Name of each channel/observation time-series.
+    events
+        2D array defining events during the simulation. For a more detailed documentation, see the docstring for
+        parameter `events` of :class:`mne.Epochs`.
+    event_keys
+        Names of the events. For a more detailed documentation, see the docstring for parameter `event_id` of
+        :class:`mne.Epochs`.
+    epoch_start
+        Time, relative to event onset, at which an epoch should start [unit = s]. For a more detailed documentation,
+        see the docstring for parameter `tmin` of :class:`mne.Epochs`.
+    epoch_end
+        Time, relative to event onset, at which an epoch should end [unit = s]. For a more detailed documentation,
+        see the docstring for parameter `tmax` of :class:`mne.Epochs`.
+    epoch_duration
+        Instead of passing `events`, this parameter can be used to create epochs with a fixed duration [unit = s].
+        If this is used, do not pass `epoch_start` or `epoch_end`. For a more detailed documentation,
+        see the docstring for parameter `duration` of :function:`mne.make_fixed_length_events`.
+    epoch_averaging
+        Only relevant, if `events` or `event_duration` were passede. If true, an :class:`mne.EvokedArray` instance will
+        be returned that contains ttime-series averaged over all epochs.
+
+    Returns
+    -------
+    Union[mne.io.Raw, mne.Epochs, mne.Evoked]
+        MNE object that contains either the raw, epoched, or averaged (over epochs) data.
+
     """
 
     # extract information from arguments
@@ -166,13 +242,13 @@ def mne_from_csv(csv_dir: str,
             events = mne.make_fixed_length_events(raw=raw, id=0, duration=epoch_duration)
 
         # check whether event labels still have to be created or not
-        if not event_labels:
-            event_labels = dict()
+        if not event_keys:
+            event_keys = dict()
             for event in np.unique(events[:, 2]):
-                event_labels['event_' + str(event)] = event
+                event_keys['event_' + str(event)] = event
 
         # create epoch object from raw data and event information
-        mne_object = mne.Epochs(raw=raw, events=events, event_id=event_labels, tmin=epoch_start, tmax=epoch_end)
+        mne_object = mne.Epochs(raw=raw, events=events, event_id=event_keys, tmin=epoch_start, tmax=epoch_end)
 
         # create Evoked object by averaging over epochs if epoch_averaging is true
         if epoch_averaging:
@@ -183,7 +259,7 @@ def mne_from_csv(csv_dir: str,
             data = np.mean(data, axis=0)
 
             # create evoked object
-            mne_object = mne.EvokedArray(data=data, info=info, tmin=epoch_start, comment=event_labels['event_0'],
+            mne_object = mne.EvokedArray(data=data, info=info, tmin=epoch_start, comment=event_keys['event_0'],
                                          nave=n_epochs)
 
     # stick with Raw object

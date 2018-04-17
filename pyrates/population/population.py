@@ -18,7 +18,7 @@ from types import MethodType
 from pyrates.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
 from pyrates.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
     DEExponentialSynapse, DEDoubleExponentialSynapse
-from pyrates.utility import set_instance, check_nones
+from pyrates.utility import set_instance, make_iterable
 from pyrates.population.population_methods import construct_state_update_function, \
     construct_get_delta_membrane_potential_function
 from pyrates.utility.filestorage import RepresentationBase
@@ -352,7 +352,7 @@ class Population(AbstractBasePopulation):
                  synapse_efficacy_adaptation: Optional[List[Callable[[float], float]]] = None,
                  synapse_efficacy_adaptation_kwargs: Optional[List[dict]] = None,
                  synapse_keys: Optional[list] = None,
-                 key: str = 'Custom',
+                 key: Optional[str] = None,
                  verbose: bool = False
                  ) -> None:
         """Instantiation of base population.
@@ -390,7 +390,7 @@ class Population(AbstractBasePopulation):
 
         self.synapses = dict()
         self.step_size = step_size
-        self.key = key
+        self.key = key if key else 'nokey'
         self.max_population_delay = max_population_delay
         self.n_synapses = len(synapses) if synapses else len(synapse_params)
         self.spike_frequency_adaptation = deepcopy(spike_frequency_adaptation)
@@ -501,10 +501,7 @@ class Population(AbstractBasePopulation):
         ##############
 
         # make sure max_synaptic_delay has the correct format
-        if max_synaptic_delay is None:
-            max_synaptic_delay = np.array(check_nones(max_synaptic_delay, self.n_synapses))
-        elif not isinstance(max_synaptic_delay, np.ndarray):
-            max_synaptic_delay = np.zeros(self.n_synapses) + max_synaptic_delay
+        max_synaptic_delay = make_iterable(max_synaptic_delay, self.n_synapses)
 
         # instantiate synapses
         self._set_synapses(synapse_subtypes=synapses,
@@ -595,7 +592,7 @@ class Population(AbstractBasePopulation):
                       synapse_subtypes: Optional[List[str]] = None,
                       synapse_types: Union[str, List[str]] = 'DoubleExponentialSynapse',
                       synapse_params: Optional[List[dict]] = None,
-                      max_synaptic_delay: Optional[np.ndarray] = None,
+                      max_synaptic_delay: Optional[Union[np.ndarray, list]] = None,
                       synapse_keys: Optional[List[str]] = None
                       ) -> None:
         """Instantiates synapses.
@@ -618,11 +615,9 @@ class Population(AbstractBasePopulation):
         # check synapse parameter formats
         #################################
 
-        if isinstance(synapse_types, str):
-            synapse_types = [synapse_types for _ in range(self.n_synapses)]
-
-        synapse_subtypes = check_nones(synapse_subtypes, self.n_synapses)
-        synapse_params = check_nones(synapse_params, self.n_synapses)
+        synapse_types = make_iterable(synapse_types, self.n_synapses)
+        synapse_subtypes = make_iterable(synapse_subtypes, self.n_synapses)
+        synapse_params = make_iterable(synapse_params, self.n_synapses)
 
         # set all given synapses
         ########################

@@ -1,10 +1,16 @@
-"""This file includes the base observer class for the population & circuit level.
+"""This file includes the base observer classes for the circuit (internal observation) and external observations.
+
+The observers allow to observe specified state variables of specified populations of the circuit (internal observer) and
+to transform these observations into a specified external observation modality (external observer).
+
 """
 
+# external packages
 import numpy as np
-from typing import Union, Optional, List
-from pandas import DataFrame, concat, Series
+from typing import Optional, List
+from pandas import DataFrame
 
+# meta infos
 __status__ = "development"
 __author__ = "Richard Gast"
 
@@ -62,8 +68,21 @@ class CircuitObserver(object):
                target_states: Optional[List[str]] = None
                ) -> None:
         """Updates observer system to prepare a new run.
+
+        Parameters
+        ----------
+        circuit
+            Circuit instance.
+        sampling_step_size
+            Can be used to down-sample the observations compared to the simulated data.
+        target_populations
+            Names of the populations of interest.
+        target_states
+            Names of the state variables of interest.
+
         """
 
+        # set input argument-dependent variables
         self.sampling_step_size = sampling_step_size if sampling_step_size else circuit.step_size
         if not target_populations:
             target_populations = [pop for pop in circuit.populations.keys()]
@@ -71,7 +90,7 @@ class CircuitObserver(object):
             target_states = self.target_states
         self.precision = int(np.log10(1 / self.sampling_step_size)) + 2
 
-        # state dictionary
+        # create states collector list
         for i, state in enumerate(target_states):
             if state not in self.target_states:
                 state_list = list()
@@ -85,6 +104,12 @@ class CircuitObserver(object):
 
     def store_state_variables(self, circuit: object):
         """Goes through all target populations and adds the target state variables to the observer.
+
+        Parameters
+        ----------
+        circuit
+            Circuit instance.
+
         """
 
         if circuit.t % self.sampling_step_size < self.precision:
@@ -111,14 +136,30 @@ class CircuitObserver(object):
 
 class ExternalObserver(object):
     """Base external observation class. Manages how the circuit dynamics can be observed from outside the system.
+
+    Parameters
+    ----------
+    observer
+        CircuitObserver instance (exists on each Circuit instance on which `run()` was called at least once).
+    target_populations
+        Names of the populations of interest, grouped in lists that contain all populations that contribute to a single
+        external observation time-series.
+    target_population_weights
+        A scaling factor for each population specified in `target_populations` that indicates how much this population
+        contributes to the external observation time-series.
+    target_state
+        Name of the state variable that causes the external observation.
+    group_keys
+        Names of the external observation time-series (one for each group of populations).
+
     """
 
     def __init__(self,
                  observer: CircuitObserver,
-                 target_populations: Optional[list] = None,
-                 target_population_weights: Optional[Union[List[list], list]] = None,
+                 target_populations: Optional[List[List[str]]] = None,
+                 target_population_weights: Optional[List[List[float]]] = None,
                  target_state: str = 'membrane_potential',
-                 group_labels: Optional[list] = None
+                 group_keys: Optional[List[str]] = None
                  ):
         """Instantiates external observer.
         """
@@ -163,8 +204,8 @@ class ExternalObserver(object):
                 target_col.append(target + '_tmp')
 
             # combine grouped populations into single column
-            if group_labels:
-                group_key = group_labels[i]
+            if group_keys:
+                group_key = group_keys[i]
             else:
                 group_key = target.split('_')[0]
                 if group_key in self.states.keys():
@@ -177,9 +218,28 @@ class ExternalObserver(object):
                 store_observations: bool=False,
                 filename: Optional[str] = None,
                 path: Optional[str] = None,
-                time_window: Optional[list] = None
+                time_window: Optional[List[float]] = None
                 ) -> DataFrame:
         """Generates observation data from population states.
+
+        Parameters
+        ----------
+        store_observations
+            If true, observations will be saved to file.
+        filename
+            Name of the file the data should be stored in.
+        path
+            Can be used to specify a directory where the file should be stored in.
+        time_window
+            Can be used to crop the length of the observation time-series.
+            Pass a list with a start and a stop time [unit = s].
+
+        Returns
+        -------
+        DataFrame
+            Pandas dataframe containing the external observations with the columns being the observed time-series and
+            the rows defining the time-steps.
+
         """
 
         if time_window:

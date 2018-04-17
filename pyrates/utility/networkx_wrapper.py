@@ -1,11 +1,20 @@
 """Defines a few custom functions on the network graph for convenience.
 """
 
-__author__ = "Daniel Rose"
+# external packages
+from networkx import MultiDiGraph
+
+# pyrates internal imports
+from pyrates.population import Population
+
+# meta infos
+__author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
 
-from networkx import MultiDiGraph
-from pyrates.population import Population
+
+####################
+# networkx wrapper #
+####################
 
 
 class WrappedMultiDiGraph(MultiDiGraph):

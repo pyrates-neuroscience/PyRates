@@ -8,8 +8,8 @@ from .helper_functions import set_instance
 from .helper_functions import update_param
 from .helper_functions import interpolate_array
 from .helper_functions import nmrse
-from .helper_functions import check_nones
 from .helper_functions import deep_compare
+from .helper_functions import make_iterable
 from .bio_features import *
 from .filestorage import get_simulation_data
 from .filestorage import save_simulation_data_to_file

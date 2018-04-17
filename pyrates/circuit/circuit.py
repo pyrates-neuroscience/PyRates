@@ -17,7 +17,7 @@ from networkx import relabel_nodes
 # pyrates internal imports
 from pyrates.population import Population
 from pyrates.population import SynapticInputPopulation, ExtrinsicCurrentPopulation, ExtrinsicModulationPopulation
-from pyrates.utility import check_nones, set_instance
+from pyrates.utility import set_instance, make_iterable
 from pyrates.utility.filestorage import RepresentationBase
 from pyrates.utility.networkx_wrapper import WrappedMultiDiGraph
 from pyrates.observer import CircuitObserver
@@ -789,7 +789,7 @@ class Circuit(RepresentationBase):
         if not key:
             key = str(len(self.network_graph.nodes))
 
-        conn_targets = check_nones(conn_targets, len(target_nodes))
+        conn_targets = make_iterable(conn_targets, len(target_nodes))
 
         # add to network graph
         ######################
@@ -1099,53 +1099,32 @@ class CircuitFromScratch(Circuit):
             delays = np.zeros((n_pops, n_pops), dtype=int) if type(connectivity) is np.ndarray else \
                 [0. for _ in range(len(connectivity))]
 
-        # make float variables iterable
-        if isinstance(init_states, float):
-            init_states = np.zeros(n_pops) + init_states
+        # ensure that population specific variables are iterable
+        init_states = make_iterable(init_states, n_pops)
+        max_synaptic_delay = make_iterable(max_synaptic_delay, n_pops)
+        tau_leak = make_iterable(tau_leak, n_pops)
+        resting_potential = make_iterable(resting_potential, n_pops)
+        membrane_capacitance = make_iterable(membrane_capacitance, n_pops)
+        synapses = make_iterable(synapses, n_synapses)
+        synapse_params = make_iterable(synapse_params, n_synapses)
+        axons = make_iterable(axons, n_pops)
+        axon_params = make_iterable(axon_params, n_pops)
+        spike_frequency_adaptation = make_iterable(spike_frequency_adaptation, n_pops)
+        spike_frequency_adaptation_kwargs = make_iterable(spike_frequency_adaptation_kwargs, n_pops)
+        synapse_efficacy_adaptation = make_iterable(synapse_efficacy_adaptation, n_pops)
+        synapse_efficacy_adaptation_kwargs = make_iterable(synapse_efficacy_adaptation_kwargs, n_pops)
+        population_keys = make_iterable(population_keys, n_pops)
+        synapse_class = make_iterable(synapse_class, n_pops)
+        axon_class = make_iterable(axon_class, n_pops)
 
-        if isinstance(max_synaptic_delay, float):
-            max_synaptic_delay = np.zeros(n_pops) + max_synaptic_delay
-        elif not max_synaptic_delay:
-            max_synaptic_delay = check_nones(max_synaptic_delay, n_pops)
-
-        if isinstance(tau_leak, float):
-            tau_leak = np.zeros(n_pops) + tau_leak
-        elif tau_leak is None:
-            tau_leak = check_nones(tau_leak, n_pops)
-
-        if isinstance(resting_potential, float):
-            resting_potential = np.zeros(n_pops) + resting_potential
-        elif resting_potential is None:
-            resting_potential = check_nones(resting_potential, n_pops)
-
-        if isinstance(membrane_capacitance, float):
-            membrane_capacitance = np.zeros(n_pops) + membrane_capacitance
-        elif membrane_capacitance is None:
-            membrane_capacitance = check_nones(membrane_capacitance, n_pops)
-
-        # make None and str variables iterable
-        synapses = check_nones(synapses, n_synapses)
-        synapse_params = check_nones(synapse_params, n_synapses)
-        axons = check_nones(axons, n_pops)
-        axon_params = check_nones(axon_params, n_pops)
-        spike_frequency_adaptation = check_nones(spike_frequency_adaptation, n_pops)
-        spike_frequency_adaptation_kwargs = check_nones(spike_frequency_adaptation_kwargs, n_pops)
-        synapse_efficacy_adaptation = check_nones(synapse_efficacy_adaptation, n_pops)
-        synapse_efficacy_adaptation_kwargs = check_nones(synapse_efficacy_adaptation_kwargs, n_pops)
-
+        # ensure synapse specific variables exist for each synapse of each population
         for i, syn in enumerate(synapse_efficacy_adaptation_kwargs):
             if n_synapses == n_pops:
                 n_syns = len(synapses[i]) if synapses[i] else len(synapse_params[i])
-                syn = check_nones(syn, n_syns)
+                syn = make_iterable(syn, n_syns)
             else:
-                syn = check_nones(syn, n_synapses)
+                syn = make_iterable(syn, n_synapses)
             synapse_efficacy_adaptation_kwargs[i] = syn
-        if not population_keys:
-            population_keys = ['Custom' for _ in range(n_pops)]
-        if isinstance(synapse_class, str):
-            synapse_class = [synapse_class for _ in range(n_synapses)]
-        if isinstance(axon_class, str):
-            axon_class = [axon_class for _ in range(n_pops)]
 
         # instantiate each population
         #############################
@@ -1298,25 +1277,13 @@ class CircuitFromPopulations(Circuit):
             delays = np.zeros((n_pops, n_pops), dtype=int) if type(connectivity) is np.ndarray else \
                 [0. for _ in range(len(connectivity))]
 
-        # make float variables iterable
-        if isinstance(init_states, float):
-            init_states = np.zeros(n_pops) + init_states
-        if isinstance(max_synaptic_delay, float):
-            max_synaptic_delay = np.zeros(n_pops) + max_synaptic_delay
-        elif max_synaptic_delay is None:
-            max_synaptic_delay = check_nones(max_synaptic_delay, n_pops)
-        if isinstance(tau_leak, float):
-            tau_leak = np.zeros(n_pops) + tau_leak
-        elif tau_leak is None:
-            tau_leak = check_nones(tau_leak, n_pops)
-        if isinstance(resting_potential, float):
-            resting_potential = np.zeros(n_pops) + resting_potential
-        if isinstance(membrane_capacitance, float):
-            membrane_capacitance = np.zeros(n_pops) + membrane_capacitance
-
-        # make None/str variables iterable
-        if not population_keys:
-            population_keys = [str(i) for i in range(n_pops)]
+        # make sure that population specific variables are iterable
+        init_states = make_iterable(init_states, n_pops)
+        max_synaptic_delay = make_iterable(max_synaptic_delay, n_pops)
+        tau_leak = make_iterable(tau_leak, n_pops)
+        resting_potential =make_iterable(resting_potential, n_pops)
+        membrane_capacitance = make_iterable(membrane_capacitance, n_pops)
+        population_keys = make_iterable(population_keys, n_pops)
 
         # instantiate each population
         #############################
@@ -1487,7 +1454,7 @@ class CircuitFromCircuit(Circuit):
             # transform connectivity matrix into vector
             connectivity = connectivity[idx]
 
-            # transform delays matric into list
+            # transform delays matrix into list
             if delays is None:
                 delays = [0.] * len(connectivity)
             elif isinstance(delays, np.ndarray):

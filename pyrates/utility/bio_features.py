@@ -1,10 +1,12 @@
 """Contains functions representing various biophysical features/mechanisms.
 """
 
+# external packages
 import numpy as np
 from typing import Union, Optional
 
-__author__ = "Daniel F. Rose, Richard Gast"
+# meta infos
+__author__ = "Richard Gast"
 __status__ = "Development"
 
 

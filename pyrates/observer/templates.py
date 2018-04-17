@@ -1,17 +1,20 @@
 """Includes several derivations of base observer class for certain electrophysiological/neuroimaging modalities.
 """
 
-_status__ = "development"
-__author__ = "Richard Gast"
-
-
+# external packages
 import numpy as np
 from typing import Union, Optional, Callable, List
 from pandas import DataFrame
 
+# pyrates internal imports
+from pyrates.observer import ExternalObserver, CircuitObserver
+
+# type definitions
 FloatLike = Union[float, np.float64]
 
-from pyrates.observer import ExternalObserver, CircuitObserver
+# meta infos
+_status__ = "development"
+__author__ = "Richard Gast"
 
 
 #################
@@ -20,7 +23,32 @@ from pyrates.observer import ExternalObserver, CircuitObserver
 
 
 class fMRIObserver(ExternalObserver):
-    """Uses the Balloon-Windkessel model to enable observation of BOLD/CBF/CBV from the circuit activity.
+    """Uses the Balloon-Windkessel (BWK) model to enable observation of BOLD/CBF/CBV from the circuit activity.
+
+    Parameters
+    ----------
+    observer
+        See documentation of :class:`ExternalObserver`.
+    target_populations
+        See documentation of :class:`ExternalObserver`.
+    target_population_weights
+        See documentation of :class:`ExternalObserver`.
+    target_state
+        See documentation of :class:`ExternalObserver`.
+    group_keys
+        See documentation of :class:`ExternalObserver`.
+    beta
+    gamma
+    tau
+    alpha
+    p
+    normalize
+        If true, the neural activity used as input to the BWK model will be normalized to the interval [0, 1].
+    init_states
+        Can be used to define the initial states of the BWK model. Needs to be a 2D array with the first dimension equal
+        to the number of observation time-series (i.e. voxels of interest) and the second dimension equal to 4 (number
+        of internal states of the BWK model).
+
     """
 
     def __init__(self,
@@ -28,7 +56,7 @@ class fMRIObserver(ExternalObserver):
                  target_populations: Optional[list] = None,
                  target_population_weights: Optional[Union[List[list], list]] = None,
                  target_state: str = 'membrane_potential',
-                 group_labels: Optional[list] = None,
+                 group_keys: Optional[list] = None,
                  beta: float = 1/0.65,
                  gamma: float = 1/0.41,
                  tau: float = 0.98,
@@ -43,7 +71,7 @@ class fMRIObserver(ExternalObserver):
                          target_populations=target_populations,
                          target_population_weights=target_population_weights,
                          target_state=target_state,
-                         group_labels=group_labels)
+                         group_keys=group_keys)
 
         # normalize population states
         if normalize:
@@ -62,6 +90,8 @@ class fMRIObserver(ExternalObserver):
         if init_states is None:
             self.bwk_states = np.zeros((self.N, 4))
             self.bwk_states[:, 1:] = 1.
+        else:
+            self.bwk_states = init_states
         self.delta_bwk_states = np.zeros_like(self.bwk_states)
 
     def observe(self,
@@ -72,6 +102,11 @@ class fMRIObserver(ExternalObserver):
                 time_window: Optional[list] = None,
                 ) -> DataFrame:
         """Generates observation data from population states.
+
+        See Also
+        --------
+        :class:`ExternalObserver` for a detailed documentation of the arguments.
+
         """
 
         if time_window:
@@ -135,7 +170,24 @@ class fMRIObserver(ExternalObserver):
 
         return y_old + self.sampling_step_size * f(y_old, **kwargs)
 
-    def get_delta_bwk_states(self, bwk_states_old, neural_activity):
+    def get_delta_bwk_states(self,
+                             bwk_states_old: np.ndarray,
+                             neural_activity: np.ndarray
+                             ) -> np.ndarray:
+        """Calculates the change in the BWK model states.
+
+        Parameters
+        ----------
+        bwk_states_old
+            BWK model states from previous step (2D array, n_observations x 4).
+        neural_activity
+            vector with neural activity at the voxels of interest (1D array, n_observations)
+
+        Returns
+        -------
+        np.ndarray
+            Change in BWK model states (2D array, n_observations x 4).
+        """
 
         # calculate change in signal
         self.delta_bwk_states[:, 0] = neural_activity - self.beta * bwk_states_old[:, 0] - \
@@ -158,8 +210,23 @@ class fMRIObserver(ExternalObserver):
                        v0: float = 0.02,
                        k1: Optional[float] = None,
                        k2: float = 2.,
-                       k3: Optional[float] = None):
+                       k3: Optional[float] = None
+                       ) -> np.ndarray:
+        """Calculates the BOLD signal from the BWK model states.
 
+        Parameters
+        ----------
+        v0
+        k1
+        k2
+        k3
+
+        Returns
+        -------
+        np.ndarray
+            Resulting BOLD signal at each voxel of interest.
+
+        """
         if not k1:
             k1 = 7*self.p
         if not k3:
@@ -173,6 +240,35 @@ class fMRIObserver(ExternalObserver):
 
 class EEGMEGObserver(ExternalObserver):
     """Generates the source- or sensor-space EEG/MEG signal from the circuit states.
+
+    Parameters
+    ----------
+    observer
+        See documentation of :class:`ExternalObserver`.
+    target_populations
+        See documentation of :class:`ExternalObserver`.
+    target_population_weights
+        See documentation of :class:`ExternalObserver`.
+    target_state
+        See documentation of :class:`ExternalObserver`.
+    group_keys
+        See documentation of :class:`ExternalObserver`.
+    signal_space
+        If 'source', the EEG/MEG observations will be provided in source space. If 'sensor', the observations will be
+        projected into sensor space. In the latter case, the lead-field matrix needs to be passed as well.
+    lead_field_matrix
+        Lead-field or gain matrix that desscribes the contribution of each dipole in source space to the signals
+        picked up by the EEG/MEG sensors (2D, n_sources x n_sensors).
+    source_positions
+        2D array (n_sources, 3) defining the coordinates of each possible source in 3D space.
+    dipole_positions
+        2D array (n_dipoles_of_interest, 3) defining the coordinates of each dipole of interest (i.e. the observations
+        from which the EEG/MEG signal will be generated).
+    distance_metric
+        Defines the metric that will be used to find the closest source for each dipole.
+    sensor_keys
+        Names of the sensors.
+
     """
 
     def __init__(self,
@@ -180,13 +276,13 @@ class EEGMEGObserver(ExternalObserver):
                  target_populations: Optional[list] = None,
                  target_population_weights: Optional[Union[List[list], list]] = None,
                  target_state: str = 'membrane_potential',
-                 group_labels: Optional[list] = None,
+                 group_keys: Optional[list] = None,
                  signal_space: str = 'source',
                  lead_field_matrix: Optional[np.ndarray] = None,
                  source_positions: Optional[np.ndarray] = None,
                  dipole_positions: Optional[np.ndarray] = None,
                  distance_metric: str = 'euclidean',
-                 sensor_labels: Optional[list] = None
+                 sensor_keys: Optional[list] = None
                  ) -> None:
 
         # call super init
@@ -196,7 +292,7 @@ class EEGMEGObserver(ExternalObserver):
                          target_populations=target_populations,
                          target_population_weights=target_population_weights,
                          target_state=target_state,
-                         group_labels=group_labels)
+                         group_keys=group_keys)
 
         # project states into source space if wished for
         ################################################
@@ -219,6 +315,6 @@ class EEGMEGObserver(ExternalObserver):
             states_tmp = self.states.values @ lead_field_matrix
 
             # create new dataframe with sensor space data
-            if not sensor_labels:
-                sensor_labels = ['S' + str(i) for i in range(states_tmp.shape[1])]
-            self.states = DataFrame(data=states_tmp, columns=sensor_labels)
+            if not sensor_keys:
+                sensor_keys = ['S' + str(i) for i in range(states_tmp.shape[1])]
+            self.states = DataFrame(data=states_tmp, columns=sensor_keys)
