@@ -20,8 +20,9 @@ from pyrates.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynaps
     DEExponentialSynapse, DEDoubleExponentialSynapse
 from pyrates.utility import set_instance, make_iterable
 from pyrates.population.population_methods import construct_state_update_function, \
-    construct_get_delta_membrane_potential_function
+    construct_get_delta_membrane_potential_function, construct_get_synaptic_responses
 from pyrates.utility.filestorage import RepresentationBase
+import pyrates.solver as solv
 
 # type definition
 FloatLike = Union[float, np.float64]
@@ -351,6 +352,7 @@ class Population(AbstractBasePopulation):
                  spike_frequency_adaptation_kwargs: Optional[dict] = None,
                  synapse_efficacy_adaptation: Optional[List[Callable[[float], float]]] = None,
                  synapse_efficacy_adaptation_kwargs: Optional[List[dict]] = None,
+                 solver: str = 'ForwardEuler',
                  synapse_keys: Optional[list] = None,
                  key: Optional[str] = None,
                  verbose: bool = False
@@ -394,8 +396,8 @@ class Population(AbstractBasePopulation):
         self.max_population_delay = max_population_delay
         self.n_synapses = len(synapses) if synapses else len(synapse_params)
         self.spike_frequency_adaptation = deepcopy(spike_frequency_adaptation)
-        self.synapse_efficacy_adaptation = deepcopy(synapse_efficacy_adaptation)
-        self.synapse_efficacy_adaptation_args = deepcopy(synapse_efficacy_adaptation_kwargs)
+        self.synapse_efficacy_adaptation = deepcopy(synapse_efficacy_adaptation)  # type: List[Callable]
+        self.synapse_efficacy_adaptation_args = deepcopy(synapse_efficacy_adaptation_kwargs)  # type: List[dict]
         self.features = dict()
 
         # choose between different population set-ups based on passed parameters
@@ -477,26 +479,6 @@ class Population(AbstractBasePopulation):
             print(setup_msg)
             print('\n')
 
-        # build state update function
-        #############################
-
-        exec(construct_state_update_function(spike_frequency_adaptation=self.features['axonal_plasticity'],
-                                             synapse_efficacy_adaptation=self.features['synaptic_plasticity'],
-                                             leaky_capacitor=self.features['leaky_capacitor'])
-             )
-
-        self.state_update = MethodType(locals()['state_update'], self)
-
-        # build delta membrane potential function
-        #########################################
-
-        exec(construct_get_delta_membrane_potential_function(leaky_capacitor=self.features['leaky_capacitor'],
-                                                             enable_modulation=self.features['modulation_enabled'],
-                                                             integro_differential=self.features['integro_differential'])
-             )
-
-        self.get_delta_membrane_potential = MethodType(locals()['get_delta_membrane_potential'], self)
-
         # set synapses
         ##############
 
@@ -576,7 +558,8 @@ class Population(AbstractBasePopulation):
 
         # synaptic plasticity function arguments
         if synapse_efficacy_adaptation_kwargs is None or type(synapse_efficacy_adaptation_kwargs) is dict:
-            self.synapse_efficacy_adaptation_args = [self.synapse_efficacy_adaptation_args for _ in range(self.n_synapses)]
+            self.synapse_efficacy_adaptation_args = [self.synapse_efficacy_adaptation_args
+                                                     for _ in range(self.n_synapses)]
 
         if len(self.synapse_efficacy_adaptation) != len(self.synapse_efficacy_adaptation_args):
             raise AttributeError('Number of synaptic plasticity functions and plasticity function parameter '
@@ -587,6 +570,11 @@ class Population(AbstractBasePopulation):
         for i, key in enumerate(self.synapses.keys()):
             if self.synapse_efficacy_adaptation[i]:
                 self.synaptic_depression[i] = self.synapses[key].depression
+
+        # set-up the solver system for the state-update equations
+        #########################################################
+
+        self._set_solver(solver=solver)
 
     def _set_synapses(self,
                       synapse_subtypes: Optional[List[str]] = None,
@@ -718,6 +706,97 @@ class Population(AbstractBasePopulation):
         else:
             raise AttributeError('Invalid axon type!')
 
+    def _set_solver(self, solver: str):
+        """Instantiates solver on population.
+
+        Parameters
+        ----------
+        solver
+            Name of the solver sub-class that is to be used to solve the state update DE's.
+
+        """
+
+        # build delta membrane potential method
+        #######################################
+
+        # create string representation of method and make it executable
+        exec(construct_get_delta_membrane_potential_function(leaky_capacitor=self.features['leaky_capacitor'],
+                                                             enable_modulation=self.features['modulation_enabled'],
+                                                             integro_differential=self.features['integro_differential'])
+             )
+
+        # bind method to self
+        self.get_delta_membrane_potential = MethodType(locals()['get_delta_membrane_potential'], self)
+
+        # build get synaptic responses method
+        #####################################
+
+        # create string representation of method and make it executable
+        exec(construct_get_synaptic_responses(self.features['integro_differential']))
+
+        # bind method to self
+        self.get_synaptic_responses = MethodType(locals()['get_synaptic_responses'], self)
+
+        # instantiate the solvers
+        #########################
+
+        solver_args = {'max_step': self.step_size, 'atol': 1e-3, 'rtol': 1e-2}
+
+        # solvers needed for updating the membrane potential
+        if self.features['leaky_capacitor']:
+
+            self.membrane_potential_solver = set_instance(solv.Solver,
+                                                          instance_type=solver,
+                                                          instance_params=None,
+                                                          f=self.get_delta_membrane_potential,
+                                                          y0=self.membrane_potential,
+                                                          **solver_args)
+
+        else:
+
+            self.psp_solver = set_instance(solv.Solver,
+                                           instance_type=solver,
+                                           instance_params=None,
+                                           f=self.get_delta_psps,
+                                           y0=self.PSPs,
+                                           **solver_args)
+
+            self.synaptic_current_solver = set_instance(solv.Solver,
+                                                        instance_type=solver,
+                                                        instance_params=None,
+                                                        f=self.get_synaptic_responses,
+                                                        y0=self.synaptic_currents,
+                                                        **solver_args)
+
+        # additional solvers needed for plasticity mechanisms
+        if self.features['axonal_plasticity']:
+            self.axonal_adaptation_solver = set_instance(solv.Solver,
+                                                         instance_type=solver,
+                                                         instance_params=None,
+                                                         f=self.axon_update,
+                                                         y0=self.axonal_adaptation,
+                                                         **solver_args)
+
+        if self.features['synaptic_plasticity']:
+            self.synaptic_depression_solver = set_instance(solv.Solver,
+                                                           instance_type=solver,
+                                                           instance_params=None,
+                                                           f=self.synapse_updates,
+                                                           y0=self.synaptic_depression,
+                                                           **solver_args)
+
+        # build state update method
+        ###########################
+
+        # create string representation of method and make it executable
+        exec(construct_state_update_function(spike_frequency_adaptation=self.features['axonal_plasticity'],
+                                             synapse_efficacy_adaptation=self.features['synaptic_plasticity'],
+                                             leaky_capacitor=self.features['leaky_capacitor'])
+             )
+
+        # bind method to self
+        self.state_update = MethodType(locals()['state_update'], self)
+
     def get_firing_rate(self) -> FloatLike:
         """Calculate the current average firing rate of the population.
 
@@ -730,39 +809,14 @@ class Population(AbstractBasePopulation):
 
         return self.axon.compute_firing_rate(self.membrane_potential)
 
-    def get_delta_psp(self,
-                      psp: FloatLike,
-                      synapse_idx: int
-                      ) -> FloatLike:
+    def get_delta_psps(self,
+                       t: float,
+                       psps_old: np.ndarray
+                       ) -> np.ndarray:
         """Calculates the change in PSP.
         """
 
-        return self.synaptic_currents[synapse_idx]
-
-    def take_step(self,
-                  f: Callable,
-                  y_old: Union[FloatLike, np.ndarray],
-                  **kwargs
-                  ) -> FloatLike:
-        """Takes a step of an ODE with right-hand-side f using Euler formalism.
-
-        Parameters
-        ----------
-        f
-            Function that represents right-hand-side of ODE and takes `t` plus `y_old` as an argument.
-        y_old
-            Old value of y that needs to be updated according to dy(t)/dt = f(t, y)
-        **kwargs
-            Name-value pairs to be passed to f.
-
-        Returns
-        -------
-        float
-            Updated value of left-hand-side (y).
-
-        """
-
-        return y_old + self.step_size * f(y_old, **kwargs)
+        return self.synaptic_currents
 
     def copy_synapse(self,
                      synapse_key: str,
@@ -949,35 +1003,29 @@ class Population(AbstractBasePopulation):
             self.axon.bin_size = self.step_size
         self.axon.update()
 
-    def axon_update(self):
+    def axon_update(self,
+                    t: float,
+                    adaptation_old: float
+                    ) -> float:
         """Updates adaptation field of axon.
         """
 
-        self.axon.transfer_function_args['adaptation'] = self.take_step(f=self.spike_frequency_adaptation,
-                                                                        y_old=self.axon.transfer_function_args
-                                                                        ['adaptation'],
-                                                                        firing_rate=self.firing_rate,
-                                                                        **self.spike_frequency_adaptation_args)
+        return self.spike_frequency_adaptation(adaptation_old,
+                                               self.firing_rate,
+                                               **self.spike_frequency_adaptation_args)
 
-    def synapse_update(self,
-                       key: str,
-                       idx: int):
-        """Updates depression field of synapse.
-
-        Parameters
-        ----------
-        key
-            Synapse key.
-        idx
-            Synapse index.
-
+    def synapse_updates(self,
+                        t: float,
+                        depression_old: np.ndarray
+                        ) -> np.ndarray:
+        """Updates synaptic depressions of all synapses on population.
         """
 
-        self.synapses[key].depression = self.take_step(f=self.synapse_efficacy_adaptation[idx],
-                                                       y_old=self.synapses[key].depression,
-                                                       firing_rate=self.synapses[key].synaptic_input[
-                                                           self.synapses[key].kernel_length - 1],
-                                                       **self.synapse_efficacy_adaptation_args[idx])
+        return np.array([self.synapse_efficacy_adaptation[idx](depression_old,
+                                                               self.synapses[key].synaptic_input[
+                                                                   self.synapses[key].kernel_length - 1],
+                                                               **self.synapse_efficacy_adaptation_args[idx])
+                         for idx, key in self.synapses.items()])
 
     def plot_synaptic_kernels(self,
                               synapse_idx: Optional[List[int]] = None,

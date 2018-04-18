@@ -150,7 +150,7 @@ def test_4_2_jr_circuit_ii():
     # initialize neural mass network
     ################################
 
-    nmm = JansenRitCircuit(max_synaptic_delay=0.045)
+    nmm = JansenRitCircuit()
 
     # run network simulation
     ########################
@@ -158,7 +158,7 @@ def test_4_2_jr_circuit_ii():
     nmm.run(synaptic_inputs=synaptic_inputs,
             simulation_time=simulation_time)
 
-    states = nmm.get_population_states(state_variable_idx=0)
+    states = nmm.get_population_states()
 
     # load target data
     ###################
