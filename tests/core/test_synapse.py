@@ -62,29 +62,29 @@ def test_2_1_synapse_init():
     ###################
 
     synapse = Synapse(kernel_function=exponential_decay,
-                      efficacy=1, bin_size=1, label="something_odd")
-    assert synapse.label == "something_odd"
+                      efficacy=1, bin_size=1, key="something_odd")
+    assert synapse.key == "something_odd"
 
     synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1)
-    assert synapse.label == "excitatory_current"
+    assert synapse.key == "excitatory_current"
 
     synapse = Synapse(kernel_function=exponential_decay, efficacy=-1, bin_size=1)
-    assert synapse.label == "inhibitory_current"
+    assert synapse.key == "inhibitory_current"
 
     synapse = Synapse(kernel_function=exponential_decay, efficacy=-1, bin_size=1, reversal_potential=-0.075)
-    assert synapse.label == "inhibitory_conductance"
+    assert synapse.key == "inhibitory_conductance"
 
     synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, reversal_potential=-0.075)
-    assert synapse.label == "excitatory_conductance"
+    assert synapse.key == "excitatory_conductance"
 
-    # test kernel_scaling
+    # test synaptic_response_scaling
     #####################
 
     synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, reversal_potential=-0.075)
-    assert synapse.kernel_scaling(-0.075) == 0
+    assert synapse.synaptic_response_scaling(-0.075) == 0
 
     synapse = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1)
-    assert synapse.kernel_scaling(1000) == 1
+    assert synapse.synaptic_response_scaling(1000) == 1
 
 
 # noinspection PyTypeChecker
@@ -154,7 +154,7 @@ def test_2_3_synapse_get_synaptic_current():
     TODO: Look at original equations and think of some test cases
     to test:
       - kernel multiplication and integration (convolution?)
-      - kernel_scaling with conductivity-based synapse
+      - synaptic_response_scaling with conductivity-based synapse
       - depression
     """
     pass
@@ -206,15 +206,15 @@ def test_2_4_ampa_current_synapse():
 
     for i in range(len(firing_rates_1)):
         synapse.pass_input(firing_rates_1[i])
-        synapse.get_synaptic_current()
+        synapse.get_synaptic_response()
         synapse.rotate_input()
-    synaptic_current_1 = synapse.get_synaptic_current()
+    synaptic_current_1 = synapse.get_synaptic_response()
     synapse.clear()
     for i in range(len(firing_rates_2)):
         synapse.pass_input(firing_rates_2[i])
-        synapse.get_synaptic_current()
+        synapse.get_synaptic_response()
         synapse.rotate_input()
-    synaptic_current_2 = synapse.get_synaptic_current()
+    synaptic_current_2 = synapse.get_synaptic_response()
     synapse.clear()
 
     # get synaptic current at each incoming firing rate of firing_rates_3
@@ -222,7 +222,7 @@ def test_2_4_ampa_current_synapse():
     synaptic_current_3 = np.zeros(len(idx))
     for i in range(len(idx)):
         synapse.pass_input(firing_rates_3[i])
-        synaptic_current_3[i] = synapse.get_synaptic_current()
+        synaptic_current_3[i] = synapse.get_synaptic_response()
         synapse.rotate_input()
 
     # perform unit tests
@@ -289,15 +289,15 @@ def test_2_5_gabaa_current_synapse():
     #############################
     for i in range(len(firing_rates_1)):
         synapse.pass_input(firing_rates_1[i])
-        synapse.get_synaptic_current()
+        synapse.get_synaptic_response()
         synapse.rotate_input()
-    synaptic_current_1 = synapse.get_synaptic_current()
+    synaptic_current_1 = synapse.get_synaptic_response()
     synapse.clear()
     for i in range(len(firing_rates_2)):
         synapse.pass_input(firing_rates_2[i])
-        synapse.get_synaptic_current()
+        synapse.get_synaptic_response()
         synapse.rotate_input()
-    synaptic_current_2 = synapse.get_synaptic_current()
+    synaptic_current_2 = synapse.get_synaptic_response()
     synapse.clear()
 
     # get synaptic current at each incoming firing rate of firing_rates_3
@@ -305,7 +305,7 @@ def test_2_5_gabaa_current_synapse():
     synaptic_current_3 = np.zeros(len(idx))
     for i in range(len(idx)):
         synapse.pass_input(firing_rates_3[i])
-        synaptic_current_3[i] = synapse.get_synaptic_current()
+        synaptic_current_3[i] = synapse.get_synaptic_response()
         synapse.rotate_input()
 
     # perform unit tests
@@ -368,15 +368,15 @@ def test_2_6_ampa_conductivity_synapse():
     #############################
     for i in range(len(firing_rates_1)):
         synapse.pass_input(firing_rates_1[i])
-        synapse.get_synaptic_current()
+        synapse.get_synaptic_response()
         synapse.rotate_input()
-    synaptic_current_1 = synapse.get_synaptic_current(membrane_potential=membrane_potential)
+    synaptic_current_1 = synapse.get_synaptic_response(membrane_potential=membrane_potential)
     synapse.clear()
     for i in range(len(firing_rates_2)):
         synapse.pass_input(firing_rates_2[i])
-        synapse.get_synaptic_current()
+        synapse.get_synaptic_response()
         synapse.rotate_input()
-    synaptic_current_2 = synapse.get_synaptic_current(membrane_potential=membrane_potential)
+    synaptic_current_2 = synapse.get_synaptic_response(membrane_potential=membrane_potential)
     synapse.clear()
 
     # get synaptic current at each incoming firing rate of firing_rates_3
@@ -384,7 +384,7 @@ def test_2_6_ampa_conductivity_synapse():
     synaptic_current_3 = np.zeros(len(idx))
     for i in range(len(idx)):
         synapse.pass_input(firing_rates_3[i])
-        synaptic_current_3[i] = synapse.get_synaptic_current(membrane_potential=membrane_potential)
+        synaptic_current_3[i] = synapse.get_synaptic_response(membrane_potential=membrane_potential)
         synapse.rotate_input()
 
     # perform unit tests

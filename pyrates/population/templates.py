@@ -1,12 +1,14 @@
 """Templates for specific population parametrizations.
 """
 
+# external packages
 from typing import Optional, List, Dict, Union
-import numpy as np
+
+# pyrates internal imports
 from pyrates.population import Population
-from pyrates.utility import moran_spike_frequency_adaptation, synaptic_efficacy_adaptation, spike_frequency_adaptation
+from pyrates.utility import moran_spike_frequency_adaptation, synaptic_efficacy_adaptation
 
-
+# meta infos
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
@@ -19,28 +21,9 @@ __status__ = "Development"
 class JansenRitPyramidalCells(Population):
     """Pyramidal cell population with excitatory and inhibitory synapse as defined in [1]_.
 
-    Parameters
-    ----------
-    synapses
-        Default = JansenRitExcitatorySynapse, JansenRitInhibitorySynapse.
-    axon
-        Default = JansenRitAxon.
-    init_state
-        Default = 0 V.
-    step_size
-        Default = 0.0005 s.
-    max_population_delay
-        Default = 0.
-    synapse_params
-        Default = None.
-    axon_params
-        Default = None.
-    label
-        Default = 'JR_PCs'
-
     See Also
     --------
-    :class:`SecondOrderPopulation`: Detailed documentation of 2. order population parameters, attributes and methods.
+    :class:`Population`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
@@ -57,9 +40,11 @@ class JansenRitPyramidalCells(Population):
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 label: str = 'JR_PCs'
+                 synapse_keys: Optional[List[str]] = None,
+                 key: str = 'JR_PCs'
                  ) -> None:
-        """Instantiates JansenRit PC population with second order synapses and Jansen-Rit axon.
+        """Instantiates JansenRit PC population with two alpha-kernel based synapses (excitatory + inhibitory) and
+        an sigmoidal axon.
         """
 
         # check synapse parameters
@@ -67,6 +52,9 @@ class JansenRitPyramidalCells(Population):
 
         # synapse type
         synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
+
+        # synapse key
+        synapse_keys = ['excitatory', 'inhibitory'] if not synapse_keys else synapse_keys
 
         # call super init
         #################
@@ -78,37 +66,18 @@ class JansenRitPyramidalCells(Population):
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
-                         label=label,
+                         key=key,
                          synapse_class='ExponentialSynapse',
-                         synapse_labels=['excitatory', 'inhibitory'],
+                         synapse_keys=synapse_keys,
                          axon_class='SigmoidAxon')
 
 
 class JansenRitInterneurons(Population):
     """Interneuron population with excitatory synapse as defined in [1]_.
 
-    Parameters
-    ----------
-    synapses
-        Default = JansenRitExcitatorySynapse.
-    axon
-        Default = JansenRitAxon.
-    init_state
-        Default = 0 V.
-    step_size
-        Default = 0.0005 s.
-    max_population_delay
-        Default = 0.
-    synapse_params
-        Default = None.
-    axon_params
-        Default = None.
-    label
-        Default = 'JR_INs'
-
     See Also
     --------
-    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
+    :class:`Population`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
@@ -125,7 +94,8 @@ class JansenRitInterneurons(Population):
                  max_population_delay: float = 0.,
                  synapse_params: Optional[List[Dict[str, Union[bool, float]]]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 label: str = 'JR_INs'
+                 synapse_keys: Optional[List[str]] = None,
+                 key: str = 'JR_INs'
                  ) -> None:
         """Instantiates JansenRit interneuron population with second order synapse and Jansen-Rit axon.
         """
@@ -136,6 +106,9 @@ class JansenRitInterneurons(Population):
         # synapse type
         synapses = ['JansenRitExcitatorySynapse'] if not synapses else synapses
 
+        # synapse key
+        synapse_keys = ['excitatory'] if not synapse_keys else synapse_keys
+
         # call super init
         #################
 
@@ -146,9 +119,9 @@ class JansenRitInterneurons(Population):
                          max_population_delay=max_population_delay,
                          synapse_params=synapse_params,
                          axon_params=axon_params,
-                         label=label,
+                         key=key,
                          synapse_class='ExponentialSynapse',
-                         synapse_labels=['excitatory'],
+                         synapse_keys=synapse_keys,
                          axon_class='SigmoidAxon')
 
 
@@ -160,32 +133,9 @@ class JansenRitInterneurons(Population):
 class MoranPyramidalCells(Population):
     """Population of pyramidal cells as described in [1]_.
 
-    Parameters
-    ----------
-    synapses
-        Default = MoranExcitatorySynapse, MoranInhibitorySynapse
-    axon
-        Default = MoranAxon.
-    init_state
-        Default = 0 V.
-    step_size
-        Default = 0.0005 s.
-    max_population_delay
-        Default = 0.
-    synapse_params
-        Default = None.
-    axon_params
-        Default = None.
-    tau
-        Default = None.
-    store_state_variables
-        Default = False.
-    label
-        Default = 'Moran_PCs'
-
     See Also
     --------
-    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
+    :class:`Population`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
@@ -205,8 +155,8 @@ class MoranPyramidalCells(Population):
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'PlasticSigmoidAxon',
                  tau: Optional[float] = None,
-                 store_state_variables: bool = True,
-                 label: str = 'Moran_PCs'
+                 synapse_keys: Optional[List[str]] = None,
+                 key: str = 'Moran_PCs'
                  ) -> None:
         """Instantiates a population as defined in [1]_.
         """
@@ -217,14 +167,16 @@ class MoranPyramidalCells(Population):
         # synapse type
         synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
 
-        # spike frequency adaptation params
-        ###################################
+        # synapse keys
+        synapse_keys = ['excitatory', 'inhibitory'] if not synapse_keys else synapse_keys
 
+        # set parameter dictionaries
+        ############################
+
+        # axonal plasticity
         params = {'tau': tau}
 
-        # axon params
-        #############
-
+        # axon
         if not axon_params:
             axon_params = [{'normalize': True} for _ in range(len(synapses))]
 
@@ -242,39 +194,18 @@ class MoranPyramidalCells(Population):
                          synapse_class=synapse_class,
                          axon_class=axon_class,
                          spike_frequency_adaptation=moran_spike_frequency_adaptation if tau else None,
-                         spike_frequency_adaptation_args=params,
-                         store_state_variables=store_state_variables,
-                         label=label
+                         spike_frequency_adaptation_kwargs=params,
+                         synapse_keys=synapse_keys,
+                         key=key
                          )
 
 
 class MoranExcitatoryInterneurons(Population):
     """Population of excitatory interneurons as defined in [1]_.
 
-    Parameters
-    ----------
-    synapses
-        Default = MoranExcitatorySynapse.
-    axon
-        Default = MoranAxon.
-    init_state
-        Default = 0 V.
-    step_size
-        Default = 0.0005 s.
-    max_population_delay
-        Default = 0.
-    synapse_params
-        Default = None.
-    axon_params
-        Default = None.
-    store_state_variables
-        Default = False.
-    label
-        Default = 'Moran_EINs'
-
     See Also
     --------
-    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
+    :class:`Population`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
@@ -294,8 +225,8 @@ class MoranExcitatoryInterneurons(Population):
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'PlasticSigmoidAxon',
-                 store_state_variables: bool = True,
-                 label: str = 'Moran_EINs'
+                 synapse_keys: Optional[List[str]] = None,
+                 key: str = 'Moran_EINs'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
         """
@@ -305,6 +236,9 @@ class MoranExcitatoryInterneurons(Population):
 
         # synapse type
         synapses = ['MoranExcitatorySynapse'] if not synapses else synapses
+
+        # synapse keys
+        synapse_keys = ['excitatory'] if not synapse_keys else synapse_keys
 
         # axon params
         if not axon_params:
@@ -323,37 +257,16 @@ class MoranExcitatoryInterneurons(Population):
                          axon_params=axon_params,
                          synapse_class=synapse_class,
                          axon_class=axon_class,
-                         store_state_variables=store_state_variables,
-                         label=label)
+                         synapse_keys=synapse_keys,
+                         key=key)
 
 
 class MoranInhibitoryInterneurons(Population):
     """Population of inhibitory interneurons without spike-frequency-adaptation (see [1]_).
 
-    Parameters
-    ----------
-    synapses
-        Default = MoranExcitatorySynapse, MoranInhibitorySynapse
-    axon
-        Default = MoranAxon.
-    init_state
-        Default = 0 V.
-    step_size
-        Default = 0.0005 s.
-    max_population_delay
-        Default = 0.
-    synapse_params
-        Default = None.
-    axon_params
-        Default = None.
-    store_state_variables
-        Default = False.
-    label
-        Default = 'Moran_IINs'
-
     See Also
     --------
-    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
+    :class:`Population`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
@@ -373,8 +286,8 @@ class MoranInhibitoryInterneurons(Population):
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'PlasticSigmoidAxon',
-                 store_state_variables: bool = True,
-                 label: str = 'Moran_IINs'
+                 synapse_keys: Optional[List[str]] = None,
+                 key: str = 'Moran_IINs'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a spike-frequency-adaptation mechanism.
         """
@@ -387,6 +300,9 @@ class MoranInhibitoryInterneurons(Population):
         if not synapses:
             synapses = ['MoranExcitatorySynapse', 'MoranInhibitorySynapse'] if not synapses else synapses
 
+        # synapse keys
+        synapse_keys = ['excitatory', 'inhibitory'] if not synapse_keys else synapse_keys
+
         # axon params
         if not axon_params:
             axon_params = [{'normalize': True} for _ in range(len(synapses))]
@@ -404,8 +320,8 @@ class MoranInhibitoryInterneurons(Population):
                          axon_params=axon_params,
                          synapse_class=synapse_class,
                          axon_class=axon_class,
-                         store_state_variables=store_state_variables,
-                         label=label
+                         synapse_keys=synapse_keys,
+                         key=key
                          )
 
 
@@ -417,38 +333,9 @@ class MoranInhibitoryInterneurons(Population):
 class WangKnoescheCells(Population):
     """Population of cells with synaptic-efficacy-adaptation (see [1]_).
 
-    Parameters
-    ----------
-    synapses
-        Default = JansenRitExcitatorySynapse, JansenRitInhibitorySynapse
-    axon
-        Default = JansenRitAxon.
-    init_state
-        Default = 0 V.
-    step_size
-        Default = 0.0005 s.
-    max_synaptic_delay
-        Default = None
-    max_population_delay
-        Default = 0.
-    synapse_params
-        Default = None.
-    axon_params
-        Default = None.
-    store_state_variables
-        Default = False.
-    label
-        Default = 'WangKnoeschePopulation'
-    tau_depression
-        Default = 0.05 s. Defines synaptic depression time constant.
-    tau_recycle
-        Default = 0.5 s. Defines synaptic recycling time constant.
-    plastic_synapses
-        Default = [True, False]. Defines which synapses are plastic and which are not.
-
     See Also
     --------
-    :class:`SecondOrderPopulation`: Detailed documentation of population parameters, attributes and methods.
+    :class:`Population`: Detailed documentation of population parameters, attributes and methods.
 
     References
     ----------
@@ -467,11 +354,11 @@ class WangKnoescheCells(Population):
                  axon_params: Optional[Dict[str, float]] = None,
                  synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'SigmoidAxon',
-                 store_state_variables: bool = True,
-                 label: str = 'WangKnoeschePopulation',
                  tau_depression: float = 0.05,
                  tau_recycle: float = 0.5,
-                 plastic_synapses: Optional[List[bool]] = None
+                 plastic_synapses: Optional[List[bool]] = None,
+                 synapse_keys: Optional[List[str]] = None,
+                 key: str = 'WangKnoeschePopulation'
                  ) -> None:
         """Instantiates a population as defined in [1]_ with a synaptic efficacy adaptation mechanism.
         """
@@ -484,9 +371,12 @@ class WangKnoescheCells(Population):
         if not synapses:
             synapses = ['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'] if not synapses else synapses
 
+        # synapse keys
+        synapse_keys = ['excitatory', 'inhibitory'] if not synapse_keys else synapse_keys
+
         # synaptic plasticity
         if not plastic_synapses:  # A list [False] evaluates correctly
-            plastic_synapses = [True, False] if not plastic_synapses else plastic_synapses
+            plastic_synapses = [True, False]
 
         # synaptic plasticity params
         ############################
@@ -523,8 +413,8 @@ class WangKnoescheCells(Population):
                          axon_params=axon_params,
                          synapse_class=synapse_class,
                          axon_class=axon_class,
-                         store_state_variables=store_state_variables,
-                         label=label,
                          synapse_efficacy_adaptation=func_list,
-                         synapse_efficacy_adaptation_args=param_list
+                         synapse_efficacy_adaptation_kwargs=param_list,
+                         synapse_keys=synapse_keys,
+                         key=key
                          )

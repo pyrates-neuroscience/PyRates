@@ -35,15 +35,15 @@
                         "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
-                    "label": "JR_PCs",
-                    "synapse_labels": [
+                    "key": "JR_PCs",
+                    "synapse_keys": [
                         "excitatory",
                         "inhibitory"
                     ],
                     "spike_frequency_adaptation": null,
-                    "spike_frequency_adaptation_args": null,
+                    "spike_frequency_adaptation_kwargs": null,
                     "synapse_efficacy_adaptation": null,
-                    "synapse_efficacy_adaptation_args": null,
+                    "synapse_efficacy_adaptation_kwargs": null,
                     "tau_leak": null,
                     "resting_potential": null,
                     "membrane_capacitance": null,
@@ -72,14 +72,14 @@
                         "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
-                    "label": "JR_EINs",
-                    "synapse_labels": [
+                    "key": "JR_EINs",
+                    "synapse_keys": [
                         "excitatory"
                     ],
                     "spike_frequency_adaptation": null,
-                    "spike_frequency_adaptation_args": null,
+                    "spike_frequency_adaptation_kwargs": null,
                     "synapse_efficacy_adaptation": null,
-                    "synapse_efficacy_adaptation_args": null,
+                    "synapse_efficacy_adaptation_kwargs": null,
                     "tau_leak": null,
                     "resting_potential": null,
                     "membrane_capacitance": null,
@@ -108,14 +108,14 @@
                         "ExponentialSynapse"
                     ],
                     "axon_class": "SigmoidAxon",
-                    "label": "JR_IINs",
-                    "synapse_labels": [
+                    "key": "JR_IINs",
+                    "synapse_keys": [
                         "excitatory"
                     ],
                     "spike_frequency_adaptation": null,
-                    "spike_frequency_adaptation_args": null,
+                    "spike_frequency_adaptation_kwargs": null,
                     "synapse_efficacy_adaptation": null,
-                    "synapse_efficacy_adaptation_args": null,
+                    "synapse_efficacy_adaptation_kwargs": null,
                     "tau_leak": null,
                     "resting_potential": null,
                     "membrane_capacitance": null,

@@ -1,20 +1,23 @@
 """ Utility functions to store Circuit configurations and data in JSON files
 and read/construct circuit from JSON.
 """
+
+# external packages
 from collections import OrderedDict
 from typing import Generator, Tuple, Any, Union, List, Dict
-
 from networkx import node_link_data
-
-__author__ = "Daniel Rose"
-__status__ = "Development"
-
 # from typing import Union, List
 from inspect import getsource
 import numpy as np
 import json
 from pandas import DataFrame
 import pandas as pd
+
+# meta infos
+__author__ = "Daniel Rose"
+__status__ = "Development"
+
+# TODO: Update documentations & clean functions from unnecessary comments (i.e. silent code)
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -84,7 +87,7 @@ class RepresentationBase(object):
         # return f"{_module}.{_class}({param_str})"
 
         try:
-            return f"{_class} '{self.label}'"
+            return f"{_class} '{self.key}'"
         except AttributeError:
             return f"{_class}"
 

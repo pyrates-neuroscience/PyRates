@@ -1,13 +1,16 @@
 """Templates for specific axon parametrizations.
 """
 
-import numpy as np
-from pyrates.axon import SigmoidAxon, Axon, BurstingAxon, PlasticSigmoidAxon  # type: ignore
-from pyrates.utility import plastic_sigmoid, plastic_normalized_sigmoid, activation_sigmoid, inactivation_sigmoid
-from pyrates.utility import axon_exponential
-from typing import Optional, List, Union
+# external packages
+from typing import Optional
 
-__author__ = "Daniel F. Rose, Richard Gast"
+# pyrates internal imports
+from pyrates.axon import SigmoidAxon, BurstingAxon, PlasticSigmoidAxon  # type: ignore
+from pyrates.utility import activation_sigmoid, inactivation_sigmoid
+from pyrates.utility import axon_exponential
+
+# meta infos
+__author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
 
 
@@ -19,46 +22,6 @@ __status__ = "Development"
 class KnoescheAxon(SigmoidAxon):
     """Sigmoid axon with parameters set according to Thomas Knoesche's document.
 
-    Parameters
-    ----------
-    max_firing_rate
-        Default = 5.0 Hz. See documentation of parameter 'max_firing_rate' of :class:`SigmoidAxon`.
-    membrane_potential_threshold
-        Default = -0.069 V. See documentation of parameter 'membrane_potential_threshold' of :class:`SigmoidAxon`.
-    sigmoid_steepness
-        Default = 555.56 Hz. See documentation of parameter 'sigmoid_steepness' of :class:`SigmoidAxon`.
-
-    See Also
-    --------
-    :class:`SigmoidAxon`: Detailed description of parameters.
-    :class:`Axon`: Detailed description of attributes and methods.
-
-    """
-
-    def __init__(self, max_firing_rate: float = 5.,
-                 membrane_potential_threshold: float = -0.069,
-                 sigmoid_steepness: float = 560.0) -> None:
-        """Instantiates sigmoid axon with Knoesche's parameters.
-        """
-
-        super().__init__(max_firing_rate=max_firing_rate,
-                         membrane_potential_threshold=membrane_potential_threshold,
-                         sigmoid_steepness=sigmoid_steepness,
-                         label='Knoesche')
-
-
-class PlasticKnoescheAxon(PlasticSigmoidAxon):
-    """Sigmoid axon with parameters set according to Thomas Knoesche's document.
-
-    Parameters
-    ----------
-    max_firing_rate
-        Default = 5.0 Hz. See documentation of parameter 'max_firing_rate' of :class:`SigmoidAxon`.
-    membrane_potential_threshold
-        Default = -0.069 V. See documentation of parameter 'membrane_potential_threshold' of :class:`SigmoidAxon`.
-    sigmoid_steepness
-        Default = 555.56 Hz. See documentation of parameter 'sigmoid_steepness' of :class:`SigmoidAxon`.
-
     See Also
     --------
     :class:`SigmoidAxon`: Detailed description of parameters.
@@ -68,17 +31,42 @@ class PlasticKnoescheAxon(PlasticSigmoidAxon):
 
     def __init__(self,
                  max_firing_rate: float = 5.,
-                 sigmoid_steepness: float = 560.,
-                 membrane_potential_threshold: float = -0.069
+                 firing_threshold: float = -0.069,
+                 slope: float = 560.0
+                 ) -> None:
+        """Instantiates sigmoid axon with T. Knoesche's parameters.
+        """
+
+        super().__init__(max_firing_rate=max_firing_rate,
+                         firing_threshold=firing_threshold,
+                         slope=slope,
+                         key='LC_axon')
+
+
+class PlasticKnoescheAxon(PlasticSigmoidAxon):
+    """Sigmoid axon with parameters set according to Thomas Knoesche's document. Allows for spike-frequency adaptation.
+
+    See Also
+    --------
+    :class:`PlasticSigmoidAxon`: Detailed description of parameters.
+    :class:`Axon`: Detailed description of attributes and methods.
+
+    """
+
+    def __init__(self,
+                 max_firing_rate: float = 5.,
+                 slope: float = 560.,
+                 firing_threshold: float = -0.069
                  ) -> None:
         """Instantiate plastic sigmoidal axon.
         """
 
-        super().__init__(label='plastic_knoesche_axon',
+        super().__init__(key='LC_axon_plastic',
                          max_firing_rate=max_firing_rate,
-                         membrane_potential_threshold=membrane_potential_threshold,
-                         sigmoid_steepness=sigmoid_steepness,
+                         firing_threshold=firing_threshold,
+                         slope=slope,
                          normalize=False)
+
 
 ########################
 # JansenRit-type axons #
@@ -87,15 +75,6 @@ class PlasticKnoescheAxon(PlasticSigmoidAxon):
 
 class JansenRitAxon(SigmoidAxon):
     """Sigmoid axon with parameters set according to [1]_.
-
-    Parameters
-    ----------
-    max_firing_rate
-        Default = 5.0 Hz. See documentation of parameter 'max_firing_rate' of :class:`SigmoidAxon`.
-    membrane_potential_threshold
-        Default = 0.006 V. See documentation of parameter 'membrane_potential_threshold' of :class:`SigmoidAxon`.
-    sigmoid_steepness
-        Default = 560.0 Hz. See documentation of parameter 'sigmoid_steepness' of :class:`SigmoidAxon`.
 
     See Also
     --------
@@ -109,32 +88,26 @@ class JansenRitAxon(SigmoidAxon):
 
     """
 
-    def __init__(self, max_firing_rate: float = 5.,
-                 membrane_potential_threshold: float = 0.006,
-                 sigmoid_steepness: float = 560.) -> None:
+    def __init__(self,
+                 max_firing_rate: float = 5.,
+                 firing_threshold: float = 0.006,
+                 slope: float = 560.
+                 ) -> None:
         """Instantiates sigmoid axon with Jansen & Rit's parameters.
         """
 
         super().__init__(max_firing_rate=max_firing_rate,
-                         membrane_potential_threshold=membrane_potential_threshold,
-                         sigmoid_steepness=sigmoid_steepness,
-                         label='JansenRit')
+                         firing_threshold=firing_threshold,
+                         slope=slope,
+                         key='JR_axon')
 
 
 class MoranAxon(PlasticSigmoidAxon):
     """Sigmoidal axon as defined in [1]_.
 
-    Parameters
-    ----------
-    max_firing_rate
-        Default = 1.0 Hz. See documentation of parameter 'max_firing_rate' of :class:`SigmoidAxon`.
-    sigmoid_steepness
-        Default = 2000 Hz. See documentation of parameter 'sigmoid_steepness' of :class:`SigmoidAxon`.
-    membrane_potential_threshold
-        Default = 0.001 V. See documentation of parameter 'membrane_potential_threshold' of :class:`SigmoidAxon`.
-
     See Also
     --------
+    :class:`PlasticSigmoidAxon`: Detailed description of parameters.
     :class:`Axon`: Detailed description of attributes and methods.
 
     References
@@ -146,17 +119,17 @@ class MoranAxon(PlasticSigmoidAxon):
 
     def __init__(self,
                  max_firing_rate: float = 1.,
-                 sigmoid_steepness: float = 2000.,
-                 membrane_potential_threshold: float = 0.001
+                 slope: float = 2000.,
+                 firing_threshold: float = 0.001
                  ) -> None:
         """Instantiate moran axon.
         """
 
         super().__init__(max_firing_rate=max_firing_rate,
-                         membrane_potential_threshold=membrane_potential_threshold,
-                         sigmoid_steepness=sigmoid_steepness,
+                         firing_threshold=firing_threshold,
+                         slope=slope,
                          normalize=True,
-                         label='Moran_axon')
+                         key='Moran_axon')
 
 
 #################
@@ -171,8 +144,8 @@ class SuffczynskiAxon(BurstingAxon):
     ----------
     bin_size
         time window one bin of the axonal kernel is representing [unit = s].
-    axon_type
-        See description of parameter `axon_type` of :class:`Axon`.
+    key
+        See description of parameter `key` of :class:`Axon`.
     max_delay
         Maximal time delay after which a certain membrane potential still affects the firing rate [unit = s].
     epsilon
@@ -186,13 +159,13 @@ class SuffczynskiAxon(BurstingAxon):
     max_firing_rate
         Maximum firing rate of the axon [unit = 1/s].
     activation_threshold
-        Membrane potential threshold for activating normal firing [unit = V].
-    activation_steepness
-        Steepness of sigmoid representing the standard transfer function [unit = V].
+        Firing threshold for activating normal firing [unit = V].
+    activation_slope
+        Slope of sigmoid representing the standard transfer function [unit = V].
     inactivation_threshold
-        Membrane potential threshold for de-activating LTS firing [unit = V].
-    inactivation_steepness
-        Steepness of sigmoid representing the LTS bursts [unit = V].
+        Firing threshold for de-activating LTS firing [unit = V].
+    inactivation_slope
+        Slope of sigmoid representing the LTS bursts [unit = V].
     
     See Also
     --------
@@ -200,11 +173,15 @@ class SuffczynskiAxon(BurstingAxon):
     
     References
     ----------
+    .. [1] P. Suffczynski, S. Kalitzin, G. Pfurtscheller & F.H. Lopes da Silva, "Computational model of thalamo-cortical
+       networks: dynamical control of alpha rhythms in relation to focal attention" International Journal of
+       Psychophysiology, vol. 43(1), pp. 25-40, 2001.
+
     """
 
     def __init__(self,
                  bin_size: float = 1e-3,
-                 label: Optional[str] = None,
+                 key: Optional[str] = None,
                  epsilon: float = 1e-10,
                  max_delay: Optional[float] = None,
                  resting_potential: float = -0.065,
@@ -212,9 +189,9 @@ class SuffczynskiAxon(BurstingAxon):
                  tau_decay: float = 0.1,
                  max_firing_rate: float = 800.,
                  activation_threshold: float = -0.059,
-                 activation_steepness: float = 670.,
+                 activation_slope: float = 670.,
                  inactivation_threshold: float = -0.081,
-                 inactivation_steepness: float = 170.,
+                 inactivation_slope: float = 170.,
                  ) -> None:
         """Instantiates suffczynski axon.
         """
@@ -225,7 +202,7 @@ class SuffczynskiAxon(BurstingAxon):
         double_exp_args = {'tau_rise': tau_rise,
                            'tau_decay': tau_decay}
         sigmoid_args = {'inactivation_threshold': inactivation_threshold,
-                        'inactivation_steepness': inactivation_steepness}
+                        'inactivation_slope': inactivation_slope}
 
         # call super method
         ###################
@@ -233,12 +210,12 @@ class SuffczynskiAxon(BurstingAxon):
         super().__init__(transfer_function=activation_sigmoid,
                          kernel_functions=[axon_exponential, inactivation_sigmoid],
                          bin_size=bin_size,
-                         label=label,
+                         key=key,
                          epsilon=epsilon,
                          max_delay=max_delay,
                          max_firing_rate=max_firing_rate,
                          resting_potential=resting_potential,
                          kernel_function_args=[double_exp_args, sigmoid_args],
                          activation_threshold=activation_threshold,
-                         activation_steepness=activation_steepness
+                         activation_slope=activation_slope
                          )

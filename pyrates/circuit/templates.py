@@ -1,13 +1,16 @@
 """Templates for specific circuit parametrizations.
 """
 
+# external packages
 import numpy as np
 from typing import Optional, List
 
+# pyrates internal imports
 from pyrates.circuit import CircuitFromScratch, Circuit
 from pyrates.population import WangKnoescheCells
 from pyrates.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
 
+# meta infos
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
@@ -123,11 +126,11 @@ class JansenRitLeakyCapacitorCircuit(CircuitFromScratch):
                          synapses=synapse_types,
                          synapse_params=synapse_params,
                          synapse_class=synapse_class,
-                         synapse_types=['AMPA', 'GABAA'],
+                         synapse_keys=['AMPA', 'GABAA'],
                          axons=axon_types,
                          axon_params=axon_params,
                          axon_class=axon_class,
-                         population_labels=population_labels,
+                         population_keys=population_labels,
                          step_size=step_size,
                          max_synaptic_delay=max_synaptic_delay,
                          init_states=init_states,
@@ -230,11 +233,11 @@ class JansenRitCircuit(CircuitFromScratch):
                          synapses=synapse_types,
                          synapse_params=synapse_params,
                          synapse_class=synapse_class,
-                         synapse_types=['excitatory', 'inhibitory'],
+                         synapse_keys=['excitatory', 'inhibitory'],
                          axons=axon_types,
                          axon_params=axon_params,
                          axon_class=axon_class,
-                         population_labels=population_labels,
+                         population_keys=population_labels,
                          step_size=step_size,
                          max_synaptic_delay=max_synaptic_delay,
                          enable_modulation=enable_modulation,
@@ -403,33 +406,33 @@ class WangKnoescheCircuit(Circuit):
         # populations
         l23_pcs = WangKnoescheCells(step_size=step_size,
                                     init_state=init_states[0],
-                                    label='L23_PCs',
+                                    key='L23_PCs',
                                     tau_depression=tau_depression,
                                     tau_recycle=tau_recycle,
                                     plastic_synapses=plastic_synapses)
         l23_iins = WangKnoescheCells(step_size=step_size,
                                      init_state=init_states[1],
-                                     label='L23_IIns',
+                                     key='L23_IIns',
                                      synapses=['JansenRitExcitatorySynapse'],
                                      plastic_synapses=[plastic_synapses[0]],
                                      tau_depression=tau_depression,
                                      tau_recycle=tau_recycle)
         l4_eins = WangKnoescheCells(step_size=step_size,
                                     init_state=init_states[2],
-                                    label='L4_EINs',
+                                    key='L4_EINs',
                                     synapses=['JansenRitExcitatorySynapse'],
                                     plastic_synapses=[plastic_synapses[0]],
                                     tau_depression=tau_depression,
                                     tau_recycle=tau_recycle)
         l56_pcs = WangKnoescheCells(step_size=step_size,
                                     init_state=init_states[3],
-                                    label='L56_PCs',
+                                    key='L56_PCs',
                                     plastic_synapses=plastic_synapses,
                                     tau_depression=tau_depression,
                                     tau_recycle=tau_recycle)
         l56_iins = WangKnoescheCells(step_size=step_size,
                                      init_state=init_states[4],
-                                     label='L56_IINs',
+                                     key='L56_IINs',
                                      synapses=['JansenRitExcitatorySynapse'],
                                      plastic_synapses=[plastic_synapses[0]],
                                      tau_depression=tau_depression,
@@ -541,18 +544,18 @@ class MoranCircuit(Circuit):
         pcs_plastic = MoranPyramidalCells(step_size=step_size,
                                           init_state=init_states[0],
                                           tau=tau,
-                                          label=population_labels[0]
+                                          key=population_labels[0]
                                           )
         pcs_nonplastic = MoranPyramidalCells(step_size=step_size,
                                              init_state=init_states[0],
-                                             label=population_labels[1]
+                                             key=population_labels[1]
                                              )
         eins = MoranExcitatoryInterneurons(step_size=step_size,
                                            init_state=init_states[1],
-                                           label=population_labels[2])
+                                           key=population_labels[2])
         iins = MoranInhibitoryInterneurons(step_size=step_size,
                                            init_state=init_states[2],
-                                           label=population_labels[3])
+                                           key=population_labels[3])
 
         # call super init
         #################

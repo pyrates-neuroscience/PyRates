@@ -1,35 +1,22 @@
 """Includes various types of useful functions.
 """
 
+# external packages
 import numpy as np
 import inspect
-from typing import List, Dict, Union, Optional, Callable, Iterable, overload, TypeVar, Type
+from typing import List, Union, Optional, Iterable, TypeVar, Any
 
+# type definitions
+ClassInstance = TypeVar('ClassInstance')
+
+# meta infos
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
-# @overload
-# def set_instance(class_handle: Type[Population],
-#                  instance_type: Optional[str]=None,
-#                  instance_params: dict=None,
-#                  **kwargs) -> Population: ...
-#
-#
-# @overload
-# def set_instance(class_handle: Type[Axon],
-#                  instance_type: Optional[str] = None,
-#                  instance_params: dict = None,
-#                  **kwargs) -> Axon: ...
-#
-#
-# @overload
-# def set_instance(class_handle: Type[Synapse],
-#                  instance_type: Optional[str] = None,
-#                  instance_params: dict = None,
-#                  **kwargs) -> Synapse: ...
-
-ClassInstance = TypeVar('ClassInstance')
+########################
+# function definitions #
+########################
 
 
 def set_instance(class_handle: type,
@@ -107,8 +94,11 @@ def set_instance(class_handle: type,
     return instance
 
 
-def update_param(param: str, param_dict: dict, object_instance) -> object:
-    """Checks whether param is a key in param_dict. If yes, the corresponding value in param_dict will be updated in
+def update_param(param: str,
+                 param_dict: dict,
+                 object_instance: object
+                 ) -> object:
+    """Checks whether param is a key in param_dict. If yes, the corresponding value in param_dict will be updated on
     object_instance.
 
     Parameters
@@ -142,8 +132,12 @@ def update_param(param: str, param_dict: dict, object_instance) -> object:
     return object_instance
 
 
-def interpolate_array(old_step_size, new_step_size, y, interpolation_type='cubic', axis=0):
-    """Interpolates time-vectors with :class:`scipy.interpolate.interp1d`.
+def interpolate_array(old_step_size: float,
+                      new_step_size: float, y: np.ndarray,
+                      interpolation_type: str = 'cubic',
+                      axis: int = 0
+                      ) -> np.ndarray:
+    """Interpolates time-vectors using :class:`scipy.interpolate.interp1d`.
 
     Parameters
     ----------
@@ -179,7 +173,9 @@ def interpolate_array(old_step_size, new_step_size, y, interpolation_type='cubic
     return f(x_new)
 
 
-def nmrse(x: np.ndarray, y: np.ndarray) -> Union[float, np.ndarray]:
+def nmrse(x: np.ndarray,
+          y: np.ndarray
+          ) -> Union[float, np.ndarray]:
     """Calculates the normalized root mean squared error of two vectors of equal length.
 
     Parameters
@@ -234,36 +230,36 @@ def get_euclidean_distances(positions: np.ndarray) -> np.ndarray:
     return D
 
 
-@overload
-def check_nones(param: None, n: int) -> List[None]: ...
-
-
-@overload
-def check_nones(param: Iterable, n: int) -> Iterable: ...
-
-
-def check_nones(param, n):
-    """Checks whether param is None. If yes, it returns a list of n Nones. If not, the param is returned.
+def make_iterable(param: Any,
+                  n: int
+                  ) -> Union[list, np.ndarray]:
+    """Turn param into iterable, if it is not already.
 
     Parameters
     ----------
     param
-        Parameter to be tested for None.
+        Any kind of parameter.
     n
-        Size of the list to return
+        Length, the returned iterable is supposed to have.
 
     Returns
     -------
-    NoneLike
-        Param or list of Nones
+    Union[np.ndarray, list]
+        Either unchanged param (if already an iterable) or a list of length n with each entry being the passed param.
 
     """
 
-    return [None for _ in range(n)] if param is None else param
+    if isinstance(param, str) or not isinstance(param, Iterable) or (isinstance(param, Iterable) and len(param) < n):
+        iter_param = [param for _ in range(n)]
+    else:
+        iter_param = param
+
+    return iter_param
 
 
 def deep_compare(left, right, approx=False):
     """Hack to compare the config dictionaries"""
+    # TODO: update docstring
 
     if approx is True:
         approx = dict(rtol=1e-15, atol=0)

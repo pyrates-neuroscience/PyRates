@@ -185,7 +185,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     nmm = CircuitFromCircuit(circuits=circuits,
                              connectivity=C,
                              delays=D,
-                             synapse_types=['excitatory', 'inhibitory']
+                             synapse_keys=['excitatory', 'inhibitory']
                              )
 
     #####################

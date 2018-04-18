@@ -1,13 +1,15 @@
 """Templates for specific synapse parametrizations.
 """
 
-from typing import Optional, Union, Callable
-import numpy as np
+# external packages
+from typing import Optional
 
-from pyrates.synapse import DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
+# pyrates internal imports
+from pyrates.synapse import DoubleExponentialSynapse, TransformedInputSynapse, \
     DEExponentialSynapse, DEDoubleExponentialSynapse
 from pyrates.utility import synaptic_sigmoid, double_exponential
 
+# meta infos
 __author__ = "Richard Gast, Daniel F. Rose"
 __status__ = "Development"
 
@@ -19,23 +21,6 @@ __status__ = "Development"
 
 class AMPACurrentSynapse(DoubleExponentialSynapse):
     """Current-based synapse with AMPA neuroreceptor.
-
-    Parameters
-    ----------
-    bin_size
-        See documentation of parameter `bin_size` of :class:`Synapse`.
-    max_delay
-        See documentation of parameter `max_delay` of :class:`Synapse`.
-    buffer_size
-        See documentation of parameter `buffer_size` of :class:`Synapse`.
-    epsilon
-        See documentation of parameter `epsilon` of :class:`Synapse`.
-    efficacy
-        Default = 1.273 * 3e-13 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-    tau_decay
-        Default = 0.006 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        Default = 0.0006 s. See Also documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
 
     See Also
     --------
@@ -64,29 +49,12 @@ class AMPACurrentSynapse(DoubleExponentialSynapse):
                          max_delay=max_delay,
                          buffer_size=buffer_size,
                          epsilon=epsilon,
-                         label='AMPA_current'
+                         key='AMPA_current'
                          )
 
 
 class GABAACurrentSynapse(DoubleExponentialSynapse):
     """Current-based synapse with GABA_A neuroreceptor.
-
-    Parameters
-    ----------
-    bin_size
-        See documentation of parameter `bin_size` of :class:`Synapse`.
-    max_delay
-        See documentation of parameter `max_delay` of :class:`Synapse`.
-    buffer_size
-        See documentation of parameter `buffer_size` of :class:`Synapse`.
-    epsilon
-        See documentation of parameter `epsilon` of :class:`Synapse`.
-    efficacy
-        Default = 1.273 * -1e-12 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-    tau_decay
-        Default = 0.02 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        Default = 0.0004 s. See Also documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
 
     See Also
     --------
@@ -115,7 +83,7 @@ class GABAACurrentSynapse(DoubleExponentialSynapse):
                          max_delay=max_delay,
                          buffer_size=buffer_size,
                          epsilon=epsilon,
-                         label='GABAA_current'
+                         key='GABAA_current'
                          )
 
 
@@ -183,8 +151,8 @@ class GABABCurrentSynapse(TransformedInputSynapse):
                          buffer_size=buffer_size,
                          bin_size=bin_size,
                          epsilon=epsilon,
-                         label='GABAB_current',
-                         input_transform_args=input_transform_args,
+                         key='GABAB_current',
+                         input_transform_kwargs=input_transform_args,
                          tau_decay=tau_decay,
                          tau_rise=tau_rise
                          )
@@ -192,25 +160,6 @@ class GABABCurrentSynapse(TransformedInputSynapse):
 
 class AMPAConductanceSynapse(DoubleExponentialSynapse):
     """Defines a conductivity-based synapse with AMPA neuroreceptor.
-
-    Parameters
-    ----------
-    bin_size
-        See documentation of parameter `bin_size` of :class:`Synapse`.
-    max_delay
-        See documentation of parameter `max_delay` of :class:`Synapse`.
-    buffer_size
-        See documentation of parameter `buffer_size` of :class:`Synapse`.
-    epsilon
-        See documentation of parameter `epsilon` of :class:`Synapse`.
-    efficacy
-        Default = 7.2e-10 S. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-    tau_decay
-        Default = 0.0015 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        Default = 0.000009 s. See Also documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
-    reversal_potential
-        Default = 0.0 V. See Also documentation of parameter `reversal_potential` of :class:`Synapse`.
 
     See Also
     --------
@@ -241,30 +190,11 @@ class AMPAConductanceSynapse(DoubleExponentialSynapse):
                          buffer_size=buffer_size,
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
-                         label='AMPA_conductance')
+                         key='AMPA_conductance')
 
 
 class GABAAConductanceSynapse(DoubleExponentialSynapse):
     """Conductivity-based synapse with GABA_A neuroreceptor.
-
-    Parameters
-    ----------
-    bin_size
-        See documentation of parameter `bin_size` of :class:`Synapse`.
-    max_delay
-        See documentation of parameter `max_delay` of :class:`Synapse`.
-    buffer_size
-        See documentation of parameter `buffer_size` of :class:`Synapse`.
-    epsilon
-        See documentation of parameter `epsilon` of :class:`Synapse`.
-    efficacy
-        Default = 4e-11 S. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-    tau_decay
-        Default = 0.02 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        Default = 0.0004 s. See Also documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
-    reversal_potential
-        Default = -0.060 V. See Also documentation of parameter `reversal_potential` of :class:`Synapse`.
 
     See Also
     --------
@@ -295,7 +225,7 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
                          buffer_size=buffer_size,
                          epsilon=epsilon,
                          reversal_potential=reversal_potential,
-                         label='GABAA_conductance')
+                         key='GABAA_conductance')
 
 
 #########################
@@ -305,17 +235,6 @@ class GABAAConductanceSynapse(DoubleExponentialSynapse):
 
 class AMPACurrentDESynapse(DEDoubleExponentialSynapse):
     """Current-based synapse with AMPA neuroreceptor.
-
-    Parameters
-    ----------
-    buffer_size
-        See documentation of parameter `buffer_size` of :class:`Synapse`.
-    efficacy
-        Default = 1.273 * 3e-13 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-    tau_decay
-        Default = 0.006 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        Default = 0.0006 s. See Also documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
 
     See Also
     --------
@@ -338,23 +257,12 @@ class AMPACurrentDESynapse(DEDoubleExponentialSynapse):
                          tau_decay=tau_decay,
                          tau_rise=tau_rise,
                          buffer_size=buffer_size,
-                         label='AMPA_current'
+                         key='AMPA_current'
                          )
 
 
 class GABAACurrentDESynapse(DEDoubleExponentialSynapse):
     """Current-based synapse with GABA_A neuroreceptor.
-
-    Parameters
-    ----------
-    buffer_size
-        See documentation of parameter `buffer_size` of :class:`Synapse`.
-    efficacy
-        Default = 1.273 * -1e-12 A. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-    tau_decay
-        Default = 0.02 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        Default = 0.0004 s. See Also documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
 
     See Also
     --------
@@ -377,7 +285,7 @@ class GABAACurrentDESynapse(DEDoubleExponentialSynapse):
                          tau_decay=tau_decay,
                          tau_rise=tau_rise,
                          buffer_size=buffer_size,
-                         label='GABAA_current'
+                         key='GABAA_current'
                          )
 
 
@@ -388,8 +296,6 @@ class GABABDESynapse(DEDoubleExponentialSynapse):
     ----------
     buffer_size
         See documentation of parameter `buffer_size` of :class:`Synapse`.
-    epsilon
-        See documentation of parameter `epsilon` of :class:`Synapse`.
     efficacy
         See documentation of parameter `efficacy` of :class:`Synapse`.
     tau_decay
@@ -435,7 +341,7 @@ class GABABDESynapse(DEDoubleExponentialSynapse):
 
         super().__init__(efficacy=efficacy,
                          buffer_size=buffer_size,
-                         label='GABAB_DE',
+                         key='GABAB_DE',
                          tau_decay=tau_decay,
                          tau_rise=tau_rise
                          )
@@ -466,19 +372,6 @@ class GABABDESynapse(DEDoubleExponentialSynapse):
 class AMPAConductanceDESynapse(DEDoubleExponentialSynapse):
     """Defines a conductivity-based synapse with AMPA neuroreceptor.
 
-    Parameters
-    ----------
-    buffer_size
-        See documentation of parameter `buffer_size` of :class:`Synapse`.
-    efficacy
-        Default = 7.2e-10 S. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-    tau_decay
-        Default = 0.0015 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        Default = 0.000009 s. See Also documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
-    reversal_potential
-        Default = 0.0 V. See Also documentation of parameter `reversal_potential` of :class:`Synapse`.
-
     See Also
     --------
     :class:`DoubleExponentialSynapse`: Detailed documentation of parameters of double exponential synapse.
@@ -502,24 +395,11 @@ class AMPAConductanceDESynapse(DEDoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          buffer_size=buffer_size,
                          reversal_potential=reversal_potential,
-                         label='AMPA_conductance')
+                         key='AMPA_conductance')
 
 
 class GABAAConductanceDESynapse(DEDoubleExponentialSynapse):
     """Conductivity-based synapse with GABA_A neuroreceptor.
-
-    Parameters
-    ----------
-    buffer_size
-        See documentation of parameter `buffer_size` of :class:`Synapse`.
-    efficacy
-        Default = 4e-11 S. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-    tau_decay
-        Default = 0.02 s. See Also documentation of parameter `tau_decay` of :class:`DoubleExponentialSynapse`.
-    tau_rise
-        Default = 0.0004 s. See Also documentation of parameter `tau_rise` of :class:`DoubleExponentialSynapse`.
-    reversal_potential
-        Default = -0.060 V. See Also documentation of parameter `reversal_potential` of :class:`Synapse`.
 
     See Also
     --------
@@ -544,7 +424,7 @@ class GABAAConductanceDESynapse(DEDoubleExponentialSynapse):
                          tau_rise=tau_rise,
                          buffer_size=buffer_size,
                          reversal_potential=reversal_potential,
-                         label='GABAA_conductance')
+                         key='GABAA_conductance')
 
 
 ###########################
@@ -555,26 +435,17 @@ class GABAAConductanceDESynapse(DEDoubleExponentialSynapse):
 class JansenRitExcitatorySynapse(DEExponentialSynapse):
     """Excitatory second-order synapse as defined in [1]_.
 
-        Parameters
-        ----------
-        buffer_size
-            See documentation of parameter `buffer_size` of :class:`Synapse`.
-        efficacy
-            Default = 3.25 * 1e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-        tau
-            Default = 0.01 s. See Also documentation of parameter `tau` of :class:`ExponentialSynapse`.
+    See Also
+    --------
+    :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
+    :class:`Synapse`: Detailed documentation of synapse attributes and methods.
 
-        See Also
-        --------
-        :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
-        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
+       model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
-        References
-        ----------
-        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
-           model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
-
-        """
+    """
 
     def __init__(self,
                  buffer_size: int = 0,
@@ -587,32 +458,23 @@ class JansenRitExcitatorySynapse(DEExponentialSynapse):
         super().__init__(efficacy=efficacy,
                          tau=tau,
                          buffer_size=buffer_size,
-                         label='excitatory')
+                         key='excitatory')
 
 
 class JansenRitInhibitorySynapse(DEExponentialSynapse):
     """Inhibitory second-order synapse as defined in [1]_.
 
-        Parameters
-        ----------
-        buffer_size
-            See documentation of parameter `buffer_size` of :class:`Synapse`.
-        efficacy
-            Default = -22 * 1e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-        tau
-            Default = 0.02 s. See Also documentation of parameter `tau` of :class:`ExponentialSynapse`.
+    See Also
+    --------
+    :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
+    :class:`Synapse`: Detailed documentation of synapse attributes and methods.
 
-        See Also
-        --------
-        :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
-        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
+       model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
-        References
-        ----------
-        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
-           model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
-
-        """
+    """
 
     def __init__(self,
                  buffer_size: int = 0,
@@ -625,32 +487,23 @@ class JansenRitInhibitorySynapse(DEExponentialSynapse):
         super().__init__(efficacy=efficacy,
                          tau=tau,
                          buffer_size=buffer_size,
-                         label='inhibitory')
+                         key='inhibitory')
 
 
 class MoranExcitatorySynapse(DEExponentialSynapse):
     """Excitatory second-order synapse as defined in [1]_.
 
-        Parameters
-        ----------
-        buffer_size
-            See documentation of parameter `buffer_size` of :class:`Synapse`.
-        efficacy
-            Default = 4e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-        tau
-            Default = 4e-3 s. See Also documentation of parameter `tau` of :class:`ExponentialSynapse`.
+    See Also
+    --------
+    :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
+    :class:`Synapse`: Detailed documentation of synapse attributes and methods.
 
-        See Also
-        --------
-        :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
-        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+    References
+    ----------
+    .. [1] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
+       Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
 
-        References
-        ----------
-        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
-           model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
-
-        """
+    """
 
     def __init__(self,
                  buffer_size: int = 0,
@@ -663,30 +516,23 @@ class MoranExcitatorySynapse(DEExponentialSynapse):
         super().__init__(efficacy=efficacy,
                          tau=tau,
                          buffer_size=buffer_size,
-                         label='Moran_excitatory')
+                         key='Moran_excitatory')
 
 
 class MoranInhibitorySynapse(DEExponentialSynapse):
     """Inhibitory second-order synapse as defined in [1]_.
 
-        Parameters
-        ----------
-        efficacy
-            Default = -32e-3 V. See Also documentation of parameter `efficacy` of :class:`Synapse`.
-        tau
-            Default = 16e-3 s. See Also documentation of parameter `tau` of :class:`ExponentialSynapse`.
+    See Also
+    --------
+    :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
+    :class:`Synapse`: Detailed documentation of synapse attributes and methods.
 
-        See Also
-        --------
-        :class:`ExponentialSynapse`: Detailed documentation of parameters of exponential synapse.
-        :class:`Synapse`: Detailed documentation of synapse attributes and methods.
+    References
+    ----------
+    .. [1] R.J. Moran, S.J. Kiebel, K.E. Stephan, R.B. Reilly, J. Daunizeau & K.J. Friston, "A Neural Mass Model of
+       Spectral Responses in Electrophysiology" NeuroImage, vol. 37, pp. 706-720, 2007.
 
-        References
-        ----------
-        .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical
-           model of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
-
-        """
+    """
 
     def __init__(self,
                  buffer_size: int = 0,
@@ -699,5 +545,4 @@ class MoranInhibitorySynapse(DEExponentialSynapse):
         super().__init__(efficacy=efficacy,
                          tau=tau,
                          buffer_size=buffer_size,
-                         label='Moran_inhibitory')
-
+                         key='Moran_inhibitory')

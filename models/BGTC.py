@@ -61,7 +61,7 @@ class BGTC(CircuitFromCircuit):
                          target_populations=target_populations,
                          target_synapses=target_synapses,
                          delays=delays,
-                         circuit_labels=['M1', 'BG_TH'])
+                         circuit_keys=['M1', 'BG_TH'])
 
 
 class M1(Circuit):
@@ -74,7 +74,7 @@ class M1(Circuit):
                  connectivity=None,
                  delays=None,
                  synapse_params=None,
-                 synapse_types=None,
+                 synapse_keys=None,
                  synapse_class='ExponentialSynapse',
                  axon_params=None,
                  axon_types=None,
@@ -108,8 +108,8 @@ class M1(Circuit):
             delays = np.ones((n_populations, n_populations)) * 1e-3
 
         # synapses
-        if not synapse_types:
-            synapse_types = ['excitatory', 'inhibitory']
+        if not synapse_keys:
+            synapse_keys = ['excitatory', 'inhibitory']
         if not synapse_class:
             synapse_class = 'ExponentialSynapse'
         if not synapse_params:
@@ -145,19 +145,19 @@ class M1(Circuit):
         SPs = Population(synapses=None, axon=axon_types[0], init_state=init_states[0],
                          step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                          synapse_params=synapse_params[0], axon_params=axon_params[0],
-                         synapse_class=synapse_class, axon_class=axon_class, label=population_labels[0])
+                         synapse_class=synapse_class, axon_class=axon_class, key=population_labels[0])
         MPs = Population(synapses=None, axon=axon_types[1], init_state=init_states[1],
                          step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                          synapse_params=synapse_params[1], axon_params=axon_params[1],
-                         synapse_class=synapse_class, axon_class=axon_class, label=population_labels[1])
+                         synapse_class=synapse_class, axon_class=axon_class, key=population_labels[1])
         DPs = Population(synapses=None, axon=axon_types[2], init_state=init_states[2],
                          step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                          synapse_params=synapse_params[2], axon_params=axon_params[2],
-                         synapse_class=synapse_class, axon_class=axon_class, label=population_labels[2])
+                         synapse_class=synapse_class, axon_class=axon_class, key=population_labels[2])
         IINs = Population(synapses=None, axon=axon_types[3], init_state=init_states[3],
                           step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                           synapse_params=synapse_params[3], axon_params=axon_params[3],
-                          synapse_class=synapse_class, axon_class=axon_class, label=population_labels[3])
+                          synapse_class=synapse_class, axon_class=axon_class, key=population_labels[3])
 
         # call super init
         #################
@@ -166,7 +166,7 @@ class M1(Circuit):
                          connectivity=connectivity,
                          delays=delays,
                          step_size=step_size,
-                         synapse_types=synapse_types
+                         synapse_keys=synapse_keys
                          )
 
 
@@ -278,9 +278,9 @@ class Thalamus(Circuit):
                          axon_params=axon_params_tmp[0],
                          synapse_class=synapse_classes,
                          axon_class=axon_class,
-                         label=population_labels[0],
+                         key=population_labels[0],
                          resting_potential=resting_potentials[0],
-                         synapse_labels=synapse_labels)
+                         synapse_keys=synapse_labels)
 
         RE = Population(synapses=synapse_types[0:2],
                         axon=axon_types[1],
@@ -291,9 +291,9 @@ class Thalamus(Circuit):
                         axon_params=axon_params_tmp[1],
                         synapse_class=synapse_classes[0:2],
                         axon_class=axon_class,
-                        label=population_labels[1],
+                        key=population_labels[1],
                         resting_potential=resting_potentials[1],
-                        synapse_labels=synapse_labels[0:2])
+                        synapse_keys=synapse_labels[0:2])
 
         # call super init
         #################
@@ -302,7 +302,7 @@ class Thalamus(Circuit):
                          connectivity=connectivity,
                          delays=delays,
                          step_size=step_size,
-                         synapse_types=synapse_labels)
+                         synapse_keys=synapse_labels)
 
 
 class BasalGanglia(Circuit):
@@ -314,7 +314,7 @@ class BasalGanglia(Circuit):
                  max_synaptic_delay: float = 0.5,
                  connectivity: Optional[np.ndarray] = None,
                  delays: Optional[np.ndarray] = None,
-                 synapse_types: Optional[List[str]] = None,
+                 synapse_keys: Optional[List[str]] = None,
                  synapse_params: Optional[list] = None,
                  synapse_class: str = 'ExponentialSynapse',
                  axon_types: Optional[List[str]] = None,
@@ -352,8 +352,8 @@ class BasalGanglia(Circuit):
             delays = np.ones((n_populations, n_populations)) * 4e-3
 
         # synapses
-        if not synapse_types:
-            synapse_types = ['excitatory', 'inhibitory']
+        if not synapse_keys:
+            synapse_keys = ['excitatory', 'inhibitory']
         if not synapse_class:
             synapse_class = 'ExponentialSynapse'
         if not synapse_params:
@@ -391,23 +391,23 @@ class BasalGanglia(Circuit):
         STR = Population(synapses=None, axon=axon_types[0], init_state=init_states[0],
                          step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                          synapse_params=synapse_params[0], axon_params=axon_params[0],
-                         synapse_class=synapse_class, axon_class=axon_class, label=population_labels[0])
+                         synapse_class=synapse_class, axon_class=axon_class, key=population_labels[0])
         GPe = Population(synapses=None, axon=axon_types[1], init_state=init_states[1],
                          step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                          synapse_params=synapse_params[1], axon_params=axon_params[1],
-                         synapse_class=synapse_class, axon_class=axon_class, label=population_labels[1])
+                         synapse_class=synapse_class, axon_class=axon_class, key=population_labels[1])
         STN = Population(synapses=None, axon=axon_types[2], init_state=init_states[2],
                          step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                          synapse_params=synapse_params[2], axon_params=axon_params[2],
-                         synapse_class=synapse_class, axon_class=axon_class, label=population_labels[2])
+                         synapse_class=synapse_class, axon_class=axon_class, key=population_labels[2])
         GPi = Population(synapses=None, axon=axon_types[3], init_state=init_states[3],
                          step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                          synapse_params=synapse_params[3], axon_params=axon_params[3],
-                         synapse_class=synapse_class, axon_class=axon_class, label=population_labels[3])
+                         synapse_class=synapse_class, axon_class=axon_class, key=population_labels[3])
         Tha = Population(synapses=None, axon=axon_types[4], init_state=init_states[4],
                          step_size=step_size, max_synaptic_delay=max_synaptic_delay,
                          synapse_params=synapse_params[4], axon_params=axon_params[4],
-                         synapse_class=synapse_class, axon_class=axon_class, label=population_labels[4])
+                         synapse_class=synapse_class, axon_class=axon_class, key=population_labels[4])
 
         # call super init
         #################
@@ -416,7 +416,7 @@ class BasalGanglia(Circuit):
                          connectivity=connectivity,
                          delays=delays,
                          step_size=step_size,
-                         synapse_types=synapse_types
+                         synapse_keys=synapse_keys
                          )
 
 

@@ -1,10 +1,12 @@
 """Contains functions representing various biophysical features/mechanisms.
 """
 
+# external packages
 import numpy as np
 from typing import Union, Optional
 
-__author__ = "Daniel F. Rose, Richard Gast"
+# meta infos
+__author__ = "Richard Gast"
 __status__ = "Development"
 
 
@@ -15,10 +17,10 @@ __status__ = "Development"
 
 def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
                        max_firing_rate: float,
-                       membrane_potential_threshold: float,
-                       sigmoid_steepness: float
+                       firing_threshold: float,
+                       slope: float
                        ) -> Union[float, np.ndarray]:
-    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
+    """Sigmoidal axon hillock transfer function. Transforms membrane potentials into firing rates.
 
     Parameters
     ----------
@@ -26,10 +28,10 @@ def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
         Membrane potential for which to calculate firing rate [unit = V].
     max_firing_rate
         See parameter description of `max_firing_rate` of :class:`SigmoidAxon`.
-    membrane_potential_threshold
+    firing_threshold
         See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
-    sigmoid_steepness
-        See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
+    slope
+        See parameter description of `slope` of :class:`SigmoidAxon`.
 
     Returns
     -------
@@ -38,15 +40,15 @@ def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
 
     """
 
-    return max_firing_rate / (1 + np.exp(sigmoid_steepness * (membrane_potential_threshold - membrane_potential)))
+    return max_firing_rate / (1 + np.exp(slope * (firing_threshold - membrane_potential)))
 
 
 def normalized_sigmoid(membrane_potential: Union[float, np.ndarray],
                        max_firing_rate: float,
-                       membrane_potential_threshold: float,
-                       sigmoid_steepness: float
+                       firing_threshold: float,
+                       slope: float
                        ) -> Union[float, np.ndarray]:
-    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
+    """Sigmoidal axon hillock transfer function. Transforms membrane potentials into firing rates.
 
     Parameters
     ----------
@@ -54,10 +56,10 @@ def normalized_sigmoid(membrane_potential: Union[float, np.ndarray],
         Membrane potential for which to calculate firing rate [unit = V].
     max_firing_rate
         See parameter description of `max_firing_rate` of :class:`SigmoidAxon`.
-    membrane_potential_threshold
+    firing_threshold
         See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
-    sigmoid_steepness
-        See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
+    slope
+        See parameter description of `slope` of :class:`SigmoidAxon`.
 
     Returns
     -------
@@ -66,14 +68,14 @@ def normalized_sigmoid(membrane_potential: Union[float, np.ndarray],
 
     """
 
-    return max_firing_rate / (1 + np.exp(sigmoid_steepness * (membrane_potential_threshold - membrane_potential))) - \
-           max_firing_rate / (1 + np.exp(sigmoid_steepness * membrane_potential_threshold))
+    return max_firing_rate / (1 + np.exp(slope * (firing_threshold - membrane_potential))) - \
+           max_firing_rate / (1 + np.exp(slope * firing_threshold))
 
 
 def plastic_sigmoid(membrane_potential,
                     max_firing_rate,
-                    membrane_potential_threshold,
-                    sigmoid_steepness,
+                    firing_threshold,
+                    slope,
                     adaptation):
     """
 
@@ -83,9 +85,9 @@ def plastic_sigmoid(membrane_potential,
         See above parameter description.
     max_firing_rate
         See above parameter description.
-    membrane_potential_threshold
+    firing_threshold
         See above parameter description.
-    sigmoid_steepness
+    slope
         See above parameter description.
     adaptation
         See above parameter description.
@@ -96,14 +98,14 @@ def plastic_sigmoid(membrane_potential,
         firing rate [unit = 1/s]
 
     """
-    return max_firing_rate / (1 + np.exp(sigmoid_steepness *
-                                         (membrane_potential_threshold - membrane_potential + adaptation)))
+
+    return max_firing_rate / (1 + np.exp(slope * (firing_threshold - membrane_potential + adaptation)))
 
 
 def plastic_normalized_sigmoid(membrane_potential,
                                max_firing_rate,
-                               membrane_potential_threshold,
-                               sigmoid_steepness,
+                               firing_threshold,
+                               slope,
                                adaptation):
     """
 
@@ -113,9 +115,9 @@ def plastic_normalized_sigmoid(membrane_potential,
         See above parameter description.
     max_firing_rate
         See above parameter description.
-    membrane_potential_threshold
+    firing_threshold
         See above parameter description.
-    sigmoid_steepness
+    slope
         See above parameter description.
     adaptation
         See above parameter description.
@@ -126,16 +128,15 @@ def plastic_normalized_sigmoid(membrane_potential,
         firing rate [unit = 1/s]
 
     """
-    return max_firing_rate / (1 + np.exp(sigmoid_steepness *
-                                         (membrane_potential_threshold - membrane_potential + adaptation))) - \
-           max_firing_rate / (1 + np.exp(sigmoid_steepness * membrane_potential_threshold))
+    return max_firing_rate / (1 + np.exp(slope * (firing_threshold - membrane_potential + adaptation))) - \
+           max_firing_rate / (1 + np.exp(slope * firing_threshold))
 
 
 def activation_sigmoid(membrane_potential: Union[float, np.ndarray],
                        activation_threshold: float,
-                       activation_steepness: float
+                       activation_slope: float
                        ) -> Union[float, np.ndarray]:
-    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
+    """Sigmoidal axon hillock transfer function. Transforms membrane potentials into firing rates.
 
     Parameters
     ----------
@@ -143,7 +144,7 @@ def activation_sigmoid(membrane_potential: Union[float, np.ndarray],
         Membrane potential for which to calculate firing rate [unit = V].
     activation_threshold
         See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
-    activation_steepness
+    activation_slope
         See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
 
     Returns
@@ -153,14 +154,14 @@ def activation_sigmoid(membrane_potential: Union[float, np.ndarray],
 
     """
 
-    return 1. / (1 + np.exp((membrane_potential - activation_threshold) / activation_steepness))
+    return 1. / (1 + np.exp((membrane_potential - activation_threshold) / activation_slope))
 
 
 def inactivation_sigmoid(membrane_potential: Union[float, np.ndarray],
                          inactivation_threshold: float,
-                         inactivation_steepness: float
+                         inactivation_slope: float
                          ) -> Union[float, np.ndarray]:
-    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
+    """Sigmoidal axon hillock transfer function. Transforms membrane potentials into firing rates.
 
     Parameters
     ----------
@@ -168,7 +169,7 @@ def inactivation_sigmoid(membrane_potential: Union[float, np.ndarray],
         Membrane potential for which to calculate firing rate [unit = V].
     inactivation_threshold
         See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
-    inactivation_steepness
+    inactivation_slope
         See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
 
     Returns
@@ -178,15 +179,15 @@ def inactivation_sigmoid(membrane_potential: Union[float, np.ndarray],
 
     """
 
-    return 1 / (1 + np.exp((membrane_potential - inactivation_threshold) / inactivation_steepness))
+    return 1 / (1 + np.exp((membrane_potential - inactivation_threshold) / inactivation_slope))
 
 
 def synaptic_sigmoid(firing_rate: Union[float, np.ndarray],
                      max_firing_rate: float,
                      threshold: float,
-                     steepness: float,
+                     slope: float,
                      ) -> Union[float, np.ndarray]:
-    """Sigmoidal axon hillok transfer function. Transforms membrane potentials into firing rates.
+    """Sigmoidal axon hillock transfer function. Transforms membrane potentials into firing rates.
 
     Parameters
     ----------
@@ -196,7 +197,7 @@ def synaptic_sigmoid(firing_rate: Union[float, np.ndarray],
         Maximum firing rate entering into the synaptic kernel [unit = 1/s].
     threshold
         See parameter description of `membrane_potential_threshold` of :class:`SigmoidAxon`.
-    steepness
+    slope
         See parameter description of `sigmoid_steepness` of :class:`SigmoidAxon`.
 
     Returns
@@ -206,7 +207,7 @@ def synaptic_sigmoid(firing_rate: Union[float, np.ndarray],
 
     """
 
-    return firing_rate * max_firing_rate / (1 + np.exp((firing_rate - threshold) / steepness))
+    return firing_rate * max_firing_rate / (1 + np.exp((firing_rate - threshold) / slope))
 
 
 ###########

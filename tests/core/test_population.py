@@ -78,10 +78,10 @@ def test_3_1_population_init():
     syn2.pass_input(firing_rate)
 
     # calculate synaptic response
-    pop_syn1_response = pop.synapses['AMPA_current'].get_synaptic_current()
-    pop_syn2_response = pop.synapses['GABAA_current'].get_synaptic_current()
-    syn1_response = syn1.get_synaptic_current()
-    syn2_response = syn2.get_synaptic_current()
+    pop_syn1_response = pop.synapses['AMPA_current'].get_synaptic_response()
+    pop_syn2_response = pop.synapses['GABAA_current'].get_synaptic_response()
+    syn1_response = syn1.get_synaptic_response()
+    syn2_response = syn2.get_synaptic_response()
 
     pop_ax_response = pop.axon.compute_firing_rate(membrane_potential)
     ax_response = axon.compute_firing_rate(membrane_potential)
