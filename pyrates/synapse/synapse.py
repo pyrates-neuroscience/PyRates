@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from typing import Optional, Union, Callable, overload
 from matplotlib.axes import Axes
+import tensorflow as tf
 
 # pyrates internal imports
 from pyrates.utility.filestorage import RepresentationBase
@@ -27,7 +28,6 @@ FloatOrArray = Union[float, np.ndarray]
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
-
 
 
 ####################
@@ -387,20 +387,15 @@ class DESynapse(RepresentationBase):
     """
 
     def __init__(self,
+                 step_size: float,
                  efficacy: float,
-                 buffer_size: int = 0,
+                 buffer_size: float = 0.,
                  reversal_potential: Optional[float] = None,
+                 tf_graph: Optional[tf.Graph] = None,
                  key: Optional[str] = None
                  ) -> None:
         """Instantiates base synapse.
         """
-
-        # set attributes
-        ################
-
-        self.efficacy = efficacy
-        self.reversal_potential = reversal_potential
-        self.buffer_size = buffer_size
 
         # set synapse type
         ##################
@@ -417,38 +412,60 @@ class DESynapse(RepresentationBase):
 
             self.key = key
 
-        # set synaptic depression (for plasticity mechanisms)
-        self.depression = 1.0
+        # build tensorflow graph
+        ########################
 
-        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
-        if reversal_potential:
-            self.synaptic_response_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
-        else:
-            self.synaptic_response_scaling = lambda membrane_potential: 1.0
+        self.tf_graph = tf.get_default_graph() if tf_graph is None else tf_graph
 
-        # build input buffer
-        ####################
+        with self.tf_graph.as_default():
 
-        self.kernel_length = 1
-        self.synaptic_input = np.zeros(self.buffer_size + self.kernel_length)
+            # set attributes
+            ################
 
-    def get_synaptic_response(self,
-                              synaptic_response_old: Union[float, np.float64],
-                              membrane_potential: Union[float, np.float64]
-                              ) -> Union[np.float64, float]:
+            self.step_size = step_size
+            self.efficacy = efficacy
+            self.reversal_potential = reversal_potential
+            self.buffer_size = buffer_size
+
+            # set synaptic depression (for plasticity mechanisms)
+            self.depression = 1.0
+
+            # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+            if reversal_potential:
+                self.synaptic_response_scaling = lambda membrane_potential: (self.reversal_potential-membrane_potential)
+            else:
+                self.synaptic_response_scaling = lambda membrane_potential: 1.0
+
+            # build input buffer
+            ####################
+
+            self.synaptic_buffer = tf.Variable(np.zeros(1 + int(self.buffer_size / self.step_size), dtype=np.float64),
+                                               trainable=False,
+                                               name=self.key + '_synaptic_buffer')
+
+            # initialize state variables
+            ############################
+
+            self.synaptic_response = tf.get_variable(name=self.key + '_synaptic_response',
+                                                     dtype=tf.float64,
+                                                     trainable=False,
+                                                     initializer=tf.constant_initializer(value=0.),
+                                                     shape=()
+                                                     )
+
+            self.psp = tf.get_variable(name=self.key + '_psp',
+                                       dtype=tf.float64,
+                                       trainable=False,
+                                       initializer=tf.constant_initializer(value=0.),
+                                       shape=()
+                                       )
+
+    def get_synaptic_response(self) -> tf.Variable:
         """Calculates change in synaptic response from synaptic input (should be incoming firing rate).
-
-        Parameters
-        ----------
-        synaptic_response_old
-            Synaptic response from last time-step [unit = A].
-        membrane_potential
-            Membrane potential of post-synapse. Only to be used for conductivity based synapses (default = None)
-            [unit = V].
 
         Returns
         -------
-        float
+        tf.Variable
             Resulting synaptic response [unit = A].
 
         """
@@ -468,35 +485,44 @@ class DESynapse(RepresentationBase):
 
         """
 
-        self.synaptic_input[self.kernel_length + delay - 1] += synaptic_input
+        return self.synaptic_buffer[delay].assign(self.synaptic_buffer[delay] + synaptic_input)
 
     def rotate_input(self):
         """Shifts input values in synaptic input vector one position to the left.
         """
 
-        self.synaptic_input[0:-1] = self.synaptic_input[1:]
-        self.synaptic_input[-1] = 0.
+        return tf.group(self.synaptic_buffer[0:-1].assign(self.synaptic_buffer[1:]),
+                        self.synaptic_buffer[-1].assign(0.))
 
     def clear(self):
         """Clears synaptic input and depression.
         """
 
-        self.synaptic_input[:] = 0.
         self.depression = 1.0
+
+        return self.synaptic_buffer[:].assign(0.)
 
     def update(self):
         """Updates synapse attributes.
         """
 
-        # update buffer
-        # TODO: implement interpolation from old to new array
-        self.synaptic_input = np.zeros(self.buffer_size + self.kernel_length)
+        with self.tf_graph.as_default():
 
-        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
-        if self.reversal_potential:
-            self.synaptic_response_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
-        else:
-            self.synaptic_response_scaling = lambda membrane_potential: 1.0
+            # update buffer
+            # TODO: implement interpolation from old to new array
+            self.synaptic_input = tf.placeholder(shape=(),
+                                                 dtype=float,
+                                                 name=self.key + '_synaptic_input')
+            self.synaptic_buffer = tf.Variable(np.zeros(1 + int(self.buffer_size / self.step_size)),
+                                               trainable=False,
+                                               name=self.key + '_synaptic_buffer')
+
+            # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+            if self.reversal_potential:
+                self.synaptic_response_scaling = lambda membrane_potential: \
+                    (self.reversal_potential - membrane_potential)
+            else:
+                self.synaptic_response_scaling = lambda membrane_potential: 1.0
 
 
 ##############################
@@ -776,10 +802,12 @@ class DEExponentialSynapse(DESynapse):
     """
 
     def __init__(self,
+                 step_size: float,
                  efficacy: float,
                  tau: float,
-                 buffer_size: int = 0,
+                 buffer_size: float = 0.,
                  reversal_potential: Optional[float] = None,
+                 tf_graph: Optional[tf.Graph] = None,
                  key: Optional[str] = None
                  ) -> None:
         """Instantiates base synapse.
@@ -788,9 +816,11 @@ class DEExponentialSynapse(DESynapse):
         # call super init
         #################
 
-        super().__init__(efficacy=efficacy,
+        super().__init__(step_size=step_size,
+                         efficacy=efficacy,
                          buffer_size=buffer_size,
                          reversal_potential=reversal_potential,
+                         tf_graph=tf_graph,
                          key=key)
 
         # set additional attributes
@@ -804,19 +834,23 @@ class DEExponentialSynapse(DESynapse):
         self.d1_scaling = 1 / self.tau ** 2
         self.d2_scaling = 2 / self.tau
 
-    def get_synaptic_response(self,
-                              synaptic_response_old: Union[float, np.float64],
-                              membrane_potential: Union[float, np.float64]
-                              ) -> Union[np.float64, float]:
-        """Calculates change in synaptic current from synaptic input (should be incoming firing rate).
+        with self.tf_graph.as_default():
 
-        Parameters
-        ----------
-        synaptic_response_old
-            Synaptic current from last time-step [unit = A].
-        membrane_potential
-            Membrane potential of post-synapse. Only to be used for conductivity based synapses (default = None)
-            [unit = V].
+            # update state variables
+            delta_synaptic_response = self.get_synaptic_response()
+
+            with self.tf_graph.control_dependencies([delta_synaptic_response]):
+
+                # update synapse
+                update_synaptic_response = self.synaptic_response.assign_add(self.step_size * delta_synaptic_response)
+                update_psp = self.psp.assign_add(self.step_size * self.synaptic_response)
+                update_buffer = self.rotate_input()
+
+                # update synaptic buffer
+                self.update_synapse = tf.group(update_synaptic_response, update_psp, update_buffer)
+
+    def get_synaptic_response(self) -> tf.float64:
+        """Calculates change in synaptic current from synaptic input (should be incoming firing rate).
 
         Returns
         -------
@@ -825,13 +859,8 @@ class DEExponentialSynapse(DESynapse):
 
         """
 
-        # calculate delta current
-        #########################
-
-        delta_current = self.input_scaling * self.synaptic_input[self.kernel_length - 1] - \
-                        self.d1_scaling * membrane_potential - self.d2_scaling * synaptic_response_old
-
-        return delta_current * self.synaptic_response_scaling(membrane_potential) * self.depression
+        return self.input_scaling * self.synaptic_buffer[0] - self.d1_scaling * self.psp \
+               - self.d2_scaling * self.synaptic_response
 
     def update(self):
         """Updates attributes depending on current synapse state.
@@ -845,15 +874,18 @@ class DEExponentialSynapse(DESynapse):
         # re-calculate DE constants
         ###########################
 
-        self.input_scaling = self.efficacy / self.tau
-        self.d1_scaling = 1 / self.tau ** 2
-        self.d2_scaling = 2 / self.tau
+        with self.tf_graph.as_default():
 
-        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
-        if self.reversal_potential:
-            self.synaptic_response_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
-        else:
-            self.synaptic_response_scaling = lambda membrane_potential: 1.0
+            self.input_scaling = self.efficacy / self.tau
+            self.d1_scaling = 1 / self.tau ** 2
+            self.d2_scaling = 2 / self.tau
+
+            # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+            if self.reversal_potential:
+                self.synaptic_response_scaling = lambda membrane_potential: \
+                    (self.reversal_potential - membrane_potential)
+            else:
+                self.synaptic_response_scaling = lambda membrane_potential: 1.0
 
 
 ################################################

@@ -12,17 +12,14 @@ import numpy as np
 from copy import deepcopy
 from matplotlib.axes import Axes
 from typing import List, Optional, Union, Dict, Callable, TypeVar
-from types import MethodType
+import tensorflow as tf
 
 # pyrates internal imports
 from pyrates.axon import Axon, SigmoidAxon, BurstingAxon, PlasticSigmoidAxon
 from pyrates.synapse import Synapse, DoubleExponentialSynapse, ExponentialSynapse, TransformedInputSynapse, \
     DEExponentialSynapse, DEDoubleExponentialSynapse
 from pyrates.utility import set_instance, make_iterable
-from pyrates.population.population_methods import construct_state_update_function, \
-    construct_get_delta_membrane_potential_function, construct_get_synaptic_responses
 from pyrates.utility.filestorage import RepresentationBase
-import pyrates.solver as solv
 
 # type definition
 FloatLike = Union[float, np.float64]
@@ -55,14 +52,16 @@ class AbstractBasePopulation(RepresentationBase):
 
     """
 
-    def __init__(self):
+    def __init__(self,
+                 tf_graph: Optional[tf.Graph] = None):
         """Instantiates basic circuit node.
         """
 
+        self.tf_graph = tf.get_default_graph() if tf_graph is None \
+            else tf_graph
         self.targets = []
         self.target_weights = []
         self.target_delays = []
-        self.firing_rate = 0.
 
     def connect(self,
                 target: object,
@@ -96,19 +95,7 @@ class AbstractBasePopulation(RepresentationBase):
         """Projects output of given population to the other circuit populations its connected to.
         """
 
-        # get source firing rate
-        source_fr = self.firing_rate
-
-        # project source firing rate to connected populations
-        #####################################################
-
-        # extract network connections
-        # targets = self.targets
-
-        # loop over target populations connected to source
-        for i, syn in enumerate(self.targets):
-            syn.pass_input(source_fr * self.target_weights[i], delay=self.target_delays[i])
-            # it would be possible to wrap this function using functools.partial to remove the delay lookup
+        raise AttributeError('This method needs to be implemented at the child class level.')
 
 
 #####################################################################
@@ -130,32 +117,44 @@ class SynapticInputPopulation(AbstractBasePopulation):
 
     def __init__(self,
                  output: np.ndarray,
+                 tf_graph: Optional[tf.Graph] = None,
                  key: Optional[str] = None
                  ):
         """Instantiate dummy population for synaptic input passage.
         """
 
-        super().__init__()
+        super().__init__(tf_graph=tf_graph)
 
         if len(self.targets) > 1:
             raise ValueError('Synaptic input dummy populations can only connect to a single target. Use multiple dummy'
                              ' populations to connect to multiple targets.')
 
-        self.output = output
-        self.idx = 0
         self.key = key if key else 'dummy_synaptic_input'
 
-    def project_to_targets(self):
+        # tensorflow stuff
+        ##################
+
+        with self.tf_graph.as_default():
+
+            with tf.variable_scope(self.key):
+
+                self.output = tf.Variable(output,
+                                          name=self.key + '_output',
+                                          trainable=False
+                                          )
+                self.idx = tf.get_variable(name=self.key + '_idx',
+                                           shape=(),
+                                           dtype=tf.int32,
+                                           initializer=tf.constant_initializer(value=-1, dtype=tf.int32)
+                                           )
+
+                self.state_update = self.idx.assign_add(1)
+
+    def connect_to_targets(self):
         """Project output to pass synapse function of target.
         """
 
-        self.targets[0].pass_input(self.output[self.idx])
-
-    def state_update(self):
-        """Advance in output array by one position.
-        """
-
-        self.idx += 1
+        return self.targets[0].pass_input(self.output[self.idx])
 
 
 class ExtrinsicCurrentPopulation(AbstractBasePopulation):
@@ -338,7 +337,7 @@ class Population(AbstractBasePopulation):
                  axon: Optional[str] = None,
                  synapse_params: Optional[List[dict]] = None,
                  axon_params: Optional[Dict[str, float]] = None,
-                 synapse_class: Union[str, List[str]] = 'DoubleExponentialSynapse',
+                 synapse_class: Union[str, List[str]] = 'ExponentialSynapse',
                  axon_class: str = 'SigmoidAxon',
                  init_state: Optional[Union[float, dict]] = None,
                  step_size: float = 1e-4,
@@ -352,8 +351,7 @@ class Population(AbstractBasePopulation):
                  spike_frequency_adaptation_kwargs: Optional[dict] = None,
                  synapse_efficacy_adaptation: Optional[List[Callable[[float], float]]] = None,
                  synapse_efficacy_adaptation_kwargs: Optional[List[dict]] = None,
-                 solver: str = 'ForwardEuler',
-                 synapse_keys: Optional[list] = None,
+                 tf_graph: Optional[tf.Graph] = None,
                  key: Optional[str] = None,
                  verbose: bool = False
                  ) -> None:
@@ -363,7 +361,7 @@ class Population(AbstractBasePopulation):
         # call super class init to establish network functionality
         ##########################################################
 
-        super().__init__()
+        super().__init__(tf_graph)
 
         # check input parameters
         ########################
@@ -399,6 +397,9 @@ class Population(AbstractBasePopulation):
         self.synapse_efficacy_adaptation = deepcopy(synapse_efficacy_adaptation)  # type: List[Callable]
         self.synapse_efficacy_adaptation_args = deepcopy(synapse_efficacy_adaptation_kwargs)  # type: List[dict]
         self.features = dict()
+        self.state_update = tf.no_op()
+        self.project_to_targets = tf.no_op()
+        self.step = tf.no_op()
 
         # choose between different population set-ups based on passed parameters
         ########################################################################
@@ -489,8 +490,7 @@ class Population(AbstractBasePopulation):
         self._set_synapses(synapse_subtypes=synapses,
                            synapse_params=synapse_params,
                            synapse_types=synapse_class,
-                           max_synaptic_delay=max_synaptic_delay,
-                           synapse_keys=synapse_keys)
+                           max_synaptic_delay=max_synaptic_delay)
 
         self.synapse_keys = list(self.synapses.keys())
 
@@ -511,77 +511,16 @@ class Population(AbstractBasePopulation):
 
         self._set_axon(axon, axon_params=axon_params, axon_type=axon_class)
 
-        # set initial states
-        ####################
+        # set up DE system for state updates
+        ####################################
 
-        if not init_state:
-            init_state = resting_potential if resting_potential else 0.
-
-        # initialize state variables
-        self.PSPs = np.zeros(self.n_synapses)
-        self.synaptic_currents = np.zeros(self.n_synapses)
-        self.extrinsic_current = 0.
-
-        if self.features['leaky_capacitor']:
-            self.leak_current = 0.
-        if not self.features['integro_differential']:
-            self.synaptic_currents_new = np.zeros(self.n_synapses)
-            self.PSPs_new = np.zeros(self.n_synapses)
-        if self.features['modulation_enabled']:
-            self.extrinsic_synaptic_modulation = np.ones(self.n_synapses)
-
-        # set to passed initial states
-        if type(init_state) is not dict:
-            self.membrane_potential = init_state
-        else:
-            for key, state in init_state.items():
-                setattr(self, key, state)
-        self.firing_rate = self.get_firing_rate()
-
-        # set plasticity attributes
-        ###########################
-
-        # for axon
-        if self.spike_frequency_adaptation:
-            self.spike_frequency_adaptation_args = deepcopy(spike_frequency_adaptation_kwargs) \
-                if spike_frequency_adaptation_kwargs else dict()
-            self.axonal_adaptation = self.axon.transfer_function_args['adaptation']
-
-        # synaptic plasticity function
-        if synapse_efficacy_adaptation and (type(synapse_efficacy_adaptation) is not list):
-            self.synapse_efficacy_adaptation = [self.synapse_efficacy_adaptation for _ in range(self.n_synapses)]
-        elif synapse_efficacy_adaptation and (len(synapse_efficacy_adaptation) != self.n_synapses):
-            raise ValueError('If list of synaptic plasticity functions is passed, its length must correspond to the'
-                             ' number of synapses of the population.')
-        elif not synapse_efficacy_adaptation:
-            self.synapse_efficacy_adaptation = [None for _ in range(self.n_synapses)]
-
-        # synaptic plasticity function arguments
-        if synapse_efficacy_adaptation_kwargs is None or type(synapse_efficacy_adaptation_kwargs) is dict:
-            self.synapse_efficacy_adaptation_args = [self.synapse_efficacy_adaptation_args
-                                                     for _ in range(self.n_synapses)]
-
-        if len(self.synapse_efficacy_adaptation) != len(self.synapse_efficacy_adaptation_args):
-            raise AttributeError('Number of synaptic plasticity functions and plasticity function parameter '
-                                 'dictionaries has to be equal.')
-
-        # synaptic plasticity state variables
-        self.synaptic_depression = np.ones(self.n_synapses)
-        for i, key in enumerate(self.synapses.keys()):
-            if self.synapse_efficacy_adaptation[i]:
-                self.synaptic_depression[i] = self.synapses[key].depression
-
-        # set-up the solver system for the state-update equations
-        #########################################################
-
-        self._set_solver(solver=solver)
+        self.state_update = self._set_state_update_equations()
 
     def _set_synapses(self,
                       synapse_subtypes: Optional[List[str]] = None,
                       synapse_types: Union[str, List[str]] = 'DoubleExponentialSynapse',
                       synapse_params: Optional[List[dict]] = None,
-                      max_synaptic_delay: Optional[Union[np.ndarray, list]] = None,
-                      synapse_keys: Optional[List[str]] = None
+                      max_synaptic_delay: Optional[Union[np.ndarray, list]] = None
                       ) -> None:
         """Instantiates synapses.
 
@@ -595,8 +534,6 @@ class Population(AbstractBasePopulation):
             Dictionaries with synapse parameter name-value pairs.
         max_synaptic_delay
             Array with maximal length of synaptic responses [unit = s].
-        synapse_keys
-            List of synapse identifiers.
 
         """
 
@@ -610,69 +547,69 @@ class Population(AbstractBasePopulation):
         # set all given synapses
         ########################
 
-        for i in range(self.n_synapses):
+        with tf.variable_scope(self.key):
 
-            # instantiate synapse
-            if synapse_types[i] == 'DoubleExponentialSynapse':
-                if self.features['integro_differential']:
-                    synapse_instance = set_instance(DoubleExponentialSynapse,
-                                                    synapse_subtypes[i],
-                                                    synapse_params[i],
+            for i in range(self.n_synapses):
+
+                synapse_key = synapse_subtypes[i] if synapse_subtypes[i] else 'synapse' + str(i)
+
+                # instantiate synapse
+                if synapse_types[i] == 'DoubleExponentialSynapse':
+                    if self.features['integro_differential']:
+                        synapse_instance = set_instance(class_handle=DoubleExponentialSynapse,
+                                                        instance_type=synapse_subtypes[i],
+                                                        instance_params=synapse_params[i],
+                                                        step_size=self.step_size,
+                                                        max_delay=max_synaptic_delay[i],
+                                                        buffer_size=self.max_population_delay,
+                                                        tf_graph=self.tf_graph,
+                                                        key=self.key + '_' + synapse_key)
+                    else:
+                        synapse_instance = set_instance(class_handle=DEDoubleExponentialSynapse,
+                                                        instance_type=synapse_subtypes[i],
+                                                        instance_params=synapse_params[i],
+                                                        step_size=self.step_size,
+                                                        buffer_size=int(self.max_population_delay / self.step_size),
+                                                        tf_graph=self.tf_graph,
+                                                        key=self.key + '_' + synapse_key)
+                elif synapse_types[i] == 'ExponentialSynapse':
+                    if self.features['integro_differential']:
+                        synapse_instance = set_instance(class_handle=ExponentialSynapse,
+                                                        instance_type=synapse_subtypes[i],
+                                                        instance_params=synapse_params[i],
+                                                        step_size=self.step_size,
+                                                        max_delay=max_synaptic_delay[i],
+                                                        buffer_size=self.max_population_delay,
+                                                        tf_graph=self.tf_graph,
+                                                        key=self.key + '_' + synapse_key)
+                    else:
+                        synapse_instance = set_instance(class_handle=DEExponentialSynapse,
+                                                        instance_type=synapse_subtypes[i],
+                                                        instance_params=synapse_params[i],
+                                                        step_size=self.step_size,
+                                                        buffer_size=int(self.max_population_delay / self.step_size),
+                                                        tf_graph=self.tf_graph,
+                                                        key=self.key + '_' + synapse_key)
+                elif synapse_types[i] == 'TransformedInputSynapse':
+                    synapse_instance = set_instance(class_handle=TransformedInputSynapse,
+                                                    instance_type=synapse_subtypes[i],
+                                                    instance_params=synapse_params[i],
+                                                    step_size=self.step_size,
+                                                    max_delay=max_synaptic_delay[i],
+                                                    buffer_size=self.max_population_delay,
+                                                    tf_graph=self.tf_graph,
+                                                    key=self.key + '_' + synapse_key)
+                elif synapse_types[i] == 'Synapse':
+                    synapse_instance = set_instance(class_handle=Synapse,
+                                                    instance_type=synapse_subtypes[i],
+                                                    instance_params=synapse_params[i],
                                                     bin_size=self.step_size,
                                                     max_delay=max_synaptic_delay[i],
-                                                    buffer_size=self.max_population_delay)
+                                                    buffer_size=self.max_population_delay,
+                                                    tf_graph=self.tf_graph,
+                                                    key=self.key + '_' + synapse_key)
                 else:
-                    synapse_instance = set_instance(DEDoubleExponentialSynapse,
-                                                    synapse_subtypes[i],
-                                                    synapse_params[i],
-                                                    buffer_size=int(self.max_population_delay / self.step_size))
-            elif synapse_types[i] == 'ExponentialSynapse':
-                if self.features['integro_differential']:
-                    synapse_instance = set_instance(ExponentialSynapse,
-                                                    synapse_subtypes[i],
-                                                    synapse_params[i],
-                                                    bin_size=self.step_size,
-                                                    max_delay=max_synaptic_delay[i],
-                                                    buffer_size=self.max_population_delay)
-                else:
-                    synapse_instance = set_instance(DEExponentialSynapse,
-                                                    synapse_subtypes[i],
-                                                    synapse_params[i],
-                                                    buffer_size=int(self.max_population_delay
-                                                                    / self.step_size))
-            elif synapse_types[i] == 'TransformedInputSynapse':
-                synapse_instance = set_instance(TransformedInputSynapse,
-                                                synapse_subtypes[i],
-                                                synapse_params[i],
-                                                bin_size=self.step_size,
-                                                max_delay=max_synaptic_delay[i],
-                                                buffer_size=self.max_population_delay)
-            elif synapse_types[i] == 'Synapse':
-                synapse_instance = set_instance(Synapse,
-                                                synapse_subtypes[i],
-                                                synapse_params[i],
-                                                bin_size=self.step_size,
-                                                max_delay=max_synaptic_delay[i],
-                                                buffer_size=self.max_population_delay)
-            else:
-                raise AttributeError('Invalid synapse type!')
-
-            # bind instance to object
-            if synapse_keys:
-
-                # define unique synapse key
-                occurrence = 0
-                for syn_idx in range(i):
-                    if synapse_keys[syn_idx] == synapse_keys[i]:
-                        occurrence += 1
-                if occurrence > 0:
-                    synapse_keys[i] = synapse_keys[i] + '(' + str(occurrence) + ')'
-
-                # key synapse according to provided key
-                self.synapses[synapse_keys[i]] = synapse_instance
-                self.synapses[synapse_keys[i]].key = synapse_keys[i]
-
-            else:
+                    raise AttributeError('Invalid synapse type!')
 
                 # name synapse according to the instance's key
                 self.synapses[synapse_instance.key] = synapse_instance
@@ -695,128 +632,116 @@ class Population(AbstractBasePopulation):
 
         """
 
-        if axon_type == 'SigmoidAxon':
-            self.axon = set_instance(SigmoidAxon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
-        elif axon_type == 'BurstingAxon':
-            self.axon = set_instance(BurstingAxon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
-        elif axon_type == 'Axon':
-            self.axon = set_instance(Axon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
-        elif axon_type == 'PlasticSigmoidAxon':
-            self.axon = set_instance(PlasticSigmoidAxon, axon_subtype, axon_params)  # type: Union[Axon, BurstingAxon]
-        else:
-            raise AttributeError('Invalid axon type!')
+        with tf.variable_scope(self.key):
 
-    def _set_solver(self, solver: str):
-        """Instantiates solver on population.
+            axon_key = axon_subtype if axon_subtype is not None else 'axon'
 
-        Parameters
-        ----------
-        solver
-            Name of the solver sub-class that is to be used to solve the state update DE's.
+            if axon_type == 'SigmoidAxon':
+                self.axon = set_instance(class_handle=SigmoidAxon,
+                                         instance_type=axon_subtype,
+                                         instance_params=axon_params,
+                                         tf_graph=self.tf_graph,
+                                         key=self.key + '_' + axon_key)  # type: Union[Axon, BurstingAxon]
+            elif axon_type == 'BurstingAxon':
+                self.axon = set_instance(class_handle=BurstingAxon,
+                                         instance_type=axon_subtype,
+                                         instance_params=axon_params,
+                                         tf_graph=self.tf_graph,
+                                         key=self.key + '_' + axon_key)  # type: Union[Axon, BurstingAxon]
+            elif axon_type == 'Axon':
+                self.axon = set_instance(class_handle=Axon,
+                                         instance_type=axon_subtype,
+                                         instance_params=axon_params,
+                                         tf_graph=self.tf_graph,
+                                         key=self.key + '_' + axon_key)  # type: Union[Axon, BurstingAxon]
+            elif axon_type == 'PlasticSigmoidAxon':
+                self.axon = set_instance(class_handle=PlasticSigmoidAxon,
+                                         instance_type=axon_subtype,
+                                         instance_params=axon_params,
+                                         tf_graph=self.tf_graph,
+                                         key=self.key + '_' + axon_key)  # type: Union[Axon, BurstingAxon]
+            else:
+                raise AttributeError('Invalid axon type!')
 
+    def _set_state_update_equations(self):
+        """Creates a system of ODEs that describes the total state update.
         """
 
-        # build delta membrane potential method
-        #######################################
+        with self.tf_graph.as_default():
 
-        # create string representation of method and make it executable
-        exec(construct_get_delta_membrane_potential_function(leaky_capacitor=self.features['leaky_capacitor'],
-                                                             enable_modulation=self.features['modulation_enabled'],
-                                                             integro_differential=self.features['integro_differential'])
-             )
+            with tf.variable_scope(self.key):
 
-        # bind method to self
-        self.get_delta_membrane_potential = MethodType(locals()['get_delta_membrane_potential'], self)
+                self.membrane_potential = tf.get_variable(name=self.key + '_membrane_potential',
+                                                          shape=(),
+                                                          dtype=tf.float64,
+                                                          initializer=tf.constant_initializer(value=0.)
+                                                          )
 
-        # build get synaptic responses method
-        #####################################
+                self.psps = tf.Variable(np.zeros(self.n_synapses),
+                                        name=self.key + '_psps',
+                                        trainable=False
+                                        )
 
-        # create string representation of method and make it executable
-        exec(construct_get_synaptic_responses(self.features['integro_differential']))
+                # rate-to-potential operator: synapse level
+                ###########################################
 
-        # bind method to self
-        self.get_synaptic_responses = MethodType(locals()['get_synaptic_responses'], self)
+                # update synaptic states
+                update_synapses = [syn.update_synapse for syn in self.synapses.values()]
 
-        # instantiate the solvers
-        #########################
+                # collect synaptic responses
+                with self.tf_graph.control_dependencies(update_synapses):
+                    get_psps = [self.psps[i].assign(syn.psp) for i, syn in enumerate(self.synapses.values())]
 
-        solver_args = {'max_step': self.step_size, 'atol': 1e-3, 'rtol': 1e-2}
+                # rate-to-potential operator: soma level
+                ########################################
 
-        # solvers needed for updating the membrane potential
-        if self.features['leaky_capacitor']:
+                # update membrane potential
+                with self.tf_graph.control_dependencies(get_psps):
+                    update_membrane_potential = self.membrane_potential.assign(tf.reduce_sum(self.psps))
 
-            self.membrane_potential_solver = set_instance(solv.Solver,
-                                                          instance_type=solver,
-                                                          instance_params=None,
-                                                          f=self.get_delta_membrane_potential,
-                                                          y0=self.membrane_potential,
-                                                          **solver_args)
+                # group rtp operations
+                rate_to_potential = tf.group(tf.tuple(update_synapses),
+                                             tf.tuple(get_psps),
+                                             update_membrane_potential)
 
-        else:
+                # potential-to-rate operator
+                ############################
 
-            self.psp_solver = set_instance(solv.Solver,
-                                           instance_type=solver,
-                                           instance_params=None,
-                                           f=self.get_delta_psps,
-                                           y0=self.PSPs,
-                                           **solver_args)
+                with self.tf_graph.control_dependencies([rate_to_potential]):
 
-            self.synaptic_current_solver = set_instance(solv.Solver,
-                                                        instance_type=solver,
-                                                        instance_params=None,
-                                                        f=self.get_synaptic_responses,
-                                                        y0=self.synaptic_currents,
-                                                        **solver_args)
+                    update_axon = self.axon.membrane_potential.assign(self.membrane_potential)
 
-        # additional solvers needed for plasticity mechanisms
-        if self.features['axonal_plasticity']:
-            self.axonal_adaptation_solver = set_instance(solv.Solver,
-                                                         instance_type=solver,
-                                                         instance_params=None,
-                                                         f=self.axon_update,
-                                                         y0=self.axonal_adaptation,
-                                                         **solver_args)
+                    with self.tf_graph.control_dependencies([update_axon]):
+                        update_firing_rate = self.axon.update_firing_rate
 
-        if self.features['synaptic_plasticity']:
-            self.synaptic_depression_solver = set_instance(solv.Solver,
-                                                           instance_type=solver,
-                                                           instance_params=None,
-                                                           f=self.synapse_updates,
-                                                           y0=self.synaptic_depression,
-                                                           **solver_args)
+                    potential_to_rate = tf.group(update_axon, update_firing_rate)
 
-        # build state update method
-        ###########################
+                # final grouping
+                ################
 
-        # create string representation of method and make it executable
-        exec(construct_state_update_function(spike_frequency_adaptation=self.features['axonal_plasticity'],
-                                             synapse_efficacy_adaptation=self.features['synaptic_plasticity'],
-                                             leaky_capacitor=self.features['leaky_capacitor'])
-             )
+                state_update = tf.group(potential_to_rate, rate_to_potential)
 
-        # bind method to self
-        self.state_update = MethodType(locals()['state_update'], self)
+        return state_update
 
-    def get_firing_rate(self) -> FloatLike:
-        """Calculate the current average firing rate of the population.
-
-        Returns
-        -------
-        float
-            Average firing rate of population [unit = 1/s].
-
+    def connect_to_targets(self):
+        """Project population output firing rate to connected targets.
         """
 
-        return self.axon.compute_firing_rate(self.membrane_potential)
+        # project source firing rate to connected populations
+        #####################################################
 
-    def get_delta_psps(self,
-                       t: float,
-                       psps_old: np.ndarray
-                       ) -> np.ndarray:
-        """Calculates the change in PSP.
-        """
+        with self.tf_graph.as_default():
 
-        return self.synaptic_currents
+            with tf.variable_scope(self.key):
+
+                # loop over target populations connected to source
+                project_to_targets = [syn.pass_input(self.axon.firing_rate * self.target_weights[i],
+                                                     delay=self.target_delays[i])
+                                      for i, syn in enumerate(self.targets)]
+
+                self.project_to_targets = tf.tuple(project_to_targets)
+
+        return self.project_to_targets
 
     def copy_synapse(self,
                      synapse_key: str,

@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import numpy as np
 from typing import Optional, Callable, overload, List
+import tensorflow as tf
 
 # pyrates internal imports
 from pyrates.utility import parametric_sigmoid, normalized_sigmoid, plastic_sigmoid, plastic_normalized_sigmoid
@@ -56,7 +57,9 @@ class Axon(RepresentationBase):
 
     def __init__(self,
                  transfer_function: Callable[..., float],
+                 init_val: float = 0.,
                  key: Optional[str] = None,
+                 tf_graph: Optional[tf.Graph] = None,
                  **transfer_function_kwargs: float
                  ) -> None:
         """Instantiates base axon.
@@ -65,34 +68,32 @@ class Axon(RepresentationBase):
         self.transfer_function = transfer_function
         self.key = '' if key is None else key
         self.transfer_function_args = transfer_function_kwargs
-        self.firing_rate = 0.
+        self.tf_graph = tf.get_default_graph() if tf_graph is None else tf_graph
 
-    def compute_firing_rate(self,
-                            membrane_potential: float
-                            ) -> float:
-        """Computes average firing rate from membrane potential via transfer function.
+        with self.tf_graph.as_default():
 
-        Parameters
-        ----------
-        membrane_potential
-            Current average membrane potential at soma of neural mass [unit = V].
+            self.firing_rate = tf.get_variable(name=self.key + '_firing_rate',
+                                               trainable=False,
+                                               dtype=tf.float64,
+                                               initializer=tf.constant_initializer(value=init_val),
+                                               shape=()
+                                               )
+            self.membrane_potential = tf.get_variable(name=self.key + '_membrane_potential',
+                                                      trainable=False,
+                                                      dtype=tf.float64,
+                                                      initializer=tf.constant_initializer(value=0.),
+                                                      shape=()
+                                                      )
 
-        Returns
-        -------
-        float
-            average firing rate at axon hillock [unit = 1/s]
-
-        """
-
-        self.firing_rate = self.transfer_function(membrane_potential, **self.transfer_function_args)  # type: ignore
-
-        return self.firing_rate
+            self.update_firing_rate = self.firing_rate.assign(self.transfer_function(self.membrane_potential,
+                                                                                     **self.transfer_function_args))
 
     def clear(self):
         """Clears all time-dependent variables of axon.
         """
 
-        self.firing_rate = 0.
+        self.firing_rate.assign(0.)
+        self.membrane_potential.assign(0.)
 
     def update(self):
         """Updates all time-dependent parameters/methods of axon.
@@ -126,7 +127,12 @@ class Axon(RepresentationBase):
         # calculate firing rates
         ########################
 
-        firing_rates = np.array([self.compute_firing_rate(v) for v in membrane_potentials])
+        firing_rates = []
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
+        for v in membrane_potentials:
+            sess.run(self.update_firing_rate(v))
+            firing_rates.append(self.firing_rate.eval(session=sess))
 
         # plot firing rates over membrane potentials
         ############################################
@@ -148,6 +154,8 @@ class Axon(RepresentationBase):
         # show plot
         if create_plot:
             fig.show()
+
+        sess.close()
 
         return axis
 
@@ -197,6 +205,7 @@ class SigmoidAxon(Axon):
                  firing_threshold: float,
                  slope: float,
                  normalize: bool = False,
+                 tf_graph: Optional[tf.Graph] = None,
                  key: Optional[str] = None
                  ) -> None:
         """Initializes sigmoid axon instance.
@@ -212,6 +221,7 @@ class SigmoidAxon(Axon):
         #################
 
         super().__init__(transfer_function=parametric_sigmoid if not normalize else normalized_sigmoid,
+                         tf_graph=tf_graph,
                          key=key,
                          max_firing_rate=max_firing_rate,
                          firing_threshold=firing_threshold,
@@ -274,13 +284,13 @@ class SigmoidAxon(Axon):
             # potential until the firing rate is smaller or equal to epsilon
             membrane_potential = list()
             membrane_potential.append(self.transfer_function_args['membrane_potential_threshold'])
-            firing_rate = self.compute_firing_rate(membrane_potential[-1])
+            firing_rate = self.update_firing_rate(membrane_potential[-1])
             if firing_rate == 0.:
                 raise ValueError('Automatic range detection not implemented for normalized axons yet. '
                                  'Please pass a membrane potential vector to plotting function.')
             while np.abs(firing_rate) > epsilon:
                 membrane_potential.append(membrane_potential[-1] - bin_size)
-                firing_rate = self.compute_firing_rate(membrane_potential[-1])
+                firing_rate = self.update_firing_rate(membrane_potential[-1])
             membrane_potential_1 = np.array(membrane_potential)
             membrane_potential_1 = np.flipud(membrane_potential_1)
 
@@ -288,10 +298,10 @@ class SigmoidAxon(Axon):
             # potential until the firing rate is greater or equal to max_firing_rate - epsilon
             membrane_potential = list()
             membrane_potential.append(self.transfer_function_args['membrane_potential_threshold'] + bin_size)
-            firing_rate = self.compute_firing_rate(membrane_potential[-1])
+            firing_rate = self.update_firing_rate(membrane_potential[-1])
             while np.abs(firing_rate) <= self.transfer_function_args['max_firing_rate'] - epsilon:
                 membrane_potential.append(membrane_potential[-1] + bin_size)
-                firing_rate = self.compute_firing_rate(membrane_potential[-1])
+                firing_rate = self.update_firing_rate(membrane_potential[-1])
             membrane_potential_2 = np.array(membrane_potential)
 
             # concatenate the resulting membrane potentials
@@ -531,9 +541,9 @@ class BurstingAxon(Axon):
 
         return self.kernel_function(time_points, **self.kernel_function_args)
 
-    def compute_firing_rate(self,
-                            membrane_potential: float
-                            ) -> float:
+    def update_firing_rate(self,
+                           membrane_potential: float
+                           ) -> float:
         """Computes average firing rate from membrane potential via transfer function and axonal kernel.
 
         Parameters
@@ -564,7 +574,7 @@ class BurstingAxon(Axon):
         # integrate over time
         kernel_value = np.trapz(kernel_value, dx=self.bin_size)
 
-        self.firing_rate = kernel_value * super().compute_firing_rate(membrane_potential) * self.max_firing_rate
+        self.firing_rate = kernel_value * super().update_firing_rate(membrane_potential) * self.max_firing_rate
 
         return self.firing_rate
 

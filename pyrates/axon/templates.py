@@ -3,6 +3,7 @@
 
 # external packages
 from typing import Optional
+import tensorflow as tf
 
 # pyrates internal imports
 from pyrates.axon import SigmoidAxon, BurstingAxon, PlasticSigmoidAxon  # type: ignore
@@ -91,7 +92,9 @@ class JansenRitAxon(SigmoidAxon):
     def __init__(self,
                  max_firing_rate: float = 5.,
                  firing_threshold: float = 0.006,
-                 slope: float = 560.
+                 slope: float = 560.,
+                 tf_graph: Optional[tf.Graph] = None,
+                 key: str = 'JR_axon'
                  ) -> None:
         """Instantiates sigmoid axon with Jansen & Rit's parameters.
         """
@@ -99,7 +102,8 @@ class JansenRitAxon(SigmoidAxon):
         super().__init__(max_firing_rate=max_firing_rate,
                          firing_threshold=firing_threshold,
                          slope=slope,
-                         key='JR_axon')
+                         tf_graph=tf_graph,
+                         key=key)
 
 
 class MoranAxon(PlasticSigmoidAxon):

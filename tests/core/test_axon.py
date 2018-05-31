@@ -26,7 +26,7 @@ def setup_module():
 
 def test_1_1_axon_transfer_function():
     """Testing basic functionality of Axon class:
-    The compute_firing_rate function is tested with a 2x2 design:
+    The update_firing_rate function is tested with a 2x2 design:
     - with and without transfer_function_args as captured in the init
     - called with a scalar or with an array"""
 
@@ -40,29 +40,29 @@ def test_1_1_axon_transfer_function():
 
     zero_axon = Axon(transfer_function=multiply)
 
-    assert zero_axon.compute_firing_rate(scalar) == 0
-    assert np.array_equal(zero_axon.compute_firing_rate(array), array * 0)
+    assert zero_axon.update_firing_rate(scalar) == 0
+    assert np.array_equal(zero_axon.update_firing_rate(array), array * 0)
 
     # Testing with transfer_function_args given as keyword argument
     ###############################################################
 
     double_axon = Axon(transfer_function=multiply,
                        factor=2.)
-    assert double_axon.compute_firing_rate(scalar) == 10
-    assert np.array_equal(double_axon.compute_firing_rate(array), array * 2)
+    assert double_axon.update_firing_rate(scalar) == 10
+    assert np.array_equal(double_axon.update_firing_rate(array), array * 2)
 
     # Erroneous behaviour with list instead of array
     ################################################
 
     list_ = list(array)
     with pytest.raises(TypeError):
-        double_axon.compute_firing_rate(list_)  # PyCharm correctly warns about this
+        double_axon.update_firing_rate(list_)  # PyCharm correctly warns about this
 
     integer_axon = Axon(transfer_function=multiply,
                         factor=10)
 
-    result_list = integer_axon.compute_firing_rate(list_)
-    result_array = integer_axon.compute_firing_rate(array)
+    result_list = integer_axon.update_firing_rate(list_)
+    result_array = integer_axon.update_firing_rate(array)
 
     assert not len(result_list) == len(result_array)
 
@@ -109,11 +109,11 @@ def test_1_2_jr_sigmoid_axon():
     # get firing rates
     ##################
 
-    firing_rate_1 = axon.compute_firing_rate(membrane_potential_1)
-    firing_rate_2 = axon.compute_firing_rate(membrane_potential_2)
-    firing_rate_3 = axon.compute_firing_rate(membrane_potential_3)
-    firing_rate_4 = axon.compute_firing_rate(membrane_potential_4)
-    firing_rate_5 = axon.compute_firing_rate(membrane_potential_5)
+    firing_rate_1 = axon.update_firing_rate(membrane_potential_1)
+    firing_rate_2 = axon.update_firing_rate(membrane_potential_2)
+    firing_rate_3 = axon.update_firing_rate(membrane_potential_3)
+    firing_rate_4 = axon.update_firing_rate(membrane_potential_4)
+    firing_rate_5 = axon.update_firing_rate(membrane_potential_5)
 
     # perform unit tests
     ####################

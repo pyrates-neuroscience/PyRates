@@ -4,6 +4,7 @@
 # external packages
 import numpy as np
 from typing import Union, Optional
+import tensorflow as tf
 
 # meta infos
 __author__ = "Richard Gast"
@@ -40,7 +41,7 @@ def parametric_sigmoid(membrane_potential: Union[float, np.ndarray],
 
     """
 
-    return max_firing_rate / (1 + np.exp(slope * (firing_threshold - membrane_potential)))
+    return max_firing_rate / (1 + tf.exp(slope * (firing_threshold - membrane_potential)))
 
 
 def normalized_sigmoid(membrane_potential: Union[float, np.ndarray],

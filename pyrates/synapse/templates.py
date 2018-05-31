@@ -3,6 +3,7 @@
 
 # external packages
 from typing import Optional
+import tensorflow as tf
 
 # pyrates internal imports
 from pyrates.synapse import DoubleExponentialSynapse, TransformedInputSynapse, \
@@ -448,17 +449,22 @@ class JansenRitExcitatorySynapse(DEExponentialSynapse):
     """
 
     def __init__(self,
+                 step_size: float,
                  buffer_size: int = 0,
                  efficacy: float = 3.25e-3,
-                 tau: float = 0.01
+                 tau: float = 0.01,
+                 tf_graph: Optional[tf.Graph] = None,
+                 key: str = 'excitatory'
                  ) -> None:
         """Initializes excitatory exponential synapse as defined in [1]_.
         """
 
-        super().__init__(efficacy=efficacy,
+        super().__init__(step_size=step_size,
+                         efficacy=efficacy,
                          tau=tau,
                          buffer_size=buffer_size,
-                         key='excitatory')
+                         tf_graph=tf_graph,
+                         key=key)
 
 
 class JansenRitInhibitorySynapse(DEExponentialSynapse):
@@ -477,17 +483,22 @@ class JansenRitInhibitorySynapse(DEExponentialSynapse):
     """
 
     def __init__(self,
+                 step_size: float,
                  buffer_size: int = 0,
                  efficacy: float = -22e-3,
-                 tau: float = 0.02
+                 tau: float = 0.02,
+                 tf_graph: Optional[tf.Graph] = None,
+                 key: str = 'inhibitory'
                  ) -> None:
         """Initializes excitatory exponential synapse as defined in [1]_.
         """
 
-        super().__init__(efficacy=efficacy,
+        super().__init__(step_size=step_size,
+                         efficacy=efficacy,
                          tau=tau,
                          buffer_size=buffer_size,
-                         key='inhibitory')
+                         tf_graph=tf_graph,
+                         key=key)
 
 
 class MoranExcitatorySynapse(DEExponentialSynapse):

@@ -83,8 +83,8 @@ def test_3_1_population_init():
     syn1_response = syn1.get_synaptic_response()
     syn2_response = syn2.get_synaptic_response()
 
-    pop_ax_response = pop.axon.compute_firing_rate(membrane_potential)
-    ax_response = axon.compute_firing_rate(membrane_potential)
+    pop_ax_response = pop.axon.update_firing_rate(membrane_potential)
+    ax_response = axon.update_firing_rate(membrane_potential)
 
     # perform unit tests
     ####################

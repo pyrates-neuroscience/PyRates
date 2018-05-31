@@ -7,7 +7,8 @@ from typing import Optional, List
 
 # pyrates internal imports
 from pyrates.circuit import CircuitFromScratch, Circuit
-from pyrates.population import WangKnoescheCells
+from pyrates.population import Population
+from pyrates.population import WangKnoescheCells, JansenRitPyramidalCells
 from pyrates.population import MoranPyramidalCells, MoranExcitatoryInterneurons, MoranInhibitoryInterneurons
 
 # meta infos
@@ -564,3 +565,40 @@ class MoranCircuit(Circuit):
                          connectivity=connections,
                          delays=delays,
                          step_size=step_size)
+
+
+##########################
+# single population NMMs #
+##########################
+
+
+class SinglePopCircuit(Circuit):
+
+    def __init__(self,
+                 step_size: float = 1e-3,
+                 connectivity: Optional[List[float]] = None,
+                 delays: Optional[List[float]] = None,
+                 target_syns: Optional[List[str]] = None,
+                 pop_key: str = 'PCs',
+                 **pop_kwargs
+                 ) -> None:
+
+        pop = Population(step_size=step_size, **pop_kwargs) if pop_kwargs else \
+            JansenRitPyramidalCells(step_size=step_size, key=pop_key)
+
+        if connectivity is None:
+            connectivity = [135., 0.25*135]
+
+        if delays is None:
+            delays = [2e-3] * len(connectivity)
+
+        if target_syns is None:
+            target_syns = ['excitatory', 'inhibitory']
+
+        super().__init__([pop],
+                         step_size=step_size,
+                         connectivity=connectivity,
+                         source_pops=[pop_key] * len(connectivity),
+                         target_pops=[pop_key] * len(connectivity),
+                         target_syns=target_syns,
+                         delays=delays)
