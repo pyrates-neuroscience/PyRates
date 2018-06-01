@@ -487,13 +487,6 @@ class DESynapse(RepresentationBase):
 
         return self.synaptic_buffer[delay].assign(self.synaptic_buffer[delay] + synaptic_input)
 
-    def rotate_input(self):
-        """Shifts input values in synaptic input vector one position to the left.
-        """
-
-        return tf.group(self.synaptic_buffer[0:-1].assign(self.synaptic_buffer[1:]),
-                        self.synaptic_buffer[-1].assign(0.))
-
     def clear(self):
         """Clears synaptic input and depression.
         """
@@ -826,41 +819,31 @@ class DEExponentialSynapse(DESynapse):
         # set additional attributes
         ###########################
 
-        # time constant
         self.tau = tau
-
-        # pre-calculate DE constants
-        self.input_scaling = self.efficacy / self.tau
-        self.d1_scaling = 1 / self.tau ** 2
-        self.d2_scaling = 2 / self.tau
 
         with self.tf_graph.as_default():
 
+            # pre-calculate DE constants
+            self.input_scaling = tf.constant(self.efficacy / self.tau, dtype=tf.float64)
+            self.d1_scaling = tf.constant(1 / self.tau ** 2, dtype=tf.float64)
+            self.d2_scaling = tf.constant(2 / self.tau, dtype=tf.float64)
+
             # update state variables
-            delta_synaptic_response = self.get_synaptic_response()
+            delta_synaptic_response = self.input_scaling * self.synaptic_buffer[0] - self.d1_scaling * self.psp \
+                                      - self.d2_scaling * self.synaptic_response
 
-            with self.tf_graph.control_dependencies([delta_synaptic_response]):
+            # update synapse
+            with tf.control_dependencies([delta_synaptic_response]):
+                self.update_psp = self.psp.assign_add(self.step_size * self.synaptic_response)
+            with tf.control_dependencies([delta_synaptic_response, self.update_psp]):
+                self.update_synaptic_response = self.synaptic_response.assign_add(self.step_size *
+                                                                                  delta_synaptic_response)
 
-                # update synapse
-                update_synaptic_response = self.synaptic_response.assign_add(self.step_size * delta_synaptic_response)
-                update_psp = self.psp.assign_add(self.step_size * self.synaptic_response)
-                update_buffer = self.rotate_input()
-
-                # update synaptic buffer
-                self.update_synapse = tf.group(update_synaptic_response, update_psp, update_buffer)
-
-    def get_synaptic_response(self) -> tf.float64:
-        """Calculates change in synaptic current from synaptic input (should be incoming firing rate).
-
-        Returns
-        -------
-        float
-            Resulting synaptic current [unit = A].
-
-        """
-
-        return self.input_scaling * self.synaptic_buffer[0] - self.d1_scaling * self.psp \
-               - self.d2_scaling * self.synaptic_response
+            # update buffer
+            with tf.control_dependencies([delta_synaptic_response, self.update_synaptic_response]):
+                self.update_buffer_1 = self.synaptic_buffer[0:-1].assign(self.synaptic_buffer[1:])
+            with tf.control_dependencies([delta_synaptic_response, self.update_buffer_1]):
+                self.update_buffer_2 = self.synaptic_buffer[-1].assign(0.)
 
     def update(self):
         """Updates attributes depending on current synapse state.

@@ -397,9 +397,7 @@ class Population(AbstractBasePopulation):
         self.synapse_efficacy_adaptation = deepcopy(synapse_efficacy_adaptation)  # type: List[Callable]
         self.synapse_efficacy_adaptation_args = deepcopy(synapse_efficacy_adaptation_kwargs)  # type: List[dict]
         self.features = dict()
-        self.state_update = tf.no_op()
         self.project_to_targets = tf.no_op()
-        self.step = tf.no_op()
 
         # choose between different population set-ups based on passed parameters
         ########################################################################
@@ -686,42 +684,39 @@ class Population(AbstractBasePopulation):
                 ###########################################
 
                 # update synaptic states
-                update_synapses = [syn.update_synapse for syn in self.synapses.values()]
+                syn_updates = []
+                for i, syn in enumerate(self.synapses.values()):
 
-                # collect synaptic responses
-                with self.tf_graph.control_dependencies(update_synapses):
-                    get_psps = [self.psps[i].assign(syn.psp) for i, syn in enumerate(self.synapses.values())]
+                    update_synapse = tf.group(syn.update_psp,
+                                              syn.update_synaptic_response,
+                                              syn.update_buffer_1,
+                                              syn.update_buffer_2)
+
+                    with tf.control_dependencies([update_synapse]):
+                        get_psp = self.psps[i].assign(syn.psp)
+
+                    syn_updates.append(tf.group(update_synapse, get_psp))
+
+                update_all_synapses = tf.tuple(syn_updates)
 
                 # rate-to-potential operator: soma level
                 ########################################
 
                 # update membrane potential
-                with self.tf_graph.control_dependencies(get_psps):
+                with tf.control_dependencies(update_all_synapses):
                     update_membrane_potential = self.membrane_potential.assign(tf.reduce_sum(self.psps))
 
                 # group rtp operations
-                rate_to_potential = tf.group(tf.tuple(update_synapses),
-                                             tf.tuple(get_psps),
-                                             update_membrane_potential)
+                rate_to_potential = tf.group(update_all_synapses, update_membrane_potential)
 
                 # potential-to-rate operator
                 ############################
 
-                with self.tf_graph.control_dependencies([rate_to_potential]):
+                with tf.control_dependencies([rate_to_potential]):
+                    potential_to_rate = self.axon.firing_rate.assign(
+                        self.axon.transfer_function(self.membrane_potential, **self.axon.transfer_function_args))
 
-                    update_axon = self.axon.membrane_potential.assign(self.membrane_potential)
-
-                    with self.tf_graph.control_dependencies([update_axon]):
-                        update_firing_rate = self.axon.update_firing_rate
-
-                    potential_to_rate = tf.group(update_axon, update_firing_rate)
-
-                # final grouping
-                ################
-
-                state_update = tf.group(potential_to_rate, rate_to_potential)
-
-        return state_update
+        return tf.group(potential_to_rate, rate_to_potential)
 
     def connect_to_targets(self):
         """Project population output firing rate to connected targets.
@@ -735,13 +730,11 @@ class Population(AbstractBasePopulation):
             with tf.variable_scope(self.key):
 
                 # loop over target populations connected to source
-                project_to_targets = [syn.pass_input(self.axon.firing_rate * self.target_weights[i],
-                                                     delay=self.target_delays[i])
-                                      for i, syn in enumerate(self.targets)]
+                project_to_targets = [syn.synaptic_buffer[self.target_delays[i]].assign(
+                    syn.synaptic_buffer[self.target_delays[i]] + self.axon.firing_rate * self.target_weights[i])
+                                       for i, syn in enumerate(self.targets)]
 
-                self.project_to_targets = tf.tuple(project_to_targets)
-
-        return self.project_to_targets
+        return tf.tuple(project_to_targets)
 
     def copy_synapse(self,
                      synapse_key: str,

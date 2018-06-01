@@ -85,9 +85,6 @@ class Axon(RepresentationBase):
                                                       shape=()
                                                       )
 
-            self.update_firing_rate = self.firing_rate.assign(self.transfer_function(self.membrane_potential,
-                                                                                     **self.transfer_function_args))
-
     def clear(self):
         """Clears all time-dependent variables of axon.
         """
