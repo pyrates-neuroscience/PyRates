@@ -700,7 +700,6 @@ class Population(AbstractBasePopulation):
 
                     update_synapse = tf.group(syn.update_psp,
                                               syn.update_synaptic_response,
-                                              syn.print_inp,
                                               name=self.key + '_update_synapse_' + str(i))
 
                     with tf.control_dependencies([update_synapse]):

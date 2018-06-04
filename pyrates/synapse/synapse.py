@@ -838,7 +838,6 @@ class DEExponentialSynapse(DESynapse):
                                           name=self.key + '_d2_scaling')
 
             # update state variables
-            self.print_inp = tf.Print(self.synaptic_buffer, [self.key, self.synaptic_buffer[0]])
             delta_synaptic_response = self.input_scaling * self.synaptic_buffer[0] - self.d1_scaling * self.psp \
                                       - self.d2_scaling * self.synaptic_response
 
