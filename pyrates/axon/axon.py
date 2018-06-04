@@ -74,23 +74,16 @@ class Axon(RepresentationBase):
 
             self.firing_rate = tf.get_variable(name=self.key + '_firing_rate',
                                                trainable=False,
-                                               dtype=tf.float64,
+                                               dtype=tf.float32,
                                                initializer=tf.constant_initializer(value=init_val),
                                                shape=()
                                                )
-            self.membrane_potential = tf.get_variable(name=self.key + '_membrane_potential',
-                                                      trainable=False,
-                                                      dtype=tf.float64,
-                                                      initializer=tf.constant_initializer(value=0.),
-                                                      shape=()
-                                                      )
 
     def clear(self):
         """Clears all time-dependent variables of axon.
         """
 
-        self.firing_rate.assign(0.)
-        self.membrane_potential.assign(0.)
+        return self.firing_rate.assign(0.)
 
     def update(self):
         """Updates all time-dependent parameters/methods of axon.

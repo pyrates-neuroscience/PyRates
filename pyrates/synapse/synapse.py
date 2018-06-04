@@ -412,6 +412,21 @@ class DESynapse(RepresentationBase):
 
             self.key = key
 
+        # set attributes
+        ################
+
+        self.step_size = step_size
+        self.efficacy = efficacy
+        self.reversal_potential = reversal_potential
+        self.buffer_size = buffer_size
+        self.depression = 1.0
+
+        # set decorator for synaptic current getter (only relevant for conductivity based synapses)
+        if reversal_potential:
+            self.synaptic_response_scaling = lambda membrane_potential: (self.reversal_potential - membrane_potential)
+        else:
+            self.synaptic_response_scaling = lambda membrane_potential: 1.0
+
         # build tensorflow graph
         ########################
 
@@ -419,46 +434,33 @@ class DESynapse(RepresentationBase):
 
         with self.tf_graph.as_default():
 
-            # set attributes
-            ################
+            with tf.variable_scope(self.key):
 
-            self.step_size = step_size
-            self.efficacy = efficacy
-            self.reversal_potential = reversal_potential
-            self.buffer_size = buffer_size
 
-            # set synaptic depression (for plasticity mechanisms)
-            self.depression = 1.0
+                # build input buffer
+                ####################
 
-            # set decorator for synaptic current getter (only relevant for conductivity based synapses)
-            if reversal_potential:
-                self.synaptic_response_scaling = lambda membrane_potential: (self.reversal_potential-membrane_potential)
-            else:
-                self.synaptic_response_scaling = lambda membrane_potential: 1.0
+                self.synaptic_buffer = tf.Variable(np.zeros(1 + int(self.buffer_size / self.step_size),
+                                                            dtype=np.float32),
+                                                   trainable=False,
+                                                   name=self.key + '_synaptic_buffer')
 
-            # build input buffer
-            ####################
+                # initialize state variables
+                ############################
 
-            self.synaptic_buffer = tf.Variable(np.zeros(1 + int(self.buffer_size / self.step_size), dtype=np.float64),
-                                               trainable=False,
-                                               name=self.key + '_synaptic_buffer')
+                self.synaptic_response = tf.get_variable(name=self.key + '_synaptic_response',
+                                                         dtype=tf.float32,
+                                                         trainable=False,
+                                                         initializer=tf.constant_initializer(value=0.),
+                                                         shape=()
+                                                         )
 
-            # initialize state variables
-            ############################
-
-            self.synaptic_response = tf.get_variable(name=self.key + '_synaptic_response',
-                                                     dtype=tf.float64,
-                                                     trainable=False,
-                                                     initializer=tf.constant_initializer(value=0.),
-                                                     shape=()
-                                                     )
-
-            self.psp = tf.get_variable(name=self.key + '_psp',
-                                       dtype=tf.float64,
-                                       trainable=False,
-                                       initializer=tf.constant_initializer(value=0.),
-                                       shape=()
-                                       )
+                self.psp = tf.get_variable(name=self.key + '_psp',
+                                           dtype=tf.float32,
+                                           trainable=False,
+                                           initializer=tf.constant_initializer(value=0.),
+                                           shape=()
+                                           )
 
     def get_synaptic_response(self) -> tf.Variable:
         """Calculates change in synaptic response from synaptic input (should be incoming firing rate).
@@ -472,7 +474,7 @@ class DESynapse(RepresentationBase):
 
         raise AttributeError('This method needs to be implemented in child classes for the synapse to work!')
 
-    def pass_input(self, synaptic_input: float, delay: int = 0
+    def pass_input(self, synaptic_input: tf.float32, delay: int = 0
                    ) -> None:
         """Passes synaptic input to synaptic_input array.
 
@@ -485,7 +487,11 @@ class DESynapse(RepresentationBase):
 
         """
 
-        return self.synaptic_buffer[delay].assign(self.synaptic_buffer[delay] + synaptic_input)
+        with self.tf_graph.as_default():
+
+            pass_inp = self.synaptic_buffer[delay].assign(self.synaptic_buffer[delay] + synaptic_input)
+
+        return pass_inp
 
     def clear(self):
         """Clears synaptic input and depression.
@@ -824,25 +830,30 @@ class DEExponentialSynapse(DESynapse):
         with self.tf_graph.as_default():
 
             # pre-calculate DE constants
-            self.input_scaling = tf.constant(self.efficacy / self.tau, dtype=tf.float64)
-            self.d1_scaling = tf.constant(1 / self.tau ** 2, dtype=tf.float64)
-            self.d2_scaling = tf.constant(2 / self.tau, dtype=tf.float64)
+            self.input_scaling = tf.constant(self.efficacy / self.tau, dtype=tf.float32,
+                                             name=self.key + '_input_scaling')
+            self.d1_scaling = tf.constant(1 / self.tau ** 2, dtype=tf.float32,
+                                          name=self.key + '_d1_scaling')
+            self.d2_scaling = tf.constant(2 / self.tau, dtype=tf.float32,
+                                          name=self.key + '_d2_scaling')
 
             # update state variables
+            self.print_inp = tf.Print(self.synaptic_buffer, [self.key, self.synaptic_buffer[0]])
             delta_synaptic_response = self.input_scaling * self.synaptic_buffer[0] - self.d1_scaling * self.psp \
                                       - self.d2_scaling * self.synaptic_response
 
             # update synapse
             with tf.control_dependencies([delta_synaptic_response]):
                 self.update_psp = self.psp.assign_add(self.step_size * self.synaptic_response)
-            with tf.control_dependencies([delta_synaptic_response, self.update_psp]):
+
+            with tf.control_dependencies([self.update_psp]):
                 self.update_synaptic_response = self.synaptic_response.assign_add(self.step_size *
                                                                                   delta_synaptic_response)
 
             # update buffer
-            with tf.control_dependencies([delta_synaptic_response, self.update_synaptic_response]):
+            with tf.control_dependencies([self.update_synaptic_response]):
                 self.update_buffer_1 = self.synaptic_buffer[0:-1].assign(self.synaptic_buffer[1:])
-            with tf.control_dependencies([delta_synaptic_response, self.update_buffer_1]):
+            with tf.control_dependencies([self.update_buffer_1]):
                 self.update_buffer_2 = self.synaptic_buffer[-1].assign(0.)
 
     def update(self):
