@@ -14,12 +14,12 @@ import time as t
 
 # general
 step_size = 1e-3
-simulation_time = 1.0
+simulation_time = 10.0
 n_steps = int(simulation_time / step_size)
 c = 135.
 d = 0.0 * step_size
 inp_mean = 220.
-inp_var = 22.
+inp_var = 0.
 inp = inp_mean + np.random.randn(n_steps) * inp_var
 
 # tensorflow graph setup
@@ -82,7 +82,7 @@ with tf.Session(graph=gr) as sess:
     for _ in range(n_steps-1):
 
         # perform step with input
-        sess.run(pass_all)
+        sess.run(pass_all, {arg1})
         sess.run(state_update)
 
         # save states

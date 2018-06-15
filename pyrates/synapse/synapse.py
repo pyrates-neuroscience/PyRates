@@ -436,7 +436,6 @@ class DESynapse(RepresentationBase):
 
             with tf.variable_scope(self.key):
 
-
                 # build input buffer
                 ####################
 
@@ -850,7 +849,7 @@ class DEExponentialSynapse(DESynapse):
                                                                                   delta_synaptic_response)
 
             # update buffer
-            with tf.control_dependencies([self.update_synaptic_response]):
+            with tf.control_dependencies([delta_synaptic_response]):
                 self.update_buffer_1 = self.synaptic_buffer[0:-1].assign(self.synaptic_buffer[1:])
             with tf.control_dependencies([self.update_buffer_1]):
                 self.update_buffer_2 = self.synaptic_buffer[-1].assign(0.)
