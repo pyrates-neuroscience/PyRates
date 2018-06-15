@@ -1,4 +1,4 @@
 """
 """
 
-from .parser import RHSParser, LHSParser, EquationParser
+from .parser import RHSParser, LHSParser, EquationParser, parse_dict
