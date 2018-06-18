@@ -33,14 +33,26 @@ class RHSParser(object):
         """Instantiates RHSParser.
         """
 
-        # make sure that vectors/matrices are replaced with the appropriate sympy expressions in expression
-        ###################################################################################################
+        # make sure that sliced vectors/matrices are replaced with the appropriate sympy expressions in expression
+        ##########################################################################################################
+
+        if expression.find('['):
+            expression_unsliced = expression
+            for sub_expr in expression_unsliced.split(' '):
+                idx_start = sub_expr.find('[')
+                if idx_start:
+                    sub_expr_new = sub_expr[0:idx_start]
+                    expression_unsliced.replace(sub_expr, sub_expr_new)
+            self.expression_unsliced = expression_unsliced
+            self.sliced_expr = True
+        else:
+            self.sliced_expr = False
 
         for key, arg in args.items():
             if len(arg.shape) == 1:
-                expression = expression.replace(key, f"""MatrixSymbol('{key}', {arg.shape[0]}, 1)""")
+                expression.replace(key, f"""MatrixSymbol('{key}', {arg.shape[0]}, 1)""")
             elif len(arg.shape) == 2:
-                expression = expression.replace(key, f"""MatrixSymbol('{key}', {arg.shape[0]}, {arg.shape[1]})""")
+                expression.replace(key, f"""MatrixSymbol('{key}', {arg.shape[0]}, {arg.shape[1]})""")
 
         # parse expression and initialize important variables
         #####################################################
@@ -109,6 +121,8 @@ class RHSParser(object):
 
         # turn expression into tensorflow function
         ##########################################
+
+        if self.sliced_expr:
 
         func = lambdify(args=tuple(self.lambdify_args), expr=self.expression, modules='tensorflow')
 
