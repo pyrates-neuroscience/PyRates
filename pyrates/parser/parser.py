@@ -36,7 +36,7 @@ class RHSParser(object):
         # make sure that sliced vectors/matrices are replaced with the appropriate sympy expressions in expression
         ##########################################################################################################
 
-        if expression.find('['):
+        if expression.find('[') != -1:
             expression_unsliced = expression
             for sub_expr in expression_unsliced.split(' '):
                 idx_start = sub_expr.find('[')
@@ -47,12 +47,6 @@ class RHSParser(object):
             self.sliced_expr = True
         else:
             self.sliced_expr = False
-
-        for key, arg in args.items():
-            if len(arg.shape) == 1:
-                expression.replace(key, f"""MatrixSymbol('{key}', {arg.shape[0]}, 1)""")
-            elif len(arg.shape) == 2:
-                expression.replace(key, f"""MatrixSymbol('{key}', {arg.shape[0]}, {arg.shape[1]})""")
 
         # parse expression and initialize important variables
         #####################################################
@@ -104,25 +98,16 @@ class RHSParser(object):
                 if symb_name not in self.args.keys():
                     raise ValueError(symb_name + ' must be defined in args!')
 
-                arg = self.args[symb_name]
-
-                # check whether the variable is a scalar or some kind of tensor and inform sympy about it
-                if len(arg.shape) > 1:
-                    new_symb = MatrixSymbol(symb_name, arg.shape[0], arg.shape[1])
-                elif len(arg.shape) == 1 and arg.shape[0] > 1:
-                    new_symb = MatrixSymbol(symb_name, arg.shape[0], 1)
-                else:
-                    new_symb = symbols(symb_name)
+                # get new sympy symbol
+                new_symb = symbols(symb_name)
                 self.expression.subs(symb, new_symb)
 
                 # collect the arguments
                 self.lambdify_args.append(new_symb)
-                self.tf_op_args.append(arg)
+                self.tf_op_args.append(self.args[symb_name])
 
         # turn expression into tensorflow function
         ##########################################
-
-        if self.sliced_expr:
 
         func = lambdify(args=tuple(self.lambdify_args), expr=self.expression, modules='tensorflow')
 
@@ -185,15 +170,6 @@ class LHSParser(object):
         """Instantiates RHSParser.
         """
 
-        # make sure that vectors/matrices are replaced with the appropriate sympy expressions in expression
-        ###################################################################################################
-
-        for key, arg in args.items():
-            if len(arg.shape) == 1:
-                expression = expression.replace(key, f"""MatrixSymbol('{key}', {arg.shape[0]}, 1)""")
-            elif len(arg.shape) == 2:
-                expression = expression.replace(key, f"""MatrixSymbol('{key}', {arg.shape[0]}, {arg.shape[1]})""")
-
         # parse expression and initialize important variables
         #####################################################
 
@@ -216,7 +192,7 @@ class LHSParser(object):
 
         """
 
-        if 'dt' in self.expression.free_symbols:
+        if symbols('dt') in self.expression.free_symbols:
 
             from pyrates.solver import Solver
 
@@ -230,7 +206,7 @@ class LHSParser(object):
 
                 out_var_name = str(out_var)
 
-                if (out_var_name != 'd') and (out_var_name != 'dt'):
+                if out_var_name != 'd' and out_var_name != 'dt':
 
                     if out_var_name not in self.args.keys():
                         raise AttributeError('Output variables must be included in expression_args dictionary.')
@@ -242,46 +218,20 @@ class LHSParser(object):
 
         else:
 
-            #if len(self.expression.free_symbols) > 1:
-            #    raise AttributeError('The left-hand side of an expression needs to be of the form `out_var` or '
-            #                         '`d/dt out_var`!')
-
             with self.tf_graph.as_default():
 
-                if self.expression.func == MatrixElement:
+                for out_var in self.expression.free_symbols:
 
-                    indices = []
-                    index_names = []
-                    for symb in self.expression.free_symbols:
-
-                        if str(symb) != 'd' and str(symb) != 'dt':
-
-                            out_var = symb
-                            out_var_name = str(out_var)
-                            if out_var_name not in self.args.keys():
-                                raise AttributeError('Output variables must be included in expression_args dictionary.')
-
-                        else:
-
-                            indices.append(symb)
-                            index_names.append(str(symb))
-
-                    if len(indices) == 1:
-                        tf_op = self.args[out_var_name][self.args[index_names[0]]].assign(self.rhs)
-                    elif len(indices) == 2:
-                        tf_op = self.args[out_var_name][self.args[index_names[0]],
-                                                        self.args[index_names[1]]].assign(self.rhs)
-                    else:
-                        raise ValueError('Currently, only 2d state variables are supported.')
-
-                else:
-
-                    out_var = self.expression.free_symbols.pop()
                     out_var_name = str(out_var)
-                    if out_var_name not in self.args.keys():
-                        raise AttributeError('Output variables must be included in expression_args dictionary.')
 
-                    tf_op = self.args[out_var_name].assign(self.rhs)
+                    if out_var_name != 'd' and out_var_name != 'dt':
+
+                        if out_var_name not in self.args.keys():
+                            raise AttributeError('Output variables must be included in expression_args dictionary.')
+
+                        break
+
+                tf_op = self.args[out_var_name].assign(self.rhs)
 
         return tf_op, self.args[out_var_name]
 
@@ -352,6 +302,10 @@ def parse_dict(var_dict: dict, var_scope: str, tf_graph: Optional[tf.Graph] = No
                         or isinstance(var, tf.IndexedSlices):
 
                     tf_var = var
+
+                elif isinstance(var, float) or isinstance(var, int):
+
+                    tf_var = tf.constant(var)
 
                 elif var['variable_type'] == 'state_variable':
 
