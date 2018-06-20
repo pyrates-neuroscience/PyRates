@@ -35,18 +35,11 @@ class Edge(object):
 
             with tf.variable_scope(self.key):
 
-                for op in coupling_op:
-
-                    op_parser = EquationParser(op)
-                    op_vars = op_parser.variables
-
-                    lhs_vars, rhs_vars = op_vars[0], op_vars[1]
-                    for var in lhs_vars:
-                        if hasattr(target, var):
-                            coupling_op_args[var] = getattr(target, var)
-                    for var in rhs_vars:
-                        if hasattr(source, var):
-                            coupling_op_args[var] = getattr(source, var)
+                # replace the coupling operator arguments with the fields from source and target
+                inp = getattr(target, coupling_op_args['input'])
+                outp = getattr(source, coupling_op_args['output'])
+                coupling_op_args['input'] = {'variable_type': 'tensorflow', 'func': inp}
+                coupling_op_args['output'] = {'variable_type': 'tensorflow', 'func': outp}
 
                 tf_vars, var_names = parse_dict(coupling_op_args, self.key, self.tf_graph)
 

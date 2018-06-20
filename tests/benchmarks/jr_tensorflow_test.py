@@ -5,104 +5,383 @@
 #########
 
 import tensorflow as tf
-from pyrates.population import Population, SynapticInputPopulation
+import numpy as np
+from pyrates.network import Network
 from matplotlib.pyplot import *
-import time as t
 
 # parameter definition
 ######################
 
 # general
 step_size = 1e-3
-simulation_time = 10.0
+simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
 c = 135.
-d = 0.0 * step_size
 inp_mean = 220.
 inp_var = 0.
 inp = inp_mean + np.random.randn(n_steps) * inp_var
 
-# tensorflow graph setup
-########################
+# define network dictionary
+###########################
 
-# initialize graph
+node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau * X - 1/tau**2 * V_syn",
+                                          "d/dt * V_syn = X"],
+                     'operator_rtp_soma': ["V = reduce_sum(V_syn, ax, keep)"],
+                     'operator_ptr': ["m_out = m_max / (1 + exp(r * (v_th - V)))"],
+                     'V': {'name': 'V',
+                           'variable_type': 'state_variable',
+                           'data_type': 'float32',
+                           'shape': (3, 1),
+                           'initial_value': 0.},
+                     'V_syn': {'name': 'V_syn',
+                               'variable_type': 'state_variable',
+                               'data_type': 'float32',
+                               'shape': (3, 2),
+                               'initial_value': 0.},
+                     'm_in': {'name': 'm_in',
+                              'variable_type': 'state_variable',
+                              'data_type': 'float32',
+                              'shape': (3, 2),
+                              'initial_value': 0.},
+                     'm_out': {'name': 'm_out',
+                               'variable_type': 'state_variable',
+                               'data_type': 'float32',
+                               'shape': (3, 1),
+                               'initial_value': 0.16},
+                     'X': {'name': 'X',
+                           'variable_type': 'state_variable',
+                           'data_type': 'float32',
+                           'shape': (3, 2),
+                           'initial_value': 0.},
+                     'H': {'name': 'H',
+                           'variable_type': 'constant',
+                           'data_type': 'float32',
+                           'shape': (3, 2),
+                           'initial_value': [[3.25e-3, -22e-3],
+                                             [3.25e-3, -22e-3],
+                                             [3.25e-3, -22e-3]]},
+                     'tau': {'name': 'tau',
+                             'variable_type': 'constant',
+                             'data_type': 'float32',
+                             'shape': (3, 2),
+                             'initial_value': [[10e-3, 20e-3],
+                                               [10e-3, 20e-3],
+                                               [10e-3, 20e-3]]},
+                     'm_max': {'name': 'm_max',
+                               'variable_type': 'constant',
+                               'data_type': 'float32',
+                               'shape': (),
+                               'initial_value': 5.},
+                     'r': {'name': 'r',
+                           'variable_type': 'constant',
+                           'data_type': 'float32',
+                           'shape': (),
+                           'initial_value': 560.},
+                     'v_th': {'name': 'v_th',
+                              'variable_type': 'constant',
+                              'data_type': 'float32',
+                              'shape': (),
+                              'initial_value': 6e-3},
+                     'U': {'name': 'U',
+                           'variable_type': 'placeholder',
+                           'data_type': 'float32',
+                           'shape': (3, 2)},
+                     'reduce_sum': {'variable_type': 'tensorflow',
+                                    'func': tf.reduce_sum},
+                     'ax': {'name': 'ax',
+                            'variable_type': 'constant',
+                            'data_type': 'int32',
+                            'shape': (),
+                            'initial_value': 1},
+                     'keep': True
+                     }
+             }
+
+# node_dict = {'pcs': {'operator_rtp_syn': ["d/dt * x_e = H_e/tau_e * (m_ein + u) - 2/tau_e * x_e - 1/tau_e**2 * psp_e",
+#                                           "d/dt * psp_e = x_e",
+#                                           "d/dt * x_i = H_i/tau_i * m_iin - 2/tau_i * x_i - 1/tau_i**2 * psp_i",
+#                                           "d/dt * psp_i = x_i"
+#                                           ],
+#                      'operator_rtp_soma': ["v = psp_e + psp_i"],
+#                      'operator_ptr': ["m_out = m_max / (1 + exp(r * (v_th - v)))"],
+#                      'v': {'name': 'v',
+#                            'variable_type': 'state_variable',
+#                            'data_type': 'float32',
+#                            'shape': (),
+#                            'initial_value': 0.},
+#                      'm_ein': {'name': 'm_ein',
+#                                'variable_type': 'state_variable',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 0.},
+#                      'm_iin': {'name': 'm_iin',
+#                                'variable_type': 'state_variable',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 0.},
+#                      'm_out': {'name': 'm_out',
+#                                'variable_type': 'state_variable',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 0.16},
+#                      'psp_e': {'name': 'psp_e',
+#                                'variable_type': 'state_variable',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 0.},
+#                      'psp_i': {'name': 'psp_i',
+#                                'variable_type': 'state_variable',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 0.},
+#                      'x_e': {'name': 'x_e',
+#                              'variable_type': 'state_variable',
+#                              'data_type': 'float32',
+#                              'shape': (),
+#                              'initial_value': 0.},
+#                      'x_i': {'name': 'x_i',
+#                              'variable_type': 'state_variable',
+#                              'data_type': 'float32',
+#                              'shape': (),
+#                              'initial_value': 0.},
+#                      'H_e': {'name': 'H_e',
+#                              'variable_type': 'constant',
+#                              'data_type': 'float32',
+#                              'shape': (),
+#                              'initial_value': 3.25e-3},
+#                      'H_i': {'name': 'H_i',
+#                              'variable_type': 'constant',
+#                              'data_type': 'float32',
+#                              'shape': (),
+#                              'initial_value': -22e-3},
+#                      'tau_e': {'name': 'tau_e',
+#                                'variable_type': 'constant',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 10e-3},
+#                      'tau_i': {'name': 'tau_i',
+#                                'variable_type': 'constant',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 20e-3},
+#                      'm_max': {'name': 'm_max',
+#                                'variable_type': 'constant',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 5.},
+#                      'r': {'name': 'r',
+#                            'variable_type': 'constant',
+#                            'data_type': 'float32',
+#                            'shape': (),
+#                            'initial_value': 560.},
+#                      'v_th': {'name': 'v_th',
+#                               'variable_type': 'constant',
+#                               'data_type': 'float32',
+#                               'shape': (),
+#                               'initial_value': 6e-3},
+#                      'u': {'name': 'u',
+#                            'variable_type': 'placeholder',
+#                            'data_type': 'float32',
+#                            'shape': ()}
+#                      },
+#              'eins': {'operator_rtp_syn': ["d/dt * x = H/tau * m_in - 2/tau * x - 1/tau**2 * psp",
+#                                            "d/dt * psp = x"],
+#                       'operator_rtp_soma': ["v = psp"],
+#                       'operator_ptr': ["m_out = m_max / (1 + exp(r * (v_th - v)))"],
+#                       'v': {'name': 'v',
+#                             'variable_type': 'state_variable',
+#                             'data_type': 'float32',
+#                             'shape': (),
+#                             'initial_value': 0.},
+#                       'm_in': {'name': 'm_in',
+#                                'variable_type': 'state_variable',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 0.},
+#                       'm_out': {'name': 'm_out',
+#                                 'variable_type': 'state_variable',
+#                                 'data_type': 'float32',
+#                                 'shape': (),
+#                                 'initial_value': 0.16},
+#                       'psp': {'name': 'psp',
+#                               'variable_type': 'state_variable',
+#                               'data_type': 'float32',
+#                               'shape': (),
+#                               'initial_value': 0.},
+#                       'x': {'name': 'x',
+#                             'variable_type': 'state_variable',
+#                             'data_type': 'float32',
+#                             'shape': (),
+#                             'initial_value': 0.},
+#                       'H': {'name': 'H',
+#                             'variable_type': 'constant',
+#                             'data_type': 'float32',
+#                             'shape': (),
+#                             'initial_value': 3.25e-3},
+#                       'tau': {'name': 'tau',
+#                               'variable_type': 'constant',
+#                               'data_type': 'float32',
+#                               'shape': (),
+#                               'initial_value': 10e-3},
+#                       'm_max': {'name': 'm_max',
+#                                 'variable_type': 'constant',
+#                                 'data_type': 'float32',
+#                                 'shape': (),
+#                                 'initial_value': 5.},
+#                       'r': {'name': 'r',
+#                             'variable_type': 'constant',
+#                             'data_type': 'float32',
+#                             'shape': (),
+#                             'initial_value': 560.},
+#                       'v_th': {'name': 'v_th',
+#                                'variable_type': 'constant',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 6e-3}
+#                       },
+#              'iins': {'operator_rtp_syn': ["d/dt * x = H/tau * m_in - 2/tau * x - 1/tau**2 * psp",
+#                                            "d/dt * psp = x"],
+#                       'operator_rtp_soma': ["v = psp"],
+#                       'operator_ptr': ["m_out = m_max / (1 + exp(r * (v_th - v)))"],
+#                       'v': {'name': 'v',
+#                             'variable_type': 'state_variable',
+#                             'data_type': 'float32',
+#                             'shape': (),
+#                             'initial_value': 0.},
+#                       'm_in': {'name': 'm_in',
+#                                'variable_type': 'state_variable',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 0.},
+#                       'm_out': {'name': 'm_out',
+#                                 'variable_type': 'state_variable',
+#                                 'data_type': 'float32',
+#                                 'shape': (),
+#                                 'initial_value': 0.16},
+#                       'psp': {'name': 'psp',
+#                               'variable_type': 'state_variable',
+#                               'data_type': 'float32',
+#                               'shape': (),
+#                               'initial_value': 0.},
+#                       'x': {'name': 'x',
+#                             'variable_type': 'state_variable',
+#                             'data_type': 'float32',
+#                             'shape': (),
+#                             'initial_value': 0.},
+#                       'H': {'name': 'H',
+#                             'variable_type': 'constant',
+#                             'data_type': 'float32',
+#                             'shape': (),
+#                             'initial_value': 3.25e-3},
+#                       'tau': {'name': 'tau',
+#                               'variable_type': 'constant',
+#                               'data_type': 'float32',
+#                               'shape': (),
+#                               'initial_value': 10e-3},
+#                       'm_max': {'name': 'm_max',
+#                                 'variable_type': 'constant',
+#                                 'data_type': 'float32',
+#                                 'shape': (),
+#                                 'initial_value': 5.},
+#                       'r': {'name': 'r',
+#                             'variable_type': 'constant',
+#                             'data_type': 'float32',
+#                             'shape': (),
+#                             'initial_value': 560.},
+#                       'v_th': {'name': 'v_th',
+#                                'variable_type': 'constant',
+#                                'data_type': 'float32',
+#                                'shape': (),
+#                                'initial_value': 6e-3}
+#                       },
+#              }
+
+connection_dict = {'coupling_operators': [["input[:, 0] = reduce_sum(dot(C_e, output), ax1)",
+                                           "input[:, 1] = reduce_sum(dot(C_i, output), ax1)"]],
+                   'coupling_operator_args': [{'C_e': {'name': 'C_e',
+                                                       'variable_type': 'constant',
+                                                       'data_type': 'float32',
+                                                       'shape': (3, 3),
+                                                       'initial_value': [[0., c * 0.8, 0.],
+                                                                         [c * 1.0, 0., 0.],
+                                                                         [0.25 * c, 0., 0.]]},
+                                               'C_i': {'name': 'C_i',
+                                                       'variable_type': 'constant',
+                                                       'data_type': 'float32',
+                                                       'shape': (3, 3),
+                                                       'initial_value': [[0., 0., 0.25 * c],
+                                                                         [0., 0., 0.],
+                                                                         [0., 0., 0.]]},
+                                               'ax1': {'name': 'ax1',
+                                                       'variable_type': 'constant',
+                                                       'data_type': 'int32',
+                                                       'shape': (),
+                                                       'initial_value': 1},
+                                               'reduce_sum': {'variable_type': 'tensorflow',
+                                                              'func': tf.reduce_sum},
+                                               'input': 'm_in',
+                                               'output': 'm_out'
+                                               }],
+                   'sources': ['jrc'],
+                   'targets': ['jrc']
+                   }
+
+# connection_dict = {'coupling_operators': [["m_in = m_out * c"],
+#                                           ["m_in = m_out * c"],
+#                                           ["m_ein = m_out * c"],
+#                                           ["m_iin = m_out * c"]],
+#                    'coupling_operator_args': [{'c': {'name': 'c',
+#                                                      'variable_type': 'constant',
+#                                                      'data_type': 'float32',
+#                                                      'shape': (),
+#                                                      'initial_value': c * 1.0}
+#                                                },
+#                                               {'c': {'name': 'c',
+#                                                      'variable_type': 'constant',
+#                                                      'data_type': 'float32',
+#                                                      'shape': (),
+#                                                      'initial_value': c * 0.25}
+#                                                },
+#                                               {'c': {'name': 'c',
+#                                                      'variable_type': 'constant',
+#                                                      'data_type': 'float32',
+#                                                      'shape': (),
+#                                                      'initial_value': c * 0.8}
+#                                                },
+#                                               {'c': {'name': 'c',
+#                                                      'variable_type': 'constant',
+#                                                      'data_type': 'float32',
+#                                                      'shape': (),
+#                                                      'initial_value': c * 0.25}
+#                                                },
+#                                               ],
+#                    'sources': ['pcs', 'pcs', 'eins', 'iins'],
+#                    'targets': ['eins', 'iins', 'pcs', 'pcs']
+#                    }
+
+
+# network setup
+###############
+
 gr = tf.Graph()
+net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_size)
 
-# initialize populations
-PCs = Population(synapses=['JansenRitExcitatorySynapse', 'JansenRitInhibitorySynapse'], axon='JansenRitAxon',
-                 step_size=step_size, tf_graph=gr, key='pcs', max_population_delay=d)
-EINs = Population(synapses=['JansenRitExcitatorySynapse'], axon='JansenRitAxon', step_size=step_size, tf_graph=gr,
-                  key='eins', max_population_delay=d)
-IINs = Population(synapses=['JansenRitExcitatorySynapse'], axon='JansenRitAxon', step_size=step_size, tf_graph=gr,
-                  key='iins', max_population_delay=d)
-INP = SynapticInputPopulation(inp, tf_graph=gr)
+# network simulation
+####################
 
-# add connections
-PCs.connect(EINs.synapses['eins_JansenRitExcitatorySynapse'], 1.0 * c, int(d/step_size))
-PCs.connect(IINs.synapses['iins_JansenRitExcitatorySynapse'], 0.25 * c, int(d/step_size))
-EINs.connect(PCs.synapses['pcs_JansenRitExcitatorySynapse'], 0.8 * c, int(d/step_size))
-IINs.connect(PCs.synapses['pcs_JansenRitInhibitorySynapse'], 0.25 * c, int(d/step_size))
-INP.connect(PCs.synapses['pcs_JansenRitExcitatorySynapse'], 1.0, 0)
+inp = np.zeros((1000, 3, 2))
+inp[:, 0, 0] = inp_mean + np.random.randn(1000) * inp_var
+potentials = net.run(simulation_time=simulation_time,
+                     inputs={net.nodes['jrc'].U: inp},
+                     outputs=[net.nodes['jrc'].V])
 
-# add grouping + projection operations to graph
-with gr.as_default():
+# results
+#########
 
-    with tf.variable_scope('jrc1'):
-
-        pass_inf = tf.group(PCs.connect_to_targets(),
-                            EINs.connect_to_targets(),
-                            IINs.connect_to_targets(),
-                            name='pass_infos')
-        with tf.control_dependencies([pass_inf]):
-            pass_inp = INP.connect_to_targets()
-        pass_all = tf.group(pass_inf, pass_inp, name='pass_all')
-
-        state_update = tf.tuple([PCs.state_update, EINs.state_update, IINs.state_update, INP.state_update],
-                                name='state_updates')
-
-    init = tf.global_variables_initializer()
-
-# run session
-#############
-
-states = []
-
-# initalize session
-with tf.Session(graph=gr) as sess:
-
-    # initialize output storage
-    writer = tf.summary.FileWriter('/tmp/log/', graph=gr)
-
-    # initialize variables
-    sess.run(init)
-
-    t_start = t.time()
-
-    # perform simulation
-    for _ in range(n_steps-1):
-
-        # perform step with input
-        sess.run(pass_all, {arg1})
-        sess.run(state_update)
-
-        # save states
-        states.append([PCs.membrane_potential.eval(sess),
-                       EINs.membrane_potential.eval(sess),
-                       IINs.membrane_potential.eval(sess),
-                       ]
-                      )
-
-    t_end = t.time()
-
-    writer.close()
-
-# summary
-print(str(simulation_time) + ' s of JRC behavior was simulated in ' + str(t_end - t_start) + ' s with a step size of ' +
-      str(step_size) + ' s.')
-fig, ax = subplots()
-ax.plot(np.array(states))
+fig, axes = subplots(figsize=(14, 5))
+axes.plot(np.squeeze(np.array(potentials)))
 legend(['PCs', 'EINs', 'IINs'])
-ax.set_title('JRC states')
-ax.set_ylabel('v')
-ax.set_xlabel('step')
+axes.set_xlabel('timesteps')
+axes.set_ylabel('membrane potential')
+axes.set_title('Jansen-Rit NMM')
 fig.show()
