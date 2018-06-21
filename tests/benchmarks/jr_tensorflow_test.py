@@ -13,13 +13,13 @@ from matplotlib.pyplot import *
 ######################
 
 # general
-step_size = 1e-3
+step_size = 1e-4
 simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
 c = 135.
 inp_mean = 220.
 inp_var = 0.
-n_nodes = 3000
+n_nodes = 300
 
 # define network dictionary
 ###########################
@@ -357,8 +357,8 @@ net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_s
 # network simulation
 ####################
 
-inp = np.zeros((1000, n_nodes, 2))
-inp[:, 0, 0] = inp_mean + np.random.randn(1000) * inp_var
+inp = np.zeros((n_steps, n_nodes, 2))
+inp[:, 0, 0] = inp_mean + np.random.randn(n_steps) * inp_var
 potentials = net.run(simulation_time=simulation_time,
                      inputs={net.nodes['jrc'].U: inp},
                      outputs=[net.nodes['jrc'].V])
