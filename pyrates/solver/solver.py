@@ -2,7 +2,7 @@
 """
 
 # external packages
-from typing import Union, Optional
+from typing import Union
 import tensorflow as tf
 
 # pyrates internal imports
@@ -41,7 +41,7 @@ class Solver(object):
             steps.append(tf.no_op())
             for expr in self.integration_expressions:
                 parser = RHSParser(expr, {'dt': self.dt, 'rhs': self.rhs}, self.tf_graph)
-                step = parser.parse()
+                step = parser.transform()
                 with tf.control_dependencies([steps[-1]]):
                     steps.append(self.state_var.assign_add(step))
             steps.pop(0)

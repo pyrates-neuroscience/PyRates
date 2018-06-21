@@ -19,7 +19,6 @@ n_steps = int(simulation_time / step_size)
 c = 135.
 inp_mean = 220.
 inp_var = 0.
-inp = inp_mean + np.random.randn(n_steps) * inp_var
 
 # define network dictionary
 ###########################
@@ -86,14 +85,15 @@ node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau
                            'variable_type': 'placeholder',
                            'data_type': 'float32',
                            'shape': (3, 2)},
-                     'reduce_sum': {'variable_type': 'tensorflow',
-                                    'func': tf.reduce_sum},
+                     'reduce_sum': {'variable_type': 'raw',
+                                    'variable': tf.reduce_sum},
                      'ax': {'name': 'ax',
                             'variable_type': 'constant',
                             'data_type': 'int32',
                             'shape': (),
                             'initial_value': 1},
-                     'keep': True
+                     'keep': {'variable_type': 'raw',
+                              'variable': True}
                      }
              }
 
@@ -296,8 +296,8 @@ node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau
 #                       },
 #              }
 
-connection_dict = {'coupling_operators': [["input[:, 0] = reduce_sum(dot(C_e, output), ax1)",
-                                           "input[:, 1] = reduce_sum(dot(C_i, output), ax1)"]],
+connection_dict = {'coupling_operators': [["idx(input, :, 0) = dot(C_e, output)",
+                                           "idx(input, :, 1) = dot(C_i, output)"]],
                    'coupling_operator_args': [{'C_e': {'name': 'C_e',
                                                        'variable_type': 'constant',
                                                        'data_type': 'float32',
@@ -312,13 +312,8 @@ connection_dict = {'coupling_operators': [["input[:, 0] = reduce_sum(dot(C_e, ou
                                                        'initial_value': [[0., 0., 0.25 * c],
                                                                          [0., 0., 0.],
                                                                          [0., 0., 0.]]},
-                                               'ax1': {'name': 'ax1',
-                                                       'variable_type': 'constant',
-                                                       'data_type': 'int32',
-                                                       'shape': (),
-                                                       'initial_value': 1},
-                                               'reduce_sum': {'variable_type': 'tensorflow',
-                                                              'func': tf.reduce_sum},
+                                               'reduce_sum': {'variable_type': 'raw',
+                                                              'variable': tf.reduce_sum},
                                                'input': 'm_in',
                                                'output': 'm_out'
                                                }],
