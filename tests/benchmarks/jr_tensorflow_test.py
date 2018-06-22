@@ -16,15 +16,61 @@ from matplotlib.pyplot import *
 step_size = 1e-4
 simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
-c = 135.
+n_jrcs = 100
+n_nodes = int(n_jrcs * 3)
+
+# synapse parameters
+H = []
+tau = []
+for _ in range(n_jrcs):
+    H += [[3.25e-3, -22e-3],
+          [3.25e-3, 0.],
+          [3.25e-3, 0.]]
+    tau += [[10e-3, 20e-3],
+            [10e-3, 1.],
+            [10e-3, 1.]]
+
+# connectivity parameters
+c_intra = 135.
+c_inter_e = 100.
+c_inter_i = 50.
+
+sparseness_e = 0.01
+sparseness_i = 0.005
+
+C_e = np.zeros((n_nodes, n_nodes))
+C_i = np.zeros((n_nodes, n_nodes))
+
+for i in range(n_jrcs):
+
+    # intra-circuit connectivity
+    C_e[i*3:(i+1)*3, i*3:(i+1)*3] = np.array([[0., 0.8 * c_intra, 0.],
+                                              [1.0 * c_intra, 0., 0.],
+                                              [0.25 * c_intra, 0., 0.]])
+    C_i[i*3:(i+1)*3, i*3:(i+1)*3] = np.array([[0., 0., 0.25 * c_intra],
+                                              [0., 0., 0.],
+                                              [0., 0., 0.]])
+
+    # inter-circuit connectivity
+    for j in range(n_jrcs-1):
+        if i != j:
+            weight_e = np.random.uniform()
+            if weight_e > (1 - sparseness_e):
+                C_e[i*3, j*3] = weight_e * c_inter_e
+            weight_i = np.random.uniform()
+            if weight_i > (1 - sparseness_i):
+                C_i[i*3 + 2, j*3] = weight_i * c_inter_i
+
+# input parameters
 inp_mean = 220.
-inp_var = 0.
-n_nodes = 300
+inp_var = 22.
+inp = np.zeros((n_steps, n_nodes, 2))
+inp[:, 0::3, 0] = inp_mean + np.random.randn(n_steps, n_jrcs) * inp_var
 
 # define network dictionary
 ###########################
 
-node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau * X - 1/tau**2 * V_syn",
+node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * idx(X, 0, 1) = H/tau * (m_in + U) - 2/tau * X - 1/tau**2 * V_syn",
                                           "d/dt * V_syn = X"],
                      'operator_rtp_soma': ["V = reduce_sum(V_syn, ax, keep)"],
                      'operator_ptr': ["m_out = m_max / (1 + exp(r * (v_th - V)))"],
@@ -57,12 +103,12 @@ node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau
                            'variable_type': 'constant',
                            'data_type': 'float32',
                            'shape': (n_nodes, 2),
-                           'initial_value': [[3.25e-3, -22e-3] for _ in range(n_nodes)]},
+                           'initial_value': H},
                      'tau': {'name': 'tau',
                              'variable_type': 'constant',
                              'data_type': 'float32',
                              'shape': (n_nodes, 2),
-                             'initial_value': [[10e-3, 20e-3] for _ in range(n_nodes)]},
+                             'initial_value': tau},
                      'm_max': {'name': 'm_max',
                                'variable_type': 'constant',
                                'data_type': 'float32',
@@ -299,12 +345,12 @@ connection_dict = {'coupling_operators': [["idx(input, :, 0) = dot(C_e, output)"
                                                        'variable_type': 'constant',
                                                        'data_type': 'float32',
                                                        'shape': (n_nodes, n_nodes),
-                                                       'initial_value': np.random.uniform(0, 100, (n_nodes, n_nodes))},
+                                                       'initial_value': C_e},
                                                'C_i': {'name': 'C_i',
                                                        'variable_type': 'constant',
                                                        'data_type': 'float32',
                                                        'shape': (n_nodes, n_nodes),
-                                                       'initial_value': np.random.uniform(0, 100, (n_nodes, n_nodes))},
+                                                       'initial_value': C_i},
                                                'reduce_sum': {'variable_type': 'raw',
                                                               'variable': tf.reduce_sum},
                                                'input': 'm_in',
@@ -357,8 +403,6 @@ net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_s
 # network simulation
 ####################
 
-inp = np.zeros((n_steps, n_nodes, 2))
-inp[:, 0, 0] = inp_mean + np.random.randn(n_steps) * inp_var
 potentials = net.run(simulation_time=simulation_time,
                      inputs={net.nodes['jrc'].U: inp},
                      outputs=[net.nodes['jrc'].V])

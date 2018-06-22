@@ -214,8 +214,7 @@ class RHSParser(object):
                                     func_str += f"{base_str} {self.symbol_to_str(arg)}, "
                                 else:
                                     func_str += f"{self.symbol_to_str(arg)})"
-                            func_str = func_str[0:-2]
-                            for _ in range(j + 1):
+                            for _ in range(j - 1):
                                 func_str += ')'
 
                         else:
@@ -235,7 +234,7 @@ class RHSParser(object):
                                    f"{self.symbol_to_str(new_args[1])}"
 
                     # parse function string with sympy
-                    new_expr = self.parse_expr(func_str)
+                    new_expr = parse_expr(func_str)
 
                     break
 
@@ -307,6 +306,10 @@ class RHSParser(object):
 
         if isinstance(symb, MatrixSymbol):
             symb_str = f"MatrixSymbol('{symb}', {symb.shape[0]}, {symb.shape[1]})"
+        elif isinstance(symb, MatrixElement):
+            symb_str = f"MatrixSymbol('{symb}', {symb.args[1] + 1}, {symb.args[2] + 1})"
+        elif isinstance(symb, MatrixSlice):
+            symb_str = f"MatrixSymbol('{symb}', {1}, {1})"
         else:
             symb_str = str(symb)
 
@@ -579,17 +582,7 @@ class LHSParser(object):
 
         else:
 
-            target_var = None
-
-            # go through the left-hand side arguments
-            for arg in expr.args:
-
-                # find target variable in arguments
-                if not (symbols('d') in arg.free_symbols or symbols('dt') in arg.free_symbols):
-
-                    target_var = self.apply_slicing(arg)
-
-                    break
+            target_var = self.recursive_var_search(expr)
 
         if target_var is None:
             raise ValueError('Target variable has to be included in left-hand side of expression!')
@@ -655,6 +648,31 @@ class LHSParser(object):
 
             # extract target variable from args
             target_var = self.args[var_name]
+
+        return target_var
+
+    def recursive_var_search(self, expr: Expr) -> Expr:
+        """Searches for target variable recursively in expression.
+        """
+
+        target_var = None
+
+        # go through the left-hand side arguments
+        for arg in expr.args:
+
+            if len(arg.args) > 0 and expr.func != MatrixElement and expr.func != MatrixSlice \
+                    and not isinstance(expr, MatrixSymbol):
+
+                target_var = self.recursive_var_search(arg)
+
+            else:
+
+                # find target variable in arguments
+                if not (symbols('d') in arg.free_symbols or symbols('dt') in arg.free_symbols):
+
+                    target_var = self.apply_slicing(arg)
+
+                    break
 
         return target_var
 
