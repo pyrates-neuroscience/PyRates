@@ -52,6 +52,7 @@ class Network(object):
         self.dt = dt
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
         self.nodes = dict()
+        self.states = []
 
         # initialize nodes
         ##################
@@ -143,7 +144,8 @@ class Network(object):
             # group update and project operation (grouped across all nodes/edges)
             self.step = tf.group(self.update, self.project, name='step')
 
-    def run(self, simulation_time: float, inputs: Optional[dict] = None, outputs: Optional[List[tf.Variable]] = None):
+    def run(self, simulation_time: Optional[float] = None, inputs: Optional[dict] = None,
+            outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None) -> list:
         """Simulate the network behavior over time via a tensorflow session.
 
         Parameters
@@ -151,14 +153,31 @@ class Network(object):
         simulation_time
         inputs
         outputs
+        sampling_step_size
 
         Returns
         -------
+        list
 
         """
 
-        sim_steps = int(simulation_time / self.dt)
-        outputs = [node.v for node in self.nodes.values()] if not outputs else outputs
+        # prepare simulation
+        ####################
+
+        # basic simulation parameters initialization
+        if simulation_time:
+            sim_steps = int(simulation_time / self.dt)
+        else:
+            sim_steps = 1
+
+        if not sampling_step_size:
+            sampling_step_size = self.dt
+        sampling_steps = int(sampling_step_size / self.dt)
+
+        if not outputs:
+            outputs = dict()
+            for name, node in self.nodes.items():
+                outputs[name + '_v'] = node.V
 
         # linearize input dictionary
         inp = list()
@@ -170,6 +189,9 @@ class Network(object):
                 else:
                     inp_dict[key] = val
             inp.append(inp_dict)
+
+        # run simulation
+        ################
 
         with tf.Session(graph=self.tf_graph) as sess:
 
@@ -183,11 +205,16 @@ class Network(object):
             for step in range(sim_steps):
 
                 sess.run(self.step, inp[step])
-                results.append([var.eval() for var in outputs])
+
+                if step % sampling_steps == 0:
+                    results.append([var.eval() for var in outputs.values()])
 
             t_end = t.time()
 
-            print(f"{simulation_time}s of network behavior were simulated in {t_end - t_start} s given a simulation "
-                  f"resolution of {self.dt} s.")
+            if simulation_time:
+                print(f"{simulation_time}s of network behavior were simulated in {t_end - t_start} s given a "
+                      f"simulation resolution of {self.dt} s.")
+            else:
+                print(f"Network computations finished after {t_end - t_start} seconds.")
 
         return results

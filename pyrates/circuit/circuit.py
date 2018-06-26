@@ -485,7 +485,7 @@ class Circuit(RepresentationBase):
 
         else:
 
-            self.observer = CircuitObserver(circuit=self,
+            self.observer = CircuitObserver(network=self,
                                             sampling_step_size=sampling_size,
                                             target_populations=observe_populations,
                                             target_states=observe_states)

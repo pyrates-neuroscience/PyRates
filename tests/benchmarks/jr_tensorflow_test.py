@@ -5,7 +5,6 @@
 #########
 
 import tensorflow as tf
-import numpy as np
 from pyrates.network import Network
 from matplotlib.pyplot import *
 
@@ -16,7 +15,7 @@ from matplotlib.pyplot import *
 step_size = 1e-4
 simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
-n_jrcs = 100
+n_jrcs = 1
 n_nodes = int(n_jrcs * 3)
 
 # synapse parameters
@@ -70,10 +69,40 @@ inp[:, 0::3, 0] = inp_mean + np.random.randn(n_steps, n_jrcs) * inp_var
 # define network dictionary
 ###########################
 
-node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * idx(X, 0, 1) = H/tau * (m_in + U) - 2/tau * X - 1/tau**2 * V_syn",
+node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau * X - 1/tau**2 * V_syn",
                                           "d/dt * V_syn = X"],
                      'operator_rtp_soma': ["V = reduce_sum(V_syn, ax, keep)"],
                      'operator_ptr': ["m_out = m_max / (1 + exp(r * (v_th - V)))"],
+                     'operator_bwk': ["d/dt * s = idx(V_syn, :, 0) - 1.54 * s - 2.44 * bf",
+                                      "d/dt * bf = s",
+                                      "d/dt * bv = bf - bv**(3.03) / 0.98",
+                                      "d/dt * dhg = (bf/0.34 - (1 - (0.66)**(1/bf)) - (dhg/bv) * bv**(3.03)) / 0.98",
+                                      "bold = 5.88 * (2.38 * (1-dhg) + 2.0 * (1-dhg) / bv + 0.48 * (1-bv))"],
+                     's': {'name': 's',
+                           'variable_type': 'state_variable',
+                           'data_type': 'float32',
+                           'shape': (n_nodes, 1),
+                           'initial_value': 0.},
+                     'bf': {'name': 'bf',
+                            'variable_type': 'state_variable',
+                            'data_type': 'float32',
+                            'shape': (n_nodes, 1),
+                            'initial_value': 0.},
+                     'bv': {'name': 'bv',
+                            'variable_type': 'state_variable',
+                            'data_type': 'float32',
+                            'shape': (n_nodes, 1),
+                            'initial_value': 0.},
+                     'dhg': {'name': 'dhg',
+                             'variable_type': 'state_variable',
+                             'data_type': 'float32',
+                             'shape': (n_nodes, 1),
+                             'initial_value': 0.},
+                     'bold': {'name': 'bold',
+                              'variable_type': 'state_variable',
+                              'data_type': 'float32',
+                              'shape': (n_nodes, 1),
+                              'initial_value': 0.},
                      'V': {'name': 'V',
                            'variable_type': 'state_variable',
                            'data_type': 'float32',
@@ -405,7 +434,8 @@ net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_s
 
 potentials = net.run(simulation_time=simulation_time,
                      inputs={net.nodes['jrc'].U: inp},
-                     outputs=[net.nodes['jrc'].V])
+                     outputs={'V': net.nodes['jrc'].bold},
+                     sampling_step_size=1e-3)
 
 # results
 #########
