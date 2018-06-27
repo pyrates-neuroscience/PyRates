@@ -12,10 +12,10 @@ from matplotlib.pyplot import *
 ######################
 
 # general
-step_size = 1e-4
-simulation_time = 1.0
+step_size = 1e-3
+simulation_time = 10.0
 n_steps = int(simulation_time / step_size)
-n_jrcs = 1
+n_jrcs = 100
 n_nodes = int(n_jrcs * 3)
 
 # synapse parameters
@@ -72,12 +72,12 @@ inp[:, 0::3, 0] = inp_mean + np.random.randn(n_steps, n_jrcs) * inp_var
 node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau * X - 1/tau**2 * V_syn",
                                           "d/dt * V_syn = X"],
                      'operator_rtp_soma': ["V = reduce_sum(V_syn, ax, keep)"],
-                     'operator_ptr': ["m_out = m_max / (1 + exp(r * (v_th - V)))"],
-                     'operator_bwk': ["d/dt * s = idx(V_syn, :, 0) - 1.54 * s - 2.44 * bf",
+                     'operator_ptr': ["m_out = m_max / (1 + expo(r * (v_th - V)))"],
+                     'operator_bwk': ["d/dt * s = idx(V_syn, :, 0) - 1.54 * s - 2.44 * (bf-1)",
                                       "d/dt * bf = s",
-                                      "d/dt * bv = bf - bv**(3.03) / 0.98",
-                                      "d/dt * dhg = (bf/0.34 - (1 - (0.66)**(1/bf)) - (dhg/bv) * bv**(3.03)) / 0.98",
-                                      "bold = 5.88 * (2.38 * (1-dhg) + 2.0 * (1-dhg) / bv + 0.48 * (1-bv))"],
+                                      "d/dt * bv = (bf - bv**3.03) / 0.98",
+                                      "d/dt * dhg = (bf/0.34 * (1 - 0.66**(1/bf)) - dhg/bv * bv**(3.03)) / 0.98",
+                                      "bold = 5.88 * (2.38 * (1-dhg) + 2.0 * (1 - dhg/bv) + 0.48 * (1-bv))"],
                      's': {'name': 's',
                            'variable_type': 'state_variable',
                            'data_type': 'float32',
@@ -432,16 +432,17 @@ net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_s
 # network simulation
 ####################
 
-potentials = net.run(simulation_time=simulation_time,
-                     inputs={net.nodes['jrc'].U: inp},
-                     outputs={'V': net.nodes['jrc'].bold},
-                     sampling_step_size=1e-3)
+results = net.run(simulation_time=simulation_time,
+                  inputs={net.nodes['jrc'].U: inp},
+                  outputs={'V': net.nodes['jrc'].V, 'BOLD': net.nodes['jrc'].bold},
+                  sampling_step_size=1e-3)
 
 # results
 #########
 
+target_var = 0
 fig, axes = subplots(figsize=(14, 5))
-axes.plot(np.squeeze(np.array(potentials)))
+axes.plot(np.squeeze(np.array(results))[:, target_var, :])
 legend(['PCs', 'EINs', 'IINs'])
 axes.set_xlabel('timesteps')
 axes.set_ylabel('membrane potential')

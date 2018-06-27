@@ -129,7 +129,8 @@ class RHSParser(object):
                                   },
                        'inv': {'arg': tf.matrix_inverse
                                },
-                       'dot': {'arg': tf.matmul}
+                       'dot': {'arg': tf.matmul},
+                       'expo': {'arg': tf.exp}
                        }
 
         return self.replace(expr, replace_ops)
@@ -311,7 +312,8 @@ class RHSParser(object):
             symb_str = f"MatrixSymbol('{symb.args[0]}', {symb.args[1] + 1}, {symb.args[2] + 1})" \
                        f"[{symb.args[1]}, {symb.args[2]}]"
         elif isinstance(symb, MatrixSlice):
-            symb_str = f"MatrixSymbol('{symb}', {1}, {1})"
+            symb_str = f"MatrixSymbol('{symb.args[0]}', {symb.args[1][1]}, {symb.args[2][1]})" \
+                       f"[{symb.args[1][0]}:{symb.args[1][1]}, {symb.args[2][0]}:{symb.args[2][1]}]"
         else:
             symb_str = str(symb)
 
@@ -335,38 +337,25 @@ class RHSParser(object):
             # turn custom functions into tensorflow operations
             ##################################################
 
-            tf_ops, custom_funcs = self.custom_funcs_to_tf_ops(self.expression)
+            self.expression = self.custom_funcs_to_tf_ops(self.expression)
 
-            # replace the custom functions in the expression with the tensorflow operation results
-            ######################################################################################
+            # turn expression into tensorflow function
+            ##########################################
 
-            self.expression = self.replace_custom_funcs(self.expression, tf_ops, custom_funcs)
+            if isinstance(self.expression, Symbol) or isinstance(self.expression, MatrixSymbol):
 
-            # collect all arguments needed to transform the expression into a tensorflow operation
-            ######################################################################################
+                tf_op = self.args[str(self.expression)]
 
-            # go through all variables of the expression
-            for i, symb in enumerate(self.expression.free_symbols):
+            else:
 
-                symb_name = str(symb)
+                func = lambdify(args=tuple(self.lambdify_args), expr=self.expression,
+                                modules=[{'ImmutableDenseMatrix': tf.Variable}, 'tensorflow'])
 
-                # check whether the variable was passed with the args dictionary
-                if symb_name not in self.args.keys():
-                    raise ValueError(symb_name + ' must be defined in args!')
+                tf_op = func(*tuple(self.tf_op_args))
 
-                # collect the arguments
-                self.lambdify_args.append(symb)
-                self.tf_op_args.append(self.args[symb_name])
+        return tf_op
 
-        # turn expression into tensorflow function
-        ##########################################
-
-        func = lambdify(args=tuple(self.lambdify_args), expr=self.expression,
-                        modules=[{'ImmutableDenseMatrix': tf.Variable}, 'tensorflow'])
-
-        return func(*tuple(self.tf_op_args))
-
-    def custom_funcs_to_tf_ops(self, expression: Expr) -> Tuple[list, list]:
+    def custom_funcs_to_tf_ops(self, expression: Expr) -> Expr:
         """Recursive function that turns all custom functions in the expression into tensorflow operations.
 
         Parameters
@@ -376,7 +365,7 @@ class RHSParser(object):
 
         Returns
         -------
-        Tuple
+        Expr
             Tuple of two lists. First list contains the tensorflow operations, the second contains the expressions
             that were turned into tensorflow operations.
 
@@ -395,17 +384,14 @@ class RHSParser(object):
                 and not isinstance(expression, MatrixSymbol):
 
             # go through all arguments of top-level function
-            for expr in expression.args:
+            expr_args = expression.args
+            for expr in expr_args:
 
                 # recursive call
-                tf_ops_tmp, funcs_tmp = self.custom_funcs_to_tf_ops(expr)
+                expr_new = self.custom_funcs_to_tf_ops(expr)
 
-                # add results to collector variables
-                tf_ops += tf_ops_tmp
-                funcs += funcs_tmp
-
-            # replace funcs with tf_ops in expression
-            expression = self.replace_custom_funcs(expression, tf_ops, funcs)
+                # expression substitution
+                expression = expression.subs(expr, expr_new)
 
         # if multiple arguments exist that are connected by func, call this function recursively on each argument
         #########################################################################################################
@@ -433,8 +419,7 @@ class RHSParser(object):
                     if str(arg) in self.args:
 
                         # extract argument from args
-                        new_arg = self.args[str(arg)]
-                        func_args.append(new_arg)
+                        func_args.append(self.args[str(arg)])
 
                     elif arg.is_Number:
 
@@ -442,19 +427,22 @@ class RHSParser(object):
                         # TODO: avoid this. Datatype should be inferred somehow
                         func_args.append(tf.constant(float(arg), dtype=tf.float32))
 
+                    elif isinstance(arg, MatrixSymbol) or isinstance(arg, MatrixElement) \
+                            or isinstance(arg, MatrixSlice):
+
+                        func_args.append(self.apply_slicing(arg))
+
                     else:
 
                         # create new instance of RHSParser and create tensorflow operation from arg
                         parser = RHSParser(str(arg), self.args, self.tf_graph)
-                        tf_op_tmp = parser.transform()
-                        func_args.append(tf_op_tmp)
+                        func_args.append(parser.transform())
 
                 # create tensorflow operation from function
                 tf_op = new_expr(*tuple(func_args))
 
                 # collect tensorflow operation and original expression
-                tf_ops.append(tf_op)
-                funcs.append(expression)
+                expression = self.replace_custom_funcs(expression, [tf_op], [expression])
 
             elif type(new_expr) is 'str':
 
@@ -466,16 +454,77 @@ class RHSParser(object):
                 tf_op = parser.transform()
 
                 # collect tensorflow operation and original expression
-                tf_ops.append(tf_op)
-                funcs.append(expression)
+                expression = self.replace_custom_funcs(expression, [tf_op], [expression])
 
             else:
 
                 raise ValueError('Custom functions can only be of type `tensorflow function` or `str`.')
 
-        return tf_ops, funcs
+        return expression
 
-    def replace_custom_funcs(self, expr: Expr, tf_ops, custom_funcs):
+    def apply_slicing(self, arg: Expr) -> Union[tf.Variable, tf.Tensor, tf.Operation]:
+        """Apply slicing to arg if necessary.
+
+        Parameters
+        ----------
+        arg
+            Sympy expression.
+
+        Returns
+        -------
+        Union[tf.Variable, tf.Tensor, tf.Operation]
+
+        """
+
+        if arg.func == MatrixElement:
+
+            # extract element from target variable matrix
+            #############################################
+
+            # get and check variable name
+            var_name = str(arg.args[0])
+            if var_name not in self.args.keys():
+                raise AttributeError("Output variables or their indices must be included in "
+                                     "expression_args.")
+
+            # extract target variable from args
+            if len(arg.args) == 3:
+                target_var = self.args[var_name][int(arg.args[1]), int(arg.args[2])]
+            else:
+                target_var = self.args[var_name][int(arg.args[1])]
+
+        elif arg.func == MatrixSlice:
+
+            # extract slice from target variable matrix
+            ###########################################
+
+            # get and check variable name
+            var_name = str(arg.args[0])
+            if var_name not in self.args.keys():
+                raise AttributeError("Output variables or their indices must be included in "
+                                     "expression_args.")
+
+            # extract target variable from args
+            if len(arg.args) == 3:
+                target_var = self.args[var_name][int(arg.args[1][0]):int(arg.args[1][1]),
+                             int(arg.args[2][0]):int(arg.args[2][1])]
+            else:
+                target_var = self.args[var_name][int(arg.args[1][0]):int(arg.args[1][1])]
+
+        else:
+
+            # get and check variable name
+            var_name = str(arg)
+            if var_name not in self.args.keys():
+                raise AttributeError("Output variables or their indices must be included in "
+                                     "expression_args.")
+
+            # extract target variable from args
+            target_var = self.args[var_name]
+
+        return target_var
+
+    def replace_custom_funcs(self, expr: Expr, tf_ops: list, custom_funcs: list) -> Expr:
         """
 
         Parameters
