@@ -1,3 +1,5 @@
+%YAML 1.2
+---
 SigmoidPRO:
   description: >
     Basic symmetric sigmoid function transforming potential to firing rate.
@@ -8,11 +10,12 @@ SigmoidPRO:
     generation in a mathematical model of coupled cortical columns."
     Biological Cybernetics, vol. 73(4), pp. 357-366, 1995."
 
-  base: pyrates.axon.PotentialToRateOperator
+  base: pyrates.axon.axon.PotentialToRateOperator
 
   equations:
     replace:
       r * V: "m_max / (1 + exp(s*(V_thr - V)))"
+    remove: ["L_PRO * "]
     conditions:
       normalize:
         description: "If true, firing rate will be
@@ -25,38 +28,29 @@ SigmoidPRO:
 
   variables:
      m_max:
-      name: max_firing_rate
-      description: Determines maximum firing rate of axon.
-      unit: 1/s
-      default: constant(float)
-      # no explicit default value specified.
-      # this will thus be a required variable later on.
-      allowed_range: ">= 0"
-      # this can be set as explicit condition
-      # will raise "ValueError" with the range in the
-      # error message
-    s:
-      name: slope
-      description: "Determines slope of the sigmoidal transfer
-        function at the firing threshold."
-      default: constant(float)
-      # unit not specified --> unit: None
-    V_thr:
-      name: firing_threshold
-      description: "Determines membrane potential for which
-        output firing rate is half the maximum firing rate."
-      default: constant(float)
-      unit: V
+       name: max_firing_rate
+       description: Determines maximum firing rate of axon.
+       unit: 1/s
+       default: constant(float)
+       # no explicit default value specified.
+       # this will thus be a required variable later on.
+       allowed_range: ">= 0"
+       # this can be set as explicit condition
+       # will raise "ValueError" with the range in the
+       # error message
+#    s:
+#      name: slope
+#      description: "Determines slope of the sigmoidal transfer
+#        function at the firing threshold."
+#      default: constant(float)
+#      # unit not specified --> unit: None
+#    V_thr:
+#      name: firing_threshold
+#      description: "Determines membrane potential for which
+#        output firing rate is half the maximum firing rate."
+#      default: constant(float)
+#      unit: V
 
-  conditions:
-    normalize:
-      description: "If true, firing rate will be
-        normalized to be zero at firing threshold."
-      default: False
-      values:
-        True:
-          equations.append: "- m_max/(1 + exp(s * V_thr))"
-      # not the most elegant solution, but does the job
 
 JansenRitPRO:
   description: >

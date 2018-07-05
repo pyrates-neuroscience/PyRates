@@ -26,6 +26,7 @@ def setup_module():
 # Tests #
 #########
 
+@pytest.mark.skip
 def test_2_1_synapse_init():
     """Testing initialization of Synapse class:
 
@@ -88,6 +89,7 @@ def test_2_1_synapse_init():
 
 
 # noinspection PyTypeChecker
+@pytest.mark.skip
 def test_2_2_synapse_build_kernel():
     """Testing build_kernel and evaluate_kernel function of Synapse class
 
@@ -143,6 +145,7 @@ def test_2_2_synapse_build_kernel():
         _ = Synapse(kernel_function=exponential_decay, efficacy=1, bin_size=1, wrong_keyword=2)
 
 
+@pytest.mark.skip
 def test_2_3_synapse_get_synaptic_current():
     """Testing build_kernel function of Synapse class
 
@@ -161,6 +164,7 @@ def test_2_3_synapse_get_synaptic_current():
 
 
 # noinspection PyTypeChecker
+@pytest.mark.skip
 def test_2_4_ampa_current_synapse():
     """Tests whether synapse with standard AMPA parametrization from Thomas Knoesche (corresponding to AMPA synapse
      in [1]_) shows expected output for various firing rate inputs.
@@ -243,6 +247,7 @@ def test_2_4_ampa_current_synapse():
 
 
 # noinspection PyTypeChecker
+@pytest.mark.skip
 def test_2_5_gabaa_current_synapse():
     """Tests whether synapse with standard GABAA parametrization from Thomas Knoesche (corresponding to GABAA
     synapse in [1]_) shows expected output for various firing rate inputs.
@@ -326,6 +331,7 @@ def test_2_5_gabaa_current_synapse():
 
 
 # noinspection PyTypeChecker
+@pytest.mark.skip
 def test_2_6_ampa_conductivity_synapse():
     """Tests whether synapse with parametrization from Thomas Knoesche corresponding to conductivity based AMPA
     synapse shows expected output for various firing rate inputs.

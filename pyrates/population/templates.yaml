@@ -1,9 +1,11 @@
+%YAML 1.2
+---
 InstantaneousCPO:
   description: >
     Implementation of a current-to-potential operator (CPO) that sums all synaptic
     (current) contributions and instantaneously, i.e. without temporal derivative,
     transforms those currents into a mean somatic membrane potential.
-  base: pyrates.population.CurrentToPotentialOperator
+  base: pyrates.population.population.CurrentToPotentialOperator
   equations:
     remove: "L_m * "
 

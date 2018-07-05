@@ -24,6 +24,7 @@ def setup_module():
 # Tests #
 #########
 
+@pytest.mark.skip
 def test_1_1_axon_transfer_function():
     """Testing basic functionality of Axon class:
     The update_firing_rate function is tested with a 2x2 design:
@@ -67,6 +68,7 @@ def test_1_1_axon_transfer_function():
     assert not len(result_list) == len(result_array)
 
 
+@pytest.mark.skip
 def test_1_2_jr_sigmoid_axon():
     """Tests whether axon with standard parametrization from [1]_ shows expected output to membrane potential input.
 

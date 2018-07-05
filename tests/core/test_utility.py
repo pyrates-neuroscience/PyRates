@@ -28,6 +28,7 @@ def setup_module():
 
 
 # @pytest.mark.xfail
+@pytest.mark.skip
 def test_5_1_store_circuit_config():
     """As title says."""
 
@@ -83,6 +84,7 @@ def test_5_1_store_circuit_config():
     assert config_dict == target_config_dict
 
 
+@pytest.mark.skip
 def test_5_2_store_circuit_config_dict_as_json():
     """As title says."""
 
@@ -129,6 +131,7 @@ def test_5_2_store_circuit_config_dict_as_json():
 
 
 # @pytest.mark.xfail
+@pytest.mark.skip
 def test_5_3_construct_circuit_from_file_or_dict():
     """As title says."""
 
@@ -199,6 +202,7 @@ def test_5_4_construct_circuit_from_repr_eval():
     assert repr(circuit) == repr(new_circuit)
 
 
+@pytest.mark.skip
 def test_5_5_save_run_data_to_file():
     """Run a simulation and save the states to file."""
 

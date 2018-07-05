@@ -1,4 +1,6 @@
-ExponentialRCO:
+%YAML 1.2
+---
+ExponentialSynapseRCO:
   description: >
     Basic implementation of a synaptic rate-to-current operator (RCO)
     with 2nd-order linear differential operator. Corresponds to a convolution
@@ -10,13 +12,15 @@ ExponentialRCO:
     .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
        of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
-  base: pyrates.synapse.RateToCurrentOperator
+  base: pyrates.synapse.synapse.RateToCurrentOperator
 
   equations:
     replace:
       L_syn: "(d/dt + 1/tau)^2"
       h: "h/tau"
 
+  # solution for external input: model as separate connection --> additional vector entry on synapse
+  # TODO: implement external input operator
   variables:
     tau:
       description: Synaptic time constant. Determining the lag/shape of the
@@ -26,28 +30,40 @@ ExponentialRCO:
     h:
       unit: A
       default: constant(float)
-#
-#InstantaneousCPO:
-#  description: >
-#    Implementation of a current-to-potential operator (CPO) that sums all synaptic
-#    (current) contributions and instantaneously, i.e. without temporal derivative,
-#    transforms those currents into a mean somatic membrane potential.
-#  base: pyrates.population.CurrentToPotentialOperator
-#  equations:
-#    remove: "L_m * "
-#
-#JansenRitCPO:
-#  description: >
-#    Implementation and parametrization of a CPO based on the Jansen-Rit
-#    neural mass model [1].
-#
-#    References:
-#
-#    [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
-#    generation in a mathematical model of coupled cortical columns."
-#    Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
-#  base: InstantaneousCPO
 
+JansenRitExcitatorySynapseRCO:
+  description: >
+    Implementation and parametrization of an excitatory synapse RCO based on
+    the Jansen-Rit neural mass model [1]_.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: ExponentialRCO
+
+  variables:
+    h:
+      default: 3.25 e-3
+    tau:
+      default: 10e-3
+
+JansenRitInhibitorySynapseRCO:
+  description: >
+    Implementation and parametrization of an inhibitory synapse RCO based on
+    the Jansen-Rit neural mass model [1]_.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: ExponentialRCO
+
+  variables:
+    h:
+      default: -22e-3
+    tau:
+      default: 20e-3
 
 
 

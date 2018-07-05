@@ -26,6 +26,7 @@ def setup_module():
 
 # noinspection PyTypeChecker
 # @pytest.mark.xfail
+@pytest.mark.skip
 @pytest.mark.parametrize("test_case", ["alpha", "spiking", "flat"])
 def test_4_1_jr_circuit_bifurcation(test_case):
     """Tests whether current implementation shows expected behavior when standard Jansen-Rit circuit ([1]_) with three
@@ -288,7 +289,7 @@ def test_4_3_jr_circuit_iii():
     assert pytest.approx(0, abs=0.5) == error
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 def test_4_4_jr_network_i():
     """
     tests whether 2 delay-connected vs unconnected JR circuits behave as expected.
@@ -367,6 +368,7 @@ def test_4_4_jr_network_i():
     assert not pytest.approx(0, abs=0.5) == error
 
 
+@pytest.mark.skip
 def test_4_5_circuit_run_method():
     """Testing whether the method Circuit.run does what it is supposed to"""
 
@@ -470,6 +472,7 @@ def test_4_5_circuit_run_method():
     # TODO: think of a simple case to check for (like a test population/test circuit)
 
 
+@pytest.mark.skip
 def test_circuit_run_verbosity(capsys):
     from pyrates.circuit import JansenRitCircuit
 
