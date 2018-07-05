@@ -423,28 +423,30 @@ connection_dict = {'coupling_operators': [["idx(input, :, 0) = dot(C_e, output)"
 #                    }
 
 
-# network setup
-###############
+if __name__ == "__main__":
 
-gr = tf.Graph()
-net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_size)
+    # network setup
+    ###############
 
-# network simulation
-####################
+    gr = tf.Graph()
+    net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_size)
 
-results = net.run(simulation_time=simulation_time,
-                  inputs={net.nodes['jrc'].U: inp},
-                  outputs={'V': net.nodes['jrc'].V, 'BOLD': net.nodes['jrc'].bold},
-                  sampling_step_size=1e-3)
+    # network simulation
+    ####################
 
-# results
-#########
+    results = net.run(simulation_time=simulation_time,
+                      inputs={net.nodes['jrc'].U: inp},
+                      outputs={'V': net.nodes['jrc'].V, 'BOLD': net.nodes['jrc'].bold},
+                      sampling_step_size=1e-3)
 
-target_var = 0
-fig, axes = subplots(figsize=(14, 5))
-axes.plot(np.squeeze(np.array(results))[:, target_var, :])
-legend(['PCs', 'EINs', 'IINs'])
-axes.set_xlabel('timesteps')
-axes.set_ylabel('membrane potential')
-axes.set_title('Jansen-Rit NMM')
-fig.show()
+    # results
+    #########
+
+    target_var = 0
+    fig, axes = subplots(figsize=(14, 5))
+    axes.plot(np.squeeze(np.array(results))[:, target_var, :])
+    legend(['PCs', 'EINs', 'IINs'])
+    axes.set_xlabel('timesteps')
+    axes.set_ylabel('membrane potential')
+    axes.set_title('Jansen-Rit NMM')
+    fig.show()

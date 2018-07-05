@@ -76,3 +76,8 @@ class Operator(object):
             grouped_expressions = tf.group(self.expressions, name=self.key)
 
         return grouped_expressions
+
+
+
+
+

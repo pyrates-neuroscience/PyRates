@@ -24,6 +24,7 @@ def setup_module():
 #########
 
 
+@pytest.mark.skip
 def test_3_1_population_init():
     """Tests whether synapses and axon of initialized population show expected behavior.
 
@@ -99,6 +100,7 @@ def test_3_1_population_init():
     assert pop_ax_response == ax_response
 
 
+@pytest.mark.skip
 def test_3_2_population_dynamics():
     """Tests whether population develops as expected over time given some input.
 

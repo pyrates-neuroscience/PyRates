@@ -1,10 +1,12 @@
+%YAML 1.2
+---
 RateToCurrentOperator:
   description: "Generic rate-to-current operator (RCO) to be replaced
     with a meaningful implementation. The CPO encodes the activation of
     synapses across the neural population due to pre-synaptic incoming
     firing rates. Activation leads to an electric mean electric current
     that contributes to the total membrane voltage change."
-  base: pyrates.operator.OperatorTemplate
+  base: pyrates.operator.operator.OperatorTemplate
   equations:
     "L_syn * I = h * m_in"
   variables:
