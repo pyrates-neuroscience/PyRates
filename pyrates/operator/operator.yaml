@@ -1,6 +1,0 @@
-%YAML 1.2
----
-OperatorTemplate:
-  description: Base class to create operator templates parsed from YAML.
-  equations:
-  variables:

@@ -38,8 +38,7 @@ def test_parse_basic_templates(section):
         templates = yaml.load(file)
 
 
-@pytest.mark.parametrize("operator", ["pyrates.operator.operator.OperatorTemplate",
-                                      "pyrates.axon.axon.PotentialToRateOperator",
+@pytest.mark.parametrize("operator", ["pyrates.axon.axon.PotentialToRateOperator",
                                       "pyrates.axon.templates.SigmoidPRO",
                                       "pyrates.axon.templates.JansenRitPRO",
                                       "pyrates.population.population.CurrentToPotentialOperator",
@@ -47,12 +46,15 @@ def test_parse_basic_templates(section):
                                       ])
 def test_import_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
-    from pyrates.utility.yaml_parser import import_template
+    from pyrates.utility.yaml_parser import TemplateLoader
 
-    import_template(operator)
+    template = TemplateLoader(operator)
 
+    assert template.path in TemplateLoader.cache
 
-
-
-
-    assert True
+    cached_template = TemplateLoader.cache[template.path]
+    assert template is cached_template
+    assert template.path == cached_template.path
+    assert template.equations == cached_template.equations
+    assert repr(template) == repr(cached_template)
+    # assert template == TemplateLoader.cache[template.path]

@@ -5,7 +5,7 @@ CurrentToPotentialOperator:
     with a meaningful function. The CPO collect contributions from synapses
     to a mean membrane current which leads to a change in mean somatic
     membrane voltage in the neural population."
-  base: pyrates.operator.operator.OperatorTemplate
+  base: OperatorTemplate
   equations:
     "L_m * V = k * I"
   variables:
