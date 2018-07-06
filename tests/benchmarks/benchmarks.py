@@ -238,12 +238,12 @@ if __name__ == "__main__":
     ######################
 
     # parameters
-    simulation_duration = 1.0
-    step_size = 1e-4
+    simulation_duration = 10.0
+    step_size = 5e-4
     verbose = True
     D = True
     velocity = 2.0
-    connectivity_scaling = 135.0
+    connectivity_scaling = 50.0
 
     if run_first:
         # single JR circuit

@@ -156,16 +156,15 @@ class SynapticInputPopulation(AbstractBasePopulation):
                                            )
 
                 increment = self.idx.assign_add(1)
-                with tf.control_dependencies([increment]):
-                    update_output = self.output.assign(self.output_buffer[self.idx])
+                # with tf.control_dependencies([increment]):
+                update_output = self.output.assign(self.output_buffer[self.idx])
                 self.state_update = tf.group(increment, update_output, name=self.key + '_state_update')
 
     def connect_to_targets(self):
         """Project output to pass synapse function of target.
         """
+        return self.targets[0].synaptic_buffer[0].assign(tf.add(self.targets[0].synaptic_buffer[0], self.output, name= self.key + 'addition')) if len(self.targets) > 0 else tf.no_op()
 
-        return self.targets[0].synaptic_buffer[0].assign(self.targets[0].synaptic_buffer[0] + self.output) \
-            if len(self.targets) > 0 else tf.no_op()
 
 
 class ExtrinsicCurrentPopulation(AbstractBasePopulation):
@@ -398,8 +397,8 @@ class Population(AbstractBasePopulation):
 
         # set general population params
         ###############################
-
         self.synapses = dict()
+        self.excitatory_current_synaptic_buffersynapses = dict()
         self.step_size = step_size
         self.key = key if key else 'nokey'
         self.max_population_delay = max_population_delay
@@ -680,14 +679,14 @@ class Population(AbstractBasePopulation):
 
             with tf.variable_scope(self.key):
 
-                self.membrane_potential = tf.get_variable(name=self.key + '_membrane_potential',
+                self.membrane_potential = tf.get_variable(name='_membrane_potential',
                                                           shape=(),
                                                           dtype=tf.float32,
                                                           initializer=tf.constant_initializer(value=0.)
                                                           )
 
-                self.psps = tf.Variable(np.zeros(self.n_synapses, dtype=np.float32),
-                                        name=self.key + '_psps',
+                self.psps = tf.Variable(tf.zeros(self.n_synapses, dtype=tf.float32),
+                                        name='_psps',
                                         trainable=False
                                         )
 
@@ -697,34 +696,30 @@ class Population(AbstractBasePopulation):
                 # update synaptic states
                 syn_updates = []
                 for i, syn in enumerate(self.synapses.values()):
-
                     update_synapse = tf.group(syn.update_psp,
                                               syn.update_synaptic_response,
-                                              name=self.key + '_update_synapse_' + str(i))
+                                              name='_update_synapse_' + str(i))
 
                     with tf.control_dependencies([update_synapse]):
                         get_psp = self.psps[i].assign(syn.psp)
-                        with tf.control_dependencies([get_psp]):
-                            update_buffer_1 = syn.update_buffer_1
-                            with tf.control_dependencies([update_buffer_1]):
-                                update_buffer_2 = syn.update_buffer_2
-                            update_buffer = tf.group(update_buffer_1, update_buffer_2,
-                                                     name=self.key + '_update_synapse_buffer_' + str(i))
+                        update_buffer_1 = syn.update_buffer_1
+                        update_buffer_2 = syn.update_buffer_2
+                        update_buffer = tf.group(update_buffer_1, update_buffer_2,
+                                             name='_update_synapse_buffer_' + str(i))
 
                     syn_updates.append(tf.group(update_synapse, get_psp, update_buffer))
-
-                update_all_synapses = tf.tuple(syn_updates, name=self.key + '_update_all_synapses')
+                # update_all_synapses = tf.tuple(syn_updates, name=self.key + '_update_all_synapses')
 
                 # rate-to-potential operator: soma level
                 ########################################
 
                 # update membrane potential
-                with tf.control_dependencies(update_all_synapses):
+                with tf.control_dependencies(syn_updates):
                     update_membrane_potential = self.membrane_potential.assign(tf.reduce_sum(self.psps))
 
                 # group rtp operations
-                rate_to_potential = tf.group(update_all_synapses, update_membrane_potential,
-                                             name=self.key + '_rpo')
+                rate_to_potential = tf.group(syn_updates, update_membrane_potential,
+                                             name='_rpo')
 
                 # potential-to-rate operator
                 ############################
@@ -741,14 +736,13 @@ class Population(AbstractBasePopulation):
 
         # project source firing rate to connected populations
         #####################################################
-
         with self.tf_graph.as_default():
 
             with tf.variable_scope(self.key):
 
                 # loop over target populations connected to source
                 project_to_targets = [syn.synaptic_buffer[self.target_delays[i]].assign(
-                    syn.synaptic_buffer[self.target_delays[i]] + self.axon.firing_rate * self.target_weights[i])
+                    tf.add(syn.synaptic_buffer[self.target_delays[i]], tf.multiply(self.axon.firing_rate, self.target_weights[i], name='FirWtMul'), name= 'buffMulAdd'))
                                       for i, syn in enumerate(self.targets)]
 
         return tf.tuple(project_to_targets, name=self.key + '_project_to_targets') if len(project_to_targets) > 0 \

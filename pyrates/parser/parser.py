@@ -130,6 +130,7 @@ class RHSParser(object):
                        'inv': {'arg': tf.matrix_inverse
                                },
                        'dot': {'arg': tf.matmul},
+                       'sparseDot': {'arg': tf.sparse_tensor_dense_matmul},
                        'expo': {'arg': tf.exp}
                        }
 
@@ -711,9 +712,16 @@ class LHSParser(object):
 
             # extract target variable from args
             if len(arg.args) == 3:
-                target_var = self.args[var_name][int(arg.args[1]), int(arg.args[2])]
+
+                idx1 = self.args[str(arg.args[1])] if str(arg.args[1]) in self.args else int(arg.args[1])
+                idx2 = self.args[str(arg.args[2])] if str(arg.args[2]) in self.args else int(arg.args[2])
+
+                target_var = self.args[var_name][idx1, idx2]
+
             else:
-                target_var = self.args[var_name][int(arg.args[1])]
+
+                idx1 = self.args[arg.args[1]] if str(arg.args[1]) in self.args else int(arg.args[1])
+                target_var = self.args[var_name][idx1]
 
         elif arg.func == MatrixSlice:
 
@@ -728,6 +736,7 @@ class LHSParser(object):
 
             # extract target variable from args
             if len(arg.args) == 3:
+
                 target_var = self.args[var_name][int(arg.args[1][0]):int(arg.args[1][1]),
                              int(arg.args[2][0]):int(arg.args[2][1])]
             else:
@@ -769,6 +778,42 @@ class LHSParser(object):
                 target_var = self.apply_slicing(expr)
 
         return target_var
+
+class EquationParser(object):
+
+    def __init__(self, eq: str):
+
+        lhs, rhs = eq.split('=')
+
+        eq_parts = [lhs, rhs]
+        self.operations = []
+        self.variables = []
+
+        for eq_part in eq_parts:
+
+            idx = 0
+            while idx < len(eq_part):
+                start = eq_part[idx:].find('[')
+                if start == -1:
+                    break
+                end = eq_part[idx:].find(']') + 1
+                eq_part = eq_part[0:start] + eq_part[end:]
+                idx += end
+
+            expr = parse_expr(eq_part, evaluate=False)
+            self.get_operations(expr)
+            self.get_variables(expr)
+
+    def get_operations(self, expr: Expr):
+
+        self.operations.append(expr.func)
+
+        for arg in expr.args:
+            self.get_operations(arg)
+
+    def get_variables(self, expr: Expr):
+
+        self.variables.append([str(symb) for symb in expr.free_symbols])
 
 
 def parse_dict(var_dict: dict, var_scope: str, tf_graph: Optional[tf.Graph] = None) -> Tuple[list, list]:
@@ -814,20 +859,59 @@ def parse_dict(var_dict: dict, var_scope: str, tf_graph: Optional[tf.Graph] = No
 
             for var_name, var in var_dict.items():
 
+
                 if var['variable_type'] == 'raw':
 
                     tf_var = var['variable']
 
                 elif var['variable_type'] == 'state_variable':
 
+
                     tf_var = tf.get_variable(name=var['name'],
-                                             shape=var['shape'],
-                                             dtype=data_types[var['data_type']],
-                                             initializer=tf.constant_initializer(var['initial_value'])
-                                             )
+                                         shape=var['shape'],
+                                         dtype=data_types[var['data_type']],
+                                         initializer=tf.constant_initializer(var['initial_value'])
+                                         )
+
+                elif var['variable_type'] == 'constant_sparse':
+
+                    # Check the shape, zeros and non-zero elements in the input matrix
+                    # Check if zeros are more than 30 percent of the whole dense matrix and while doing that, record the index of each non zero element.
+
+                    if len(var['shape']) == 2:
+                        tN = 1
+
+                        for Num in var['shape']:
+                            tN = Num * tN
+
+                        zN = 0
+                        i = 0
+
+                        NonZer_idx = []
+                        NonZer_val = []
+
+                        for arr in var['initial_value']:
+                            j = 0
+                            for elem in arr:
+
+                                if elem == 0.0:
+                                    zN += 1
+
+                                else:
+
+                                    NonZer = [i, j]
+                                    NonZer_idx.append(NonZer)
+
+                                    NonZer_val.append(elem)
+                                j += 1
+                            i += 1
+                        if zN > 0.3*tN:
+
+                            tf_var = tf.SparseTensor(indices=NonZer_idx, values=NonZer_val, dense_shape=var['shape'])
+
+
 
                 elif var['variable_type'] == 'constant':
-
                     tf_var = tf.constant(value=var['initial_value'],
                                          name=var['name'],
                                          shape=var['shape'],

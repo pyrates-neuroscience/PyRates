@@ -18,7 +18,6 @@ import tensorflow as tf
 # pyrates internal imports
 from pyrates.utility import parametric_sigmoid, normalized_sigmoid, plastic_sigmoid, plastic_normalized_sigmoid
 from pyrates.utility.filestorage import RepresentationBase
-from pyrates.parser import RHSParser
 
 # meta infos
 __author__ = "Richard Gast, Daniel F. Rose"
@@ -57,11 +56,11 @@ class Axon(RepresentationBase):
     """
 
     def __init__(self,
-                 transfer_function: str,
-                 transfer_function_kwargs: Optional[dict] = None,
+                 transfer_function: Callable[..., float],
                  init_val: float = 0.,
                  key: Optional[str] = None,
-                 tf_graph: Optional[tf.Graph] = None
+                 tf_graph: Optional[tf.Graph] = None,
+                 **transfer_function_kwargs: float
                  ) -> None:
         """Instantiates base axon.
         """
@@ -79,21 +78,6 @@ class Axon(RepresentationBase):
                                                initializer=tf.constant_initializer(value=init_val),
                                                shape=()
                                                )
-            self.membrane_potential = tf.get_variable(name=self.key + '_v',
-                                                      trainable=False,
-                                                      dtype=tf.float32,
-                                                      initializer=tf.constant_initializer(value=init_val),
-                                                      shape=()
-                                                      )
-            self.transfer_function_args['v'] = self.membrane_potential
-
-            transfer_function_parser = RHSParser(self.transfer_function, self.transfer_function_args, self.tf_graph)
-            tf_op, tf_op_args = transfer_function_parser.parse()
-
-            for arg in tf_op_args:
-                setattr(self, arg.name, arg)
-
-            self.update_firing_rate = self.firing_rate.assign(tf_op)
 
     def clear(self):
         """Clears all time-dependent variables of axon.

@@ -60,7 +60,6 @@ class Network(object):
         with self.tf_graph.as_default():
 
             with tf.variable_scope(self.key):
-
                 if vectorize:
 
                     # TODO: Go through input dicts and group similar operations/nodes into tensors
@@ -109,11 +108,9 @@ class Network(object):
         sources = connection_dict['sources']
         targets = connection_dict['targets']
 
-        # check dimensionality of coupling_ops and coupling_op_args
+        # check dimensionality of coupling_ops
         if len(coupling_ops) < len(sources):
-            coupling_ops = [coupling_ops for _ in range(len(sources))]
-        if len(coupling_op_args) < len(coupling_ops):
-            coupling_op_args = [deepcopy(coupling_op_args) for _ in range(len(sources))]
+            coupling_ops = [coupling_ops[0] for _ in range(len(sources))]
 
         with self.tf_graph.as_default():
 
@@ -122,21 +119,26 @@ class Network(object):
                 with tf.control_dependencies(self.update):
 
                     projections = []
+                    for i, (source, target, op) in enumerate(zip(sources,
+                                                                 targets,
+                                                                 coupling_ops)):
 
-                    for i, (source, target, op, op_args) in enumerate(zip(sources,
-                                                                          targets,
-                                                                          coupling_ops,
-                                                                          coupling_op_args)):
+                        # create edge argument dictionary
+                        edge_dict = {}
+                        for key, val in coupling_op_args.items():
+                            edge_dict[key] = val[i] if type(val) is list else val
+
                         # create edge
                         edge = Edge(source=self.nodes[source],
                                     target=self.nodes[target],
                                     coupling_op=op,
-                                    coupling_op_args=op_args,
+                                    coupling_op_args=edge_dict,
                                     tf_graph=self.tf_graph,
                                     key=f'edge_{i}')
 
                         # collect project operation of edge
                         projections.append(edge.project)
+                        # projections = tf(edge.project)
 
                     # group project operations of all edges
                     self.project = tf.tuple(projections, name='project')
@@ -180,20 +182,24 @@ class Network(object):
                 outputs[name + '_v'] = node.V
 
         # linearize input dictionary
-        inp = list()
-        for step in range(sim_steps):
-            inp_dict = dict()
-            for key, val in inputs.items():
-                if len(val) > 1:
-                    inp_dict[key] = val[step]
-                else:
-                    inp_dict[key] = val
-            inp.append(inp_dict)
-
+        if inputs:
+            inp = list()
+            for step in range(sim_steps):
+                inp_dict = dict()
+                for key, val in inputs.items():
+                    if len(val) > 1:
+                        inp_dict[key] = val[step]
+                    else:
+                        inp_dict[key] = val
+                inp.append(inp_dict)
+        else:
+            inp = [None for _ in range(sim_steps)]
         # run simulation
         ################
 
         with tf.Session(graph=self.tf_graph) as sess:
+
+            # writer = tf.summary.FileWriter('/tmp/log/', graph=self.tf_graph)
 
             # initialize all variables
             sess.run(tf.global_variables_initializer())
@@ -208,7 +214,6 @@ class Network(object):
 
                 if step % sampling_steps == 0:
                     results.append([var.eval() for var in outputs.values()])
-
             t_end = t.time()
 
             if simulation_time:
@@ -216,5 +221,6 @@ class Network(object):
                       f"simulation resolution of {self.dt} s.")
             else:
                 print(f"Network computations finished after {t_end - t_start} seconds.")
+            # writer.close()
 
-        return results
+        return results, (t_end - t_start)
