@@ -9,6 +9,7 @@ import tensorflow as tf
 import typing as type
 
 # pyrates internal imports
+from pyrates.solver import Solver
 
 # meta infos
 __author__ = "Richard Gast"
@@ -48,6 +49,7 @@ class ExpressionParser(ParserElement):
 
             # general symbols
             point = Literal(".")
+            comma = Literal(",")
             e = CaselessLiteral("E")
             pi = CaselessLiteral("PI")
 
@@ -59,10 +61,12 @@ class ExpressionParser(ParserElement):
 
             # indices
             idx_1d = Combine(num_int + Optional(":" + Optional(num_int)) + Optional(":" + Optional(num_int)))
-            idx = Combine(idx_1d + Optional("," + idx_1d) + Optional("," + idx_1d) + Optional("," + idx_1d))
+            idx = Combine(idx_1d + Optional(comma + idx_1d) + Optional(comma + idx_1d) + Optional(comma + idx_1d))
 
             # variable and function names
             name = Word(alphas, alphas + nums + "_$")
+            arg = name | num_float | num_int | Literal("True") | Literal("False")
+            func_args = Combine(arg + ZeroOrMore(comma + arg))
 
             # basic mathematical operations
             plus = Literal("+")
@@ -87,14 +91,14 @@ class ExpressionParser(ParserElement):
 
             # base types
             self.expr = Forward()
-            atom = (Optional("-") + (pi | e | num_float | name + par_l + self.expr + par_r | name
-                                     ).setParseAction(self.push_first) | (par_l + self.expr.suppress() + par_r)
-                    ).setParseAction(self.push_unary)
+            factor = Forward()
+            atom = (Optional("-") + (pi | e | name + par_l + func_args.suppress() + par_r | name | num_float | num_int
+                                     ).setParseAction(self.push_first)).setParseAction(self.push_unary) | \
+                   (par_l + self.expr.suppress() + par_r).setParseAction(self.push_unary)
 
             # hierarchical relationships between operations
-            indexed = Forward()
-            indexed << atom + ZeroOrMore((idx_l + idx + idx_r).setParseAction(self.push_all))
-            factor = Forward()
+            func = atom + Optional(par_l + func_args.setParseAction(self.push_first) + par_r)
+            indexed = func + ZeroOrMore((idx_l + idx + idx_r).setParseAction(self.push_all))
             factor << indexed + ZeroOrMore((op_exp + factor).setParseAction(self.push_first))
             term = factor + ZeroOrMore((op_mult + factor).setParseAction(self.push_first))
             self.expr << term + ZeroOrMore((op_add + term).setParseAction(self.push_first))
@@ -149,6 +153,9 @@ class ExpressionParser(ParserElement):
         for t in toks:
             self.expr_stack.append(t)
 
+    def push_last(self, strg, loc, toks):
+        self.expr_stack.append(toks[-1])
+
     def parse(self, expr_stack: list) -> type.Union[tf.Operation, tf.Tensor, tf.Variable, float]:
         """"""
 
@@ -172,7 +179,8 @@ class ExpressionParser(ParserElement):
             elif op == "E":
                 self._op_tmp = math.e
             elif op in self.funcs:
-                self._op_tmp = self.funcs[op](self.parse(expr_stack))
+                args = [self.parse([e]) for e in expr_stack.pop().split(',')]
+                self._op_tmp = self.funcs[op](*tuple(args))
             elif op in self.args.keys():
                 self._op_tmp = self.args[op]
             elif op[0].isalpha():
@@ -185,126 +193,95 @@ class ExpressionParser(ParserElement):
         return self._op_tmp
 
 
-# exprStack = []
-#
-#
-# def pushFirst(strg, loc, toks):
-#     exprStack.append(toks[0])
-#
-#
-# def pushUMinus(strg, loc, toks):
-#     if toks and toks[0] == '-':
-#         exprStack.append('unary -')
-#         # ~ exprStack.append( '-1' )
-#         # ~ exprStack.append( '*' )
-#
-#
-# bnf = None
-#
-#
-# def BNF():
-#     """
-#     expop   :: '^'
-#     multop  :: '*' | '/'
-#     addop   :: '+' | '-'
-#     integer :: ['+' | '-'] '0'..'9'+
-#     atom    :: PI | E | real | fn '(' expr ')' | '(' expr ')'
-#     factor  :: atom [ expop factor ]*
-#     term    :: factor [ multop factor ]*
-#     expr    :: term [ addop term ]*
-#     """
-#     global bnf
-#     if not bnf:
-#         point = Literal(".")
-#         e = CaselessLiteral("E")
-#         fnumber = Combine(Word("+-" + nums, nums) +
-#                           Optional(point + Optional(Word(nums))) +
-#                           Optional(e + Word("+-" + nums, nums)))
-#         inumber = Word("+-" + nums, nums)
-#         idx_1D = Combine(inumber + Optional(":" + Optional(inumber)) + Optional(":" + Optional(inumber)))
-#         idx = Combine(idx_1D + Optional("," + idx_1D) + Optional("," + idx_1D) + Optional("," + idx_1D))
-#         ident = Word(alphas, alphas + nums + "_$")
-#
-#         plus = Literal("+")
-#         minus = Literal("-")
-#         mult = Literal("*")
-#         div = Literal("/")
-#         lpar = Literal("(").suppress()
-#         rpar = Literal(")").suppress()
-#         lidx = Literal("[")
-#         ridx = Literal("]")
-#         addop = plus | minus
-#         multop = mult | div
-#         expop = Literal("^")
-#         pi = CaselessLiteral("PI")
-#
-#         expr = Forward()
-#         atom = (Optional("-") + (pi | e | fnumber | ident + lpar + expr + rpar | ident + lidx + idx + ridx | ident | idx
-#                                  ).setParseAction(pushFirst) | (lpar + expr.suppress() + rpar)
-#                 ).setParseAction(pushUMinus)
-#
-#         # by defining exponentiation as "atom [ ^ factor ]..." instead of "atom [ ^ atom ]...", we get right-to-left exponents, instead of left-to-righ
-#         # that is, 2^3^2 = 2^(3^2), not (2^3)^2.
-#         factor = Forward()
-#         factor << atom + ZeroOrMore((expop + factor).setParseAction(pushFirst))
-#
-#         term = factor + ZeroOrMore((multop + factor).setParseAction(pushFirst))
-#         expr << term + ZeroOrMore((addop + term).setParseAction(pushFirst))
-#         bnf = expr
-#     return bnf
-#
-#
-# # map operator symbols to corresponding arithmetic operations
-# epsilon = 1e-12
-# opn = {"+": tf.add,
-#        "-": tf.subtract,
-#        "*": tf.multiply,
-#        "/": tf.truediv,
-#        "^": tf.pow}
-# fn = {"sin": tf.sin,
-#       "cos": tf.cos,
-#       "tan": tf.tan,
-#       "abs": tf.abs,
-#       "round": tf.to_int32,
-#       "sgn": lambda a: abs(a) > epsilon and ((a > 0) - (a < 0)) or 0}
-#
-#
-# def evaluate_stack(s):
-#     op = s.pop()
-#     if op == 'unary -':
-#         return -evaluateStack(s)
-#     if op in "+-*/^":
-#         op2 = evaluateStack(s)
-#         op1 = evaluateStack(s)
-#         return opn[op](op1, op2)
-#     elif op == "PI":
-#         return math.pi  # 3.1415926535
-#     elif op == "E":
-#         return math.e  # 2.718281828
-#     elif op in fn:
-#         return fn[op](evaluateStack(s))
-#     elif op[0].isalpha():
-#         return 0
-#     else:
-#         return float(op)
+class EquationParser(object):
+    """Parses lhs and rhs of an equation.
+    """
 
+    def __init__(self, expr_str: str, args: dict, tf_graph: type.Optional[tf.Graph] = None) -> None:
+        """Instantiates equation parser.
+        """
+
+        # bind inputs args to instance
+        ##############################
+
+        self.expr_str = expr_str
+        self.args = args
+        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+        # parse lhs and rhs of equation
+        ###############################
+
+        # split into lhs and rhs
+        lhs, rhs = self.expr_str.split('=')
+
+        # parse rhs
+        rhs_parser = ExpressionParser(rhs, self.args, self.tf_graph)
+        rhs_op = rhs_parser.op
+
+        # parse lhs
+        lhs_parser = ExpressionParser(lhs, self.args, self.tf_graph)
+        lhs_list = lhs_parser.expr_list.copy()
+
+        # find state variable in lhs and solve for it
+        #############################################
+
+        # search for state variable in lhs
+        var_n = 0
+        self.target_var = None
+        while len(lhs_list) > 0:
+            symb = lhs_list.pop(0)
+            if symb not in 'dt/*[]':
+                if symb not in self.args.keys():
+                    raise ValueError(f'Could not find state variable in arguments dictionary. Please add {symb} '
+                                     'to `args`.')
+                self.target_var = self.args[symb]
+                if var_n > 0:
+                    raise ValueError('Multiple potential state variables found in left-hand side of equation. Please'
+                                     'reformulate equation to follow one of the following formulations:'
+                                     'y = f(...); d/dt y = f(...); Y[idx] = f(...).')
+                var_n += 1
+            elif symb == '[':
+                if not self.target_var:
+                    raise ValueError('Beginning of index found befor state variable could be identified. Please'
+                                     'reformulate equation to follow one of the following formulations:'
+                                     'y = f(...); d/dt y = f(...); Y[idx] = f(...).')
+                idx = lhs_list.pop(0)
+                self.target_var = self.target_var[eval(idx)]
+
+        if self.target_var is None:
+            raise ValueError('Could not find state variable in left-hand side of equation. Please'
+                             'reformulate equation to follow one of the following formulations:'
+                             'y = f(...); d/dt y = f(...); Y[idx] = f(...).')
+
+        # solve for state variable
+        if 'd' in list(lhs_parser.expr_list) and 'dt' in list(lhs_parser.expr_list):
+            if 'dt' not in self.args.keys():
+                raise ValueError('Integration step-size has to be passed with differential equations. Please '
+                                 'add a field `dt` to `args` with the corresponding value.')
+            solver = Solver(rhs_op, self.target_var, self.args['dt'], self.tf_graph)
+            with self.tf_graph.as_default():
+                self.lhs_update = solver.solve()
+        else:
+            with self.tf_graph.as_default():
+                self.lhs_update = self.target_var.assign(rhs_op)
 
 ############
 # test bed #
 ############
 
 import numpy as np
-string = "A @ (B + 4)."
+string = "A = (-A + sum(B,1)) * sin(c)"
 
 gr = tf.Graph()
 with gr.as_default():
-    A = tf.constant(np.ones((5, 5)), dtype=tf.float32)
+    A = tf.Variable(np.ones(5), dtype=tf.float32)
     B = tf.constant(np.ones((5, 5)), dtype=tf.float32)
     c = tf.constant(7.3, dtype=tf.float32)
-parser = ExpressionParser(string, {'A': A, 'B': B, 'c': c}, gr)
-op = parser.op
+parser = EquationParser(string, {'A': A, 'B': B, 'c': c, 'dt': 1e-1, 'd': 1.}, gr)
+op = parser.lhs_update
 
 with tf.Session(graph=gr) as sess:
-    sess.run(op)
-    print(op.eval())
-print('hi')
+    sess.run(tf.global_variables_initializer())
+    for i in range(10):
+        sess.run(op)
+        print(A.eval())
