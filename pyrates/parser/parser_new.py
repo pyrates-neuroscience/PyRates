@@ -60,7 +60,8 @@ class ExpressionParser(ParserElement):
             num_int = Word("+-" + nums, nums)
 
             # indices
-            idx_1d = Combine(num_int + Optional(":" + Optional(num_int)) + Optional(":" + Optional(num_int)))
+            idx_1d = Literal(":") | \
+                     Combine(num_int + Optional(":" + Optional(num_int)) + Optional(":" + Optional(num_int)))
             idx = Combine(idx_1d + Optional(comma + idx_1d) + Optional(comma + idx_1d) + Optional(comma + idx_1d))
 
             # variable and function names
@@ -173,7 +174,7 @@ class ExpressionParser(ParserElement):
                 idx = expr_stack.pop()
                 expr_stack.pop()
                 op_to_idx = self.parse([expr_stack.pop()])
-                self._op_tmp = op_to_idx[eval(idx)]
+                self._op_tmp = eval(f"op_to_idx[{idx}]")
             elif op == "PI":
                 self._op_tmp = math.pi
             elif op == "E":
@@ -184,7 +185,7 @@ class ExpressionParser(ParserElement):
             elif op in self.args.keys():
                 self._op_tmp = self.args[op]
             elif op[0].isalpha():
-                self._op_tmp = 0
+                self._op_tmp = 1.
             elif "." in op:
                 self._op_tmp = float(op)
             else:
@@ -246,7 +247,7 @@ class EquationParser(object):
                                      'reformulate equation to follow one of the following formulations:'
                                      'y = f(...); d/dt y = f(...); Y[idx] = f(...).')
                 idx = lhs_list.pop(0)
-                self.target_var = self.target_var[eval(idx)]
+                self.target_var = eval(f"self.target_var[{idx}]")
 
         if self.target_var is None:
             raise ValueError('Could not find state variable in left-hand side of equation. Please'
@@ -269,19 +270,19 @@ class EquationParser(object):
 # test bed #
 ############
 
-import numpy as np
-string = "A = (-A + sum(B,1)) * sin(c)"
-
-gr = tf.Graph()
-with gr.as_default():
-    A = tf.Variable(np.ones(5), dtype=tf.float32)
-    B = tf.constant(np.ones((5, 5)), dtype=tf.float32)
-    c = tf.constant(7.3, dtype=tf.float32)
-parser = EquationParser(string, {'A': A, 'B': B, 'c': c, 'dt': 1e-1, 'd': 1.}, gr)
-op = parser.lhs_update
-
-with tf.Session(graph=gr) as sess:
-    sess.run(tf.global_variables_initializer())
-    for i in range(10):
-        sess.run(op)
-        print(A.eval())
+# import numpy as np
+# string = "A = (-A + sum(B,1)) * sin(c)"
+#
+# gr = tf.Graph()
+# with gr.as_default():
+#     A = tf.Variable(np.ones(5), dtype=tf.float32)
+#     B = tf.constant(np.ones((5, 5)), dtype=tf.float32)
+#     c = tf.constant(7.3, dtype=tf.float32)
+# parser = EquationParser(string, {'A': A, 'B': B, 'c': c, 'dt': 1e-1, 'd': 1.}, gr)
+# op = parser.lhs_update
+#
+# with tf.Session(graph=gr) as sess:
+#     sess.run(tf.global_variables_initializer())
+#     for i in range(10):
+#         sess.run(op)
+#         print(A.eval())

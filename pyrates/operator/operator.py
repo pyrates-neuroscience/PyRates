@@ -6,7 +6,7 @@ from typing import List, Optional
 import tensorflow as tf
 
 # pyrates internal imports
-from pyrates.parser import RHSParser, LHSParser
+from pyrates.parser import EquationParser
 
 # meta infos
 __author__ = "Richard Gast"
@@ -53,18 +53,22 @@ class Operator(object):
 
                     for i, expr in enumerate(expressions):
 
-                        lhs, rhs = expr.split('=')
+                        expr_parser = EquationParser(expr, expression_args, self.tf_graph)
+                        op = expr_parser.lhs_update
 
-                        # parse right-hand side and turn it into tensorflow operation
-                        rhs_parser = RHSParser(rhs, expression_args, tf_graph)
-                        rhs_tf_op = rhs_parser.transform()
-
-                        # parse left-hand side and combine it with rhs tensorflow operation
-                        lhs_parser = LHSParser(lhs, expression_args, rhs_tf_op, tf_graph)
-                        lhs_tf_op, _ = lhs_parser.transform()
+                        # lhs, rhs = expr.split('=')
+                        #
+                        # # parse right-hand side and turn it into tensorflow operation
+                        # rhs_parser = RHSParser(rhs, expression_args, tf_graph)
+                        # rhs_tf_op = rhs_parser.transform()
+                        #
+                        # # parse left-hand side and combine it with rhs tensorflow operation
+                        # lhs_parser = LHSParser(lhs, expression_args, rhs_tf_op, tf_graph)
+                        # op, _ = lhs_parser.transform()
 
                         # collect resulting tensorflow operation
-                        self.expressions.append(lhs_tf_op)
+
+                        self.expressions.append(op)
 
     def create(self):
         """Create a single tensorflow operation for the set of parsed expressions.

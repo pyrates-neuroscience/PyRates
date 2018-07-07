@@ -25,7 +25,7 @@ sparseness_e = 0.01
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 100
 
 # connectivity parameters
 c_intra = 135.
@@ -83,11 +83,11 @@ mask[0::3, 0] = 1
 
 # The Vectorized Dict.
 #####################
-node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau * X - 1/tau**2 * V_syn",
+node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2./tau * X - 1./tau^2 * V_syn",
                                           "d/dt * V_syn = X",
-                                          "U = mask * (220 + randn(cint) * 22.)"],
-                     'operator_rtp_soma': ["V = reduce_sum(V_syn, ax, keep)"],
-                     'operator_ptr': ["m_out = m_max / (1 + expo(r * (v_th - V)))"],
+                                          "U = mask * (220. + randn(cint) * 22.)"],
+                     'operator_rtp_soma': ["V = sum(V_syn,ax,keep)"],
+                     'operator_ptr': ["m_out = m_max / (1. + e^(r * (v_th - V)))"],
 
                      's': {'name': 's',
                            'variable_type': 'state_variable',
@@ -409,8 +409,8 @@ node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2/tau
 
 # For the Vec. Dict.
 ####################
-connection_dict = {'coupling_operators': [["idx(input, :, 0) = dot(C_e, output)", # dot(C_e, output)
-                                           "idx(input, :, 1) = dot(C_i, output)"]],
+connection_dict = {'coupling_operators': [["input[:,0:1] = C_e @ output",
+                                           "input[:,1:2] = C_i @ output"]],
                    'coupling_operator_args': {'C_e': {'name': 'C_e',
                                                        'variable_type': 'constant',
                                                        'data_type': 'float32',
@@ -514,5 +514,3 @@ axes.set_xlabel('timesteps')
 axes.set_ylabel('membrane potential')
 axes.set_title('Jansen-Rit NMM')
 show()
-
-
