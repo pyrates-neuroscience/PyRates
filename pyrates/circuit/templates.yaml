@@ -1,0 +1,30 @@
+%YAML 1.2
+---
+JansenRitCircuit:
+  description: |
+    Implementation of a neural mass model of 3 neural masses following Jansen and Rit [1]_
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+       generation in a mathematical model of coupled cortical columns."
+       Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: pyrates.circuit.circuit.BaseCircuit
+  nodes:
+    JR_PC: pyrates.population.templates.JansenRitPC
+    JR_IIN: pyrates.population.templates.JansenRitIN
+    JR_EIN: pyrates.population.templates.JansenRitIN
+
+  coupling: pyrates.coupling.templates.JansenRitCoupling
+  # single coupling operator. needs rework for multiple coupling operators in single circuit.
+
+  edges:
+    - JR_PC: JR_IIN
+      c: 33.75
+    - JR_PC: JR_EIN
+      c: 135
+    - JR_EIN: JR_PC
+      c: 108
+    - JR_IIN: JR_PC
+      c: 33.75
+
