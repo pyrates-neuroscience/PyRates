@@ -2,11 +2,11 @@
 ---
 PotentialToRateOperator:
   base: OperatorTemplate
-  equations: "L_PRO * m_out = r * V"
+  equation: "L_PRO * m_out = r * V"
   variables:
     L_PRO:
       description: Generic linear differential operator
-      unit: None
+      unit: null
       default: 1
     m_out:
       name: outgoing_firing_rate

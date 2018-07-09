@@ -44,7 +44,9 @@ def test_parse_operator_templates(section):
                                       "pyrates.axon.templates.SigmoidPRO",
                                       "pyrates.axon.templates.JansenRitPRO",
                                       "pyrates.population.population.CurrentToPotentialOperator",
-                                      "pyrates.synapse.synapse.RateToCurrentOperator"
+                                      "pyrates.synapse.synapse.RateToCurrentOperator",
+                                      "pyrates.coupling.coupling.CouplingOperator",
+                                      "pyrates.coupling.templates.JansenRitCoupling",
                                       ])
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
@@ -57,7 +59,7 @@ def test_import_operator_templates(operator):
     cached_template = OperatorTemplateLoader.cache[operator]
     assert template is cached_template
     assert template.path == cached_template.path
-    assert template.equations == cached_template.equations
+    assert template.equation == cached_template.equation
     assert repr(template) == repr(cached_template) == f"OperatorTemplate <{operator}>"
     # assert template == TemplateLoader.cache[template.path]
 
