@@ -16,7 +16,7 @@ from matplotlib.pyplot import *
 
 # general
 step_size = 1e-3
-simulation_time = 10.0
+simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
 
 
@@ -25,7 +25,7 @@ sparseness_e = 0.01
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 100
+n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.

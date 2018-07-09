@@ -859,24 +859,23 @@ def parse_dict(var_dict: dict, var_scope: str, tf_graph: Optional[tf.Graph] = No
 
             for var_name, var in var_dict.items():
 
-
                 if var['variable_type'] == 'raw':
 
                     tf_var = var['variable']
 
                 elif var['variable_type'] == 'state_variable':
 
-
                     tf_var = tf.get_variable(name=var['name'],
-                                         shape=var['shape'],
-                                         dtype=data_types[var['data_type']],
-                                         initializer=tf.constant_initializer(var['initial_value'])
-                                         )
+                                             shape=var['shape'],
+                                             dtype=data_types[var['data_type']],
+                                             initializer=tf.constant_initializer(var['initial_value'])
+                                             )
 
                 elif var['variable_type'] == 'constant_sparse':
 
                     # Check the shape, zeros and non-zero elements in the input matrix
-                    # Check if zeros are more than 30 percent of the whole dense matrix and while doing that, record the index of each non zero element.
+                    # Check if zeros are more than 30 percent of the whole dense matrix and while doing that,
+                    # record the index of each non zero element.
 
                     if len(var['shape']) == 2:
                         tN = 1
@@ -908,8 +907,6 @@ def parse_dict(var_dict: dict, var_scope: str, tf_graph: Optional[tf.Graph] = No
                         if zN > 0.3*tN:
 
                             tf_var = tf.SparseTensor(indices=NonZer_idx, values=NonZer_val, dense_shape=var['shape'])
-
-
 
                 elif var['variable_type'] == 'constant':
                     tf_var = tf.constant(value=var['initial_value'],

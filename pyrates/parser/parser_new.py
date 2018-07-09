@@ -2,7 +2,7 @@
 """
 
 # external imports
-from pyparsing import Literal, CaselessLiteral, Word, Combine, Group, Optional, \
+from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 import math
 import tensorflow as tf
@@ -18,9 +18,31 @@ __status__ = "development"
 
 class ExpressionParser(ParserElement):
     """Base class for parsing mathematical expressions.
+
+    Parameters
+    ----------
+    expr_str
+        Mathematical expression in string format.
+    args
+        Dictionary containing all variables and functions needed to evaluate the expression.
+    tf_graph
+        Tensorflow graph on which all operations will be created.
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    Examples
+    --------
+
+    References
+    ----------
+
     """
     
-    def __init__(self, expr: str, args: dict, tf_graph: type.Optional[tf.Graph] = None) -> None:
+    def __init__(self, expr_str: str, args: dict, tf_graph: type.Optional[tf.Graph] = None) -> None:
         """Instantiates expression parser.
         """
         
@@ -32,7 +54,7 @@ class ExpressionParser(ParserElement):
         # bind input args to instance
         #############################
 
-        self.expr_str = expr
+        self.expr_str = expr_str
         self.args = args
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
         
@@ -94,8 +116,8 @@ class ExpressionParser(ParserElement):
             self.expr = Forward()
             factor = Forward()
             atom = (Optional("-") + (pi | e | name + par_l + func_args.suppress() + par_r | name | num_float | num_int
-                                     ).setParseAction(self.push_first)).setParseAction(self.push_unary) | \
-                   (par_l + self.expr.suppress() + par_r).setParseAction(self.push_unary)
+                                     ).setParseAction(self.push_first)).setParseAction(self.push_negone) | \
+                   (par_l + self.expr.suppress() + par_r).setParseAction(self.push_negone)
 
             # hierarchical relationships between operations
             func = atom + Optional(par_l + func_args.setParseAction(self.push_first) + par_r)
@@ -123,7 +145,8 @@ class ExpressionParser(ParserElement):
                       "tan": tf.tan,
                       "abs": tf.abs,
                       "round": tf.to_int32,
-                      "sum": tf.reduce_sum}
+                      "sum": tf.reduce_sum,
+                      }
 
         # add functions from args dictionary, if passed
         for key, val in self.args.items():
@@ -142,53 +165,104 @@ class ExpressionParser(ParserElement):
             self.op = self.parse(self.expr_stack[:])
 
     def push_first(self, strg, loc, toks):
-        """"""
+        """Push tokens in first-to-last order to expression stack.
+        """
         self.expr_stack.append(toks[0])
         
-    def push_unary(self, strg, loc, toks):
-        """"""
+    def push_negone(self, strg, loc, toks):
+        """Push negative one multiplier if on first position in toks.
+        """
         if toks and toks[0] == '-':
-            self.expr_stack.append('unary -')
+            self.expr_stack.append('-one')
 
     def push_all(self, strg, loc, toks):
+        """Push all tokens to expression stack at once (first-to-last).
+        """
         for t in toks:
             self.expr_stack.append(t)
 
     def push_last(self, strg, loc, toks):
+        """Push tokens in last-to-first order to expression stack.
+        """
         self.expr_stack.append(toks[-1])
 
-    def parse(self, expr_stack: list) -> type.Union[tf.Operation, tf.Tensor, tf.Variable, float]:
-        """"""
+    def parse(self, expr_stack: list) -> type.Union[tf.Operation, tf.Tensor, tf.Variable, float, int]:
+        """Parse elements in expression stack to tensorflow operation.
+
+        Parameters
+        ----------
+        expr_stack
+            Ordered list with expression variables and operations.
+
+        Returns
+        -------
+        type.Union[tf.Operation, tf.Tensor, tf.Variable, float]
+            Tensorflow operation
+
+        """
 
         with self.tf_graph.as_default():
 
+            # get next operation from stack
             op = expr_stack.pop()
 
-            if op == 'unary -':
+            # check type of operation
+            #########################
+
+            if op == '-one':
+
+                # multiply expression by minus one
                 self._op_tmp = -self.parse(expr_stack)
+
             elif op in "+-*/^@":
+
+                # combine elements via mathematical operator
                 op2 = self.parse(expr_stack)
                 op1 = self.parse(expr_stack)
                 self._op_tmp = self.ops[op](op1, op2)
+
             elif op == "]":
+
+                # apply indexing to element
                 idx = expr_stack.pop()
                 expr_stack.pop()
                 op_to_idx = self.parse([expr_stack.pop()])
                 self._op_tmp = eval(f"op_to_idx[{idx}]")
+
             elif op == "PI":
+
+                # return float representation of pi
                 self._op_tmp = math.pi
+
             elif op == "E":
+
+                # return float representation of e
                 self._op_tmp = math.e
+
             elif op in self.funcs:
+
+                # apply function to arguments
                 args = [self.parse([e]) for e in expr_stack.pop().split(',')]
                 self._op_tmp = self.funcs[op](*tuple(args))
+
             elif op in self.args.keys():
+
+                # extract variable from args dict
                 self._op_tmp = self.args[op]
+
             elif op[0].isalpha():
+
+                # return float(1) for undefined constants
                 self._op_tmp = 1.
+
             elif "." in op:
+
+                # return float
                 self._op_tmp = float(op)
+
             else:
+
+                # return int
                 self._op_tmp = int(op)
 
         return self._op_tmp
@@ -196,6 +270,28 @@ class ExpressionParser(ParserElement):
 
 class EquationParser(object):
     """Parses lhs and rhs of an equation.
+
+    Parameters
+    ----------
+    expr_str
+        Mathematical equation in string format.
+    args
+        Dictionary containing all variables and functions needed to evaluate the expression.
+    tf_graph
+        Tensorflow graph on which all operations will be created.
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    Examples
+    --------
+
+    References
+    ----------
+
     """
 
     def __init__(self, expr_str: str, args: dict, tf_graph: type.Optional[tf.Graph] = None) -> None:
@@ -265,24 +361,3 @@ class EquationParser(object):
         else:
             with self.tf_graph.as_default():
                 self.lhs_update = self.target_var.assign(rhs_op)
-
-############
-# test bed #
-############
-
-# import numpy as np
-# string = "A = (-A + sum(B,1)) * sin(c)"
-#
-# gr = tf.Graph()
-# with gr.as_default():
-#     A = tf.Variable(np.ones(5), dtype=tf.float32)
-#     B = tf.constant(np.ones((5, 5)), dtype=tf.float32)
-#     c = tf.constant(7.3, dtype=tf.float32)
-# parser = EquationParser(string, {'A': A, 'B': B, 'c': c, 'dt': 1e-1, 'd': 1.}, gr)
-# op = parser.lhs_update
-#
-# with tf.Session(graph=gr) as sess:
-#     sess.run(tf.global_variables_initializer())
-#     for i in range(10):
-#         sess.run(op)
-#         print(A.eval())
