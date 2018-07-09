@@ -20,5 +20,5 @@ class AbstractBaseTemplate:
         """Check if path contains a folder structure and prepend own path, if it doesn't"""
 
         if "." not in path:
-            path = f"{self.path.split('.')[:-1]}.{path}"
+            path = ".".join((*self.path.split('.')[:-1], path))
         return path

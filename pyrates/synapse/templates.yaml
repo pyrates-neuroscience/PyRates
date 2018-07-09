@@ -14,7 +14,7 @@ ExponentialSynapseRCO:
 
   base: pyrates.synapse.synapse.RateToCurrentOperator
 
-  equations:
+  equation:
     replace:
       L_syn: "(d/dt + 1/tau)^2"
       h: "h/tau"

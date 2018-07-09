@@ -85,15 +85,15 @@ class OperatorTemplate(AbstractBaseTemplate):
     initialization conditions. The template can be used to create variations of a specific
     equation or variables."""
 
-    def __init__(self, name: str, path: str, equations: str, variables: dict, description: str,
+    def __init__(self, name: str, path: str, equation: str, variables: dict, description: str,
                  options: dict = None):
         """For now: only allow single equation in operator template."""
 
         super().__init__(name, path, description)
 
-        self.equations = equations
+        self.equation = equation
         self.variables = variables
 
         self.options = options
-        if options:
-            raise NotImplementedError
+        # if options:
+        #     raise NotImplementedError

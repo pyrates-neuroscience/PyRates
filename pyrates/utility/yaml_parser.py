@@ -145,20 +145,20 @@ class OperatorTemplateLoader(TemplateLoader):
     """Template loader specific to an OperatorTemplate. """
 
     @classmethod
-    def update_template(cls, base, name: str, path: str, equations: Union[str, dict] = None,
+    def update_template(cls, base, name: str, path: str, equation: Union[str, dict] = None,
                         variables: dict = None, description: str = None, options: dict = None):
         """Update all entries of the Operator template in their respective ways."""
 
-        if equations:
+        if equation:
             # if it is a string, just replace
-            if isinstance(equations, str):
-                pass  # pass equations string to constructor
+            if isinstance(equation, str):
+                pass  # pass equation string to constructor
             # else, update according to predefined rules, assuming dict structure
             else:
-                equations = cls.update_equation(base.equations, **equations)
+                equation = cls.update_equation(base.equation, **equation)
         else:
-            # copy equations from parent template
-            equations = base.equations
+            # copy equation from parent template
+            equation = base.equation
 
         if variables:
             variables = cls.update_variables(base.variables, variables)
@@ -168,7 +168,7 @@ class OperatorTemplateLoader(TemplateLoader):
         rogue_variables = []
         for var in variables:
             # remove variables that are not present in the equation anymore
-            if var not in equations:
+            if var not in equation:
                 # save entries in list, since dictionary must not change size during iteration
                 rogue_variables.append(var)
 
@@ -184,7 +184,7 @@ class OperatorTemplateLoader(TemplateLoader):
         if not description:
             description = base.__doc__  # or do we want to enforce documenting a template?
 
-        return OperatorTemplate(name=name, path=path, equations=equations, variables=variables,
+        return OperatorTemplate(name=name, path=path, equation=equation, variables=variables,
                                 description=description, options=options)
 
     @staticmethod
