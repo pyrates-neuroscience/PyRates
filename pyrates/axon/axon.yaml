@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 PotentialToRateOperator:
-  # no base defined --> implicitly refers to pyrates.operator.OperatorTemplate
+  base: OperatorTemplate
   equations: "L_PRO * m_out = r * V"
   variables:
     L_PRO:

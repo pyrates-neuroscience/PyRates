@@ -36,4 +36,23 @@ CurrentToPotentialOperator:
       default: input
 
 
+NeuralMass:
+  description: Basic template for a neural mass.
+  base: NodeTemplate
+  operators:
+    pyrates.snyapse.synapse.RateToCurrentOperator:
+      defaults: null
+      options: null
+    CurrentToPotentialOperator:
+      defaults: null
+      options: null
+    pyrates.axon.axon.PotentialToRateOperator:
+      defaults: null
+      options: null
+  options: null
+
+
+
+
+
 
