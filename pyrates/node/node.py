@@ -2,7 +2,7 @@
 """
 
 # external imports
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 import tensorflow as tf
 
 # pyrates imports
@@ -10,6 +10,8 @@ from pyrates.operator import Operator
 from pyrates.parser import parse_dict
 
 # meta infos
+from pyrates.abc import AbstractBaseTemplate
+
 __author__ = "Richard Gast"
 __status__ = "Development"
 
@@ -86,3 +88,37 @@ class Node(object):
 
                 # group tensorflow versions of all operators
                 self.update = tf.group(tf_ops, name='update')
+
+
+class NodeTemplate(AbstractBaseTemplate):
+    """Generic template for a node in the computational network graph. A single node may encompass several
+    different operators. One template defines a typical structure of a given node type."""
+
+    def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
+                 description: str, label: str=None, options: dict = None):
+        """For now: only allow single equation in operator template."""
+
+        super().__init__(name, path, description)
+
+        if label:
+            self.label = label
+        else:
+            self.label = self.name
+
+        self.operators = {}  # dictionary with operator path as key and variations to the template as values
+        if isinstance(operators, str):
+            self.operators[self._format_path(operators)] = {}  # single operator path with no variations
+        elif isinstance(operators, list):
+            for op in operators:
+                self.operators[self._format_path(op)] = {}  # multiple operator paths with no variations
+        elif isinstance(operators, dict):
+            for op, variations in operators.items():
+                self.operators[self._format_path(op)] = variations
+        # for op, variations in operators.items():
+        #     if "." not in op:
+        #         op = f"{path.split('.')[:-1]}.{op}"
+        #     self.operators[op] = variations
+
+        self.options = options
+        if options:
+            raise NotImplementedError

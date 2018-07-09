@@ -9,6 +9,8 @@ import tensorflow as tf
 from pyrates.parser import RHSParser, LHSParser
 
 # meta infos
+from pyrates.abc import AbstractBaseTemplate
+
 __author__ = "Richard Gast"
 __status__ = "Development"
 
@@ -78,22 +80,20 @@ class Operator(object):
         return grouped_expressions
 
 
-class OperatorTemplate:
+class OperatorTemplate(AbstractBaseTemplate):
     """Generic template for an operator with a name, equation(s), variables and possible
     initialization conditions. The template can be used to create variations of a specific
     equation or variables."""
 
     def __init__(self, name: str, path: str, equations: str, variables: dict, description: str,
-                 conditions: dict = None):
+                 options: dict = None):
         """For now: only allow single equation in operator template."""
 
-        self.name = name
-        self.path = path
+        super().__init__(name, path, description)
+
         self.equations = equations
         self.variables = variables
-        self.__doc__ = description
-        self.conditions = conditions
 
-    def __repr__(self):
-        return f"OperatorTemplate <{self.path}>"
-
+        self.options = options
+        if options:
+            raise NotImplementedError

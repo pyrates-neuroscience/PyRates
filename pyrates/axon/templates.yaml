@@ -17,7 +17,7 @@ SigmoidPRO:
       r * V: "m_max / (1 + exp(s*(V_thr - V)))"
     remove: ["L_PRO * "]
 
-  conditions:
+  options:
     normalize:
       description: "If true, firing rate will be
         normalized to be zero at firing threshold."
@@ -28,29 +28,29 @@ SigmoidPRO:
     # not the most elegant solution, but does the job
 
   variables:
-     m_max:
-       name: max_firing_rate
-       description: Determines maximum firing rate of axon.
-       unit: 1/s
-       default: constant(float)
-       # no explicit default value specified.
-       # this will thus be a required variable later on.
-       allowed_range: ">= 0"
-       # this can be set as explicit condition
-       # will raise "ValueError" with the range in the
-       # error message
-#    s:
-#      name: slope
-#      description: "Determines slope of the sigmoidal transfer
-#        function at the firing threshold."
-#      default: constant(float)
-#      # unit not specified --> unit: None
-#    V_thr:
-#      name: firing_threshold
-#      description: "Determines membrane potential for which
-#        output firing rate is half the maximum firing rate."
-#      default: constant(float)
-#      unit: V
+    m_max:
+      name: max_firing_rate
+      description: Determines maximum firing rate of axon.
+      unit: 1/s
+      default: constant(float)
+      # no explicit default value specified.
+      # this will thus be a required variable later on.
+      allowed_range: ">= 0"
+      # this can be set as explicit condition
+      # will raise "ValueError" with the range in the
+      # error message
+    s:
+      name: slope
+      description: "Determines slope of the sigmoidal transfer
+        function at the firing threshold."
+      default: constant(float)
+      # unit not specified --> unit: None
+    V_thr:
+      name: firing_threshold
+      description: "Determines membrane potential for which
+        output firing rate is half the maximum firing rate."
+      default: constant(float)
+      unit: V
 
 
 JansenRitPRO:

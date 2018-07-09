@@ -1,12 +1,13 @@
 """ Some utility functions for parsing YAML-based definitions of circuits and components.
 """
-from typing import Union
+from typing import Union, List
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 import importlib
 from pyrates.operator import OperatorTemplate
+from pyrates.node import NodeTemplate
 
 
 class TemplateLoader:
@@ -28,26 +29,27 @@ class TemplateLoader:
             template = cls.cache[path]
         else:
             template_dict = cls.load_template_from_yaml(path)
-            if "base" in template_dict:
+            try:
                 base_path = template_dict.pop("base")
-                if base_path == "OperatorTemplate":
-                    template = OperatorTemplate(**template_dict)
-                    # also basic assumption, if none is given
-                else:
-                    # load base if needed
-                    if "." in base_path:
-                        # reference to template in different file
-                        template = TemplateLoader(base_path)
-                    else:
-                        # reference to template in same file
-                        base_path = ".".join((*path.split(".")[:-1], base_path))
-                        template = TemplateLoader(base_path)
-                    template = cls.update_template(template, **template_dict)
-                    # may fail if "base" is present but empty
+            except KeyError:
+                raise KeyError(f"No 'base' defined for template {path}. Please define a "
+                               f"base to derive the template from.")
+            if base_path == "OperatorTemplate":
+                template = OperatorTemplate(**template_dict)
+            elif base_path == "NodeTemplate":
+                template = NodeTemplate(**template_dict)
 
             else:
-                # create template (no base needed)
-                template = OperatorTemplate(**template_dict)
+                # load base if needed
+                if "." in base_path:
+                    # reference to template in different file
+                    template = TemplateLoader(base_path)
+                else:
+                    # reference to template in same file
+                    base_path = ".".join((*path.split(".")[:-1], base_path))
+                    template = TemplateLoader(base_path)
+                template = cls.update_template(template, **template_dict)
+                # may fail if "base" is present but empty
 
             cls.cache[path] = template
 
@@ -86,6 +88,11 @@ class TemplateLoader:
 
         return template_dict
 
+    @classmethod
+    def update_template(cls, *args, **kwargs):
+        """Updates the template with a given list of arguments."""
+        raise NotImplementedError
+
     @staticmethod
     def parse_path(path: str):
         """Parse a path of form path.to.template, returning a tuple of (name, file, abspath)."""
@@ -115,9 +122,31 @@ class TemplateLoader:
             raise NotImplementedError
             # this should only happen, if "base" is specified, but empty
 
+    @staticmethod
+    def update_options(options: Union[dict, None], updates: dict):
+
+        if options:
+            updated = options.copy()
+        else:
+            updated = {}
+
+        for opt, opt_dict in updates.items():
+            if opt in updated:
+                # update dictionary defining single condition
+                updated[opt].update(opt_dict)
+            else:
+                # copy new condition into options dictionary
+                updated.update({opt: opt_dict})
+
+        return updated
+
+
+class OperatorTemplateLoader(TemplateLoader):
+    """Template loader specific to an OperatorTemplate. """
+
     @classmethod
-    def update_template(cls, base, name: str = None, path: str = None, equations: Union[str, dict] = None,
-                        variables: dict = None, description: str = None, conditions: dict = None):
+    def update_template(cls, base, name: str, path: str, equations: Union[str, dict] = None,
+                        variables: dict = None, description: str = None, options: dict = None):
         """Update all entries of the Operator template in their respective ways."""
 
         if equations:
@@ -139,24 +168,24 @@ class TemplateLoader:
         rogue_variables = []
         for var in variables:
             # remove variables that are not present in the equation anymore
-            if not var in equations:
+            if var not in equations:
                 # save entries in list, since dictionary must not change size during iteration
                 rogue_variables.append(var)
 
         for var in rogue_variables:
             variables.pop(var)
 
-        if conditions:
-            # copy old conditions dict
-            conditions = cls.update_conditions(base.conditions, conditions)
+        if options:
+            # copy old options dict
+            options = cls.update_options(base.options, options)
         else:
-            conditions = base.conditions
+            options = base.options
 
         if not description:
             description = base.__doc__  # or do we want to enforce documenting a template?
 
         return OperatorTemplate(name=name, path=path, equations=equations, variables=variables,
-                                description=description, conditions=conditions)
+                                description=description, options=options)
 
     @staticmethod
     def update_equation(equation: str,  # original equation
@@ -205,20 +234,69 @@ class TemplateLoader:
 
         return updated
 
-    @staticmethod
-    def update_conditions(conditions: Union[dict, None], updates: dict):
 
-        if conditions:
-            updated = conditions.copy()
+class NodeTemplateLoader(TemplateLoader):
+    """Template loader specific to an OperatorTemplate. """
+
+    @classmethod
+    def update_template(cls, base, name: str, path: str, label: str,
+                        operators: Union[str, List[str], dict] = None,
+                        description: str = None,
+                        options: dict = None):
+        """Update all entries of a base node template to a more specific template."""
+
+        if operators:
+            cls.update_operators(base.operators, operators)
         else:
-            updated = {}
+            operators = base.operators
 
-        for cond, cond_dict in updates.items():
-            if cond in updated:
-                # update dictionary defining single condition
-                updated[cond].update(cond_dict)
-            else:
-                # copy new condition into conditions dictionary
-                updated.update({cond: cond_dict})
+        if options:
+            # copy old options dict
+            options = cls.update_options(base.options, options)
+        else:
+            options = base.options
 
+        if not description:
+            description = base.__doc__  # or do we want to enforce documenting a template?
+
+        return NodeTemplate(name=name, path=path, label=label, operators=operators,
+                            description=description, options=options)
+
+    @staticmethod
+    def update_operators(base_operators: dict, updates: Union[str, List[str], dict]):
+        """Update operators of a given template. Note that currently, only the new information is
+        propagated into the operators dictionary. Comparing or replacing operators does not work currently.
+
+        Parameters:
+        -----------
+
+        base_operators:
+            Reference to one or more operators in the base class.
+        updates:
+            Reference to one ore more operators in the child class
+            - string refers to path or name of single operator
+            - list refers to multiple operators of the same class
+            - dict contains operator path or name as key and options/defaults as sub-dictionaries
+        """
+        # updated = base_operators.copy()
+        updated = {}
+        if isinstance(updates, str):
+            updated[updates] = {}  # single operator path with no variations
+        elif isinstance(updates, list):
+            for path in updates:
+                updated[path] = {}  # multiple operator paths with no variations
+        elif isinstance(updates, dict):
+            for path, variations in updates.items():
+                updated[path] = variations
+            # dictionary with operator path as key and variations as sub-dictionary
+        else:
+            raise TypeError("Unable to interpret type of operator updates. Must be a single string,"
+                            "list of strings or dictionary.")
+        # # Check somewhere, if child operators have same input/output as base operators?
+        #
         return updated
+
+
+
+
+
