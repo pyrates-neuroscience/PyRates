@@ -2,16 +2,17 @@
 """
 
 # external imports
-from typing import List, Optional
+from typing import List, Optional, Union
 import tensorflow as tf
 
 # pyrates internal imports
 from pyrates.parser import RHSParser, LHSParser
 
-# meta infos
 from pyrates.abc import AbstractBaseTemplate
+from pyrates.utility.yaml_parser import TemplateLoader
 
-__author__ = "Richard Gast"
+# meta infos
+__author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
@@ -97,3 +98,101 @@ class OperatorTemplate(AbstractBaseTemplate):
         self.options = options
         # if options:
         #     raise NotImplementedError
+
+
+class OperatorTemplateLoader(TemplateLoader):
+    """Template loader specific to an OperatorTemplate. """
+
+    def __new__(cls, path):
+
+        return super().__new__(cls, path, OperatorTemplate)
+
+    @classmethod
+    def update_template(cls, base, name: str, path: str, equation: Union[str, dict] = None,
+                        variables: dict = None, description: str = None, options: dict = None):
+        """Update all entries of the Operator template in their respective ways."""
+
+        if equation:
+            # if it is a string, just replace
+            if isinstance(equation, str):
+                pass  # pass equation string to constructor
+            # else, update according to predefined rules, assuming dict structure
+            else:
+                equation = cls.update_equation(base.equation, **equation)
+        else:
+            # copy equation from parent template
+            equation = base.equation
+
+        if variables:
+            variables = cls.update_variables(base.variables, variables)
+        else:
+            variables = base.variables
+
+        rogue_variables = []
+        for var in variables:
+            # remove variables that are not present in the equation anymore
+            if var not in equation:
+                # save entries in list, since dictionary must not change size during iteration
+                rogue_variables.append(var)
+
+        for var in rogue_variables:
+            variables.pop(var)
+
+        if options:
+            options = cls.update_options(base.options, options)
+        else:
+            # copy old options dict
+            options = base.options
+
+        if not description:
+            description = base.__doc__  # or do we want to enforce documenting a template?
+
+        return OperatorTemplate(name=name, path=path, equation=equation, variables=variables,
+                                description=description, options=options)
+
+    @staticmethod
+    def update_equation(equation: str,  # original equation
+                        replace: dict = False,  # replace parts of the string
+                        remove: Union[list, tuple] = False,  # remove parts of the string
+                        append: str = False,  # append to the end of the string
+                        prepend: str = False,  # add to beginning of string
+                        ):
+
+        # replace existing terms by new ones
+        if replace:
+            for old, new in replace.items():
+                equation = equation.replace(old, new)
+                # this might fail, if multiple replacements refer or contain the same variables
+                # is it possible to call str.replace with tuples?
+
+        # remove terms
+        if remove:
+            for old in remove:
+                equation = equation.replace(old, "")
+
+        # append terms at the end of the equation string
+        if append:
+            # only allowing single append per update
+            equation = f"{equation} {append}"
+
+            # prepend terms at the beginning of the equation string
+        if prepend:
+            # only allowing single prepend per update
+            equation = f"{prepend} {equation}"
+
+        return equation
+
+    @staticmethod
+    def update_variables(variables: dict, updates: dict):
+
+        updated = variables.copy()
+
+        for var, var_dict in updates.items():
+            if var in updated:
+                # update dictionary defining single variable
+                updated[var].update(var_dict)
+            else:
+                # copy new variable into variables dictionary
+                updated.update({var: var_dict})
+
+        return updated
