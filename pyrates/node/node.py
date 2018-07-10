@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Union
 import tensorflow as tf
 
 # pyrates imports
-from pyrates.operator import Operator
+from pyrates.operator import Operator, OperatorTemplate
 from pyrates.parser import parse_dict
 
 # meta infos
@@ -117,13 +117,16 @@ class NodeTemplate(AbstractBaseTemplate):
 
         self.operators = {}  # dictionary with operator path as key and variations to the template as values
         if isinstance(operators, str):
-            self.operators[self._format_path(operators)] = {}  # single operator path with no variations
+            operator_template = self._load_operator_template(operators)
+            self.operators[operator_template] = {}  # single operator path with no variations
         elif isinstance(operators, list):
             for op in operators:
-                self.operators[self._format_path(op)] = {}  # multiple operator paths with no variations
+                operator_template = self._load_operator_template(op)
+                self.operators[operator_template] = {}  # multiple operator paths with no variations
         elif isinstance(operators, dict):
             for op, variations in operators.items():
-                self.operators[self._format_path(op)] = variations
+                operator_template = self._load_operator_template(op)
+                self.operators[operator_template] = variations
         # for op, variations in operators.items():
         #     if "." not in op:
         #         op = f"{path.split('.')[:-1]}.{op}"
@@ -132,6 +135,11 @@ class NodeTemplate(AbstractBaseTemplate):
         self.options = options
         if options:
             raise NotImplementedError
+
+    def _load_operator_template(self, path: str):
+        """Load an operator template based on a path"""
+        path = self._format_path(path)
+        return OperatorTemplate.from_yaml(path)
 
 
 class NodeTemplateLoader(TemplateLoader):
