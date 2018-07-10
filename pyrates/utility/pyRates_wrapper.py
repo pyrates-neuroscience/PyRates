@@ -4,7 +4,7 @@
 # external packages
 
 # pyrates internal imports
-from pyrates.circuit import *
+from pyrates.circuit import Circuit, CircuitFromScratch, CircuitFromPopulations
 from pyrates.utility import set_instance
 
 # meta infos

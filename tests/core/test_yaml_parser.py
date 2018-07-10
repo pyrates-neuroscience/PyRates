@@ -65,48 +65,84 @@ def test_import_operator_templates(operator):
     # assert template == TemplateLoader.cache[template.path]
 
 
-@pytest.mark.parametrize("node", ["pyrates.population.templates.JansenRitIN",
-                                  "pyrates.population.templates.JansenRitPC",
-                                  "pyrates.population.population.NeuralMass"
-                                  ])
-def test_import_node_templates(node):
-    """test import of node templates"""
+# @pytest.mark.parametrize("node", ["pyrates.population.templates.JansenRitIN",
+#                                   "pyrates.population.templates.JansenRitPC",
+#                                   "pyrates.population.population.NeuralMass"
+#                                   ])
+# def test_import_node_templates(node):
+#     """test import of node templates"""
+#
+#     from pyrates.utility.yaml_parser import TemplateLoader
+#     from pyrates.node.node import NodeTemplateLoader
+#
+#     template = NodeTemplate.from_yaml(node)  # type: NodeTemplate
+#
+#     assert template.path in TemplateLoader.cache  # just to check if cache is really shared among subclasses
+#
+#     cached_template = NodeTemplateLoader.cache[node]
+#     assert template is cached_template
+#     assert template.path == cached_template.path
+#     for op in template.operators:
+#         assert isinstance(op, OperatorTemplate)
+#     assert template.operators == cached_template.operators
+#     assert repr(template) == repr(cached_template) == f"<NodeTemplate '{node}'>"
 
+
+# @pytest.mark.parametrize("circuit", ["pyrates.circuit.templates.JansenRitCircuit",
+#                                      "pyrates.circuit.circuit.BaseCircuit"
+#                                      ])
+# def test_import_circuit_templates(circuit):
+#     """test import of circuit templates"""
+#
+#     from pyrates.circuit.circuit import CircuitTemplateLoader
+#
+#     template = CircuitTemplate.from_yaml(circuit)  # type: CircuitTemplate
+#
+#     assert template.path in CircuitTemplateLoader.cache
+#
+#     cached_template = CircuitTemplateLoader.cache[circuit]  # type: CircuitTemplate
+#
+#     assert template is cached_template
+#     assert template.path == cached_template.path
+#     assert template.nodes == cached_template.nodes
+#     assert template.edges == cached_template.edges
+#
+#     for value in template.coupling.values():
+#         assert isinstance(value, OperatorTemplate)
+#     for value in template.nodes.values():
+#         assert isinstance(value, NodeTemplate)
+#     assert repr(template) == repr(cached_template) == f"<CircuitTemplate '{circuit}'>"
+
+
+def test_full_jansen_rit_circuit_template_load():
+    """Test a simple circuit template, including all nodes and operators to be loaded."""
+
+    path = "pyrates.circuit.templates.JansenRitCircuit"
+    from pyrates.circuit import CircuitTemplate
+
+    template = CircuitTemplate.from_yaml(path)
+
+    # test, whether circuit is in loader cache
     from pyrates.utility.yaml_parser import TemplateLoader
-    from pyrates.node.node import NodeTemplateLoader
+    assert template is TemplateLoader.cache[path]
 
-    template = NodeTemplate.from_yaml(node)  # type: NodeTemplate
+    # test, whether node templates have been loaded successfully
+    nodes = {"JR_PC": "pyrates.population.templates.JansenRitPC",
+             "JR_IIN": "pyrates.population.templates.JansenRitIN",
+             "JR_EIN": "pyrates.population.templates.JansenRitIN"}
 
-    assert template.path in TemplateLoader.cache  # just to check if cache is really shared among subclasses
+    for key, value in nodes.items():
+        assert isinstance(template.nodes[key], NodeTemplate)
+        assert template.nodes[key] is TemplateLoader.cache[value]
+        # test operators in node templates
+        for op in template.nodes[key].operators:
+            assert op.path in TemplateLoader.cache
+            assert isinstance(op, OperatorTemplate)
 
-    cached_template = NodeTemplateLoader.cache[node]
-    assert template is cached_template
-    assert template.path == cached_template.path
-    assert template.operators == cached_template.operators
-    assert repr(template) == repr(cached_template) == f"<NodeTemplate '{node}'>"
+    # test, whether coupling operator has been loaded correctly
+    coupling_path = "pyrates.coupling.templates.LinearCoupling"
 
+    assert isinstance(template.coupling["LC"], OperatorTemplate)
+    assert template.coupling["LC"] is TemplateLoader.cache[coupling_path]
 
-@pytest.mark.parametrize("circuit", ["pyrates.circuit.templates.JansenRitCircuit",
-                                     "pyrates.circuit.circuit.BaseCircuit"
-                                     ])
-def test_import_circuit_templates(circuit):
-    """test import of node templates"""
-
-    from pyrates.circuit.circuit import CircuitTemplateLoader
-
-    template = CircuitTemplate.from_yaml(circuit)  # type: CircuitTemplate
-
-    assert template.path in CircuitTemplateLoader.cache
-
-    cached_template = CircuitTemplateLoader.cache[circuit]  # type: CircuitTemplate
-
-    assert template is cached_template
-    assert template.path == cached_template.path
-    assert template.nodes == cached_template.nodes
-    assert template.edges == cached_template.edges
-
-    for value in template.coupling.values():
-        assert isinstance(value, OperatorTemplate)
-    for value in template.nodes.values():
-        assert isinstance(value, NodeTemplate)
-    assert repr(template) == repr(cached_template) == f"<CircuitTemplate '{circuit}'>"
+    assert repr(template) == f"<CircuitTemplate '{path}'>"
