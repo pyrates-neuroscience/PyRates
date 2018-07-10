@@ -11,6 +11,7 @@ from pyrates.parser import parse_dict
 
 # meta infos
 from pyrates.abc import AbstractBaseTemplate
+from pyrates.utility.yaml_parser import TemplateLoader
 
 __author__ = "Richard Gast"
 __status__ = "Development"
@@ -131,3 +132,69 @@ class NodeTemplate(AbstractBaseTemplate):
         self.options = options
         if options:
             raise NotImplementedError
+
+
+class NodeTemplateLoader(TemplateLoader):
+    """Template loader specific to an OperatorTemplate. """
+
+    def __new__(cls, path):
+
+        return super().__new__(cls, path, NodeTemplate)
+
+    @classmethod
+    def update_template(cls, base, name: str, path: str, label: str,
+                        operators: Union[str, List[str], dict] = None,
+                        description: str = None,
+                        options: dict = None):
+        """Update all entries of a base node template to a more specific template."""
+
+        if operators:
+            cls.update_operators(base.operators, operators)
+        else:
+            operators = base.operators
+
+        if options:
+            # copy old options dict
+            options = cls.update_options(base.options, options)
+        else:
+            options = base.options
+
+        if not description:
+            description = base.__doc__  # or do we want to enforce documenting a template?
+
+        return NodeTemplate(name=name, path=path, label=label, operators=operators,
+                            description=description, options=options)
+
+    @staticmethod
+    def update_operators(base_operators: dict, updates: Union[str, List[str], dict]):
+        """Update operators of a given template. Note that currently, only the new information is
+        propagated into the operators dictionary. Comparing or replacing operators is not implemented.
+
+        Parameters:
+        -----------
+
+        base_operators:
+            Reference to one or more operators in the base class.
+        updates:
+            Reference to one ore more operators in the child class
+            - string refers to path or name of single operator
+            - list refers to multiple operators of the same class
+            - dict contains operator path or name as key and options/defaults as sub-dictionaries
+        """
+        # updated = base_operators.copy()
+        updated = {}
+        if isinstance(updates, str):
+            updated[updates] = {}  # single operator path with no variations
+        elif isinstance(updates, list):
+            for path in updates:
+                updated[path] = {}  # multiple operator paths with no variations
+        elif isinstance(updates, dict):
+            for path, variations in updates.items():
+                updated[path] = variations
+            # dictionary with operator path as key and variations as sub-dictionary
+        else:
+            raise TypeError("Unable to interpret type of operator updates. Must be a single string,"
+                            "list of strings or dictionary.")
+        # # Check somewhere, if child operators have same input/output as base operators?
+        #
+        return updated
