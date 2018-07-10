@@ -62,11 +62,14 @@ class Edge(object):
                 # create operator
                 #################
 
-                # replace the coupling operator arguments with the fields from source and target
-                inp = getattr(target, coupling_op_args['input'])
-                outp = getattr(source, coupling_op_args['output'])
-                coupling_op_args['input'] = {'variable_type': 'raw', 'variable': inp}
-                coupling_op_args['output'] = {'variable_type': 'raw', 'variable': outp}
+                # replace the coupling operator arguments with the fields from source and target where necessary
+                for key, val in coupling_op_args.items():
+                    if val['variable_type'] == 'source_var':
+                        var = getattr(source, val['name'])
+                        coupling_op_args[key] = {'variable_type': 'raw', 'variable': var}
+                    elif val['variable_type'] == 'target_var':
+                        var = getattr(target, val['name'])
+                        coupling_op_args[key] = {'variable_type': 'raw', 'variable': var}
 
                 # create tensorflow variables from the additional operator args
                 tf_vars, var_names = parse_dict(coupling_op_args, self.key, self.tf_graph)

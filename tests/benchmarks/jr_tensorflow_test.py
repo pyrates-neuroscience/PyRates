@@ -16,7 +16,7 @@ from matplotlib.pyplot import *
 
 # general
 step_size = 1e-3
-simulation_time = 1.0
+simulation_time = 5.0
 n_steps = int(simulation_time / step_size)
 
 
@@ -25,7 +25,7 @@ sparseness_e = 0.01
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 50
 
 # connectivity parameters
 c_intra = 135.
@@ -69,14 +69,20 @@ for i in range(n_jrcs):
                 C_i[i*3 + 2, j*3] = weight_i * c_inter_i
 
 # Input parameters
-inp_mean = 220.
-inp_var = 22.
-inp = np.zeros((n_steps, n_nodes, 2))
-inp[:, 0::3, 0] = inp_mean + np.random.randn(n_steps, n_jrcs) * inp_var
+#inp_mean = 220.
+#inp_var = 22.
+#inp = np.zeros((n_steps, n_nodes, 2))
+#inp[:, 0::3, 0] = inp_mean + np.random.randn(n_steps, n_jrcs) * inp_var
 
-# mask
-mask = np.zeros((n_nodes, 2))
-mask[0::3, 0] = 1
+# masks
+inp_mask = np.zeros((n_nodes, 2))
+inp_mask[0::3, 0] = 1
+
+# hebbian learning mask
+hebb_mask = np.ones((n_nodes, n_nodes))
+for i in range(n_jrcs):
+    hebb_mask[i*3:(i+1)*3, i*3:(i+1)*3] = 0.
+hebb_mask = np.argwhere(hebb_mask)
 
 # define network dictionary
 ###########################
@@ -86,34 +92,11 @@ mask[0::3, 0] = 1
 node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2./tau * X - 1./tau^2 * V_syn",
                                           "d/dt * V_syn = X",
                                           "U = mask * (220. + randn(cint) * 22.)"],
-                     'operator_rtp_soma': ["V = sum(V_syn,ax,keep)"],
-                     'operator_ptr': ["m_out = m_max / (1. + e^(r * (v_th - V)))"],
+                     'operator_rtp_soma': ["V = sum(V_syn,1,True)"],
+                     'operator_ptr': ["m_out_old = m_out",
+                                      "m_out = m_max / (1. + e^(r * (v_th - V)))",
+                                      "d/dt * v_th[0:-1:3] = kappa * (m_out[0:-1:3] - m_tar)"],
 
-                     's': {'name': 's',
-                           'variable_type': 'state_variable',
-                           'data_type': 'float32',
-                           'shape': (n_nodes, 1),
-                           'initial_value': 0.},
-                     'bf': {'name': 'bf',
-                            'variable_type': 'state_variable',
-                            'data_type': 'float32',
-                            'shape': (n_nodes, 1),
-                            'initial_value': 0.},
-                     'bv': {'name': 'bv',
-                            'variable_type': 'state_variable',
-                            'data_type': 'float32',
-                            'shape': (n_nodes, 1),
-                            'initial_value': 0.},
-                     'dhg': {'name': 'dhg',
-                             'variable_type': 'state_variable',
-                             'data_type': 'float32',
-                             'shape': (n_nodes, 1),
-                             'initial_value': 0.},
-                     'bold': {'name': 'bold',
-                              'variable_type': 'state_variable',
-                              'data_type': 'float32',
-                              'shape': (n_nodes, 1),
-                              'initial_value': 0.},
                      'V': {'name': 'V',
                            'variable_type': 'state_variable',
                            'data_type': 'float32',
@@ -134,6 +117,11 @@ node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2./ta
                                'data_type': 'float32',
                                'shape': (n_nodes, 1),
                                'initial_value': 0.16},
+                     'm_out_old': {'name': 'm_out_old',
+                                   'variable_type': 'state_variable',
+                                   'data_type': 'float32',
+                                   'shape': (n_nodes, 1),
+                                   'initial_value': 0.},
                      'X': {'name': 'X',
                            'variable_type': 'state_variable',
                            'data_type': 'float32',
@@ -160,17 +148,27 @@ node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2./ta
                            'shape': (),
                            'initial_value': 560.},
                      'v_th': {'name': 'v_th',
-                              'variable_type': 'constant',
+                              'variable_type': 'state_variable',
                               'data_type': 'float32',
-                              'shape': (),
+                              'shape': (n_nodes, 1),
                               'initial_value': 6e-3},
+                     'kappa': {'name': 'kappa',
+                               'variable_type': 'constant',
+                               'data_type': 'float32',
+                               'shape': (),
+                               'initial_value': 0.1},
+                     'm_tar': {'name': 'm_tar',
+                               'variable_type': 'constant',
+                               'data_type': 'float32',
+                               'shape': (),
+                               'initial_value': 0.8},
                      'U': {'name': 'U',
                            'variable_type': 'state_variable',
                            'data_type': 'float32',
                            'shape': (n_nodes, 2),
                            'initial_value': 220.},
                      'randn': {'variable_type': 'raw',
-                              'variable': tf.random_normal},
+                               'variable': tf.random_normal},
                      'cint': {'variable_type': 'raw',
                               'variable': (n_nodes, 2)
                               },
@@ -178,16 +176,7 @@ node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2./ta
                               'variable_type': 'constant',
                               'data_type': 'float32',
                               'shape': (n_nodes, 2),
-                              'initial_value': mask},
-                     'reduce_sum': {'variable_type': 'raw',
-                                    'variable': tf.reduce_sum},
-                     'ax': {'name': 'ax',
-                            'variable_type': 'constant',
-                            'data_type': 'int32',
-                            'shape': (),
-                            'initial_value': 1},
-                     'keep': {'variable_type': 'raw',
-                              'variable': True}
+                              'initial_value': inp_mask}
                      }
              }
 
@@ -409,21 +398,59 @@ node_dict = {'jrc': {'operator_rtp_syn': ["d/dt * X = H/tau * (m_in + U) - 2./ta
 
 # For the Vec. Dict.
 ####################
-connection_dict = {'coupling_operators': [["input[:,0:1] = C_e @ output",
-                                           "input[:,1:2] = C_i @ output"]],
+connection_dict = {'coupling_operators': [["out_transp = output.T",
+                                           "new_inp = C_e * tile(out_transp,shape2)",
+                                           "input[:,0] = sum(new_inp,1)",
+                                           "input[:,1:2] = C_i @ output",
+                                           "d/dt * C_e[mask] = C_e[mask] + dt * lr * (new_inp * tile(old_out,shape))[mask]",
+                                           "C_norm = sum(C_e,1,True)",
+                                           "C_e[mask] = 10. * (C_e / tile(C_norm,shape))[mask]"]],
                    'coupling_operator_args': {'C_e': {'name': 'C_e',
-                                                       'variable_type': 'constant',
-                                                       'data_type': 'float32',
-                                                       'shape': (n_nodes, n_nodes),
-                                                       'initial_value': C_e},
-                                               'C_i': {'name': 'C_i',
-                                                       'variable_type': 'constant',
-                                                       'data_type': 'float32',
-                                                       'shape': (n_nodes, n_nodes),
-                                                       'initial_value': C_i},
-                                               'input': 'm_in',
-                                               'output': 'm_out'
-                                               },
+                                                      'variable_type': 'state_variable',
+                                                      'data_type': 'float32',
+                                                      'shape': (n_nodes, n_nodes),
+                                                      'initial_value': C_e},
+                                              'C_i': {'name': 'C_i',
+                                                      'variable_type': 'constant',
+                                                      'data_type': 'float32',
+                                                      'shape': (n_nodes, n_nodes),
+                                                      'initial_value': C_i},
+                                              'C_norm': {'name': 'C_norm',
+                                                         'variable_type': 'state_variable',
+                                                         'data_type': 'float32',
+                                                         'shape': (n_nodes, 1),
+                                                         'initial_value': np.sum(C_e, 1)},
+                                              'out_transp': {'variable_type': 'state_variable',
+                                                             'data_type': 'float32',
+                                                             'shape': (1, n_nodes),
+                                                             'name': 'out_transp',
+                                                             'initial_value': 0.},
+                                              'new_inp': {'variable_type': 'state_variable',
+                                                          'data_type': 'float32',
+                                                          'shape': (n_nodes, n_nodes),
+                                                          'name': 'new_inp',
+                                                          'initial_value': 0.},
+                                              'input': {'variable_type': 'target_var',
+                                                        'name': 'm_in'},
+                                              'output': {'variable_type': 'source_var',
+                                                         'name': 'm_out'},
+                                              'old_out': {'variable_type': 'source_var',
+                                                          'name': 'm_out_old'},
+                                              'lr': {'variable_type': 'constant',
+                                                     'data_type': 'float32',
+                                                     'shape': (),
+                                                     'initial_value': 0.1,
+                                                     'name': 'lr'},
+                                              'shape': {'variable_type': 'raw',
+                                                        'variable': (1, n_nodes)},
+                                              'shape2': {'variable_type': 'raw',
+                                                         'variable': (n_nodes, 1)},
+                                              'mask': {'variable_type': 'constant',
+                                                       'data_type': 'int32',
+                                                       'shape': hebb_mask.shape,
+                                                       'initial_value': hebb_mask,
+                                                       'name': 'mask2'},
+                                              },
                    'sources': ['jrc'],
                    'targets': ['jrc']
                    }

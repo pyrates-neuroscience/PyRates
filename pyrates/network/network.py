@@ -108,6 +108,13 @@ class Network(object):
         sources = connection_dict['sources']
         targets = connection_dict['targets']
 
+        # pass integration step-size to coupling op arguments
+        coupling_op_args['dt'] = {'variable_type': 'constant',
+                                  'name': 'dt',
+                                  'shape': (),
+                                  'data_type': 'float32',
+                                  'initial_value': self.dt}
+
         # check dimensionality of coupling_ops
         if len(coupling_ops) < len(sources):
             coupling_ops = [coupling_ops[0] for _ in range(len(sources))]

@@ -6,10 +6,10 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 import math
 import tensorflow as tf
-import typing as type
+import typing as tp
+import numpy as np
 
 # pyrates internal imports
-from pyrates.solver import Solver
 
 # meta infos
 __author__ = "Richard Gast"
@@ -42,7 +42,7 @@ class ExpressionParser(ParserElement):
 
     """
     
-    def __init__(self, expr_str: str, args: dict, tf_graph: type.Optional[tf.Graph] = None) -> None:
+    def __init__(self, expr_str: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None) -> None:
         """Instantiates expression parser.
         """
         
@@ -81,15 +81,15 @@ class ExpressionParser(ParserElement):
                                 Optional(e + Word("+-" + nums, nums)))
             num_int = Word("+-" + nums, nums)
 
-            # indices
-            idx_1d = Literal(":") | \
-                     Combine(num_int + Optional(":" + Optional(num_int)) + Optional(":" + Optional(num_int)))
-            idx = Combine(idx_1d + Optional(comma + idx_1d) + Optional(comma + idx_1d) + Optional(comma + idx_1d))
-
             # variable and function names
             name = Word(alphas, alphas + nums + "_$")
             arg = name | num_float | num_int | Literal("True") | Literal("False")
             func_args = Combine(arg + ZeroOrMore(comma + arg))
+
+            # indices
+            idx_1d = Literal(":") | name | \
+                     Combine(num_int + Optional(":" + Optional(num_int)) + Optional(":" + Optional(num_int)))
+            idx = Combine(idx_1d + Optional(comma + idx_1d) + Optional(comma + idx_1d) + Optional(comma + idx_1d))
 
             # basic mathematical operations
             plus = Literal("+")
@@ -122,7 +122,7 @@ class ExpressionParser(ParserElement):
             # hierarchical relationships between operations
             func = atom + Optional(par_l + func_args.setParseAction(self.push_first) + par_r)
             indexed = func + ZeroOrMore((idx_l + idx + idx_r).setParseAction(self.push_all))
-            factor << indexed + ZeroOrMore((op_exp + factor).setParseAction(self.push_first))
+            factor << indexed + ZeroOrMore((op_exp + Optional(factor)).setParseAction(self.push_first))
             term = factor + ZeroOrMore((op_mult + factor).setParseAction(self.push_first))
             self.expr << term + ZeroOrMore((op_add + term).setParseAction(self.push_first))
 
@@ -146,6 +146,7 @@ class ExpressionParser(ParserElement):
                       "abs": tf.abs,
                       "round": tf.to_int32,
                       "sum": tf.reduce_sum,
+                      "tile": tf.tile
                       }
 
         # add functions from args dictionary, if passed
@@ -186,7 +187,7 @@ class ExpressionParser(ParserElement):
         """
         self.expr_stack.append(toks[-1])
 
-    def parse(self, expr_stack: list) -> type.Union[tf.Operation, tf.Tensor, tf.Variable, float, int]:
+    def parse(self, expr_stack: list) -> tp.Union[tf.Operation, tf.Tensor, tf.Variable, float, int]:
         """Parse elements in expression stack to tensorflow operation.
 
         Parameters
@@ -221,13 +222,25 @@ class ExpressionParser(ParserElement):
                 op1 = self.parse(expr_stack)
                 self._op_tmp = self.ops[op](op1, op2)
 
+            elif op in ".T.I":
+
+                # transpose/invert expression
+                self._op_tmp = self.ops[op](self.parse(expr_stack))
+
             elif op == "]":
 
                 # apply indexing to element
                 idx = expr_stack.pop()
                 expr_stack.pop()
-                op_to_idx = self.parse([expr_stack.pop()])
-                self._op_tmp = eval(f"op_to_idx[{idx}]")
+                op_to_idx = self.parse(expr_stack)
+                if idx in self.args.keys():
+                    idx = self.args[idx]
+                    if idx.dtype == 'bool':
+                        self._op_tmp = tf.boolean_mask(op_to_idx, idx)
+                    else:
+                        self._op_tmp = tf.gather_nd(op_to_idx, idx)
+                else:
+                    self._op_tmp = eval(f"op_to_idx[{idx}]")
 
             elif op == "PI":
 
@@ -250,15 +263,20 @@ class ExpressionParser(ParserElement):
                 # extract variable from args dict
                 self._op_tmp = self.args[op]
 
-            elif op[0].isalpha():
-
-                # return float(1) for undefined constants
-                self._op_tmp = 1.
-
             elif "." in op:
 
                 # return float
                 self._op_tmp = float(op)
+
+            elif op in "TruetrueFalsefalse":
+
+                # return boolean
+                self._op_tmp = True if op in "Truetrue" else False
+
+            elif op[0].isalpha():
+
+                # return float(1) for undefined constants
+                self._op_tmp = 1.
 
             else:
 
@@ -294,7 +312,7 @@ class EquationParser(object):
 
     """
 
-    def __init__(self, expr_str: str, args: dict, tf_graph: type.Optional[tf.Graph] = None) -> None:
+    def __init__(self, expr_str: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None) -> None:
         """Instantiates equation parser.
         """
 
@@ -319,45 +337,185 @@ class EquationParser(object):
         lhs_parser = ExpressionParser(lhs, self.args, self.tf_graph)
         lhs_list = lhs_parser.expr_list.copy()
 
-        # find state variable in lhs and solve for it
-        #############################################
+        # find state variable in lhs
+        ############################
 
-        # search for state variable in lhs
         var_n = 0
         self.target_var = None
+        idx = None
+
+        # go through list of lhs operations
         while len(lhs_list) > 0:
+
             symb = lhs_list.pop(0)
+
+            # identifies symb as target state variable
             if symb not in 'dt/*[]':
+
                 if symb not in self.args.keys():
                     raise ValueError(f'Could not find state variable in arguments dictionary. Please add {symb} '
                                      'to `args`.')
                 self.target_var = self.args[symb]
                 if var_n > 0:
-                    raise ValueError('Multiple potential state variables found in left-hand side of equation. Please'
+                    raise ValueError('Multiple potential state variables found in left-hand side of equation. Please '
                                      'reformulate equation to follow one of the following formulations:'
                                      'y = f(...); d/dt y = f(...); Y[idx] = f(...).')
                 var_n += 1
+
+            # identifies indexing of state variable
             elif symb == '[':
                 if not self.target_var:
-                    raise ValueError('Beginning of index found befor state variable could be identified. Please'
+                    raise ValueError('Beginning of index found befor state variable could be identified. Please '
                                      'reformulate equation to follow one of the following formulations:'
                                      'y = f(...); d/dt y = f(...); Y[idx] = f(...).')
-                idx = lhs_list.pop(0)
-                self.target_var = eval(f"self.target_var[{idx}]")
+                idx = self.parse_idx(lhs_list.pop(0))
 
         if self.target_var is None:
-            raise ValueError('Could not find state variable in left-hand side of equation. Please'
+            raise ValueError('Could not find state variable in left-hand side of equation. Please '
                              'reformulate equation to follow one of the following formulations:'
                              'y = f(...); d/dt y = f(...); Y[idx] = f(...).')
 
         # solve for state variable
+        ##########################
+
         if 'd' in list(lhs_parser.expr_list) and 'dt' in list(lhs_parser.expr_list):
+
             if 'dt' not in self.args.keys():
                 raise ValueError('Integration step-size has to be passed with differential equations. Please '
                                  'add a field `dt` to `args` with the corresponding value.')
-            solver = Solver(rhs_op, self.target_var, self.args['dt'], self.tf_graph)
-            with self.tf_graph.as_default():
-                self.lhs_update = solver.solve()
+
+            solver = Solver(rhs=rhs_op,
+                            state_var=self.target_var,
+                            state_var_idx=idx,
+                            dt=self.args['dt'],
+                            tf_graph=self.tf_graph)
+
         else:
-            with self.tf_graph.as_default():
-                self.lhs_update = self.target_var.assign(rhs_op)
+
+            solver = Solver(rhs=rhs_op,
+                            state_var=self.target_var,
+                            state_var_idx=idx,
+                            dt=None,
+                            tf_graph=self.tf_graph)
+
+        # collect solver update operation
+        with self.tf_graph.as_default():
+            self.lhs_update = solver.solve()
+
+    def parse_idx(self, idx):
+        """Creates list of indices from idx.
+        """
+
+        # retrieve index from args dictionary, if provided
+        if idx in self.args.keys():
+            idx = self.args[idx]
+
+        if type(idx) == str:
+            test_var = np.zeros(self.target_var.shape, dtype=int)
+            exec(f"test_var[{idx}] = 1")
+            idx = np.argwhere(test_var == 1)
+        elif idx.dtype == 'bool':
+            idx = np.argwhere(idx)
+        else:
+            if idx.shape[1] != len(self.target_var.shape):
+                raise ValueError('Each entry in indices needs to math the dimensionality of the target variable.')
+
+        return idx
+
+
+class Solver(object):
+    """Base solver class (currently only implements basic forward euler).
+
+    Parameters
+    ----------
+    rhs
+        Tensorflow operation that represents right-hand side of a differential equation.
+    state_var
+        Tensorflow variable that should be integrated over time.
+    dt
+        Step-size of the integration over time [unit = s].
+    tf_graph
+        Tensorflow graph on which rhs and state_var have been created.
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    def __init__(self,
+                 rhs: tp.Union[tf.Operation, tf.Tensor],
+                 state_var: tp.Union[tf.Variable, tf.Tensor],
+                 state_var_idx: tp.Optional[np.ndarray] = None,
+                 dt: tp.Optional[float] = None,
+                 tf_graph: tp.Optional[tf.Graph] = None
+                 ) -> None:
+        """Instantiates solver.
+        """
+
+        # initialize instance attributes
+        ################################
+
+        self.rhs = rhs
+        self.state_var = state_var
+        self.state_var_idx = state_var_idx
+        self.dt = dt
+        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+        # define integration expression
+        ###############################
+
+        # TODO: Implement Butcher tableau and its translation into various solver algorithms
+        if self.dt is None:
+            self.integration_expressions = ["rhs"]
+        else:
+            self.integration_expressions = ["dt * rhs"]
+
+    def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
+        """Creates tensorflow method for performing a single differentiation step.
+        """
+
+        with self.tf_graph.as_default():
+
+            steps = list()
+            steps.append(tf.no_op())
+
+            # go through integration expressions to solve DE
+            ################################################
+
+            for expr in self.integration_expressions:
+
+                # parse the integration expression
+                expr_args = {'dt': self.dt, 'rhs': self.rhs}
+                parser = ExpressionParser(expr, expr_args, self.tf_graph)
+
+                # update the target state variable
+                with tf.control_dependencies([steps[-1]]):
+
+                    if self.state_var_idx is None:
+
+                        if self.dt is None:
+                            steps.append(tf.assign(self.state_var, parser.op))
+                        else:
+                            steps.append(tf.assign_add(self.state_var, parser.op))
+                    else:
+
+                        if self.dt is None:
+                            steps.append(tf.scatter_nd_update(ref=self.state_var,
+                                                              indices=self.state_var_idx,
+                                                              updates=tf.squeeze(parser.op)))
+                        else:
+                            steps.append(tf.scatter_nd_add(ref=self.state_var,
+                                                           indices=self.state_var_idx,
+                                                           updates=tf.squeeze(parser.op)))
+
+            steps.pop(0)
+
+        return tf.group(steps)
