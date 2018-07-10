@@ -7,38 +7,92 @@ arguments. For more detailed descriptions, see the respective docstrings.
 """
 
 # external packages
-from typing import List
+from typing import List, Dict
+from networkx import MultiDiGraph
 
 # pyrates internal imports
 from pyrates.abc import AbstractBaseTemplate
 from pyrates.node import NodeTemplate
 
-# meta infos
 from pyrates.utility.yaml_parser import TemplateLoader
 from pyrates.operator.operator import OperatorTemplate
 
+# meta infos
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
+class Circuit(MultiDiGraph):
+    """Custom graph datastructure that represents a network of nodes and edges with associated equations
+    and variables."""
 
+    def __init__(self, label: str, nodes: dict=None,
+                 coupling: Dict[str, OperatorTemplate]=None,
+                 edges=None, template: str=None, **attr):
+        """
+        Parameters:
+        -----------
+        label
+            string label, used if circuit is part of other circuits
+        nodes
+            dictionary of nodes of form {node_label:NodeTemplate instance}
+        operators
+            dictionary of coupling operators of form {op_label:OperatorTemplate}
+        edges
+            list of tuples (source:str, target:str, coupling_operator:str, coupling_values:dict)
+        attr
+            attribute keyword arguments that are passed to networkx graph constructor.
+        """
 
+        super().__init__(**attr)
+        self.label = label
+        self.template = template
 
+        self.add_nodes_from(nodes, from_templates=True)
 
+        coupling = {key: op.apply() for (key, op) in coupling.items()}
 
+        self.add_edges_from(edges, coupling)
 
+    def add_nodes_from(self, nodes, from_templates=False, **attr):
+        """Add multiple nodes"""
 
+        if from_templates:
+            node_list = []
+            for label, template in nodes.items():
+                node_list.append((label, {"node": template.apply()}))
+                # assuming unique labels
+            super().add_nodes_from(node_list, **attr)
+        else:
+            super().add_nodes_from(nodes, **attr)
 
+    def add_node(self, label: str, template: NodeTemplate=None, options: dict=None, **attr):
+        """Add single node"""
 
+        if template:
+            super().add_node(label, node=template.apply(options), **attr)
+        else:
+            super().add_node(label, **attr)
 
+    def add_edges_from(self, edges, coupling:dict=None, **attr):
+        """Add multiple edges"""
 
+        if coupling:
+            edge_list = []
+            for (source, target, key, values) in edges:
+                edge_list.append((source, target, {"coupling": coupling[key], "values": values}))
+            super().add_edges_from(edge_list, **attr)
+        else:
+            super().add_edges_from(edges, **attr)
 
+    # def __repr__(self):
+    #     return f"Circuit '{self.label}'"
 
 
 class CircuitTemplate(AbstractBaseTemplate):
 
-    def __init__(self, name: str, path: str, description: str, label: str,
-                 nodes: dict=None, coupling: dict=None, edges: List[list]=None,
+    def __init__(self, name: str, path: str, description: str, label: str="circuit",
+                 nodes: dict=None, coupling: dict=None, edges: List[tuple]=None,
                  options: dict=None):
 
         super().__init__(name, path, description)
@@ -67,6 +121,17 @@ class CircuitTemplate(AbstractBaseTemplate):
         else:
             self.options = {}
 
+    def apply(self, label: str=None, **options):
+        """Create a Circuit graph instance based on the template, possibly applying predefined options"""
+
+        if options:
+            raise NotImplementedError("Unrecognised keyword argument. "
+                                      "Note: The use of options is not implemented yet.")
+        if not label:
+            label = self.label
+
+        return Circuit(label, self.nodes, self.coupling, self.edges, self.path)
+
 
 class CircuitTemplateLoader(TemplateLoader):
 
@@ -77,7 +142,7 @@ class CircuitTemplateLoader(TemplateLoader):
     @classmethod
     def update_template(cls, base, name: str, path: str, description: str = None,
                         label: str = None, nodes: dict=None, coupling: dict=None,
-                        edges: List[list]=None, options: dict = None):
+                        edges: List[tuple]=None, options: dict = None):
         """Update all entries of the circuit template in their respective ways."""
 
         if not description:
@@ -136,7 +201,7 @@ class CircuitTemplateLoader(TemplateLoader):
         return updated
 
     @staticmethod
-    def update_edges(base_edges: list, updates: list):
+    def update_edges(base_edges: List[tuple], updates: List[tuple]):
         """Add edges to list of edges. Removing or altering is currently not supported."""
 
         updated = base_edges.copy()

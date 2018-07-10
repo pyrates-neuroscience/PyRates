@@ -92,6 +92,8 @@ class OperatorTemplate(AbstractBaseTemplate):
     initialization conditions. The template can be used to create variations of a specific
     equation or variables."""
 
+    instance_cache = {}
+
     def __init__(self, name: str, path: str, equation: str, variables: dict, description: str,
                  options: dict = None):
         """For now: only allow single equation in operator template."""
@@ -104,6 +106,19 @@ class OperatorTemplate(AbstractBaseTemplate):
         self.options = options
         # if options:
         #     raise NotImplementedError
+
+    def apply(self, options: dict =None):
+
+        if options:
+            hashable = (self.path, tuple((key, value) for key, value in options.items()))
+        else:
+            hashable = (self.path, ())
+
+        if hashable in self.instance_cache:
+            return self.instance_cache[hashable]
+        else:
+            return OperatorInstance(self, options)
+        # TODO: return operator instance
 
 
 class OperatorTemplateLoader(TemplateLoader):
