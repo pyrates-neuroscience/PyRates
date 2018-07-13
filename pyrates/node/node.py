@@ -95,6 +95,8 @@ class NodeTemplate(AbstractBaseTemplate):
     """Generic template for a node in the computational network graph. A single node may encompass several
     different operators. One template defines a typical structure of a given node type."""
 
+    label_cache = set()
+
     def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
                  description: str, label: str=None, options: dict = None):
         """For now: only allow single equation in operator template."""
@@ -125,12 +127,43 @@ class NodeTemplate(AbstractBaseTemplate):
 
         self.options = options
         if options:
-            raise NotImplementedError
+            raise NotImplementedError("Using options in node templates is not implemented yet.")
 
     def _load_operator_template(self, path: str):
         """Load an operator template based on a path"""
         path = self._format_path(path)
         return OperatorTemplate.from_yaml(path)
+
+    # def apply(self, options: dict = None, max_iter: int=10000):
+    def apply(self, options: dict = None):
+
+        if options:
+            raise NotImplementedError("Applying options to a template is not implemented yet.")
+
+        # # assign default label if not explicitly given
+        # if not label:
+        #     label = self.label
+        #
+        # # make sure labels are unique
+        # if label in self.label_cache:
+        #     _idx = 0
+        #     while _idx<=max_iter:
+        #         if f"{label}:_iter" not in self.label_cache:
+        #             label = f"{label}:_iter"
+        #             break
+        # self.label_cache.add(label)
+
+        # create instance as dictionary
+        # instance = {"operators": {}, "label": label, "template": self}
+        instance = {"operators": {}, "template": self}
+        for op_template, op_options in self.operators.items():
+            op_instance, op_values, key = op_template.apply(op_options, return_key=True)
+            instance["operators"][key] = {"operator": op_instance,
+                                          "values": op_values}
+
+        return instance
+
+
 
 
 class NodeTemplateLoader(TemplateLoader):

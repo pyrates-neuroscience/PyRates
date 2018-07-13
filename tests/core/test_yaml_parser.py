@@ -146,3 +146,15 @@ def test_full_jansen_rit_circuit_template_load():
     assert template.coupling["LC"] is TemplateLoader.cache[coupling_path]
 
     assert repr(template) == f"<CircuitTemplate '{path}'>"
+
+
+def test_circuit_instantiation():
+    """Test, if apply() functions all work properly"""
+    path = "pyrates.circuit.templates.JansenRitCircuit"
+    from pyrates.circuit import CircuitTemplate
+
+    template = CircuitTemplate.from_yaml(path)
+
+    circuit = template.apply()
+    # test if two edges refer to the same coupling operator by comparing ids
+    assert circuit.edges[("JR_PC", "JR_IIN", 0)]["coupling"] is circuit.edges[('JR_PC', 'JR_EIN', 0)]["coupling"]
