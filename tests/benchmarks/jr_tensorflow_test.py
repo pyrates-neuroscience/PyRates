@@ -4,6 +4,7 @@
 import tensorflow as tf
 from pyrates.network import Network
 from matplotlib.pyplot import *
+from pyrates.utility import mne_from_dataframe
 
 # Comment this out for making GPU available for Tensorflow.
 ###########################################################
@@ -25,7 +26,7 @@ sparseness_e = 0.01
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 50
+n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
@@ -534,10 +535,6 @@ results, ActTime = net.run(simulation_time=simulation_time,
 
 # results
 #########
-fig, axes = subplots(figsize=(14, 5))
-axes.plot(np.squeeze(np.array(results)))
-legend(['PCs', 'EINs', 'IINs'])
-axes.set_xlabel('timesteps')
-axes.set_ylabel('membrane potential')
-axes.set_title('Jansen-Rit NMM')
-show()
+
+mne_obj = mne_from_dataframe(sim_results=results)
+mne_obj.plot()

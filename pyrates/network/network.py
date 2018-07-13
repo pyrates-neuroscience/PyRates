@@ -4,9 +4,10 @@ manages all computations/operations and a networkx graph that represents the net
 
 # external imports
 import tensorflow as tf
-from typing import Optional, List
-from copy import deepcopy
+from typing import Optional, Tuple
+from pandas import DataFrame
 import time as t
+import numpy as np
 
 # pyrates imports
 from pyrates.node import Node
@@ -154,7 +155,7 @@ class Network(object):
             self.step = tf.group(self.update, self.project, name='step')
 
     def run(self, simulation_time: Optional[float] = None, inputs: Optional[dict] = None,
-            outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None) -> list:
+            outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None) -> Tuple[DataFrame, float]:
         """Simulate the network behavior over time via a tensorflow session.
 
         Parameters
@@ -183,6 +184,7 @@ class Network(object):
             sampling_step_size = self.dt
         sampling_steps = int(sampling_step_size / self.dt)
 
+        # define output variables
         if not outputs:
             outputs = dict()
             for name, node in self.nodes.items():
@@ -201,6 +203,7 @@ class Network(object):
                 inp.append(inp_dict)
         else:
             inp = [None for _ in range(sim_steps)]
+
         # run simulation
         ################
 
@@ -220,9 +223,10 @@ class Network(object):
                 sess.run(self.step, inp[step])
 
                 if step % sampling_steps == 0:
-                    results.append([var.eval() for var in outputs.values()])
+                    results.append([np.squeeze(var.eval()) for var in outputs.values()])
             t_end = t.time()
 
+            # display simulation time
             if simulation_time:
                 print(f"{simulation_time}s of network behavior were simulated in {t_end - t_start} s given a "
                       f"simulation resolution of {self.dt} s.")
@@ -230,4 +234,19 @@ class Network(object):
                 print(f"Network computations finished after {t_end - t_start} seconds.")
             # writer.close()
 
-        return results, (t_end - t_start)
+            # store results in pandas dataframe
+            time = 0.
+            times = []
+            for i in range(sim_steps):
+                time += self.dt
+                times.append(time)
+
+            results = np.array(results)
+            n_steps, n_vars, n_nodes = results.shape
+            results = np.reshape(results, (n_steps, n_nodes*n_vars))
+            columns = []
+            for var in outputs.keys():
+                columns += [f"{var}_{i}" for i in range(n_nodes)]
+            results_final = DataFrame(data=results, columns=columns, index=times)
+
+        return results_final, (t_end - t_start)

@@ -14,7 +14,7 @@ from .bio_features import *
 from .filestorage import get_simulation_data
 from .filestorage import save_simulation_data_to_file
 from .filestorage import read_simulation_data_from_file
-from .mne_wrapper import mne_from_csv, mne_from_observer
+from .mne_wrapper import mne_from_csv, mne_from_dataframe
 
 # from .construct import construct_circuit_from_file  # this one fails tests due to circular import
 
