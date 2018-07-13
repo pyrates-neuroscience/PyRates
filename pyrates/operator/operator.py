@@ -2,6 +2,7 @@
 """
 
 # external imports
+import re
 from typing import List, Optional, Union
 import tensorflow as tf
 
@@ -92,7 +93,7 @@ class OperatorTemplate(AbstractBaseTemplate):
     initialization conditions. The template can be used to create variations of a specific
     equation or variables."""
 
-    instance_cache = {}
+    cache = {}  # tracks all unique instances of applied operator templates
 
     def __init__(self, name: str, path: str, equation: str, variables: dict, description: str,
                  options: dict = None):
@@ -102,23 +103,100 @@ class OperatorTemplate(AbstractBaseTemplate):
 
         self.equation = equation
         self.variables = variables
-
         self.options = options
         # if options:
         #     raise NotImplementedError
 
-    def apply(self, options: dict =None):
+    def apply(self, options: dict = None, return_key=False):
+        """Returns the non-editable but unique, cashed definition of the operator."""
 
-        if options:
-            hashable = (self.path, tuple((key, value) for key, value in options.items()))
+        if not options:
+            key = (self.path, None)
         else:
-            hashable = (self.path, ())
+            key = (self.path, frozenset(options.items()))
 
-        if hashable in self.instance_cache:
-            return self.instance_cache[hashable]
+        try:
+            instance = self.cache[key]
+            _, values = self._separate_variables()
+        except KeyError:
+            if options:
+                raise NotImplementedError("Applying options to a template is not implemented yet.")
+            variables, values = self._separate_variables()
+            instance = dict(equation=self.equation, variables=variables)
+            self.cache[key] = instance
+
+        if return_key:
+            return instance, values, key
         else:
-            return OperatorInstance(self, options)
+            return instance, values
         # TODO: return operator instance
+
+    def _separate_variables(self):
+        """Return variable definitions and the respective values."""
+        # this part can be improved a lot with a proper expression parser
+
+        variables = {}
+        values = {}
+        for variable, properties in self.variables.items():
+            var_dict = {}
+            for prop, expr in properties.items():
+                if prop == "default":
+                    var_dict["variable_type"], var_dict["data_type"], value = self._parse_vprops(expr)
+                    if value:
+                        values[variable] = value
+                    # else: don't pass information for that variable
+                else:
+                    var_dict[prop] = expr
+            variables[variable] = var_dict
+
+        return variables, values
+
+    @staticmethod
+    def _parse_vprops(expr: Union[str, int, float]):
+        """Naive version of a parser for the default key of variables in a template. Returns data type,
+        variable type and default value of the variable."""
+
+        value = None
+        if isinstance(expr, int):
+            vtype = "constant"
+            value = expr
+            dtype = "int32"
+        elif isinstance(expr, float):
+            vtype = "constant"
+            value = expr
+            dtype = "float32"
+        else:
+            if expr.startswith(("input", "output", "variable")):
+                vtype = "state_variable"
+            elif expr.startswith("constant"):
+                vtype = "constant"
+            elif expr.startswith("placeholder"):
+                vtype = "placeholder"
+            else:
+                try:
+                    if "." in expr:
+                        value = float(expr)
+                    else:
+                        value = int(expr)
+                    vtype = "constant"
+                except ValueError:
+                    raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
+
+            if expr.endswith("(float)"):
+                dtype = "float32" # why float32 and not float64?
+            elif expr.endswith("(int)"):
+                dtype = "int32"
+            elif "." in expr:
+                dtype = "float32"
+                value = re.search("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)", expr).group()
+                # see https://stackoverflow.com/questions/12643009/regular-expression-for-floating-point-numbers
+            elif re.search("[0-9]+", expr):
+                dtype = "int32"
+                value = re.search("[0-9]+", expr).group()
+            else:
+                dtype = "float32" # base assumption
+
+        return vtype, dtype, value
 
 
 class OperatorTemplateLoader(TemplateLoader):

@@ -54,7 +54,7 @@ class Circuit(MultiDiGraph):
 
         self.add_edges_from(edges, coupling)
 
-    def add_nodes_from(self, nodes, from_templates=False, **attr):
+    def add_nodes_from(self, nodes: Dict[str, NodeTemplate], from_templates=False, **attr):
         """Add multiple nodes"""
 
         if from_templates:
@@ -74,13 +74,22 @@ class Circuit(MultiDiGraph):
         else:
             super().add_node(label, **attr)
 
-    def add_edges_from(self, edges, coupling:dict=None, **attr):
+    def add_edges_from(self, edges, coupling: dict=None, **attr):
         """Add multiple edges"""
 
         if coupling:
             edge_list = []
             for (source, target, key, values) in edges:
-                edge_list.append((source, target, {"coupling": coupling[key], "values": values}))
+                try:
+                    defaults = dict(coupling[key][1])
+                    defaults.update(values)
+                    values = defaults
+                except TypeError as e:
+                    if e.args[0].startswith("'NoneType'"):
+                        pass
+                    else:
+                        raise e
+                edge_list.append((source, target, {"coupling": coupling[key][0], "values": values}))
             super().add_edges_from(edge_list, **attr)
         else:
             super().add_edges_from(edges, **attr)

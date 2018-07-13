@@ -17,4 +17,10 @@ setup(name='PyRates',
                 'models'],
       zip_safe=False,
       python_requires='>=3.6',
-      install_requires=['numpy', 'matplotlib', 'scipy', 'networkx', 'pandas', 'typing', 'tensorflow'])
+      install_requires=['numpy',
+                        'matplotlib',
+                        'scipy',
+                        'networkx',
+                        'pandas',
+                        'tensorflow',
+                        'ruamel.yaml'])
