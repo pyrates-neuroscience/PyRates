@@ -1,27 +1,159 @@
-"""This module contains different parser classes used to parse strings/dictionaries passed by the user and turn them
-into formats that can be handled by tensorflow.
+"""This module provides parser classes and functions to parse string-based equations into operations.
 """
 
 # external imports
-from sympy.parsing.sympy_parser import parse_expr
-from sympy.core.function import UndefinedFunction
-from sympy import Expr, lambdify, symbols, MatrixSlice, MatrixSymbol, Symbol
-from sympy.matrices.expressions.matexpr import MatrixElement
+from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
+    ZeroOrMore, Forward, nums, alphas, ParserElement
+from numbers import Number
+from copy import copy
+import math
 import tensorflow as tf
-from typing import Tuple, Union, Optional
+import typing as tp
+import numpy as np
+
+# pyrates internal imports
 
 # meta infos
 __author__ = "Richard Gast"
-__status__ = "Development"
+__status__ = "development"
 
 
-class RHSParser(object):
-    """Parses right-hand side of an equation.
+# equation parsers
+##################
+
+class EquationParser(object):
+    """Parses lhs and rhs of an equation.
 
     Parameters
     ----------
-    expression
-        Right-hand side of an equation in string format.
+    expr_str
+        Mathematical equation in string format.
+    args
+        Dictionary containing all variables and functions needed to evaluate the expression.
+    engine
+        String indicating which computational backbone/backend to use. Can be either `numpy` or `tensorflow`.
+    tf_graph
+        Tensorflow graph on which all operations will be created.
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    Examples
+    --------
+
+    References
+    ----------
+
+    """
+
+    def __init__(self, expr_str: str, args: dict, engine: str = 'tensorflow', tf_graph: tp.Optional[tf.Graph] = None
+                 ) -> None:
+        """Instantiates equation parser.
+        """
+
+        # bind inputs args to instance
+        ##############################
+
+        self.expr_str = expr_str
+        self.args = args
+        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+        # parse lhs and rhs of equation
+        ###############################
+
+        # split into lhs and rhs
+        lhs, rhs = self.expr_str.split(' = ')
+
+        # parse rhs
+        if engine == 'tensorflow':
+            rhs_parser = TFExpressionParser(rhs, self.args, self.tf_graph)
+        elif engine == 'numpy':
+            rhs_parser = NPExpressionParser(rhs, self.args)
+        else:
+            raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
+        rhs_op = rhs_parser.parse_expr()
+
+        # check update type of lhs
+        if "d/dt" in lhs:
+            lhs_split = lhs.split('*')
+            lhs = ""
+            for lhs_part in lhs_split[1:]:
+                lhs += lhs_part
+            solve = True
+        else:
+            solve = False
+
+        # parse lhs
+        if engine == 'tensorflow':
+            lhs_parser = TFExpressionParser(lhs, self.args, self.tf_graph)
+        elif engine == 'numpy':
+            lhs_parser = NPExpressionParser(rhs, self.args)
+        else:
+            raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
+        self.target_var = lhs_parser.parse_expr()
+
+        # solve for state variable
+        ##########################
+
+        # set integration step-size
+        if solve:
+            try:
+                dt = self.args['dt']
+            except KeyError:
+                raise ValueError('Integration step-size has to be passed for differential equations. Please '
+                                 'add a field `dt` to `args` with the corresponding value.')
+        else:
+            dt = None
+
+        # create solver instance
+        if engine == 'tensorflow':
+            solver = TFSolver(rhs=rhs_op,
+                              state_var=self.target_var,
+                              dt=dt,
+                              tf_graph=self.tf_graph)
+        else:
+            solver = NPSolver(rhs=rhs_op,
+                              state_var=self.target_var,
+                              dt=dt)
+
+        # collect solver update operation
+        self.lhs_update = solver.solve()
+
+    def parse_idx(self, idx):
+        """Creates list of indices from idx.
+        """
+
+        # retrieve index from args dictionary, if provided
+        if idx in self.args.keys():
+            idx = self.args[idx]
+
+        if type(idx) == str:
+            test_var = np.zeros(self.target_var.shape, dtype=int)
+            exec(f"test_var[{idx}] = 1")
+            idx = np.argwhere(test_var == 1)
+        elif idx.dtype == 'bool' or idx.dtype == 'bool_ref':
+            idx = np.argwhere(idx)
+        else:
+            if idx.shape[1] != len(self.target_var.shape):
+                raise ValueError('Each entry in indices needs to math the dimensionality of the target variable.')
+
+        return idx
+
+
+# expression parsers (lhs/rhs of an equation)
+#############################################
+
+
+class ExpressionParser(ParserElement):
+    """Base class for parsing mathematical expressions.
+
+    Parameters
+    ----------
+    expr_str
+        Mathematical expression in string format.
     args
         Dictionary containing all variables and functions needed to evaluate the expression.
     tf_graph
@@ -40,790 +172,889 @@ class RHSParser(object):
     ----------
 
     """
-
-    def __init__(self, expression: str, args: dict, tf_graph: tf.Graph):
-        """Instantiates RHSParser.
+    
+    def __init__(self, expr_str: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None) -> None:
+        """Instantiates expression parser.
         """
+        
+        # call super init
+        #################
+        
+        super().__init__()
+        
+        # bind input args to instance
+        #############################
 
-        # initialization of instance fields
-        ###################################
-
+        self.expr_str = expr_str
         self.args = args
-        self.tf_graph = tf_graph
-        self.tf_op = tf.no_op()
-        self.tf_op_args = []
-        self.lambdify_args = []
-        self.custom_var_count = 0
+        
+        # additional attributes
+        #######################
 
-        # parse expression
-        ##################
+        self.expr = None
+        self.expr_stack = []
+        self.expr_list = []
+        self._op_tmp = None
+        self.op = None
+        
+        # define algebra
+        ################
 
-        parsed_expr = self.parse_expr(expression)
-        self.expression = self.check_for_matrix_ops(parsed_expr)
+        if not self.expr:
 
-    def parse_expr(self, expr: str) -> Expr:
-        """Parses expression and checks whether certain matrix operations have been used that cannot be parsed by sympy.
+            # general symbols
+            point = Literal(".")
+            comma = Literal(",")
+            colon = Literal(":")
+            e = CaselessLiteral("E")
+            pi = CaselessLiteral("PI")
+
+            # parentheses
+            par_l = Literal("(")
+            par_r = Literal(")")
+            idx_l = Literal("[")
+            idx_r = Literal("]")
+
+            # numeric types
+            num_float = Combine(Word("+-" + nums, nums) +
+                                Optional(point + Optional(Word(nums))) +
+                                Optional(e + Word("+-" + nums, nums)))
+            num_int = Word("+-" + nums, nums)
+
+            # variables and functions
+            name = Word(alphas, alphas + nums + "_$")
+            func_name = Combine(name + par_l, adjacent=True)
+
+            # basic mathematical operations
+            plus = Literal("+")
+            minus = Literal("-")
+            mult = Literal("*")
+            div = Literal("/")
+            mod = Literal("%")
+            dot = Literal("@")
+            exp = Literal("^")
+            transp = Combine(point + Literal("T"))
+            inv = Combine(point + Literal("I"))
+
+            # math operation groups
+            op_add = plus | minus
+            op_mult = mult | div | dot | mod
+            op_exp = exp | inv | transp
+
+            # logical operations
+            greater = Literal(">")
+            less = Literal("<")
+            equal = Combine(Literal("=") + Literal("="))
+            unequal = Combine(Literal("!") + Literal("="))
+            greater_equal = Combine(Literal(">") + Literal("="))
+            less_equal = Combine(Literal("<") + Literal("="))
+
+            # logical operations group
+            op_logical = greater_equal | less_equal | unequal | equal | less | greater
+
+            # pre-allocations
+            self.expr = Forward()
+            exponential = Forward()
+            index_multiples = Forward()
+
+            # basic organization units
+            index_start = idx_l.setParseAction(self.push_first)
+            index_end = idx_r.setParseAction(self.push_first)
+            index_comb = colon.setParseAction(self.push_first)
+            arg_comb = comma.setParseAction(self.push_first)
+
+            # basic computation unit
+            atom = (Optional("-") + (func_name + self.expr.suppress() + ZeroOrMore((arg_comb.suppress() +
+                                                                                    self.expr.suppress()))
+                                     + par_r | pi | e | name | num_float | num_int
+                                     ).setParseAction(self.push_first)
+                    ).setParseAction(self.push_negone) | \
+                   (par_l.suppress() + self.expr.suppress() + par_r.suppress()).setParseAction(self.push_negone)
+
+            # apply indexing to atoms
+            indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
+            index_base = (self.expr.suppress() | index_comb)
+            index_full = index_base + ZeroOrMore((index_comb + index_base))
+            index_multiples << index_full + ZeroOrMore((arg_comb + index_full))
+
+            # hierarchical relationships between mathematical and logical operations
+            boolean = indexed + Optional((op_logical + indexed).setParseAction(self.push_first))
+            exponential << boolean + ZeroOrMore((op_exp + Optional(exponential)).setParseAction(self.push_first))
+            factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self.push_first))
+            self.expr << factor + ZeroOrMore((op_add + factor).setParseAction(self.push_first))
+
+        # define operations and functions
+        #################################
+
+        # base math operations
+        self.ops = {}
+
+        # additional functions
+        self.funcs = {}
+
+        # allowed data-types
+        self.dtypes = {}
+
+        # add functions from args dictionary, if passed
+        for key, val in self.args.items():
+            if callable(val):
+                self.funcs[key] = val
+
+    def parse_expr(self):
+        """Parses string-based expression.
+        """
+
+        # extract symbols and operations from expression string
+        self.expr_list = self.expr.parseString(self.expr_str)
+
+        # check whether parsing was successful
+        expr_str = self.expr_str
+        for sub_str in sorted(self.expr_stack, key=len)[::-1]:
+            if sub_str == 'E':
+                sub_str = 'e'
+            expr_str = expr_str.replace(sub_str, "")
+        expr_str = expr_str.replace(" ", "")
+        expr_str = expr_str.replace("(", "")
+        expr_str = expr_str.replace(")", "")
+        expr_str = expr_str.replace("-", "")
+        if len(expr_str) > 0:
+            raise ValueError(f"Error while parsing expression: {self.expr_str}. {expr_str} could not be parsed.")
+
+        # turn expression into operation
+        self.op = self.parse(self.expr_stack[:])
+
+        return self.op
+
+    def push_first(self, strg, loc, toks):
+        """Push tokens in first-to-last order to expression stack.
+        """
+        self.expr_stack.append(toks[0])
+        
+    def push_negone(self, strg, loc, toks):
+        """Push negative one multiplier if on first position in toks.
+        """
+        if toks and toks[0] == '-':
+            self.expr_stack.append('-one')
+
+    def push_all(self, strg, loc, toks):
+        """Push all tokens to expression stack at once (first-to-last).
+        """
+        for t in toks:
+            self.expr_stack.append(t)
+
+    def push_all_reverse(self, strg, loc, toks):
+        """Push all tokens to expression stack at once (last-to-first).
+        """
+        for t in range(len(toks)-1, -1, -1):
+            self.expr_stack.append(toks[t])
+
+    def push_last(self, strg, loc, toks):
+        """Push tokens in last-to-first order to expression stack.
+        """
+        self.expr_stack.append(toks[-1])
+
+    def parse(self, expr_stack: list) -> tp.Any:
+        """Parse elements in expression stack to operation.
 
         Parameters
         ----------
-        expr
-            Expression string (should represent right-hand side of an equation).
+        expr_stack
+            Ordered list with expression variables and operations.
 
         Returns
         -------
-        Expr
-            Sympy-parsed expression
+        type.Any
 
         """
 
-        # check for matrix-based expressions
-        #####################################
+        # get next operation from stack
+        op = expr_stack.pop()
 
-        # breaking operator definition
-        breaking_ops = {'@': 'dot(A, B)',
-                        '.T': 'transp(A)',
-                        '.I': 'inv(A)',
-                        '[': 'idx(A, row, col)'
-                        }
+        # check type of operation
+        #########################
 
-        # replacable operator definition
-        replace_ops = {':': 'all'}
+        if op == '-one':
 
-        # check for breaking operations in expression string
-        for op, subs in breaking_ops.items():
-            if op in expr:
-                raise ValueError(f"Operator sign {op} cannot be parsed. Please use {subs} instead.")
+            # multiply expression by minus one
+            self._op_tmp = -self.parse(expr_stack)
 
-        # replace operations in expression string
-        for op, subs in replace_ops.items():
-            expr = expr.replace(op, subs)
+        elif op in "+-*/^@<=>=!==":
 
-        return parse_expr(expr)
+            # combine elements via mathematical/boolean operator
+            op2 = self.parse(expr_stack)
+            op1 = self.parse(expr_stack)
+            self._op_tmp = self.ops[op](op1, op2)
 
-    def check_for_matrix_ops(self, expr: Expr) -> Expr:
-        """Goes through parsed expression and makes it compatible with sympy matrix operations.
+        elif op in ".T.I":
 
-        Parameters
-        ----------
-        expr
-            Sympy-parsed expression.
+            # transpose/invert expression
+            self._op_tmp = self.ops[op](self.parse(expr_stack))
 
-        Returns
-        -------
-        Expr
-            New, matrix operation compatible expression
+        elif op == "]":
 
-        """
-
-        replace_ops = {'is_Mul': {'func': 'custom_mult()',
-                                  'arg': tf.multiply
-                                  },
-                       'is_Pow': {'func': 'custom_power()',
-                                  'arg': tf.pow
-                                  },
-                       'is_Add': {'func': 'custom_add()',
-                                  'arg': tf.add
-                                  },
-                       'idx': {'func': self.apply_idx},
-                       'transp': {'arg': tf.transpose
-                                  },
-                       'inv': {'arg': tf.matrix_inverse
-                               },
-                       'dot': {'arg': tf.matmul},
-                       'sparseDot': {'arg': tf.sparse_tensor_dense_matmul},
-                       'expo': {'arg': tf.exp}
-                       }
-
-        return self.replace(expr, replace_ops)
-
-    def apply_idx(self, args: list) -> str:
-        """Applies idx() function to arguments.
-
-        Parameters
-        ----------
-        args
-            List of arguments passed to the idx() function.
-
-        Returns
-        -------
-        str
-            Brackets indexing notation ( A[row, col]).
-
-        """
-
-        # turn `all` slice indicator into `:`
-        for i in range(len(args)):
-            if str(args[i]) == 'all':
-                args[i] = ':'
-
-        idx_str = f"{self.symbol_to_str(args[0])}["
-        for i in range(1, len(args)):
-            idx_str += f"{self.symbol_to_str(args[i])}, "
-
-        return f"{idx_str[:-2]}]"
-
-    def replace(self, expr: Expr, replacement_dict: dict) -> Expr:
-        """Recursively goes through expr and replaces matches to the keys in dict with the respective values.
-
-        Parameters
-        ----------
-        expr
-            Sympy-parsed expression.
-        replacement_dict
-            Key, value pairs. Keys will be checked for in expr, values will be used to replace key matches in expr.
-
-        Returns
-        -------
-        Expr
-            New sympy expression with potential replacements.
-
-        """
-
-        # extract top level function and arguments to that function from expression
-        func = expr.func
-        args = expr.args
-
-        if len(args) > 0:
-
-            # go recursively through expression
-            ###################################
-
-            new_args = []
-            for arg in args:
-                new_args.append(self.replace(arg, replacement_dict))
-
-            # replace func if necessary
-            ###########################
-
-            for i, (key, new_func) in enumerate(replacement_dict.items()):
-
-                if 'is_' in key and getattr(func, key):
-
-                    # replace target sympy operations with custom functions
-                    #######################################################
-
-                    if new_func['func'].find('(') != -1:
-
-                        # string replacements are expected to be of form: `custom_func()`
-                        base_str = new_func['func'][0:-1]
-                        func_str = ''
-
-                        if len(new_args) > 2:
-
-                            # iterate through arguments to func and create string of form
-                            # `custom_func(arg1, custom_func(arg2, arg3))`
-                            for j, arg in enumerate(new_args):
-                                if j < len(new_args) - 1:
-                                    func_str += f"{base_str} {self.symbol_to_str(arg)}, "
-                                else:
-                                    func_str += f"{self.symbol_to_str(arg)})"
-                            for _ in range(j - 1):
-                                func_str += ')'
-
-                        else:
-
-                            # create string of form `custom_func(arg1, arg2)`
-                            func_str = f"{base_str} {self.symbol_to_str(new_args[0])}, " \
-                                       f"{self.symbol_to_str(new_args[1])})"
-
-                        # save arguments to custom function on args dictionary with the function name as key
-                        self.args[new_func['func'][0:-2]] = new_func['arg']
-
+            # parse indices
+            indices = []
+            while len(expr_stack) > 0 and expr_stack[-1] != "[":
+                index = []
+                while len(expr_stack) > 0 and expr_stack[-1] not in ",[":
+                    if expr_stack[-1] == ":":
+                        index.append(expr_stack.pop())
                     else:
+                        index.append(self.parse(expr_stack))
+                indices.append(index[::-1])
+                if expr_stack[-1] == ",":
+                    expr_stack.pop()
+            expr_stack.pop()
 
-                        # create function string of form `arg1 <new_operator> arg2`
-                        func_str = f"{self.symbol_to_str(new_args[0])} " \
-                                   f"{new_func['func']} " \
-                                   f"{self.symbol_to_str(new_args[1])}"
-
-                    # parse function string with sympy
-                    new_expr = parse_expr(func_str)
-
-                    break
-
-                elif key == str(func):
-
-                    # replace target functions (identified by their name) with other functions or just add arguments
-                    ################################################################################################
-
-                    # if function was passed, use it to get a new function string and then parse that string
-                    if 'func' in new_func.keys():
-                        func_str = new_func['func'](new_args)
-                        new_expr = parse_expr(func_str)
+            # build strinb-based representation of idx
+            idx = ""
+            for index in indices[::-1]:
+                for i, ind in enumerate(index):
+                    if type(ind) == str:
+                        idx += ind
+                    elif isinstance(ind, Number):
+                        idx += f"{ind}"
                     else:
-                        new_expr = expr
+                        try:
+                            exec(f"var_{i} = ind.__copy__()")
+                        except AttributeError:
+                            exec(f"var_{i} = copy(ind)")
+                        idx += f"var_{i}"
+                idx += ","
+            idx = idx[0:-1]
 
-                    # if function arguments where passed, add them to the args dictionary
-                    if 'arg' in new_func.keys():
-                        self.args[key] = new_func['arg']
+            # apply idx to op
+            op_to_idx = self.parse(expr_stack)
+            try:
+                self._op_tmp = eval(f"op_to_idx[{idx}]")
+            except (TypeError, ValueError):
+                try:
+                    self._op_tmp = eval(f"self.funcs['array_idx'](op_to_idx, {idx})")
+                except (TypeError, ValueError):
+                    self._op_tmp = eval(f"self.funcs['boolean_mask'](op_to_idx, {idx})")
 
+        elif op == "PI":
+
+            # return float representation of pi
+            self._op_tmp = math.pi
+
+        elif op == "E":
+
+            # return float representation of e
+            self._op_tmp = math.e
+
+        elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
+
+            # extract data type
+            try:
+                dtype = self.dtypes[op[0:-1]]
+            except AttributeError:
+                raise ValueError(f"Datatype casting error in expression: {self.expr_str}. {op[0:-1]} is not a valid "
+                                 f"data-type for this parser.")
+
+            # cast new data type to argument
+            self._op_tmp = self.funcs['cast'](self.parse(expr_stack), dtype)
+
+        elif op[-1] == "(":
+
+            # extract function
+            try:
+                f = self.funcs[op[0:-1]]
+            except KeyError:
+                raise ValueError(f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
+                                 f"in arguments dictionary.")
+
+            # parse arguments
+            args = []
+            while len(expr_stack) > 0:
+                args.append(self.parse(expr_stack))
+                if len(expr_stack) == 0 or expr_stack[-1] != ",":
                     break
-
-                elif i < len(replacement_dict) - 1:
-
-                    new_expr = expr
-
                 else:
+                    expr_stack.pop()
 
-                    # if in the last iteration and no new expression has been created, apply new_args (collected through
-                    # recursion) to the top-level function
-                    new_expr = func(*tuple(new_args))
+            # apply function to arguments
+            self._op_tmp = f(*tuple(args[::-1]))
+
+        elif op in self.args.keys():
+
+            # extract variable from args dict
+            self._op_tmp = self.args[op]
+
+        elif any([op == "True", op == "true", op == "False", op == "false"]):
+
+            # return boolean
+            self._op_tmp = True if op in "Truetrue" else False
+
+        elif "." in op:
+
+            # return float
+            self._op_tmp = float(op)
+
+        elif op[0].isnumeric:
+
+            # return integer
+            self._op_tmp = int(op)
+
+        elif op[0].isalpha():
+
+            raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
+                             f"in the respective arguments dictionary.")
 
         else:
 
-            # replace simple symbols with matrix symbols where necessary
-            ############################################################
+            raise ValueError(f"Undefined operation detected in expression: {self.expr_str}. {op} cannot be "
+                             f"interpreted by this parser.")
 
-            if str(expr) in self.args.keys():
+        return self._op_tmp
 
-                arg = self.args[str(expr)]
-                if not hasattr(arg, 'shape'):
-                    new_expr = expr
-                elif len(arg.shape) > 1:
-                    new_expr = MatrixSymbol(str(expr), arg.shape[0], arg.shape[1])
-                elif len(arg.shape) == 1 and arg.shape[0] > 1:
-                    new_expr = MatrixSymbol(str(expr), arg.shape[0], 1)
-                else:
-                    new_expr = expr
 
+class LambdaExpressionParser(ExpressionParser):
+    """Expression parser that turns expressions into lambda functions.
+    """
+
+    def parse(self, expr_stack: list) -> tp.Union[np.ndarray, float, int, tp.Callable]:
+        """Parse elements in expression stack to lambda function.
+
+        Parameters
+        ----------
+        expr_stack
+            Ordered list with expression variables and operations.
+
+        Returns
+        -------
+        type.Any
+
+        """
+
+        # get next operation from stack
+        op = expr_stack.pop()
+
+        # check type of operation
+        #########################
+
+        if op == '-one':
+
+            # multiply expression by minus one
+            arg = self.parse(expr_stack)
+            if callable(arg):
+                self._op_tmp = lambda: -arg()
             else:
+                self._op_tmp = lambda: -arg
 
-                new_expr = expr
+        elif op in "+-*/^@<=>=!==":
 
-        return new_expr
+            # combine elements via mathematical/boolean operator
+            op2 = self.parse(expr_stack)
+            op1 = self.parse(expr_stack)
+            if callable(op1):
+                if callable(op2):
+                    self._op_tmp = lambda: self.ops[op](op1(), op2())
+                else:
+                    self._op_tmp = lambda: self.ops[op](op1(), op2)
+            else:
+                if callable(op2):
+                    self._op_tmp = lambda: self.ops[op](op1, op2())
+                else:
+                    self._op_tmp = lambda: self.ops[op](op1, op2)
 
-    def symbol_to_str(self, symb: Union[MatrixSymbol, Symbol]) -> str:
-        """Turns sympy symbol into string representation.
+        elif op in ".T.I":
 
-        Parameters
-        ----------
-        symb
-            Symbol or MatrixSymbol
+            # transpose/invert expression
+            arg = self.parse(expr_stack)
+            if callable(arg):
+                self._op_tmp = lambda: self.ops[op](arg())
+            else:
+                self._op_tmp = lambda: self.ops[op](arg)
 
-        Returns
-        -------
-        str
-            String-based representation of symb.
+        elif op == "]":
 
+            # parse indices
+            indices = []
+            while len(expr_stack) > 0 and expr_stack[-1] != "[":
+                index = []
+                while len(expr_stack) > 0 and expr_stack[-1] not in ",[":
+                    if expr_stack[-1] == ":":
+                        index.append(expr_stack.pop())
+                    else:
+                        index.append(self.parse(expr_stack))
+                indices.append(index[::-1])
+                if expr_stack[-1] == ",":
+                    expr_stack.pop()
+            expr_stack.pop()
+
+            # build str representation of idx
+            idx = ""
+            global new_vars
+            new_vars = []
+            i = 0
+            for index in indices[::-1]:
+                for ind in index:
+                    if type(ind) == str:
+                        idx += ind
+                    elif isinstance(ind, Number):
+                        idx += f"{ind}"
+                    else:
+                        try:
+                            new_vars.append(ind.__copy__())
+                        except AttributeError:
+                            new_vars.append(copy(ind))
+                        if callable(new_vars[i]):
+                            idx += f"new_vars[{i}]()"
+                        else:
+                            idx += f"new_vars[{i}]"
+                        i += 1
+                idx += ","
+            idx = idx[0:-1]
+
+            # apply indices to op
+            global op_to_idx
+            op_to_idx = self.parse(expr_stack)
+            if callable(op_to_idx):
+                exec(f"self._op_tmp = lambda: op_to_idx()[{idx}]")
+            else:
+                exec(f"self._op_tmp = lambda: op_to_idx[{idx}]")
+
+        elif op == "PI":
+
+            # return float representation of pi
+            self._op_tmp = math.pi
+
+        elif op == "E":
+
+            # return float representation of e
+            self._op_tmp = math.e
+
+        elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
+
+            # extract data type
+            try:
+                dtype = self.dtypes[op[0:-1]]
+            except AttributeError:
+                raise ValueError(f"Datatype casting error in expression: {self.expr_str}. {op[0:-1]} is not a valid "
+                                 f"data-type for this parser.")
+
+            # cast new data type to argument
+            arg = self.parse(expr_stack)
+            if callable(arg):
+                self._op_tmp = self.funcs['cast'](arg(), dtype)
+            else:
+                self._op_tmp = self.funcs['cast'](arg, dtype)
+
+        elif op[-1] == "(":
+
+            # extract function
+            try:
+                f = self.funcs[op[0:-1]]
+            except KeyError:
+                raise ValueError(f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
+                                 f"in arguments dictionary.")
+
+            # parse arguments
+            args = []
+            while len(expr_stack) > 0:
+                args.append(self.parse(expr_stack))
+                if len(expr_stack) == 0 or expr_stack[-1] != ",":
+                    break
+                else:
+                    expr_stack.pop()
+
+            # apply function to arguments
+            self._op_tmp = lambda: f(*tuple([arg() if callable(arg) else arg for arg in args[::-1]]))
+
+        elif op in self.args.keys():
+
+            # extract variable from args dict
+            self._op_tmp = self.args[op]
+
+        elif any([op == "True", op == "true", op == "False", op == "false"]):
+
+            # return boolean
+            self._op_tmp = True if op in "Truetrue" else False
+
+        elif "." in op:
+
+            # return float
+            self._op_tmp = float(op)
+
+        elif op[0].isnumeric():
+
+            # return integer
+            self._op_tmp = int(op)
+
+        elif op[0].isalpha():
+
+            raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
+                             f"in the respective arguments dictionary.")
+
+        else:
+
+            raise ValueError(f"Undefined operation detected in expression: {self.expr_str}. {op} cannot be "
+                             f"interpreted by this parser.")
+
+        return self._op_tmp
+
+
+class TFExpressionParser(ExpressionParser):
+    """Expression parser that transforms expression into tensorflow operations on a tensorflow graph.
+    """
+
+    def __init__(self, expr_str: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None) -> None:
+        """Instantiates tensorflow expression parser.
         """
 
-        if isinstance(symb, MatrixSymbol):
-            symb_str = f"MatrixSymbol('{symb}', {symb.shape[0]}, {symb.shape[1]})"
-        elif isinstance(symb, MatrixElement):
-            symb_str = f"MatrixSymbol('{symb.args[0]}', {symb.args[1] + 1}, {symb.args[2] + 1})" \
-                       f"[{symb.args[1]}, {symb.args[2]}]"
-        elif isinstance(symb, MatrixSlice):
-            symb_str = f"MatrixSymbol('{symb.args[0]}', {symb.args[1][1]}, {symb.args[2][1]})" \
-                       f"[{symb.args[1][0]}:{symb.args[1][1]}, {symb.args[2][0]}:{symb.args[2][1]}]"
+        # call super init
+        #################
+
+        super().__init__(expr_str=expr_str, args=args)
+
+        # define tensorflow graph on which to create the operations
+        ###########################################################
+
+        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+        # define operations and functions
+        #################################
+
+        # base math operations
+        ops = {"+": tf.add,
+               "-": tf.subtract,
+               "*": tf.multiply,
+               "/": tf.truediv,
+               "%": tf.mod,
+               "^": tf.pow,
+               "@": tf.matmul,
+               ".T": tf.matrix_transpose,
+               ".I": tf.matrix_inverse,
+               ">": tf.greater,
+               "<": tf.less,
+               "==": tf.equal,
+               "!=": tf.not_equal,
+               ">=": tf.greater_equal,
+               "<=": tf.less_equal
+               }
+        for key, val in ops.items():
+            self.ops[key] = val
+
+        # additional functions
+        funcs = {"sin": tf.sin,
+                 "cos": tf.cos,
+                 "tan": tf.tan,
+                 "abs": tf.abs,
+                 "max": tf.reduce_max,
+                 "min": tf.reduce_min,
+                 "argmax": tf.argmax,
+                 "argmin": tf.argmin,
+                 "round": tf.to_int32,
+                 "roundto": round_to_prec,
+                 "sum": tf.reduce_sum,
+                 "tile": tf.tile,
+                 "reshape": tf.reshape,
+                 "cast": tf.cast,
+                 "randn": tf.random_normal,
+                 "ones": tf.ones,
+                 "zeros": tf.zeros,
+                 "softmax": tf.nn.softmax,
+                 "boolean_mask": tf.boolean_mask,
+                 "array_idx": tf.gather_nd
+                 }
+        for key, val in funcs.items():
+            self.funcs[key] = val
+
+        dtypes = {"float16": tf.float16,
+                  "float32": tf.float32,
+                  "float64": tf.float64,
+                  "int16": tf.int16,
+                  "int32": tf.int32,
+                  "int64": tf.int64,
+                  "uint16": tf.uint16,
+                  "uint32": tf.uint32,
+                  "uint64": tf.uint64,
+                  "complex64": tf.complex64,
+                  "complex128": tf.complex128,
+                  "bool": tf.bool
+                  }
+        for key, val in dtypes.items():
+            self.dtypes[key] = val
+
+    def parse(self, expr_stack: list) -> tp.Union[tf.Operation, tf.Tensor, tf.Variable, float, int]:
+        """Parses string-based expression.
+        """
+
+        with self.tf_graph.as_default():
+            return super().parse(expr_stack=expr_stack)
+
+
+class NPExpressionParser(LambdaExpressionParser):
+    """Expression parser that turns expressions into numpy operations.
+    """
+
+    def __init__(self, expr_str: str, args: dict) -> None:
+        """Instantiate numpy expression parser.
+        """
+
+        # call super init
+        #################
+
+        super().__init__(expr_str=expr_str, args=args)
+
+        # define operations and functions
+        #################################
+
+        # base math operations
+        ops = {"+": np.add,
+               "-": np.subtract,
+               "*": np.multiply,
+               "/": np.true_divide,
+               "%": np.mod,
+               "^": np.float_power,
+               "@": np.matmul,
+               ".T": np.transpose,
+               ".I": np.invert,
+               ">": np.greater,
+               "<": np.less,
+               "==": np.equal,
+               "!=": np.not_equal,
+               ">=": np.greater_equal,
+               "<=": np.less_equal
+               }
+        for key, val in ops.items():
+            self.ops[key] = val
+
+        # additional functions
+        funcs = {"sin": np.sin,
+                 "cos": np.cos,
+                 "tan": np.tan,
+                 "abs": np.abs,
+                 "max": np.max,
+                 "min": np.min,
+                 "argmax": np.argmax,
+                 "argmin": np.argmin,
+                 "round": np.round,
+                 "sum": np.sum,
+                 "tile": np.tile,
+                 "reshape": np.reshape,
+                 "cast": np.array,
+                 "randn": np.random.randn,
+                 "ones": np.ones,
+                 "zeros": np.zeros
+                 }
+        for key, val in funcs.items():
+            self.funcs[key] = val
+
+        dtypes = {"float16": np.float16,
+                  "float32": np.float32,
+                  "float64": np.float64,
+                  "int16": np.int16,
+                  "int32": np.int32,
+                  "int64": np.int64,
+                  "uint16": np.uint16,
+                  "uint32": np.uint32,
+                  "uint64": np.uint64,
+                  "complex64": np.complex64,
+                  "complex128": np.complex128,
+                  "bool": tf.bool
+                  }
+        for key, val in dtypes.items():
+            self.dtypes[key] = val
+
+
+# solver classes (update lhs according to rhs)
+##############################################
+
+
+class Solver(object):
+    """Base solver class (currently only implements basic forward euler).
+
+    Parameters
+    ----------
+    rhs
+        Tensorflow operation that represents right-hand side of a differential equation.
+    state_var
+        Tensorflow variable that should be integrated over time.
+    dt
+        Step-size of the integration over time [unit = s].
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+
+    def __init__(self,
+                 rhs: tp.Union[tf.Operation, tf.Tensor, tp.Callable, tuple],
+                 state_var: tp.Union[tf.Variable, tf.Tensor, np.ndarray, float, int],
+                 state_var_idx: tp.Optional[np.ndarray] = None,
+                 dt: tp.Optional[float] = None
+                 ) -> None:
+        """Instantiates solver.
+        """
+
+        # initialize instance attributes
+        ################################
+
+        self.rhs = rhs
+        self.state_var = state_var
+        self.state_var_idx = state_var_idx
+        self.dt = dt
+
+        # define integration expression
+        ###############################
+
+        # TODO: Implement Butcher tableau and its translation into various solver algorithms
+        if self.dt is None:
+            self.integration_expressions = ["rhs"]
         else:
-            symb_str = str(symb)
+            self.integration_expressions = ["dt * rhs"]
 
-        return symb_str
+    def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
+        """Creates tensorflow method for performing a single differentiation step.
+        """
 
-    def transform(self) -> Union[tf.Operation, tf.Tensor]:
-        """Turns the expression into a runnable tensorflow operation.
+        raise NotImplementedError('This method needs to be implemented at the child class level '
+                                  '(any class inheriting the `Solver` class).')
 
-        Parameters
-        ----------
 
-        Returns
-        -------
-        Union[tf.Operator, tf.Tensor]
-            Tensorflow operation that represents rhs.
+class TFSolver(Solver):
 
+    def __init__(self,
+                 rhs: tp.Union[tf.Operation, tf.Tensor],
+                 state_var: tp.Union[tf.Variable, tf.Tensor],
+                 state_var_idx: tp.Optional[np.ndarray] = None,
+                 dt: tp.Optional[float] = None,
+                 tf_graph: tp.Optional[tf.Graph] = None
+                 ) -> None:
+        """Instantiates solver.
+        """
+
+        # call super init
+        #################
+
+        super().__init__(rhs=rhs, state_var=state_var, state_var_idx=state_var_idx, dt=dt)
+
+        # initialize additional attributes
+        ##################################
+
+        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+    def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
+        """Creates tensorflow method for performing a single differentiation step.
         """
 
         with self.tf_graph.as_default():
 
-            # turn custom functions into tensorflow operations
-            ##################################################
+            steps = list()
+            steps.append(tf.no_op())
 
-            self.expression = self.custom_funcs_to_tf_ops(self.expression)
+            # go through integration expressions to solve DE
+            ################################################
 
-            # turn expression into tensorflow function
-            ##########################################
+            for expr in self.integration_expressions:
 
-            if isinstance(self.expression, Symbol) or isinstance(self.expression, MatrixSymbol):
+                # parse the integration expression
+                expr_args = {'dt': self.dt, 'rhs': self.rhs}
+                parser = TFExpressionParser(expr, expr_args, self.tf_graph)
+                op = parser.parse_expr()
 
-                tf_op = self.args[str(self.expression)]
+                # update the target state variable
+                with tf.control_dependencies([steps[-1]]):
 
-            else:
+                    if self.state_var_idx is None:
 
-                func = lambdify(args=tuple(self.lambdify_args), expr=self.expression,
-                                modules=[{'ImmutableDenseMatrix': tf.Variable}, 'tensorflow'])
-
-                tf_op = func(*tuple(self.tf_op_args))
-
-        return tf_op
-
-    def custom_funcs_to_tf_ops(self, expression: Expr) -> Expr:
-        """Recursive function that turns all custom functions in the expression into tensorflow operations.
-
-        Parameters
-        ----------
-        expression
-            Sympy-parsed expression.
-
-        Returns
-        -------
-        Expr
-            Tuple of two lists. First list contains the tensorflow operations, the second contains the expressions
-            that were turned into tensorflow operations.
-
-        """
-
-        # extract the name of the operation
-        func_name = expression.func.class_key()[-1]
-
-        funcs = []
-        tf_ops = []
-
-        # recursively fo through arguments of func
-        ##########################################
-
-        if len(expression.args) > 0 and expression.func != MatrixElement and expression.func != MatrixSlice \
-                and not isinstance(expression, MatrixSymbol):
-
-            # go through all arguments of top-level function
-            expr_args = expression.args
-            for expr in expr_args:
-
-                # recursive call
-                expr_new = self.custom_funcs_to_tf_ops(expr)
-
-                # expression substitution
-                expression = expression.subs(expr, expr_new)
-
-        # if multiple arguments exist that are connected by func, call this function recursively on each argument
-        #########################################################################################################
-
-        if isinstance(expression.func, UndefinedFunction):
-
-            # parsing of custom functions
-            #############################
-
-            if func_name not in self.args.keys():
-                raise ValueError(func_name + ' must be defined in args!')
-
-            # extract custom function definition
-            new_expr = self.args[func_name]
-
-            if callable(new_expr):
-
-                # parsing of tensorflow functions
-                #################################
-
-                func_args = []
-
-                for arg in expression.args:
-
-                    if str(arg) in self.args:
-
-                        # extract argument from args
-                        func_args.append(self.args[str(arg)])
-
-                    elif arg.is_Number:
-
-                        # turn constant into tensorflow constant
-                        # TODO: avoid this. Datatype should be inferred somehow
-                        func_args.append(tf.constant(float(arg), dtype=tf.float32))
-
-                    elif isinstance(arg, MatrixSymbol) or isinstance(arg, MatrixElement) \
-                            or isinstance(arg, MatrixSlice):
-
-                        func_args.append(self.apply_slicing(arg))
-
+                        if self.dt is None:
+                            steps.append(tf.assign(self.state_var, op))
+                        else:
+                            steps.append(tf.assign_add(self.state_var, op))
                     else:
 
-                        # create new instance of RHSParser and create tensorflow operation from arg
-                        parser = RHSParser(str(arg), self.args, self.tf_graph)
-                        func_args.append(parser.transform())
+                        if self.dt is None:
+                            steps.append(tf.scatter_nd_update(ref=self.state_var,
+                                                              indices=self.state_var_idx,
+                                                              updates=tf.squeeze(op)))
+                        else:
+                            steps.append(tf.scatter_nd_add(ref=self.state_var,
+                                                           indices=self.state_var_idx,
+                                                           updates=tf.squeeze(op)))
 
-                # create tensorflow operation from function
-                tf_op = new_expr(*tuple(func_args))
+            steps.pop(0)
 
-                # collect tensorflow operation and original expression
-                expression = self.replace_custom_funcs(expression, [tf_op], [expression])
+        return tf.group(steps)
 
-            elif type(new_expr) is 'str':
 
-                # parsing of string-based functions
-                ###################################
+class NPSolver(Solver):
 
-                # create new instance of RHSParser and create tensorflow operation from string
-                parser = RHSParser(self.args[func_name], self.args, self.tf_graph)
-                tf_op = parser.transform()
+    def solve(self) -> list:
 
-                # collect tensorflow operation and original expression
-                expression = self.replace_custom_funcs(expression, [tf_op], [expression])
+        steps = list()
 
+        # apply indexing to state variable if necessary
+        ###############################################
+
+        if self.state_var_idx is not None:
+            if callable(self.state_var):
+                if callable(self.state_var_idx):
+                    self.state_var = lambda: self.state_var()[self.state_var_idx()]
+                else:
+                    self.state_var = lambda: self.state_var()[self.state_var_idx]
             else:
+                if callable(self.state_var_idx):
+                    self.state_var = lambda: self.state_var[self.state_var_idx()]
+                else:
+                    self.state_var = lambda: self.state_var[self.state_var_idx]
 
-                raise ValueError('Custom functions can only be of type `tensorflow function` or `str`.')
+        # go through integration expressions to solve DE
+        ################################################
 
-        return expression
+        for expr in self.integration_expressions:
 
-    def apply_slicing(self, arg: Expr) -> Union[tf.Variable, tf.Tensor, tf.Operation]:
-        """Apply slicing to arg if necessary.
+            # parse the integration expression
+            expr_args = {'dt': self.dt, 'rhs': self.rhs}
+            parser = NPExpressionParser(expr, expr_args)
+            op = parser.parse_expr()
 
-        Parameters
-        ----------
-        arg
-            Sympy expression.
-
-        Returns
-        -------
-        Union[tf.Variable, tf.Tensor, tf.Operation]
-
-        """
-
-        if arg.func == MatrixElement:
-
-            # extract element from target variable matrix
-            #############################################
-
-            # get and check variable name
-            var_name = str(arg.args[0])
-            if var_name not in self.args.keys():
-                raise AttributeError("Output variables or their indices must be included in "
-                                     "expression_args.")
-
-            # extract target variable from args
-            if len(arg.args) == 3:
-                target_var = self.args[var_name][int(arg.args[1]), int(arg.args[2])]
+            # update the target state variable
+            if self.dt is None:
+                if callable(op):
+                    update = lambda: op()
+                else:
+                    update = lambda: op
             else:
-                target_var = self.args[var_name][int(arg.args[1])]
-
-        elif arg.func == MatrixSlice:
-
-            # extract slice from target variable matrix
-            ###########################################
-
-            # get and check variable name
-            var_name = str(arg.args[0])
-            if var_name not in self.args.keys():
-                raise AttributeError("Output variables or their indices must be included in "
-                                     "expression_args.")
-
-            # extract target variable from args
-            if len(arg.args) == 3:
-                target_var = self.args[var_name][int(arg.args[1][0]):int(arg.args[1][1]),
-                             int(arg.args[2][0]):int(arg.args[2][1])]
-            else:
-                target_var = self.args[var_name][int(arg.args[1][0]):int(arg.args[1][1])]
-
-        else:
-
-            # get and check variable name
-            var_name = str(arg)
-            if var_name not in self.args.keys():
-                raise AttributeError("Output variables or their indices must be included in "
-                                     "expression_args.")
-
-            # extract target variable from args
-            target_var = self.args[var_name]
-
-        return target_var
-
-    def replace_custom_funcs(self, expr: Expr, tf_ops: list, custom_funcs: list) -> Expr:
-        """
-
-        Parameters
-        ----------
-        tf_ops
-        funcs
-
-        Returns
-        -------
-
-        """
-
-        # replace the custom functions in the expression with the tensorflow operation results
-        ######################################################################################
-
-        for i, (tf_op, func) in enumerate(zip(tf_ops, custom_funcs)):
-
-            # get a new sympy symbol for the result
-            expr_symb = symbols('var_' + str(self.custom_var_count + i))
-
-            # substitute the function call with the symbol representing its result
-            expr = expr.subs(func, expr_symb)
-
-            # add the tensorflow operation calculating the result to the args dictionary
-            self.args[str(expr_symb)] = tf_op
-
-        self.custom_var_count += len(tf_ops)
-
-        # collect all arguments needed to transform the expression into a tensorflow operation
-        ######################################################################################
-
-        # go through all variables of the expression
-        for i, symb in enumerate(expr.free_symbols):
-
-            symb_name = str(symb)
-
-            # check whether the variable was passed with the args dictionary
-            if symb_name not in self.args.keys():
-                raise ValueError(symb_name + ' must be defined in args!')
-
-            # collect the arguments
-            self.lambdify_args.append(symb)
-            self.tf_op_args.append(self.args[symb_name])
-
-        return expr
-
-
-class LHSParser(object):
-    """Parses left-hand side of an equation.
-
-    Parameters
-    ----------
-    expression
-        Right-hand side of an equation in string format.
-    args
-        Dictionary containing all variables and functions needed to evaluate the expression.
-    tf_graph
-        Tensorflow graph on which all operations will be created.
-
-    Attributes
-    ----------
-
-    Methods
-    -------
-
-    Examples
-    --------
-
-    References
-    ----------
-
-    """
-
-    def __init__(self, expression: str, args: dict, rhs: Union[tf.Operation, tf.Tensor], tf_graph: tf.Graph):
-        """Instantiates LHSParser.
-        """
-
-        # initialize variables
-        ######################
-
-        self.args = args
-        self.tf_graph = tf_graph
-        self.rhs = rhs
-        self.indices = []
-
-        # parse expression
-        ##################
-
-        parser = RHSParser(expression, args, self.tf_graph)
-        self.expression = parser.expression
-
-    def transform(self) -> Tuple[Union[tf.Operation, tf.Tensor], Union[tf.Variable, tf.Tensor]]:
-        """Turns the expression into a runnable tensorflow operation.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        Tuple[Union[tf.Operation, tf.Tensor], Union[tf.Variable, tf.Tensor]]
-            Either a tensorflow operation (if its a differential equation) or a tensorflow variable
-            (the state variable to be updated by a right-hand side of an equation).
-
-        """
-
-        # get target variable from expression
-        target_var = self.get_target_var()
-
-        if symbols('dt') in self.expression.free_symbols:
-
-            # solve differential equation
-            #############################
-
-            from pyrates.solver import Solver
-
-            if 'dt' not in self.args.keys():
-                raise AttributeError('The step-size `dt` has to be passed with `args` for differential equations.')
-
-            solver = Solver(self.rhs, target_var, self.args['dt'], self.tf_graph)
-            tf_op = solver.solve()
-
-        else:
-
-            # calculate value of target variable
-            ####################################
-
-            with self.tf_graph.as_default():
-                tf_op = target_var.assign(self.rhs)
-
-        return tf_op, target_var
-
-    def get_target_var(self) -> Union[tf.Variable, tf.Tensor, tf.Operation]:
-        """Finds target variable in expression and extracts it from args.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        Union[tf.Variable, tf.Tensor, tf.Operation]
-            Target tensorflow variable from args.
-
-        """
-
-        expr = self.expression
-
-        if len(expr.free_symbols) == 1:
-
-            target_var = self.apply_slicing(expr)
-
-        else:
-
-            target_var = self.recursive_var_search(expr)
-
-        if target_var is None:
-            raise ValueError('Target variable has to be included in left-hand side of expression!')
-
-        return target_var
-
-    def apply_slicing(self, arg: Expr) -> Union[tf.Variable, tf.Tensor, tf.Operation]:
-        """Apply slicing to arg if necessary.
-
-        Parameters
-        ----------
-        arg
-            Sympy expression.
-
-        Returns
-        -------
-        Union[tf.Variable, tf.Tensor, tf.Operation]
-
-        """
-
-        if arg.func == MatrixElement:
-
-            # extract element from target variable matrix
-            #############################################
-
-            # get and check variable name
-            var_name = str(arg.args[0])
-            if var_name not in self.args.keys():
-                raise AttributeError("Output variables or their indices must be included in "
-                                     "expression_args.")
-
-            # extract target variable from args
-            if len(arg.args) == 3:
-
-                idx1 = self.args[str(arg.args[1])] if str(arg.args[1]) in self.args else int(arg.args[1])
-                idx2 = self.args[str(arg.args[2])] if str(arg.args[2]) in self.args else int(arg.args[2])
-
-                target_var = self.args[var_name][idx1, idx2]
-
-            else:
-
-                idx1 = self.args[arg.args[1]] if str(arg.args[1]) in self.args else int(arg.args[1])
-                target_var = self.args[var_name][idx1]
-
-        elif arg.func == MatrixSlice:
-
-            # extract slice from target variable matrix
-            ###########################################
-
-            # get and check variable name
-            var_name = str(arg.args[0])
-            if var_name not in self.args.keys():
-                raise AttributeError("Output variables or their indices must be included in "
-                                     "expression_args.")
-
-            # extract target variable from args
-            if len(arg.args) == 3:
-
-                target_var = self.args[var_name][int(arg.args[1][0]):int(arg.args[1][1]),
-                             int(arg.args[2][0]):int(arg.args[2][1])]
-            else:
-                target_var = self.args[var_name][int(arg.args[1][0]):int(arg.args[1][1])]
-
-        else:
-
-            # get and check variable name
-            var_name = str(arg)
-            if var_name not in self.args.keys():
-                raise AttributeError("Output variables or their indices must be included in "
-                                     "expression_args.")
-
-            # extract target variable from args
-            target_var = self.args[var_name]
-
-        return target_var
-
-    def recursive_var_search(self, expr: Expr) -> Expr:
-        """Searches for target variable recursively in expression.
-        """
-
-        target_var = None
-
-        if len(expr.args) > 0 and expr.func != MatrixElement and expr.func != MatrixSlice \
-                and not isinstance(expr, MatrixSymbol):
-
-            # perform recursive search
-            for arg in expr.args:
-                target_var = self.recursive_var_search(arg)
-                if target_var is not None:
-                    break
-
-        else:
-
-            # find target variable in arguments
-            if not (symbols('d') in expr.free_symbols or symbols('dt') in expr.free_symbols or expr.is_Number):
-
-                target_var = self.apply_slicing(expr)
-
-        return target_var
-
-class EquationParser(object):
-
-    def __init__(self, eq: str):
-
-        lhs, rhs = eq.split('=')
-
-        eq_parts = [lhs, rhs]
-        self.operations = []
-        self.variables = []
-
-        for eq_part in eq_parts:
-
-            idx = 0
-            while idx < len(eq_part):
-                start = eq_part[idx:].find('[')
-                if start == -1:
-                    break
-                end = eq_part[idx:].find(']') + 1
-                eq_part = eq_part[0:start] + eq_part[end:]
-                idx += end
-
-            expr = parse_expr(eq_part, evaluate=False)
-            self.get_operations(expr)
-            self.get_variables(expr)
-
-    def get_operations(self, expr: Expr):
-
-        self.operations.append(expr.func)
-
-        for arg in expr.args:
-            self.get_operations(arg)
-
-    def get_variables(self, expr: Expr):
-
-        self.variables.append([str(symb) for symb in expr.free_symbols])
-
-
-def parse_dict(var_dict: dict, var_scope: str, tf_graph: Optional[tf.Graph] = None) -> Tuple[list, list]:
+                if callable(op):
+                    if callable(self.state_var):
+                        update = lambda: self.state_var() + op()
+                    else:
+                        update = lambda: self.state_var + op()
+                else:
+                    if callable(self.state_var):
+                        update = lambda: self.state_var() + op
+                    else:
+                        update = lambda: self.state_var + op
+            steps.append((self.state_var, update))
+
+        return steps
+
+
+def parse_dict(var_dict: dict,
+               engine: str = "tensorflow",
+               tf_graph: tp.Optional[tf.Graph] = None,
+               var_scope: tp.Optional[str] = None
+               ) -> tp.Tuple[list, list]:
     """Parses a dictionary with variable information and creates tensorflow variables from that information.
 
     Parameters
     ----------
     var_dict
-    var_scope
+    engine
     tf_graph
+    var_scope
 
     Returns
     -------
@@ -831,103 +1062,116 @@ def parse_dict(var_dict: dict, var_scope: str, tf_graph: Optional[tf.Graph] = No
 
     """
 
-    # get tensorflow graph
-    tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+    var_col = []
+    var_names = []
 
-    with tf_graph.as_default():
+    if engine == "tensorflow":
 
-        with tf.variable_scope(var_scope):
+        # get tensorflow graph
+        tf_graph = tf_graph if tf_graph else tf.get_default_graph()
 
-            # data-type definition
-            data_types = {'float16': tf.float16,
-                          'float32': tf.float32,
-                          'float64': tf.float64,
-                          'int16': tf.int16,
-                          'int32': tf.int32,
-                          'int64': tf.int64,
-                          'double': tf.double,
-                          'complex64': tf.complex64,
-                          'complex128': tf.complex128,
-                          'string': tf.string,
-                          'bool': tf.bool}
+        with tf_graph.as_default():
 
-            tf_vars = []
-            var_names = []
+            with tf.variable_scope(var_scope):
 
-            # go through dictionary items and instantiate variables
-            #######################################################
+                # go through dictionary items and instantiate variables
+                #######################################################
 
-            for var_name, var in var_dict.items():
+                for var_name, var in var_dict.items():
 
-                if var['variable_type'] == 'raw':
+                    if var['variable_type'] == 'raw':
 
-                    tf_var = var['variable']
+                        tf_var = var['variable']
 
-                elif var['variable_type'] == 'state_variable':
+                    elif var['variable_type'] == 'state_variable':
 
-                    tf_var = tf.get_variable(name=var['name'],
+                        tf_var = tf.get_variable(name=var['name'],
+                                                 shape=var['shape'],
+                                                 dtype=getattr(tf, var['data_type']),
+                                                 initializer=tf.constant_initializer(var['initial_value'])
+                                                 )
+
+                    elif var['variable_type'] == 'constant_sparse':
+
+                        # Check the shape, zeros and non-zero elements in the input matrix
+                        # Check if zeros are more than 30 percent of the whole dense matrix and while doing that,
+                        # record the index of each non zero element.
+
+                        if len(var['shape']) == 2:
+                            tN = 1
+
+                            for Num in var['shape']:
+                                tN = Num * tN
+
+                            zN = 0
+                            i = 0
+
+                            NonZer_idx = []
+                            NonZer_val = []
+
+                            for arr in var['initial_value']:
+                                j = 0
+                                for elem in arr:
+
+                                    if elem == 0.0:
+                                        zN += 1
+
+                                    else:
+
+                                        NonZer = [i, j]
+                                        NonZer_idx.append(NonZer)
+
+                                        NonZer_val.append(elem)
+                                    j += 1
+                                i += 1
+                            if zN > 0.3*tN:
+
+                                tf_var = tf.SparseTensor(indices=NonZer_idx,
+                                                         values=NonZer_val,
+                                                         dense_shape=var['shape'])
+
+                    elif var['variable_type'] == 'constant':
+                        tf_var = tf.constant(value=var['initial_value'],
+                                             name=var['name'],
                                              shape=var['shape'],
-                                             dtype=data_types[var['data_type']],
-                                             initializer=tf.constant_initializer(var['initial_value'])
+                                             dtype=getattr(tf, var['data_type'])
                                              )
 
-                elif var['variable_type'] == 'constant_sparse':
+                    elif var['variable_type'] == 'placeholder':
 
-                    # Check the shape, zeros and non-zero elements in the input matrix
-                    # Check if zeros are more than 30 percent of the whole dense matrix and while doing that,
-                    # record the index of each non zero element.
+                        tf_var = tf.placeholder(name=var['name'],
+                                                shape=var['shape'],
+                                                dtype=getattr(tf,var['data_type'])
+                                                )
 
-                    if len(var['shape']) == 2:
-                        tN = 1
+                    else:
 
-                        for Num in var['shape']:
-                            tN = Num * tN
+                        raise ValueError('Variable type must be `raw`, `state_variable`, `constant` or `placeholder`.')
 
-                        zN = 0
-                        i = 0
+                    var_col.append(tf_var)
+                    var_names.append(var_name)
 
-                        NonZer_idx = []
-                        NonZer_val = []
+    elif engine == "numpy":
 
-                        for arr in var['initial_value']:
-                            j = 0
-                            for elem in arr:
+        for var_name, var in var_dict.items():
 
-                                if elem == 0.0:
-                                    zN += 1
+            if var['variable_type'] == 'raw':
+                np_var = var['variable']
+            else:
+                np_var = np.zeros(shape=var['shape'],
+                                  dtype=getattr(np, var['data_type']))
+                np_var += var['initial_value']
 
-                                else:
+            var_col.append(np_var)
+            var_names.append(var_name)
 
-                                    NonZer = [i, j]
-                                    NonZer_idx.append(NonZer)
+    else:
 
-                                    NonZer_val.append(elem)
-                                j += 1
-                            i += 1
-                        if zN > 0.3*tN:
+        raise ValueError('Engine must be set to either `tensorflow` or `numpy`.')
 
-                            tf_var = tf.SparseTensor(indices=NonZer_idx, values=NonZer_val, dense_shape=var['shape'])
+    return var_col, var_names
 
-                elif var['variable_type'] == 'constant':
-                    tf_var = tf.constant(value=var['initial_value'],
-                                         name=var['name'],
-                                         shape=var['shape'],
-                                         dtype=data_types[var['data_type']]
-                                         )
 
-                elif var['variable_type'] == 'placeholder':
-
-                    tf_var = tf.placeholder(name=var['name'],
-                                            shape=var['shape'],
-                                            dtype=data_types[var['data_type']]
-                                            )
-
-                else:
-
-                    raise ValueError('Variable type must be `raw`, `state_variable`, `constant` or `placeholder`.')
-
-                tf_vars.append(tf_var)
-                var_names.append(var_name)
-
-    return tf_vars, var_names
-
+def round_to_prec(x, prec=0):
+    prec = 10**prec
+    return tf.round(x * prec) / prec

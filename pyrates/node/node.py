@@ -57,7 +57,9 @@ class Node(object):
             with tf.variable_scope(self.key):
 
                 # get tensorflow variables and the variable names from operation_args
-                tf_vars, var_names = parse_dict(operation_args, self.key, self.tf_graph)
+                tf_vars, var_names = parse_dict(var_dict=operation_args,
+                                                var_scope=self.key,
+                                                tf_graph=self.tf_graph)
 
                 operator_args = dict()
 

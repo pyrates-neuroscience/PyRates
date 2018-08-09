@@ -53,21 +53,10 @@ class Operator(object):
 
                     for i, expr in enumerate(expressions):
 
-                        expr_parser = EquationParser(expr, expression_args, self.tf_graph)
+                        expr_parser = EquationParser(expr, expression_args, engine='tensorflow', tf_graph=self.tf_graph)
                         op = expr_parser.lhs_update
 
-                        # lhs, rhs = expr.split('=')
-                        #
-                        # # parse right-hand side and turn it into tensorflow operation
-                        # rhs_parser = RHSParser(rhs, expression_args, tf_graph)
-                        # rhs_tf_op = rhs_parser.transform()
-                        #
-                        # # parse left-hand side and combine it with rhs tensorflow operation
-                        # lhs_parser = LHSParser(lhs, expression_args, rhs_tf_op, tf_graph)
-                        # op, _ = lhs_parser.transform()
-
                         # collect resulting tensorflow operation
-
                         self.expressions.append(op)
 
     def create(self):

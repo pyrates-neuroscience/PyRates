@@ -525,7 +525,7 @@ net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_s
 
 # network simulation
 ####################
-
+net.update_node('jrc', ["v"], {})
 results, ActTime = net.run(simulation_time=simulation_time,
                   # inputs={net.nodes['jrc'].U: inp},
                   # inputs = input_coll,
