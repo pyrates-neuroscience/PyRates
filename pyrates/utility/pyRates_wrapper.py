@@ -17,8 +17,8 @@ __status__ = "Development"
 #####################
 
 
-def circuit_wrapper(circuit_type, circuit_params, simulation_params, target_var_idx=0, population_idx=None,
-                    time_window=None):
+def circuit_wrapper(circuit_type, circuit_params, simulation_params, target_var='membrane_potential',
+                    population_idx=None, time_window=None):
     """Instantiates circuit and returns its simulated behavior.
     """
 
@@ -47,7 +47,7 @@ def circuit_wrapper(circuit_type, circuit_params, simulation_params, target_var_
     if not time_window:
         time_window = [0., simulation_params['simulation_time']]
 
-    return circuit.get_population_states(target_var_idx, population_idx, time_window=time_window).flatten()
+    return circuit.get_population_states(target_var, population_idx, time_window=time_window).flatten()
 
 
 def jansenrit_wrapper(rand_vars, step_size=1e-3, max_synaptic_delay=0.5, input_mean=220., input_var=22.,
@@ -71,7 +71,7 @@ def jansenrit_wrapper(rand_vars, step_size=1e-3, max_synaptic_delay=0.5, input_m
     simulation_params = {'simulation_time': simulation_time, 'synaptic_inputs': synaptic_input}
 
     return np.mean(circuit_wrapper('JansenRitCircuit', circuit_params, simulation_params,
-                                   population_idx=[0], time_window=[simulation_time-cutoff_time, simulation_time]))
+                                   population_idx=['JR_PCs'], time_window=[simulation_time-cutoff_time, simulation_time]))
 
 
 ###############
@@ -229,6 +229,6 @@ for i, predicted_vals in enumerate(predictions):
     fig.colorbar(im2, ax=axes[1], orientation='vertical')
 
     tight_layout()
-    fig.show()
+show()
 
 print('finished')
