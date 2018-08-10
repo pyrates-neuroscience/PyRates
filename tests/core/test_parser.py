@@ -322,7 +322,7 @@ def test_1_6_expression_parser_funcs():
                                    tf_graph=gr).parse_expr()
 
 
-def test_2_1_solver_init():
+def test_1_7_solver_init():
     """Testing initializations of different equation solvers:
 
     See Also
@@ -340,7 +340,7 @@ def test_2_1_solver_init():
         assert isinstance(solver, Solver)
 
 
-def test_2_2_solver_update():
+def test_1_8_solver_update():
     """Testing variable updates performed by solvers:
 
     See Also
@@ -393,7 +393,7 @@ def test_2_2_solver_update():
     assert var_new == pytest.approx(var + new_val * dt, rel=1e-6)
 
 
-def test_3_1_equation_parser():
+def test_1_9_equation_parser():
     """Tests equation parser functionalities.
 
     See Also

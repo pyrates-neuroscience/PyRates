@@ -106,22 +106,28 @@ class Network(MultiDiGraph):
         # initialize edges
         ##################
 
-        # collect connectivity information from connection_dict
-        coupling_ops = connection_dict['coupling_operators']
-        coupling_op_args = connection_dict['coupling_operator_args']
-        sources = connection_dict['sources']
-        targets = connection_dict['targets']
+        if connection_dict:
 
-        # pass integration step-size to coupling op arguments
-        coupling_op_args['dt'] = {'variable_type': 'constant',
-                                  'name': 'dt',
-                                  'shape': (),
-                                  'data_type': 'float32',
-                                  'initial_value': self.dt}
+            # collect connectivity information from connection_dict
+            coupling_ops = connection_dict['coupling_operators']
+            coupling_op_args = connection_dict['coupling_operator_args']
+            sources = connection_dict['sources']
+            targets = connection_dict['targets']
 
-        # check dimensionality of coupling_ops
-        if len(coupling_ops) < len(sources):
-            coupling_ops = [coupling_ops[0] for _ in range(len(sources))]
+            # pass integration step-size to coupling op arguments
+            coupling_op_args['dt'] = {'variable_type': 'constant',
+                                      'name': 'dt',
+                                      'shape': (),
+                                      'data_type': 'float32',
+                                      'initial_value': self.dt}
+
+            # check dimensionality of coupling_ops
+            if len(coupling_ops) < len(sources):
+                coupling_ops = [coupling_ops[0] for _ in range(len(sources))]
+
+        else:
+
+            sources, targets, coupling_ops, coupling_op_args = ([], [], [], [])
 
         with self.tf_graph.as_default():
 
@@ -149,7 +155,10 @@ class Network(MultiDiGraph):
                         projections.append(edge.project)
 
                     # group project operations of all edges
-                    self.project = tf.tuple(projections, name='project')
+                    if len(projections) > 0:
+                        self.project = tf.tuple(projections, name='project')
+                    else:
+                        self.project = tf.no_op()
 
             # group update and project operation (grouped across all nodes/edges)
             self.step = tf.group(self.update, self.project, name='step')
