@@ -33,14 +33,17 @@ class Operator(object):
     --------
 
     """
-    def __init__(self, expressions: List[str], expression_args: dict, tf_graph: tf.Graph, key: str,
-                 variable_scope: str, dependencies: Optional[list] = None):
+    def __init__(self, expressions: List[str], expression_args: dict, key: str,
+                 variable_scope: str, dependencies: Optional[list] = None, tf_graph: Optional[tf.Graph] = None):
         """Instantiates operator.
         """
 
         self.expressions = []
         self.key = key
-        self.tf_graph = tf_graph
+        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+        if not dependencies:
+            dependencies = []
 
         # parse expressions
         ###################
@@ -49,9 +52,9 @@ class Operator(object):
 
             with tf.variable_scope(variable_scope):
 
-                with tf.control_dependencies(dependencies):
+                for i, expr in enumerate(expressions):
 
-                    for i, expr in enumerate(expressions):
+                    with tf.control_dependencies(dependencies + self.expressions):
 
                         expr_parser = EquationParser(expr, expression_args, engine='tensorflow', tf_graph=self.tf_graph)
                         op = expr_parser.lhs_update

@@ -167,7 +167,9 @@ def test_1_4_expression_parser_logic_ops():
     #################################################
 
     expr = "5 >= 6"
-    assert NPExpressionParser(expr_str=expr, args={}).parse_expr()() == False
+
+    # numpy-based parser
+    assert not NPExpressionParser(expr_str=expr, args={}).parse_expr()()
 
     # tensorflow-based parser
     gr = tf.get_default_graph()
@@ -175,7 +177,7 @@ def test_1_4_expression_parser_logic_ops():
         result = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
     with tf.Session(graph=gr) as sess:
         sess.run(result)
-        assert result.eval() == False
+        assert not result.eval()
 
 
 def test_1_5_expression_parser_indexing():
@@ -228,11 +230,11 @@ def test_1_5_expression_parser_indexing():
     # define invalid test cases
     ###########################
 
-    indexed_expressions_wrong = ["A[1.2]",       # single-dim indexing I
-                                 "A[all]",       # single-dim indexing II
-                                 "A[-11]",       # single-dim indexing III
-                                 "A[0:5:2:1]",   # single-dim slicing I
-                                 "A[-1::0:-1]",  # single-dim slicing II
+    indexed_expressions_wrong = ["A[1.2]",       # indexing with float variables
+                                 "A[all]",       # indexing with undefined key words
+                                 "A[-11]",       # index out of bounds
+                                 "A[0:5:2:1]",   # too many arguments for slicing
+                                 "A[-1::0:-1]",  # wrong slicing syntax II
                                  ]
 
     # test expression parsers on expression results
@@ -393,6 +395,10 @@ def test_2_2_solver_update():
 
 def test_3_1_equation_parser():
     """Tests equation parser functionalities.
+
+    See Also
+    --------
+    :class:`EquationParser`: Detailed documentation of equation parser attributes and methods.
     """
 
     # test minimal minimal call example
@@ -401,42 +407,36 @@ def test_3_1_equation_parser():
     parser = EquationParser("a = 5 + 2", {'a': np.zeros(shape=())}, engine="numpy")
     assert isinstance(parser, EquationParser)
 
-    # test simple equation solving
-    ##############################
+    # define test equations
+    #######################
 
-    # numpy-based parsing
-    parser = EquationParser("a = 5 + 2", {'a': np.zeros(shape=())}, engine="numpy")
-    result = parser.lhs_update[0]()
-    assert result == 7
+    equations = ["a = 5. + 2.",              # simple update of variable
+                 "d/dt * a = 5. + 2.",       # simple differential equation
+                 ]
+    arguments = [{'a': np.zeros(shape=(), dtype=np.float32)},
+                 {'a': np.zeros(shape=(), dtype=np.float32), 'dt': 0.1}
+                 ]
+    results = [7., 0.7]
 
-    # tensorflow-based parsing
-    gr = tf.Graph()
-    with gr.as_default():
-        v1 = tf.Variable(np.zeros(shape=()), dtype=tf.int32)
-        parser = EquationParser("a = 5 + 2", {'a': v1}, engine="tensorflow")
-        upd = parser.lhs_update
-    with tf.Session(graph=gr) as sess:
-        sess.run(tf.global_variables_initializer())
-        sess.run(upd)
-        result = v1.eval()
-    assert result == 7
+    # test equation parser on different test equations
+    ##################################################
 
-    # test differential equation solving
-    ####################################
+    for eq, args, target in zip(equations, arguments, results):
 
-    # numpy-based parsing
-    #parser = EquationParser("d/dt * a = a^2", {'a': np.zeros(shape=()) + 2., 'dt': 0.1}, engine="numpy")
-    #result = parser.lhs_update[0]()
-    #assert result == pytest.approx(2 + 0.1 * 2**2, rel=1e-6)
+        # numpy-based parsing
+        #parser = EquationParser(eq, args, engine="numpy")
+        #result = parser.lhs_update[0]()
+        #assert result == pytest.approx(target, rel=1e-6)
 
-    # tensorflow-based parsing
-    gr = tf.Graph()
-    with gr.as_default():
-        v1 = tf.Variable(np.zeros(shape=()) + 2., dtype=tf.float32)
-        parser = EquationParser("d/dt * a = a^2", {'a': v1, 'dt': tf.constant(0.1)}, engine="tensorflow")
-        upd = parser.lhs_update
-    with tf.Session(graph=gr) as sess:
-        sess.run(tf.global_variables_initializer())
-        sess.run(upd)
-        result = v1.eval()
-    assert result == pytest.approx(2 + 0.1 * 2**2, rel=1e-6)
+        # tensorflow-based parsing
+        gr = tf.Graph()
+        with gr.as_default():
+            v = tf.Variable(args['a'])
+            args['a'] = v
+            parser = EquationParser(eq, args, engine="tensorflow")
+            upd = parser.lhs_update
+        with tf.Session(graph=gr) as sess:
+            sess.run(tf.global_variables_initializer())
+            sess.run(upd)
+            result = v.eval()
+        assert result == pytest.approx(target, rel=1e-6)
