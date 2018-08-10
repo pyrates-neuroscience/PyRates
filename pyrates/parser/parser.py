@@ -1037,7 +1037,7 @@ class NPSolver(Solver):
                         update = lambda: self.state_var() + op
                     else:
                         update = lambda: self.state_var + op
-            steps.append((self.state_var, update))
+            steps.append(update)
 
         return steps
 

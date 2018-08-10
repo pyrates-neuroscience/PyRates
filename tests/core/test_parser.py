@@ -7,7 +7,7 @@ import tensorflow as tf
 import pytest
 
 # pyrates internal imports
-from pyrates.parser import NPExpressionParser, TFExpressionParser
+from pyrates.parser import NPExpressionParser, TFExpressionParser, NPSolver, TFSolver, EquationParser
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -318,3 +318,125 @@ def test_1_6_expression_parser_funcs():
             with pytest.raises((IndexError, ValueError, SyntaxError, TypeError)):
                 TFExpressionParser(expr_str=expr, args={'A': tf.constant(A)},
                                    tf_graph=gr).parse_expr()
+
+
+def test_2_1_solver_init():
+    """Testing initializations of different equation solvers:
+
+    See Also
+    --------
+    :class:`Solver`: Detailed documentation of solver attributes and methods.
+    """
+
+    solvers = [NPSolver, TFSolver]
+
+    # test minimal minimal call example
+    ###################################
+
+    for Solver in solvers:
+        solver = Solver(5., np.zeros(shape=()))
+        assert isinstance(solver, Solver)
+
+
+def test_2_2_solver_update():
+    """Testing variable updates performed by solvers:
+
+    See Also
+    --------
+    :class:`Solver`: Detailed documentation of solver attributes and methods.
+    """
+
+    # simple update
+    ###############
+
+    var = np.ones(shape=(), dtype=np.float32)
+    new_val = 5.
+
+    # numpy-based solver
+    upd = NPSolver(new_val, var).solve()
+    for u in upd:
+        var_new = u()
+    assert var_new == new_val
+
+    # tensorflow-based solver
+    gr = tf.Graph()
+    with gr.as_default():
+        v1 = tf.Variable(var, name='v1')
+        upd = TFSolver(tf.constant(new_val), v1, tf_graph=gr).solve()
+    with tf.Session(graph=gr) as sess:
+        sess.run(upd)
+        var_new = v1.eval()
+    assert var_new == new_val
+
+    # integration
+    #############
+
+    dt = 0.1
+
+    # numpy-based solver
+    upd = NPSolver(new_val, var, dt=dt).solve()
+    for u in upd:
+        var_new = u()
+    assert var_new == pytest.approx(var + new_val * dt, rel=1e-6)
+
+    # tensorflow-based solver
+    gr = tf.Graph()
+    with gr.as_default():
+        v1 = tf.Variable(var, name='v1')
+        upd = TFSolver(tf.constant(new_val), v1, dt=dt, tf_graph=gr).solve()
+    with tf.Session(graph=gr) as sess:
+        sess.run(tf.global_variables_initializer())
+        sess.run(upd)
+        var_new = v1.eval()
+    assert var_new == pytest.approx(var + new_val * dt, rel=1e-6)
+
+
+def test_3_1_equation_parser():
+    """Tests equation parser functionalities.
+    """
+
+    # test minimal minimal call example
+    ###################################
+
+    parser = EquationParser("a = 5 + 2", {'a': np.zeros(shape=())}, engine="numpy")
+    assert isinstance(parser, EquationParser)
+
+    # test simple equation solving
+    ##############################
+
+    # numpy-based parsing
+    parser = EquationParser("a = 5 + 2", {'a': np.zeros(shape=())}, engine="numpy")
+    result = parser.lhs_update[0]()
+    assert result == 7
+
+    # tensorflow-based parsing
+    gr = tf.Graph()
+    with gr.as_default():
+        v1 = tf.Variable(np.zeros(shape=()), dtype=tf.int32)
+        parser = EquationParser("a = 5 + 2", {'a': v1}, engine="tensorflow")
+        upd = parser.lhs_update
+    with tf.Session(graph=gr) as sess:
+        sess.run(tf.global_variables_initializer())
+        sess.run(upd)
+        result = v1.eval()
+    assert result == 7
+
+    # test differential equation solving
+    ####################################
+
+    # numpy-based parsing
+    #parser = EquationParser("d/dt * a = a^2", {'a': np.zeros(shape=()) + 2., 'dt': 0.1}, engine="numpy")
+    #result = parser.lhs_update[0]()
+    #assert result == pytest.approx(2 + 0.1 * 2**2, rel=1e-6)
+
+    # tensorflow-based parsing
+    gr = tf.Graph()
+    with gr.as_default():
+        v1 = tf.Variable(np.zeros(shape=()) + 2., dtype=tf.float32)
+        parser = EquationParser("d/dt * a = a^2", {'a': v1, 'dt': tf.constant(0.1)}, engine="tensorflow")
+        upd = parser.lhs_update
+    with tf.Session(graph=gr) as sess:
+        sess.run(tf.global_variables_initializer())
+        sess.run(upd)
+        result = v1.eval()
+    assert result == pytest.approx(2 + 0.1 * 2**2, rel=1e-6)
