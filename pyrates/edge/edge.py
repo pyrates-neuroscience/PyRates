@@ -100,5 +100,10 @@ class Edge(object):
                                     key=self.key,
                                     variable_scope=self.key)
 
+                # bind newly created tf variables to edge
+                for var_name, tf_var in operator.args.items():
+                    if not hasattr(self, var_name):
+                        setattr(self, var_name, tf_var)
+
                 # connect source and target variables via operator
                 self.project = operator.create()

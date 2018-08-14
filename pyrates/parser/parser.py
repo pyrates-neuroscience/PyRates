@@ -76,6 +76,9 @@ class EquationParser(object):
             raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
         rhs_op = rhs_parser.parse_expr()
 
+        # add information about rhs to args
+        self.args['rhs'] = rhs_op
+
         # check update type of lhs
         if "d/dt" in lhs:
             lhs_split = lhs.split('*')
@@ -88,9 +91,9 @@ class EquationParser(object):
 
         # parse lhs
         if engine == 'tensorflow':
-            lhs_parser = TFExpressionParser(lhs, self.args, self.tf_graph)
+            lhs_parser = TFExpressionParser(lhs, self.args, lhs=True,  tf_graph=self.tf_graph)
         elif engine == 'numpy':
-            lhs_parser = NPExpressionParser(rhs, self.args)
+            lhs_parser = NPExpressionParser(rhs, self.args, lhs=True)
         else:
             raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
         self.target_var = lhs_parser.parse_expr()
@@ -98,49 +101,31 @@ class EquationParser(object):
         # solve for state variable
         ##########################
 
-        # set integration step-size
         if solve:
+
+            # set integration step-size
             try:
                 dt = self.args['dt']
             except KeyError:
                 raise ValueError('Integration step-size has to be passed for differential equations. Please '
                                  'add a field `dt` to `args` with the corresponding value.')
-        else:
-            dt = None
 
-        # create solver instance
-        if engine == 'tensorflow':
-            solver = TFSolver(rhs=rhs_op,
-                              state_var=self.target_var,
-                              dt=dt,
-                              tf_graph=self.tf_graph)
-        else:
-            solver = NPSolver(rhs=rhs_op,
-                              state_var=self.target_var,
-                              dt=dt)
+            # create solver instance
+            if engine == 'tensorflow':
+                solver = TFSolver(rhs=rhs_op,
+                                  state_var=self.target_var,
+                                  dt=dt,
+                                  tf_graph=self.tf_graph)
+            else:
+                solver = NPSolver(rhs=rhs_op,
+                                  state_var=self.target_var,
+                                  dt=dt)
 
-        # collect solver update operation
-        self.lhs_update = solver.solve()
+            # collect solver update operation
+            self.update = solver.solve()
 
-    def parse_idx(self, idx):
-        """Creates list of indices from idx.
-        """
-
-        # retrieve index from args dictionary, if provided
-        if idx in self.args.keys():
-            idx = self.args[idx]
-
-        if type(idx) == str:
-            test_var = np.zeros(self.target_var.shape, dtype=int)
-            exec(f"test_var[{idx}] = 1")
-            idx = np.argwhere(test_var == 1)
-        elif idx.dtype == 'bool' or idx.dtype == 'bool_ref':
-            idx = np.argwhere(idx)
-        else:
-            if idx.shape[1] != len(self.target_var.shape):
-                raise ValueError('Each entry in indices needs to math the dimensionality of the target variable.')
-
-        return idx
+        elif 'rhs' in self.args.keys():
+            self.update = self.args.pop('rhs')
 
 
 # expression parsers (lhs/rhs of an equation)
@@ -156,8 +141,6 @@ class ExpressionParser(ParserElement):
         Mathematical expression in string format.
     args
         Dictionary containing all variables and functions needed to evaluate the expression.
-    tf_graph
-        Tensorflow graph on which all operations will be created.
 
     Attributes
     ----------
@@ -173,7 +156,7 @@ class ExpressionParser(ParserElement):
 
     """
     
-    def __init__(self, expr_str: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None) -> None:
+    def __init__(self, expr_str: str, args: dict, lhs: bool = False) -> None:
         """Instantiates expression parser.
         """
         
@@ -196,6 +179,7 @@ class ExpressionParser(ParserElement):
         self.expr_list = []
         self._op_tmp = None
         self.op = None
+        self.lhs = lhs
         
         # define algebra
         ################
@@ -406,7 +390,7 @@ class ExpressionParser(ParserElement):
                     expr_stack.pop()
             expr_stack.pop()
 
-            # build strinb-based representation of idx
+            # build string-based representation of idx
             idx = ""
             for index in indices[::-1]:
                 for i, ind in enumerate(index):
@@ -491,15 +475,23 @@ class ExpressionParser(ParserElement):
             # return float
             self._op_tmp = float(op)
 
-        elif op[0].isnumeric:
+        elif op.isnumeric():
 
             # return integer
             self._op_tmp = int(op)
 
-        elif op[0].isalpha():
+        elif op.isalpha():
 
-            raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
-                             f"in the respective arguments dictionary.")
+            if self.lhs:
+
+                op_tmp = self.args.pop('rhs')
+                self._op_tmp = op_tmp
+                self.args[op] = op_tmp
+
+            else:
+
+                raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
+                                 f"in the respective arguments dictionary.")
 
         else:
 
@@ -684,8 +676,16 @@ class LambdaExpressionParser(ExpressionParser):
 
         elif op[0].isalpha():
 
-            raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
-                             f"in the respective arguments dictionary.")
+            if self.lhs:
+
+                op = self.args['rhs']
+                self._op_tmp = op
+                self.args[op] = op
+
+            else:
+
+                raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
+                                 f"in the respective arguments dictionary.")
 
         else:
 
@@ -699,14 +699,14 @@ class TFExpressionParser(ExpressionParser):
     """Expression parser that transforms expression into tensorflow operations on a tensorflow graph.
     """
 
-    def __init__(self, expr_str: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None) -> None:
+    def __init__(self, expr_str: str, args: dict, lhs: bool = False, tf_graph: tp.Optional[tf.Graph] = None) -> None:
         """Instantiates tensorflow expression parser.
         """
 
         # call super init
         #################
 
-        super().__init__(expr_str=expr_str, args=args)
+        super().__init__(expr_str=expr_str, args=args, lhs=lhs)
 
         # define tensorflow graph on which to create the operations
         ###########################################################
@@ -756,7 +756,8 @@ class TFExpressionParser(ExpressionParser):
                  "zeros": tf.zeros,
                  "softmax": tf.nn.softmax,
                  "boolean_mask": tf.boolean_mask,
-                 "array_idx": tf.gather_nd
+                 "array_idx": tf.gather_nd,
+                 "new_var": tf.get_variable
                  }
         for key, val in funcs.items():
             self.funcs[key] = val
@@ -789,14 +790,14 @@ class NPExpressionParser(LambdaExpressionParser):
     """Expression parser that turns expressions into numpy operations.
     """
 
-    def __init__(self, expr_str: str, args: dict) -> None:
+    def __init__(self, expr_str: str, args: dict, lhs: bool = False) -> None:
         """Instantiate numpy expression parser.
         """
 
         # call super init
         #################
 
-        super().__init__(expr_str=expr_str, args=args)
+        super().__init__(expr_str=expr_str, args=args, lhs=lhs)
 
         # define operations and functions
         #################################
@@ -837,7 +838,8 @@ class NPExpressionParser(LambdaExpressionParser):
                  "cast": np.array,
                  "randn": np.random.randn,
                  "ones": np.ones,
-                 "zeros": np.zeros
+                 "zeros": np.zeros,
+                 "new_var": np.array
                  }
         for key, val in funcs.items():
             self.funcs[key] = val
@@ -892,7 +894,6 @@ class Solver(object):
     def __init__(self,
                  rhs: tp.Union[tf.Operation, tf.Tensor, tp.Callable, tuple],
                  state_var: tp.Union[tf.Variable, tf.Tensor, np.ndarray, float, int],
-                 state_var_idx: tp.Optional[np.ndarray] = None,
                  dt: tp.Optional[float] = None
                  ) -> None:
         """Instantiates solver.
@@ -903,7 +904,6 @@ class Solver(object):
 
         self.rhs = rhs
         self.state_var = state_var
-        self.state_var_idx = state_var_idx
         self.dt = dt
 
         # define integration expression
@@ -911,9 +911,9 @@ class Solver(object):
 
         # TODO: Implement Butcher tableau and its translation into various solver algorithms
         if self.dt is None:
-            self.integration_expressions = ["rhs"]
+            self.integration_expression = "rhs"
         else:
-            self.integration_expressions = ["dt * rhs"]
+            self.integration_expression = "dt * rhs"
 
     def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
         """Creates tensorflow method for performing a single differentiation step.
@@ -928,7 +928,6 @@ class TFSolver(Solver):
     def __init__(self,
                  rhs: tp.Union[tf.Operation, tf.Tensor],
                  state_var: tp.Union[tf.Variable, tf.Tensor],
-                 state_var_idx: tp.Optional[np.ndarray] = None,
                  dt: tp.Optional[float] = None,
                  tf_graph: tp.Optional[tf.Graph] = None
                  ) -> None:
@@ -938,7 +937,7 @@ class TFSolver(Solver):
         # call super init
         #################
 
-        super().__init__(rhs=rhs, state_var=state_var, state_var_idx=state_var_idx, dt=dt)
+        super().__init__(rhs=rhs, state_var=state_var, dt=dt)
 
         # initialize additional attributes
         ##################################
@@ -951,42 +950,19 @@ class TFSolver(Solver):
 
         with self.tf_graph.as_default():
 
-            steps = list()
-            steps.append(tf.no_op())
-
             # go through integration expressions to solve DE
             ################################################
 
-            for expr in self.integration_expressions:
+            # parse the integration expression
+            expr_args = {'dt': self.dt, 'rhs': self.rhs}
+            parser = TFExpressionParser(self.integration_expression, expr_args, tf_graph=self.tf_graph)
+            op = parser.parse_expr()
 
-                # parse the integration expression
-                expr_args = {'dt': self.dt, 'rhs': self.rhs}
-                parser = TFExpressionParser(expr, expr_args, self.tf_graph)
-                op = parser.parse_expr()
+            # update the target state variable
+            if self.dt is not None:
+                op = self.state_var + op
 
-                # update the target state variable
-                with tf.control_dependencies([steps[-1]]):
-
-                    if self.state_var_idx is None:
-
-                        if self.dt is None:
-                            steps.append(tf.assign(self.state_var, op))
-                        else:
-                            steps.append(tf.assign_add(self.state_var, op))
-                    else:
-
-                        if self.dt is None:
-                            steps.append(tf.scatter_nd_update(ref=self.state_var,
-                                                              indices=self.state_var_idx,
-                                                              updates=tf.squeeze(op)))
-                        else:
-                            steps.append(tf.scatter_nd_add(ref=self.state_var,
-                                                           indices=self.state_var_idx,
-                                                           updates=tf.squeeze(op)))
-
-            steps.pop(0)
-
-        return tf.group(steps)
+        return op
 
 
 class NPSolver(Solver):
@@ -994,21 +970,6 @@ class NPSolver(Solver):
     def solve(self) -> list:
 
         steps = list()
-
-        # apply indexing to state variable if necessary
-        ###############################################
-
-        if self.state_var_idx is not None:
-            if callable(self.state_var):
-                if callable(self.state_var_idx):
-                    self.state_var = lambda: self.state_var()[self.state_var_idx()]
-                else:
-                    self.state_var = lambda: self.state_var()[self.state_var_idx]
-            else:
-                if callable(self.state_var_idx):
-                    self.state_var = lambda: self.state_var[self.state_var_idx()]
-                else:
-                    self.state_var = lambda: self.state_var[self.state_var_idx]
 
         # go through integration expressions to solve DE
         ################################################

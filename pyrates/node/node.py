@@ -68,23 +68,30 @@ class Node(object):
                     setattr(self, var_name, tf_var)
                     operator_args[var_name] = tf_var
 
-                tf_ops = []
+                tf_op = tf.no_op()
 
                 for op_name, op in operations.items():
 
                     # store operator equations
                     self.operations[op_name] = op
 
-                    # create operator
-                    operator = Operator(expressions=op,
-                                        expression_args=operator_args,
-                                        tf_graph=self.tf_graph,
-                                        key=op_name,
-                                        variable_scope=self.key,
-                                        dependencies=tf_ops)
+                    with tf.control_dependencies([tf_op]):
 
-                    # collect tensorflow operator
-                    tf_ops.append(operator.create())
+                        # create operator
+                        operator = Operator(expressions=op,
+                                            expression_args=operator_args,
+                                            tf_graph=self.tf_graph,
+                                            key=op_name,
+                                            variable_scope=self.key)
+
+                        # collect tensorflow operator
+                        tf_op = operator.create()
+
+                    # bind newly created tf variables to node
+                    for var_name, tf_var in operator.args.items():
+                        if not hasattr(self, var_name):
+                            setattr(self, var_name, tf_var)
+                            operation_args[var_name] = tf_var
 
                 # group tensorflow versions of all operators
-                self.update = tf.group(tf_ops, name='update')
+                self.update = tf_op

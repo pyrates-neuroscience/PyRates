@@ -38,12 +38,11 @@ class Operator(object):
         """Instantiates operator.
         """
 
-        self.expressions = []
+        self.DEs = []
+        self.updates = []
         self.key = key
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
-
-        if not dependencies:
-            dependencies = []
+        self.args = expression_args
 
         # parse expressions
         ###################
@@ -54,13 +53,17 @@ class Operator(object):
 
                 for i, expr in enumerate(expressions):
 
-                    with tf.control_dependencies(dependencies + self.expressions):
+                    with tf.control_dependencies(dependencies):
 
-                        expr_parser = EquationParser(expr, expression_args, engine='tensorflow', tf_graph=self.tf_graph)
-                        op = expr_parser.lhs_update
+                        # parse equation
+                        parser = EquationParser(expr, self.args, engine='tensorflow', tf_graph=self.tf_graph)
+                        self.args = parser.args
 
-                        # collect resulting tensorflow operation
-                        self.expressions.append(op)
+                        # collect tensorflow variables and update operations
+                        if hasattr(parser, 'update'):
+                            self.DEs.append((parser.target_var, parser.update))
+                        else:
+                            self.updates.append(parser.target_var)
 
     def create(self):
         """Create a single tensorflow operation for the set of parsed expressions.
@@ -69,6 +72,11 @@ class Operator(object):
         with self.tf_graph.as_default():
 
             # group the tensorflow operations across expressions
-            grouped_expressions = tf.group(self.expressions, name=self.key)
+            with tf.control_dependencies(self.updates):
+                if len(self.DEs) > 0:
 
-        return grouped_expressions
+                    updates = tf.group([var.assign(upd) for var, upd in self.DEs], name=self.key)
+                else:
+                    updates = tf.group(self.updates, name=self.key)
+
+        return updates

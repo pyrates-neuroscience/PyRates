@@ -54,25 +54,27 @@ def test_2_1_operator():
     #################################################
 
     eq1 = "d/dt * a = a^2"
-    eq2 = "a = a / sum(a,1)"
+    eq2 = "b = a / sum(a)"
 
     gr = tf.Graph()
     with gr.as_default():
-        v1 = tf.Variable(np.ones((1, 10))*5., dtype=tf.float32)
-        v2 = tf.Variable(np.ones((1, 10))*5., dtype=tf.float32)
+        v1 = tf.Variable(np.ones((1, 10))*2., dtype=tf.float32)
+        v2 = tf.Variable(np.ones((1, 10))*2., dtype=tf.float32)
 
-    op1 = Operator([eq1, eq2], {'a': v1, 'dt': .5}, 'test1', 'test_scope1', tf_graph=gr).create()
-    op2 = Operator([eq2, eq1], {'a': v2, 'dt': .5}, 'test2', 'test_scope2', tf_graph=gr).create()
+    args1 = {'a': v1, 'dt': .5}
+    args2 = {'a': v2, 'dt': .5}
+    op1 = Operator([eq1, eq2], args1, 'test1', 'test_scope1', tf_graph=gr).create()
+    op2 = Operator([eq2, eq1], args2, 'test2', 'test_scope2', tf_graph=gr).create()
 
     with tf.Session(graph=gr) as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(op1)
-        result1 = np.sum(v1.eval())
+        result1 = np.sum(args1['b'].eval())
         sess.run(op2)
-        result2 = np.sum(v2.eval())
+        result2 = np.sum(args2['b'].eval())
 
     assert result1 == pytest.approx(1., rel=1e-6)
-    assert result2 > result1
+    assert result2 == pytest.approx(1., rel=1e-6)
 
 
 def test_2_2_node():
@@ -86,7 +88,7 @@ def test_2_2_node():
     # test minimal call example
     ###########################
 
-    ops = {'operator_1': ["a = a*2"]}
+    ops = {'operator_1': ["a[:] = 2"]}
     op_args = {'a': {'variable_type': 'state_variable',
                      'shape': (1, 10),
                      'name': 'a',
@@ -100,28 +102,35 @@ def test_2_2_node():
     # test dependencies between operations of node
     ##############################################
 
-    op1 = ["d/dt * a = a^2", "a = a / sum(a,1)"]
-    op2 = ["d/dt * a = a*2"]
+    op1 = ["d/dt * a = a^2", "b = a*2"]
+    op2 = ["c = b / sum(b)"]
 
     op_args['dt'] = {'variable_type': 'constant',
                      'shape': (),
                      'name': 'dt',
                      'data_type': 'float32',
                      'initial_value': 0.5}
+    op_args1 = op_args.copy()
+    op_args2 = op_args.copy()
+    op_args2['b'] = {'variable_type': 'state_variable',
+                     'shape': (1, 10),
+                     'name': 'b',
+                     'data_type': 'float32',
+                     'initial_value': 1.}
     gr = tf.Graph()
 
-    n1 = Node({'operator_1': op1, 'operator_2': op2}, op_args, 'test1', tf_graph=gr)
-    n2 = Node({'operator_1': op2, 'operator_2': op1}, op_args, 'test2', tf_graph=gr)
+    n1 = Node({'operator_1': op1, 'operator_2': op2}, op_args1, 'test1', tf_graph=gr)
+    n2 = Node({'operator_1': op2, 'operator_2': op1}, op_args2, 'test2', tf_graph=gr)
 
     with tf.Session(graph=gr) as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(n1.update)
-        result1 = np.sum(n1.a.eval())
+        result1 = np.sum(n1.c.eval())
         sess.run(n2.update)
-        result2 = np.sum(n2.a.eval())
+        result2 = np.sum(n2.c.eval())
 
-    assert result2 == pytest.approx(1., rel=1e-6)
-    assert result1 > result2
+    assert result1 == pytest.approx(1., rel=1e-6)
+    assert result1 == result2
 
 
 def test_2_3_edge():
@@ -136,12 +145,12 @@ def test_2_3_edge():
     ###########################
 
     gr = tf.Graph()
-    ops = {'operator_1': ["a = a^2", "a = a / sum(a,1)"]}
+    ops = {'operator_1': ["a[:] = 1."]}
     op_args = {'a': {'variable_type': 'state_variable',
                      'shape': (1, 10),
                      'name': 'a',
                      'data_type': 'float32',
-                     'initial_value': 1.},
+                     'initial_value': 1.}
                }
     n1 = Node(ops, op_args, 'n1', tf_graph=gr)
     n2 = Node(ops, op_args, 'n2', tf_graph=gr)
@@ -159,34 +168,29 @@ def test_2_3_edge():
     #####################################################################
 
     gr = tf.Graph()
-    ops = {'operator_1': ["d/dt * a = a^2", "a = a / sum(a,1)"]}
-    op_args = {'a': {'variable_type': 'state_variable',
-                     'shape': (1, 10),
-                     'name': 'a',
-                     'data_type': 'float32',
-                     'initial_value': 1.},
-               'dt': {'variable_type': 'constant',
-                      'shape': (),
-                      'name': 'dt',
-                      'data_type': 'float32',
-                      'initial_value': 0.5}
-               }
+
     n1 = Node(ops, op_args, 'n1', tf_graph=gr)
     n2 = Node(ops, op_args, 'n2', tf_graph=gr)
 
-    eq1 = "inp = out*c"
-    eq2 = "c = c / sum(c,1)"
+    eq1 = "c = c_ / sum(c_,1)"
+    eq2 = "inp = out*c"
     edge_args = {'out': {'variable_type': 'source_var',
                          'name': 'a'},
                  'inp': {'variable_type': 'target_var',
                          'name': 'a'},
-                 'c': {'variable_type': 'state_variable',
-                       'shape': (1, 10),
-                       'name': 'c',
-                       'data_type': 'float32',
-                       'initial_value': 5.},
+                 'c_': {'variable_type': 'state_variable',
+                        'shape': (1, 10),
+                        'name': 'c_',
+                        'data_type': 'float32',
+                        'initial_value': 5.}
                  }
     e1 = Edge(n1, n2, [eq1, eq2], edge_args, 'e1', tf_graph=gr)
+
+    edge_args['c'] = {'variable_type': 'state_variable',
+                      'shape': (1, 10),
+                      'name': 'c',
+                      'data_type': 'float32',
+                      'initial_value': 5.}
     e2 = Edge(n2, n1, [eq2, eq1], edge_args, 'e2', tf_graph=gr)
 
     with tf.Session(graph=gr) as sess:
@@ -199,10 +203,8 @@ def test_2_3_edge():
         sess.run(e2.project)
         result2 = [np.sum(n1.a.eval()), np.sum(n2.a.eval())]
 
-    assert result1[1] > result1[0]
-    assert result2[1] > result2[0]
-    assert result1[1] == pytest.approx(50., rel=1e-6)
-    assert result2[0] == pytest.approx(1., rel=1e-6)
+    assert result1 == [10., 1.]
+    assert result2 == [50., 10.]
 
 
 def test_2_4_network():
@@ -216,7 +218,7 @@ def test_2_4_network():
     # test minimal call example
     ###########################
 
-    node_dict = {'n1': {'operator_1': ["a = a^2", "a = a / sum(a,1)"],
+    node_dict = {'n1': {'operator_1': ["d/dt * a = a^2"],
                         'a': {'variable_type': 'state_variable',
                               'shape': (1, 10),
                               'name': 'a',
@@ -225,7 +227,7 @@ def test_2_4_network():
                         }
                  }
 
-    net = Network(node_dict, {})
+    net = Network(node_dict, {}, dt=0.1)
     assert isinstance(net, Network)
 
     # test for correct simulation behavior of network
@@ -295,8 +297,8 @@ def test_2_4_network():
                       'data_type': 'float32',
                       'initial_value': 0.1}
                }
-    n1 = Node(ops, op_args, 'n1', tf_graph=gr2)
-    n2 = Node(ops, op_args, 'n2', tf_graph=gr2)
+    n1 = Node(ops, op_args.copy(), 'n1', tf_graph=gr2)
+    n2 = Node(ops, op_args.copy(), 'n2', tf_graph=gr2)
 
     eq1 = "inp = out*c"
     eq2 = "inp[0] = out[0]/c[0]"

@@ -355,42 +355,51 @@ def test_1_8_solver_update():
     new_val = 5.
 
     # numpy-based solver
-    upd = NPSolver(new_val, var).solve()
-    for u in upd:
-        var_new = u()
-    assert var_new == new_val
+    #upd = NPSolver(new_val, var).solve()
+    #for u in upd:
+    #    var_new = u()
+    #assert var_new == new_val
 
     # tensorflow-based solver
     gr = tf.Graph()
     with gr.as_default():
         v1 = tf.Variable(var, name='v1')
-        upd = TFSolver(tf.constant(new_val), v1, tf_graph=gr).solve()
+        solver = TFSolver(tf.constant(new_val), v1, tf_graph=gr)
+        update = solver.solve()
+        state_var = solver.state_var
+        op = state_var.assign(update)
     with tf.Session(graph=gr) as sess:
-        sess.run(upd)
+        sess.run(tf.global_variables_initializer())
+        sess.run(op)
         var_new = v1.eval()
     assert var_new == new_val
 
     # integration
     #############
 
+    var = np.ones(shape=(), dtype=np.float32)
+    new_val = 5.
     dt = 0.1
 
     # numpy-based solver
-    upd = NPSolver(new_val, var, dt=dt).solve()
-    for u in upd:
-        var_new = u()
-    assert var_new == pytest.approx(var + new_val * dt, rel=1e-6)
+    #upd = NPSolver(new_val, var, dt=dt).solve()
+    #for u in upd:
+    #    var_new = u()
+    #assert var_new == pytest.approx(var + new_val * dt, rel=1e-6)
 
     # tensorflow-based solver
     gr = tf.Graph()
     with gr.as_default():
         v1 = tf.Variable(var, name='v1')
-        upd = TFSolver(tf.constant(new_val), v1, dt=dt, tf_graph=gr).solve()
+        solver = TFSolver(tf.constant(new_val), v1, dt=dt, tf_graph=gr)
+        update = solver.solve()
+        state_var = solver.state_var
+        op = state_var.assign(update)
     with tf.Session(graph=gr) as sess:
         sess.run(tf.global_variables_initializer())
-        sess.run(upd)
+        sess.run(op)
         var_new = v1.eval()
-    assert var_new == pytest.approx(var + new_val * dt, rel=1e-6)
+    assert var_new == 1 + dt * new_val
 
 
 def test_1_9_equation_parser():
@@ -404,7 +413,7 @@ def test_1_9_equation_parser():
     # test minimal minimal call example
     ###################################
 
-    parser = EquationParser("a = 5 + 2", {'a': np.zeros(shape=())}, engine="numpy")
+    parser = EquationParser("a = 5. + 2.", {}, engine="tensorflow")
     assert isinstance(parser, EquationParser)
 
     # define test equations
@@ -434,9 +443,12 @@ def test_1_9_equation_parser():
             v = tf.Variable(args['a'])
             args['a'] = v
             parser = EquationParser(eq, args, engine="tensorflow")
-            upd = parser.lhs_update
+            if hasattr(parser, 'update'):
+                update = parser.target_var.assign(parser.update)
+            else:
+                update = parser.target_var
         with tf.Session(graph=gr) as sess:
             sess.run(tf.global_variables_initializer())
-            sess.run(upd)
+            sess.run(update)
             result = v.eval()
         assert result == pytest.approx(target, rel=1e-6)
