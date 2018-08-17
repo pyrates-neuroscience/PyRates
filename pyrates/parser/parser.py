@@ -69,9 +69,9 @@ class EquationParser(object):
 
         # parse rhs
         if engine == 'tensorflow':
-            rhs_parser = TFExpressionParser(rhs, self.args, self.tf_graph)
+            rhs_parser = TFExpressionParser(expr_str=rhs, args=self.args, tf_graph=self.tf_graph)
         elif engine == 'numpy':
-            rhs_parser = NPExpressionParser(rhs, self.args)
+            rhs_parser = NPExpressionParser(expr_str=rhs, args=self.args)
         else:
             raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
         rhs_op = rhs_parser.parse_expr()
@@ -91,9 +91,9 @@ class EquationParser(object):
 
         # parse lhs
         if engine == 'tensorflow':
-            lhs_parser = TFExpressionParser(lhs, self.args, lhs=True,  tf_graph=self.tf_graph)
+            lhs_parser = TFExpressionParser(expr_str=lhs, args=self.args, lhs=True,  tf_graph=self.tf_graph)
         elif engine == 'numpy':
-            lhs_parser = NPExpressionParser(rhs, self.args, lhs=True)
+            lhs_parser = NPExpressionParser(expr_str=rhs, args=self.args, lhs=True)
         else:
             raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
         self.target_var = lhs_parser.parse_expr()
@@ -750,12 +750,14 @@ class TFExpressionParser(ExpressionParser):
                  "sum": tf.reduce_sum,
                  "tile": tf.tile,
                  "reshape": tf.reshape,
+                 'squeeze': tf.squeeze,
                  "cast": tf.cast,
                  "randn": tf.random_normal,
                  "ones": tf.ones,
                  "zeros": tf.zeros,
                  "softmax": tf.nn.softmax,
                  "boolean_mask": tf.boolean_mask,
+                 "scatter": tf.scatter_nd,
                  "array_idx": tf.gather_nd,
                  "new_var": tf.get_variable
                  }

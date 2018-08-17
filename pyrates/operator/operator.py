@@ -44,6 +44,9 @@ class Operator(object):
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
         self.args = expression_args
 
+        if dependencies is None:
+            dependencies = []
+
         # parse expressions
         ###################
 
@@ -74,7 +77,6 @@ class Operator(object):
             # group the tensorflow operations across expressions
             with tf.control_dependencies(self.updates):
                 if len(self.DEs) > 0:
-
                     updates = tf.group([var.assign(upd) for var, upd in self.DEs], name=self.key)
                 else:
                     updates = tf.group(self.updates, name=self.key)
