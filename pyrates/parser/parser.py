@@ -427,6 +427,11 @@ class ExpressionParser(ParserElement):
             # return float representation of e
             self._op_tmp = math.e
 
+        elif op in self.args.keys():
+
+            # extract variable from args dict
+            self._op_tmp = self.args[op]
+
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
             # extract data type
@@ -460,11 +465,6 @@ class ExpressionParser(ParserElement):
             # apply function to arguments
             self._op_tmp = f(*tuple(args[::-1]))
 
-        elif op in self.args.keys():
-
-            # extract variable from args dict
-            self._op_tmp = self.args[op]
-
         elif any([op == "True", op == "true", op == "False", op == "false"]):
 
             # return boolean
@@ -480,7 +480,7 @@ class ExpressionParser(ParserElement):
             # return integer
             self._op_tmp = int(op)
 
-        elif op.isalpha():
+        elif op[0].isalpha():
 
             if self.lhs:
 

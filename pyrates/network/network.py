@@ -332,7 +332,7 @@ class Network(MultiDiGraph):
 
         with tf.Session(graph=self.tf_graph) as sess:
 
-            # writer = tf.summary.FileWriter('/tmp/log/', graph=self.tf_graph)
+            #writer = tf.summary.FileWriter('/tmp/log/', graph=self.tf_graph)
 
             # initialize all variables
             sess.run(tf.global_variables_initializer())
@@ -356,7 +356,7 @@ class Network(MultiDiGraph):
                       f"simulation resolution of {self.dt} s.")
             else:
                 print(f"Network computations finished after {t_end - t_start} seconds.")
-            # writer.close()
+            #writer.close()
 
             # store results in pandas dataframe
             time = 0.
