@@ -284,12 +284,12 @@ class ExpressionParser(ParserElement):
             if callable(val):
                 self.funcs[key] = val
 
+        # extract symbols and operations from expression string
+        self.expr_list = self.expr.parseString(self.expr_str)
+
     def parse_expr(self):
         """Parses string-based expression.
         """
-
-        # extract symbols and operations from expression string
-        self.expr_list = self.expr.parseString(self.expr_str)
 
         # check whether parsing was successful
         expr_str = self.expr_str

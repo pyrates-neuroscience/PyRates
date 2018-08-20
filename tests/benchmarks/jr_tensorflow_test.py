@@ -8,8 +8,8 @@ from pyrates.utility import mne_from_dataframe
 
 # Comment this out for making GPU available for Tensorflow.
 ###########################################################
-#import os
-#os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 ##########################################################
 
 # parameter definition
@@ -20,18 +20,17 @@ step_size = 1e-3
 simulation_time = 5.0
 n_steps = int(simulation_time / step_size)
 
-
 # Connection Percentage (If Low that means Connections are few!!)
 sparseness_e = 0.6
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 100
+n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter_e = 100. / (n_jrcs*sparseness_e/0.01)
-c_inter_i = 50. / (n_jrcs*sparseness_e/0.01)
+c_inter_e = 100. / (n_jrcs * sparseness_e / 0.01)
+c_inter_i = 50. / (n_jrcs * sparseness_e / 0.01)
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -53,27 +52,27 @@ C_i = np.zeros((n_nodes, n_nodes))
 
 for i in range(n_jrcs):
     # intra-circuit connectivity
-    C_e[i*3:(i+1)*3, i*3:(i+1)*3] = np.array([[0., 0.8 * c_intra, 0.],
-                                              [1.0 * c_intra, 0., 0.],
-                                              [0.25 * c_intra, 0., 0.]])
-    C_i[i*3:(i+1)*3, i*3:(i+1)*3] = np.array([[0., 0., 0.25 * c_intra],
-                                              [0., 0., 0.],
-                                              [0., 0., 0.]])
+    C_e[i * 3:(i + 1) * 3, i * 3:(i + 1) * 3] = np.array([[0., 0.8 * c_intra, 0.],
+                                                          [1.0 * c_intra, 0., 0.],
+                                                          [0.25 * c_intra, 0., 0.]])
+    C_i[i * 3:(i + 1) * 3, i * 3:(i + 1) * 3] = np.array([[0., 0., 0.25 * c_intra],
+                                                          [0., 0., 0.],
+                                                          [0., 0., 0.]])
     # inter-circuit connectivity
-    for j in range(n_jrcs-1):
+    for j in range(n_jrcs - 1):
         if i != j:
             weight_e = np.random.uniform()
             if weight_e > (1 - sparseness_e):
-                C_e[i*3, j*3] = weight_e * c_inter_e
+                C_e[i * 3, j * 3] = weight_e * c_inter_e
             weight_i = np.random.uniform()
             if weight_i > (1 - sparseness_i):
-                C_i[i*3 + 2, j*3] = weight_i * c_inter_i
+                C_i[i * 3 + 2, j * 3] = weight_i * c_inter_i
 
 # Input parameters
-#inp_mean = 220.
-#inp_var = 22.
-#inp = np.zeros((n_steps, n_nodes, 2))
-#inp[:, 0::3, 0] = inp_mean + np.random.randn(n_steps, n_jrcs) * inp_var
+# inp_mean = 220.
+# inp_var = 22.
+# inp = np.zeros((n_steps, n_nodes, 2))
+# inp[:, 0::3, 0] = inp_mean + np.random.randn(n_steps, n_jrcs) * inp_var
 
 # masks
 inp_mask = np.zeros((n_nodes, 2))
@@ -82,7 +81,7 @@ inp_mask[0::3, 0] = 1
 # hebbian learning mask
 hebb_mask = np.ones((n_nodes, n_nodes))
 for i in range(n_jrcs):
-    hebb_mask[i*3:(i+1)*3, i*3:(i+1)*3] = 0.
+    hebb_mask[i * 3:(i + 1) * 3, i * 3:(i + 1) * 3] = 0.
 hebb_mask = np.argwhere(hebb_mask)
 
 # define network dictionary
@@ -188,10 +187,10 @@ iin_node_dic = {}
 for i in range(0, n_jrcs):
     dic = {
         f'pcs_{i}': {
-            'operator_rtp_syn2': [[" d/dt * psp_e = x_e "], [" d/dt * psp_i = x_i "]],
-            'operator_rtp_syn1': [
+            'operator_rtp_syn': [
                 [" d/dt * x_e = H_e / tau_e * ( m_ein + ue ) - 2./ tau_e * x_e - 1./ tau_e ^2 * psp_e "],
-                [" d/dt * x_i = H_i / tau_i * ( m_iin + ui ) - 2./ tau_i * x_i - 1./ tau_i ^2 * psp_i "]],
+                [" d/dt * x_i = H_i / tau_i * ( m_iin + ui ) - 2./ tau_i * x_i - 1./ tau_i ^2 * psp_i "],
+                [" d/dt * psp_e = x_e "], [" d/dt * psp_i = x_i "]],
             # "u = 220. + randn(cint) * 22."
             'operator_rtp_soma_pc': [" v = psp_e + psp_i "],
             'operator_ptr': [" m_out = m_max / (1. + e^( r * ( v_th - v )))"],
@@ -271,16 +270,16 @@ for i in range(0, n_jrcs):
                      'shape': (),
                      'initial_value': 6e-3},
             'ue': {'name': 'ue',
-                      'variable_type': 'constant',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 220.},
+                   'variable_type': 'constant',
+                   'data_type': 'float32',
+                   'shape': (),
+                   'initial_value': 220.},
 
             'ui': {'name': 'ui',
-                      'variable_type': 'constant',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 0.},
+                   'variable_type': 'constant',
+                   'data_type': 'float32',
+                   'shape': (),
+                   'initial_value': 0.},
             # 'u': {'name': 'u',
             #       'variable_type': 'state_variable',
             #       'data_type': 'float32',
@@ -299,8 +298,8 @@ for i in range(0, n_jrcs):
     pc_node_dic.update(dic)
     dic = {
         f'ein_{i}': {
-            'operator_rtp_syn1': ["d/dt * x = H / tau * ( m_in + uein ) - 2./ tau * x - 1./ tau ^ 2 * psp "],
-            'operator_rtp_syn2': ["d/dt * psp = x "],
+            'operator_rtp_syn': [["d/dt * x = H / tau * ( m_in + uein ) - 2./ tau * x - 1./ tau ^ 2 * psp "],
+                                 ["d/dt * psp = x "]],
             'operator_rtp_soma': [" v = psp "],
             'operator_ptr': [" m_out = m_max / (1. + e^( r * ( v_th - v )))"],
             'v': {'name': 'v',
@@ -364,8 +363,8 @@ for i in range(0, n_jrcs):
 
     dic = {
         f'iin_{i}': {
-            'operator_rtp_syn1': ["d/dt* x = H / tau * ( m_in + uiin ) - 2./ tau * x - 1./ tau ^2 * psp "],
-            'operator_rtp_syn2': ["d/dt * psp = x "],
+            'operator_rtp_syn': [["d/dt* x = H / tau * ( m_in + uiin ) - 2./ tau * x - 1./ tau ^2 * psp "],
+                                 ["d/dt * psp = x "]],
             'operator_rtp_soma': [" v = psp "],
             'operator_ptr': [" m_out = m_max / (1. + e^( r * ( v_th - v )))"],
             'v': {'name': 'v',
@@ -488,7 +487,7 @@ node_dict.update(iin_node_dic)
 #                    }
 
 # For the Un_vectorized Connection Dict.
-    ########################################
+########################################
 target_list = []
 source_list = []
 input_list = []
@@ -535,7 +534,7 @@ for a in range(0, n_nodes):
                       }
 
             input_dict = {'variable_type': 'target_var',
-                           'name': f'{input}'}
+                          'name': f'{input}'}
             output_dict = {'variable_type': 'source_var',
                            'name': f'{output}'}
 
@@ -583,4 +582,3 @@ results, ActTime = net.run(simulation_time=simulation_time,
 mne_obj = mne_from_dataframe(sim_results=results)
 results.plot()
 show()
-

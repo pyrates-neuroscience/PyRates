@@ -10,13 +10,11 @@ from pandas import DataFrame
 import time as t
 import numpy as np
 from networkx import MultiDiGraph
+from pyrates.parser import ExpressionParser, EquationParser
 
 # pyrates imports
 from pyrates.node import Node
 from pyrates.edge import Edge
-
-# for the vectorization (tmp-library)
-import re
 
 # meta infos
 __author__ = "Richard Gast"
@@ -69,9 +67,7 @@ class Network(MultiDiGraph):
         vectorize = True
 
         if vectorize:
-
             node_dict, connection_dict = self.Vectorization(connection_dict, node_dict)
-
 
         # initialize nodes
         ##################
@@ -209,7 +205,7 @@ class Network(MultiDiGraph):
         #######################################
 
         gr_tmp = tf.Graph()
-        #node_new = Node(operations=node_ops,
+        # node_new = Node(operations=node_ops,
         #                operation_args=node_args,
         #                key=n,
         #                tf_graph=gr_tmp)
@@ -286,12 +282,59 @@ class Network(MultiDiGraph):
 
     def Vectorization(self, connection_dict, node_dict):
 
-        n_jrcs = len(node_dict.keys())/3
+        n_jrcs = len(node_dict.keys()) / 3
         jrcsID = 0
         len_prev_opr = []
         operationID = 0
         opr_dict = dict()
         node_args = dict()
+
+        for node_name, node_info in node_dict.items():
+            nested_dict = dict()
+
+            for key, val in node_info.items():
+                if 'operator' in key:
+
+                    # Nested operators re-ording.
+                    if len(val) > 1:
+                        nested_idx = 0
+
+                        for i_oper in val:
+
+                            # Splitting expression.
+                            lhs, rhs = i_oper[0].split(' = ')
+                            exp_pars = ExpressionParser(lhs, dict())
+                            expr_list = exp_pars.expr_stack
+                            exp_pars = ExpressionParser(rhs, node_info)
+                            expr_list.extend(exp_pars.expr_stack)
+
+                            if not key + f'_nested_{nested_idx-1}' in nested_dict:
+                                nested_dict[key + f'_nested_{nested_idx}'] = {'val': i_oper, 'oper_params':
+                                    expr_list}
+
+                                nested_idx = nested_idx + 1
+                            else:
+                                similar_nested_operator_found = False
+                                for i_nested in nested_dict:
+                                    if len(nested_dict[i_nested]['oper_params']) == len(expr_list):
+                                        if len(nested_dict[i_nested]['val']) == 1:
+                                            nested_dict[i_nested]['val'] = [nested_dict[i_nested]['val']]
+                                        nested_dict[i_nested]['val'].append(i_oper)
+                                        similar_nested_operator_found = True
+                                if not similar_nested_operator_found:
+                                    nested_dict[key + f'_nested_{nested_idx}'] = {
+                                        'val': i_oper, 'oper_params':
+                                            expr_list}
+                                    nested_idx = nested_idx + 1
+                    else:
+
+                        nested_dict[key] = {'val': val}
+                else:
+                    nested_dict[key] = {'val': val}
+
+            node_dict[node_name] = {}
+            for key_nested in nested_dict:
+                node_dict[node_name].update({key_nested: nested_dict[key_nested]['val']})
 
         for node_name, node_info in node_dict.items():
 
@@ -314,6 +357,7 @@ class Network(MultiDiGraph):
                 ################################################################
 
                 if 'operator' in key:
+
                     operationID += 1
                     if operationID > len(len_prev_opr):
                         len_prev_opr.append(0)
@@ -361,8 +405,7 @@ class Network(MultiDiGraph):
                 else:
                     for k in opr_dict:
                         for j in range(0, len(opr_dict[k])):
-                            opr_dict[k][j] = [w.replace(' ' + key + ' ', ' ' + key + node_name + ' ') for w in
-                                              opr_dict[k][j]]
+                            opr_dict[k][j] = [w.replace(' ' + key + ' ', ' ' + key + node_name + ' ') for w in opr_dict[k][j]]
 
         batched = dict()
 
@@ -371,8 +414,16 @@ class Network(MultiDiGraph):
 
             stripped_par_list = []
             for each_oper in oper_list:
-                par_list = re.findall(r"[\w]+", str(each_oper).strip('[]'))
+                # Splitting expression.
+                lhs, rhs = each_oper[0].split(' = ')
+                exp_pars = ExpressionParser(lhs, dict())
+                expr_list = exp_pars.expr_stack
+                exp_pars = ExpressionParser(rhs, node_info)
+                expr_list.extend(exp_pars.expr_stack)
+
+                par_list = expr_list
                 stripped_par_list.append(par_list)
+
             list_len = len(par_list)
 
             for first_itr in range(0, list_len):
@@ -398,7 +449,8 @@ class Network(MultiDiGraph):
                                                              'variable_type': 'state_variable',
                                                              'data_type': node_args[poped_symbol]['data_type'],
                                                              'nodes': [node_args[poped_symbol]['node_name']],
-                                                             'initial_value': [node_args[poped_symbol]['initial_value']],
+                                                             'initial_value': [
+                                                                 node_args[poped_symbol]['initial_value']],
                                                              'shape': [1, 1],
                                                              }
                                     batched[f'{poped_symbol}_'] = batched.pop(poped_symbol)
@@ -435,7 +487,14 @@ class Network(MultiDiGraph):
         for dict1_k in opr_dict:
             stripped_par_list = []
             for expr in opr_dict[dict1_k]:
-                par_list = re.findall(r"[\w]+", str(expr).strip('[]'))
+                # Splitting expression.
+                lhs, rhs = expr[0].split(' = ')
+                exp_pars = ExpressionParser(lhs, dict())
+                expr_list = exp_pars.expr_stack
+                exp_pars = ExpressionParser(rhs, node_info)
+                expr_list.extend(exp_pars.expr_stack)
+
+                par_list = expr_list
                 stripped_par_list.append(par_list)
 
             list_len = len(par_list)
@@ -466,16 +525,26 @@ class Network(MultiDiGraph):
                                     replace_val = batched_k + f"[{index_start}:{index_end}]"
                 start_bool = True
 
-        batch_opr_list = []
-
         # I am doing it in this way as it the operations lost their order in the process. (limitation 5)
         # This problem can be solved by adding a dependency in the input dictionary or in the first loop.
         #################################################################################################
-        batched.update({'operator_rtp_syn1': batch_opr_dict['operator_rtp_syn1']})
-        batched.update({'operator_rtp_syn2': batch_opr_dict['operator_rtp_syn2']})
-        batched.update({'operator_rtp_soma_pc': batch_opr_dict['operator_rtp_soma_pc']})
-        batched.update({'operator_rtp_soma': batch_opr_dict['operator_rtp_soma']})
-        batched.update({'operator_ptr': batch_opr_dict['operator_ptr']})
+        new_batch_opr_dict = dict()
+
+        for opr_key in batch_opr_dict:
+
+            if '_nested_' in opr_key:
+                old_name = ''.join([w for w in opr_key[0:opr_key.index('_nested_')]])
+                if not old_name in new_batch_opr_dict:
+                    new_batch_opr_dict[old_name] = batch_opr_dict[opr_key]
+                else:
+                    new_batch_opr_dict[old_name].append(batch_opr_dict[opr_key][0])
+            else:
+                new_batch_opr_dict[opr_key] = batch_opr_dict[opr_key]
+
+        batched.update({'operator_rtp_syn': new_batch_opr_dict['operator_rtp_syn']})
+        batched.update({'operator_rtp_soma_pc': new_batch_opr_dict['operator_rtp_soma_pc']})
+        batched.update({'operator_rtp_soma': new_batch_opr_dict['operator_rtp_soma']})
+        batched.update({'operator_ptr': new_batch_opr_dict['operator_ptr']})
 
         conn = []
 
@@ -508,7 +577,7 @@ class Network(MultiDiGraph):
                         break
         new_eq = [w.replace('output', 'mapping @ ((mapping2@output)') for [w] in connection_dict['coupling_operators']]
         for exp in new_eq:
-            new_eq = exp.replace(exp, exp+')')
+            new_eq = exp.replace(exp, exp + ')')
 
         n_edges = len(connection_dict['coupling_operator_args']['c'])
         n_inp = len(batched[batched_target_key]['initial_value'])
@@ -518,8 +587,8 @@ class Network(MultiDiGraph):
         mapping = np.zeros((n_inp, n_edges), dtype=np.float32)
         mapping2 = np.zeros((n_edges, n_out), dtype=np.float32)
         scatter_indices = []
-        for conn_i in range(0, len(connection_dict['coupling_operator_args']['c'])):
 
+        for conn_i in range(0, len(connection_dict['coupling_operator_args']['c'])):
             Source_idx = batched[batched_source_key]['par_name'].index(
                 connection_dict['coupling_operator_args']['output'][conn_i]['name'])
 
@@ -532,15 +601,6 @@ class Network(MultiDiGraph):
 
             mapping[Target_idx, conn_i] = 1.
             mapping2[conn_i, Source_idx] = 1.
-
-        #C_op.append(f'output_new = scatter(scatter_idxs, output, shape_scatter_out)')
-
-        #C_op.append(new_eq)
-
-        # targets = unique(edge_targets)
-        # for i, t in enumerate(targets):
-        #     for j, et in enumerate(edge_targets):
-        #         if t == et:
 
         C_batched['coupling_operators'] = [[new_eq]]
         C_batched['coupling_operator_args'] = {'c': {'name': 'c',
@@ -560,10 +620,10 @@ class Network(MultiDiGraph):
                                                             'shape': [n_edges, n_out],
                                                             'data_type': 'float32',
                                                             'initial_value': mapping2},
-                                               'shape_scatter_out':{'variable_type': 'raw',
-                                                                    'variable': [n_edges, 1]},
+                                               'shape_scatter_out': {'variable_type': 'raw',
+                                                                     'variable': [n_edges, 1]},
                                                'scatter_idxs': {'name': 'scatter_idxs',
-                                                                'shape':[n_edges, 1],
+                                                                'shape': [n_edges, 1],
                                                                 'data_type': 'int32',
                                                                 'variable_type': 'constant',
                                                                 'initial_value': scatter_indices}
@@ -572,10 +632,10 @@ class Network(MultiDiGraph):
         C_batched['sources'] = ['BNode' for _ in range(len(C_batched['coupling_operators']))]
         C_batched['targets'] = ['BNode' for _ in range(len(C_batched['coupling_operators']))]
 
-        batched['operator_rtp_syn1'].append(batched.pop('operator_rtp_syn2')[0])
-        batched['operator_rtp_soma'].append(batched.pop('operator_rtp_soma_pc')[0])
+        # batched['operator_rtp_syn1'].append(batched.pop('operator_rtp_syn2')[0])
+        # batched['operator_rtp_soma'].append(batched.pop('operator_rtp_soma_pc')[0])
 
-        return({'BNode':batched}, C_batched)
+        return ({'BNode': batched}, C_batched)
 
     def run(self, simulation_time: Optional[float] = None, inputs: Optional[dict] = None,
             outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None) -> Tuple[DataFrame, float]:
@@ -633,7 +693,7 @@ class Network(MultiDiGraph):
 
         with tf.Session(graph=self.tf_graph) as sess:
 
-            #writer = tf.summary.FileWriter('/tmp/log/', graph=self.tf_graph)
+            # writer = tf.summary.FileWriter('/tmp/log/', graph=self.tf_graph)
 
             # initialize all variables
             sess.run(tf.global_variables_initializer())
@@ -657,7 +717,7 @@ class Network(MultiDiGraph):
                       f"simulation resolution of {self.dt} s.")
             else:
                 print(f"Network computations finished after {t_end - t_start} seconds.")
-            #writer.close()
+            # writer.close()
 
             # store results in pandas dataframe
             time = 0.
@@ -672,7 +732,7 @@ class Network(MultiDiGraph):
             else:
                 n_steps, n_vars = results.shape
                 n_nodes = 1
-            results = np.reshape(results, (n_steps, n_nodes*n_vars))
+            results = np.reshape(results, (n_steps, n_nodes * n_vars))
             columns = []
             for var in outputs.keys():
                 columns += [f"{var}_{i}" for i in range(n_nodes)]
