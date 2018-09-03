@@ -63,7 +63,7 @@ class Circuit(MultiDiGraph):
                 node_list.append((label, {"node": template.apply()}))
                 # assuming unique labels
             super().add_nodes_from(node_list, **attr)
-        else:
+        else:  # default networkx behaviour
             super().add_nodes_from(nodes, **attr)
 
     def add_node(self, label: str, template: NodeTemplate=None, options: dict=None, **attr):
@@ -71,7 +71,7 @@ class Circuit(MultiDiGraph):
 
         if template:
             super().add_node(label, node=template.apply(options), **attr)
-        else:
+        else:  # default networkx behaviour
             super().add_node(label, **attr)
 
     def add_edges_from(self, edges, coupling: dict=None, **attr):
@@ -91,7 +91,7 @@ class Circuit(MultiDiGraph):
                         raise e
                 edge_list.append((source, target, {"coupling": coupling[key][0], "values": values}))
             super().add_edges_from(edge_list, **attr)
-        else:
+        else:  # default networkx behaviour
             super().add_edges_from(edges, **attr)
 
     # def __repr__(self):
