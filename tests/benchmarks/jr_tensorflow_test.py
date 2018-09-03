@@ -552,33 +552,35 @@ connection_dict = {'coupling_operators': [["input = output * c"]],
                    'targets': target_list
                    }
 
-# network setup
-###############
-gr = tf.Graph()
-net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_size)
+if __name__ == "__main__":
 
-# output_coll = {}
-# for i in range (3, 4):
-#     output = {f'V_{i}': net.nodes[f'pcs_{i}'].v}
-#     output_coll.update(output)
+    # network setup
+    ###############
+    gr = tf.Graph()
+    net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_size)
 
-# network simulation
-####################
-#
-for i, k in net.nodes['BNode']['handle'].__dict__.items():
-    if 'vp' in i:
-        V = i
+    # output_coll = {}
+    # for i in range (3, 4):
+    #     output = {f'V_{i}': net.nodes[f'pcs_{i}'].v}
+    #     output_coll.update(output)
 
-results, ActTime = net.run(simulation_time=simulation_time,
-                           # inputs={net.nodes['jrc'].U: inp},
-                           # inputs = input_coll,
-                           outputs={'V': getattr(net.nodes['BNode']['handle'], V)},
-                           # outputs=output_coll,
-                           sampling_step_size=step_size)
+    # network simulation
+    ####################
+    #
+    for i, k in net.nodes['BNode']['handle'].__dict__.items():
+        if 'vp' in i:
+            V = i
 
-# results
-#########
+    results, ActTime = net.run(simulation_time=simulation_time,
+                               # inputs={net.nodes['jrc'].U: inp},
+                               # inputs = input_coll,
+                               outputs={'V': getattr(net.nodes['BNode']['handle'], V)},
+                               # outputs=output_coll,
+                               sampling_step_size=step_size)
 
-mne_obj = mne_from_dataframe(sim_results=results)
-results.plot()
-show()
+    # results
+    #########
+
+    mne_obj = mne_from_dataframe(sim_results=results)
+    results.plot()
+    show()
