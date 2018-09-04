@@ -7,3 +7,11 @@ BaseCircuit:
   coupling: null  # dictionary with coupling operators: key=label, value=template
   edges: null  # list of edges with entries [source, target, coupling label, coupling arguments]
   label: circuit  # default label of circuit template to be used if no other label is given
+
+CircuitFromCircuits:
+  description: Base implementation of a circuit that is built from other circuits.
+  base: BaseCircuit
+  nodes: null
+  coupling: null
+  edges: null
+  label: circuit_from_circuits

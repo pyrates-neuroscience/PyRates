@@ -171,4 +171,4 @@ def test_equation_alteration():
 
     operator, values = template.apply()
 
-    assert operator["equation"] == "V = k * I"
+    assert operator["equation"] == ["V = k * I"]

@@ -133,6 +133,7 @@ def test_2_2_node():
     assert result1 == result2
 
 
+@pytest.mark.skip
 def test_2_3_edge():
     """Testing edge functionality:
 

@@ -19,11 +19,32 @@ JansenRitCircuit:
   coupling:
     LC: pyrates.coupling.templates.LinearCoupling
   # single coupling operator. needs rework for multiple coupling operators in single circuit.
-  # alternative: use YAML tags to h
+  # alternative: use YAML tags for proper references
 
   edges:
     - [JR_PC, JR_IIN, LC, c: 33.75]
     - [JR_PC, JR_EIN, LC, c: 135]
-    - [JR_EIN, JR_PC, LC, c: 108]
-    - [JR_IIN, JR_PC, LC, c: 33.75]
+    - [JR_EIN, JR_PC/JansenRitExcitatorySynapseRCO, LC, c: 108]
+    - [JR_IIN, JR_PC/JansenRitInhibitorySynapseRCO, LC, c: 33.75]
 
+MultiJansenRitCircuit:
+  description: |
+    Implementation of a network of multiple Jansen-Rit ([1]_) type circuits.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+       generation in a mathematical model of coupled cortical columns."
+       Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: pyrates.circuit.circuit.BaseCircuit
+  label: MultiJRC
+  nodes:
+    JRC: JansenRitCircuit
+
+  coupling:
+    LC: pyrates.coupling.templates.LinearCoupling
+  # single coupling operator. needs rework for multiple coupling operators in single circuit.
+  # alternative: use YAML tags to h
+
+  edges:
+    - matrix

@@ -125,7 +125,7 @@ class OperatorTemplate(AbstractBaseTemplate):
             variables, values = self._separate_variables()
 
             # reduce order of ODE if necessary
-            equation = self._reduce_ode_order(self.equation)
+            *equation, variables = self._reduce_ode_order(self.equation, variables)
 
             # operator instance is invoked as a dictionary of equation and variable definition
             # this may be subject to change
@@ -139,7 +139,7 @@ class OperatorTemplate(AbstractBaseTemplate):
         # TODO: return operator instance
 
     @staticmethod
-    def _reduce_ode_order(equation: str):
+    def _reduce_ode_order(equation: str, variables):
         """Checks if a 2nd-order ODE is present and reduces it to two coupled first-order ODEs.
         Currently limited to special case of the form '(d/dt + a)^2 * x = b'.
 
@@ -150,18 +150,22 @@ class OperatorTemplate(AbstractBaseTemplate):
         """
 
         # matches pattern of form `(d/dt + a)^2 * y` and extracts `a` and `y`
-        match = re.match("\(\s*d\s*/\s*dt\s*[+-]\s*([a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)", equation)
+        match = re.match("\(\s*d\s*/\s*dt\s*[+-]\s*(\d*/?[a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)", equation)
 
         if match:
             # assume the entire lhs was matched, fails if there is something remaining on the lhs
             lhs, rhs = equation.split("=")
             a, var = match.groups()  # returns coefficient `a` and variable `y`
-            eq1 = f"d/dt * {var} = x"
-            eq2 = f"d/dt * x = {rhs} - ({a})^2 * {var} - 2 * {a} * x"
+            eq1 = f"d/dt * {var} = {var}_t"
+            eq2 = f"d/dt * {var}_t = {rhs} - ({a})^2 * {var} - 2 * {a} * {var}_t"
 
-            return eq1, eq2
+            variables[f"{var}_t"] = {"data_type": "float32",
+                                     "description": "integration variable",
+                                     "variable_type": "state_variable"}
+
+            return eq1, eq2, variables
         else:
-            return equation
+            return equation, variables
 
     def _separate_variables(self):
         """Return variable definitions and the respective values."""
