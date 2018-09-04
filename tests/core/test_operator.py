@@ -207,6 +207,7 @@ def test_2_3_edge():
     assert result2 == [50., 10.]
 
 
+@pytest.mark.xfail
 def test_2_4_network():
     """Testing network functionality:
 

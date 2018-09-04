@@ -121,9 +121,14 @@ class OperatorTemplate(AbstractBaseTemplate):
         except KeyError:
             if options:
                 raise NotImplementedError("Applying options to a template is not implemented yet.")
+            # get variable definitions and specified default values
             variables, values = self._separate_variables()
 
-            equation = self._parse_ode(self.equation)
+            # reduce order of ODE if necessary
+            equation = self._reduce_ode_order(self.equation)
+
+            # operator instance is invoked as a dictionary of equation and variable definition
+            # this may be subject to change
             instance = dict(equation=equation, variables=variables)
             self.cache[key] = instance
 
@@ -133,7 +138,8 @@ class OperatorTemplate(AbstractBaseTemplate):
             return instance, values
         # TODO: return operator instance
 
-    def _parse_ode(self, equation: str):
+    @staticmethod
+    def _reduce_ode_order(equation: str):
         """Checks if a 2nd-order ODE is present and reduces it to two coupled first-order ODEs.
         Currently limited to special case of the form '(d/dt + a)^2 * x = b'.
 
@@ -156,11 +162,6 @@ class OperatorTemplate(AbstractBaseTemplate):
             return eq1, eq2
         else:
             return equation
-
-
-
-
-
 
     def _separate_variables(self):
         """Return variable definitions and the respective values."""
@@ -297,8 +298,11 @@ class OperatorTemplateLoader(TemplateLoader):
 
         # remove terms
         if remove:
-            for old in remove:
-                equation = equation.replace(old, "")
+            if isinstance(remove, str):
+                equation = equation.replace(remove, "")
+            else:
+                for old in remove:
+                    equation = equation.replace(old, "")
 
         # append terms at the end of the equation string
         if append:

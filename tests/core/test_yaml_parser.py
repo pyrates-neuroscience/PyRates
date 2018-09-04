@@ -158,3 +158,17 @@ def test_circuit_instantiation():
     circuit = template.apply()
     # test if two edges refer to the same coupling operator by comparing ids
     assert circuit.edges[("JR_PC", "JR_IIN", 0)]["coupling"] is circuit.edges[('JR_PC', 'JR_EIN', 0)]["coupling"]
+
+
+def test_equation_alteration():
+    """Test, if properties of a template that mean to alter a certain parent equation are treated correctly"""
+
+    path = "pyrates.population.templates.InstantaneousCPO"
+    # this template removes the component "L_m * " from the base equation "L_m * V = k * I"
+    from pyrates.operator import OperatorTemplate
+
+    template = OperatorTemplate.from_yaml(path)
+
+    operator, values = template.apply()
+
+    assert operator["equation"] == "V = k * I"
