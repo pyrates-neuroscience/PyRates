@@ -275,7 +275,7 @@ def test_2_4_network():
                  'targets': ['n2', 'n1']
                  }
 
-    net = Network(node_dict=node_dict, connection_dict=conn_dict, tf_graph=gr, key='net', dt=0.1)
+    net = Network(nodes=node_dict, edges=conn_dict, tf_graph=gr, key='net', dt=0.1)
     results, _ = net.run(1., outputs={'a1': net.nodes['n1']['handle'].a, 'a2': net.nodes['n2']['handle'].a})
 
     # target results

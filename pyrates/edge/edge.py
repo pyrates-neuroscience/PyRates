@@ -44,41 +44,43 @@ class Edge(object):
     def __init__(self,
                  source: Node,
                  target: Node,
-                 coupling_op: List[str],
+                 coupling_ops: dict,
                  coupling_op_args: dict,
-                 key: Optional[str] = None,
+                 key: str,
                  tf_graph: Optional[tf.Graph] = None):
         """Instantiates edge.
         """
 
-        self.operator = coupling_op
-        self.key = key if key else 'edge0'
+        self.operations = {}
+        self.key = key
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+        # add variables/operations to tensorflow graph
+        ##############################################
 
         with self.tf_graph.as_default():
 
             with tf.variable_scope(self.key):
 
-                # create operator
-                #################
+                # handle operation arguments
+                ############################
 
                 # replace the coupling operator arguments with the fields from source and target where necessary
                 co_args = {}
                 for key, val in coupling_op_args.items():
-                    if val['variable_type'] == 'source_var':
-                        try:
-                            var = getattr(source, val['name'])
-                            co_args[key] = {'variable_type': 'raw', 'variable': var}
-                        except AttributeError:
-                            pass
 
-                    elif val['variable_type'] == 'target_var':
-                        try:
-                            var = getattr(target, val['name'])
-                            co_args[key] = {'variable_type': 'raw', 'variable': var}
-                        except AttributeError:
-                            pass
+                    if val['vtype'] == 'source_var':
+
+                        var = getattr(source, val['name'])
+                        co_args[key] = {'vtype': 'raw', 'value': var}
+
+                    elif val['vtype'] == 'target_var':
+
+                        var = getattr(target, val['name'])
+                        co_args[key] = {'vtype': 'raw', 'value': var}
+
                     else:
+
                         co_args[key] = val
 
                 # create tensorflow variables from the additional operator args
@@ -91,19 +93,44 @@ class Edge(object):
                 # bind operator args to edge
                 for tf_var, var_name in zip(tf_vars, var_names):
                     setattr(self, var_name, tf_var)
-                    operator_args[var_name] = tf_var
+                    operator_args[var_name] = {'var': tf_var, 'dependency': False}
 
-                # instantiate operator
-                operator = Operator(expressions=coupling_op,
-                                    expression_args=operator_args,
-                                    tf_graph=self.tf_graph,
-                                    key=self.key,
-                                    variable_scope=self.key)
+                # instantiate operations
+                ########################
 
-                # bind newly created tf variables to edge
-                for var_name, tf_var in operator.args.items():
-                    if not hasattr(self, var_name):
-                        setattr(self, var_name, tf_var)
+                tf_ops = []
+                for op_name, op in coupling_ops.items():
 
-                # connect source and target variables via operator
-                self.project = operator.create()
+                    # store operator equations
+                    self.operations[op_name] = op['equations']
+
+                    # set input dependencies
+                    for inp in op['inputs']:
+                        operator_args[inp]['dependency'] = True
+                        if not hasattr(operator_args[inp], 'op'):
+                            raise ValueError(f"Invalid dependencies found in operator: {op['equations']}. Input "
+                                             f"Variable {inp} has not been calculated yet.")
+
+                    # create coupling operator
+                    operator = Operator(expressions=op['equations'],
+                                        expression_args=operator_args,
+                                        tf_graph=self.tf_graph,
+                                        key=op_name,
+                                        variable_scope=self.key)
+
+                    # collect tensorflow operator
+                    tf_ops.append(operator.create())
+
+                    # handle dependencies
+                    operator_args[op['output']]['op'] = tf_ops[-1]
+                    for arg in operator_args.values():
+                        arg['dependency'] = False
+
+                    # bind newly created tf variables to edge
+                    for var_name, tf_var in operator.args.items():
+                        if not hasattr(self, var_name):
+                            setattr(self, var_name, tf_var)
+                            operator_args[var_name]['var'] = tf_var
+
+                # collect tensorflow operations of that edge
+                self.project = tf.group(tf_ops, name=f"{self.key}_project")

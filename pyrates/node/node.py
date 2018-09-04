@@ -37,7 +37,7 @@ class Node(object):
     """
 
     def __init__(self,
-                 operations: Dict[str, List[str]],
+                 operations: dict,
                  operation_args: dict,
                  key: str,
                  tf_graph: Optional[tf.Graph] = None
@@ -49,12 +49,15 @@ class Node(object):
         self.operations = dict()
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
 
-        # instantiate operations
-        ########################
+        # create tensorflow operations/variables on graph
+        #################################################
 
         with self.tf_graph.as_default():
 
             with tf.variable_scope(self.key):
+
+                # handle operation arguments
+                ############################
 
                 # get tensorflow variables and the variable names from operation_args
                 tf_vars, var_names = parse_dict(var_dict=operation_args,
@@ -66,32 +69,44 @@ class Node(object):
                 # bind tensorflow variables to node and save them in dictionary for the operator class
                 for tf_var, var_name in zip(tf_vars, var_names):
                     setattr(self, var_name, tf_var)
-                    operator_args[var_name] = tf_var
+                    operator_args[var_name] = {'var': tf_var, 'dependency': False}
 
-                tf_op = tf.no_op()
+                # instantiate operations
+                ########################
 
+                tf_ops = []
                 for op_name, op in operations.items():
 
                     # store operator equations
-                    self.operations[op_name] = op
+                    self.operations[op_name] = op['equations']
 
-                    with tf.control_dependencies([tf_op]):
+                    # set input dependencies
+                    for inp in op['inputs']:
+                        operator_args[inp]['dependency'] = True
+                        if 'op' not in operator_args[inp].keys():
+                            raise ValueError(f"Invalid dependencies found in operator: {op['equations']}. Input "
+                                             f"Variable {inp} has not been calculated yet.")
 
-                        # create operator
-                        operator = Operator(expressions=op,
-                                            expression_args=operator_args,
-                                            tf_graph=self.tf_graph,
-                                            key=op_name,
-                                            variable_scope=self.key)
+                    # create operator
+                    operator = Operator(expressions=op['equations'],
+                                        expression_args=operator_args,
+                                        tf_graph=self.tf_graph,
+                                        key=op_name,
+                                        variable_scope=self.key)
 
-                        # collect tensorflow operator
-                        tf_op = operator.create()
+                    # collect tensorflow operator
+                    tf_ops.append(operator.create())
+
+                    # handle dependencies
+                    operator_args[op['output']]['op'] = tf_ops[-1]
+                    for arg in operator_args.values():
+                        arg['dependency'] = False
 
                     # bind newly created tf variables to node
                     for var_name, tf_var in operator.args.items():
                         if not hasattr(self, var_name):
                             setattr(self, var_name, tf_var)
-                            operation_args[var_name] = tf_var
+                            operator_args[var_name]['var'] = tf_var
 
                 # group tensorflow versions of all operators
-                self.update = tf_op
+                self.update = tf.group(tf_ops, name=f"{self.key}_update")

@@ -2,6 +2,7 @@
 """
 
 import tensorflow as tf
+from networkx import MultiDiGraph
 from pyrates.network import Network
 from matplotlib.pyplot import *
 from pyrates.utility import mne_from_dataframe
@@ -180,257 +181,254 @@ hebb_mask = np.argwhere(hebb_mask)
 
 # The Un-Vectorized Dict.
 #########################
-node_dict = {}
-pc_node_dic = {}
-ein_node_dic = {}
-iin_node_dic = {}
+graph = MultiDiGraph()
 for i in range(0, n_jrcs):
-    dic = {
-        f'pcs_{i}': {
-            'operator_rtp_syn': [
-                [" d/dt * x_e = H_e / tau_e * ( m_ein + ue ) - 2./ tau_e * x_e - 1./ tau_e ^2 * psp_e "],
-                [" d/dt * x_i = H_i / tau_i * ( m_iin + ui ) - 2./ tau_i * x_i - 1./ tau_i ^2 * psp_i "],
-                [" d/dt * psp_e = x_e "], [" d/dt * psp_i = x_i "]],
-            # "u = 220. + randn(cint) * 22."
-            'operator_rtp_soma_pc': [" v = psp_e + psp_i "],
-            'operator_ptr': [" m_out = m_max / (1. + e^( r * ( v_th - v )))"],
-            'v': {'name': 'v',
-                  'variable_type': 'state_variable',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 0.},
-            'm_ein': {'name': 'm_ein',
-                      'variable_type': 'state_variable',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 0.},
-            'm_iin': {'name': 'm_iin',
-                      'variable_type': 'state_variable',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 0.},
-            'm_out': {'name': 'm_out',
-                      'variable_type': 'state_variable',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 0.16},
-            'psp_e': {'name': 'psp_e',
-                      'variable_type': 'state_variable',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 0.},
-            'psp_i': {'name': 'psp_i',
-                      'variable_type': 'state_variable',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 0.},
-            'x_e': {'name': 'x_e',
-                    'variable_type': 'state_variable',
-                    'data_type': 'float32',
-                    'shape': (),
-                    'initial_value': 0.},
-            'x_i': {'name': 'x_i',
-                    'variable_type': 'state_variable',
-                    'data_type': 'float32',
-                    'shape': (),
-                    'initial_value': 0.},
-            'H_e': {'name': 'H_e',
-                    'variable_type': 'constant',
-                    'data_type': 'float32',
-                    'shape': (),
-                    'initial_value': 3.25e-3},
-            'H_i': {'name': 'H_i',
-                    'variable_type': 'constant',
-                    'data_type': 'float32',
-                    'shape': (),
-                    'initial_value': -22e-3},
-            'tau_e': {'name': 'tau_e',
-                      'variable_type': 'constant',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 10e-3},
-            'tau_i': {'name': 'tau_i',
-                      'variable_type': 'constant',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 20e-3},
-            'm_max': {'name': 'm_max',
-                      'variable_type': 'constant',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 5.},
-            'r': {'name': 'r',
-                  'variable_type': 'constant',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 560.},
-            'v_th': {'name': 'v_th',
-                     'variable_type': 'constant',
-                     'data_type': 'float32',
-                     'shape': (),
-                     'initial_value': 6e-3},
-            'ue': {'name': 'ue',
-                   'variable_type': 'constant',
-                   'data_type': 'float32',
-                   'shape': (),
-                   'initial_value': 220.},
+    data = {'operators':
+                {'operator_rtp_syn_e':
+                     {'equations': ["d/dt * x_e = H_e/tau_e * (m_ein + ue) - 2./tau_e * x_e - 1./tau_e ^2 * psp_e",
+                                    "d/dt * psp_e = x_e"],
+                      'inputs': [],
+                      'output': 'psp_e'},
+                 'operator_rtp_syn_i':
+                     {'equations': ["d/dt * x_i = H_i/tau_i * (m_iin + ui) - 2./tau_i * x_i - 1./tau_i ^2 * psp_i",
+                                    "d/dt * psp_i = x_i"],
+                      'inputs': [],
+                      'output': 'psp_i'},
+                 'operator_rtp_soma_pc':
+                     {'equations': [" v = psp_e + psp_i "],
+                      'inputs': ['psp_e', 'psp_i'],
+                      'output': 'v'},
+                 'operator_ptr':
+                     {'equations': ["m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                      'inputs': ['v'],
+                      'output': 'm_out'}
+                 },
+            'operator_args':
+                {'v': {'name': 'v',
+                       'vtype': 'state_var',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 0.},
+                 'm_ein': {'name': 'm_ein',
+                           'vtype': 'state_var',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 0.},
+                 'm_iin': {'name': 'm_iin',
+                           'vtype': 'state_var',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 0.},
+                 'm_out': {'name': 'm_out',
+                           'vtype': 'state_var',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 0.16},
+                 'psp_e': {'name': 'psp_e',
+                           'vtype': 'state_var',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 0.},
+                 'psp_i': {'name': 'psp_i',
+                           'vtype': 'state_var',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 0.},
+                 'x_e': {'name': 'x_e',
+                         'vtype': 'state_var',
+                         'dtype': 'float32',
+                         'shape': (),
+                         'value': 0.},
+                 'x_i': {'name': 'x_i',
+                         'vtype': 'state_var',
+                         'dtype': 'float32',
+                         'shape': (),
+                         'value': 0.},
+                 'H_e': {'name': 'H_e',
+                         'vtype': 'constant',
+                         'dtype': 'float32',
+                         'shape': (),
+                         'value': 3.25e-3},
+                 'H_i': {'name': 'H_i',
+                         'vtype': 'constant',
+                         'dtype': 'float32',
+                         'shape': (),
+                         'value': -22e-3},
+                 'tau_e': {'name': 'tau_e',
+                           'vtype': 'constant',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 10e-3},
+                 'tau_i': {'name': 'tau_i',
+                           'vtype': 'constant',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 20e-3},
+                 'm_max': {'name': 'm_max',
+                           'vtype': 'constant',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 5.},
+                 'r': {'name': 'r',
+                       'vtype': 'constant',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 560.},
+                 'v_th': {'name': 'v_th',
+                          'vtype': 'constant',
+                          'dtype': 'float32',
+                          'shape': (),
+                          'value': 6e-3},
+                 'ue': {'name': 'ue',
+                        'vtype': 'constant',
+                        'dtype': 'float32',
+                        'shape': (),
+                        'value': 220.},
 
-            'ui': {'name': 'ui',
-                   'variable_type': 'constant',
-                   'data_type': 'float32',
-                   'shape': (),
-                   'initial_value': 0.},
-            # 'u': {'name': 'u',
-            #       'variable_type': 'state_variable',
-            #       'data_type': 'float32',
-            #       'shape': (),
-            #       'initial_value': 0.
-            #       },
-            # 'randn': {'variable_type': 'raw',
-            #           'variable': tf.random_normal},
-            # 'cint': {'name': 'cint',
-            #          'variable_type': 'constant',
-            #          'data_type': 'int32',
-            #          'shape': ([0]),
-            #          'initial_value': 0}
+                 'ui': {'name': 'ui',
+                        'vtype': 'constant',
+                        'dtype': 'float32',
+                        'shape': (),
+                        'value': 0.}
+                 }
+            }
+    graph.add_node(f'pc_{i}', data=data)
 
-        }, }
-    pc_node_dic.update(dic)
-    dic = {
-        f'ein_{i}': {
-            'operator_rtp_syn': [["d/dt * x = H / tau * ( m_in + uein ) - 2./ tau * x - 1./ tau ^ 2 * psp "],
-                                 ["d/dt * psp = x "]],
-            'operator_rtp_soma': [" v = psp "],
-            'operator_ptr': [" m_out = m_max / (1. + e^( r * ( v_th - v )))"],
-            'v': {'name': 'v',
-                  'variable_type': 'state_variable',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 0.},
-            'm_in': {'name': 'm_in',
-                     'variable_type': 'state_variable',
-                     'data_type': 'float32',
-                     'shape': (),
-                     'initial_value': 0.},
-            'm_out': {'name': 'm_out',
-                      'variable_type': 'state_variable',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 0.16},
-            'psp': {'name': 'psp',
-                    'variable_type': 'state_variable',
-                    'data_type': 'float32',
-                    'shape': (),
-                    'initial_value': 0.},
-            'x': {'name': 'x',
-                  'variable_type': 'state_variable',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 0.},
-            'H': {'name': 'H',
-                  'variable_type': 'constant',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 3.25e-3},
-            'tau': {'name': 'tau',
-                    'variable_type': 'constant',
-                    'data_type': 'float32',
-                    'shape': (),
-                    'initial_value': 10e-3},
-            'm_max': {'name': 'm_max',
-                      'variable_type': 'constant',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 5.},
-            'r': {'name': 'r',
-                  'variable_type': 'constant',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 560.},
-            'v_th': {'name': 'v_th',
-                     'variable_type': 'constant',
-                     'data_type': 'float32',
-                     'shape': (),
-                     'initial_value': 6e-3},
-            'uein': {'name': 'uein',
-                     'variable_type': 'constant',
-                     'data_type': 'float32',
-                     'shape': (),
-                     'initial_value': 0.},
+    data = {'operators':
+                {'operator_rtp':
+                     {'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau^2 * v",
+                                    "d/dt * v = x"],
+                      'inputs': [],
+                      'output': 'v'},
+                 'operator_ptr':
+                     {'equations': ["m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                      'inputs': ['v'],
+                      'output': 'm_out'}
+                 },
+            'operator_args':
+                {'v': {'name': 'v',
+                       'vtype': 'state_var',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 0.},
+                 'm_in': {'name': 'm_in',
+                          'vtype': 'state_var',
+                          'dtype': 'float32',
+                          'shape': (),
+                          'value': 0.},
+                 'm_out': {'name': 'm_out',
+                           'vtype': 'state_var',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 0.16},
+                 'x': {'name': 'x',
+                       'vtype': 'state_var',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 0.},
+                 'H': {'name': 'H',
+                       'vtype': 'constant',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 3.25e-3},
+                 'tau': {'name': 'tau',
+                         'vtype': 'constant',
+                         'dtype': 'float32',
+                         'shape': (),
+                         'value': 10e-3},
+                 'm_max': {'name': 'm_max',
+                           'vtype': 'constant',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 5.},
+                 'r': {'name': 'r',
+                       'vtype': 'constant',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 560.},
+                 'v_th': {'name': 'v_th',
+                          'vtype': 'constant',
+                          'dtype': 'float32',
+                          'shape': (),
+                          'value': 6e-3},
+                 'u': {'name': 'u',
+                       'vtype': 'constant',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 0.}
+                 }
+            }
+    graph.add_node(f'ein_{i}', data=data)
 
-        }, }
-    ein_node_dic.update(dic)
-
-    dic = {
-        f'iin_{i}': {
-            'operator_rtp_syn': [["d/dt* x = H / tau * ( m_in + uiin ) - 2./ tau * x - 1./ tau ^2 * psp "],
-                                 ["d/dt * psp = x "]],
-            'operator_rtp_soma': [" v = psp "],
-            'operator_ptr': [" m_out = m_max / (1. + e^( r * ( v_th - v )))"],
-            'v': {'name': 'v',
-                  'variable_type': 'state_variable',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 0.},
-            'm_in': {'name': 'm_in',
-                     'variable_type': 'state_variable',
-                     'data_type': 'float32',
-                     'shape': (),
-                     'initial_value': 0.},
-            'm_out': {'name': 'm_out',
-                      'variable_type': 'state_variable',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 0.16},
-            'psp': {'name': 'psp',
-                    'variable_type': 'state_variable',
-                    'data_type': 'float32',
-                    'shape': (),
-                    'initial_value': 0.},
-            'x': {'name': 'x',
-                  'variable_type': 'state_variable',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 0.},
-            'H': {'name': 'H',
-                  'variable_type': 'constant',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 3.25e-3},
-            'tau': {'name': 'tau',
-                    'variable_type': 'constant',
-                    'data_type': 'float32',
-                    'shape': (),
-                    'initial_value': 10e-3},
-            'm_max': {'name': 'm_max',
-                      'variable_type': 'constant',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': 5.},
-            'r': {'name': 'r',
-                  'variable_type': 'constant',
-                  'data_type': 'float32',
-                  'shape': (),
-                  'initial_value': 560.},
-            'v_th': {'name': 'v_th',
-                     'variable_type': 'constant',
-                     'data_type': 'float32',
-                     'shape': (),
-                     'initial_value': 6e-3},
-            'uiin': {'name': 'uiin',
-                     'variable_type': 'constant',
-                     'data_type': 'float32',
-                     'shape': (),
-                     'initial_value': 0.},
-        },
-    }
-    iin_node_dic.update(dic)
+    data = {'operators':
+                {'operator_rtp':
+                     {'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau^2 * v",
+                                    "d/dt * v = x"],
+                      'inputs': [],
+                      'output': 'v'},
+                 'operator_ptr':
+                     {'equations': ["m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                      'inputs': ['v'],
+                      'output': 'm_out'}
+                 },
+            'operator_args':
+                {'v': {'name': 'v',
+                       'vtype': 'state_var',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 0.},
+                 'm_in': {'name': 'm_in',
+                          'vtype': 'state_var',
+                          'dtype': 'float32',
+                          'shape': (),
+                          'value': 0.},
+                 'm_out': {'name': 'm_out',
+                           'vtype': 'state_var',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 0.16},
+                 'x': {'name': 'x',
+                       'vtype': 'state_var',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 0.},
+                 'H': {'name': 'H',
+                       'vtype': 'constant',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 3.25e-3},
+                 'tau': {'name': 'tau',
+                         'vtype': 'constant',
+                         'dtype': 'float32',
+                         'shape': (),
+                         'value': 10e-3},
+                 'm_max': {'name': 'm_max',
+                           'vtype': 'constant',
+                           'dtype': 'float32',
+                           'shape': (),
+                           'value': 5.},
+                 'r': {'name': 'r',
+                       'vtype': 'constant',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 560.},
+                 'v_th': {'name': 'v_th',
+                          'vtype': 'constant',
+                          'dtype': 'float32',
+                          'shape': (),
+                          'value': 6e-3},
+                 'u': {'name': 'u',
+                       'vtype': 'constant',
+                       'dtype': 'float32',
+                       'shape': (),
+                       'value': 0.}
+                 }
+            }
+    graph.add_node(f'iin_{i}', data=data)
 
 # node_dict is the collective input dictionary for all the nodes dictionaries.
 ##############################################################################
-node_dict.update(pc_node_dic)
-node_dict.update(ein_node_dic)
-node_dict.update(iin_node_dic)
+
 # For the Vec. Dict.
 ####################
 # connection_dict = {'coupling_operators': [["input[:,0:1] = C_e @ output",
@@ -488,11 +486,6 @@ node_dict.update(iin_node_dic)
 
 # For the Un_vectorized Connection Dict.
 ########################################
-target_list = []
-source_list = []
-input_list = []
-output_list = []
-c_dict_coll = []
 
 # for i in range(0, n_jrcs):
 for a in range(0, n_nodes):
@@ -500,62 +493,50 @@ for a in range(0, n_nodes):
 
         # source stuff
         if b % 3 == 2:
-            source = f'iins_{int(b/3)}'
-            output = f'm_outiin_{int(b/3)}'
+            source = f'iin_{int(b/3)}'
             c = C_i[a, b]
         elif b % 3 == 1:
-            source = f'eins_{int(b/3)}'
-            output = f'm_outein_{int(b/3)}'
+            source = f'ein_{int(b/3)}'
             c = C_e[a, b]
         else:
-            source = f'pcs_{int(b/3)}'
-            output = f'm_outpcs_{int(b/3)}'
+            source = f'pc_{int(b/3)}'
             c = C_e[a, b]
 
         if c != 0:
+            edge = {'operators': {}, 'operator_args': {}}
             if a % 3 == 0:
-                target = f'pcs_{int(a/3)}'
-                if 'eins' in source:
-                    input = f'm_einpcs_{int(a/3)}'
+                target = f'pc_{int(a/3)}'
+                if source.split('_')[0] == 'iin':
+                    edge['operator_args']['m_in'] = {'vtype': 'target_var',
+                                                     'name': 'm_iin'}
                 else:
-                    input = f'm_iinpcs_{int(a/3)}'
+                    edge['operator_args']['m_in'] = {'vtype': 'target_var',
+                                                     'name': 'm_ein'}
             elif a % 3 == 1:
-                target = f'eins_{int(a/3)}'
-                input = f'm_inein_{int(a/3)}'
+                target = f'ein_{int(a/3)}'
             else:
-                target = f'iins_{int(a/3)}'
-                input = f'm_iniin_{int(a/3)}'
+                target = f'iin_{int(a/3)}'
 
-            c_dict = {'name': 'c',
-                      'variable_type': 'state_variable',
-                      'data_type': 'float32',
-                      'shape': (),
-                      'initial_value': c * 1.,
-                      }
+            edge['operators']['coupling_op'] = {'equations': ["m_in = m_out * c"],
+                                                'inputs': [],
+                                                'output': 'm_in'}
+            edge['operator_args']['c'] = {'name': 'c',
+                                          'vtype': 'constant',
+                                          'dtype': 'float32',
+                                          'shape': (),
+                                          'value': c * 1.,
+                                          }
+            edge['operator_args']['m_out'] = {'vtype': 'source_var',
+                                              'name': 'm_out'}
 
-            input_dict = {'variable_type': 'target_var',
-                          'name': f'{input}'}
-            output_dict = {'variable_type': 'source_var',
-                           'name': f'{output}'}
-
-            c_dict_coll.append(c_dict)
-            target_list.append(target)
-            source_list.append(source)
-            input_list.append(input_dict)
-            output_list.append(output_dict)
-
-connection_dict = {'coupling_operators': [["input = output * c"]],
-
-                   'coupling_operator_args': {'c': c_dict_coll, 'input': input_list, 'output': output_list},
-
-                   'sources': source_list,
-                   'targets': target_list
-                   }
+            s = source.split('_')[0]
+            t = target.split('_')[0]
+            graph.add_edge(source, target, key=f'{s}{t}_edge', data=edge)
 
 # network setup
 ###############
 gr = tf.Graph()
-net = Network(node_dict, connection_dict, tf_graph=gr, key='test_net', dt=step_size)
+net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size)
 
 # output_coll = {}
 # for i in range (3, 4):

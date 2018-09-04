@@ -77,7 +77,7 @@ class EquationParser(object):
         rhs_op = rhs_parser.parse_expr()
 
         # add information about rhs to args
-        self.args['rhs'] = rhs_op
+        self.args['rhs'] = {'var': rhs_op, 'dependency': False}
 
         # check update type of lhs
         if "d/dt" in lhs:
@@ -105,7 +105,7 @@ class EquationParser(object):
 
             # set integration step-size
             try:
-                dt = self.args['dt']
+                dt = self.args['dt']['var']
             except KeyError:
                 raise ValueError('Integration step-size has to be passed for differential equations. Please '
                                  'add a field `dt` to `args` with the corresponding value.')
@@ -125,7 +125,7 @@ class EquationParser(object):
             self.update = solver.solve()
 
         elif 'rhs' in self.args.keys():
-            self.update = self.args.pop('rhs')
+            self.update = self.args.pop('rhs')['var']
 
 
 # expression parsers (lhs/rhs of an equation)
@@ -430,7 +430,7 @@ class ExpressionParser(ParserElement):
         elif op in self.args.keys():
 
             # extract variable from args dict
-            self._op_tmp = self.args[op]
+            self._op_tmp = self.args[op]['var']
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
@@ -485,7 +485,7 @@ class ExpressionParser(ParserElement):
             if self.lhs:
 
                 op_tmp = self.args.pop('rhs')
-                self._op_tmp = op_tmp
+                self._op_tmp = op_tmp['var']
                 self.args[op] = op_tmp
 
             else:
@@ -785,7 +785,16 @@ class TFExpressionParser(ExpressionParser):
         """
 
         with self.tf_graph.as_default():
-            return super().parse(expr_stack=expr_stack)
+
+            # set dependencies
+            dependencies = []
+            for arg in expr_stack:
+                if arg in self.args.keys() and self.args[arg]['dependency']:
+                    dependencies.append(self.args[arg]['op'])
+
+            # create tensorflow operation/variable
+            with tf.control_dependencies(dependencies):
+                return super().parse(expr_stack=expr_stack)
 
 
 class NPExpressionParser(LambdaExpressionParser):
@@ -956,7 +965,7 @@ class TFSolver(Solver):
             ################################################
 
             # parse the integration expression
-            expr_args = {'dt': self.dt, 'rhs': self.rhs}
+            expr_args = {'dt': {'var': self.dt, 'dependency': False}, 'rhs': {'var': self.rhs, 'dependency': False}}
             parser = TFExpressionParser(self.integration_expression, expr_args, tf_graph=self.tf_graph)
             op = parser.parse_expr()
 
@@ -1042,19 +1051,19 @@ def parse_dict(var_dict: dict,
 
                 for var_name, var in var_dict.items():
 
-                    if var['variable_type'] == 'raw':
+                    if var['vtype'] == 'raw':
 
-                        tf_var = var['variable']
+                        tf_var = var['value']
 
-                    elif var['variable_type'] == 'state_variable':
+                    elif var['vtype'] == 'state_var':
 
                         tf_var = tf.get_variable(name=var['name'],
                                                  shape=var['shape'],
-                                                 dtype=getattr(tf, var['data_type']),
-                                                 initializer=tf.constant_initializer(var['initial_value'])
+                                                 dtype=getattr(tf, var['dtype']),
+                                                 initializer=tf.constant_initializer(var['value'])
                                                  )
 
-                    elif var['variable_type'] == 'constant_sparse':
+                    elif var['vtype'] == 'constant_sparse':
 
                         # Check the shape, zeros and non-zero elements in the input matrix
                         # Check if zeros are more than 30 percent of the whole dense matrix and while doing that,
@@ -1072,7 +1081,7 @@ def parse_dict(var_dict: dict,
                             NonZer_idx = []
                             NonZer_val = []
 
-                            for arr in var['initial_value']:
+                            for arr in var['value']:
                                 j = 0
                                 for elem in arr:
 
@@ -1093,18 +1102,18 @@ def parse_dict(var_dict: dict,
                                                          values=NonZer_val,
                                                          dense_shape=var['shape'])
 
-                    elif var['variable_type'] == 'constant':
-                        tf_var = tf.constant(value=var['initial_value'],
+                    elif var['vtype'] == 'constant':
+                        tf_var = tf.constant(value=var['value'],
                                              name=var['name'],
                                              shape=var['shape'],
-                                             dtype=getattr(tf, var['data_type'])
+                                             dtype=getattr(tf, var['dtype'])
                                              )
 
-                    elif var['variable_type'] == 'placeholder':
+                    elif var['vtype'] == 'placeholder':
 
                         tf_var = tf.placeholder(name=var['name'],
                                                 shape=var['shape'],
-                                                dtype=getattr(tf,var['data_type'])
+                                                dtype=getattr(tf, var['dtype'])
                                                 )
 
                     else:
@@ -1118,12 +1127,12 @@ def parse_dict(var_dict: dict,
 
         for var_name, var in var_dict.items():
 
-            if var['variable_type'] == 'raw':
-                np_var = var['variable']
+            if var['vtype'] == 'raw':
+                np_var = var['value']
             else:
                 np_var = np.zeros(shape=var['shape'],
-                                  dtype=getattr(np, var['data_type']))
-                np_var += var['initial_value']
+                                  dtype=getattr(np, var['dtype']))
+                np_var += var['value']
 
             var_col.append(np_var)
             var_names.append(var_name)
