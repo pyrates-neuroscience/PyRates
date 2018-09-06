@@ -107,7 +107,7 @@ class NodeTemplate(AbstractBaseTemplate):
     label_cache = set()
 
     def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
-                 description: str, label: str=None, options: dict = None):
+                 description: str, label: str = None, options: dict = None):
         """For now: only allow single equation in operator template."""
 
         super().__init__(name, path, description)
@@ -138,7 +138,7 @@ class NodeTemplate(AbstractBaseTemplate):
         if options:
             raise NotImplementedError("Using options in node templates is not implemented yet.")
 
-    def _load_operator_template(self, path: str):
+    def _load_operator_template(self, path: str) -> OperatorTemplate:
         """Load an operator template based on a path"""
         path = self._format_path(path)
         return OperatorTemplate.from_yaml(path)
@@ -164,15 +164,27 @@ class NodeTemplate(AbstractBaseTemplate):
 
         # create instance as dictionary
         # instance = {"operators": {}, "label": label, "template": self}
-        instance = {"operators": {}, "template": self}
+        instance = {"operators": {}, "template": self, "inputs": set(), "output": None}
+        op_inputs, op_outputs = set(), set()
         for op_template, op_options in self.operators.items():
             op_instance, op_values, key = op_template.apply(op_options, return_key=True)
             instance["operators"][key] = {"operator": op_instance,
                                           "values": op_values}
+            op_inputs.update(op_instance["inputs"])
+            op_outputs.add(op_instance["output"])
+
+        for var in op_outputs:
+            try:
+                op_inputs.remove(var)
+            except KeyError:  # output variable not found as input in any operator
+                if instance["output"] is None:
+                    instance["output"] = var
+                else:
+                    raise ValueError("Too many outputs. Nodes only support a single overall output")
+
+        instance["inputs"] = op_inputs  # save remaining input variables as node inputs
 
         return instance
-
-
 
 
 class NodeTemplateLoader(TemplateLoader):

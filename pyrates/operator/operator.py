@@ -117,19 +117,19 @@ class OperatorTemplate(AbstractBaseTemplate):
 
         try:
             instance = self.cache[key]
-            _, values = self._separate_variables()
+            *_, values = self._separate_variables()
         except KeyError:
             if options:
                 raise NotImplementedError("Applying options to a template is not implemented yet.")
             # get variable definitions and specified default values
-            variables, values = self._separate_variables()
+            variables, inputs, output, values = self._separate_variables()
 
             # reduce order of ODE if necessary
             *equation, variables = self._reduce_ode_order(self.equation, variables)
 
             # operator instance is invoked as a dictionary of equation and variable definition
             # this may be subject to change
-            instance = dict(equation=equation, variables=variables)
+            instance = dict(equation=equation, variables=variables, inputs=inputs, output=output)
             self.cache[key] = instance
 
         if return_key:
@@ -150,7 +150,8 @@ class OperatorTemplate(AbstractBaseTemplate):
         """
 
         # matches pattern of form `(d/dt + a)^2 * y` and extracts `a` and `y`
-        match = re.match("\(\s*d\s*/\s*dt\s*[+-]\s*(\d*/?[a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)", equation)
+        match = re.match("\(\s*d\s*/\s*dt\s*[+-]\s*(\d*/?[a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)",
+                         equation)
 
         if match:
             # assume the entire lhs was matched, fails if there is something remaining on the lhs
@@ -161,31 +162,55 @@ class OperatorTemplate(AbstractBaseTemplate):
 
             variables[f"{var}_t"] = {"data_type": "float32",
                                      "description": "integration variable",
-                                     "variable_type": "state_variable"}
+                                     "variable_type": "state_var"}
 
             return eq1, eq2, variables
         else:
             return equation, variables
 
     def _separate_variables(self):
-        """Return variable definitions and the respective values."""
+        """
+        Return variable definitions and the respective values.
+
+        Returns
+        -------
+        variables
+        inputs
+        output
+        values
+        """
         # this part can be improved a lot with a proper expression parser
 
         variables = {}
         values = {}
+        inputs = []
+        output = None
         for variable, properties in self.variables.items():
             var_dict = {}
             for prop, expr in properties.items():
                 if prop == "default":
                     var_dict["variable_type"], var_dict["data_type"], value = self._parse_vprops(expr)
+
                     if value:
                         values[variable] = value
                     # else: don't pass information for that variable
+
+                    # separate in/out specification from variable type specification
+                    if var_dict["variable_type"] == "input":
+                        inputs.append(variable)
+                        var_dict["variable_type"] = "state_var"
+                    elif var_dict["variable_type"] == "output":
+                        if output is None:
+                            output = variable  # for now assume maximum one output is present
+                        else:
+                            raise ValueError("More than one output specification found in operator. "
+                                             "Only one output per operator is supported.")
+                        var_dict["variable_type"] = "state_var"
                 else:
                     var_dict[prop] = expr
             variables[variable] = var_dict
 
-        return variables, values
+        return variables, inputs, output, values
 
     @staticmethod
     def _parse_vprops(expr: Union[str, int, float]):
@@ -201,9 +226,14 @@ class OperatorTemplate(AbstractBaseTemplate):
             vtype = "constant"
             value = expr
             dtype = "float32"
+            # restriction to 32bit float for consistency. May not be reasonable at all times.
         else:
-            if expr.startswith(("input", "output", "variable")):
-                vtype = "state_variable"
+            if expr.startswith("input"):
+                vtype = "input"
+            elif expr.startswith("output"):
+                vtype = "output"
+            elif expr.startswith("variable"):
+                vtype = "state_var"
             elif expr.startswith("constant"):
                 vtype = "constant"
             elif expr.startswith("placeholder"):
@@ -219,7 +249,7 @@ class OperatorTemplate(AbstractBaseTemplate):
                     raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
 
             if expr.endswith("(float)"):
-                dtype = "float32" # why float32 and not float64?
+                dtype = "float32"  # why float32 and not float64?
             elif expr.endswith("(int)"):
                 dtype = "int32"
             elif "." in expr:

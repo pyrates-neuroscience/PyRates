@@ -1,5 +1,9 @@
 %YAML 1.2
 ---
+aliases:
+  - &JRExcitatorySynapse pyrates.synapse.templates.JansenRitExcitatorySynapseRCO
+  - &JRInhibitorySynapse pyrates.synapse.templates.JansenRitInhibitorySynapseRCO
+
 JansenRitCircuit:
   description: |
     Implementation of a neural mass model of 3 neural masses following Jansen and Rit [1]_
@@ -22,10 +26,10 @@ JansenRitCircuit:
   # alternative: use YAML tags for proper references
 
   edges:
-    - [JR_PC, JR_IIN, LC, c: 33.75]
-    - [JR_PC, JR_EIN, LC, c: 135]
-    - [JR_EIN, JR_PC/JansenRitExcitatorySynapseRCO, LC, c: 108]
-    - [JR_IIN, JR_PC/JansenRitInhibitorySynapseRCO, LC, c: 33.75]
+    - [JR_PC, JR_IIN, LC, *JRExcitatorySynapse, c: 33.75]
+    - [JR_PC, JR_EIN, LC, *JRExcitatorySynapse, c: 135.]
+    - [JR_EIN, JR_PC, LC, *JRExcitatorySynapse, c: 108.]
+    - [JR_IIN, JR_PC, LC, *JRInhibitorySynapse, c: 33.75]
 
 MultiJansenRitCircuit:
   description: |

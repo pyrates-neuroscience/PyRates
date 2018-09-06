@@ -12,7 +12,7 @@ CurrentToPotentialOperator:
     L_m:
       description: Generic linear differential operator
       unit: None
-      default: 1
+      default: 1.
     k:
       name: synaptic_weight
       description: >
@@ -21,7 +21,7 @@ CurrentToPotentialOperator:
         a conductivity of the somatic membrane.
         Note: This may be scalar or vector form.
       unit: V/A
-      default: 1
+      default: 1.
     V:
       name: membrane_potential
       description: Mean somatic membrane potential

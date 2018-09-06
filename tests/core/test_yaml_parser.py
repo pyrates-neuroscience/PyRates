@@ -172,3 +172,16 @@ def test_equation_alteration():
     operator, values = template.apply()
 
     assert operator["equation"] == ["V = k * I"]
+
+
+def test_network_def_workaround():
+    path = "pyrates.circuit.templates.JansenRitCircuit"
+    from pyrates.circuit import CircuitTemplate
+
+    template = CircuitTemplate.from_yaml(path)
+
+    circuit = template.apply()
+
+    nd = circuit.network_def()
+
+    assert nd

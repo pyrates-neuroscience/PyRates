@@ -25,7 +25,7 @@ RateToCurrentOperator:
       name: efficacy
       description: Synaptic efficacy. Scales the synaptic activation.
       unit: A*s
-      default: 1
+      default: 1.
     m_in:
       name: incoming_firing_rate
       description: Mean incoming firing rate at a specific synapse type
