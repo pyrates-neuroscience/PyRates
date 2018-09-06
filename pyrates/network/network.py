@@ -376,6 +376,8 @@ class Network(MultiDiGraph):
 
                     if 'shape' in arg.keys():
                         arg['shape'] = [n_nodes, ] + list(arg['shape'])
+                        if len(arg['shape']) == 1:
+                            arg['shape'] = arg['shape'] + [1]
 
                 # add new, vectorized node to dictionary
                 if n_nodes > 0:
@@ -412,6 +414,8 @@ class Network(MultiDiGraph):
                         op_args_new = {}
                         n_edges = 0
                         arg_vals = {}
+                        snode_idx = {}
+                        tnode_idx = {}
 
                         # go through old edges
                         for source, target, edge in net_config.edges:
@@ -423,11 +427,20 @@ class Network(MultiDiGraph):
                                 if n_edges == 0:
 
                                     # use first match to collect operations and operation arguments
+                                    # TODO: implement mapping from node to edge space and back
                                     ops_new = edge_info['operators']
                                     for key, arg in edge_info['operator_args'].items():
                                         op_args_new[key] = arg
                                         if 'value' in arg.keys():
                                             arg_vals[key] = [arg['value']]
+                                        if arg['vtype'] == 'source_var':
+                                            snode_idx[key] = ([node_arg_map[source][arg['name']]],
+                                                              new_net_config.nodes[s]['data']['operator_args']
+                                                              [arg['name']]['shape'][0])
+                                        elif arg['vtype'] == 'target_var':
+                                            tnode_idx[key] = ([node_arg_map[target][arg['name']]],
+                                                              new_net_config.nodes[t]['data']['operator_args']
+                                                              [arg['name']]['shape'][0])
 
                                 else:
 
@@ -435,18 +448,58 @@ class Network(MultiDiGraph):
                                     for key, arg in edge_info['operator_args'].items():
                                         if 'value' in arg.keys():
                                             arg_vals[key].append(arg['value'])
+                                        if arg['vtype'] == 'source_var':
+                                            snode_idx[key][0].append(node_arg_map[source][arg['name']])
+                                        elif arg['vtype'] == 'target_var':
+                                            tnode_idx[key][0].append(node_arg_map[target][arg['name']])
 
                                 # increment edge counter
                                 n_edges += 1
 
+                        # create mapping from source to edge space and edge to target space
+                        if not second_lvl_vec and n_edges > 0:
+                            for n, (key, val) in enumerate(snode_idx.items()):
+                                edge_map = np.zeros((n_edges, val[1]))
+                                for i, idx in enumerate(val[0]):
+                                    edge_map[i, idx] = 1.
+                                if not n_edges == val[1] and not edge_map == np.eye(n_edges):
+                                    for op_key, op in ops_new.items():
+                                        for i, eq in enumerate(op['equations']):
+                                            eq = eq.replace(key, f'(map_{n} @ {key})')
+                                            ops_new[op_key]['equations'][i] = eq
+                                    op_args_new[f'map_{n}'] = {'vtype': 'constant',
+                                                               'dtype': 'float32',
+                                                               'name': f'map_{n}',
+                                                               'shape': edge_map.shape,
+                                                               'value': edge_map}
+                            for key, val in tnode_idx.items():
+                                target_map = np.zeros((val[1], n_edges))
+                                for i, idx in enumerate(val[0]):
+                                    target_map[idx, i] = 1.
+                                if not n_edges == val[1] and not target_map == np.eye(n_edges):
+                                    for op_key, op in ops_new.items():
+                                        for i, eq in enumerate(op['equations']):
+                                            _, rhs = eq.split(' = ')
+                                            eq = eq.replace(rhs, f'tmap @ ({rhs})')
+                                            ops_new[op_key]['equations'][i] = eq
+                                    op_args_new['tmap'] = {'vtype': 'constant',
+                                                           'dtype': 'float32',
+                                                           'name': 'tmap',
+                                                           'shape': target_map.shape,
+                                                           'value': target_map}
+
                         # go through new arguments and change shape and values
                         for key, arg in op_args_new.items():
 
-                            if 'value' in arg.keys():
-                                arg['value'] = np.array(arg_vals[key]) if type(arg['value']) == np.ndarray else arg_vals[key]
+                            if 'map_' not in key and 'tmap' not in key:
 
-                            if 'shape' in arg.keys():
-                                arg['shape'] = [n_edges, ] + list(arg['shape'])
+                                if 'value' in arg.keys():
+                                    arg['value'] = np.array(arg_vals[key]) if type(arg['value']) == np.ndarray else arg_vals[key]
+
+                                if 'shape' in arg.keys():
+                                    arg['shape'] = [n_edges, ] + list(arg['shape'])
+                                    if len(arg['shape']) == 1:
+                                        arg['shape'] = arg['shape'] + [1]
 
                         if n_edges > 0:
 
@@ -529,355 +582,6 @@ class Network(MultiDiGraph):
         #                     if type(arg_tmp['value']) == np.ndarray:
         #                         arg_val = np.array(arg_val)
         #                     arg_tmp['value'] = arg_val
-
-        # loop through nodes in node dict, to check for equal operators that can be vectorized
-        ######################################################################################
-
-        # for node_name, node_info in nodes.items():
-        #
-        #     nested_dict = dict()
-        #
-        #     for key, val in node_info.items():
-        #
-        #         if 'operator' in key:
-        #
-        #             # Nested operators re-ording.
-        #             if len(val) > 1:
-        #                 nested_idx = 0
-        #
-        #                 for i_oper in val:
-        #
-        #                     # parse expression
-        #                     lhs, rhs = i_oper[0].split(' = ')
-        #                     expr_list = ExpressionParser(lhs, dict()).expr_stack
-        #                     expr_list.extend(ExpressionParser(rhs, dict()).expr_stack)
-        #
-        #                     if not key + f'_nested_{nested_idx-1}' in nested_dict:
-        #                         nested_dict[key + f'_nested_{nested_idx}'] = {'val': i_oper, 'oper_params':
-        #                             expr_list}
-        #
-        #                         nested_idx = nested_idx + 1
-        #                     else:
-        #                         similar_nested_operator_found = False
-        #                         for i_nested in nested_dict:
-        #                             if len(nested_dict[i_nested]['oper_params']) == len(expr_list):
-        #                                 if len(nested_dict[i_nested]['val']) == 1:
-        #                                     nested_dict[i_nested]['val'] = [nested_dict[i_nested]['val']]
-        #                                 nested_dict[i_nested]['val'].append(i_oper)
-        #                                 similar_nested_operator_found = True
-        #                         if not similar_nested_operator_found:
-        #                             nested_dict[key + f'_nested_{nested_idx}'] = {
-        #                                 'val': i_oper, 'oper_params':
-        #                                     expr_list}
-        #                             nested_idx = nested_idx + 1
-        #             else:
-        #
-        #                 nested_dict[key] = {'val': val}
-        #         else:
-        #             nested_dict[key] = {'val': val}
-        #
-        #     nodes[node_name] = {}
-        #     for key_nested in nested_dict:
-        #         nodes[node_name].update({key_nested: nested_dict[key_nested]['val']})
-        #
-        # for node_name, node_info in nodes.items():
-        #
-        #     # Reseting jrcsID and operationID
-        #     if jrcsID == n_jrcs:
-        #         jrcsID = 0
-        #         operationID = 0
-        #
-        #     jrcsID += 1
-        #
-        #     # split dictionary keys into operators and variables
-        #     for key, val in node_info.items():
-        #
-        #         # 1- Checking for the "_Operation" keyword
-        #         # 2- Calculating the length of the Operation list, if its more than 1.
-        #         # 3- Either: add the name of the operation with the operation in the dict
-        #         # 3- Or: append the dict if the name is already there.
-        #         # 4- IF: there is two similar operations in same node rearrange them,
-        #         # 4- as how the similar nodes in different circuits is arranged.
-        #         ################################################################
-        #
-        #         if 'operator' in key:
-        #
-        #             operationID += 1
-        #             if operationID > len(len_prev_opr):
-        #                 len_prev_opr.append(0)
-        #             else:
-        #                 pass
-        #
-        #             # Append similar operation together is a list
-        #             if not key in opr_dict:
-        #                 if len(val) > 1:
-        #                     opr_dict[key] = val
-        #                 else:
-        #                     opr_dict[key] = [val]
-        #                 len_prev_opr[operationID - 1] += len(val)
-        #             else:
-        #                 if len(val) > 1:
-        #                     for i, elems in enumerate(val):
-        #                         prev_operations = 0
-        #                         for prev_i in range(0, operationID):
-        #                             prev_operations += len_prev_opr[prev_i]
-        #                         insertion_idx = (i * (jrcsID)) + (jrcsID - 1)
-        #                         opr_dict[key][insertion_idx:insertion_idx] = [elems]
-        #                         # opr_dict[key].append(elems)
-        #                 else:
-        #                     opr_dict[key].append(val)
-        #
-        #         # if its not an Operation it would be then save in the node_args dict
-        #         # with adding the node name to its key name in the dict.
-        #         ####################################################################
-        #
-        #         else:
-        #             node_args[key + node_name] = val
-        #             val['node_name'] = node_name
-        #
-        #     operationID = 0
-        #
-        #     # At the end of each node after saving the operations in each node and the variable(args) names,
-        #     # we replace the old names in the operation with the new ones.
-        #     # That's why we need the input args be written with spaces in each operation (limitation 2).
-        #     ############################################################################################
-        #
-        #     for key, val in node_info.items():
-        #
-        #         if 'operator' in key:
-        #             pass
-        #         else:
-        #             for k in opr_dict:
-        #                 for j in range(0, len(opr_dict[k])):
-        #                     opr_dict[k][j] = [w.replace(' ' + key + ' ', ' ' + key + node_name + ' ') for w in opr_dict[k][j]]
-        #
-        # batched = dict()
-        #
-        # # Batching parameters from inputr dictionary
-        # for i_dict, oper_list in enumerate(sorted(opr_dict.values())):
-        #
-        #     stripped_par_list = []
-        #     for each_oper in oper_list:
-        #         # Splitting expression.
-        #         lhs, rhs = each_oper[0].split(' = ')
-        #         exp_pars = ExpressionParser(lhs, dict())
-        #         expr_list = exp_pars.expr_stack
-        #         exp_pars = ExpressionParser(rhs, node_info)
-        #         expr_list.extend(exp_pars.expr_stack)
-        #
-        #         par_list = expr_list
-        #         stripped_par_list.append(par_list)
-        #
-        #     list_len = len(par_list)
-        #
-        #     for first_itr in range(0, list_len):
-        #
-        #         variable_found = False
-        #         for second_itr, list_enum in enumerate(stripped_par_list):
-        #             poped_symbol = list_enum.pop()
-        #
-        #             if poped_symbol in node_args:
-        #
-        #                 # To check if its not already in batched.
-        #                 for k, v in batched.items():
-        #                     if f'{poped_symbol}_' in k:
-        #                         variable_found = True
-        #                     else:
-        #                         pass
-        #
-        #                 if not variable_found:
-        #                     if second_itr == 0:
-        #                         if not poped_symbol in batched:
-        #                             batched[poped_symbol] = {'name': poped_symbol,
-        #                                                      'par_name': [f'{poped_symbol}'],
-        #                                                      'variable_type': 'state_variable',
-        #                                                      'data_type': node_args[poped_symbol]['data_type'],
-        #                                                      'nodes': [node_args[poped_symbol]['node_name']],
-        #                                                      'initial_value': [
-        #                                                          node_args[poped_symbol]['initial_value']],
-        #                                                      'shape': [1, 1],
-        #                                                      }
-        #                             batched[f'{poped_symbol}_'] = batched.pop(poped_symbol)
-        #                             pop_par_init = f'{poped_symbol}_'
-        #                         else:
-        #                             print("Is this an Error? How was it in this case !?!?!?")
-        #                     else:
-        #                         batched[pop_par_init]['initial_value'].append(node_args[poped_symbol]['initial_value'])
-        #                         batched[pop_par_init]['par_name'].append(f'{poped_symbol}')
-        #                         batched[pop_par_init]['shape'] = [len(batched[pop_par_init]['initial_value']), 1]
-        #                         batched[pop_par_init]['nodes'].append(node_args[poped_symbol]['node_name'])
-        #                         batched[pop_par_init]['name'] = f'{pop_par_init}{poped_symbol}_'
-        #                         batched[f'{pop_par_init}{poped_symbol}_'] = batched.pop(pop_par_init)
-        #                         pop_par_init = f'{pop_par_init}{poped_symbol}_'
-        #                 else:
-        #                     pass
-        #
-        # batch_opr_dict = dict()
-        #
-        # # batch_opr_dict:
-        # #               A dictionary which have only one Operation of each Operation with the
-        # #               new batched collected names and a slicing for which indices the operations is done on.
-        #
-        # index_start = None
-        # start_bool = True
-        #
-        # # Create a dictionary with related collected variable names in the batched dictionary to be parsed.
-        # # A strip of the operations and checking if each variable(argument) is in any of the batched dict keys and
-        # # then checking in the par_name.
-        # # popping each variable in opr_dict and replace it with the new variable name form batched dictionary keys
-        # # and add the slicing required for each operation.
-        # #############################################################################################################
-        #
-        # for dict1_k in opr_dict:
-        #     stripped_par_list = []
-        #     for expr in opr_dict[dict1_k]:
-        #         # Splitting expression.
-        #         lhs, rhs = expr[0].split(' = ')
-        #         exp_pars = ExpressionParser(lhs, dict())
-        #         expr_list = exp_pars.expr_stack
-        #         exp_pars = ExpressionParser(rhs, node_info)
-        #         expr_list.extend(exp_pars.expr_stack)
-        #
-        #         par_list = expr_list
-        #         stripped_par_list.append(par_list)
-        #
-        #     list_len = len(par_list)
-        #
-        #     for first_itr in range(0, list_len):
-        #         for i, expr in enumerate(stripped_par_list):
-        #             popped_par = expr.pop()
-        #             for batched_k in batched:
-        #                 if popped_par in batched[batched_k]['par_name']:
-        #                     if popped_par != 'dt':
-        #                         if not dict1_k in batch_opr_dict:
-        #                             batch_opr_dict[dict1_k] = opr_dict[dict1_k][0]
-        #                         else:
-        #                             pass
-        #                         if start_bool:
-        #                             index_start = batched[batched_k]['par_name'].index(popped_par)
-        #                             start_bool = False
-        #                             replace_val = popped_par
-        #                         else:
-        #                             pass
-        #
-        #                         ind = batched[batched_k]['par_name'].index(popped_par)
-        #                         index_end = ind + 1
-        #                         if popped_par != 'd':
-        #                             batch_opr_dict[dict1_k] = [w.replace(' ' + replace_val + ' ',
-        #                                                                  ' ' + batched_k + f"[{index_start}:{index_end}]" + ' ')
-        #                                                        for w in batch_opr_dict[dict1_k]]
-        #                             replace_val = batched_k + f"[{index_start}:{index_end}]"
-        #         start_bool = True
-        #
-        # # I am doing it in this way as it the operations lost their order in the process. (limitation 5)
-        # # This problem can be solved by adding a dependency in the input dictionary or in the first loop.
-        # #################################################################################################
-        # new_batch_opr_dict = dict()
-        #
-        # for opr_key in batch_opr_dict:
-        #
-        #     if '_nested_' in opr_key:
-        #         old_name = ''.join([w for w in opr_key[0:opr_key.index('_nested_')]])
-        #         if not old_name in new_batch_opr_dict:
-        #             new_batch_opr_dict[old_name] = batch_opr_dict[opr_key]
-        #         else:
-        #             new_batch_opr_dict[old_name].append(batch_opr_dict[opr_key][0])
-        #     else:
-        #         new_batch_opr_dict[opr_key] = batch_opr_dict[opr_key]
-        #
-        # batched.update({'operator_rtp_syn': new_batch_opr_dict['operator_rtp_syn']})
-        # batched.update({'operator_rtp_soma_pc': new_batch_opr_dict['operator_rtp_soma_pc']})
-        # batched.update({'operator_rtp_soma': new_batch_opr_dict['operator_rtp_soma']})
-        # batched.update({'operator_ptr': new_batch_opr_dict['operator_ptr']})
-        #
-        # conn = []
-        #
-        # for i in range(0, len(edges['coupling_operator_args']['c'])):
-        #     conn.append(
-        #         edges['coupling_operator_args']['c'][i][
-        #             'initial_value'])  # To add it in the batched dict
-        #
-        # # C_batched:
-        # #           Dictionary of batched [[input = output * c]] for each index of connections.
-        #
-        # C_batched = dict()
-        # C_op = []
-        # k_output_found = False  # A Flag
-        # k_input_found = False  # A Flag
-        #
-        # for i_batched, k_batched in enumerate(batched):
-        #     if not k_output_found:
-        #         for k_output in edges['coupling_operator_args']['output']:
-        #             if k_output['name'] in k_batched:
-        #                 batched_source_key = k_batched
-        #                 k_output_found = True
-        #                 break
-        #
-        #     if not k_input_found:
-        #         for k_input in edges['coupling_operator_args']['input']:
-        #             if k_input['name'] in k_batched:
-        #                 batched_target_key = k_batched
-        #                 k_input_found = True
-        #                 break
-        # new_eq = [w.replace('output', 'mapping @ ((mapping2@output)') for [w] in edges['coupling_operators']]
-        # for exp in new_eq:
-        #     new_eq = exp.replace(exp, exp + ')')
-        #
-        # n_edges = len(edges['coupling_operator_args']['c'])
-        # n_inp = len(batched[batched_target_key]['initial_value'])
-        # n_out = len(batched[batched_source_key]['initial_value'])
-        #
-        # # create mapping
-        # mapping = np.zeros((n_inp, n_edges), dtype=np.float32)
-        # mapping2 = np.zeros((n_edges, n_out), dtype=np.float32)
-        # scatter_indices = []
-        #
-        # for conn_i in range(0, len(edges['coupling_operator_args']['c'])):
-        #     Source_idx = batched[batched_source_key]['par_name'].index(
-        #         edges['coupling_operator_args']['output'][conn_i]['name'])
-        #
-        #     Target_idx = batched[batched_target_key]['par_name'].index(
-        #         edges['coupling_operator_args']['input'][conn_i]['name'])
-        #
-        #     scatter_indices.append([Source_idx])
-        #
-        #     # C_op_target.append(f'batched_target_key[{Target_idx}] = new_batched_source[{conn_i}]')
-        #
-        #     mapping[Target_idx, conn_i] = 1.
-        #     mapping2[conn_i, Source_idx] = 1.
-        #
-        # C_batched['coupling_operators'] = [[new_eq]]
-        # C_batched['coupling_operator_args'] = {'c': {'name': 'c',
-        #                                              'variable_type': 'state_variable',
-        #                                              'data_type': 'float32',
-        #                                              'shape': [n_edges, 1],
-        #                                              'initial_value': conn},
-        #                                        'input': {'variable_type': 'target_var', 'name': batched_target_key},
-        #                                        'output': {'variable_type': 'source_var', 'name': batched_source_key},
-        #                                        'mapping': {'variable_type': 'constant',
-        #                                                    'name': 'mapping',
-        #                                                    'shape': [n_inp, n_edges],
-        #                                                    'data_type': 'float32',
-        #                                                    'initial_value': mapping},
-        #                                        'mapping2': {'variable_type': 'constant',
-        #                                                     'name': 'mapping2',
-        #                                                     'shape': [n_edges, n_out],
-        #                                                     'data_type': 'float32',
-        #                                                     'initial_value': mapping2},
-        #                                        'shape_scatter_out': {'variable_type': 'raw',
-        #                                                              'variable': [n_edges, 1]},
-        #                                        'scatter_idxs': {'name': 'scatter_idxs',
-        #                                                         'shape': [n_edges, 1],
-        #                                                         'data_type': 'int32',
-        #                                                         'variable_type': 'constant',
-        #                                                         'initial_value': scatter_indices}
-        #                                        }
-        #
-        # C_batched['sources'] = ['BNode' for _ in range(len(C_batched['coupling_operators']))]
-        # C_batched['targets'] = ['BNode' for _ in range(len(C_batched['coupling_operators']))]
-        #
-        # # batched['operator_rtp_syn1'].append(batched.pop('operator_rtp_syn2')[0])
-        # # batched['operator_rtp_soma'].append(batched.pop('operator_rtp_soma_pc')[0])
 
         return net_config
 

@@ -30,8 +30,8 @@ n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter_e = 100. / (n_jrcs * sparseness_e / 0.01)
-c_inter_i = 50. / (n_jrcs * sparseness_e / 0.01)
+c_inter_e = 0. / (n_jrcs * sparseness_e / 0.01)
+c_inter_i = 0. / (n_jrcs * sparseness_e / 0.01)
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -545,15 +545,11 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size)
 
 # network simulation
 ####################
-#
-for i, k in net.nodes['BNode']['handle'].__dict__.items():
-    if 'vp' in i:
-        V = i
 
 results, ActTime = net.run(simulation_time=simulation_time,
                            # inputs={net.nodes['jrc'].U: inp},
                            # inputs = input_coll,
-                           outputs={'V': getattr(net.nodes['BNode']['handle'], V)},
+                           outputs={'V': net.nodes['pc']['handle'].v},
                            # outputs=output_coll,
                            sampling_step_size=step_size)
 

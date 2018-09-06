@@ -34,7 +34,7 @@ class Operator(object):
 
     """
     def __init__(self, expressions: List[str], expression_args: dict, key: str,
-                 variable_scope: str, dependencies: Optional[list] = None, tf_graph: Optional[tf.Graph] = None):
+                 variable_scope: str, tf_graph: Optional[tf.Graph] = None):
         """Instantiates operator.
         """
 
@@ -43,9 +43,6 @@ class Operator(object):
         self.key = key
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
         self.args = expression_args
-
-        if dependencies is None:
-            dependencies = []
 
         # parse expressions
         ###################
@@ -56,17 +53,15 @@ class Operator(object):
 
                 for i, expr in enumerate(expressions):
 
-                    with tf.control_dependencies(dependencies):
+                    # parse equation
+                    parser = EquationParser(expr, self.args, engine='tensorflow', tf_graph=self.tf_graph)
+                    self.args = parser.args
 
-                        # parse equation
-                        parser = EquationParser(expr, self.args, engine='tensorflow', tf_graph=self.tf_graph)
-                        self.args = parser.args
-
-                        # collect tensorflow variables and update operations
-                        if hasattr(parser, 'update'):
-                            self.DEs.append((parser.target_var, parser.update))
-                        else:
-                            self.updates.append(parser.target_var)
+                    # collect tensorflow variables and update operations
+                    if hasattr(parser, 'update'):
+                        self.DEs.append((parser.target_var, parser.update))
+                    else:
+                        self.updates.append(parser.target_var)
 
     def create(self):
         """Create a single tensorflow operation for the set of parsed expressions.

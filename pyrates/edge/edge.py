@@ -129,7 +129,8 @@ class Edge(object):
                     # bind newly created tf variables to edge
                     for var_name, tf_var in operator.args.items():
                         if not hasattr(self, var_name):
-                            setattr(self, var_name, tf_var)
+                            setattr(self, var_name, tf_var['var'])
+                        if var_name not in operator_args.keys():
                             operator_args[var_name]['var'] = tf_var
 
                 # collect tensorflow operations of that edge

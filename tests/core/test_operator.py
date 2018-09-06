@@ -46,8 +46,8 @@ def test_2_1_operator():
 
     expressions = ["a = 5.0 - 2.0"]
 
-    op = Operator(expressions=expressions, expression_args={'a': tf.Variable(0.)}, key='test',
-                  variable_scope='test_scope')
+    op = Operator(expressions=expressions, expression_args={'a': {'var': tf.Variable(0.), 'dependency': False}},
+                  key='test', variable_scope='test_scope')
     assert isinstance(op, Operator)
 
     # test dependencies between equations of operator
@@ -61,17 +61,17 @@ def test_2_1_operator():
         v1 = tf.Variable(np.ones((1, 10))*2., dtype=tf.float32)
         v2 = tf.Variable(np.ones((1, 10))*2., dtype=tf.float32)
 
-    args1 = {'a': v1, 'dt': .5}
-    args2 = {'a': v2, 'dt': .5}
+    args1 = {'a': {'var': v1, 'dependency': False}, 'dt': {'var': .5, 'dependency': False}}
+    args2 = {'a': {'var': v2, 'dependency': False}, 'dt': {'var': .5, 'dependency': False}}
     op1 = Operator([eq1, eq2], args1, 'test1', 'test_scope1', tf_graph=gr).create()
     op2 = Operator([eq2, eq1], args2, 'test2', 'test_scope2', tf_graph=gr).create()
 
     with tf.Session(graph=gr) as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(op1)
-        result1 = np.sum(args1['b'].eval())
+        result1 = np.sum(args1['b']['var'].eval())
         sess.run(op2)
-        result2 = np.sum(args2['b'].eval())
+        result2 = np.sum(args2['b']['var'].eval())
 
     assert result1 == pytest.approx(1., rel=1e-6)
     assert result2 == pytest.approx(1., rel=1e-6)
@@ -88,12 +88,12 @@ def test_2_2_node():
     # test minimal call example
     ###########################
 
-    ops = {'operator_1': ["a[:] = 2"]}
-    op_args = {'a': {'variable_type': 'state_variable',
+    ops = {'operator_1': {'equations': ["a[:] = 2"], 'inputs': [], 'output': 'a'}}
+    op_args = {'a': {'vtype': 'state_var',
                      'shape': (1, 10),
                      'name': 'a',
-                     'data_type': 'float32',
-                     'initial_value': 1.},
+                     'dtype': 'float32',
+                     'value': 1.},
                }
 
     node = Node(ops, op_args, 'test')
@@ -102,25 +102,30 @@ def test_2_2_node():
     # test dependencies between operations of node
     ##############################################
 
-    op1 = ["d/dt * a = a^2", "b = a*2"]
-    op2 = ["c = b / sum(b)"]
+    eq1 = ["d/dt * a = a^2", "b = a*2"]
+    eq2 = ["c = b / sum(b)"]
 
-    op_args['dt'] = {'variable_type': 'constant',
+    op1 = {'operator1': {'equations': eq1, 'inputs': [], 'output': 'b'},
+           'operator2': {'equations': eq2, 'inputs': ['b'], 'output': 'c'}}
+    op2 = {'operator1': {'equations': eq1, 'inputs': [], 'output': 'b'},
+           'operator2': {'equations': eq2, 'inputs': [], 'output': 'c'}}
+
+    op_args['dt'] = {'vtype': 'constant',
                      'shape': (),
                      'name': 'dt',
-                     'data_type': 'float32',
-                     'initial_value': 0.5}
+                     'dtype': 'float32',
+                     'value': 0.5}
     op_args1 = op_args.copy()
     op_args2 = op_args.copy()
-    op_args2['b'] = {'variable_type': 'state_variable',
+    op_args2['b'] = {'vtype': 'state_var',
                      'shape': (1, 10),
                      'name': 'b',
-                     'data_type': 'float32',
-                     'initial_value': 1.}
+                     'dtype': 'float32',
+                     'value': 1.}
     gr = tf.Graph()
 
-    n1 = Node({'operator_1': op1, 'operator_2': op2}, op_args1, 'test1', tf_graph=gr)
-    n2 = Node({'operator_1': op2, 'operator_2': op1}, op_args2, 'test2', tf_graph=gr)
+    n1 = Node(op1, op_args1, 'test1', tf_graph=gr)
+    n2 = Node(op2, op_args2, 'test2', tf_graph=gr)
 
     with tf.Session(graph=gr) as sess:
         sess.run(tf.global_variables_initializer())
@@ -145,20 +150,20 @@ def test_2_3_edge():
     ###########################
 
     gr = tf.Graph()
-    ops = {'operator_1': ["a[:] = 1."]}
-    op_args = {'a': {'variable_type': 'state_variable',
+    ops = {'operator_1': {'equations': ["a[:] = 1."], 'inputs': [], 'output': 'a'}}
+    op_args = {'a': {'vtype': 'state_var',
                      'shape': (1, 10),
                      'name': 'a',
-                     'data_type': 'float32',
-                     'initial_value': 1.}
+                     'dtype': 'float32',
+                     'value': 1.}
                }
     n1 = Node(ops, op_args, 'n1', tf_graph=gr)
     n2 = Node(ops, op_args, 'n2', tf_graph=gr)
 
-    edge_op = ["inp = out*2"]
-    edge_args = {'out': {'variable_type': 'source_var',
+    edge_op = {'operator_2': {'equations': ["inp = out*2"], 'inputs': [], 'output': 'inp'}}
+    edge_args = {'out': {'vtype': 'source_var',
                          'name': 'a'},
-                 'inp': {'variable_type': 'target_var',
+                 'inp': {'vtype': 'target_var',
                          'name': 'a'}
                  }
     edge = Edge(n1, n2, edge_op, edge_args, 'test', tf_graph=gr)
@@ -174,24 +179,26 @@ def test_2_3_edge():
 
     eq1 = "c = c_ / sum(c_,1)"
     eq2 = "inp = out*c"
-    edge_args = {'out': {'variable_type': 'source_var',
+    edge_args = {'out': {'vtype': 'source_var',
                          'name': 'a'},
-                 'inp': {'variable_type': 'target_var',
+                 'inp': {'vtype': 'target_var',
                          'name': 'a'},
-                 'c_': {'variable_type': 'state_variable',
+                 'c_': {'vtype': 'state_var',
                         'shape': (1, 10),
                         'name': 'c_',
-                        'data_type': 'float32',
-                        'initial_value': 5.}
+                        'dtype': 'float32',
+                        'value': 5.}
                  }
-    e1 = Edge(n1, n2, [eq1, eq2], edge_args, 'e1', tf_graph=gr)
+    edge_op1 = {'operator_2': {'equations': [eq1, eq2], 'inputs': [], 'output': 'inp'}}
+    edge_op2 = {'operator_3': {'equations': [eq2, eq1], 'inputs': [], 'output': 'inp'}}
+    e1 = Edge(n1, n2, edge_op1, edge_args, 'e1', tf_graph=gr)
 
-    edge_args['c'] = {'variable_type': 'state_variable',
+    edge_args['c'] = {'vtype': 'state_var',
                       'shape': (1, 10),
                       'name': 'c',
-                      'data_type': 'float32',
-                      'initial_value': 5.}
-    e2 = Edge(n2, n1, [eq2, eq1], edge_args, 'e2', tf_graph=gr)
+                      'dtype': 'float32',
+                      'value': 5.}
+    e2 = Edge(n2, n1, edge_op2, edge_args, 'e2', tf_graph=gr)
 
     with tf.Session(graph=gr) as sess:
         sess.run(tf.global_variables_initializer())

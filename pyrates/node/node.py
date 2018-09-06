@@ -105,7 +105,8 @@ class Node(object):
                     # bind newly created tf variables to node
                     for var_name, tf_var in operator.args.items():
                         if not hasattr(self, var_name):
-                            setattr(self, var_name, tf_var)
+                            setattr(self, var_name, tf_var['var'])
+                        if var_name not in operator_args.keys():
                             operator_args[var_name]['var'] = tf_var
 
                 # group tensorflow versions of all operators
