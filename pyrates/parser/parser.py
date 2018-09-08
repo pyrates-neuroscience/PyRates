@@ -155,22 +155,22 @@ class ExpressionParser(ParserElement):
     ----------
 
     """
-    
+
     def __init__(self, expr_str: str, args: dict, lhs: bool = False) -> None:
         """Instantiates expression parser.
         """
-        
+
         # call super init
         #################
-        
+
         super().__init__()
-        
+
         # bind input args to instance
         #############################
 
         self.expr_str = expr_str
         self.args = args
-        
+
         # additional attributes
         #######################
 
@@ -180,7 +180,7 @@ class ExpressionParser(ParserElement):
         self._op_tmp = None
         self.op = None
         self.lhs = lhs
-        
+
         # define algebra
         ################
 
@@ -313,7 +313,7 @@ class ExpressionParser(ParserElement):
         """Push tokens in first-to-last order to expression stack.
         """
         self.expr_stack.append(toks[0])
-        
+
     def push_negone(self, strg, loc, toks):
         """Push negative one multiplier if on first position in toks.
         """

@@ -22,11 +22,11 @@ simulation_time = 5.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
-sparseness_e = 0.6
+sparseness_e = 0.1
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 100
 
 # connectivity parameters
 c_intra = 135.
@@ -514,8 +514,12 @@ for a in range(0, n_nodes):
                                                      'name': 'm_ein'}
             elif a % 3 == 1:
                 target = f'ein_{int(a/3)}'
+                edge['operator_args']['m_in'] = {'vtype': 'target_var',
+                                                 'name': 'm_in'}
             else:
                 target = f'iin_{int(a/3)}'
+                edge['operator_args']['m_in'] = {'vtype': 'target_var',
+                                                 'name': 'm_in'}
 
             edge['operators']['coupling_op'] = {'equations': ["m_in = m_out * c"],
                                                 'inputs': [],
@@ -536,12 +540,12 @@ for a in range(0, n_nodes):
 # network setup
 ###############
 gr = tf.Graph()
-net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size)
+net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize=True)
 
-# output_coll = {}
-# for i in range (3, 4):
-#     output = {f'V_{i}': net.nodes[f'pcs_{i}'].v}
-#     output_coll.update(output)
+#output_coll = {}
+#for i in range (3, 4):
+#    output = {f'V_{i}': net.nodes[f'pc_{i}']['handle'].v}
+#    output_coll.update(output)
 
 # network simulation
 ####################
@@ -550,7 +554,7 @@ results, ActTime = net.run(simulation_time=simulation_time,
                            # inputs={net.nodes['jrc'].U: inp},
                            # inputs = input_coll,
                            outputs={'V': net.nodes['pc']['handle'].v},
-                           # outputs=output_coll,
+                           #outputs=output_coll,
                            sampling_step_size=step_size)
 
 # results

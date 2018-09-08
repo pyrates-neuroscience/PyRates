@@ -107,7 +107,7 @@ class Edge(object):
                     # set input dependencies
                     for inp in op['inputs']:
                         operator_args[inp]['dependency'] = True
-                        if not hasattr(operator_args[inp], 'op'):
+                        if 'op' not in operator_args[inp].keys():
                             raise ValueError(f"Invalid dependencies found in operator: {op['equations']}. Input "
                                              f"Variable {inp} has not been calculated yet.")
 

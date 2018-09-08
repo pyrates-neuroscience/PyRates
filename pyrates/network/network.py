@@ -112,7 +112,7 @@ class Network(MultiDiGraph):
         ###############################
 
         if vectorize:
-            net_config = self.vectorize(net_config=net_config, first_lvl_vec=True, second_lvl_vec=False)
+            net_config = self.vectorize(net_config=net_config, first_lvl_vec=vectorize, second_lvl_vec=False)
 
         # create objects on tensorflow graph
         ####################################

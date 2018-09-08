@@ -5,6 +5,7 @@
 import numpy as np
 import tensorflow as tf
 import pytest
+from networkx import MultiDiGraph
 
 # pyrates internal imports
 from pyrates.operator import Operator
@@ -225,16 +226,19 @@ def test_2_4_network():
     # test minimal call example
     ###########################
 
-    node_dict = {'n1': {'operator_1': ["d/dt * a = a^2"],
-                        'a': {'variable_type': 'state_variable',
-                              'shape': (1, 10),
-                              'name': 'a',
-                              'data_type': 'float32',
-                              'initial_value': 1.},
+    node_dict = {'n1': {'operators': {'op1': {'equations': ["d/dt * a = a^2"], 'inputs': [], 'output': 'a'}},
+                        'operator_args':
+                            {'a': {'vtype': 'state_var',
+                                   'shape': (1, 10),
+                                   'name': 'a',
+                                   'dtype': 'float32',
+                                   'value': 1.}
+                             }
                         }
                  }
-
-    net = Network(node_dict, {}, dt=0.1)
+    gr = MultiDiGraph()
+    gr.add_node('n1', data=node_dict['n1'])
+    net = Network(gr, dt=0.1, vectorize=False)
     assert isinstance(net, Network)
 
     # test for correct simulation behavior of network
@@ -242,85 +246,103 @@ def test_2_4_network():
 
     # network test
     gr = tf.Graph()
-    node_dict = {'n1': {'operator_1': ["d/dt * a = b^2"],
-                        'a': {'variable_type': 'state_variable',
-                              'shape': (1, 10),
-                              'name': 'a',
-                              'data_type': 'float32',
-                              'initial_value': 1.},
-                        'b': {'variable_type': 'state_variable',
-                              'shape': (1, 10),
-                              'name': 'b',
-                              'data_type': 'float32',
-                              'initial_value': 1.},
+    node_dict = {'n1': {'operators': {'operator_1': {'equations': ["d/dt * a = b^2"], 'inputs': [], 'output': 'a'}},
+                        'operator_args': {
+                            'a': {'vtype': 'state_var',
+                                  'shape': (1, 10),
+                                  'name': 'a',
+                                  'dtype': 'float32',
+                                  'value': 1.},
+                            'b': {'vtype': 'state_var',
+                                  'shape': (1, 10),
+                                  'name': 'b',
+                                  'dtype': 'float32',
+                                  'value': 1.},
+                                                        }
                         },
-                 'n2': {'operator_1': ["d/dt * a = b^2"],
-                        'a': {'variable_type': 'state_variable',
-                              'shape': (1, 10),
-                              'name': 'a',
-                              'data_type': 'float32',
-                              'initial_value': 1.},
-                        'b': {'variable_type': 'state_variable',
-                              'shape': (1, 10),
-                              'name': 'b',
-                              'data_type': 'float32',
-                              'initial_value': 1.},
+                 'n2': {'operators': {'operator_1': {'equations': ["d/dt * a = b^2"], 'inputs': [], 'output': 'a'}},
+                        'operator_args': {
+                            'a': {'vtype': 'state_var',
+                                  'shape': (1, 10),
+                                  'name': 'a',
+                                  'dtype': 'float32',
+                                  'value': 1.},
+                            'b': {'vtype': 'state_var',
+                                  'shape': (1, 10),
+                                  'name': 'b',
+                                  'dtype': 'float32',
+                                  'value': 1.},
+                                                        }
                         }
                  }
-    conn_dict = {'coupling_operators': [["inp = out*c"], ["inp[0] = out[0]/c[0]"]],
-                 'coupling_operator_args': {'out': {'variable_type': 'source_var',
-                                                    'name': 'a'},
-                                            'inp': {'variable_type': 'target_var',
-                                                    'name': 'b'},
-                                            'c': {'variable_type': 'constant',
-                                                  'shape': (1, 10),
-                                                  'name': 'c',
-                                                  'data_type': 'float32',
-                                                  'initial_value': 0.5},
-                                            },
-                 'sources': ['n1', 'n2'],
-                 'targets': ['n2', 'n1']
+    conn_dict = {'edge1': {'operators': {'coupling_op1': {'equations': ["d/dt * c = c * 2"],
+                                                          'inputs': [],
+                                                          'output': 'c'},
+                                         'coupling_op2': {'equations': ["inp = out * c"],
+                                                          'inputs': ['c'],
+                                                          'output': 'inp'}
+                                         },
+                           'operator_args': {'out': {'vtype': 'source_var',
+                                                     'name': 'a'},
+                                             'inp': {'vtype': 'target_var',
+                                                     'name': 'b'},
+                                             'c': {'vtype': 'state_var',
+                                                   'shape': (1, 10),
+                                                   'name': 'c',
+                                                   'dtype': 'float32',
+                                                   'value': 0.5},
+                                             }
+                           }
                  }
 
-    net = Network(nodes=node_dict, edges=conn_dict, tf_graph=gr, key='net', dt=0.1)
+    net_gr = MultiDiGraph()
+    net_gr.add_node('n1', data=node_dict['n1'])
+    net_gr.add_node('n2', data=node_dict['n2'])
+    net_gr.add_edge('n1', 'n2', key='e1', data=conn_dict['edge1'])
+    net = Network(net_gr, tf_graph=gr, key='net', dt=0.1, vectorize=False)
     results, _ = net.run(1., outputs={'a1': net.nodes['n1']['handle'].a, 'a2': net.nodes['n2']['handle'].a})
 
     # target results
     gr2 = tf.Graph()
-    ops = {'operator_1': ["d/dt * a = b^2"]}
-    op_args = {'a': {'variable_type': 'state_variable',
+    ops = {'operator_1': {'equations': ["d/dt * a = b^2"], 'inputs': [], 'output': 'a'}}
+    op_args = {'a': {'vtype': 'state_var',
                      'shape': (1, 10),
                      'name': 'a',
-                     'data_type': 'float32',
-                     'initial_value': 1.},
-               'b': {'variable_type': 'state_variable',
+                     'dtype': 'float32',
+                     'value': 1.},
+               'b': {'vtype': 'state_var',
                      'shape': (1, 10),
                      'name': 'b',
-                     'data_type': 'float32',
-                     'initial_value': 1.},
-               'dt': {'variable_type': 'constant',
+                     'dtype': 'float32',
+                     'value': 1.},
+               'dt': {'vtype': 'constant',
                       'shape': (),
                       'name': 'dt',
-                      'data_type': 'float32',
-                      'initial_value': 0.1}
+                      'dtype': 'float32',
+                      'value': 0.1}
                }
     n1 = Node(ops, op_args.copy(), 'n1', tf_graph=gr2)
     n2 = Node(ops, op_args.copy(), 'n2', tf_graph=gr2)
 
-    eq1 = "inp = out*c"
-    eq2 = "inp[0] = out[0]/c[0]"
-    edge_args = {'out': {'variable_type': 'source_var',
+    edge_ops = {'op1': {'equations': ["d/dt * c = c * 2"], 'inputs': [], 'output': 'c'},
+                'op2': {'equations': ["inp = out * c"], 'inputs': ['c'], 'output': 'inp'}
+                }
+    edge_args = {'out': {'vtype': 'source_var',
                          'name': 'a'},
-                 'inp': {'variable_type': 'target_var',
+                 'inp': {'vtype': 'target_var',
                          'name': 'b'},
-                 'c': {'variable_type': 'constant',
+                 'c': {'vtype': 'state_var',
                        'shape': (1, 10),
                        'name': 'c',
-                       'data_type': 'float32',
-                       'initial_value': 0.5},
+                       'dtype': 'float32',
+                       'value': 0.5},
+                 'dt': {'vtype': 'constant',
+                        'shape': (),
+                        'name': 'dt',
+                        'dtype': 'float32',
+                        'value': 0.1},
                  }
-    e1 = Edge(n1, n2, [eq1], edge_args, 'e1', tf_graph=gr2)
-    e2 = Edge(n2, n1, [eq2], edge_args, 'e2', tf_graph=gr2)
+    e1 = Edge(n1, n2, edge_ops, edge_args, 'e1', tf_graph=gr2)
 
     targets = []
     with tf.Session(graph=gr2) as sess:
@@ -329,7 +351,6 @@ def test_2_4_network():
             sess.run(n1.update)
             sess.run(n2.update)
             sess.run(e1.project)
-            sess.run(e2.project)
             targets.append([n1.a.eval(), n2.a.eval()])
 
     error = nmrse(results.values, np.reshape(np.array(targets), (10, 20)))
