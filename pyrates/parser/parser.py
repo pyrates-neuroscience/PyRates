@@ -1103,6 +1103,7 @@ def parse_dict(var_dict: dict,
                                                          dense_shape=var['shape'])
 
                     elif var['vtype'] == 'constant':
+
                         tf_var = tf.constant(value=var['value'],
                                              name=var['name'],
                                              shape=var['shape'],
