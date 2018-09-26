@@ -157,7 +157,9 @@ def test_circuit_instantiation():
 
     circuit = template.apply()
     # test if two edges refer to the same coupling operator by comparing ids
-    assert circuit.edges[("JR_PC", "JR_IIN", 0)]["coupling"] is circuit.edges[('JR_PC', 'JR_EIN', 0)]["coupling"]
+    for op_key, op in circuit.edges[("JR_PC", "JR_IIN", 0)]["operators"].items():
+
+        assert op is circuit.edges[('JR_PC', 'JR_EIN', 0)]["operators"][op_key]
 
 
 def test_equation_alteration():
