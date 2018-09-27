@@ -57,7 +57,7 @@ def test_import_operator_templates(operator):
 
     assert template.path in OperatorTemplateLoader.cache
 
-    cached_template = OperatorTemplateLoader.cache[operator] # type: OperatorTemplate
+    cached_template = OperatorTemplateLoader.cache[operator]  # type: OperatorTemplate
     assert template is cached_template
     assert template.path == cached_template.path
     assert template.equation == cached_template.equation
@@ -158,7 +158,6 @@ def test_circuit_instantiation():
     circuit = template.apply()
     # test if two edges refer to the same coupling operator by comparing ids
     for op_key, op in circuit.edges[("JR_PC", "JR_IIN", 0)]["operators"].items():
-
         assert op is circuit.edges[('JR_PC', 'JR_EIN', 0)]["operators"][op_key]
 
 
@@ -186,4 +185,66 @@ def test_network_def_workaround():
 
     nd = circuit.network_def()
 
-    assert nd
+    JR_PC = {'inputs': {'m_in': ["('pyrates.synapse.templates.JansenRitExcitatorySynapseRCO', None)/m_in",
+                                 "('pyrates.synapse.templates.JansenRitInhibitorySynapseRCO', None)/m_in"]},
+             'operator_args': {'JansenRitCPO:0/I': {'dtype': 'float32', 'shape': (), 'vtype': 'state_var'},
+                               'JansenRitCPO:0/V': {'dtype': 'float32', 'shape': (), 'vtype': 'state_var'},
+                               'JansenRitCPO:0/k': {'dtype': 'float32', 'shape': (), 'value': 1.0, 'vtype': 'constant'},
+                               'JansenRitExcitatorySynapseRCO:0/I': {'dtype': 'float32', 'shape': (),
+                                                                     'vtype': 'state_var'},
+                               'JansenRitExcitatorySynapseRCO:0/I_t': {'dtype': 'float32', 'shape': (),
+                                                                       'vtype': 'state_var'},
+                               'JansenRitExcitatorySynapseRCO:0/h': {'dtype': 'float32',
+                                                                     'shape': (),
+                                                                     'value': -0.022,
+                                                                     'vtype': 'constant'},
+                               'JansenRitExcitatorySynapseRCO:0/m_in': {'dtype': 'float32', 'shape': (),
+                                                                        'vtype': 'state_var'},
+                               'JansenRitExcitatorySynapseRCO:0/tau': {'dtype': 'float32',
+                                                                       'shape': (),
+                                                                       'value': 0.02,
+                                                                       'vtype': 'constant'},
+                               'JansenRitInhibitorySynapseRCO:0/I': {'dtype': 'float32', 'shape': (),
+                                                                     'vtype': 'state_var'},
+                               'JansenRitInhibitorySynapseRCO:0/I_t': {'dtype': 'float32', 'shape': (),
+                                                                       'vtype': 'state_var'},
+                               'JansenRitInhibitorySynapseRCO:0/h': {'dtype': 'float32',
+                                                                     'shape': (),
+                                                                     'value': -0.022,
+                                                                     'vtype': 'constant'},
+                               'JansenRitInhibitorySynapseRCO:0/m_in': {'dtype': 'float32', 'shape': (),
+                                                                        'vtype': 'state_var'},
+                               'JansenRitInhibitorySynapseRCO:0/tau': {'dtype': 'float32',
+                                                                       'shape': (),
+                                                                       'value': 0.02,
+                                                                       'vtype': 'constant'},
+                               'JansenRitPRO:0/V': {'dtype': 'float32', 'shape': (), 'vtype': 'state_var'},
+                               'JansenRitPRO:0/V_thr': {'dtype': 'float32', 'shape': (), 'value': 0.006,
+                                                        'vtype': 'constant'},
+                               'JansenRitPRO:0/m_max': {'allowed_range': '>= 0',
+                                                        'dtype': 'float32',
+                                                        'shape': (),
+                                                        'value': 5.0,
+                                                        'vtype': 'constant'},
+                               'JansenRitPRO:0/m_out': {'dtype': 'float32', 'shape': (), 'vtype': 'state_var'},
+                               'JansenRitPRO:0/r': {'dtype': 'int32', 'shape': (), 'value': 1, 'vtype': 'constant'},
+                               'JansenRitPRO:0/s': {'dtype': 'float32', 'shape': (), 'value': 560.0,
+                                                    'vtype': 'constant'}},
+             'operators': {'JansenRitCPO:0': {'equations': ['V = k * I'],
+                                              'inputs': ['I'],
+                                              'output': 'V'},
+                           'JansenRitExcitatorySynapseRCO:0': {'equations': ['d/dt * I = I_t',
+                                                                             'd/dt * I_t =  h/tau * m_in - (1/tau)^2 '
+                                                                             '* I - 2 * 1/tau * I_t'],
+                                                               'inputs': ['m_in'],
+                                                               'output': 'I'},
+                           'JansenRitInhibitorySynapseRCO:0': {'equations': ['d/dt * I = I_t',
+                                                                             'd/dt * I_t =  h/tau * m_in - (1/tau)^2 '
+                                                                             '* I - 2 * 1/tau * I_t'],
+                                                               'inputs': ['m_in'],
+                                                               'output': 'I'},
+                           'JansenRitPRO:0': {'equations': ['m_out = m_max / (1 + exp(s*(V_thr - V)))'],
+                                              'inputs': ['V'],
+                                              'output': 'm_out'}}}
+
+    assert dict(nd.nodes["JR_PC:0"]) == JR_PC

@@ -180,6 +180,7 @@ class Circuit(MultiDiGraph):
         for node_key, node in list(self.nodes(data=True)):
             node_cp = deepcopy(node["node"])  # duplicate node info
             node_cp = self._nd_reformat_node_operators(node_cp, op_key_map)
+            node_cp.pop("template", None)
             network_def.add_node(f"{node_key}:0", **node_cp)
 
         # add edges and reformat them a little
@@ -236,7 +237,7 @@ class Circuit(MultiDiGraph):
 
         for op_key, op_dict in node["operators"].items():
             op_cp = deepcopy(op_dict["operator"])  # duplicate operator info
-            op_cp["original_key"] = op_key  # copy original key to be able to change it later
+            # op_cp["original_key"] = op_key  # copy original key to be able to change it later
 
             # create shortened unique key
             new_op_key = self._nd_create_short_unique_key(op_key_map, op_key)
@@ -281,21 +282,35 @@ class Circuit(MultiDiGraph):
 
         return node
 
-    def _nd_reformat_edge_operators(self, edge_data, op_key_map):
+    @staticmethod
+    def _nd_reformat_edge_operators(edge_data, op_key_map):
+        """
+
+        Parameters
+        ----------
+        edge_data
+        op_key_map
+
+        Returns
+        -------
+        operators
+        operator_args
+        """
         operator_args = {}
-        operators = deepcopy(edge_data["operators"])
+        edge_data = deepcopy(edge_data)
+        operators = edge_data["operators"]
         for op_key, op in operators.items():
             variables = op.pop("variables")
-            target_op = deepcopy(edge_data["target_operator"])
+            target_op = edge_data["target_operator"]
 
             # transfer edge-specific values back to variable info
-            values = deepcopy(edge_data["values"])
+            values = edge_data["values"]
 
             for var_key, value in values.items():
                 variables[var_key]["value"] = value
 
             for var_key, var_props in variables.items():
-                var_prop_cp = deepcopy(var_props)
+                var_prop_cp = var_props
                 var_prop_cp["vtype"] = var_prop_cp.pop("variable_type")
                 var_prop_cp["dtype"] = var_prop_cp.pop("data_type")
                 if var_key in op["inputs"]:
