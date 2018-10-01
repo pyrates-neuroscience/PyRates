@@ -18,116 +18,6 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-# equation parsers
-##################
-
-class EquationParser(object):
-    """Parses lhs and rhs of an equation.
-
-    Parameters
-    ----------
-    expr_str
-        Mathematical equation in string format.
-    args
-        Dictionary containing all variables and functions needed to evaluate the expression.
-    engine
-        String indicating which computational backbone/backend to use. Can be either `numpy` or `tensorflow`.
-    tf_graph
-        Tensorflow graph on which all operations will be created.
-
-    Attributes
-    ----------
-
-    Methods
-    -------
-
-    Examples
-    --------
-
-    References
-    ----------
-
-    """
-
-    def __init__(self, expr_str: str, args: dict, engine: str = 'tensorflow', tf_graph: tp.Optional[tf.Graph] = None
-                 ) -> None:
-        """Instantiates equation parser.
-        """
-
-        # bind inputs args to instance
-        ##############################
-
-        self.expr_str = expr_str
-        self.args = args
-        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
-
-        # parse lhs and rhs of equation
-        ###############################
-
-        # split into lhs and rhs
-        lhs, rhs = self.expr_str.split(' = ')
-
-        # parse rhs
-        if engine == 'tensorflow':
-            rhs_parser = TFExpressionParser(expr_str=rhs, args=self.args, tf_graph=self.tf_graph)
-        elif engine == 'numpy':
-            rhs_parser = NPExpressionParser(expr_str=rhs, args=self.args)
-        else:
-            raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
-        rhs_op = rhs_parser.parse_expr()
-
-        # add information about rhs to args
-        self.args['rhs'] = {'var': rhs_op, 'dependency': False}
-
-        # check update type of lhs
-        if "d/dt" in lhs:
-            lhs_split = lhs.split('*')
-            lhs = ""
-            for lhs_part in lhs_split[1:]:
-                lhs += lhs_part
-            solve = True
-        else:
-            solve = False
-
-        # parse lhs
-        if engine == 'tensorflow':
-            lhs_parser = TFExpressionParser(expr_str=lhs, args=self.args, lhs=True,  tf_graph=self.tf_graph)
-        elif engine == 'numpy':
-            lhs_parser = NPExpressionParser(expr_str=rhs, args=self.args, lhs=True)
-        else:
-            raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
-        self.target_var = lhs_parser.parse_expr()
-
-        # solve for state variable
-        ##########################
-
-        if solve:
-
-            # set integration step-size
-            try:
-                dt = self.args['dt']['var']
-            except KeyError:
-                raise ValueError('Integration step-size has to be passed for differential equations. Please '
-                                 'add a field `dt` to `args` with the corresponding value.')
-
-            # create solver instance
-            if engine == 'tensorflow':
-                solver = TFSolver(rhs=rhs_op,
-                                  state_var=self.target_var,
-                                  dt=dt,
-                                  tf_graph=self.tf_graph)
-            else:
-                solver = NPSolver(rhs=rhs_op,
-                                  state_var=self.target_var,
-                                  dt=dt)
-
-            # collect solver update operation
-            self.update = solver.solve()
-
-        elif 'rhs' in self.args.keys():
-            self.update = self.args.pop('rhs')['var']
-
-
 # expression parsers (lhs/rhs of an equation)
 #############################################
 
@@ -168,8 +58,20 @@ class ExpressionParser(ParserElement):
         # bind input args to instance
         #############################
 
-        self.expr_str = expr_str
+        self.lhs = lhs
         self.args = args
+
+        # if left-hand side of an equation, check whether it includes a differential operator
+        if "d/dt" in expr_str:
+            lhs_split = expr_str.split('*')
+            expr_str = ""
+            for lhs_part in lhs_split[1:]:
+                expr_str += lhs_part
+            self.solve = True
+        else:
+            self.solve = False
+
+        self.expr_str = expr_str
 
         # additional attributes
         #######################
@@ -179,7 +81,6 @@ class ExpressionParser(ParserElement):
         self.expr_list = []
         self._op_tmp = None
         self.op = None
-        self.lhs = lhs
 
         # define algebra
         ################
@@ -305,9 +206,29 @@ class ExpressionParser(ParserElement):
             raise ValueError(f"Error while parsing expression: {self.expr_str}. {expr_str} could not be parsed.")
 
         # turn expression into operation
-        self.op = self.parse(self.expr_stack[:])
+        op = self.parse(self.expr_stack[:])
 
-        return self.op
+        if self.lhs and self.solve:
+
+            # set integration step-size
+            try:
+                dt = self.args['dt']['var']
+            except KeyError:
+                raise ValueError('Integration step-size has to be passed for differential equations. Please '
+                                 'add a field `dt` to `args` with the corresponding value.')
+
+            # solve differential equation
+            update = op + self.args['dt']['var'] * self.args.pop('rhs')['var']
+
+        elif 'rhs' in self.args.keys():
+
+            update = self.args.pop('rhs')['var']
+
+        else:
+
+            update = None
+
+        return op, update
 
     def push_first(self, strg, loc, toks):
         """Push tokens in first-to-last order to expression stack.
@@ -364,9 +285,34 @@ class ExpressionParser(ParserElement):
 
         elif op in "+-*/^@<=>=!==":
 
-            # combine elements via mathematical/boolean operator
+            # collect elements to combine
             op2 = self.parse(expr_stack)
             op1 = self.parse(expr_stack)
+
+            # automatic broadcasting
+            if hasattr(op1, 'shape') and hasattr(op2, 'shape') and op1.shape != op2.shape:
+                if len(op1.shape) > len(op2.shape):
+                    target_shape = op1.shape
+                    if 1 in target_shape:
+                        op2 = tf.reshape(op2, target_shape)
+                    else:
+                        idx = list(target_shape).index(op2.shape[0])
+                        if idx == 0:
+                            op2 = tf.reshape(op2, [1, op1.shape[0]])
+                        else:
+                            op2 = tf.reshape(op2, [op1.shape[1], 1])
+                elif len(op2.shape) > len(op1.shape) and 1 in op2.shape:
+                    target_shape = op2.shape
+                    if 1 in target_shape:
+                        op1 = tf.reshape(op1, target_shape)
+                    else:
+                        idx = list(target_shape).index(op1.shape[0])
+                        if idx == 0:
+                            op1 = tf.reshape(op1, [1, target_shape[0]])
+                        else:
+                            op1 = tf.reshape(op1, [target_shape[1], 1])
+
+            # combine elements via mathematical/boolean operator
             self._op_tmp = self.ops[op](op1, op2)
 
         elif op in ".T.I":
@@ -410,12 +356,37 @@ class ExpressionParser(ParserElement):
             # apply idx to op
             op_to_idx = self.parse(expr_stack)
             try:
+
+                # standard indexing
                 self._op_tmp = eval(f"op_to_idx[{idx}]")
+
             except (TypeError, ValueError):
-                try:
-                    self._op_tmp = eval(f"self.funcs['array_idx'](op_to_idx, {idx})")
-                except (TypeError, ValueError):
-                    self._op_tmp = eval(f"self.funcs['boolean_mask'](op_to_idx, {idx})")
+
+                if self.lhs:
+
+                    if self.solve:
+
+                        # perform differential equation update for indexed variable
+                        update = self.args['dt']['var'] * self.args.pop('rhs')['var']
+                        self._op_tmp = eval(f'tf.scatter_nd_add(op_to_idx, {idx}, update)')
+
+                    else:
+
+                        # perform variable update for indexed variable
+                        update = self.args.pop('rhs')['var']
+                        self._op_tmp = eval(f'tf.scatter_nd_update(op_to_idx, {idx}, update)')
+
+                else:
+
+                    try:
+
+                        # indexing by list of indices
+                        self._op_tmp = eval(f"self.funcs['array_idx'](op_to_idx, {idx})")
+
+                    except (TypeError, ValueError):
+
+                        # indexing via boolean array
+                        self._op_tmp = eval(f"self.funcs['boolean_mask'](op_to_idx, {idx})")
 
         elif op == "PI":
 
@@ -872,6 +843,176 @@ class NPExpressionParser(LambdaExpressionParser):
             self.dtypes[key] = val
 
 
+# functions using the expression parser
+#######################################
+
+
+def parse_equation(equation: str, args: dict, engine: str = 'tensorflow', tf_graph: tp.Optional[tf.Graph] = None
+                   ) -> tuple:
+    """Parses lhs and rhs of an equation.
+
+    Parameters
+    ----------
+    equation
+        Mathematical equation in string format.
+    args
+        Dictionary containing all variables and functions needed to evaluate the expression.
+    engine
+        String indicating which computational backbone/backend to use. Can be either `numpy` or `tensorflow`.
+    tf_graph
+        Tensorflow graph on which all operations will be created.
+
+    Returns
+    -------
+    tuple
+
+    Examples
+    --------
+
+    References
+    ----------
+
+    """
+
+    lhs, rhs = equation.split(' = ')
+
+    tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+    with tf_graph.as_default():
+
+        # parse rhs
+        if engine == 'tensorflow':
+            rhs_parser = TFExpressionParser(expr_str=rhs, args=args, tf_graph=tf_graph)
+        elif engine == 'numpy':
+            rhs_parser = NPExpressionParser(expr_str=rhs, args=args)
+        else:
+            raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
+        rhs_op = rhs_parser.parse_expr()
+
+        # handle rhs evaluation
+        if rhs_op[1] is None:
+            rhs_op = rhs_op[0]
+        else:
+            rhs_op = rhs_op[0].assign(rhs_op[1])
+        args['rhs'] = {'var': rhs_op, 'dependency': False}
+
+        # parse lhs
+        if engine == 'tensorflow':
+            lhs_parser = TFExpressionParser(expr_str=lhs, args=args, lhs=True, tf_graph=tf_graph)
+        elif engine == 'numpy':
+            lhs_parser = NPExpressionParser(expr_str=rhs, args=args, lhs=True)
+        else:
+            raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
+
+    return lhs_parser.parse_expr(), args
+
+
+class EquationParser(object):
+    """Parses lhs and rhs of an equation.
+
+    Parameters
+    ----------
+    expr_str
+        Mathematical equation in string format.
+    args
+        Dictionary containing all variables and functions needed to evaluate the expression.
+    engine
+        String indicating which computational backbone/backend to use. Can be either `numpy` or `tensorflow`.
+    tf_graph
+        Tensorflow graph on which all operations will be created.
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    Examples
+    --------
+
+    References
+    ----------
+
+    """
+
+    def __init__(self, expr_str: str, args: dict, engine: str = 'tensorflow', tf_graph: tp.Optional[tf.Graph] = None
+                 ) -> None:
+        """Instantiates equation parser.
+        """
+
+        # bind inputs args to instance
+        ##############################
+
+        self.expr_str = expr_str
+        self.args = args
+        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+
+        # parse lhs and rhs of equation
+        ###############################
+
+        # split into lhs and rhs
+        lhs, rhs = self.expr_str.split(' = ')
+
+        # parse rhs
+        if engine == 'tensorflow':
+            rhs_parser = TFExpressionParser(expr_str=rhs, args=self.args, tf_graph=self.tf_graph)
+        elif engine == 'numpy':
+            rhs_parser = NPExpressionParser(expr_str=rhs, args=self.args)
+        else:
+            raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
+        rhs_op = rhs_parser.parse_expr()
+
+        # add information about rhs to args
+        self.args['rhs'] = {'var': rhs_op, 'dependency': False}
+
+        # check update type of lhs
+        if "d/dt" in lhs:
+            lhs_split = lhs.split('*')
+            lhs = ""
+            for lhs_part in lhs_split[1:]:
+                lhs += lhs_part
+            solve = True
+        else:
+            solve = False
+
+        # parse lhs
+        if engine == 'tensorflow':
+            lhs_parser = TFExpressionParser(expr_str=lhs, args=self.args, lhs=True,  tf_graph=self.tf_graph)
+        elif engine == 'numpy':
+            lhs_parser = NPExpressionParser(expr_str=rhs, args=self.args, lhs=True)
+        else:
+            raise ValueError('Engine needs to be set to either `tensorflow` or `numpy`.')
+        self.target_var = lhs_parser.parse_expr()
+
+        # solve for state variable
+        ##########################
+
+        if solve:
+
+            # set integration step-size
+            try:
+                dt = self.args['dt']['var']
+            except KeyError:
+                raise ValueError('Integration step-size has to be passed for differential equations. Please '
+                                 'add a field `dt` to `args` with the corresponding value.')
+
+            # create solver instance
+            if engine == 'tensorflow':
+                solver = TFSolver(rhs=rhs_op,
+                                  state_var=self.target_var,
+                                  dt=dt,
+                                  tf_graph=self.tf_graph)
+            else:
+                solver = NPSolver(rhs=rhs_op,
+                                  state_var=self.target_var,
+                                  dt=dt)
+
+            # collect solver update operation
+            self.update = solver.solve()
+
+        elif 'rhs' in self.args.keys():
+            self.update = self.args.pop('rhs')['var']
+
 # solver classes (update lhs according to rhs)
 ##############################################
 
@@ -1057,7 +1198,7 @@ def parse_dict(var_dict: dict,
 
                     elif var['vtype'] == 'state_var':
 
-                        tf_var = tf.get_variable(name=var['name'],
+                        tf_var = tf.get_variable(name=var_name,
                                                  shape=var['shape'],
                                                  dtype=getattr(tf, var['dtype']),
                                                  initializer=tf.constant_initializer(var['value'])
@@ -1105,14 +1246,14 @@ def parse_dict(var_dict: dict,
                     elif var['vtype'] == 'constant':
 
                         tf_var = tf.constant(value=var['value'],
-                                             name=var['name'],
+                                             name=var_name,
                                              shape=var['shape'],
                                              dtype=getattr(tf, var['dtype'])
                                              )
 
                     elif var['vtype'] == 'placeholder':
 
-                        tf_var = tf.placeholder(name=var['name'],
+                        tf_var = tf.placeholder(name=var_name,
                                                 shape=var['shape'],
                                                 dtype=getattr(tf, var['dtype'])
                                                 )

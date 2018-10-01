@@ -6,7 +6,7 @@ from typing import List, Optional
 import tensorflow as tf
 
 # pyrates internal imports
-from pyrates.parser import EquationParser
+from pyrates.parser import parse_equation
 
 # meta infos
 __author__ = "Richard Gast"
@@ -38,7 +38,6 @@ class Operator(object):
         """Instantiates operator.
         """
 
-        self.DEs = []
         self.updates = []
         self.key = key
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
@@ -54,14 +53,8 @@ class Operator(object):
                 for i, expr in enumerate(expressions):
 
                     # parse equation
-                    parser = EquationParser(expr, self.args, engine='tensorflow', tf_graph=self.tf_graph)
-                    self.args = parser.args
-
-                    # collect tensorflow variables and update operations
-                    if hasattr(parser, 'update'):
-                        self.DEs.append((parser.target_var, parser.update))
-                    else:
-                        self.updates.append(parser.target_var)
+                    update, self.args = parse_equation(expr, self.args, engine='tensorflow', tf_graph=self.tf_graph)
+                    self.updates.append(update)
 
     def create(self):
         """Create a single tensorflow operation for the set of parsed expressions.
@@ -69,11 +62,18 @@ class Operator(object):
 
         with self.tf_graph.as_default():
 
-            # group the tensorflow operations across expressions
-            with tf.control_dependencies(self.updates):
-                if len(self.DEs) > 0:
-                    updates = tf.group([var.assign(upd) for var, upd in self.DEs], name=self.key)
+            # check which rhs evaluations still have to be assigned to lhs
+            updated = []
+            not_updated = []
+            for upd in self.updates:
+                if upd[1] is None:
+                    updated.append(upd[0])
                 else:
-                    updates = tf.group(self.updates, name=self.key)
+                    not_updated.append(upd)
 
-        return updates
+            # group the tensorflow operations across expressions
+            with tf.control_dependencies(updated):
+                for upd in not_updated:
+                    updated.append(upd[0].assign(upd[1]))
+
+        return tf.group(updated, name=f'{self.key}_updates')

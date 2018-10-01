@@ -15,7 +15,7 @@ __author__ = "Richard Gast"
 __status__ = "Development"
 
 
-class Edge(object):
+class Edge(dict):
     """Base edge class to connect a tensorflow variable on source to a tensorflow variable on target via an
     operator.
 
@@ -42,14 +42,17 @@ class Edge(object):
 
     """
     def __init__(self,
-                 source: Node,
-                 target: Node,
+                 source: dict,
+                 target: dict,
                  coupling_ops: dict,
                  coupling_op_args: dict,
+                 coupling_op_order: list,
                  key: str,
                  tf_graph: Optional[tf.Graph] = None):
         """Instantiates edge.
         """
+
+        super().__init__()
 
         self.operations = {}
         self.key = key
@@ -71,12 +74,12 @@ class Edge(object):
 
                     if val['vtype'] == 'source_var':
 
-                        var = getattr(source, val['name'])
+                        var = source[val['name']]
                         co_args[key] = {'vtype': 'raw', 'value': var}
 
                     elif val['vtype'] == 'target_var':
 
-                        var = getattr(target, val['name'])
+                        var = target[val['name']]
                         co_args[key] = {'vtype': 'raw', 'value': var}
 
                     else:
@@ -89,7 +92,7 @@ class Edge(object):
                 ########################
 
                 tf_ops = []
-                for op_name in coupling_ops['op_order']:
+                for op_name in coupling_op_order:
 
                     op = coupling_ops[op_name]
 
@@ -111,7 +114,7 @@ class Edge(object):
                     # bind operator args to edge
                     op_args_tf = {}
                     for tf_var, var_name in zip(tf_vars, var_names):
-                        setattr(self, f'{op_name}/{var_name}', tf_var)
+                        self.update({f'{op_name}/{var_name}': tf_var})
                         op_args_tf[var_name] = {'var': tf_var, 'dependency': False}
 
                     # set input dependencies
@@ -122,23 +125,90 @@ class Edge(object):
                         # collect input variable calculation operations
                         out_ops = []
                         out_vars = []
-                        for inp_op in inp['in_col']:
-                            out_name = co_args[inp_op]['output']
-                            out_var = f"{inp_op}/{out_name}"
-                            if out_var not in operator_args.keys():
-                                raise ValueError(
-                                    f"Invalid dependencies found in operator: {op['equations']}. Input "
-                                    f"Variable {var_name} has not been calculated yet.")
-                            out_ops.append(operator_args[out_var]['op'])
-                            out_vars.append(operator_args[out_var]['var'])
+                        out_var_idx = []
+
+                        for i, inp_op in enumerate(inp['sources']):
+
+                            if type(inp_op) is list and len(inp_op) == 1:
+                                inp_op = inp_op[0]
+
+                            if type(inp_op) is str:
+
+                                out_name = coupling_ops[inp_op]['output']
+                                if '[' in out_name:
+                                    idx_start, idx_stop = out_name.find('['), out_name.find(']')
+                                    out_var_idx.append(out_name[idx_start+1:idx_stop])
+                                    out_var = f"{inp_op}/{out_name[:idx_start]}"
+                                else:
+                                    out_var_idx.append(None)
+                                    out_var = f"{inp_op}/{out_name}"
+                                if out_var not in operator_args.keys():
+                                    raise ValueError(f"Invalid dependencies found in operator: {op['equations']}. Input"
+                                                     f" Variable {var_name} has not been calculated yet.")
+                                out_ops.append(operator_args[out_var]['op'])
+                                out_vars.append(operator_args[out_var]['var'])
+
+                            else:
+
+                                out_vars_tmp = []
+                                out_var_idx_tmp = []
+                                out_ops_tmp = []
+
+                                for inp_op_tmp in inp_op:
+
+                                    out_name = coupling_ops[inp_op_tmp]['output']
+                                    if '[' in out_name:
+                                        idx_start, idx_stop = out_name.find('['), out_name.find(']')
+                                        out_var_idx.append(out_name[idx_start + 1:idx_stop])
+                                        out_var = f"{inp_op_tmp}/{out_name[:idx_start]}"
+                                    else:
+                                        out_var_idx_tmp.append(None)
+                                        out_var = f"{inp_op_tmp}/{out_name}"
+                                    if out_var not in operator_args.keys():
+                                        raise ValueError(
+                                            f"Invalid dependencies found in operator: {op['equations']}. Input"
+                                            f" Variable {var_name} has not been calculated yet.")
+                                    out_ops_tmp.append(operator_args[out_var]['op'])
+                                    out_vars_tmp.append(operator_args[out_var]['var'])
+
+                                tf_var_tmp = tf.parallel_stack(out_vars_tmp)
+                                if inp['reduce_dim'][i]:
+                                    tf_var_tmp = tf.reduce_sum(tf_var_tmp, 0)
+                                else:
+                                    tf_var_tmp = tf.reshape(tf_var_tmp,
+                                                            shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
+
+                                out_vars.append(tf_var_tmp)
+                                out_var_idx.append(out_var_idx_tmp)
+                                out_ops.append(tf.group(out_ops_tmp))
 
                         # add inputs to argument dictionary (in reduced or stacked form)
                         if len(out_vars) > 1:
-                            tf_var = tf.stack(out_vars)
-                            if inp['reduce']:
+
+                            min_shape = min([outvar.shape[0] for outvar in out_vars])
+                            out_vars_new = []
+                            for out_var in out_vars:
+                                shape = out_var.shape[0]
+                                if shape > min_shape:
+                                    if shape % min_shape != 0:
+                                        raise ValueError(f"Shapes of inputs do not match: "
+                                                         f"{inp['sources']} cannot be stacked.")
+                                    multiplier = shape // min_shape
+                                    for j in range(multiplier):
+                                        out_vars_new.append(out_var[j*min_shape:(j+1)*min_shape])
+                                else:
+                                    out_vars_new.append(out_var)
+
+                            tf_var = tf.parallel_stack(out_vars_new)
+                            if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
                                 tf_var = tf.reduce_sum(tf_var, 0)
+                            else:
+                                tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0]*tf_var.shape[1],))
+
                             tf_op = tf.group(out_ops)
+
                         else:
+
                             tf_var = out_vars[0]
                             tf_op = out_ops[0]
 
@@ -158,8 +228,8 @@ class Edge(object):
 
                     # bind newly created tf variables to node
                     for var_name, tf_var in operator.args.items():
-                        if not hasattr(self, var_name):
-                            setattr(self, var_name, tf_var['var'])
+                        if var_name not in self.keys():
+                            self.update({var_name: tf_var['var']})
                         operator_args[f'{op_name}/{var_name}'] = tf_var
 
                     # handle dependencies

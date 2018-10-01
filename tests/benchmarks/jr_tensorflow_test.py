@@ -18,7 +18,7 @@ from pyrates.utility import mne_from_dataframe
 
 # general
 step_size = 1e-3
-simulation_time = 20.0
+simulation_time = 5.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
@@ -196,7 +196,7 @@ for i in range(0, n_jrcs):
                           'operator_ptr': {
                               'equations': ["v = psp", "m_out = m_max / (1. + e^(r * (v_th - v)))"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn_e', 'operator_rtp_syn_i'],
-                                                 'reduce_dim': False}},
+                                                 'reduce_dim': True}},
                               'output': 'm_out'}},
             'op_order': ['operator_rtp_syn_e', 'operator_rtp_syn_i', 'operator_ptr'],
             'operator_args': {'operator_rtp_syn_e/m_in': {'vtype': 'state_var',
@@ -463,30 +463,22 @@ for a in range(0, n_nodes):
                 if source.split('/')[0] == 'iin':
                     edge['operator_args']['coupling_op/m_in'] = {'vtype': 'target_var',
                                                                  'name': 'operator_rtp_syn_i/m_in'}
-                    edge['operators']['coupling_op'] = {'equations': ["m_in = m_out * c"],
-                                                        'inputs': {},
-                                                        'output': 'm_in'}
                 else:
                     edge['operator_args']['coupling_op/m_in'] = {'vtype': 'target_var',
                                                                  'name': 'operator_rtp_syn_e/m_in'}
-                    edge['operators']['coupling_op'] = {'equations': ["m_in = m_out * c"],
-                                                        'inputs': {},
-                                                        'output': 'm_in'}
             elif a % 3 == 1:
                 target = f'ein/{int(a/3)}'
                 edge['operator_args']['coupling_op/m_in'] = {'vtype': 'target_var',
                                                              'name': 'operator_rtp_syn/m_in'}
-                edge['operators']['coupling_op'] = {'equations': ["m_in = m_out * c"],
-                                                    'inputs': {},
-                                                    'output': 'm_in'}
             else:
                 target = f'iin/{int(a/3)}'
                 edge['operator_args']['coupling_op/m_in'] = {'vtype': 'target_var',
                                                              'name': 'operator_rtp_syn/m_in'}
-                edge['operators']['coupling_op'] = {'equations': ["m_in = m_out * c"],
-                                                    'inputs': {},
-                                                    'output': 'm_in'}
 
+            edge['operators']['coupling_op'] = {'equations': ["m_in = m_out * c"],
+                                                'inputs': {},
+                                                'output': 'm_in',
+                                                'delay': 1e-3}
             edge['operator_args']['coupling_op/c'] = {'name': 'c',
                                                       'vtype': 'constant',
                                                       'dtype': 'float32',
@@ -517,7 +509,7 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 results, ActTime = net.run(simulation_time=simulation_time,
                            # inputs={net.nodes['jrc'].U: inp},
                            # inputs = input_coll,
-                           outputs={'V': net.nodes['pc'].v},
+                           outputs={'V': net.nodes['pc']['v']},
                            #outputs=output_coll,
                            sampling_step_size=1e-3)
 
