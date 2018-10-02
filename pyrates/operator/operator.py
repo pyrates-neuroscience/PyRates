@@ -53,7 +53,7 @@ class Operator(object):
                 for i, expr in enumerate(expressions):
 
                     # parse equation
-                    update, self.args = parse_equation(expr, self.args, engine='tensorflow', tf_graph=self.tf_graph)
+                    update, self.args = parse_equation(expr, self.args, tf_graph=self.tf_graph)
                     self.updates.append(update)
 
     def create(self):
