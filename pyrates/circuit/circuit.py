@@ -8,13 +8,14 @@ arguments. For more detailed descriptions, see the respective docstrings.
 
 # external packages
 from typing import List, Dict, Any, Union
-from networkx import MultiDiGraph
+from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle
+from networkx.algorithms.cycles import find_cycle
 from copy import deepcopy
 
 # pyrates internal imports
 from pyrates.abc import AbstractBaseTemplate
 from pyrates.node import NodeTemplate
-
+from pyrates import PyRatesException
 from pyrates.utility.yaml_parser import TemplateLoader
 from pyrates.operator.operator import OperatorTemplate
 
@@ -189,12 +190,13 @@ class Circuit(MultiDiGraph):
 
         for source, target, edge_data in list(self.edges(data=True)):
             edge_cp = deepcopy(edge_data)
-            operators, operator_args = self._nd_reformat_edge_operators(edge_cp, op_key_map)
+            operators, operator_args, operator_order = self._nd_reformat_edge_operators(edge_cp, op_key_map)
 
             network_def.add_edge(f"{source}:0", f"{target}:0",
                                  # key=edge_counter,
                                  operators=operators,
-                                 operator_args=operator_args)
+                                 operator_args=operator_args,
+                                 operator_order=operator_order)
             # edge_counter += 1
 
         return network_def  # return MultiDiGraph as needed by Network class
@@ -233,7 +235,6 @@ class Circuit(MultiDiGraph):
 
     def _nd_reformat_node_operators(self, node, op_key_map):
         operator_args = dict()
-        inputs = {}  # type: Dict[str, list]
 
         for op_key, op_dict in node["operators"].items():
             op_cp = deepcopy(op_dict["operator"])  # duplicate operator info
@@ -259,14 +260,14 @@ class Circuit(MultiDiGraph):
                 # var_prop_cp["name"] = f"{new_op_key}/{var_key}"  # has been trown out
                 operator_args[f"{new_op_key}/{var_key}"] = deepcopy(var_prop_cp)
 
-                vname = var_key.split("/")[-1]
+                # vname = var_key.split("/")[-1]
                 # create mapping between node-wide input variable names and operator-level var names
-                if vname in node["inputs"]:
-                    if vname in inputs:
-                        inputs[vname].append(f"{op_key}/{var_key}")
-                    else:
-                        inputs[vname] = [f"{op_key}/{var_key}"]
-                node.pop("output", None)  # remove output specifier from node
+                # if vname in node["inputs"]:
+                #     if vname in inputs:
+                #         inputs[vname].append(f"{op_key}/{var_key}")
+                #     else:
+                #         inputs[vname] = [f"{op_key}/{var_key}"]
+
                 # elif vname in node_cp["output"]:
                 #     node_cp["output"] = {vname: f"{op_key}/{var_key}"}
             op_cp["equations"] = op_cp.pop("equation")
@@ -278,12 +279,14 @@ class Circuit(MultiDiGraph):
                 node["operators"][new_key] = node["operators"].pop(old_key)
 
         node["operator_args"] = operator_args
-        node["inputs"] = inputs
+        node["operator_order"], node["operators"] = self._get_operator_order(node["operators"])
+        # node["inputs"] = inputs
+        node.pop("output", None)  # remove output specifier from node
+        node["inputs"] = {}  # will be filled in backend
 
         return node
 
-    @staticmethod
-    def _nd_reformat_edge_operators(edge_data, op_key_map):
+    def _nd_reformat_edge_operators(self, edge_data, op_key_map):
         """
 
         Parameters
@@ -295,6 +298,7 @@ class Circuit(MultiDiGraph):
         -------
         operators
         operator_args
+        operator_order
         """
         operator_args = {}
         edge_data = deepcopy(edge_data)
@@ -332,7 +336,81 @@ class Circuit(MultiDiGraph):
                 var_prop_cp.pop("description", None)
                 operator_args[f"{op_key}/{var_key}"] = deepcopy(var_prop_cp)
 
-        return operators, operator_args
+            operator_order, operators = self._get_operator_order(operators)
+        return operators, operator_args, operator_order
+
+    def _get_operator_order(self, operators: dict) -> (list, dict):
+        """
+        Sort operators by logical sequence of input and output variables via a directed graph.
+
+        Parameters
+        ----------
+        operators
+
+        Returns
+        -------
+        op_order
+        operators
+        """
+        all_outputs = {}  # type: Dict[str, dict]
+        op_graph = DiGraph()
+
+        # collect output variables in outputs dictionary
+        for op_key, op_dict in operators.items():
+            out_var = op_dict["output"]
+
+            # check, if variable name exists in outputs and create empty list if it doesn't
+            if out_var not in all_outputs:
+                all_outputs[out_var] = {}
+
+            all_outputs[out_var][op_key] = out_var
+            op_graph.add_node(op_key)
+
+        # link outputs to inputs
+        for op_key, op_dict in operators.items():
+            op_inputs = {}
+            for in_var in op_dict["inputs"]:
+                op_inputs[in_var] = {"source": [], "reduce_dim": True}  # default to True for now
+                if in_var in all_outputs:
+                    # link all collected outputs of given variable in inputs field of operator
+                    for predecessor, out_var in all_outputs[in_var].items():
+                        # add predecessor output as source; this would also work for non-equal variable names
+                        op_inputs[in_var]["source"].append(f"{predecessor}/{out_var}")
+                        op_graph.add_edge(predecessor, op_key)
+            operators[op_key]["inputs"] = op_inputs
+
+        op_order = self._sort_operators(op_graph)
+
+        return op_order, operators
+
+    @staticmethod
+    def _sort_operators(op_graph: DiGraph) -> list:
+        """
+
+        Parameters
+        ----------
+        op_graph
+
+        Returns
+        -------
+        op_order
+        """
+        # check, if cycles are present in operator graph (which would be problematic
+        try:
+            find_cycle(op_graph)
+        except NetworkXNoCycle:
+            pass
+        else:
+            raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
+
+        op_order = []
+        while op_graph.nodes:
+            # noinspection PyTypeChecker
+            primary_nodes = [node for node, in_degree in op_graph.in_degree if in_degree == 0]
+            op_order.extend(primary_nodes)
+            op_graph.remove_nodes_from(primary_nodes)
+
+        return op_order
 
 
 class CircuitTemplate(AbstractBaseTemplate):
