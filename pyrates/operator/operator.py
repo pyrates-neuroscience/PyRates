@@ -94,6 +94,7 @@ class OperatorTemplate(AbstractBaseTemplate):
     equation or variables."""
 
     cache = {}  # tracks all unique instances of applied operator templates
+    key_map = {}
 
     def __init__(self, name: str, path: str, equation: str, variables: dict, description: str,
                  options: dict = None):
@@ -107,7 +108,7 @@ class OperatorTemplate(AbstractBaseTemplate):
         # if options:
         #     raise NotImplementedError
 
-    def apply(self, options: dict = None, return_key=False):
+    def apply(self, options: dict = None, return_key=False, max_count=1000):
         """Returns the non-editable but unique, cashed definition of the operator."""
 
         if not options:
@@ -133,7 +134,27 @@ class OperatorTemplate(AbstractBaseTemplate):
             self.cache[key] = instance
 
         if return_key:
-            return instance, values, key
+            # shorten key
+            ######################
+            if key in self.key_map:  # fetch already known key from map
+                new_key = self.key_map[key]
+            else:  # create new unique short key
+                base_name = key[0].split(".")[-1]
+
+                # ensure uniqueness
+                for counter in range(max_count):  # max 1000 iterations by default
+                    new_key = f"{base_name}:{counter}"
+                    if new_key in self.key_map.values():
+                        continue  # increment counter
+                    else:  # use current new op_key
+                        self.key_map[key] = new_key
+                        break
+                else:
+                    raise RecursionError(
+                        f"Maximum number of iterations (={max_count}) reached. This number can be changed by setting"
+                        f"the 'max_count' argument on the OperatorTemplate.apply() method.")
+
+            return instance, values, new_key
         else:
             return instance, values
         # TODO: return operator instance
@@ -183,7 +204,7 @@ class OperatorTemplate(AbstractBaseTemplate):
 
         variables = {}
         values = {}
-        inputs = []
+        inputs = {}
         output = None
         for variable, properties in self.variables.items():
             var_dict = {}
@@ -197,7 +218,7 @@ class OperatorTemplate(AbstractBaseTemplate):
 
                     # separate in/out specification from variable type specification
                     if var_dict["variable_type"] == "input":
-                        inputs.append(variable)
+                        inputs[variable] = dict(source=[], reduce_dim=True)  # default to True for now
                         var_dict["variable_type"] = "state_var"
                     elif var_dict["variable_type"] == "output":
                         if output is None:

@@ -8,12 +8,12 @@ arguments. For more detailed descriptions, see the respective docstrings.
 
 # external packages
 from typing import List, Dict, Any, Union
-from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle
-from networkx.algorithms.cycles import find_cycle
+from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle
 from copy import deepcopy
 
 # pyrates internal imports
 from pyrates.abc import AbstractBaseTemplate
+from pyrates.edge.edge import EdgeTemplate
 from pyrates.node import NodeTemplate
 from pyrates import PyRatesException
 from pyrates.utility.yaml_parser import TemplateLoader
@@ -28,9 +28,11 @@ class Circuit(MultiDiGraph):
     """Custom graph datastructure that represents a network of nodes and edges with associated equations
     and variables."""
 
+    label_cache = {}
+
     def __init__(self, label: str, nodes: dict = None,
-                 coupling: Dict[str, OperatorTemplate] = None,
-                 edges=None, template: str = None, **attr):
+                 edge_templates: Dict[str, EdgeTemplate] = None,
+                 edges: list = None, template: str = None, **attr):
         """
         Parameters:
         -----------
@@ -50,13 +52,23 @@ class Circuit(MultiDiGraph):
         self.label = label
         self.template = template
 
-        self.add_nodes_from(nodes, from_templates=True)
+        label_map = self.add_nodes_from(nodes, from_templates=True)
 
-        coupling = {key: op.apply() for (key, op) in coupling.items()}
+        self.add_edges_from(edges, edge_templates, label_map)
 
-        self.add_edges_from(edges, coupling)
+    def add_nodes_and_edges(self, nodes: Dict[str, NodeTemplate],
+                            edges: list,
+                            edge_templates: Dict[str, EdgeTemplate]):
 
-    def add_nodes_from(self, nodes: Dict[str, NodeTemplate], from_templates=False, **attr):
+        label_map = {}
+        edge_list = []
+        for label, template in nodes.items():
+            # ensure label uniqueness
+            label_map[label] = self._get_unique_label(label)
+            self.add_node(label_map[label], node=template.apply())
+
+    def add_nodes_from(self, nodes: Union[Dict[str, NodeTemplate], Dict[str, dict]],
+                       from_templates=True, **attr) -> dict:
         """ Add multiple nodes to circuit. Allows networkx-style adding if from_templates is set to False.
 
         Parameters
@@ -64,42 +76,56 @@ class Circuit(MultiDiGraph):
         nodes
             Dictionary with node label as key. The item is a template to derive the node instance from.
         from_templates
-            Defaults to `False` which invokes `add_nodes_from` of `networkx.MultiDiGraph`. Use this option, if you
-            want to add node instances instead of templates. If `True`, nodes are assumed to be defined by templates and
-            these templates are applied to create node instances.
+            Defaults to `True`. Setting it to `False` invokes `add_nodes_from` of `networkx.MultiDiGraph`. Use this
+            option, if you want to add node instances instead of templates. If `True`, nodes are assumed to be defined
+            by templates and these templates are applied to create node instances.
         attr
             additional keyword attributes that can be added to the node data. (default `networkx` syntax.)
 
         Returns
         -------
-        None
+        label_map
         """
+        label_map = {}
+        for label in nodes:
+            label_map[label] = self._get_unique_label(label)
 
         if from_templates:
             node_list = []
             for label, template in nodes.items():
-                node_list.append((label, {"node": template.apply()}))
+                # ensure label uniqueness
+                node_list.append((label_map[label], {"node": template.apply()}))
                 # assuming unique labels
             super().add_nodes_from(node_list, **attr)
         else:  # default networkx behaviour
+            for old, new in label_map.items():
+                nodes[new] = nodes.pop(old)
             super().add_nodes_from(nodes, **attr)
+        return label_map
 
-    def add_node(self, label: str, template: NodeTemplate = None, options: dict = None, **attr):
+    def add_node(self, label: str, template: NodeTemplate = None, options: dict = None,
+                 node: dict = None, **attr) -> str:
         """Add single node"""
 
+        label = self._get_unique_label(label)
+
         if template:
+
             super().add_node(label, node=template.apply(options), **attr)
         else:  # default networkx behaviour
-            super().add_node(label, **attr)
+            super().add_node(label, node=node, **attr)
 
-    def add_edges_from(self, edges, coupling: dict = None, **attr):
+        return label
+
+    def add_edges_from(self, edges, edge_templates: dict = None, label_map: dict = None, **attr):
         """ Add multiple edges.
 
         Parameters
         ----------
         edges
-            list of edges, each of shape [source, target, coupling_operator_key, target_operator_name, **values]
-        coupling
+            list of edges, each of shape [source, target, edge_type_key, target_operator_name, **values]
+        edge_templates
+        label_map
         attr
 
         Returns
@@ -107,65 +133,170 @@ class Circuit(MultiDiGraph):
 
         """
 
-        if coupling:
+        if edge_templates:
             edge_list = []
-            for (source, target, co_key, target_operator, *values) in edges:
-                coupling_op = coupling[co_key][0]  # type: dict  # operator spec
+            for (source, target, template_key, target_operator, *values) in edges:
 
-                defaults = dict(coupling[co_key][1])  # default values of variables
-                # try:
-                defaults.update(*values)
-                # except TypeError as e:
-                #     if e.args[0].startswith("'NoneType'"):
-                #         pass  # just propagate "None" as values
-                #     else:
-                #         raise e
-                # else:
-                values = defaults
-                # test, if variables at source and target exist
-                self._ensure_io_consistency(source, target, target_operator,
-                                            coupling_op["inputs"], coupling_op["output"])
+                edge_type = edge_templates[template_key].apply()  # type: dict # edge spec
 
-                # TODO: allow multiple operator definitions per edge
-                edge_list.append((source, target, {"operators": {co_key: coupling[co_key][0]},
-                                                   "values": values,
-                                                   "target_operator": target_operator}))
+                weight = values[0]
+                try:
+                    delay = values[1]
+                except IndexError:
+                    delay = 0
+
+                # coupling_op = edge_type["operators"]
+                # self._ensure_io_consistency(source, target, target_operator,
+                #                             coupling_op["inputs"], coupling_op["output"])
+                if label_map:
+                    source = label_map[source]
+                    target = label_map[target]
+
+                # test, if variables at source and target exist and reference them properly
+                source_var, target_var = self._get_edge_source_target_vars(source, target, target_operator,
+                                                                           edge_type["operators"])
+
+                edge_list.append((source, target,  # edge_unique_key,
+                                  {"edge_type": edge_type,
+                                   # "target_operator": target_operator,
+                                   "weight": weight,
+                                   "delay": delay,
+                                   "source_var": source_var,
+                                   "target_var": target_var}))
             super().add_edges_from(edge_list, **attr)
         else:  # default networkx behaviour
             super().add_edges_from(edges, **attr)
 
-    # def __repr__(self):
-    #     return f"Circuit '{self.label}'"
-
-    def _ensure_io_consistency(self, source: str, target: str, target_operator: str,
-                               input_var: List[str], output_var: str):
-        """Test, if inputs and output of coupling operator are present as output/input of source/target,
-        respectively.
+    def _get_unique_label(self, label: str) -> str:
+        """
 
         Parameters
         ----------
-        source
-        target
-        target_operator
-        input_var
-        output_var
+        label
+        max_count
 
         Returns
         -------
-        None
+        unique_label
         """
-        if len(input_var) > 1:
-            raise ValueError("Too many input variables defined in `input_var`. "
-                             "Edges only accept one input variable.")
-        # step 1: find source output variable
-        assert self.nodes[source]["node"]["output"] == input_var[0]
+        # define counter
+        if label in self.label_cache:
+            self.label_cache[label] += 1
+        else:
+            self.label_cache[label] = 0
 
-        # step 2: find target input variable
-        target_node = self.nodes[target]["node"]
-        # hard-coded variant of operator instance key with no additional options applied
-        target_op = target_node["operators"][(target_operator, None)]["operator"]
-        assert output_var in target_op["inputs"]  # could be replaced by target_node["inputs"],
-        # if it contained info about operators
+        # set label
+        unique_label = f"{label}:{self.label_cache[label]}"
+
+        return unique_label
+
+    # noinspection PyUnresolvedReferences
+    def _get_edge_source_target_vars(self, source: str, target: str, target_operator: str,
+                                     op_graph: DiGraph) -> (str, str):
+
+        # 1: get reference for source variable
+        ######################################
+
+        # noinspection PyTypeChecker
+        in_op = [op for op, in_degree in op_graph.in_degree if in_degree == 0]  # type: List[dict]
+
+        # multiple input operations are possible, as long as they require the same singular input variable
+        in_var = set()
+        for op_key in in_op:
+            for var in op_graph.nodes[op_key]["operator"]["inputs"]:
+                in_var.add(var)
+
+        if len(in_var) != 1:
+            raise PyRatesException("Too many or too little input variables found. Exactly one input variable is "
+                                   "required per edge.")
+        else:
+            source_var = in_var.pop()
+
+        # collect all output variables
+        source_out_vars = {}  # type: Dict[str, list]
+        source_op_graph = self.nodes[source]["node"]["operators"]
+        for op_key, data in source_op_graph.nodes(data=True):
+            out_var = data["operator"]["output"]
+            if out_var not in source_out_vars:
+                source_out_vars[out_var] = []
+
+            source_out_vars[out_var].append(op_key)
+
+        # check for uniqueness of output variable
+        if len(source_out_vars[source_var]) > 1:
+            raise PyRatesException(f"Too many operators found for source variable `{source_var}`. The source variable "
+                                   f"of an edge needs to be a unique output in the source node.")
+
+        # assign output variable and operator as source_var
+        source_out_op = source_out_vars[source_var][0]
+        source_path = f"{source_out_op}/{source_var}"
+        # note source variable and operator as input in input operators
+        for op in in_op:
+            op_graph.nodes[op]["operator"]["inputs"][source_var]["source"].append(source_path)
+            # this should be transmitted back as a side effect, since op_graph references the actual DiGraph instance
+
+        # 2: get reference for target variable
+        ######################################
+        # simplification: assume target operator is defined by name:0
+
+        # try to find single output variable
+        # noinspection PyTypeChecker
+        out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]  # type: List[dict]
+
+        # only one single output operator allowed
+        if len(out_op) != 1:
+            raise PyRatesException("Too many or too little output operators found. Exactly one output operator and "
+                                   "associated output variable is required per edge.")
+
+        target_var = op_graph.nodes[out_op[0]]["operator"]["output"]
+        target_op_graph = self.nodes[target]["node"]["operators"]
+        target_op_name = f"{target_operator.split('.')[-1]}:0"
+        target_op = target_op_graph.nodes[target_op_name]["operator"]
+
+        if target_var not in target_op["inputs"]:
+            raise PyRatesException(f"Could not find target variable {target_var} in target operator {target_op_name}  "
+                                   f"of node {target}.")
+
+        target_path = f"{target_op_name}/{target_var}"
+
+        return source_path, target_path
+
+    # def __repr__(self):
+    #     return f"Circuit '{self.label}'"
+
+    # def add_edge(self, *args, **kwargs):
+    #
+    #     raise NotImplementedError("Adding single edges is not implemented.")
+
+    # def _ensure_io_consistency(self, source: str, target: str, target_operator: str,
+    #                            input_var: List[str], output_var: str):
+    #     """Test, if inputs and output of coupling operator are present as output/input of source/target,
+    #     respectively.
+    #
+    #     Parameters
+    #     ----------
+    #     source
+    #     target
+    #     target_operator
+    #     input_var
+    #     output_var
+    #
+    #     Returns
+    #     -------
+    #     None
+    #     """
+    #     if len(input_var) > 1:
+    #         raise ValueError("Too many input variables defined in `input_var`. "
+    #                          "Edges only accept one input variable.")
+    #     # step 1: find source output variable
+    #     assert self.nodes[source]["node"]["output"] == input_var[0]
+    #
+    #     # step 2: find target input variable
+    #     target_node = self.nodes[target]["node"]
+    #     # hard-coded variant of operator instance key with no additional options applied
+    #     target_op = target_node["operators"][(target_operator, None)]["operator"]
+    #     assert output_var in target_op["inputs"]  # could be replaced by target_node["inputs"],
+    #     # if it contained info about operators
 
     def network_def(self):
         """A bit of a workaround to connect interfaces of frontend and backend.
@@ -174,74 +305,62 @@ class Circuit(MultiDiGraph):
 
         network_def = MultiDiGraph()
 
-        # reorganize node and operator data to conform with backend API
-        ###############################################################
+        edge_list = []
+        node_dict = {}
 
-        op_key_map = {}
-        for node_key, node in list(self.nodes(data=True)):
-            node_cp = deepcopy(node["node"])  # duplicate node info
-            node_cp = self._nd_reformat_node_operators(node_cp, op_key_map)
-            node_cp.pop("template", None)
-            network_def.add_node(f"{node_key}:0", **node_cp)
+        # reorganize node to conform with backend API
+        #############################################
+        for node_key, data in self.nodes(data=True):
+            # reformat all node internals into operators + operator_args
+            node_dict[node_key] = {}  # type: Dict[str, Union[dict, list]]
+            node_dict[node_key] = dict(self._nd_reformat_operators(data["node"]))
+            op_order = self._nd_get_operator_order(data["node"]["operators"])  # type: list
+            node_dict[node_key]["operator_order"] = op_order
 
-        # add edges and reformat them a little
-        ######################################
-        # edge_counter = 0
+        # reorganize edge to conform with backend API
+        #############################################
+        for source, target, data in self.edges(data=True):
+            # reformat all edge internals into operators + operator_args
+            op_data = self._nd_reformat_operators(data["edge_type"])
+            op_order = self._nd_get_operator_order(data["edge_type"]["operators"])
 
-        for source, target, edge_data in list(self.edges(data=True)):
-            edge_cp = deepcopy(edge_data)
-            operators, operator_args, operator_order = self._nd_reformat_edge_operators(edge_cp, op_key_map)
+            # move edge operators to nodes
+            # using dictionary update method, assuming no conflicts in operator names
+            # this fails, if multiple edges on one source node use the same coupling operator
+            # todo: implement conflict management for multiple edges with same operators per source node
+            node_dict[source]["operators"].update(op_data["operators"])
+            node_dict[source]["operator_args"].update(op_data["operator_args"])
 
-            network_def.add_edge(f"{source}:0", f"{target}:0",
-                                 # key=edge_counter,
-                                 operators=operators,
-                                 operator_args=operator_args,
-                                 operator_order=operator_order)
-            # edge_counter += 1
+            for op in op_order:
+                if op not in node_dict[source]["operator_order"]:
+                    node_dict[source]["operator_order"].append(op)
+
+            # simplify edges and save into edge_list
+            # find single output operator to save new reference to source variable after reformatting
+            op_graph = data["edge_type"]["operators"]
+            out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]
+            out_var = op_graph.nodes[out_op[0]]["operator"]["output"]
+            source_var = f"{out_op[0]}/{out_var}"
+
+            edge_list.append((source, target, {"source_var": source_var,
+                                               "target_var": data["target_var"],
+                                               "weight": data["weight"],
+                                               "delay": data["delay"]}))
+
+        # network_def.add_nodes_from(node_dict)
+        for key, node in node_dict.items():
+            network_def.add_node(key, **node)
+        network_def.add_edges_from(edge_list)
 
         return network_def  # return MultiDiGraph as needed by Network class
 
     @staticmethod
-    def _nd_create_short_unique_key(key_map, old_key):
-        """ Workaround method to create new shorter unique keys for unneccessarily long keys
-
-        Parameters
-        ----------
-        key_map
-        old_key
-
-        Returns
-        -------
-        new_key
-        """
-        if old_key in key_map:  # fetch already known key from map
-            new_key = key_map[old_key]
-        else:  # create new unique short key
-            base_name = old_key[0].split(".")[-1]
-
-            # ensure uniqueness
-            for counter in range(1000):  # max 1000 iterations
-                new_key = f"{base_name}:{counter}"
-                if new_key in key_map.values():
-                    continue  # increment counter
-                else:  # use current new op_key
-                    key_map[old_key] = new_key
-                    break
-            else:
-                raise RecursionError("Maximum number of iterations (=1000) reached. This is a feature that should be "
-                                     "removed, once the IR interface overhaul is completed.")
-
-        return new_key
-
-    def _nd_reformat_node_operators(self, node, op_key_map):
+    def _nd_reformat_operators(data):
         operator_args = dict()
+        operators = dict()
 
-        for op_key, op_dict in node["operators"].items():
+        for op_key, op_dict in data["operators"].nodes(data=True):
             op_cp = deepcopy(op_dict["operator"])  # duplicate operator info
-            # op_cp["original_key"] = op_key  # copy original key to be able to change it later
-
-            # create shortened unique key
-            new_op_key = self._nd_create_short_unique_key(op_key_map, op_key)
 
             var_dict = op_cp.pop("variables")
 
@@ -258,133 +377,18 @@ class Circuit(MultiDiGraph):
                 var_prop_cp.pop("description", None)
                 var_prop_cp.pop("name", None)
                 # var_prop_cp["name"] = f"{new_op_key}/{var_key}"  # has been trown out
-                operator_args[f"{new_op_key}/{var_key}"] = deepcopy(var_prop_cp)
-
-                # vname = var_key.split("/")[-1]
-                # create mapping between node-wide input variable names and operator-level var names
-                # if vname in node["inputs"]:
-                #     if vname in inputs:
-                #         inputs[vname].append(f"{op_key}/{var_key}")
-                #     else:
-                #         inputs[vname] = [f"{op_key}/{var_key}"]
-
-                # elif vname in node_cp["output"]:
-                #     node_cp["output"] = {vname: f"{op_key}/{var_key}"}
-            op_cp["equations"] = op_cp.pop("equation")
-            node["operators"][op_key] = op_cp
-
-        # rename all operators with short names
-        for old_key, new_key in op_key_map.items():
-            if old_key in node["operators"]:
-                node["operators"][new_key] = node["operators"].pop(old_key)
-
-        node["operator_args"] = operator_args
-        node["operator_order"], node["operators"] = self._get_operator_order(node["operators"])
-        # node["inputs"] = inputs
-        node.pop("output", None)  # remove output specifier from node
-        node["inputs"] = {}  # will be filled in backend
-
-        return node
-
-    def _nd_reformat_edge_operators(self, edge_data, op_key_map):
-        """
-
-        Parameters
-        ----------
-        edge_data
-        op_key_map
-
-        Returns
-        -------
-        operators
-        operator_args
-        operator_order
-        """
-        operator_args = {}
-        edge_data = deepcopy(edge_data)
-        operators = edge_data["operators"]
-        for op_key, op in operators.items():
-            variables = op.pop("variables")
-            target_op = edge_data["target_operator"]
-
-            # transfer edge-specific values back to variable info
-            values = edge_data["values"]
-
-            for var_key, value in values.items():
-                variables[var_key]["value"] = value
-
-            for var_key, var_props in variables.items():
-                var_prop_cp = var_props
-                var_prop_cp["vtype"] = var_prop_cp.pop("variable_type")
-                var_prop_cp["dtype"] = var_prop_cp.pop("data_type")
-                if var_key in op["inputs"]:
-                    var_prop_cp["vtype"] = "source_var"
-                    base_name = target_op.split(".")[-1]
-                    var_prop_cp["name"] = f"{base_name}:0/{var_key}"
-                    var_prop_cp.pop("dtype", None)
-                elif var_key == op["output"]:
-                    var_prop_cp["vtype"] = "target_var"
-                    base_name = target_op.split(".")[-1]
-                    # assume unique instances, no options applied
-                    var_prop_cp["name"] = f"{base_name}:0/{var_key}"
-                    var_prop_cp.pop("dtype", None)
-                else:
-                    var_prop_cp["shape"] = ()
-                    var_prop_cp.pop("name", None)
-
-                var_prop_cp.pop("unit", None)
-                var_prop_cp.pop("description", None)
                 operator_args[f"{op_key}/{var_key}"] = deepcopy(var_prop_cp)
 
-            operator_order, operators = self._get_operator_order(operators)
-        return operators, operator_args, operator_order
+            op_cp["equations"] = op_cp.pop("equation")
+            operators[op_key] = op_cp
 
-    def _get_operator_order(self, operators: dict) -> (list, dict):
-        """
-        Sort operators by logical sequence of input and output variables via a directed graph.
-
-        Parameters
-        ----------
-        operators
-
-        Returns
-        -------
-        op_order
-        operators
-        """
-        all_outputs = {}  # type: Dict[str, dict]
-        op_graph = DiGraph()
-
-        # collect output variables in outputs dictionary
-        for op_key, op_dict in operators.items():
-            out_var = op_dict["output"]
-
-            # check, if variable name exists in outputs and create empty list if it doesn't
-            if out_var not in all_outputs:
-                all_outputs[out_var] = {}
-
-            all_outputs[out_var][op_key] = out_var
-            op_graph.add_node(op_key)
-
-        # link outputs to inputs
-        for op_key, op_dict in operators.items():
-            op_inputs = {}
-            for in_var in op_dict["inputs"]:
-                op_inputs[in_var] = {"source": [], "reduce_dim": True}  # default to True for now
-                if in_var in all_outputs:
-                    # link all collected outputs of given variable in inputs field of operator
-                    for predecessor, out_var in all_outputs[in_var].items():
-                        # add predecessor output as source; this would also work for non-equal variable names
-                        op_inputs[in_var]["source"].append(f"{predecessor}/{out_var}")
-                        op_graph.add_edge(predecessor, op_key)
-            operators[op_key]["inputs"] = op_inputs
-
-        op_order = self._sort_operators(op_graph)
-
-        return op_order, operators
+        reformatted = dict(operator_args=operator_args,
+                           operators=operators,
+                           inputs={})
+        return reformatted
 
     @staticmethod
-    def _sort_operators(op_graph: DiGraph) -> list:
+    def _nd_get_operator_order(op_graph: DiGraph) -> list:
         """
 
         Parameters
@@ -404,11 +408,12 @@ class Circuit(MultiDiGraph):
             raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
 
         op_order = []
-        while op_graph.nodes:
+        graph = op_graph.copy()
+        while graph.nodes:
             # noinspection PyTypeChecker
-            primary_nodes = [node for node, in_degree in op_graph.in_degree if in_degree == 0]
+            primary_nodes = [node for node, in_degree in graph.in_degree if in_degree == 0]
             op_order.extend(primary_nodes)
-            op_graph.remove_nodes_from(primary_nodes)
+            graph.remove_nodes_from(primary_nodes)
 
         return op_order
 
@@ -416,7 +421,7 @@ class Circuit(MultiDiGraph):
 class CircuitTemplate(AbstractBaseTemplate):
 
     def __init__(self, name: str, path: str, description: str, label: str = "circuit",
-                 nodes: dict = None, coupling: dict = None, edges: List[tuple] = None,
+                 nodes: dict = None, edge_templates: dict = None, edges: List[tuple] = None,
                  options: dict = None):
 
         super().__init__(name, path, description)
@@ -427,11 +432,11 @@ class CircuitTemplate(AbstractBaseTemplate):
                 if isinstance(path, str):
                     self.nodes[key] = NodeTemplate.from_yaml(path)
 
-        self.coupling = {}
-        if coupling:
-            for key, path in coupling.items():
+        self.edge_templates = {}
+        if edge_templates:
+            for key, path in edge_templates.items():
                 if isinstance(path, str):
-                    self.coupling[key] = OperatorTemplate.from_yaml(path)
+                    self.edge_templates[key] = EdgeTemplate.from_yaml(path)
 
         if edges:
             self.edges = edges
@@ -454,7 +459,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         if not label:
             label = self.label
 
-        return Circuit(label, self.nodes, self.coupling, self.edges, self.path)
+        return Circuit(label, self.nodes, self.edge_templates, self.edges, self.path)
 
 
 class CircuitTemplateLoader(TemplateLoader):
@@ -465,7 +470,8 @@ class CircuitTemplateLoader(TemplateLoader):
 
     @classmethod
     def update_template(cls, base, name: str, path: str, description: str = None,
-                        label: str = None, nodes: dict = None, coupling: dict = None,
+                        label: str = None, nodes: dict = None,
+                        edge_templates: Dict[str, OperatorTemplate] = None,
                         edges: List[tuple] = None, options: dict = None):
         """Update all entries of the circuit template in their respective ways."""
 
@@ -480,10 +486,11 @@ class CircuitTemplateLoader(TemplateLoader):
         else:
             nodes = base.nodes
 
-        if coupling:
-            coupling = cls.update_coupling(base.coupling, coupling)
+        if edge_templates:
+            edge_templates = cls.update_nodes(base.edge_templates, edge_templates)
+            # note: edge templates have the same properties as node templates, could also call them graph entities
         else:
-            coupling = base.coupling
+            edge_templates = base.edge_templates
 
         if edges:
             edges = cls.update_edges(base.edges, edges)
@@ -497,32 +504,26 @@ class CircuitTemplateLoader(TemplateLoader):
             options = base.options
 
         return CircuitTemplate(name=name, path=path, description=description,
-                               label=label, nodes=nodes, coupling=coupling,
+                               label=label, nodes=nodes, edge_templates=edge_templates,
                                edges=edges, options=options)
 
     @staticmethod
     def update_nodes(base_nodes: dict, updates: dict):
 
-        updated = base_nodes.copy()
-
-        # for key, value in updates.items():
-        #     if isinstance(value, str):
-        #         updated[key] = OperatorTemplate.from_yaml(value)
-        #     else:
-        #         raise TypeError("Node specifier must a string.")
-        #         # could be a dict, but not implemented
-        updated.update(updates)
-
-        return updated
-
-    @staticmethod
-    def update_coupling(base_coupling: dict, updates: dict):
-
-        updated = base_coupling.copy()
+        updated = deepcopy(base_nodes)
 
         updated.update(updates)
 
         return updated
+
+    # @staticmethod
+    # def update_edge_templates(base_edge_templates: dict, updates: dict):
+    #
+    #     updated = deepcopy(base_edge_templates)
+    #
+    #     updated.update(updates)
+    #
+    #     return updated
 
     @staticmethod
     def update_edges(base_edges: List[tuple], updates: List[tuple]):

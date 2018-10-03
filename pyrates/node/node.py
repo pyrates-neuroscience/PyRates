@@ -2,17 +2,18 @@
 """
 
 # external imports
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Type
 import tensorflow as tf
+from networkx import DiGraph, find_cycle, NetworkXNoCycle
 
 # pyrates imports
+from pyrates import PyRatesException
 from pyrates.operator import Operator, OperatorTemplate
 from pyrates.parser import parse_dict
-
-# meta infos
 from pyrates.abc import AbstractBaseTemplate
 from pyrates.utility.yaml_parser import TemplateLoader
 
+# meta infos
 __author__ = "Richard Gast"
 __status__ = "Development"
 
@@ -100,11 +101,7 @@ class Node(object):
                 self.update = tf_op
 
 
-class NodeTemplate(AbstractBaseTemplate):
-    """Generic template for a node in the computational network graph. A single node may encompass several
-    different operators. One template defines a typical structure of a given node type."""
-
-    label_cache = set()
+class GraphEntityTemplate(AbstractBaseTemplate):
 
     def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
                  description: str, label: str = None, options: dict = None):
@@ -149,57 +146,72 @@ class NodeTemplate(AbstractBaseTemplate):
         if options:
             raise NotImplementedError("Applying options to a template is not implemented yet.")
 
-        # # assign default label if not explicitly given
-        # if not label:
-        #     label = self.label
-        #
-        # # make sure labels are unique
-        # if label in self.label_cache:
-        #     _idx = 0
-        #     while _idx<=max_iter:
-        #         if f"{label}:_iter" not in self.label_cache:
-        #             label = f"{label}:_iter"
-        #             break
-        # self.label_cache.add(label)
+        op_graph = DiGraph()
+        all_outputs = {}  # type: Dict[str, dict]
 
-        # create instance as dictionary
-        # instance = {"operators": {}, "label": label, "template": self}
-        instance = {"operators": {}, "template": self, "inputs": set(), "output": None}
-        op_inputs, op_outputs = set(), set()
+        # op_inputs, op_outputs = set(), set()
+
         for op_template, op_options in self.operators.items():
             op_instance, op_values, key = op_template.apply(op_options, return_key=True)
-            instance["operators"][key] = {"operator": op_instance,
-                                          "values": op_values}
-            op_inputs.update(op_instance["inputs"])
-            op_outputs.add(op_instance["output"])
+            # add operator as node to local operator_graph
+            op_graph.add_node(key, operator=op_instance, values=op_values)
 
-        for var in op_outputs:
-            try:
-                op_inputs.remove(var)
-            except KeyError:  # output variable not found as input in any operator
-                if instance["output"] is None:
-                    instance["output"] = var
+            # collect all output variables
+            out_var = op_instance["output"]
+
+            # check, if variable name exists in outputs and create empty list if it doesn't
+            if out_var not in all_outputs:
+                all_outputs[out_var] = {}
+
+            all_outputs[out_var][key] = out_var
+            # this assumes input and output variables map on each other by equal name
+            # with additional information, non-equal names could also be mapped here
+
+        # link outputs to inputs
+        for op_key, data in op_graph.nodes(data=True):
+            for in_var in data["operator"]["inputs"]:
+                if in_var in all_outputs:
+                    # link all collected outputs of given variable in inputs field of operator
+                    for predecessor, out_var in all_outputs[in_var].items():
+                        # add predecessor output as source; this would also work for non-equal variable names
+                        name = f"{predecessor}/{out_var}"
+                        op_graph.nodes[op_key]["operator"]["inputs"][in_var]["source"].append(name)
+                        op_graph.add_edge(predecessor, op_key)
                 else:
-                    raise ValueError("Too many outputs. Nodes only support a single overall output")
+                    pass  # means, that 'source' will remain an empty list and no incoming edge will be added
 
-        instance["inputs"] = op_inputs  # save remaining input variables as node inputs
+        instance = {"operators": op_graph, "template": self}
+
+        try:
+            find_cycle(op_graph)
+        except NetworkXNoCycle:
+            pass
+        else:
+            raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node "
+                                   "or edge.")
 
         return instance
 
 
-class NodeTemplateLoader(TemplateLoader):
-    """Template loader specific to an OperatorTemplate. """
+class NodeTemplate(GraphEntityTemplate):
+    """Generic template for a node in the computational network graph. A single node may encompass several
+    different operators. One template defines a typical structure of a given node type."""
 
-    def __new__(cls, path):
+    pass
 
-        return super().__new__(cls, path, NodeTemplate)
+
+class GraphEntityTemplateLoader(TemplateLoader):
+
+    def __new__(cls, path, template_class):
+
+        return super().__new__(cls, path, template_class)
 
     @classmethod
-    def update_template(cls, base, name: str, path: str, label: str,
+    def update_template(cls, template_cls: Type[GraphEntityTemplate], base, name: str, path: str, label: str,
                         operators: Union[str, List[str], dict] = None,
                         description: str = None,
                         options: dict = None):
-        """Update all entries of a base node template to a more specific template."""
+        """Update all entries of a base edge template to a more specific template."""
 
         if operators:
             cls.update_operators(base.operators, operators)
@@ -215,7 +227,7 @@ class NodeTemplateLoader(TemplateLoader):
         if not description:
             description = base.__doc__  # or do we want to enforce documenting a template?
 
-        return NodeTemplate(name=name, path=path, label=label, operators=operators,
+        return template_cls(name=name, path=path, label=label, operators=operators,
                             description=description, options=options)
 
     @staticmethod
@@ -251,3 +263,16 @@ class NodeTemplateLoader(TemplateLoader):
         # # Check somewhere, if child operators have same input/output as base operators?
         #
         return updated
+
+
+class NodeTemplateLoader(GraphEntityTemplateLoader):
+    """Template loader specific to an OperatorTemplate. """
+
+    def __new__(cls, path):
+        return super().__new__(cls, path, NodeTemplate)
+
+    @classmethod
+    def update_template(cls, *args, **kwargs):
+        """Update all entries of a base node template to a more specific template."""
+
+        return super().update_template(NodeTemplate, *args, **kwargs)

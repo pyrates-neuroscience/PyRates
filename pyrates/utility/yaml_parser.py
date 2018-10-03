@@ -41,10 +41,12 @@ class TemplateLoader:
                 # load base if needed
                 if "." in base_path:
                     # reference to template in different file
+                    # noinspection PyCallingNonCallable
                     template = cls(base_path)
                 else:
                     # reference to template in same file
                     base_path = ".".join((*path.split(".")[:-1], base_path))
+                    # noinspection PyCallingNonCallable
                     template = cls(base_path)
                 template = cls.update_template(template, **template_dict)
                 # may fail if "base" is present but empty

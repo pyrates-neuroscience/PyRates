@@ -1,7 +1,10 @@
 """ Tests for the parser that translates circuits and components defined in YAML into the intermediate
 python representation.
 """
+from copy import deepcopy
+
 from pyrates.circuit import CircuitTemplate
+from pyrates.edge.edge import EdgeTemplate
 from pyrates.node import NodeTemplate
 from pyrates.operator import OperatorTemplate
 
@@ -140,10 +143,10 @@ def test_full_jansen_rit_circuit_template_load():
             assert isinstance(op, OperatorTemplate)
 
     # test, whether coupling operator has been loaded correctly
-    coupling_path = "pyrates.coupling.templates.LinearCoupling"
-
-    assert isinstance(template.coupling["LC"], OperatorTemplate)
-    assert template.coupling["LC"] is TemplateLoader.cache[coupling_path]
+    coupling_path = "pyrates.edge.templates.LinearCouplingOperator"
+    edge_temp = template.edge_templates["LC"]
+    assert isinstance(edge_temp, EdgeTemplate)
+    assert list(edge_temp.operators)[0] is TemplateLoader.cache[coupling_path]
 
     assert repr(template) == f"<CircuitTemplate '{path}'>"
 
@@ -157,8 +160,8 @@ def test_circuit_instantiation():
 
     circuit = template.apply()
     # test if two edges refer to the same coupling operator by comparing ids
-    for op_key, op in circuit.edges[("JR_PC", "JR_IIN", 0)]["operators"].items():
-        assert op is circuit.edges[('JR_PC', 'JR_EIN', 0)]["operators"][op_key]
+    for op_key, op in circuit.edges[("JR_PC:0", "JR_IIN:0", 0)]["edge_type"]["operators"].nodes(data=True):
+        assert op["operator"] is circuit.edges[('JR_PC:0', 'JR_EIN:0', 0)]["edge_type"]["operators"].nodes[op_key]["operator"]
 
 
 def test_equation_alteration():

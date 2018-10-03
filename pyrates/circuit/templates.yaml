@@ -20,16 +20,18 @@ JansenRitCircuit:
     JR_IIN: pyrates.population.templates.JansenRitIN
     JR_EIN: pyrates.population.templates.JansenRitIN
 
-  coupling:
-    LC: pyrates.coupling.templates.LinearCoupling
+  edge_templates:
+    LC: pyrates.edge.templates.LCEdge
+#    LC: pyrates.coupling.templates.LinearCoupling
   # single coupling operator. needs rework for multiple coupling operators in single circuit.
   # alternative: use YAML tags for proper references
 
   edges:
-    - [JR_PC, JR_IIN, LC, *JRExcitatorySynapse, c: 33.75]
-    - [JR_PC, JR_EIN, LC, *JRExcitatorySynapse, c: 135.]
-    - [JR_EIN, JR_PC, LC, *JRExcitatorySynapse, c: 108.]
-    - [JR_IIN, JR_PC, LC, *JRInhibitorySynapse, c: 33.75]
+    # [source, target, type, target_operator, weight (, delay)]
+    - [JR_PC, JR_IIN, LC, *JRExcitatorySynapse, 33.75, 0]
+    - [JR_PC, JR_EIN, LC, *JRExcitatorySynapse, 135., 0]
+    - [JR_EIN, JR_PC, LC, *JRExcitatorySynapse, 108., 0]
+    - [JR_IIN, JR_PC, LC, *JRInhibitorySynapse, 33.75]  # leave out delay to default to 0
 
 MultiJansenRitCircuit:
   description: |
@@ -45,10 +47,10 @@ MultiJansenRitCircuit:
   nodes:
     JRC: JansenRitCircuit
 
-  coupling:
-    LC: pyrates.coupling.templates.LinearCoupling
+  edge_templates:
+    LC: pyrates.edge.templates.LCEdge
   # single coupling operator. needs rework for multiple coupling operators in single circuit.
-  # alternative: use YAML tags to h
+  # alternative: use YAML tags to hide long names
 
   edges:
     - matrix
