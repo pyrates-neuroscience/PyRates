@@ -2,6 +2,7 @@
 """
 
 # external imports
+from copy import deepcopy
 from typing import Dict, List, Optional, Union, Type
 import tensorflow as tf
 from networkx import DiGraph, find_cycle, NetworkXNoCycle
@@ -154,7 +155,8 @@ class GraphEntityTemplate(AbstractBaseTemplate):
         for op_template, op_options in self.operators.items():
             op_instance, op_values, key = op_template.apply(op_options, return_key=True)
             # add operator as node to local operator_graph
-            op_graph.add_node(key, operator=op_instance, values=op_values)
+            # ToDo: separate variable def and operator def so one can be private and the other shared
+            op_graph.add_node(key, **deepcopy(op_instance), values=op_values)
 
             # collect all output variables
             out_var = op_instance["output"]
@@ -169,13 +171,13 @@ class GraphEntityTemplate(AbstractBaseTemplate):
 
         # link outputs to inputs
         for op_key, data in op_graph.nodes(data=True):
-            for in_var in data["operator"]["inputs"]:
+            for in_var in data["inputs"]:
                 if in_var in all_outputs:
                     # link all collected outputs of given variable in inputs field of operator
                     for predecessor, out_var in all_outputs[in_var].items():
                         # add predecessor output as source; this would also work for non-equal variable names
                         name = f"{predecessor}/{out_var}"
-                        op_graph.nodes[op_key]["operator"]["inputs"][in_var]["source"].append(name)
+                        op_graph.nodes[op_key]["inputs"][in_var]["source"].append(name)
                         op_graph.add_edge(predecessor, op_key)
                 else:
                     pass  # means, that 'source' will remain an empty list and no incoming edge will be added

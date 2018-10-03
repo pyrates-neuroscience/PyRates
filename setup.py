@@ -23,4 +23,5 @@ setup(name='PyRates',
                         'networkx',
                         'pandas',
                         'tensorflow',
-                        'ruamel.yaml'])
+                        'ruamel.yaml',
+                        'sympy'])

@@ -3,11 +3,6 @@ python representation.
 """
 from copy import deepcopy
 
-from pyrates.circuit import CircuitTemplate
-from pyrates.edge.edge import EdgeTemplate
-from pyrates.node import NodeTemplate
-from pyrates.operator import OperatorTemplate
-
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
@@ -29,7 +24,7 @@ def test_parse_operator_templates(section):
 
     yaml = YAML(typ="safe", pure=True)
 
-    path = f"../pyrates/{section}/"
+    path = f"pyrates/{section}/"
     base_filename = f"{section}.yaml"
     template_filename = f"templates.yaml"
 
@@ -55,6 +50,7 @@ def test_parse_operator_templates(section):
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
     from pyrates.operator.operator import OperatorTemplateLoader
+    from pyrates.operator import OperatorTemplate
 
     template = OperatorTemplate.from_yaml(operator)  # type: OperatorTemplate
 
@@ -122,6 +118,9 @@ def test_full_jansen_rit_circuit_template_load():
 
     path = "pyrates.circuit.templates.JansenRitCircuit"
     from pyrates.circuit import CircuitTemplate
+    from pyrates.edge.edge import EdgeTemplate
+    from pyrates.node import NodeTemplate
+    from pyrates.operator import OperatorTemplate
 
     template = CircuitTemplate.from_yaml(path)
 
@@ -159,9 +158,11 @@ def test_circuit_instantiation():
     template = CircuitTemplate.from_yaml(path)
 
     circuit = template.apply()
-    # test if two edges refer to the same coupling operator by comparing ids
-    for op_key, op in circuit.edges[("JR_PC:0", "JR_IIN:0", 0)]["edge_type"]["operators"].nodes(data=True):
-        assert op["operator"] is circuit.edges[('JR_PC:0', 'JR_EIN:0', 0)]["edge_type"]["operators"].nodes[op_key]["operator"]
+    # used to be: test if two edges refer to the same coupling operator by comparing ids
+    # this is why we referenced by "operator"
+    # now: compare operators directly
+    for op_key, op in circuit.edges[("JR_PC:0", "JR_IIN:0", 0)]["operators"].nodes(data=True):
+        assert op == circuit.edges[('JR_PC:0', 'JR_EIN:0', 0)]["operators"].nodes[op_key]
 
 
 def test_equation_alteration():
@@ -191,7 +192,8 @@ def test_network_def_workaround():
     operator_order = ['JansenRitExcitatorySynapseRCO:0',
                       'JansenRitInhibitorySynapseRCO:0',
                       'JansenRitCPO:0',
-                      'JansenRitPRO:0']
+                      'JansenRitPRO:0',
+                      'LinearCouplingOperator:0']
     inputs = {}
 
     cpo_i = {'dtype': 'float32',
@@ -205,13 +207,10 @@ def test_network_def_workaround():
               'output': 'V'}
     # assert dict(nd.nodes["JR_PC:0"]) == JR_PC
     node = nd.nodes["JR_PC:0"]
-    edge = {'operator_args': {'LC/c': {'dtype': 'int32', 'shape': (), 'value': 108.0, 'vtype': 'constant'},
-                              'LC/m_in': {'name': 'JansenRitExcitatorySynapseRCO:0/m_in', 'vtype': 'target_var'},
-                              'LC/m_out': {'name': 'JansenRitExcitatorySynapseRCO:0/m_out', 'vtype': 'source_var'}},
-            'operator_order': ['LC'],
-            'operators': {'LC': {'equation': ['m_in = c * m_out'],
-                                 'inputs': {'m_out': {'reduce_dim': True, 'source': []}},
-                                 'output': 'm_in'}}}
+    edge = {'delay': 0,
+            'source_var': 'LinearCouplingOperator:0/m_in',
+            'target_var': 'JansenRitExcitatorySynapseRCO:0/m_in',
+            'weight': 108.0}
     assert node["operator_order"] == operator_order
     assert node["inputs"] == inputs
     assert node["operator_args"]['JansenRitCPO:0/I'] == cpo_i

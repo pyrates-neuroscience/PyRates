@@ -28,8 +28,6 @@ class Circuit(MultiDiGraph):
     """Custom graph datastructure that represents a network of nodes and edges with associated equations
     and variables."""
 
-    label_cache = {}
-
     def __init__(self, label: str, nodes: dict = None,
                  edge_templates: Dict[str, EdgeTemplate] = None,
                  edges: list = None, template: str = None, **attr):
@@ -50,6 +48,7 @@ class Circuit(MultiDiGraph):
 
         super().__init__(**attr)
         self.label = label
+        self.label_cache = {}
         self.template = template
 
         label_map = self.add_nodes_from(nodes, from_templates=True)
@@ -94,7 +93,7 @@ class Circuit(MultiDiGraph):
             node_list = []
             for label, template in nodes.items():
                 # ensure label uniqueness
-                node_list.append((label_map[label], {"node": template.apply()}))
+                node_list.append((label_map[label], template.apply()))
                 # assuming unique labels
             super().add_nodes_from(node_list, **attr)
         else:  # default networkx behaviour
@@ -157,7 +156,7 @@ class Circuit(MultiDiGraph):
                                                                            edge_type["operators"])
 
                 edge_list.append((source, target,  # edge_unique_key,
-                                  {"edge_type": edge_type,
+                                  {**edge_type,
                                    # "target_operator": target_operator,
                                    "weight": weight,
                                    "delay": delay,
@@ -203,7 +202,7 @@ class Circuit(MultiDiGraph):
         # multiple input operations are possible, as long as they require the same singular input variable
         in_var = set()
         for op_key in in_op:
-            for var in op_graph.nodes[op_key]["operator"]["inputs"]:
+            for var in op_graph.nodes[op_key]["inputs"]:
                 in_var.add(var)
 
         if len(in_var) != 1:
@@ -214,9 +213,9 @@ class Circuit(MultiDiGraph):
 
         # collect all output variables
         source_out_vars = {}  # type: Dict[str, list]
-        source_op_graph = self.nodes[source]["node"]["operators"]
+        source_op_graph = self.nodes[source]["operators"]
         for op_key, data in source_op_graph.nodes(data=True):
-            out_var = data["operator"]["output"]
+            out_var = data["output"]
             if out_var not in source_out_vars:
                 source_out_vars[out_var] = []
 
@@ -232,7 +231,7 @@ class Circuit(MultiDiGraph):
         source_path = f"{source_out_op}/{source_var}"
         # note source variable and operator as input in input operators
         for op in in_op:
-            op_graph.nodes[op]["operator"]["inputs"][source_var]["source"].append(source_path)
+            op_graph.nodes[op]["inputs"][source_var]["source"].append(source_path)
             # this should be transmitted back as a side effect, since op_graph references the actual DiGraph instance
 
         # 2: get reference for target variable
@@ -248,10 +247,10 @@ class Circuit(MultiDiGraph):
             raise PyRatesException("Too many or too little output operators found. Exactly one output operator and "
                                    "associated output variable is required per edge.")
 
-        target_var = op_graph.nodes[out_op[0]]["operator"]["output"]
-        target_op_graph = self.nodes[target]["node"]["operators"]
+        target_var = op_graph.nodes[out_op[0]]["output"]
+        target_op_graph = self.nodes[target]["operators"]
         target_op_name = f"{target_operator.split('.')[-1]}:0"
-        target_op = target_op_graph.nodes[target_op_name]["operator"]
+        target_op = target_op_graph.nodes[target_op_name]
 
         if target_var not in target_op["inputs"]:
             raise PyRatesException(f"Could not find target variable {target_var} in target operator {target_op_name}  "
@@ -289,12 +288,12 @@ class Circuit(MultiDiGraph):
     #         raise ValueError("Too many input variables defined in `input_var`. "
     #                          "Edges only accept one input variable.")
     #     # step 1: find source output variable
-    #     assert self.nodes[source]["node"]["output"] == input_var[0]
+    #     assert self.nodes[source]["output"] == input_var[0]
     #
     #     # step 2: find target input variable
-    #     target_node = self.nodes[target]["node"]
+    #     target_node = self.nodes[target]
     #     # hard-coded variant of operator instance key with no additional options applied
-    #     target_op = target_node["operators"][(target_operator, None)]["operator"]
+    #     target_op = target_node["operators"][(target_operator, None)]
     #     assert output_var in target_op["inputs"]  # could be replaced by target_node["inputs"],
     #     # if it contained info about operators
 
@@ -313,16 +312,16 @@ class Circuit(MultiDiGraph):
         for node_key, data in self.nodes(data=True):
             # reformat all node internals into operators + operator_args
             node_dict[node_key] = {}  # type: Dict[str, Union[dict, list]]
-            node_dict[node_key] = dict(self._nd_reformat_operators(data["node"]))
-            op_order = self._nd_get_operator_order(data["node"]["operators"])  # type: list
+            node_dict[node_key] = dict(self._nd_reformat_operators(data))
+            op_order = self._nd_get_operator_order(data["operators"])  # type: list
             node_dict[node_key]["operator_order"] = op_order
 
         # reorganize edge to conform with backend API
         #############################################
         for source, target, data in self.edges(data=True):
             # reformat all edge internals into operators + operator_args
-            op_data = self._nd_reformat_operators(data["edge_type"])
-            op_order = self._nd_get_operator_order(data["edge_type"]["operators"])
+            op_data = self._nd_reformat_operators(data)
+            op_order = self._nd_get_operator_order(data["operators"])
 
             # move edge operators to nodes
             # using dictionary update method, assuming no conflicts in operator names
@@ -337,9 +336,9 @@ class Circuit(MultiDiGraph):
 
             # simplify edges and save into edge_list
             # find single output operator to save new reference to source variable after reformatting
-            op_graph = data["edge_type"]["operators"]
+            op_graph = data["operators"]
             out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]
-            out_var = op_graph.nodes[out_op[0]]["operator"]["output"]
+            out_var = op_graph.nodes[out_op[0]]["output"]
             source_var = f"{out_op[0]}/{out_var}"
 
             edge_list.append((source, target, {"source_var": source_var,
@@ -360,7 +359,7 @@ class Circuit(MultiDiGraph):
         operators = dict()
 
         for op_key, op_dict in data["operators"].nodes(data=True):
-            op_cp = deepcopy(op_dict["operator"])  # duplicate operator info
+            op_cp = deepcopy(op_dict)  # duplicate operator info
 
             var_dict = op_cp.pop("variables")
 
@@ -380,6 +379,7 @@ class Circuit(MultiDiGraph):
                 operator_args[f"{op_key}/{var_key}"] = deepcopy(var_prop_cp)
 
             op_cp["equations"] = op_cp.pop("equation")
+            op_cp.pop("values", None)
             operators[op_key] = op_cp
 
         reformatted = dict(operator_args=operator_args,

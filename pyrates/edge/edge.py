@@ -58,7 +58,7 @@ class Edge(object):
         """
 
         self.operator = coupling_op
-        self.key = key if key else 'edge0'
+        self.key = key if key else 'edge'
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
 
         with self.tf_graph.as_default():
