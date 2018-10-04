@@ -4,7 +4,7 @@ manages all computations/operations and a networkx graph that represents the net
 
 # external imports
 import tensorflow as tf
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union, List
 from pandas import DataFrame
 import time as t
 import numpy as np
@@ -12,8 +12,7 @@ from networkx import MultiDiGraph
 from copy import deepcopy
 
 # pyrates imports
-from pyrates.node import Node
-from pyrates.edge import Edge
+from pyrates.parser import parse_dict, parse_equation
 
 # meta infos
 __author__ = "Richard Gast, Karim Ahmed"
@@ -132,82 +131,399 @@ class Network(MultiDiGraph):
                                                'value': self.dt}
 
                     # add node to network
-                    node = self.add_node(n=node_name,
-                                         node_ops=node_info['operators'],
-                                         node_args=node_args,
-                                         node_op_order=node_info['op_order'])
+                    self.add_node(n=node_name,
+                                  ops=node_info['operators'],
+                                  op_args=node_args,
+                                  op_order=node_info['op_order'])
 
                     # collect update operation of node
-                    node_updates.append(node.step)
+                    node_updates.append(self.nodes[node_name]['update'])
 
                 # group the update operations of all nodes
-                self.step = tf.tuple(node_updates, name='update')
+                self.step = tf.tuple(node_updates, name='network_nodes_update')
 
                 # initialize edges
                 ##################
 
                 with tf.control_dependencies(self.step):
 
-                    projections = []
+                    edge_updates = []
 
-                    for source_name, target_name, edge_name in net_config.edges:
-
-                        # add simulation step-size to edge arguments
-                        edge_info = net_config.edges[source_name, target_name, edge_name]
-                        edge_args = edge_info['operator_args']
-                        edge_args['all_ops/dt'] = {'vtype': 'raw',
-                                                   'value': self.dt}
+                    for source_name, target_name, edge_idx in net_config.edges:
 
                         # add edge to network
-                        edge = self.add_edge(u=source_name,
-                                             v=target_name,
-                                             coupling_op=edge_info['operators'],
-                                             coupling_op_args=edge_args,
-                                             coupling_op_order=edge_info['op_order'],
-                                             key=edge_name)
+                        edge_info = net_config.edges[source_name, target_name, edge_idx]
+                        self.add_edge(u=source_name,
+                                      v=target_name,
+                                      delay=edge_info['delay'],
+                                      weight=edge_info['weight'])
 
                         # collect project operation of edge
-                        projections.append(edge.project)
+                        edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
 
                     # group project operations of all edges
-                    if len(projections) > 0:
-                        self.step = tf.tuple(projections, name='step')
+                    if len(edge_updates) > 0:
+                        self.step = tf.tuple(edge_updates, name='network_update')
 
-    def add_node(self, n, node_ops, node_args, node_op_order, key=None):
+    def add_node(self, n: str, ops: dict, op_args: dict, op_order: list) -> None:
+        """
 
-        # instantiate node
-        node = Node(operations=node_ops,
-                    operation_args=node_args,
-                    op_order=node_op_order,
-                    key=n,
-                    tf_graph=self.tf_graph)
+        Parameters
+        ----------
+        n
+            Node name.
+        ops
+            Dictionary containing key-value pairs for all operators on the node.
+        op_args
+            Dictionary containing key-value pairs for all variables used in the operators.
+        op_order
+            List that determines the order in which the operators are created.
 
-        # get node attributes
-        node_attr = dict([(k, v) for k, v in node.items()])
+        Returns
+        -------
+        None
+
+        """
+
+        # add node operations/variables to tensorflow graph
+        ###################################################
+
+        node_attr = {}
+
+        with self.tf_graph.as_default():
+
+            with tf.variable_scope(n):
+
+                # handle operation arguments
+                ############################
+
+                op_args = {}
+
+                # instantiate operations
+                ########################
+
+                tf_ops = []
+                for op_name in op_order:
+
+                    op = ops[op_name]
+
+                    # extract operator-specific arguments from dict
+                    op_args_raw = {}
+                    for key, val in op_args.items():
+                        op_name_tmp, var_name = key.split('/')
+                        if op_name == op_name_tmp or 'all_ops' in op_name_tmp:
+                            op_args_raw[var_name] = val
+
+                    # get tensorflow variables and the variable names from operation_args
+                    tf_vars, var_names = parse_dict(var_dict=op_args_raw,
+                                                    var_scope=op_name,
+                                                    tf_graph=self.tf_graph)
+
+                    # bind tensorflow variables to node and save them in dictionary for the operator class
+                    op_args_tf = {}
+                    for tf_var, var_name in zip(tf_vars, var_names):
+                        node_attr.update({f'{op_name}/{var_name}': tf_var})
+                        op_args_tf[var_name] = {'var': tf_var, 'dependency': False}
+
+                    # set input dependencies
+                    ########################
+
+                    for var_name, inp in op['inputs'].items():
+
+                        # collect input variable calculation operations
+                        out_ops = []
+                        out_vars = []
+                        out_var_idx = []
+
+                        # go through inputs to variable
+                        for i, inp_op in enumerate(inp['sources']):
+
+                            if type(inp_op) is list and len(inp_op) == 1:
+                                inp_op = inp_op[0]
+
+                            # collect output variable and operation of the input operator(s)
+                            ################################################################
+
+                            # for a single input operator
+                            if type(inp_op) is str:
+
+                                # get name and extract index from it if necessary
+                                out_name = ops[inp_op]['output']
+                                if '[' in out_name:
+                                    idx_start, idx_stop = out_name.find('['), out_name.find(']')
+                                    out_var_idx.append(out_name[idx_start + 1:idx_stop])
+                                    out_var = f"{inp_op}/{out_name[:idx_start]}"
+                                else:
+                                    out_var_idx.append(None)
+                                    out_var = f"{inp_op}/{out_name}"
+                                if out_var not in op_args.keys():
+                                    raise ValueError(f"Invalid dependencies found in operator: {op['equations']}. Input"
+                                                     f" Variable {var_name} has not been calculated yet.")
+
+                                # append variable and operation to list
+                                out_ops.append(op_args[out_var]['op'])
+                                out_vars.append(op_args[out_var]['var'])
+
+                            # for multiple input operators
+                            else:
+
+                                out_vars_tmp = []
+                                out_var_idx_tmp = []
+                                out_ops_tmp = []
+
+                                for inp_op_tmp in inp_op:
+
+                                    # get name and extract index from it if necessary
+                                    out_name = ops[inp_op_tmp]['output']
+                                    if '[' in out_name:
+                                        idx_start, idx_stop = out_name.find('['), out_name.find(']')
+                                        out_var_idx.append(out_name[idx_start + 1:idx_stop])
+                                        out_var = f"{inp_op_tmp}/{out_name[:idx_start]}"
+                                    else:
+                                        out_var_idx_tmp.append(None)
+                                        out_var = f"{inp_op_tmp}/{out_name}"
+                                    if out_var not in op_args.keys():
+                                        raise ValueError(
+                                            f"Invalid dependencies found in operator: {op['equations']}. Input"
+                                            f" Variable {var_name} has not been calculated yet.")
+                                    out_ops_tmp.append(op_args[out_var]['op'])
+                                    out_vars_tmp.append(op_args[out_var]['var'])
+
+                                # add tensorflow operations for grouping the inputs together
+                                tf_var_tmp = tf.parallel_stack(out_vars_tmp)
+                                if inp['reduce_dim'][i]:
+                                    tf_var_tmp = tf.reduce_sum(tf_var_tmp, 0)
+                                else:
+                                    tf_var_tmp = tf.reshape(tf_var_tmp,
+                                                            shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
+
+                                # append variable and operation to list
+                                out_vars.append(tf_var_tmp)
+                                out_var_idx.append(out_var_idx_tmp)
+                                out_ops.append(tf.group(out_ops_tmp))
+
+                        # add inputs to argument dictionary (in reduced or stacked form)
+                        ################################################################
+
+                        # for multiple multiple input operations
+                        if len(out_vars) > 1:
+
+                            # find shape of smallest input variable
+                            min_shape = min([outvar.shape[0] for outvar in out_vars])
+
+                            # append inpout variables to list and reshape them if necessary
+                            out_vars_new = []
+                            for out_var in out_vars:
+
+                                shape = out_var.shape[0]
+
+                                if shape > min_shape:
+                                    if shape % min_shape != 0:
+                                        raise ValueError(f"Shapes of inputs do not match: "
+                                                         f"{inp['sources']} cannot be stacked.")
+                                    multiplier = shape // min_shape
+                                    for j in range(multiplier):
+                                        out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
+                                else:
+                                    out_vars_new.append(out_var)
+
+                            # stack input variables or sum them up
+                            tf_var = tf.parallel_stack(out_vars_new)
+                            if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
+                                tf_var = tf.reduce_sum(tf_var, 0)
+                            else:
+                                tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
+
+                            tf_op = tf.group(out_ops)
+
+                        # for a single input variable
+                        else:
+
+                            tf_var = out_vars[0]
+                            tf_op = out_ops[0]
+
+                        # add input variable information to argument dictionary
+                        op_args_tf[var_name] = {'dependency': True,
+                                                'var': tf_var,
+                                                'op': tf_op}
+
+                    # create tensorflow operator
+                    tf_op_new, op_args_tf = self.add_operator(expressions=op['equations'],
+                                                              expression_args=op_args_tf,
+                                                              variable_scope=op_name)
+                    tf_ops.append(tf_op_new)
+
+                    # bind newly created tf variables to node
+                    for var_name, tf_var in op_args_tf.items():
+                        if not hasattr(node_attr, var_name):
+                            node_attr.update({var_name: tf_var['var']})
+                        op_args[f'{op_name}/{var_name}'] = tf_var
+
+                    # handle dependencies
+                    op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops[-1]
+                    for arg in op_args.values():
+                        arg['dependency'] = False
+
+                # group tensorflow versions of all operators to a single 'step' operation
+                node_attr.update({'step': tf.group(tf_ops, name=f"{self.key}_step")})
 
         # call super method
         super().add_node(n, **node_attr)
 
-        return node
+    def add_edge(self, u: str, v: str,
+                 source_op: str,
+                 target_var: str,
+                 source_to_edge_map: Optional[np.ndarray] = None,
+                 edge_to_target_map: Optional[np.ndarray] = None,
+                 weight: Optional[Union[float, list, np.ndarray]] = 1.,
+                 delay: Optional[Union[float, list, np.ndarray]] = 0.
+                 ) -> None:
+        """Add edge to the network that connects two variables from a source and a target node.
 
-    def add_edge(self, u, v, coupling_op, coupling_op_args, coupling_op_order, key=None):
+        Parameters
+        ----------
+        u
+            Name of source node.
+        v
+            Name of target node.
+        source_op
+            Name of the output operator on the source node
+        target_var
+            Name of the target variable on the target node
+        weight
+            Weighting constant that will be applied to the source output.
+        delay
+            Time that it takes for the source output to arrive at the target.
 
-        # create edge
-        edge = Edge(source=self.nodes[u],
-                    target=self.nodes[v],
-                    coupling_ops=coupling_op,
-                    coupling_op_args=coupling_op_args,
-                    coupling_op_order=coupling_op_order,
-                    tf_graph=self.tf_graph,
-                    key=key)
+        Returns
+        -------
+        None
 
-        # get edge attributes
-        edge_attr = dict([(k, v) for k, v in edge.items()])
+        """
 
-        # call super method
-        super().add_edge(u, v, **edge_attr)
+        edge_attr = {}
 
-        return edge
+        # extract variables from source and target
+        ##########################################
+
+        source, target = self.nodes[u], self.nodes[v]
+
+        # get source variable
+        source_var_name = source['operators'][source_op]['output']
+        source_var_tf = source['operator_args'][f"{source_op}/{source_var_name}"]
+
+        # get target variable
+        target_var_tf = target['operator_args'][target_var]
+
+        # add projection operator of edge to tensorflow graph
+        #####################################################
+
+        with self.tf_graph.as_default():
+
+            # set variable scope of edge
+            edge_idx = len(self.edges[u, v])
+            with tf.variable_scope(f'{u}_{v}_{edge_idx}'):
+
+                # create edge operator dictionary
+                source_to_edge_mapping = "" if source_to_edge_map is None else "smap @ "
+                edge_to_target_mapping = "" if edge_to_target_map is None else "tmap @ "
+                _, target_var_name = target_var.split('/')
+                op = {'equations': [f"tvar[d] = {edge_to_target_mapping}"
+                                    f"( c * {source_to_edge_mapping} svar)"],
+                      'inputs': {},
+                      'output': target_var}
+
+                # create edge operator arguments dictionary
+                op_args = {'c': {'vtype': 'constant',
+                                 'dtype': 'float32',
+                                 'shape': np.array(weight).shape,
+                                 'value': weight},
+                           'd': {'vtype': 'constant',
+                                 'dtype': 'float32',
+                                 'shape': np.array(delay).shape,
+                                 'value': delay},
+                           }
+                if source_to_edge_map is not None:
+                    op_args['smap'] = {'vtype': 'constant_sparse',
+                                       'dtype': 'float32',
+                                       'shape': source_to_edge_map.shape,
+                                       'value': source_to_edge_map}
+                if edge_to_target_map is not None:
+                    op_args['tmap'] = {'vtype': 'constant_sparse',
+                                       'dtype': 'float32',
+                                       'shape': edge_to_target_map.shape,
+                                       'value': edge_to_target_map}
+
+                # parse into tensorflow graph
+                op_args_tf = parse_dict(op_args, self.tf_graph)
+
+                # add source and target variables
+                op_args_tf['tvar'] = {'vtype': 'target_var',
+                                      'name': target_var_name}
+                op_args_tf['svar'] = {'vtype': 'source_var',
+                                      'name': source_var_name}
+
+                # add operator to tensorflow graph
+                tf_op = self.add_operator(op['equations'], op_args, 'coupling_op')
+
+        # add edge to networkx graph
+        ############################
+
+        super().add_edge(u, v, update=tf_op, **edge_attr)
+
+    def add_operator(self, expressions: List[str], expression_args: dict, variable_scope: str
+                     ) -> Tuple[Union[tf.Tensor, tf.Variable, tf.Operation], dict]:
+        """
+
+        Parameters
+        ----------
+        expressions
+            String-based representations of operator's equations.
+        expression_args
+            Key-value pairs of operator's variables.
+        variable_scope
+            Operator name.
+
+        Returns
+        -------
+        Tuple[Union[tf.Tensor, tf.Variable, tf.Operation], dict]
+
+        """
+
+        # add mathematical evaluations of each operator expression to the tensorflow graph
+        ##################################################################################
+
+        evals = []
+
+        with self.tf_graph.as_default():
+
+            # set variable scope
+            with tf.variable_scope(variable_scope):
+
+                # go through mathematical equations
+                for i, expr in enumerate(expressions):
+
+                    # parse equation
+                    update, expression_args = parse_equation(expr, expression_args, tf_graph=self.tf_graph)
+
+                    # store tensorflow operation in list
+                    evals.append(update)
+
+                # check which rhs evaluations still have to be assigned to their lhs variable
+                evals_complete = []
+                evals_uncomplete = []
+                for ev in evals:
+                    if ev[1] is None:
+                        evals_complete.append(ev[0])
+                    else:
+                        evals_uncomplete.append(ev)
+
+                # group the tensorflow operations across expressions
+                with tf.control_dependencies(evals_complete):
+                    for ev in evals_uncomplete:
+                        evals_complete.append(ev[0].assign(ev[1]))
+
+            return tf.group(evals_complete, name=f'{variable_scope}_eval')
 
     def vectorize(self, net_config: MultiDiGraph, first_lvl_vec: bool = True, second_lvl_vec: bool=True
                   ) -> MultiDiGraph:
