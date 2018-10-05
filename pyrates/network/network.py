@@ -70,6 +70,8 @@ class Network(MultiDiGraph):
 
     Attributes
     ----------
+    node_arg_map
+        Used internally for vectorization.
 
     Methods
     -------
@@ -104,6 +106,7 @@ class Network(MultiDiGraph):
         self.dt = dt
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
         self.states = []
+        self.node_arg_map = {}
 
         # vectorize passed dictionaries
         ###############################
@@ -131,7 +134,7 @@ class Network(MultiDiGraph):
                                                'value': self.dt}
 
                     # add node to network
-                    self.add_node(n=node_name,
+                    self.add_node(node=node_name,
                                   ops=node_info['operators'],
                                   op_args=node_args,
                                   op_order=node_info['op_order'])
@@ -153,10 +156,9 @@ class Network(MultiDiGraph):
 
                         # add edge to network
                         edge_info = net_config.edges[source_name, target_name, edge_idx]
-                        self.add_edge(u=source_name,
-                                      v=target_name,
-                                      delay=edge_info['delay'],
-                                      weight=edge_info['weight'])
+                        self.add_edge(source_node=source_name,
+                                      target_node=target_name,
+                                      **edge_info)
 
                         # collect project operation of edge
                         edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
@@ -165,12 +167,12 @@ class Network(MultiDiGraph):
                     if len(edge_updates) > 0:
                         self.step = tf.tuple(edge_updates, name='network_update')
 
-    def add_node(self, n: str, ops: dict, op_args: dict, op_order: list) -> None:
+    def add_node(self, node: str, ops: dict, op_args: dict, op_order: list) -> None:
         """
 
         Parameters
         ----------
-        n
+        node
             Node name.
         ops
             Dictionary containing key-value pairs for all operators on the node.
@@ -192,186 +194,185 @@ class Network(MultiDiGraph):
 
         with self.tf_graph.as_default():
 
-            with tf.variable_scope(n):
-
-                # handle operation arguments
-                ############################
-
-                op_args = {}
-
-                # instantiate operations
-                ########################
+            # initialize variable scope of node
+            with tf.variable_scope(node):
 
                 tf_ops = []
+
+                # go through operations
                 for op_name in op_order:
 
-                    op = ops[op_name]
+                    # intialize variable scope of operator
+                    with tf.variable_scope(op_name):
 
-                    # extract operator-specific arguments from dict
-                    op_args_raw = {}
-                    for key, val in op_args.items():
-                        op_name_tmp, var_name = key.split('/')
-                        if op_name == op_name_tmp or 'all_ops' in op_name_tmp:
-                            op_args_raw[var_name] = val
+                        op = ops[op_name]
 
-                    # get tensorflow variables and the variable names from operation_args
-                    tf_vars, var_names = parse_dict(var_dict=op_args_raw,
-                                                    var_scope=op_name,
-                                                    tf_graph=self.tf_graph)
+                        # extract operator-specific arguments from dict
+                        op_args_raw = {}
+                        for key, val in op_args.items():
+                            op_name_tmp, var_name = key.split('/')
+                            if op_name == op_name_tmp or 'all_ops' in op_name_tmp:
+                                op_args_raw[var_name] = val
 
-                    # bind tensorflow variables to node and save them in dictionary for the operator class
-                    op_args_tf = {}
-                    for tf_var, var_name in zip(tf_vars, var_names):
-                        node_attr.update({f'{op_name}/{var_name}': tf_var})
-                        op_args_tf[var_name] = {'var': tf_var, 'dependency': False}
+                        # get tensorflow variables and the variable names from operation_args
+                        op_args_tf = parse_dict(var_dict=op_args_raw,
+                                                tf_graph=self.tf_graph)
 
-                    # set input dependencies
-                    ########################
+                        # bind tensorflow variables to node
+                        for var_name, var in op_args_tf.items():
+                            node_attr.update({f'{op_name}/{var_name}': var})
+                            op_args_tf[var_name] = {'var': var, 'dependency': False}
 
-                    for var_name, inp in op['inputs'].items():
+                        # set input dependencies
+                        ########################
 
-                        # collect input variable calculation operations
-                        out_ops = []
-                        out_vars = []
-                        out_var_idx = []
+                        for var_name, inp in op['inputs'].items():
 
-                        # go through inputs to variable
-                        for i, inp_op in enumerate(inp['sources']):
+                            # collect input variable calculation operations
+                            out_ops = []
+                            out_vars = []
+                            out_var_idx = []
 
-                            if type(inp_op) is list and len(inp_op) == 1:
-                                inp_op = inp_op[0]
+                            # go through inputs to variable
+                            for i, inp_op in enumerate(inp['sources']):
 
-                            # collect output variable and operation of the input operator(s)
-                            ################################################################
+                                if type(inp_op) is list and len(inp_op) == 1:
+                                    inp_op = inp_op[0]
 
-                            # for a single input operator
-                            if type(inp_op) is str:
+                                # collect output variable and operation of the input operator(s)
+                                ################################################################
 
-                                # get name and extract index from it if necessary
-                                out_name = ops[inp_op]['output']
-                                if '[' in out_name:
-                                    idx_start, idx_stop = out_name.find('['), out_name.find(']')
-                                    out_var_idx.append(out_name[idx_start + 1:idx_stop])
-                                    out_var = f"{inp_op}/{out_name[:idx_start]}"
-                                else:
-                                    out_var_idx.append(None)
-                                    out_var = f"{inp_op}/{out_name}"
-                                if out_var not in op_args.keys():
-                                    raise ValueError(f"Invalid dependencies found in operator: {op['equations']}. Input"
-                                                     f" Variable {var_name} has not been calculated yet.")
-
-                                # append variable and operation to list
-                                out_ops.append(op_args[out_var]['op'])
-                                out_vars.append(op_args[out_var]['var'])
-
-                            # for multiple input operators
-                            else:
-
-                                out_vars_tmp = []
-                                out_var_idx_tmp = []
-                                out_ops_tmp = []
-
-                                for inp_op_tmp in inp_op:
+                                # for a single input operator
+                                if type(inp_op) is str:
 
                                     # get name and extract index from it if necessary
-                                    out_name = ops[inp_op_tmp]['output']
+                                    out_name = ops[inp_op]['output']
                                     if '[' in out_name:
                                         idx_start, idx_stop = out_name.find('['), out_name.find(']')
                                         out_var_idx.append(out_name[idx_start + 1:idx_stop])
-                                        out_var = f"{inp_op_tmp}/{out_name[:idx_start]}"
+                                        out_var = f"{inp_op}/{out_name[:idx_start]}"
                                     else:
-                                        out_var_idx_tmp.append(None)
-                                        out_var = f"{inp_op_tmp}/{out_name}"
+                                        out_var_idx.append(None)
+                                        out_var = f"{inp_op}/{out_name}"
                                     if out_var not in op_args.keys():
-                                        raise ValueError(
-                                            f"Invalid dependencies found in operator: {op['equations']}. Input"
-                                            f" Variable {var_name} has not been calculated yet.")
-                                    out_ops_tmp.append(op_args[out_var]['op'])
-                                    out_vars_tmp.append(op_args[out_var]['var'])
+                                        raise ValueError(f"Invalid dependencies found in operator: {op['equations']}. Input"
+                                                         f" Variable {var_name} has not been calculated yet.")
 
-                                # add tensorflow operations for grouping the inputs together
-                                tf_var_tmp = tf.parallel_stack(out_vars_tmp)
-                                if inp['reduce_dim'][i]:
-                                    tf_var_tmp = tf.reduce_sum(tf_var_tmp, 0)
+                                    # append variable and operation to list
+                                    out_ops.append(op_args[out_var]['op'])
+                                    out_vars.append(op_args[out_var]['var'])
+
+                                # for multiple input operators
                                 else:
-                                    tf_var_tmp = tf.reshape(tf_var_tmp,
-                                                            shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
 
-                                # append variable and operation to list
-                                out_vars.append(tf_var_tmp)
-                                out_var_idx.append(out_var_idx_tmp)
-                                out_ops.append(tf.group(out_ops_tmp))
+                                    out_vars_tmp = []
+                                    out_var_idx_tmp = []
+                                    out_ops_tmp = []
 
-                        # add inputs to argument dictionary (in reduced or stacked form)
-                        ################################################################
+                                    for inp_op_tmp in inp_op:
 
-                        # for multiple multiple input operations
-                        if len(out_vars) > 1:
+                                        # get name and extract index from it if necessary
+                                        out_name = ops[inp_op_tmp]['output']
+                                        if '[' in out_name:
+                                            idx_start, idx_stop = out_name.find('['), out_name.find(']')
+                                            out_var_idx.append(out_name[idx_start + 1:idx_stop])
+                                            out_var = f"{inp_op_tmp}/{out_name[:idx_start]}"
+                                        else:
+                                            out_var_idx_tmp.append(None)
+                                            out_var = f"{inp_op_tmp}/{out_name}"
+                                        if out_var not in op_args.keys():
+                                            raise ValueError(
+                                                f"Invalid dependencies found in operator: {op['equations']}. Input"
+                                                f" Variable {var_name} has not been calculated yet.")
+                                        out_ops_tmp.append(op_args[out_var]['op'])
+                                        out_vars_tmp.append(op_args[out_var]['var'])
 
-                            # find shape of smallest input variable
-                            min_shape = min([outvar.shape[0] for outvar in out_vars])
+                                    # add tensorflow operations for grouping the inputs together
+                                    tf_var_tmp = tf.parallel_stack(out_vars_tmp)
+                                    if inp['reduce_dim'][i]:
+                                        tf_var_tmp = tf.reduce_sum(tf_var_tmp, 0)
+                                    else:
+                                        tf_var_tmp = tf.reshape(tf_var_tmp,
+                                                                shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
 
-                            # append inpout variables to list and reshape them if necessary
-                            out_vars_new = []
-                            for out_var in out_vars:
+                                    # append variable and operation to list
+                                    out_vars.append(tf_var_tmp)
+                                    out_var_idx.append(out_var_idx_tmp)
+                                    out_ops.append(tf.group(out_ops_tmp))
 
-                                shape = out_var.shape[0]
+                            # add inputs to argument dictionary (in reduced or stacked form)
+                            ################################################################
 
-                                if shape > min_shape:
-                                    if shape % min_shape != 0:
-                                        raise ValueError(f"Shapes of inputs do not match: "
-                                                         f"{inp['sources']} cannot be stacked.")
-                                    multiplier = shape // min_shape
-                                    for j in range(multiplier):
-                                        out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
+                            # for multiple multiple input operations
+                            if len(out_vars) > 1:
+
+                                # find shape of smallest input variable
+                                min_shape = min([outvar.shape[0] if len(outvar.shape) > 0 else 0 for outvar in out_vars])
+
+                                # append inpout variables to list and reshape them if necessary
+                                out_vars_new = []
+                                for out_var in out_vars:
+
+                                    shape = out_var.shape[0] if len(out_var.shape) > 0 else 0
+
+                                    if shape > min_shape:
+                                        if shape % min_shape != 0:
+                                            raise ValueError(f"Shapes of inputs do not match: "
+                                                             f"{inp['sources']} cannot be stacked.")
+                                        multiplier = shape // min_shape
+                                        for j in range(multiplier):
+                                            out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
+                                    else:
+                                        out_vars_new.append(out_var)
+
+                                # stack input variables or sum them up
+                                tf_var = tf.parallel_stack(out_vars_new)
+                                if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
+                                    tf_var = tf.reduce_sum(tf_var, 0)
                                 else:
-                                    out_vars_new.append(out_var)
+                                    tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
 
-                            # stack input variables or sum them up
-                            tf_var = tf.parallel_stack(out_vars_new)
-                            if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
-                                tf_var = tf.reduce_sum(tf_var, 0)
+                                tf_op = tf.group(out_ops)
+
+                            # for a single input variable
                             else:
-                                tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
 
-                            tf_op = tf.group(out_ops)
+                                tf_var = out_vars[0]
+                                tf_op = out_ops[0]
 
-                        # for a single input variable
-                        else:
+                            # add input variable information to argument dictionary
+                            op_args_tf[var_name] = {'dependency': True,
+                                                    'var': tf_var,
+                                                    'op': tf_op}
 
-                            tf_var = out_vars[0]
-                            tf_op = out_ops[0]
+                        # create tensorflow operator
+                        tf_op_new, op_args_tf = self.add_operator(expressions=op['equations'],
+                                                                  expression_args=op_args_tf,
+                                                                  variable_scope=op_name)
+                        tf_ops.append(tf_op_new)
 
-                        # add input variable information to argument dictionary
-                        op_args_tf[var_name] = {'dependency': True,
-                                                'var': tf_var,
-                                                'op': tf_op}
+                        # bind newly created tf variables to node
+                        for var_name, tf_var in op_args_tf.items():
+                            attr_name = f"{op_name}/{var_name}"
+                            if attr_name not in node_attr.keys():
+                                node_attr[attr_name] = tf_var['var']
+                            op_args[attr_name] = tf_var
 
-                    # create tensorflow operator
-                    tf_op_new, op_args_tf = self.add_operator(expressions=op['equations'],
-                                                              expression_args=op_args_tf,
-                                                              variable_scope=op_name)
-                    tf_ops.append(tf_op_new)
-
-                    # bind newly created tf variables to node
-                    for var_name, tf_var in op_args_tf.items():
-                        if not hasattr(node_attr, var_name):
-                            node_attr.update({var_name: tf_var['var']})
-                        op_args[f'{op_name}/{var_name}'] = tf_var
-
-                    # handle dependencies
-                    op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops[-1]
-                    for arg in op_args.values():
-                        arg['dependency'] = False
+                        # handle dependencies
+                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops[-1]
+                        for arg in op_args.values():
+                            arg['dependency'] = False
 
                 # group tensorflow versions of all operators to a single 'step' operation
-                node_attr.update({'step': tf.group(tf_ops, name=f"{self.key}_step")})
+                node_attr['update'] = tf.group(tf_ops, name=f"{self.key}_update")
 
         # call super method
-        super().add_node(n, **node_attr)
+        super().add_node(node, **node_attr)
 
-    def add_edge(self, u: str, v: str,
-                 source_op: str,
+    def add_edge(self,
+                 source_node: str,
+                 target_node: str,
+                 source_var: str,
                  target_var: str,
                  source_to_edge_map: Optional[np.ndarray] = None,
                  edge_to_target_map: Optional[np.ndarray] = None,
@@ -382,14 +383,14 @@ class Network(MultiDiGraph):
 
         Parameters
         ----------
-        u
+        source_node
             Name of source node.
-        v
+        target_node
             Name of target node.
-        source_op
-            Name of the output operator on the source node
+        source_var
+            Name of the output variable on the source node (including the operator name).
         target_var
-            Name of the target variable on the target node
+            Name of the target variable on the target node (including the operator name).
         weight
             Weighting constant that will be applied to the source output.
         delay
@@ -401,34 +402,31 @@ class Network(MultiDiGraph):
 
         """
 
-        edge_attr = {}
-
         # extract variables from source and target
         ##########################################
 
-        source, target = self.nodes[u], self.nodes[v]
+        source, target = self.nodes[source_node], self.nodes[target_node]
 
-        # get source variable
-        source_var_name = source['operators'][source_op]['output']
-        source_var_tf = source['operator_args'][f"{source_op}/{source_var_name}"]
+        # get source and target variables
+        source_var_tf = source[source_var]
+        target_var_tf = target[target_var]
 
-        # get target variable
-        target_var_tf = target['operator_args'][target_var]
-
-        # add projection operator of edge to tensorflow graph
-        #####################################################
+        # add projection operation of edge to tensorflow graph
+        ######################################################
 
         with self.tf_graph.as_default():
 
             # set variable scope of edge
-            edge_idx = len(self.edges[u, v])
-            with tf.variable_scope(f'{u}_{v}_{edge_idx}'):
+            edge_idx = self.number_of_edges(source_node, target_node)
+            with tf.variable_scope(f'{source_node}_{target_node}_{edge_idx}'):
 
                 # create edge operator dictionary
                 source_to_edge_mapping = "" if source_to_edge_map is None else "smap @ "
                 edge_to_target_mapping = "" if edge_to_target_map is None else "tmap @ "
+                weight, delay = np.array(weight), np.array(delay, dtype=np.int32)
                 _, target_var_name = target_var.split('/')
-                op = {'equations': [f"tvar[d] = {edge_to_target_mapping}"
+                delay_idx = "" if np.sum(delay) == 0 else "[d]"
+                op = {'equations': [f"tvar{delay_idx} = {edge_to_target_mapping}"
                                     f"( c * {source_to_edge_mapping} svar)"],
                       'inputs': {},
                       'output': target_var}
@@ -436,11 +434,11 @@ class Network(MultiDiGraph):
                 # create edge operator arguments dictionary
                 op_args = {'c': {'vtype': 'constant',
                                  'dtype': 'float32',
-                                 'shape': np.array(weight).shape,
+                                 'shape': weight.shape,
                                  'value': weight},
                            'd': {'vtype': 'constant',
-                                 'dtype': 'float32',
-                                 'shape': np.array(delay).shape,
+                                 'dtype': 'int32',
+                                 'shape': delay.shape,
                                  'value': delay},
                            }
                 if source_to_edge_map is not None:
@@ -458,18 +456,20 @@ class Network(MultiDiGraph):
                 op_args_tf = parse_dict(op_args, self.tf_graph)
 
                 # add source and target variables
-                op_args_tf['tvar'] = {'vtype': 'target_var',
-                                      'name': target_var_name}
-                op_args_tf['svar'] = {'vtype': 'source_var',
-                                      'name': source_var_name}
+                op_args_tf['tvar'] = target_var_tf
+                op_args_tf['svar'] = source_var_tf
+
+                # bring tensorflow variables in parser format
+                for var_name, var in op_args_tf.items():
+                    op_args_tf[var_name] = {'var': var, 'dependency': False}
 
                 # add operator to tensorflow graph
-                tf_op = self.add_operator(op['equations'], op_args, 'coupling_op')
+                tf_op, op_args_tf = self.add_operator(op['equations'], op_args_tf, 'coupling_op')
 
         # add edge to networkx graph
         ############################
 
-        super().add_edge(u, v, update=tf_op, **edge_attr)
+        super().add_edge(source_node, target_node, update=tf_op, **op_args_tf)
 
     def add_operator(self, expressions: List[str], expression_args: dict, variable_scope: str
                      ) -> Tuple[Union[tf.Tensor, tf.Variable, tf.Operation], dict]:
@@ -523,7 +523,7 @@ class Network(MultiDiGraph):
                     for ev in evals_uncomplete:
                         evals_complete.append(ev[0].assign(ev[1]))
 
-            return tf.group(evals_complete, name=f'{variable_scope}_eval')
+            return tf.group(evals_complete, name=f'{variable_scope}_eval'), expression_args
 
     def vectorize(self, net_config: MultiDiGraph, first_lvl_vec: bool = True, second_lvl_vec: bool=True
                   ) -> MultiDiGraph:
@@ -545,123 +545,69 @@ class Network(MultiDiGraph):
 
         """
 
-        # First stage: Vectorize over nodes and edges
-        #############################################
+        # First stage: Vectorize over nodes
+        ###################################
 
         if first_lvl_vec:
 
             new_net_config = MultiDiGraph()
 
-            # node vectorization
-            ####################
-
-            # extract node-type related parts of node keys
-            node_keys = []
-            for key in net_config.nodes.keys():
-                node_type, node_name = key.split('/')
-                node_keys.append(node_type)
+            # extract operations existing on each node
+            node_ops = []
+            node_names = []
+            for node_name, node in net_config.nodes.items():
+                node_ops.append(set(node['op_order']))
+                node_names.append(node_name)
 
             # get unique node names
-            node_keys_unique = list(set(node_keys))
+            node_ops_unique = []
+            for node_op in node_ops:
+                if node_op not in node_ops_unique:
+                    node_ops_unique.append(node_op)
 
-            # create new node dict with nodes vectorized over multiples of the unique node keys
-            node_arg_map = {}
-            for new_node in node_keys_unique:
+            # create new nodes that combine all original nodes that have the same operators
+            for node_op_list in node_ops_unique:
 
-                op_args_new = {}
-                n_nodes = 0
-                arg_vals = {}
-                arg_shape = {}
-                op_order_new = []
-                ops_new = {}
+                # collect nodes with a specific set of operators
+                nodes = []
+                i = 0
+                while i < len(node_ops):
+                    node_op_list_tmp = node_ops[i]
+                    if node_op_list_tmp == node_op_list:
+                        nodes.append(node_names.pop(i))
+                        node_ops.pop(i)
+                    else:
+                        i += 1
 
-                # go through old nodes
-                for node_name, node_info in net_config.nodes.items():
+                # vectorize over nodes
+                new_net_config = self.vectorize_nodes(new_net_config=new_net_config,
+                                                      old_net_config=net_config,
+                                                      nodes=nodes)
 
-                    if new_node in node_name:
+            # adjust edges accordingly
+            ##########################
 
-                        node_arg_map[node_name] = {}
+            # go through new nodes
+            for source_new in new_net_config.nodes.keys():
+                for target_new in new_net_config.nodes.keys():
 
-                        # collect information of node operators and arguments
-                        #####################################################
+                    # collect old edges that connect the same source and target variables
+                    edges = []
+                    for source, target, edge in net_config.edges:
+                        if source.split('/')[0] in source_new and target.split('/')[0] in target_new:
+                            edge_tmp = net_config.edges[source, target, edge]
+                            # TODO: implement check for target and source var that are connected (need independent edges)
+                            edges.append((source, target, edge))
 
-                        # use first match to collect operations and operation arguments
-                        if len(op_args_new) == 0:
+                    # vectorize over edges
+                    new_net_config = self.vectorize_edges(edges=edges,
+                                                          source=source_new,
+                                                          target=target_new,
+                                                          new_net_config=new_net_config,
+                                                          old_net_config=net_config)
 
-                            # collect operators, their args and their order
-                            ops_new.update(deepcopy(node_info['operators']))
-                            op_order_new = node_info['op_order']
-                            op_args_new.update(deepcopy(node_info['operator_args']))
-
-                            # collect arguments
-                            for key, arg in op_args_new.items():
-
-                                if 'value' in arg.keys() and 'shape' in arg.keys():
-
-                                    # extract value and shape of argument
-                                    if len(arg['shape']) == 2:
-                                        raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
-                                                         f" cannot be applied to networks with variables of 2 or more"
-                                                         f" dimensions. Variable {key} has shape {arg['shape']}. Please"
-                                                         f" turn of the `vectorize` option.")
-                                    if len(arg['shape']) == 1:
-                                        if type(arg['value']) is float:
-                                            arg['value'] = np.zeros(arg['shape']) + arg['value']
-                                        arg_vals[key] = list(arg['value'])
-                                        arg_shape[key] = tuple(arg['shape'])
-                                    else:
-                                        arg_vals[key] = [arg['value']]
-                                        arg_shape[key] = (1, )
-
-                                    # save position of old argument value in new, vectorized argument
-                                    node_arg_map[node_name][key] = n_nodes
-
-                        # collect shape and value information of other node's arguments
-                        else:
-
-                            for key, arg in op_args_new.items():
-
-                                if 'value' in arg.keys() and 'shape' in arg.keys():
-
-                                    # extract value and shape of argument
-                                    if len(arg['shape']) == 0:
-                                        arg_vals[key].append(arg['value'])
-                                    else:
-                                        if type(arg['value']) is float:
-                                            arg['value'] = list(np.zeros(arg['shape']) + arg['value'])
-                                        arg_vals[key] += arg['value']
-                                        if arg['shape'][0] > arg_shape[key][0]:
-                                            arg_shape[key] = tuple(arg['shape'])
-
-                                    # save position of old argument value in new, vectorized argument
-                                    node_arg_map[node_name][key] = n_nodes
-
-                        # increment node counter
-                        n_nodes += 1
-
-                # go through new arguments and update shape and values
-                for key, arg in op_args_new.items():
-
-                    if 'value' in arg.keys():
-                        arg.update({'value': arg_vals[key]})
-
-                    if 'shape' in arg.keys():
-                        arg.update({'shape': (n_nodes, ) + arg_shape[key]})
-
-                # add new, vectorized node to dictionary
-                if n_nodes > 0:
-                    new_net_config.add_node(new_node,
-                                            operators=ops_new,
-                                            op_order=op_order_new,
-                                            operator_args=op_args_new,
-                                            inputs={})
-
-            # edge vectorization
-            ####################
-
-            net_config = self.vectorize_edges(net_config=new_net_config,
-                                              net_config_old=net_config,
-                                              node_arg_map=node_arg_map)
+            net_config = new_net_config.copy()
+            new_net_config.clear()
 
         # Second stage: Vectorize over operators
         ########################################
@@ -774,15 +720,12 @@ class Network(MultiDiGraph):
                     node_idx = node_idx + 1 if node_idx < len(op_info['keys']) - 1 else 0
                     node_key = list(net_config.nodes.keys())[node_idx]
 
-            # vectorize edge operators
-            ##########################
-
-            net_config = self.vectorize_edges(net_config=new_net_config,
-                                              net_config_old=net_config,
+            net_config = self.vectorize_edges(new_net_config=new_net_config,
+                                              old_net_config=net_config,
                                               node_arg_map=node_arg_map)
 
-        # Third Stage: Vectorize over multiple edges that map to the same input variable
-        ################################################################################
+        # Third Stage: Finalize edge vectorization
+        ##########################################
 
         # 1. go through edges and extract target node input variables
         for source, target, edge in net_config.edges:
@@ -943,18 +886,21 @@ class Network(MultiDiGraph):
 
         return net_config
 
-    def vectorize_edges(self,
-                        net_config: MultiDiGraph,
-                        net_config_old: MultiDiGraph,
-                        node_arg_map: dict
+    def vectorize_nodes(self,
+                        nodes: List[str],
+                        new_net_config: MultiDiGraph,
+                        old_net_config: MultiDiGraph
                         ) -> MultiDiGraph:
-        """Vectorizes edges according to node structure of net.
+        """Combines all nodes in list to a single node and adds node to new net config.
 
         Parameters
         ----------
-        net_config
-        net_config_old
-        node_arg_map
+        new_net_config
+            Networkx MultiDiGraph with nodes and edges as defined in init.
+        old_net_config
+            Networkx MultiDiGraph with nodes and edges as defined in init.
+        nodes
+            Names of the nodes to be combined.
 
         Returns
         -------
@@ -962,247 +908,496 @@ class Network(MultiDiGraph):
 
         """
 
-        # extract edge-type related parts of edge keys
-        ##############################################
+        n_nodes = len(nodes)
 
-        edge_keys = {}
+        # instantiate new node
+        ######################
 
-        # go through edges
-        for source, target, key in net_config_old.edges:
+        node_ref = nodes.pop()
+        new_node = deepcopy(old_net_config.nodes[node_ref])
+        self.node_arg_map[node_ref] = {}
 
-            # extract dege type from key
-            if '/' in key:
-                edge_type, edge_name = key.split('/')
+        # go through node attributes and store their value and shape
+        arg_vals, arg_shapes = {}, {}
+        for arg_name, arg in new_node['operator_args'].items():
+
+            # extract argument value and shape
+            if len(arg['shape']) == 2:
+                raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
+                                 f" cannot be applied to networks with variables of 2 or more"
+                                 f" dimensions. Variable {arg_name} has shape {arg['shape']}. Please"
+                                 f" turn of the `vectorize` option or change the dimensionality of the argument.")
+            if len(arg['shape']) == 1:
+                if type(arg['value']) is float:
+                    arg['value'] = np.zeros(arg['shape']) + arg['value']
+                arg_vals[arg_name] = list(arg['value'])
+                arg_shapes[arg_name] = tuple(arg['shape'])
             else:
-                edge_type = key
+                arg_vals[arg_name] = [arg['value']]
+                arg_shapes[arg_name] = (1,)
 
-            # check whether network contains one or multiple nodes and extract source + target node
-            if len(net_config.nodes) == 1:
-                s, t = list(net_config.nodes.keys())[0], list(net_config.nodes.keys())[0]
-            else:
-                s = source.split('/')[0]
-                t = target.split('/')[0]
+            # save index of original node's attributes in new nodes attributes
+            self.node_arg_map[node_ref][arg_name] = 0
 
-            # add edge type information to dictionary
-            if s in edge_keys.keys():
-                if t in edge_keys[s].keys():
-                    edge_keys[s][t].append(edge_type)
+        # go through rest of the nodes and extract their argument shapes and values
+        ###########################################################################
+
+        for i, node_name in enumerate(nodes):
+
+            node = deepcopy(old_net_config.nodes[node_name])
+            self.node_arg_map[node_name] = {}
+
+            # go through arguments
+            for arg_name in arg_vals.keys():
+
+                arg = node['operator_args'][arg_name]
+
+                # extract value and shape of argument
+                if len(arg['shape']) == 0:
+                    arg_vals[arg_name].append(arg['value'])
                 else:
-                    edge_keys[s][t] = [edge_type]
+                    if type(arg['value']) is float:
+                        arg['value'] = np.zeros(arg['shape']) + arg['value']
+                    arg_vals[arg_name] += list(arg['value'])
+                    if arg['shape'][0] > arg_shapes[arg_name][0]:
+                        arg_shapes[arg_name] = tuple(arg['shape'])
+
+                # save index of original node's attributes in new nodes attributes
+                self.node_arg_map[node_name][arg_name] = i + 1
+
+        # go through new arguments and update shape and values
+        for arg_name, arg in new_node['operator_args'].items():
+
+            if 'value' in arg.keys():
+                arg.update({'value': arg_vals[arg_name]})
+
+            if 'shape' in arg.keys():
+                arg.update({'shape': (n_nodes,) + arg_shapes[arg_name]})
+
+        # add new, vectorized node to dictionary
+        ########################################
+
+        # define name of new node
+        if '/'in node_ref:
+            node_ref = node_ref.split('/')[0]
+        if all([node_ref in node_name for node_name in nodes]):
+            node_name = node_ref
+        else:
+            node_name = node_ref
+            for n in nodes:
+                node_name += f'_{n}'
+
+        # add new node to new net config
+        node_idx = 0
+        while True:
+            new_node_name = f"{node_name}:{node_idx}"
+            if new_node_name in new_net_config.nodes.keys():
+                node_idx += 1
             else:
-                edge_keys[s] = {t: [edge_type]}
+                new_net_config.add_node(new_node_name, **new_node)
+                break
 
-        # get unique edge names
-        for s, sval in edge_keys.items():
-            for t, tval in sval.items():
-                edge_keys[s][t] = list(set(tval))
+        return new_net_config
 
-        # create new edge dict with edges vectorized over multiples of the unique edge keys
-        ###################################################################################
+    def vectorize_edges(self,
+                        edges: list,
+                        source: str,
+                        target:str,
+                        new_net_config: MultiDiGraph,
+                        old_net_config: MultiDiGraph
+                        ) -> MultiDiGraph:
+        """Combines edges in list and adds a new edge to the new net config.
 
-        # go through each edge of each pair of nodes
-        for s, sval in edge_keys.items():
-            for t, tval in sval.items():
-                for e in tval:
+        Parameters
+        ----------
+        edges
+        source
+        target
+        new_net_config
+        old_net_config
 
-                    op_args_new = {}
-                    n_edges = 0
-                    arg_vals = {}
-                    arg_shape = {}
-                    snode_idx = {}
-                    tnode_idx = {}
-                    ops_new = {}
-                    op_order_new = []
-                    out_var_shape = 1
-                    edge_delays = []
+        Returns
+        -------
+        MultiDiGraph
 
-                    # go through old edges
-                    for source, target, edge in net_config_old.edges:
+        """
 
-                        edge_info = net_config_old.edges[source, target, edge]
+        n_edges = len(edges)
 
-                        # check if source, target and edge of old net config belong to the to-be created edge
-                        if (s in source and t in target and e in edge) or (s == t and e in edge):
+        if n_edges > 0:
 
-                            if n_edges == 0:
+            # go through edges and extract weight and delay
+            ###############################################
 
-                                # use first match to collect operations and operation arguments
-                                ###############################################################
+            weight_col = []
+            delay_col = []
+            old_edge_idx = []
+            old_svar_idx = []
+            old_tvar_idx = []
 
-                                # collect operators, their arguments and their order
-                                ops_new.update(deepcopy(edge_info['operators']))
-                                op_order_new = edge_info['op_order']
-                                op_args_new.update(deepcopy(edge_info['operator_args']))
+            for edge in edges:
 
-                                # go through operator arguments
-                                for key, arg in op_args_new.items():
+                edge_dict = old_net_config.edges[edge]
 
-                                    # set shape and value of argument
-                                    if 'value' in arg.keys() and 'shape' in arg.keys():
-                                        if len(arg['shape']) == 2:
-                                            arg_shape[key] = list(arg['shape'])
-                                            arg_vals[key] = list(arg['value'])
-                                        elif len(arg['shape']) == 1:
-                                            if type(arg['value']) is float:
-                                                arg_vals[key] = list(np.zeros(arg['shape']) + arg['value'])
-                                            else:
-                                                arg_vals[key] = list(arg['value'])
-                                            arg_shape[key] = list(arg['shape'])
-                                        else:
-                                            arg_vals[key] = [arg['value']]
-                                            arg_shape[key] = [1]
+                # check delay of edge
+                if 'delay' not in edge_dict.keys():
+                    delays = None
+                elif 'int' in str(type(edge_dict['delay'])):
+                    delays = [edge_dict['delay']]
+                elif type(edge_dict['delay']) is np.ndarray:
+                    if len(edge_dict['delay'].shape) > 1:
+                        raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
+                                         f" cannot be applied to networks with variables of 2 or more"
+                                         f" dimensions. Delay of edge between {edge[0]} and {edge[1]} has shape"
+                                         f" {edge_dict['delay'].shape}. Please turn of the `vectorize` option or change the"
+                                         f" edges' dimensionality.")
+                    delays = list(edge_dict['delay'])
+                else:
+                    delays = edge_dict['delay']
 
-                                    # collect indices and shapes of source and target variables
-                                    if arg['vtype'] == 'source_var':
-                                        snode_idx[key] = ([node_arg_map[source][arg['name']]],
-                                                          net_config.nodes[s]['operator_args'][arg['name']]['shape'])
-                                    elif arg['vtype'] == 'target_var':
-                                        tnode_idx[key] = ([node_arg_map[target][arg['name']]],
-                                                          net_config.nodes[t]['operator_args'][arg['name']]['shape'])
+                # check weight of edge
+                if 'weight' not in edge_dict.keys():
+                    weights = None
+                elif 'float' in str(type(edge_dict['weight'])):
+                    weights = [edge_dict['weight']]
+                elif type(edge_dict['weight']) is np.ndarray:
+                    if len(edge_dict['weight'].shape) > 1:
+                        raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
+                                         f" cannot be applied to networks with variables of 2 or more"
+                                         f" dimensions. Weight of edge between {edge[0]} and {edge[1]} has shape"
+                                         f" {edge_dict['weight'].shape}. Please turn of the `vectorize` option or change the"
+                                         f" edges' dimensionality.")
+                    weights = list(edge_dict['weight'])
+                else:
+                    weights = edge_dict['weight']
 
-                                    # check whether output shape needs to be updated
-                                    if 'all_ops/map_' in key:
-                                        out_var_shape = op_args_new[key]['shape'][0]
-                                    elif 'all_ops/tmap' in key:
-                                        out_var_shape = op_args_new[key]['shape'][1]
+                # match dimensionality of delay and weight
+                if not delays or not weights:
+                    pass
+                elif len(delays) > 1 and len(weights) == 1:
+                    weights = weights * len(delays)
+                elif len(weights) > 1 and len(delays) == 1:
+                    delays = delays * len(weights)
+                elif len(delays) != len(weights):
+                    raise ValueError(f"Dimensionality of weights and delays of edge between {edge[0]} and {edge[1]}"
+                                     f" do not match. They are of length {len(weights)} and {len(delays)}."
+                                     f" Please turn of the `vectorize` option or change the dimensionality of the"
+                                     f" edges' attributes.")
 
-                            else:
+                # add weight, delay and variable indices to collector lists
+                if weights:
+                    old_edge_idx.append((len(weight_col), len(weight_col) + len(weights)))
+                    weight_col += weights
+                else:
+                    old_edge_idx.append((old_edge_idx[-1][1], old_edge_idx[-1][1] + 1))
+                if delays:
+                    delay_col += delays
+                old_svar_idx.append(self.node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']])
+                old_tvar_idx.append(self.node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']])
 
-                                # add argument values to dictionary
-                                for key, arg in op_args_new.items():
+            # create new, vectorized edge
+            #############################
 
-                                    # add value and shape information
-                                    if 'value' in arg.keys() and 'shape' in arg.keys():
-                                        if len(arg['shape']) == 0:
-                                            arg_vals[key].append(arg['value'])
-                                            arg_shape[key][0] += 1
-                                        else:
-                                            if type(arg['value']) is float:
-                                                val = list(np.zeros(arg['shape']) + arg['value'])
-                                            else:
-                                                val = list(arg['value'])
-                                            arg_vals[key] += val
-                                            arg_shape[key][0] += len(val)
-                                    if arg['vtype'] == 'source_var':
-                                        snode_idx[key][0].append(node_arg_map[source][arg['name']])
-                                    elif arg['vtype'] == 'target_var':
-                                        tnode_idx[key][0].append(node_arg_map[target][arg['name']])
+            # extract edge
+            edge_ref = edges[0]
+            new_edge = deepcopy(old_net_config.edges[edge_ref])
 
-                            # extract edge delay
-                            for op in edge_info['operators'].values():
-                                if 'delay' in op.keys():
-                                    if type(op['delay']) is float:
-                                        edge_delays.append(int(op['delay'] / self.dt))
-                                    else:
-                                        edge_delays.append(op['delay'])
-                                    break
+            # change delay and weight attributes
+            new_edge['delay'] = delay_col if delay_col else None
+            new_edge['weight'] = weight_col if weight_col else None
+            new_edge['edge_idx'] = old_edge_idx
+            new_edge['source_idx'] = old_svar_idx
+            new_edge['target_idx'] = old_tvar_idx
 
-                            # increment edge counter
-                            n_edges += 1
+            # add new edge to new net config
+            new_net_config.add_edge(source, target, **new_edge)
 
-                    # create mapping from source to edge space and edge to target space
-                    ###################################################################
+        # # adjust dimensionality of
+        # for arg_name, arg in edge_dict.items():
+        #
+        #     # extract argument value and shape
+        #     if type(arg)
+        #     if len(arg['shape']) == 2:
+        #         raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
+        #                          f" cannot be applied to networks with variables of 2 or more"
+        #                          f" dimensions. Variable {arg_name} has shape {arg['shape']}. Please"
+        #                          f" turn of the `vectorize` option or change the dimensionality of the argument.")
+        #     if len(arg['shape']) == 1:
+        #         if type(arg['value']) is float:
+        #             arg['value'] = np.zeros(arg['shape']) + arg['value']
+        #         arg_vals[arg_name] = list(arg['value'])
+        #         arg_shapes[arg_name] = tuple(arg['shape'])
+        #     else:
+        #         arg_vals[arg_name] = [arg['value']]
+        #         arg_shapes[arg_name] = (1,)
+        #
+        #     # save index of original node's attributes in new nodes attributes
+        #     self.node_arg_map[node_ref][arg_name] = 0
+        #
+        # # go through rest of the nodes and extract their argument shapes and values
+        # ###########################################################################
+        #
+        # for node_name in nodes:
+        #
+        #     node = deepcopy(old_net_config.nodes[node_name])
+        #     self.node_arg_map[node_name] = {}
+        #
+        #     # go through arguments
+        #     for arg_name in arg_vals.keys():
+        #
+        #         arg = node['operator_args'][arg_name]
+        #
+        #         # extract value and shape of argument
+        #         if len(arg['shape']) == 0:
+        #             arg_vals[arg_name].append(arg['value'])
+        #         else:
+        #             if type(arg['value']) is float:
+        #                 arg['value'] = np.zeros(arg['shape']) + arg['value']
+        #             arg_vals[arg_name] += list(arg['value'])
+        #             if arg['shape'][0] > arg_shapes[arg_name][0]:
+        #                 arg_shapes[arg_name] = tuple(arg['shape'])
+        #
+        #         # save index of original node's attributes in new nodes attributes
+        #         self.node_arg_map[node_name][arg_name] = 0
+        #
+        # # go through new arguments and update shape and values
+        # for arg_name, arg in new_node['operator_args'].items():
+        #
+        #     if 'value' in arg.keys():
+        #         arg.update({'value': arg_vals[arg_name]})
+        #
+        #     if 'shape' in arg.keys():
+        #         arg.update({'shape': (n_nodes,) + arg_shapes[arg_name]})
+        #
+        # # add new, vectorized node to dictionary
+        # ########################################
+        #
+        # # define name of new node
+        # if '/' in node_ref:
+        #     node_ref = node_ref.split('/')[0]
+        # if all([node_ref in node_name for node_name in nodes]):
+        #     node_name = node_ref
+        # else:
+        #     node_name = node_ref
+        #     for n in nodes:
+        #         node_name += f'_{n}'
+        #
+        # # add new node to new net config
+        # node_idx = 0
+        # while True:
+        #     new_node_name = f"{node_name}:{node_idx}"
+        #     if new_node_name in new_net_config.nodes.keys():
+        #         node_idx += 1
+        #     else:
+        #         new_net_config.add_node(new_node_name, **new_node)
+        #         break
+        #
+        # # create new edge dict with edges vectorized over multiples of the unique edge keys
+        # ###################################################################################
+        #
+        # # go through each edge of each pair of nodes
+        # for s, sval in edge_keys.items():
+        #     for t, tval in sval.items():
+        #         for e in tval:
+        #
+        #             op_args_new = {}
+        #             n_edges = 0
+        #             arg_vals = {}
+        #             arg_shape = {}
+        #             snode_idx = {}
+        #             tnode_idx = {}
+        #             ops_new = {}
+        #             op_order_new = []
+        #             out_var_shape = 1
+        #             edge_delays = []
+        #
+        #             # go through old edges
+        #             for source, target, edge in old_net_config.edges:
+        #
+        #                 edge_info = old_net_config.edges[source, target, edge]
+        #
+        #                 # check if source, target and edge of old net config belong to the to-be created edge
+        #                 if (s in source and t in target and e in edge) or (s == t and e in edge):
+        #
+        #                     if n_edges == 0:
+        #
+        #                         # use first match to collect operations and operation arguments
+        #                         ###############################################################
+        #
+        #                         # collect operators, their arguments and their order
+        #                         ops_new.update(deepcopy(edge_info['operators']))
+        #                         op_order_new = edge_info['op_order']
+        #                         op_args_new.update(deepcopy(edge_info['operator_args']))
+        #
+        #                         # go through operator arguments
+        #                         for key, arg in op_args_new.items():
+        #
+        #                             # set shape and value of argument
+        #                             if 'value' in arg.keys() and 'shape' in arg.keys():
+        #                                 if len(arg['shape']) == 2:
+        #                                     arg_shape[key] = list(arg['shape'])
+        #                                     arg_vals[key] = list(arg['value'])
+        #                                 elif len(arg['shape']) == 1:
+        #                                     if type(arg['value']) is float:
+        #                                         arg_vals[key] = list(np.zeros(arg['shape']) + arg['value'])
+        #                                     else:
+        #                                         arg_vals[key] = list(arg['value'])
+        #                                     arg_shape[key] = list(arg['shape'])
+        #                                 else:
+        #                                     arg_vals[key] = [arg['value']]
+        #                                     arg_shape[key] = [1]
+        #
+        #                             # collect indices and shapes of source and target variables
+        #                             if arg['vtype'] == 'source_var':
+        #                                 snode_idx[key] = ([node_arg_map[source][arg['name']]],
+        #                                                   new_net_config.nodes[s]['operator_args'][arg['name']]['shape'])
+        #                             elif arg['vtype'] == 'target_var':
+        #                                 tnode_idx[key] = ([node_arg_map[target][arg['name']]],
+        #                                                   new_net_config.nodes[t]['operator_args'][arg['name']]['shape'])
+        #
+        #                             # check whether output shape needs to be updated
+        #                             if 'all_ops/map_' in key:
+        #                                 out_var_shape = op_args_new[key]['shape'][0]
+        #                             elif 'all_ops/tmap' in key:
+        #                                 out_var_shape = op_args_new[key]['shape'][1]
+        #
+        #                     else:
+        #
+        #                         # add argument values to dictionary
+        #                         for key, arg in op_args_new.items():
+        #
+        #                             # add value and shape information
+        #                             if 'value' in arg.keys() and 'shape' in arg.keys():
+        #                                 if len(arg['shape']) == 0:
+        #                                     arg_vals[key].append(arg['value'])
+        #                                     arg_shape[key][0] += 1
+        #                                 else:
+        #                                     if type(arg['value']) is float:
+        #                                         val = list(np.zeros(arg['shape']) + arg['value'])
+        #                                     else:
+        #                                         val = list(arg['value'])
+        #                                     arg_vals[key] += val
+        #                                     arg_shape[key][0] += len(val)
+        #                             if arg['vtype'] == 'source_var':
+        #                                 snode_idx[key][0].append(node_arg_map[source][arg['name']])
+        #                             elif arg['vtype'] == 'target_var':
+        #                                 tnode_idx[key][0].append(node_arg_map[target][arg['name']])
+        #
+        #                     # extract edge delay
+        #                     for op in edge_info['operators'].values():
+        #                         if 'delay' in op.keys():
+        #                             if type(op['delay']) is float:
+        #                                 edge_delays.append(int(op['delay'] / self.dt))
+        #                             else:
+        #                                 edge_delays.append(op['delay'])
+        #                             break
+        #
+        #                     # increment edge counter
+        #                     n_edges += 1
+        #
+        #             # create mapping from source to edge space and edge to target space
+        #             ###################################################################
+        #
+        #             if n_edges > 0:
+        #
+        #                 # go through source variables
+        #                 for n, (key, val) in enumerate(snode_idx.items()):
+        #
+        #                     edge_map = np.zeros((out_var_shape * n_edges, val[1][0]))
+        #
+        #                     # set indices of source variables in mapping
+        #                     for i, idx in enumerate(val[0]):
+        #                         if type(idx) is tuple:
+        #                             for idx2 in range(idx[0], idx[1]):
+        #                                 edge_map[i, idx2] = 1.
+        #                                 i += 1
+        #                         else:
+        #                             edge_map[i, idx] = 1.
+        #
+        #                     # add edge mapping to edge operator equation and operator arguments
+        #                     if not n_edges == val[1] or not edge_map == np.eye(n_edges):
+        #
+        #                         for op_key in op_order_new:
+        #
+        #                             op = ops_new[op_key]
+        #                             _, var_name = key.split('/')
+        #
+        #                             for i, eq in enumerate(op['equations']):
+        #
+        #                                 if f'map_{var_name}' not in eq:
+        #
+        #                                     # insert mapping into equation
+        #                                     eq = eq.replace(var_name, f'(map_{var_name} @ {var_name})')
+        #                                     ops_new[op_key]['equations'][i] = eq
+        #
+        #                         # add mapping to operator arguments
+        #                         op_args_new[f'all_ops/map_{var_name}'] = {'vtype': 'constant',
+        #                                                                   'dtype': 'float32',
+        #                                                                   'name': f'map_{var_name}',
+        #                                                                   'shape': edge_map.shape,
+        #                                                                   'value': edge_map}
+        #
+        #                 # go through target variables
+        #                 for key, val in tnode_idx.items():
+        #
+        #                     target_map = np.zeros((val[1][0], out_var_shape * n_edges))
+        #
+        #                     # set indices of target variables in mapping
+        #                     for i, idx in enumerate(val[0]):
+        #                         if type(idx) is tuple:
+        #                             for idx2 in range(idx[0], idx[1]):
+        #                                 target_map[idx2, i] = 1.
+        #                                 i += 1
+        #                         else:
+        #                             target_map[idx, i] = 1.
+        #
+        #                     # add target mapping to edge operator equation and operator arguments
+        #                     if not n_edges == val[1] or not target_map == np.eye(n_edges):
+        #
+        #                         for op_key in op_order_new:
+        #
+        #                             op = ops_new[op_key]
+        #
+        #                             for i, eq in enumerate(op['equations']):
+        #
+        #                                 _, rhs = eq.split(' = ')
+        #
+        #                                 if 'tmap' not in rhs:
+        #
+        #                                     # insert mapping into equation
+        #                                     eq = eq.replace(rhs, f'tmap @ ({rhs})')
+        #                                     ops_new[op_key]['equations'][i] = eq
+        #
+        #                         # add mapping to operator arguments
+        #                         op_args_new['all_ops/tmap'] = {'vtype': 'constant',
+        #                                                        'dtype': 'float32',
+        #                                                        'name': 'tmap',
+        #                                                        'shape': target_map.shape,
+        #                                                        'value': target_map}
+        #
+        #             # TODO: vectorize delays of old edges
+        #             ops_new[op_order_new[-1]]['delay'] = 0.
+        #
+        #             # go through new arguments and change shape and values
+        #             for key, arg in op_args_new.items():
+        #
+        #                 if 'map_' not in key and 'tmap' not in key:
+        #
+        #                     if 'value' in arg.keys():
+        #                         arg.update({'value': arg_vals[key]})
+        #
+        #                     if 'shape' in arg.keys():
+        #                         arg.update({'shape': tuple(arg_shape[key])})
+        #
+        #             if n_edges > 0:
+        #
+        #                 # add new, vectorized edge to networkx graph
+        #                 new_net_config.add_edge(s, t, e,
+        #                                         operators=ops_new,
+        #                                         operator_args=op_args_new,
+        #                                         op_order=op_order_new)
 
-                    if n_edges > 0:
-
-                        # go through source variables
-                        for n, (key, val) in enumerate(snode_idx.items()):
-
-                            edge_map = np.zeros((out_var_shape * n_edges, val[1][0]))
-
-                            # set indices of source variables in mapping
-                            for i, idx in enumerate(val[0]):
-                                if type(idx) is tuple:
-                                    for idx2 in range(idx[0], idx[1]):
-                                        edge_map[i, idx2] = 1.
-                                        i += 1
-                                else:
-                                    edge_map[i, idx] = 1.
-
-                            # add edge mapping to edge operator equation and operator arguments
-                            if not n_edges == val[1] or not edge_map == np.eye(n_edges):
-
-                                for op_key in op_order_new:
-
-                                    op = ops_new[op_key]
-                                    _, var_name = key.split('/')
-
-                                    for i, eq in enumerate(op['equations']):
-
-                                        if f'map_{var_name}' not in eq:
-
-                                            # insert mapping into equation
-                                            eq = eq.replace(var_name, f'(map_{var_name} @ {var_name})')
-                                            ops_new[op_key]['equations'][i] = eq
-
-                                # add mapping to operator arguments
-                                op_args_new[f'all_ops/map_{var_name}'] = {'vtype': 'constant',
-                                                                          'dtype': 'float32',
-                                                                          'name': f'map_{var_name}',
-                                                                          'shape': edge_map.shape,
-                                                                          'value': edge_map}
-
-                        # go through target variables
-                        for key, val in tnode_idx.items():
-
-                            target_map = np.zeros((val[1][0], out_var_shape * n_edges))
-
-                            # set indices of target variables in mapping
-                            for i, idx in enumerate(val[0]):
-                                if type(idx) is tuple:
-                                    for idx2 in range(idx[0], idx[1]):
-                                        target_map[idx2, i] = 1.
-                                        i += 1
-                                else:
-                                    target_map[idx, i] = 1.
-
-                            # add target mapping to edge operator equation and operator arguments
-                            if not n_edges == val[1] or not target_map == np.eye(n_edges):
-
-                                for op_key in op_order_new:
-
-                                    op = ops_new[op_key]
-
-                                    for i, eq in enumerate(op['equations']):
-
-                                        _, rhs = eq.split(' = ')
-
-                                        if 'tmap' not in rhs:
-
-                                            # insert mapping into equation
-                                            eq = eq.replace(rhs, f'tmap @ ({rhs})')
-                                            ops_new[op_key]['equations'][i] = eq
-
-                                # add mapping to operator arguments
-                                op_args_new['all_ops/tmap'] = {'vtype': 'constant',
-                                                               'dtype': 'float32',
-                                                               'name': 'tmap',
-                                                               'shape': target_map.shape,
-                                                               'value': target_map}
-
-                    # TODO: vectorize delays of old edges
-                    ops_new[op_order_new[-1]]['delay'] = 0.
-
-                    # go through new arguments and change shape and values
-                    for key, arg in op_args_new.items():
-
-                        if 'map_' not in key and 'tmap' not in key:
-
-                            if 'value' in arg.keys():
-                                arg.update({'value': arg_vals[key]})
-
-                            if 'shape' in arg.keys():
-                                arg.update({'shape': tuple(arg_shape[key])})
-
-                    if n_edges > 0:
-
-                        # add new, vectorized edge to networkx graph
-                        net_config.add_edge(s, t, e,
-                                            operators=ops_new,
-                                            operator_args=op_args_new,
-                                            op_order=op_order_new)
-
-        return net_config
+        return new_net_config
 
     def vectorize_ops(self,
                       new_node: dict,

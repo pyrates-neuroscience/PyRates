@@ -797,9 +797,8 @@ def parse_equation(equation: str, args: dict, tf_graph: tp.Optional[tf.Graph] = 
 
 
 def parse_dict(var_dict: dict,
-               tf_graph: tp.Optional[tf.Graph] = None,
-               var_scope: tp.Optional[str] = None
-               ) -> tp.Tuple[list, list]:
+               tf_graph: tp.Optional[tf.Graph] = None
+               ) -> dict:
     """Parses a dictionary with variable information and creates tensorflow variables from that information.
 
     Parameters
@@ -819,83 +818,79 @@ def parse_dict(var_dict: dict,
 
     """
 
-    var_col = []
-    var_names = []
+    var_dict_tf = {}
 
     # get tensorflow graph
     tf_graph = tf_graph if tf_graph else tf.get_default_graph()
 
     with tf_graph.as_default():
 
-        with tf.variable_scope(var_scope):
+        # go through dictionary items and instantiate variables
+        #######################################################
 
-            # go through dictionary items and instantiate variables
-            #######################################################
+        for var_name, var in var_dict.items():
 
-            for var_name, var in var_dict.items():
+            if var['vtype'] == 'raw':
 
-                if var['vtype'] == 'raw':
+                # just extract raw variable value
+                tf_var = var['value']
 
-                    # just extract raw variable value
-                    tf_var = var['value']
+            elif var['vtype'] == 'state_var':
 
-                elif var['vtype'] == 'state_var':
+                # create a tensorflow variable that can change its value over the course of a simulation
+                tf_var = tf.get_variable(name=var_name,
+                                         shape=var['shape'],
+                                         dtype=getattr(tf, var['dtype']),
+                                         initializer=tf.constant_initializer(var['value'])
+                                         )
 
-                    # create a tensorflow variable that can change its value over the course of a simulation
-                    tf_var = tf.get_variable(name=var_name,
-                                             shape=var['shape'],
-                                             dtype=getattr(tf, var['dtype']),
-                                             initializer=tf.constant_initializer(var['value'])
+            elif var['vtype'] == 'constant':
+
+                # turn `value` into array
+                vals = np.array(var['value'], dtype=getattr(np, var['dtype']))
+                if vals.shape != var['shape']:
+                    vals = np.zeros(var['shape']) + vals
+
+                # check how many of the entries in `value` are zero
+                n_zeros = 0
+                for i, val in enumerate(vals.flatten()):
+                    if val == 0:
+                        n_zeros += 1
+                frac_zeros = n_zeros / (i + 1)
+
+                if frac_zeros > 1.0:
+
+                    # create sparse, constant tensor
+                    indices = np.argwhere(vals != 0.)
+                    vals = vals[vals != 0]
+                    tf_var = tf.SparseTensor(indices=indices,
+                                             values=np.array(vals, dtype=getattr(np, var['dtype'])),
+                                             dense_shape=var['shape'],
                                              )
-
-                elif var['vtype'] == 'constant':
-
-                    # turn `value` into array
-                    vals = np.array(var['value'], dtype=getattr(np, var['dtype']))
-                    if vals.shape != var['shape']:
-                        vals = np.zeros(var['shape']) + vals
-
-                    # check how many of the entries in `value` are zero
-                    n_zeros = 0
-                    for i, val in enumerate(vals.flatten()):
-                        if val == 0:
-                            n_zeros += 1
-                    frac_zeros = n_zeros / (i + 1)
-
-                    if frac_zeros > 0.2:
-
-                        # create sparse, constant tensor
-                        indices = np.argwhere(vals != 0.)
-                        vals = vals[vals != 0]
-                        tf_var = tf.SparseTensor(indices=indices,
-                                                 values=np.array(vals, dtype=getattr(np, var['dtype'])),
-                                                 dense_shape=var['shape'],
-                                                 )
-
-                    else:
-
-                        # create dense, constant tensor
-                        tf_var = tf.constant(value=var['value'],
-                                             name=var_name,
-                                             shape=var['shape'],
-                                             dtype=getattr(tf, var['dtype'])
-                                             )
-
-                elif var['vtype'] == 'placeholder':
-
-                    tf_var = tf.placeholder(name=var_name,
-                                            shape=var['shape'],
-                                            dtype=getattr(tf, var['dtype'])
-                                            )
 
                 else:
 
-                    raise ValueError('Variable type must be `raw`, `state_variable`, `constant` or `placeholder`.')
+                    # create dense, constant tensor
+                    tf_var = tf.constant(value=var['value'],
+                                         name=var_name,
+                                         shape=var['shape'],
+                                         dtype=getattr(tf, var['dtype'])
+                                         )
 
-                var_col.append(tf_var)
-                var_names.append(var_name)
+            elif var['vtype'] == 'placeholder':
 
-    return var_col, var_names
+                tf_var = tf.placeholder(name=var_name,
+                                        shape=var['shape'],
+                                        dtype=getattr(tf, var['dtype'])
+                                        )
+
+            else:
+
+                raise ValueError('Variable type must be `raw`, `state_variable`, `constant` or `placeholder`.')
+
+            var_dict_tf[var_name] = tf_var
+
+    return var_dict_tf
 
 
 def round_to_prec(x, prec=0):

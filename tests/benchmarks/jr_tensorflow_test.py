@@ -26,12 +26,12 @@ sparseness_e = 0.1
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 100
+n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter_e = 50. / (n_jrcs * sparseness_e / 0.01)
-c_inter_i = 50. / (n_jrcs * sparseness_e / 0.01)
+c_inter_e = 10. / (n_jrcs * sparseness_e / 0.01)
+c_inter_i = 0. / (n_jrcs * sparseness_e / 0.01)
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -457,40 +457,26 @@ for a in range(0, n_nodes):
             c = C_e[a, b]
 
         if c != 0:
-            edge = {'op_order': ['coupling_op'], 'operator_args': {}, 'operators': {}}
+            edge = {}
             if a % 3 == 0:
                 target = f'pc/{int(a/3)}'
                 if source.split('/')[0] == 'iin':
-                    edge['operator_args']['coupling_op/m_in'] = {'vtype': 'target_var',
-                                                                 'name': 'operator_rtp_syn_i/m_in'}
+                    edge['target_var'] = 'operator_rtp_syn_i/m_in'
                 else:
-                    edge['operator_args']['coupling_op/m_in'] = {'vtype': 'target_var',
-                                                                 'name': 'operator_rtp_syn_e/m_in'}
+                    edge['target_var'] = 'operator_rtp_syn_e/m_in'
             elif a % 3 == 1:
                 target = f'ein/{int(a/3)}'
-                edge['operator_args']['coupling_op/m_in'] = {'vtype': 'target_var',
-                                                             'name': 'operator_rtp_syn/m_in'}
+                edge['target_var'] = 'operator_rtp_syn/m_in'
             else:
                 target = f'iin/{int(a/3)}'
-                edge['operator_args']['coupling_op/m_in'] = {'vtype': 'target_var',
-                                                             'name': 'operator_rtp_syn/m_in'}
+                edge['target_var'] = 'operator_rtp_syn/m_in'
 
-            edge['operators']['coupling_op'] = {'equations': ["m_in = m_out * c"],
-                                                'inputs': {},
-                                                'output': 'm_in',
-                                                'delay': 1e-3}
-            edge['operator_args']['coupling_op/c'] = {'name': 'c',
-                                                      'vtype': 'constant',
-                                                      'dtype': 'float32',
-                                                      'shape': (),
-                                                      'value': c * 1.,
-                                                      }
-            edge['operator_args']['coupling_op/m_out'] = {'vtype': 'source_var',
-                                                          'name': 'operator_ptr/m_out'}
+            edge['source_var'] = 'operator_ptr/m_out'
+            edge['weight'] = c
 
             s = source.split('/')[0]
             t = target.split('/')[0]
-            graph.add_edge(source, target, key=f'{s}{t}_edge', **edge)
+            graph.add_edge(source, target, **edge)
 
 # network setup
 ###############
@@ -509,7 +495,7 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 results, ActTime = net.run(simulation_time=simulation_time,
                            # inputs={net.nodes['jrc'].U: inp},
                            # inputs = input_coll,
-                           outputs={'V': net.nodes['pc']['v']},
+                           outputs={'V': net.nodes['pc/0']['operator_ptr/v']},
                            #outputs=output_coll,
                            sampling_step_size=1e-3)
 
