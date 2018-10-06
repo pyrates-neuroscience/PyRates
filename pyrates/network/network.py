@@ -592,19 +592,24 @@ class Network(MultiDiGraph):
                 for target_new in new_net_config.nodes.keys():
 
                     # collect old edges that connect the same source and target variables
-                    edges = []
+                    edge_col = {}
                     for source, target, edge in net_config.edges:
                         if source.split('/')[0] in source_new and target.split('/')[0] in target_new:
                             edge_tmp = net_config.edges[source, target, edge]
-                            # TODO: implement check for target and source var that are connected (need independent edges)
-                            edges.append((source, target, edge))
+                            source_var, target_var = edge_tmp['source_var'], edge_tmp['target_var']
+                            key = f"{source_var}{target_var}"
+                            if key in edge_col.keys():
+                                edge_col[key].append((source, target, edge))
+                            else:
+                                edge_col[key] = [(source, target, edge)]
 
                     # vectorize over edges
-                    new_net_config = self.vectorize_edges(edges=edges,
-                                                          source=source_new,
-                                                          target=target_new,
-                                                          new_net_config=new_net_config,
-                                                          old_net_config=net_config)
+                    for edges in edge_col.values():
+                        new_net_config = self.vectorize_edges(edges=edges,
+                                                              source=source_new,
+                                                              target=target_new,
+                                                              new_net_config=new_net_config,
+                                                              old_net_config=net_config)
 
             net_config = new_net_config.copy()
             new_net_config.clear()
@@ -727,92 +732,139 @@ class Network(MultiDiGraph):
         # Third Stage: Finalize edge vectorization
         ##########################################
 
-        # 1. go through edges and extract target node input variables
-        for source, target, edge in net_config.edges:
+        # 1. Go through edges and create mappings between source, edge and target variables
+        for source_name, target_name, edge_name in net_config.edges:
 
-            # extract edge data
-            edge_data = net_config.edges[source, target, edge]
-            op_name = edge_data['op_order'][-1]
-            op = edge_data['operators'][op_name]
-            var_name = op['output']
-            target_op_name = edge_data['operator_args'][f'{op_name}/{var_name}']['name']
-            delay = op['delay']
+            # extract edge information
+            edge = net_config.edges[source_name, target_name, edge_name]
+            source_var = net_config.nodes[source_name]['operator_args'][edge['source_var']]
+            target_var = net_config.nodes[target_name]['operator_args'][edge['target_var']]
+            n_sources = source_var['shape'][0]
+            n_targets = target_var['shape'][0]
+            n_edges = edge['edge_idx'][-1][1]
 
-            # find equation that maps to target variable
-            for i, eq in enumerate(op['equations']):
-                lhs, _ = eq.split(' = ')
-                if var_name in lhs:
-                    break
+            # create mapping from source to edge variables
+            ##############################################
 
-            # add output variable to inputs field of target node
-            if target_op_name not in net_config.nodes[target]['inputs']:
-                net_config.nodes[target]['inputs'][target_op_name] = {
-                    'sources': [f'{source}/{target}/{edge}/{op_name}/{i}'],
-                    'delays': [delay],
+            # create mapping from lower dimensional source to higher dimensional edge space
+            smap = np.zeros((n_edges, n_sources))
+            for edge_idx, source_idx in zip(edge['edge_idx'], edge['source_idx']):
+                smap[edge_idx[0]:edge_idx[1], source_idx] = 1.
+
+            # add mapping to edge attributs
+            if n_edges != n_sources or np.sum(smap.flatten()) != n_edges:
+                edge['source_to_edge_map'] = smap
+
+            # create mapping from edge to target variables
+            ##############################################
+
+                # create mapping from lower dimensional source to higher dimensional edge space
+                tmap = np.zeros((n_targets, n_edges))
+                for edge_idx, target_idx in zip(edge['edge_idx'], edge['target_idx']):
+                    tmap[target_idx, edge_idx[0]:edge_idx[1]] = 1.
+
+                # add mapping to edge attributs
+                if n_edges != n_sources or np.sum(tmap.flatten()) != n_edges:
+                    edge['edge_to_target_map'] = tmap
+
+            # add information about edge projection to target node
+            ######################################################
+
+            if edge['target_var'] not in net_config.nodes[target_name]['inputs']:
+                net_config.nodes[target_name]['inputs'][edge['target_var']] = {
+                    'sources': [(source_name, target_name, edge_name)],
+                    'delay': [np.max(edge['delay'])],
                     'reduce_dim': True}
             else:
-                net_config.nodes[target]['inputs'][target_op_name]['sources'].append(
-                    f'{source}/{target}/{edge}/{op_name}/{i}')
-                net_config.nodes[target]['inputs'][target_op_name]['delays'].append(delay)
+                net_config.nodes[target_name]['inputs'][edge['target_var']]['sources'].append(
+                    (source_name, target_name, edge_name))
+                net_config.nodes[target_name]['inputs'][edge['target_var']]['delay'].append(np.max(edge['delay']))
 
-        # 2. go through nodes and create correct mapping for multiple inputs to same variable
+        # 2. go through nodes and create mapping for their inputs
         for node_name, node in net_config.nodes.items():
 
             # loop over input variables of node
-            for i, (in_var, inputs) in enumerate(node['inputs'].items()):
+            for i, (in_var, input_info) in enumerate(node['inputs'].items()):
 
-                op_name, in_var_name = in_var.split('/')
-                if len(inputs) > 1:
+                # extract info for input variable connections
+                op_name, var_name = in_var.split('/')
+                target_shape = node['operator_args'][in_var]['shape']
+                n_inputs = len(input_info['sources'])
 
-                    # get shape of output variables and define equation to be used for mapping
-                    if '[' in in_var:
+                # loop over different input sources
+                for j in range(n_inputs):
 
-                        # extract index from variable name
-                        idx_start, idx_stop = in_var_name.find('['), in_var_name.find(']')
-                        in_var_name_tmp = in_var_name[0:idx_start]
-                        idx = in_var_name[idx_start+1:idx_stop]
+                    # handle delays
+                    ###############
 
-                        # define mapping equation
-                        map_eq = f"{in_var_name} = sum(in_col_{i}, 1)"
+                    max_delay = input_info['delays'][j]
 
-                        # get shape of output variable
-                        if ':' in idx:
-                            idx_1, idx_2 = idx.split(':')
-                            out_shape = int(idx_2) - int(idx_1)
+                    if max_delay:
+
+                        # create buffer equations
+                        if len(target_shape) == 1:
+                            eqs = [f"{var_name} = {var_name}_buffer_{j}[0]",
+                                   f"{var_name}_buffer_{j}_tmp = {var_name}_buffer_{j}[1:]",
+                                   f"{var_name}_buffer_{j}[0:-1] = {var_name}_buffer_{j}_tmp",
+                                   f"{var_name}_buffer_{j}[-1] = 0."]
                         else:
-                            out_shape = ()
+                            eqs = [f"{var_name} = {var_name}_buffer_{j}[:, 0]",
+                                   f"{var_name}_buffer_{j}_tmp = {var_name}_buffer_{j}[:,1:]",
+                                   f"{var_name}_buffer_{j}[:,0:-1] = {var_name}_buffer_{j}_tmp",
+                                   f"{var_name}_buffer_{j}[:,-1] = 0."]
 
-                        # add input buffer rotation to end of operation list
-                        if ',' in idx:
-                            eqs = [f"buffer_var_{i} = {in_var_name_tmp}[1:,:]",
-                                   f"{in_var_name_tmp}[0:-1,:] = buffer_var_{i}",
-                                   f"{in_var_name_tmp}[-1,:] = 0."]
-                        else:
-                            eqs = [f"buffer_var_{i} = {in_var_name_tmp}[1:]",
-                                   f"{in_var_name_tmp}[0:-1] = buffer_var_{i}",
-                                   f"{in_var_name_tmp}[-1] = 0."]
-                        node['operators'][f'input_buffer_{i}'] = {
+                        # add buffer operator to node
+                        node['operators'][f'{var_name}_buffering_{j}'] = {
                             'equations': eqs,
-                            'inputs': {in_var_name_tmp: {'sources': [f'{op_name}/{in_var_name_tmp}'],
-                                                         'reduce_dim': True}},
-                            'output': in_var_name_tmp}
-                        node['op_order'].append(f'input_buffer_{i}')
+                            'inputs': {},
+                            'output': var_name}
+                        node['op_order'] = [f'{var_name}_buffering_{j}'] + node['op_order']
 
-                    else:
+                        # add buffer variable to node arguments
+                        node['operator_args'][f'{var_name}_buffering_{j}/{var_name}_buffer_{j}'] = {
+                            'vtype': 'constant_sparse',
+                            'dtype': 'float32',
+                            'shape': target_shape + (max_delay, ),
+                            'value': 0.
+                            }
 
-                        # get shape of output variable
-                        in_var_name_tmp = in_var_name
-                        out_shape = node['operator_args'][f'{op_name}/{in_var_name_tmp}']['shape']
-
-                        # define mapping equation
-                        if len(out_shape) < 2:
-                            map_eq = f"{in_var_name_tmp} = sum(in_col_{i}, 1)"
-                        elif out_shape[0] == 1:
-                            map_eq = f"{in_var_name_tmp}[0,:] = sum(in_col_{i}, 1)"
-                        elif out_shape[1] == 1:
-                            map_eq = f"{in_var_name_tmp}[:,0] = sum(in_col_{i}, 1)"
+                        # handle operator dependencies
+                        if var_name in node['operators'][op_name]['inputs'].keys():
+                            node['operators'][op_name]['inputs'][var_name]['sources'].append(
+                                f'{var_name}_buffering_{j}')
                         else:
-                            map_eq = f"{in_var_name_tmp} = squeeze(sum(in_col_{i}, 1))"
+                            node['operators'][op_name]['inputs'][var_name] = {'sources': [f'{var_name}_buffering_{j}'],
+                                                                              'reduce_dim': True}
+
+                        # update edge information
+                        edge = net_config.edges[input_info['sources'][j]]
+                        edge['target_var'] = f'{var_name}_buffering_{j}/{var_name}_buffer_{j}'
+
+                    # handle multiple projections to same variable
+                    elif n_inputs > 1:
+
+
+
+                if len(input_info['sources']) > 1:
+
+                    # define mapping equations
+                    ##########################
+
+                    # get edge weights and delays
+                    weights = np.array(input_info['weights'], dtype=np.float32)
+
+
+
+
+                    # define mapping equation
+                    if len(target_shape) < 2:
+                        map_eq = f"{var_name} = w_{i} @ in_col_{i}, 1)"
+                    elif target_shape[0] == 1:
+                        map_eq = f"{var_name}[0,:] = sum(in_col_{i}, 1)"
+                    elif target_shape[1] == 1:
+                        map_eq = f"{var_name}[:,0] = sum(in_col_{i}, 1)"
+                    else:
+                        map_eq = f"{var_name} = squeeze(sum(in_col_{i}, 1))"
 
                     out_shape = None if len(out_shape) == 0 else out_shape[0]
 
