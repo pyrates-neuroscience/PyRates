@@ -40,13 +40,13 @@ NeuralMass:
   description: Basic template for a neural mass.
   base: NodeTemplate
   operators:
-    pyrates.synapse.synapse.RateToCurrentOperator:
+    pyrates.frontend.synapse.synapse.RateToCurrentOperator:
       defaults: null
       options: null
     CurrentToPotentialOperator:
       defaults: null
       options: null
-    pyrates.axon.axon.PotentialToRateOperator:
+    pyrates.frontend.axon.axon.PotentialToRateOperator:
       defaults: null
       options: null
   options: null

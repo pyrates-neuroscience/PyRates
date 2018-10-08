@@ -2,6 +2,8 @@
 """
 from typing import Union
 
+from pyrates import PyRatesException
+
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
@@ -106,9 +108,15 @@ class TemplateLoader:
                 file = parts[-2]
                 parentdir = ".".join(parts[:-2])
                 # let Python figure out where to look for the module
-                module = importlib.import_module(parentdir)
-
-                abspath = module.__path__[0]  # __path__ returns a list[str]
+                try:
+                    module = importlib.import_module(parentdir)
+                except ModuleNotFoundError:
+                    raise PyRatesException(f"Could not find Python (module) directory associated to path `{parentdir}` of "
+                                           f"Template `{path}`.")
+                try:
+                    abspath = module.__path__[0]  # __path__ returns a list[str]
+                except TypeError:
+                    raise PyRatesException(f"Something is wrong with the given YAML template path `{path}`.")
 
                 return name, file, abspath
 

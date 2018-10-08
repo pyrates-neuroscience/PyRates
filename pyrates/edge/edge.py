@@ -7,13 +7,9 @@ from typing import Optional, List
 from typing import Union, List
 
 # pyrates imports
-from pyrates.node.node import NodeTemplateLoader, GraphEntityTemplate, GraphEntityTemplateLoader
 from pyrates.operator import Operator
 from pyrates.parser import parse_dict
 from pyrates.node import Node
-from pyrates.abc import AbstractBaseTemplate
-from pyrates.operator import OperatorTemplate
-from pyrates.utility.yaml_parser import TemplateLoader
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -113,24 +109,3 @@ class Edge(object):
 
                 # connect source and target variables via operator
                 self.project = operator.create()
-
-
-class EdgeTemplate(GraphEntityTemplate):
-    """Generic template for an edge in the computational network graph. A single edge may encompass several
-    different operators. One template defines a typical structure of a given edge type."""
-
-    pass
-
-
-class EdgeTemplateLoader(GraphEntityTemplateLoader):
-    """Template loader specific to an EdgeOperatorTemplate. """
-
-    def __new__(cls, path):
-
-        return super().__new__(cls, path, EdgeTemplate)
-
-    @classmethod
-    def update_template(cls, *args, **kwargs):
-        """Update all entries of a base node template to a more specific template."""
-
-        return super().update_template(EdgeTemplate, *args, **kwargs)

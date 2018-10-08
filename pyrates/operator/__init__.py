@@ -2,4 +2,4 @@
 
 """
 
-from .operator import Operator, OperatorTemplate
+from .operator import Operator

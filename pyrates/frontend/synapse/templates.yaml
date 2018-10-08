@@ -12,7 +12,7 @@ ExponentialSynapseRCO:
     .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
        of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
 
-  base: pyrates.synapse.synapse.RateToCurrentOperator
+  base: pyrates.frontend.synapse.synapse.RateToCurrentOperator
 
   equation:
     replace:

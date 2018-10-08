@@ -12,12 +12,12 @@ from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle
 from copy import deepcopy
 
 # pyrates internal imports
-from pyrates.abc import AbstractBaseTemplate
-from pyrates.edge.edge import EdgeTemplate
-from pyrates.node import NodeTemplate
+from pyrates.frontend.abc import AbstractBaseTemplate
+from pyrates.frontend.edge.edge import EdgeTemplate
+from pyrates.frontend.node import NodeTemplate
 from pyrates import PyRatesException
-from pyrates.utility.yaml_parser import TemplateLoader
-from pyrates.operator.operator import OperatorTemplate
+from pyrates.frontend.yaml_parser import TemplateLoader
+from pyrates.frontend.operator import OperatorTemplate
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"

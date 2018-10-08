@@ -5,7 +5,7 @@ InstantaneousCPO:
     Implementation of a current-to-potential operator (CPO) that sums all synaptic
     (current) contributions and instantaneously, i.e. without temporal derivative,
     transforms those currents into a mean somatic membrane potential.
-  base: pyrates.population.population.CurrentToPotentialOperator
+  base: pyrates.frontend.population.population.CurrentToPotentialOperator
   equation:
     remove: "L_m * "
 
@@ -22,7 +22,7 @@ JansenRitCPO:
   base: InstantaneousCPO
 
 JansenRitIN:
-  base: pyrates.population.population.NeuralMass
+  base: pyrates.frontend.population.population.NeuralMass
   description: >
     Implementation and parametrization of an (excitatory or inhibitory) interneuron
     following the Jansen-Rit neural mass model [1]_.
@@ -33,13 +33,13 @@ JansenRitIN:
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   operators:
-    - pyrates.synapse.templates.JansenRitExcitatorySynapseRCO
+    - pyrates.frontend.synapse.templates.JansenRitExcitatorySynapseRCO
     - JansenRitCPO
-    - pyrates.axon.templates.JansenRitPRO
+    - pyrates.frontend.axon.templates.JansenRitPRO
   label: JR_IN
 
 JansenRitPC:
-  base: pyrates.population.population.NeuralMass
+  base: pyrates.frontend.population.population.NeuralMass
   description: >
     Implementation and parametrization of projection neuron with inhibitory
     and excitatory synaptic input following the Jansen-Rit neural mass model [1]_.
@@ -50,10 +50,10 @@ JansenRitPC:
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   operators:
-    - pyrates.synapse.templates.JansenRitExcitatorySynapseRCO
-    - pyrates.synapse.templates.JansenRitInhibitorySynapseRCO
+    - pyrates.frontend.synapse.templates.JansenRitExcitatorySynapseRCO
+    - pyrates.frontend.synapse.templates.JansenRitInhibitorySynapseRCO
     - JansenRitCPO
-    - pyrates.axon.templates.JansenRitPRO
+    - pyrates.frontend.axon.templates.JansenRitPRO
   label: JR_PC
 
 

@@ -1,8 +1,8 @@
 %YAML 1.2
 ---
 aliases:
-  - &JRExcitatorySynapse pyrates.synapse.templates.JansenRitExcitatorySynapseRCO
-  - &JRInhibitorySynapse pyrates.synapse.templates.JansenRitInhibitorySynapseRCO
+  - &JRExcitatorySynapse pyrates.frontend.synapse.templates.JansenRitExcitatorySynapseRCO
+  - &JRInhibitorySynapse pyrates.frontend.synapse.templates.JansenRitInhibitorySynapseRCO
 
 JansenRitCircuit:
   description: |
@@ -13,15 +13,15 @@ JansenRitCircuit:
     .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
-  base: pyrates.circuit.circuit.BaseCircuit
+  base: pyrates.frontend.circuit.circuit.BaseCircuit
   label: JRcircuit
   nodes:
-    JR_PC: pyrates.population.templates.JansenRitPC
-    JR_IIN: pyrates.population.templates.JansenRitIN
-    JR_EIN: pyrates.population.templates.JansenRitIN
+    JR_PC: pyrates.frontend.population.templates.JansenRitPC
+    JR_IIN: pyrates.frontend.population.templates.JansenRitIN
+    JR_EIN: pyrates.frontend.population.templates.JansenRitIN
 
   edge_templates:
-    LC: pyrates.edge.templates.LCEdge
+    LC: pyrates.frontend.edge.templates.LCEdge
 #    LC: pyrates.coupling.templates.LinearCoupling
   # single coupling operator. needs rework for multiple coupling operators in single circuit.
   # alternative: use YAML tags for proper references
@@ -42,13 +42,13 @@ MultiJansenRitCircuit:
     .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
-  base: pyrates.circuit.circuit.BaseCircuit
+  base: pyrates.frontend.circuit.circuit.BaseCircuit
   label: MultiJRC
   nodes:
     JRC: JansenRitCircuit
 
   edge_templates:
-    LC: pyrates.edge.templates.LCEdge
+    LC: pyrates.frontend.edge.templates.LCEdge
   # single coupling operator. needs rework for multiple coupling operators in single circuit.
   # alternative: use YAML tags to hide long names
 

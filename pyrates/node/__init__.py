@@ -2,4 +2,4 @@
 
 """
 
-from .node import Node, NodeTemplate
+from .node import Node

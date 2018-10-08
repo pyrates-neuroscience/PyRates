@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 LinearCoupling:
-  base: pyrates.coupling.coupling.CouplingOperator
+  base: pyrates.frontend.coupling.coupling.CouplingOperator
   description:
     Coupling Operator as used in the Jansen-Rit neural mass model [1]_. This is a simple, instantaneous linear
     coupling.

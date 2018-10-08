@@ -1,7 +1,6 @@
 """ Tests for the parser that translates circuits and components defined in YAML into the intermediate
 python representation.
 """
-from copy import deepcopy
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -39,18 +38,18 @@ def setup_module():
 #         templates = yaml.load(file)
 
 
-@pytest.mark.parametrize("operator", ["pyrates.axon.axon.PotentialToRateOperator",
-                                      "pyrates.axon.templates.SigmoidPRO",
-                                      "pyrates.axon.templates.JansenRitPRO",
-                                      "pyrates.population.population.CurrentToPotentialOperator",
-                                      "pyrates.synapse.synapse.RateToCurrentOperator",
-                                      "pyrates.coupling.coupling.CouplingOperator",
-                                      "pyrates.coupling.templates.LinearCoupling",
+@pytest.mark.parametrize("operator", ["pyrates.frontend.axon.axon.PotentialToRateOperator",
+                                      "pyrates.frontend.axon.templates.SigmoidPRO",
+                                      "pyrates.frontend.axon.templates.JansenRitPRO",
+                                      "pyrates.frontend.population.population.CurrentToPotentialOperator",
+                                      "pyrates.frontend.synapse.synapse.RateToCurrentOperator",
+                                      "pyrates.frontend.coupling.coupling.CouplingOperator",
+                                      "pyrates.frontend.coupling.templates.LinearCoupling",
                                       ])
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
-    from pyrates.operator.operator import OperatorTemplateLoader
-    from pyrates.operator import OperatorTemplate
+    from pyrates.frontend.operator import OperatorTemplateLoader
+    from pyrates.frontend.operator import OperatorTemplate
 
     template = OperatorTemplate.from_yaml(operator)  # type: OperatorTemplate
 
@@ -116,22 +115,22 @@ def test_import_operator_templates(operator):
 def test_full_jansen_rit_circuit_template_load():
     """Test a simple circuit template, including all nodes and operators to be loaded."""
 
-    path = "pyrates.circuit.templates.JansenRitCircuit"
-    from pyrates.circuit import CircuitTemplate
-    from pyrates.edge.edge import EdgeTemplate
-    from pyrates.node import NodeTemplate
-    from pyrates.operator import OperatorTemplate
+    path = "pyrates.frontend.circuit.templates.JansenRitCircuit"
+    from pyrates.frontend.circuit import CircuitTemplate
+    from pyrates.frontend.edge.edge import EdgeTemplate
+    from pyrates.frontend.node import NodeTemplate
+    from pyrates.frontend.operator import OperatorTemplate
 
     template = CircuitTemplate.from_yaml(path)
 
     # test, whether circuit is in loader cache
-    from pyrates.utility.yaml_parser import TemplateLoader
+    from pyrates.frontend.yaml_parser import TemplateLoader
     assert template is TemplateLoader.cache[path]
 
     # test, whether node templates have been loaded successfully
-    nodes = {"JR_PC": "pyrates.population.templates.JansenRitPC",
-             "JR_IIN": "pyrates.population.templates.JansenRitIN",
-             "JR_EIN": "pyrates.population.templates.JansenRitIN"}
+    nodes = {"JR_PC": "pyrates.frontend.population.templates.JansenRitPC",
+             "JR_IIN": "pyrates.frontend.population.templates.JansenRitIN",
+             "JR_EIN": "pyrates.frontend.population.templates.JansenRitIN"}
 
     for key, value in nodes.items():
         assert isinstance(template.nodes[key], NodeTemplate)
@@ -142,7 +141,7 @@ def test_full_jansen_rit_circuit_template_load():
             assert isinstance(op, OperatorTemplate)
 
     # test, whether coupling operator has been loaded correctly
-    coupling_path = "pyrates.edge.templates.LinearCouplingOperator"
+    coupling_path = "pyrates.frontend.edge.templates.LinearCouplingOperator"
     edge_temp = template.edge_templates["LC"]
     assert isinstance(edge_temp, EdgeTemplate)
     assert list(edge_temp.operators)[0] is TemplateLoader.cache[coupling_path]
@@ -152,8 +151,8 @@ def test_full_jansen_rit_circuit_template_load():
 
 def test_circuit_instantiation():
     """Test, if apply() functions all work properly"""
-    path = "pyrates.circuit.templates.JansenRitCircuit"
-    from pyrates.circuit import CircuitTemplate
+    path = "pyrates.frontend.circuit.templates.JansenRitCircuit"
+    from pyrates.frontend.circuit import CircuitTemplate
 
     template = CircuitTemplate.from_yaml(path)
 
@@ -168,9 +167,9 @@ def test_circuit_instantiation():
 def test_equation_alteration():
     """Test, if properties of a template that mean to alter a certain parent equation are treated correctly"""
 
-    path = "pyrates.population.templates.InstantaneousCPO"
+    path = "pyrates.frontend.population.templates.InstantaneousCPO"
     # this template removes the component "L_m * " from the base equation "L_m * V = k * I"
-    from pyrates.operator import OperatorTemplate
+    from pyrates.frontend.operator import OperatorTemplate
 
     template = OperatorTemplate.from_yaml(path)
 
@@ -180,8 +179,8 @@ def test_equation_alteration():
 
 
 def test_network_def_workaround():
-    path = "pyrates.circuit.templates.JansenRitCircuit"
-    from pyrates.circuit import CircuitTemplate
+    path = "pyrates.frontend.circuit.templates.JansenRitCircuit"
+    from pyrates.frontend.circuit import CircuitTemplate
 
     template = CircuitTemplate.from_yaml(path)
 
