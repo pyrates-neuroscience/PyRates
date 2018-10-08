@@ -362,6 +362,9 @@ class ExpressionParser(ParserElement):
                             op1 = self.funcs['reshape'](op1, [1, target_shape[0]])
                         else:
                             op1 = self.funcs['reshape'](op1, [target_shape[1], 1])
+            elif hasattr(op1, 'dense_shape') and hasattr(op2, 'shape'):
+                if len(op2.shape) == 1:
+                    op2 = self.funcs['reshape'](op2, list(op2.shape) + [1])
 
             # combine elements via mathematical/boolean operator
             try:
@@ -846,36 +849,12 @@ def parse_dict(var_dict: dict,
 
             elif var['vtype'] == 'constant':
 
-                # turn `value` into array
-                vals = np.array(var['value'], dtype=getattr(np, var['dtype']))
-                if vals.shape != var['shape']:
-                    vals = np.zeros(var['shape']) + vals
-
-                # check how many of the entries in `value` are zero
-                n_zeros = 0
-                for i, val in enumerate(vals.flatten()):
-                    if val == 0:
-                        n_zeros += 1
-                frac_zeros = n_zeros / (i + 1)
-
-                if frac_zeros > 1.0:
-
-                    # create sparse, constant tensor
-                    indices = np.argwhere(vals != 0.)
-                    vals = vals[vals != 0]
-                    tf_var = tf.SparseTensor(indices=indices,
-                                             values=np.array(vals, dtype=getattr(np, var['dtype'])),
-                                             dense_shape=var['shape'],
-                                             )
-
-                else:
-
-                    # create dense, constant tensor
-                    tf_var = tf.constant(value=var['value'],
-                                         name=var_name,
-                                         shape=var['shape'],
-                                         dtype=getattr(tf, var['dtype'])
-                                         )
+                # create dense, constant tensor
+                tf_var = tf.constant(value=var['value'],
+                                     name=var_name,
+                                     shape=var['shape'],
+                                     dtype=getattr(tf, var['dtype'])
+                                     )
 
             elif var['vtype'] == 'placeholder':
 
@@ -883,6 +862,14 @@ def parse_dict(var_dict: dict,
                                         shape=var['shape'],
                                         dtype=getattr(tf, var['dtype'])
                                         )
+
+            elif var['vtype'] in 'constant_sparse_state_var_sparse':
+
+                # create a sparse tensor
+                tf_var = tf.SparseTensor(dense_shape=var['shape'],
+                                         values=np.array(var['value'][var['value'] != 0]).flatten(),
+                                         indices=np.argwhere(np.array(var['value']) != 0)
+                                         )
 
             else:
 

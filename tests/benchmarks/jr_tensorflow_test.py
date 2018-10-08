@@ -26,7 +26,7 @@ sparseness_e = 0.1
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 800
 
 # connectivity parameters
 c_intra = 135.
@@ -495,7 +495,7 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 results, ActTime = net.run(simulation_time=simulation_time,
                            # inputs={net.nodes['jrc'].U: inp},
                            # inputs = input_coll,
-                           outputs={'V': net.nodes['pc/0']['operator_ptr/v']},
+                           outputs={'V': net.nodes['net']['operator_ptr/v']},
                            #outputs=output_coll,
                            sampling_step_size=1e-3)
 
