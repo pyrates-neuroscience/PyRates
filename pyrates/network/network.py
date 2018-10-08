@@ -9,7 +9,6 @@ from pandas import DataFrame
 import time as t
 import numpy as np
 from networkx import MultiDiGraph
-from copy import deepcopy
 
 # pyrates imports
 from pyrates.parser import parse_dict, parse_equation
@@ -102,7 +101,7 @@ class Network(MultiDiGraph):
         # additional object attributes
         ##############################
 
-        self.key = key if key else 'net:0'
+        self.key = key if key else 'net/0'
         self.dt = dt
         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
         self.states = []
@@ -374,8 +373,8 @@ class Network(MultiDiGraph):
                  target_node: str,
                  source_var: str,
                  target_var: str,
-                 source_to_edge_map: Optional[np.ndarray] = None,
-                 edge_to_target_map: Optional[np.ndarray] = None,
+                 source_to_edge_map: Optional[dict] = None,
+                 edge_to_target_map: Optional[dict] = None,
                  weight: Optional[Union[float, list, np.ndarray]] = 1.,
                  delay: Optional[Union[float, list, np.ndarray]] = 0.
                  ) -> None:
@@ -421,44 +420,57 @@ class Network(MultiDiGraph):
             with tf.variable_scope(f'{source_node}_{target_node}_{edge_idx}'):
 
                 # create edge operator dictionary
-                source_to_edge_mapping = "" if source_to_edge_map is None else "smap @ "
-                edge_to_target_mapping = "" if edge_to_target_map is None else "tmap @ "
-                weight = np.array(weight)
-                delay = np.array(delay) if delay else np.array([0])
+                #################################
+
+                # check whether mappings between source, edge and target space have to be performed
+                source_to_edge_mapping = "smap @ " if source_to_edge_map else ""
+                edge_to_target_mapping = "tmap @ " if edge_to_target_map else ""
+
+                # create index for delay if necessary
+                if not delay:
+                    delay = np.array([0])
                 _, target_var_name = target_var.split('/')
                 delay_idx = "" if np.sum(delay) == 0 else "[d]"
-                if edge_to_target_map is not None and len(target_var_tf.shape) == 1:
-                    idx = "[:,0]"
+
+                # create index for edge equation if necessary
+                if edge_to_target_map and len(target_var_tf.shape) == 1:
+                    edge_idx = "[:,0]"
                 elif len(target_var_tf.shape) == 0:
-                    idx = "[0]"
+                    edge_idx = "[0]"
                 else:
-                    idx = ""
+                    edge_idx = ""
+
+                # set up coupling operator
                 op = {'equations': [f"tvar{delay_idx} = ({edge_to_target_mapping}"
-                                    f"( c * ({source_to_edge_mapping} svar))){idx}"],
+                                    f"( c * ({source_to_edge_mapping} svar))){edge_idx}"],
                       'inputs': {},
                       'output': target_var}
 
                 # create edge operator arguments dictionary
+                if type(weight) is np.ndarray:
+                    weight_shape = weight.shape if len(weight.shape) == 2 else weight.shape + (1,)
+                else:
+                    weight_shape = (len(weight), 1)
                 op_args = {'c': {'vtype': 'constant',
                                  'dtype': 'float32',
-                                 'shape': weight.shape if len(weight.shape) == 2 else weight.shape + (1,),
+                                 'shape': weight_shape,
                                  'value': weight}
                            }
                 if np.sum(delay) > 0:
                     op_args['d'] = {'vtype': 'constant',
                                     'dtype': 'int32',
-                                    'shape': delay.shape,
+                                    'shape': delay.shape if type(delay) is np.ndarray else len(delay),
                                     'value': delay}
                 if source_to_edge_map is not None:
                     op_args['smap'] = {'vtype': 'constant_sparse',
-                                       'dtype': 'float32',
-                                       'shape': source_to_edge_map.shape,
-                                       'value': np.array(source_to_edge_map, dtype=np.float32)}
+                                       'shape': source_to_edge_map['dense_shape'],
+                                       'value': [1.] * len(source_to_edge_map['indices']),
+                                       'indices': source_to_edge_map['indices']}
                 if edge_to_target_map is not None:
                     op_args['tmap'] = {'vtype': 'constant_sparse',
-                                       'dtype': 'float32',
-                                       'shape': edge_to_target_map.shape,
-                                       'value': np.array(edge_to_target_map, dtype=np.float32)}
+                                       'shape': edge_to_target_map['dense_shape'],
+                                       'value': [1.] * len(edge_to_target_map['indices']),
+                                       'indices': edge_to_target_map['indices']}
 
                 # parse into tensorflow graph
                 op_args_tf = parse_dict(op_args, self.tf_graph)
@@ -780,39 +792,49 @@ class Network(MultiDiGraph):
             ##############################################
 
             # create mapping from lower dimensional source to higher dimensional edge space
-            smap = np.zeros((n_edges, n_sources))
+            smap_shape = (n_edges, n_sources)
+            smap = []
+            identity_map = True
             for edge_idx, source_idx in zip(edge['edge_idx'], edge['source_idx']):
                 if type(source_idx) is tuple:
                     for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), range(source_idx[0], source_idx[1])):
-                        smap[e_idx, s_idx] = 1.
+                        smap.append([e_idx, s_idx])
                 elif type(source_idx) is list:
                     for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), source_idx):
-                        smap[e_idx, s_idx] = 1.
+                        smap.append([e_idx, s_idx])
                 else:
-                    smap[edge_idx[0]:edge_idx[1], source_idx] = 1.
+                    for e_idx in range(edge_idx[0], edge_idx[1]):
+                        smap.append([e_idx, source_idx])
+                if smap[-1][0] != smap[-1][1]:
+                    identity_map = False
 
             # add mapping to edge attributs
-            if n_edges != n_sources or np.sum(smap.flatten()) != n_edges:
-                edge['source_to_edge_map'] = smap
+            if n_edges != n_sources or not identity_map:
+                edge['source_to_edge_map'] = {'indices': smap, 'dense_shape': smap_shape}
 
             # create mapping from edge to target variables
             ##############################################
 
             # create mapping from lower dimensional source to higher dimensional edge space
-            tmap = np.zeros((n_targets, n_edges))
+            tmap_shape = (n_targets, n_edges)
+            tmap = []
+            identity_map = True
             for edge_idx, target_idx in zip(edge['edge_idx'], edge['target_idx']):
                 if type(target_idx) is tuple:
                     for t_idx, e_idx in zip(range(target_idx[0], target_idx[1]), range(edge_idx[0], edge_idx[1])):
-                        tmap[t_idx, e_idx] = 1.
+                        tmap.append([t_idx, e_idx])
                 elif type(target_idx) is list:
                     for t_idx, e_idx in zip(target_idx, range(edge_idx[0], edge_idx[1])):
-                        tmap[t_idx, e_idx] = 1.
+                        tmap.append([t_idx, e_idx])
                 else:
-                    tmap[target_idx, edge_idx[0]:edge_idx[1]] = 1.
+                    for e_idx in range(edge_idx[0], edge_idx[1]):
+                        tmap.append([target_idx, e_idx])
+                if tmap[-1][0] != tmap[-1][1]:
+                    identity_map = False
 
             # add mapping to edge attributs
-            if n_edges != n_sources or np.sum(tmap.flatten()) != n_edges:
-                edge['edge_to_target_map'] = tmap
+            if n_edges != n_sources or not identity_map:
+                edge['edge_to_target_map'] = {'indices': tmap, 'dense_shape': tmap_shape}
 
             # add information about edge projection to target node
             ######################################################
@@ -957,7 +979,7 @@ class Network(MultiDiGraph):
         ######################
 
         node_ref = nodes.pop()
-        new_node = deepcopy(old_net_config.nodes[node_ref])
+        new_node = old_net_config.nodes[node_ref]
         self.node_arg_map[node_ref] = {}
 
         # go through node attributes and store their value and shape
@@ -987,7 +1009,7 @@ class Network(MultiDiGraph):
 
         for i, node_name in enumerate(nodes):
 
-            node = deepcopy(old_net_config.nodes[node_name])
+            node = old_net_config.nodes[node_name]
             self.node_arg_map[node_name] = {}
 
             # go through arguments
@@ -1171,7 +1193,7 @@ class Network(MultiDiGraph):
 
             # extract edge
             edge_ref = edges[0]
-            new_edge = deepcopy(old_net_config.edges[edge_ref])
+            new_edge = old_net_config.edges[edge_ref]
 
             # change delay and weight attributes
             new_edge['delay'] = delay_col if delay_col else None
@@ -1249,7 +1271,6 @@ class Network(MultiDiGraph):
                         dims = tuple(arg_tmp['shape'])
 
                         # append value to argument dictionary
-                        idx = (0, len(val))
                         if len(dims) > 0 and type(val) is float:
                             val = np.zeros(dims) + val
                         else:

@@ -867,8 +867,8 @@ def parse_dict(var_dict: dict,
 
                 # create a sparse tensor
                 tf_var = tf.SparseTensor(dense_shape=var['shape'],
-                                         values=np.array(var['value'][var['value'] != 0]).flatten(),
-                                         indices=np.argwhere(np.array(var['value']) != 0)
+                                         values=var['value'],
+                                         indices=var['indices']
                                          )
 
             else:
