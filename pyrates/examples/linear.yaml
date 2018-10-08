@@ -1,0 +1,54 @@
+%YAML 1.2
+---
+LinearOperator:
+  description: Simple example of an operator with a linear equation.
+  base: OperatorTemplate
+  equation: "y = m*x + n"
+  variables:
+    m:
+      description: linear scaling coefficient
+      default: 1
+    n:
+      description: additive offset
+      default: 0
+    x:
+      description: independent variable
+      default: input
+    y:
+      description: dependent variable
+      default: output
+
+IncrementOperator:
+base: OperatorTemplate
+equation: "out = in + a"
+variables:
+  out:
+    default: output
+  in:
+    default: input
+  a:
+    default: 1
+
+ExampleNode:
+  description: Simple example with one operator
+  base: NodeTemplate
+  operators:
+    - LinearOperator
+
+ExampleEdge:
+  description: Simple edge with scaling
+  operators:
+    - IncrementOperator
+
+ExampleCircuit:
+  description: Simple circuit with one node and self-connection
+  base: CircuitTemplate
+  label: ExNet
+  nodes: 
+  
+    Lin: ExampleNode
+  edge_templates:
+    Inc: ExampleEdge
+  edges:
+    - [Lin, Lin, Inc, LinearOperator, 1]
+
