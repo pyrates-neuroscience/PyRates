@@ -430,12 +430,14 @@ class CircuitTemplate(AbstractBaseTemplate):
         if nodes:
             for key, path in nodes.items():
                 if isinstance(path, str):
+                    path = self._format_path(path)
                     self.nodes[key] = NodeTemplate.from_yaml(path)
 
         self.edge_templates = {}
         if edge_templates:
             for key, path in edge_templates.items():
                 if isinstance(path, str):
+                    path = self._format_path(path)
                     self.edge_templates[key] = EdgeTemplate.from_yaml(path)
 
         if edges:

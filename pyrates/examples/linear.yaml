@@ -19,15 +19,16 @@ LinearOperator:
       default: output
 
 IncrementOperator:
-base: OperatorTemplate
-equation: "out = in + a"
-variables:
-  out:
-    default: output
-  in:
-    default: input
-  a:
-    default: 1
+  description: Simple coupling operator that increments its input by a
+  base: OperatorTemplate
+  equation: "x = y + a"
+  variables:
+    x:
+      default: output
+    y:
+      default: input
+    a:
+      default: 1
 
 ExampleNode:
   description: Simple example with one operator
@@ -36,6 +37,7 @@ ExampleNode:
     - LinearOperator
 
 ExampleEdge:
+  base: EdgeTemplate
   description: Simple edge with scaling
   operators:
     - IncrementOperator
@@ -44,11 +46,10 @@ ExampleCircuit:
   description: Simple circuit with one node and self-connection
   base: CircuitTemplate
   label: ExNet
-  nodes: 
-  
-    Lin: ExampleNode
+  nodes:
+    Node: ExampleNode
   edge_templates:
-    Inc: ExampleEdge
+    Edge: ExampleEdge
   edges:
-    - [Lin, Lin, Inc, LinearOperator, 1]
+    - [Node, Node, Edge, LinearOperator, 1]
 
