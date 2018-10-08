@@ -33,7 +33,7 @@ class AbstractBaseTemplate:
         path
             Path to template in YAML file of form 'directories.file.template'
         """
-
+        # ToDo: add AbstractBaseTemplate._format_path functionality here
         from importlib import import_module
         module = import_module(cls.__module__)
         loader = getattr(module, f"{cls.__name__}Loader")

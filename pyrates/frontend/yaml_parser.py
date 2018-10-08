@@ -98,6 +98,7 @@ class TemplateLoader:
     @staticmethod
     def parse_path(path: str):
         """Parse a path of form path.to.template, returning a tuple of (name, file, abspath)."""
+        # ToDo: Add parent path as required argument, to better locate errors in YAML templates.
 
         if "." in path:
             parts = path.split(".")

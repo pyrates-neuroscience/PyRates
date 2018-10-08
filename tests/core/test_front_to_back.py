@@ -14,4 +14,16 @@ def setup_module():
 
 
 def test_simple_example():
-    pass
+    """Test of a simple self-connecting one-node network with a linear operator for the full pipeline from YAML
+    to simulation."""
+
+    # Step 1: Load Circuit template
+    from pyrates.frontend.circuit import CircuitTemplate
+    path = "pyrates.examples.linear.ExampleCircuit"
+    tmp = CircuitTemplate.from_yaml(path)
+
+    # Step 2: Instantiate template to create frontend IR
+    circuit = tmp.apply()
+
+    # Step 3: Reformat frontend IR to backend IR
+    net_def = circuit.network_def()
