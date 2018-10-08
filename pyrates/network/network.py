@@ -423,14 +423,16 @@ class Network(MultiDiGraph):
                 # create edge operator dictionary
                 source_to_edge_mapping = "" if source_to_edge_map is None else "smap @ "
                 edge_to_target_mapping = "" if edge_to_target_map is None else "tmap @ "
-                if edge_to_target_map is not None and len(target_var_tf.shape) == 1:
-                    idx = "[:,0]"
-                else:
-                    idx = ""
                 weight = np.array(weight)
                 delay = np.array(delay) if delay else np.array([0])
                 _, target_var_name = target_var.split('/')
                 delay_idx = "" if np.sum(delay) == 0 else "[d]"
+                if edge_to_target_map is not None and len(target_var_tf.shape) == 1:
+                    idx = "[:,0]"
+                elif len(target_var_tf.shape) == 0:
+                    idx = "[0]"
+                else:
+                    idx = ""
                 op = {'equations': [f"tvar{delay_idx} = ({edge_to_target_mapping}"
                                     f"( c * ({source_to_edge_mapping} svar))){idx}"],
                       'inputs': {},
