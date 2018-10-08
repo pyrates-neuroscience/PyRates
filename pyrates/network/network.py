@@ -112,7 +112,7 @@ class Network(MultiDiGraph):
         ###############################
 
         if vectorize:
-            net_config = self.vectorize(net_config=net_config, first_lvl_vec=vectorize, second_lvl_vec=True)
+            net_config = self.vectorize(net_config=net_config, first_lvl_vec=vectorize, second_lvl_vec=False)
 
         # create objects on tensorflow graph
         ####################################
@@ -783,6 +783,9 @@ class Network(MultiDiGraph):
                 if type(source_idx) is tuple:
                     for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), range(source_idx[0], source_idx[1])):
                         smap[e_idx, s_idx] = 1.
+                elif type(source_idx) is list:
+                    for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), source_idx):
+                        smap[e_idx, s_idx] = 1.
                 else:
                     smap[edge_idx[0]:edge_idx[1], source_idx] = 1.
 
@@ -798,6 +801,9 @@ class Network(MultiDiGraph):
             for edge_idx, target_idx in zip(edge['edge_idx'], edge['target_idx']):
                 if type(target_idx) is tuple:
                     for t_idx, e_idx in zip(range(target_idx[0], target_idx[1]), range(edge_idx[0], edge_idx[1])):
+                        tmap[t_idx, e_idx] = 1.
+                elif type(target_idx) is list:
+                    for t_idx, e_idx in zip(target_idx, range(edge_idx[0], edge_idx[1])):
                         tmap[t_idx, e_idx] = 1.
                 else:
                     tmap[target_idx, edge_idx[0]:edge_idx[1]] = 1.
@@ -918,43 +924,6 @@ class Network(MultiDiGraph):
                         # update edge information
                         edge = net_config.edges[input_info['sources'][j]]
                         edge['target_var'] = f'{var_name}_collector_{j}/{var_name}_col_{j}'
-
-        # Final Stage: Vectorize operator inputs correctly
-        ##################################################
-
-        # go through nodes
-        # for node_name, node in net_config.nodes.items():
-        #
-        #     # go through node's operators
-        #     for op_name in node['op_order']:
-        #
-        #         op = node['operators'][op_name]
-        #
-        #         # go through operator's inputs
-        #         for var_name, inputs in op['inputs'].items():
-        #
-        #             if len(inputs['sources']) > 1:
-        #
-        #                 # extract shapes
-        #                 arg_name = f'{op_name}/{var_name}'
-        #                 source_shapes = []
-        #                 for source in inputs['sources']:
-        #                     source_var = f"{source}/{node['operators'][source]['output']}"
-        #                     source_shapes.append(node['operator_args'][source_var]['shape'])
-        #
-        #                 # map source variables to target variable
-        #                 #########################################
-        #
-        #                 if inputs['reduce_dim']:
-        #
-        #                     if not len(list(set(source_shapes))) == 1:
-        #
-        #                         # add indices from node_arg_map to operator outputs
-        #                         for source in inputs['sources']:
-        #                             idx = node_arg_map[node_name][arg_name]
-        #                             if type(idx) is tuple:
-        #                                 idx = f'{idx[0]}:{idx[1]}'
-        #                             node['operators'][source]['output'] += f"[{idx}]"
 
         return net_config
 
@@ -1154,7 +1123,7 @@ class Network(MultiDiGraph):
                     raise ValueError(f"Dimensionality of weights and delays of edge between {edge[0]} and {edge[1]}"
                                      f" do not match. They are of length {len(weights)} and {len(delays)}."
                                      f" Please turn of the `vectorize` option or change the dimensionality of the"
-                                     f" edges' attributes.")
+                                     f" edge's attributes.")
 
                 # add weight, delay and variable indices to collector lists
                 if weights:
@@ -1164,8 +1133,36 @@ class Network(MultiDiGraph):
                     old_edge_idx.append((old_edge_idx[-1][1], old_edge_idx[-1][1] + 1))
                 if delays:
                     delay_col += delays
-                old_svar_idx.append(self.node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']])
-                old_tvar_idx.append(self.node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']])
+                if 'source_idx' in edge_dict.keys():
+                    idx = self.node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']]
+                    if type(idx) is tuple:
+                        idx = range(idx[0], idx[1])
+                        idx_new = []
+                        for i in edge_dict['source_idx']:
+                            if type(i) is tuple:
+                                idx_new.append(idx[i[0]:i[1]])
+                            else:
+                                idx_new.append(idx[i])
+                    else:
+                        idx_new = idx
+                    old_svar_idx.append(idx_new)
+                else:
+                    old_svar_idx.append(self.node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']])
+                if 'target_idx' in edge_dict.keys():
+                    idx = self.node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']]
+                    if type(idx) is tuple:
+                        idx = range(idx[0], idx[1])
+                        idx_new = []
+                        for i in edge_dict['target_idx']:
+                            if type(i) is tuple:
+                                idx_new.append(idx[i[0]:i[1]])
+                            else:
+                                idx_new.append(idx[i])
+                    else:
+                        idx_new = idx
+                    old_tvar_idx.append(idx_new)
+                else:
+                    old_tvar_idx.append(self.node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']])
 
             # create new, vectorized edge
             #############################
@@ -1318,8 +1315,8 @@ class Network(MultiDiGraph):
         # define output variables
         if not outputs:
             outputs = dict()
-            for name, node in self.nodes.items():
-                outputs[name + '_v'] = getattr(node['handle'], 'name')
+            #for name, node in self.nodes.items():
+            #    outputs[name + '_v'] = getattr(node['handle'], 'name')
 
         # linearize input dictionary
         if inputs:
