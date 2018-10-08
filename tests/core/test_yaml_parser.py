@@ -16,27 +16,27 @@ def setup_module():
     print("===========================")
 
 
-@pytest.mark.parametrize("section", ["axon", "population", "synapse"])
-def test_parse_operator_templates(section):
-    """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
-    from ruamel.yaml import YAML
-    import os
-
-    yaml = YAML(typ="safe", pure=True)
-
-    path = f"pyrates/{section}/"
-    base_filename = f"{section}.yaml"
-    template_filename = f"templates.yaml"
-
-    # load base template
-    filepath = os.path.join(path, base_filename)
-    with open(filepath, "r") as file:
-        base = yaml.load(file)
-
-    # load further templates
-    filepath = os.path.join(path, template_filename)
-    with open(filepath, "r") as file:
-        templates = yaml.load(file)
+# @pytest.mark.parametrize("section", ["axon", "population", "synapse"])
+# def test_parse_operator_templates(section):
+#     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
+#     from ruamel.yaml import YAML
+#     import os
+#
+#     yaml = YAML(typ="safe", pure=True)
+#
+#     path = os.path.abspath(f"pyrates/{section}/")
+#     base_filename = f"{section}.yaml"
+#     template_filename = f"templates.yaml"
+#
+#     # load base template
+#     filepath = os.path.join(path, base_filename)
+#     with open(filepath, "r") as file:
+#         base = yaml.load(file)
+#
+#     # load further templates
+#     filepath = os.path.join(path, template_filename)
+#     with open(filepath, "r") as file:
+#         templates = yaml.load(file)
 
 
 @pytest.mark.parametrize("operator", ["pyrates.axon.axon.PotentialToRateOperator",

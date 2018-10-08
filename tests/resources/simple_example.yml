@@ -1,0 +1,22 @@
+%YAML 1.2
+---
+ExampleOperator:
+  base: OperatorTemplate
+  equation: "y = m*x + n"
+  variables:
+    m:
+      description: linear scaling coefficient
+      default: 1
+    n:
+      description: additive offset
+      default: 0
+    x:
+      description: independent variable
+      default: input
+    y:
+      description: dependent variable
+      default: output
+
+
+ExampleNode:
+  base: NodeTemplate
