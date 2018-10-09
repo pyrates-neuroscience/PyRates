@@ -5,8 +5,6 @@
 import numpy as np
 import inspect
 from typing import List, Union, Optional, Iterable, TypeVar, Any
-import tensorflow as tf
-from sympy.parsing.sympy_parser import parse_expr
 
 # type definitions
 ClassInstance = TypeVar('ClassInstance')
