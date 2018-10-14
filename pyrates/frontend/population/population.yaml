@@ -49,7 +49,6 @@ NeuralMass:
     pyrates.frontend.axon.axon.PotentialToRateOperator:
       defaults: null
       options: null
-  options: null
 
 
 

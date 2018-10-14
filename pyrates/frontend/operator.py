@@ -5,7 +5,7 @@ from typing import Union
 # pyrates internal imports
 from pyrates import PyRatesException
 from pyrates.frontend.abc import AbstractBaseTemplate
-from pyrates.frontend.yaml_parser import TemplateLoader
+from pyrates.frontend.yaml_parser import TemplateLoader, deep_freeze
 
 # meta infos
 __author__ = " Daniel Rose"
@@ -35,6 +35,8 @@ class OperatorTemplate(AbstractBaseTemplate):
         key = self.name
         try:
             instance, variables = self.cache[key]
+            # instance = defrost(instance)
+            # variables = defrost(variables)
             instance, variables = dict(instance), dict(variables)
         except KeyError:
             # get variable definitions and specified default values
@@ -47,7 +49,7 @@ class OperatorTemplate(AbstractBaseTemplate):
             # operator instance is invoked as a dictionary of equation and variable definition
             # this may be subject to change
             instance = dict(equation=equation, inputs=inputs, output=output)
-            self.cache[key] = (frozenset(instance), frozenset(variables))
+            self.cache[key] = (deep_freeze(instance), deep_freeze(variables))
 
         if return_key:
             # # shorten key

@@ -142,7 +142,7 @@ def test_full_jansen_rit_circuit_template_load():
 
     # test, whether coupling operator has been loaded correctly
     coupling_path = "pyrates.frontend.edge.templates.LinearCouplingOperator"
-    edge_temp = template.edge_templates["LC"]
+    edge_temp = template.edges[0][2]
     assert isinstance(edge_temp, EdgeTemplate)
     assert list(edge_temp.operators)[0] is TemplateLoader.cache[coupling_path]
 

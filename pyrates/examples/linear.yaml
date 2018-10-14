@@ -1,5 +1,9 @@
 %YAML 1.2
 ---
+
+aliases:
+  &Edge ExampleEdge
+
 LinearOperator:
   description: Simple example of an operator with a linear equation.
   base: OperatorTemplate
@@ -49,8 +53,7 @@ ExampleCircuit:
   nodes:
     Node: ExampleNode
     Circuit: SomeCircuit
-  aliases:
-    &Edge ExampleEdge
+
   edges:
     # - [Source/op/var, Target/op/var, Edge class, target op, (, weight (, delay))]
     - source: Node/LinearOperator/y

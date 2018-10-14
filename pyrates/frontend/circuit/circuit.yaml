@@ -4,7 +4,6 @@ BaseCircuit:
   description: Base implementation of a circuit
   base: CircuitTemplate  # refers to parent template, in this case the python class
   nodes: null  # dictionary with node labels as keys and node templates as values
-  edge_templates: null  # dictionary with edge templates: key=label, value=template
   edges: null  # list of edges with entries [source, target, coupling label, coupling arguments]
   label: circuit  # default label of circuit template to be used if no other label is given
 

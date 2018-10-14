@@ -4,6 +4,8 @@ aliases:
   - &JRExcitatorySynapse pyrates.frontend.synapse.templates.JansenRitExcitatorySynapseRCO
   - &JRInhibitorySynapse pyrates.frontend.synapse.templates.JansenRitInhibitorySynapseRCO
 
+  - &LC pyrates.frontend.edge.templates.LCEdge
+
 JansenRitCircuit:
   description: |
     Implementation of a neural mass model of 3 neural masses following Jansen and Rit [1]_
@@ -20,18 +22,16 @@ JansenRitCircuit:
     JR_IIN: pyrates.frontend.population.templates.JansenRitIN
     JR_EIN: pyrates.frontend.population.templates.JansenRitIN
 
-  edge_templates:
-    LC: pyrates.frontend.edge.templates.LCEdge
-#    LC: pyrates.coupling.templates.LinearCoupling
+  #    LC: pyrates.coupling.templates.LinearCoupling
   # single coupling operator. needs rework for multiple coupling operators in single circuit.
   # alternative: use YAML tags for proper references
 
   edges:
     # [source, target, type, target_operator, weight (, delay)]
-    - [JR_PC, JR_IIN, LC, *JRExcitatorySynapse, 33.75, 0]
-    - [JR_PC, JR_EIN, LC, *JRExcitatorySynapse, 135., 0]
-    - [JR_EIN, JR_PC, LC, *JRExcitatorySynapse, 108., 0]
-    - [JR_IIN, JR_PC, LC, *JRInhibitorySynapse, 33.75]  # leave out delay to default to 0
+    - [JR_PC, JR_IIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 33.75}]
+    - [JR_PC, JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 135.}]
+    - [JR_EIN, JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 108.}]
+    - [JR_IIN, JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 33.75}]
 
 MultiJansenRitCircuit:
   description: |

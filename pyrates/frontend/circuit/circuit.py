@@ -185,14 +185,15 @@ class Circuit(MultiDiGraph):
         return unique_label
 
     # noinspection PyUnresolvedReferences
-    def _identify_sources_targets(self, source: str, target: str, target_operator: str,
+    def _identify_sources_targets(self, source: str, target: str,
                                   op_graph: DiGraph, label_map: dict=None) -> (str, str):
         # 1: get reference for source variable
         ######################################
-        if label_map:
-            source = label_map[source]
-            target = label_map[target]
+        # if label_map:
+        #     source = label_map[source]
+        #     target = label_map[target]
 
+        # ToDo: Move source/target var identification to edge creation
         # Step 1: Detect edge input variable
         ####################################
         # noinspection PyTypeChecker
