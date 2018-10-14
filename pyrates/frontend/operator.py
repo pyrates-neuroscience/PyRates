@@ -3,6 +3,7 @@ import re
 from typing import Union
 
 # pyrates internal imports
+from pyrates import PyRatesException
 from pyrates.frontend.abc import AbstractBaseTemplate
 from pyrates.frontend.yaml_parser import TemplateLoader
 
@@ -17,69 +18,60 @@ class OperatorTemplate(AbstractBaseTemplate):
     equation or variables."""
 
     cache = {}  # tracks all unique instances of applied operator templates
-    key_map = {}
 
-    def __init__(self, name: str, path: str, equation: str, variables: dict, description: str,
-                 options: dict = None):
+    # key_map = {}  # tracks renaming of of operator keys to have shorter unique keys
+
+    def __init__(self, name: str, path: str, equation: str, variables: dict, description: str):
         """For now: only allow single equation in operator template."""
 
         super().__init__(name, path, description)
 
         self.equation = equation
         self.variables = variables
-        self.options = options
-        # if options:
-        #     raise NotImplementedError
 
-    def apply(self, options: dict = None, return_key=False, max_count=1000):
+    def apply(self, return_key=False):
         """Returns the non-editable but unique, cashed definition of the operator."""
 
-        if not options:
-            key = (self.path, None)
-        else:
-            key = (self.path, frozenset(options.items()))
-
+        key = self.name
         try:
-            instance = self.cache[key]
-            *_, values = self._separate_variables()
+            instance, variables = self.cache[key]
+            instance, variables = dict(instance), dict(variables)
         except KeyError:
-            if options:
-                raise NotImplementedError("Applying options to a template is not implemented yet.")
             # get variable definitions and specified default values
-            variables, inputs, output, values = self._separate_variables()
+            # ToDo: remove variable separation: instead pass variables detached from equation?
+            variables, inputs, output = self._separate_variables()
 
             # reduce order of ODE if necessary
             *equation, variables = self._reduce_ode_order(self.equation, variables)
 
             # operator instance is invoked as a dictionary of equation and variable definition
             # this may be subject to change
-            instance = dict(equation=equation, variables=variables, inputs=inputs, output=output)
-            self.cache[key] = instance
+            instance = dict(equation=equation, inputs=inputs, output=output)
+            self.cache[key] = (frozenset(instance), frozenset(variables))
 
         if return_key:
-            # shorten key
-            ######################
-            if key in self.key_map:  # fetch already known key from map
-                new_key = self.key_map[key]
-            else:  # create new unique short key
-                base_name = key[0].split(".")[-1]
-
-                # ensure uniqueness
-                for counter in range(max_count):  # max 1000 iterations by default
-                    new_key = f"{base_name}:{counter}"
-                    if new_key in self.key_map.values():
-                        continue  # increment counter
-                    else:  # use current new op_key
-                        self.key_map[key] = new_key
-                        break
-                else:
-                    raise RecursionError(
-                        f"Maximum number of iterations (={max_count}) reached. This number can be changed by setting"
-                        f"the 'max_count' argument on the OperatorTemplate.apply() method.")
-
-            return instance, values, new_key
+            # # shorten key
+            # ######################
+            # if key in self.key_map:  # fetch already known key from map
+            #     new_key = self.key_map[key]
+            # else:  # create new unique short key
+            #     base_name = key[0].split(".")[-1]
+            #
+            #     # ensure uniqueness
+            #     for counter in range(max_count):  # max 1000 iterations by default
+            #         new_key = f"{base_name}:{counter}"
+            #         if new_key in self.key_map.values():
+            #             continue  # increment counter
+            #         else:  # use current new op_key
+            #             self.key_map[key] = new_key
+            #             break
+            #     else:
+            #         raise RecursionError(
+            #             f"Maximum number of iterations (={max_count}) reached. This number can be changed by setting"
+            #             f"the 'max_count' argument on the OperatorTemplate.apply() method.")
+            return instance, variables, key
         else:
-            return instance, values
+            return instance, variables
         # TODO: return operator instance
 
     @staticmethod
@@ -126,35 +118,32 @@ class OperatorTemplate(AbstractBaseTemplate):
         # this part can be improved a lot with a proper expression parser
 
         variables = {}
-        values = {}
         inputs = {}
         output = None
         for variable, properties in self.variables.items():
             var_dict = {}
             for prop, expr in properties.items():
                 if prop == "default":
-                    var_dict["variable_type"], var_dict["data_type"], value = self._parse_vprops(expr)
+                    var_dict = self._parse_vprops(expr)
 
-                    if value:
-                        values[variable] = value
                     # else: don't pass information for that variable
 
                     # separate in/out specification from variable type specification
-                    if var_dict["variable_type"] == "input":
+                    if var_dict["vtype"] == "input":
                         inputs[variable] = dict(source=[], reduce_dim=True)  # default to True for now
-                        var_dict["variable_type"] = "state_var"
-                    elif var_dict["variable_type"] == "output":
+                        var_dict["vtype"] = "state_var"
+                    elif var_dict["vtype"] == "output":
                         if output is None:
                             output = variable  # for now assume maximum one output is present
                         else:
-                            raise ValueError("More than one output specification found in operator. "
-                                             "Only one output per operator is supported.")
-                        var_dict["variable_type"] = "state_var"
+                            raise PyRatesException("More than one output specification found in operator. "
+                                                   "Only one output per operator is supported.")
+                        var_dict["vtype"] = "state_var"
                 else:
                     var_dict[prop] = expr
             variables[variable] = var_dict
 
-        return variables, inputs, output, values
+        return variables, inputs, output
 
     @staticmethod
     def _parse_vprops(expr: Union[str, int, float]):
@@ -206,7 +195,7 @@ class OperatorTemplate(AbstractBaseTemplate):
             else:
                 dtype = "float32"  # base assumption
 
-        return vtype, dtype, value
+        return dict(vtype=vtype, dtype=dtype, value=value)
 
 
 class OperatorTemplateLoader(TemplateLoader):
@@ -218,7 +207,7 @@ class OperatorTemplateLoader(TemplateLoader):
 
     @classmethod
     def update_template(cls, base, name: str, path: str, equation: Union[str, dict] = None,
-                        variables: dict = None, description: str = None, options: dict = None):
+                        variables: dict = None, description: str = None):
         """Update all entries of the Operator template in their respective ways."""
 
         if equation:
@@ -247,17 +236,11 @@ class OperatorTemplateLoader(TemplateLoader):
         for var in rogue_variables:
             variables.pop(var)
 
-        if options:
-            options = cls.update_options(base.options, options)
-        else:
-            # copy old options dict
-            options = base.options
-
         if not description:
             description = base.__doc__  # or do we want to enforce documenting a template?
 
         return OperatorTemplate(name=name, path=path, equation=equation, variables=variables,
-                                description=description, options=options)
+                                description=description)
 
     @staticmethod
     def update_equation(equation: str,  # original equation

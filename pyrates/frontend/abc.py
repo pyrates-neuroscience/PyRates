@@ -8,7 +8,7 @@ __status__ = "Development"
 class AbstractBaseTemplate:
     """Abstract base class for templates"""
 
-    def __init__(self, name: str, path: str, description: str):
+    def __init__(self, name: str, path: str, description: str="Template without description"):
         self.name = name
         self.path = path
         self.__doc__ = description
