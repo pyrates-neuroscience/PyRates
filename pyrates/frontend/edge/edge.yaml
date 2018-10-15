@@ -34,12 +34,3 @@ BaseEdge:
   operators:
     CouplingOperator:
       defaults: null
-      options: null
-  options: null
-
-
-
-
-
-
-

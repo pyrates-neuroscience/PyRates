@@ -112,8 +112,8 @@ class TemplateLoader:
                 try:
                     module = importlib.import_module(parentdir)
                 except ModuleNotFoundError:
-                    raise PyRatesException(f"Could not find Python (module) directory associated to path `{parentdir}` of "
-                                           f"Template `{path}`.")
+                    raise PyRatesException(f"Could not find Python (module) directory associated to path "
+                                           f"`{parentdir}` of Template `{path}`.")
                 try:
                     abspath = module.__path__[0]  # __path__ returns a list[str]
                 except TypeError:
@@ -131,22 +131,39 @@ class TemplateLoader:
             raise NotImplementedError
             # this should only happen, if "base" is specified, but empty
 
-    @staticmethod
-    def update_options(options: Union[dict, None], updates: dict):
 
-        if options:
-            updated = options.copy()
+def deep_freeze(freeze: Union[dict, list, set, tuple]):
+    """
+
+    Parameters
+    ----------
+    freeze
+
+    Returns
+    -------
+    frozen
+    """
+
+    if isinstance(freeze, dict):
+        try:
+            frozen = frozenset(freeze.items())
+        except TypeError:
+            temp = set()
+            for key, item in freeze.items():
+                temp.add((key, deep_freeze(item)))
+            frozen = frozenset(temp)
+    elif isinstance(freeze, list):
+        try:
+            frozen = tuple(freeze)
+        except TypeError as e:
+            # Don't know what to do
+            raise e
+    else:
+        try:
+            hash(freeze)
+        except TypeError as e:
+            raise e
         else:
-            updated = {}
+            frozen = freeze
 
-        for opt, opt_dict in updates.items():
-            if opt in updated:
-                # update dictionary defining single condition
-                updated[opt].update(opt_dict)
-            else:
-                # copy new condition into options dictionary
-                updated.update({opt: opt_dict})
-
-        return updated
-
-
+    return frozen

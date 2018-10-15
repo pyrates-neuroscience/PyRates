@@ -17,7 +17,8 @@ from pyrates.frontend.edge.edge import EdgeTemplate
 from pyrates.frontend.node import NodeTemplate
 from pyrates import PyRatesException
 from pyrates.frontend.yaml_parser import TemplateLoader
-from pyrates.frontend.operator import OperatorTemplate
+
+# from pyrates.frontend.operator import OperatorTemplate
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -29,7 +30,6 @@ class Circuit(MultiDiGraph):
     and variables."""
 
     def __init__(self, label: str, nodes: dict = None,
-                 edge_templates: Dict[str, EdgeTemplate] = None,
                  edges: list = None, template: str = None, **attr):
         """
         Parameters:
@@ -41,30 +41,29 @@ class Circuit(MultiDiGraph):
         operators
             dictionary of coupling operators of form {op_label:OperatorTemplate}
         edges
-            list of tuples (source:str, target:str, coupling_operator:str, coupling_values:dict)
+            list of tuples (source:str, target:str, dict(template=edge_template, variables=coupling_values))
         attr
             attribute keyword arguments that are passed to networkx graph constructor.
         """
 
         super().__init__(**attr)
         self.label = label
-        self.label_cache = {}
+        self.label_counter = {}
         self.template = template
 
         label_map = self.add_nodes_from(nodes, from_templates=True)
 
-        self.add_edges_from(edges, edge_templates, label_map)
+        self.add_edges_from(edges, label_map)
 
-    def add_nodes_and_edges(self, nodes: Dict[str, NodeTemplate],
-                            edges: list,
-                            edge_templates: Dict[str, EdgeTemplate]):
-
-        label_map = {}
-        edge_list = []
-        for label, template in nodes.items():
-            # ensure label uniqueness
-            label_map[label] = self._get_unique_label(label)
-            self.add_node(label_map[label], node=template.apply())
+    # def add_nodes_and_edges(self, nodes: Dict[str, NodeTemplate],
+    #                         edges: list,):
+    #
+    #     label_map = {}
+    #     edge_list = []
+    #     for label, template in nodes.items():
+    #         # ensure label uniqueness
+    #         label_map[label] = self._get_unique_label(label)
+    #         self.add_node(label_map[label], node=template.apply())
 
     def add_nodes_from(self, nodes: Union[Dict[str, NodeTemplate], Dict[str, dict]],
                        from_templates=True, **attr) -> dict:
@@ -102,7 +101,7 @@ class Circuit(MultiDiGraph):
             super().add_nodes_from(nodes, **attr)
         return label_map
 
-    def add_node(self, label: str, template: NodeTemplate = None, options: dict = None,
+    def add_node(self, label: str, template: NodeTemplate = None,
                  node: dict = None, **attr) -> str:
         """Add single node"""
 
@@ -110,61 +109,58 @@ class Circuit(MultiDiGraph):
 
         if template:
 
-            super().add_node(label, node=template.apply(options), **attr)
+            super().add_node(label, node=template.apply(), **attr)
         else:  # default networkx behaviour
             super().add_node(label, node=node, **attr)
 
         return label
 
-    def add_edges_from(self, edges, edge_templates: dict = None, label_map: dict = None, **attr):
+    def add_edges_from(self, edges, label_map: dict = None, **attr):
         """ Add multiple edges.
 
         Parameters
         ----------
         edges
-            list of edges, each of shape [source, target, edge_type_key, target_operator_name, **values]
-        edge_templates
+            list of edges, each of shape [source/op/var, target/op/var, edge_template, variables]
         label_map
         attr
 
         Returns
         -------
-
         """
 
-        if edge_templates:
-            edge_list = []
-            for (source, target, template_key, target_operator, *values) in edges:
+        edge_list = []
+        for (source, target, template, values) in edges:
+            # get edge template and instantiate it
+            edge_type = template.apply()  # type: dict # edge spec
 
-                edge_type = edge_templates[template_key].apply()  # type: dict # edge spec
+            # get weight
+            weight = values.pop("weight", 1)
+            # get delay
+            delay = values.pop("delay", 0)
 
-                weight = values[0]
-                try:
-                    delay = values[1]
-                except IndexError:
-                    delay = 0
+            # coupling_op = edge_type["operators"]
+            # self._ensure_io_consistency(source, target, target_operator,
+            #                             coupling_op["inputs"], coupling_op["output"])
+            # ToDo: Implement source/op/var syntax
+            # take apart source and target strings
+            # for circuit from circuit:
+            # for ... in circuits
+            # for ... in nodes...
 
-                # coupling_op = edge_type["operators"]
-                # self._ensure_io_consistency(source, target, target_operator,
-                #                             coupling_op["inputs"], coupling_op["output"])
-                if label_map:
-                    source = label_map[source]
-                    target = label_map[target]
+            # test, if variables at source and target exist and reference them properly
+            source_var, target_var = self._identify_sources_targets(source, target,
+                                                                    edge_type["operators"],
+                                                                    label_map)
 
-                # test, if variables at source and target exist and reference them properly
-                source_var, target_var = self._get_edge_source_target_vars(source, target, target_operator,
-                                                                           edge_type["operators"])
-
-                edge_list.append((source, target,  # edge_unique_key,
-                                  {**edge_type,
-                                   # "target_operator": target_operator,
-                                   "weight": weight,
-                                   "delay": delay,
-                                   "source_var": source_var,
-                                   "target_var": target_var}))
-            super().add_edges_from(edge_list, **attr)
-        else:  # default networkx behaviour
-            super().add_edges_from(edges, **attr)
+            edge_list.append((source, target,  # edge_unique_key,
+                              {**edge_type,
+                               # "target_operator": target_operator,
+                               "weight": weight,
+                               "delay": delay,
+                               "source_var": source_var,
+                               "target_var": target_var}))
+        super().add_edges_from(edge_list, **attr)
 
     def _get_unique_label(self, label: str) -> str:
         """
@@ -172,30 +168,34 @@ class Circuit(MultiDiGraph):
         Parameters
         ----------
         label
-        max_count
 
         Returns
         -------
         unique_label
         """
         # define counter
-        if label in self.label_cache:
-            self.label_cache[label] += 1
+        if label in self.label_counter:
+            self.label_counter[label] += 1
         else:
-            self.label_cache[label] = 0
+            self.label_counter[label] = 0
 
         # set label
-        unique_label = f"{label}:{self.label_cache[label]}"
+        unique_label = f"{label}:{self.label_counter[label]}"
 
         return unique_label
 
     # noinspection PyUnresolvedReferences
-    def _get_edge_source_target_vars(self, source: str, target: str, target_operator: str,
-                                     op_graph: DiGraph) -> (str, str):
-
+    def _identify_sources_targets(self, source: str, target: str,
+                                  op_graph: DiGraph, label_map: dict=None) -> (str, str):
         # 1: get reference for source variable
         ######################################
+        # if label_map:
+        #     source = label_map[source]
+        #     target = label_map[target]
 
+        # ToDo: Move source/target var identification to edge creation
+        # Step 1: Detect edge input variable
+        ####################################
         # noinspection PyTypeChecker
         in_op = [op for op, in_degree in op_graph.in_degree if in_degree == 0]  # type: List[dict]
 
@@ -211,24 +211,32 @@ class Circuit(MultiDiGraph):
         else:
             source_var = in_var.pop()
 
-        # collect all output variables
-        source_out_vars = {}  # type: Dict[str, list]
-        source_op_graph = self.nodes[source]["operators"]
-        for op_key, data in source_op_graph.nodes(data=True):
-            out_var = data["output"]
-            if out_var not in source_out_vars:
-                source_out_vars[out_var] = []
+        # Step 2: Detect edge output variable
 
-            source_out_vars[out_var].append(op_key)
+        # Step 2: identify source variable
+        ##################################
+        # for now assume format source = "node/op/var"
 
-        # check for uniqueness of output variable
-        if len(source_out_vars[source_var]) > 1:
-            raise PyRatesException(f"Too many operators found for source variable `{source_var}`. The source variable "
-                                   f"of an edge needs to be a unique output in the source node.")
+        source_node, source_op, source_var = source.split("/")
+
+        # collect all output variables (the case, if source op/var not defined)
+        # source_out_vars = {}  # type: Dict[str, list]
+        # source_op_graph = self.nodes[source]["operators"]
+        # for op_key, data in source_op_graph.nodes(data=True):
+        #     out_var = data["output"]
+        #     if out_var not in source_out_vars:
+        #         source_out_vars[out_var] = []
+        #     source_out_vars[out_var].append(op_key)
+
+        # # check for uniqueness of output variable
+        # if len(source_out_vars[source_var]) > 1:
+        #     raise PyRatesException(f"Too many operators found for source variable `{source_var}`. The source variable"
+        #                            f" of an edge needs to be a unique output in the source node.")
 
         # assign output variable and operator as source_var
-        source_out_op = source_out_vars[source_var][0]
-        source_path = f"{source_out_op}/{source_var}"
+        # source_out_op = source_out_vars[source_var][0]
+        operators = self.nodes[source_node]
+        source_path = f"{source_op}/{source_var}"
         # note source variable and operator as input in input operators
         for op in in_op:
             op_graph.nodes[op]["inputs"][source_var]["source"].append(source_path)
@@ -408,7 +416,7 @@ class Circuit(MultiDiGraph):
             raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
 
         op_order = []
-        graph = op_graph.copy()
+        graph = op_graph.copy()  # type: DiGraph
         while graph.nodes:
             # noinspection PyTypeChecker
             primary_nodes = [node for node, in_degree in graph.in_degree if in_degree == 0]
@@ -421,8 +429,7 @@ class Circuit(MultiDiGraph):
 class CircuitTemplate(AbstractBaseTemplate):
 
     def __init__(self, name: str, path: str, description: str, label: str = "circuit",
-                 nodes: dict = None, edge_templates: dict = None, edges: List[tuple] = None,
-                 options: dict = None):
+                 nodes: dict = None, edges: List[tuple] = None):
 
         super().__init__(name, path, description)
 
@@ -433,35 +440,49 @@ class CircuitTemplate(AbstractBaseTemplate):
                     path = self._format_path(path)
                     self.nodes[key] = NodeTemplate.from_yaml(path)
 
-        self.edge_templates = {}
-        if edge_templates:
-            for key, path in edge_templates.items():
-                if isinstance(path, str):
-                    path = self._format_path(path)
-                    self.edge_templates[key] = EdgeTemplate.from_yaml(path)
+        # self.edge_templates = {}
+        # if edge_templates:
+        #     for key, path in edge_templates.items():
+        #         if isinstance(path, str):
+        #             path = self._format_path(path)
+        #             self.edge_templates[key] = EdgeTemplate.from_yaml(path)
 
         if edges:
-            self.edges = edges
+            self.edges = self._get_edge_templates(edges)
         else:
             self.edges = []
 
         self.label = label
 
-        if options:
-            self.options = options
-        else:
-            self.options = {}
+    def apply(self, label: str = None):
+        """Create a Circuit graph instance based on the template"""
 
-    def apply(self, label: str = None, **options):
-        """Create a Circuit graph instance based on the template, possibly applying predefined options"""
-
-        if options:
-            raise NotImplementedError("Unrecognised keyword argument. "
-                                      "Note: The use of options is not implemented yet.")
         if not label:
             label = self.label
 
-        return Circuit(label, self.nodes, self.edge_templates, self.edges, self.path)
+        return Circuit(label, self.nodes, self.edges, self.path)
+
+    def _get_edge_templates(self, edges: List[list]):
+        """
+        Reformat edges from [source, target, template_path, variables] to
+        [source, target, template_object, variables]
+
+        Parameters
+        ----------
+        edges
+
+        Returns
+        -------
+        edges_with_templates
+        """
+
+        edges_with_templates = []
+        for edge in edges:
+            path = edge[2]
+            path = self._format_path(path)
+            edge[2] = EdgeTemplate.from_yaml(path)
+            edges_with_templates.append(tuple(edge))
+        return edges_with_templates
 
 
 class CircuitTemplateLoader(TemplateLoader):
@@ -473,8 +494,7 @@ class CircuitTemplateLoader(TemplateLoader):
     @classmethod
     def update_template(cls, base, name: str, path: str, description: str = None,
                         label: str = None, nodes: dict = None,
-                        edge_templates: Dict[str, OperatorTemplate] = None,
-                        edges: List[tuple] = None, options: dict = None):
+                        edges: List[tuple] = None):
         """Update all entries of the circuit template in their respective ways."""
 
         if not description:
@@ -488,26 +508,21 @@ class CircuitTemplateLoader(TemplateLoader):
         else:
             nodes = base.nodes
 
-        if edge_templates:
-            edge_templates = cls.update_nodes(base.edge_templates, edge_templates)
-            # note: edge templates have the same properties as node templates, could also call them graph entities
-        else:
-            edge_templates = base.edge_templates
+        # removed.
+        # if edge_templates:
+        #     edge_templates = cls.update_nodes(base.edge_templates, edge_templates)
+        #     # note: edge templates have the same properties as node templates, could also call them graph entities
+        # else:
+        #     edge_templates = base.edge_templates
 
         if edges:
             edges = cls.update_edges(base.edges, edges)
         else:
             edges = base.edges
 
-        if options:
-            options = cls.update_options(base.options, options)
-        else:
-            # copy old options dict
-            options = base.options
-
         return CircuitTemplate(name=name, path=path, description=description,
-                               label=label, nodes=nodes, edge_templates=edge_templates,
-                               edges=edges, options=options)
+                               label=label, nodes=nodes,
+                               edges=edges)
 
     @staticmethod
     def update_nodes(base_nodes: dict, updates: dict):
@@ -528,10 +543,18 @@ class CircuitTemplateLoader(TemplateLoader):
     #     return updated
 
     @staticmethod
-    def update_edges(base_edges: List[tuple], updates: List[tuple]):
+    def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
         """Add edges to list of edges. Removing or altering is currently not supported."""
 
         updated = base_edges.copy()
-        updated.extend(updates)
+        for edge in updates:
+            if isinstance(edge, dict):
+                if "variables" in edge:
+                    edge = [edge["source"], edge["target"], edge["template"], edge["variables"]]
+                else:
+                    edge = [edge["source"], edge["target"], edge["template"]]
+            elif not 3 <= len(edge) <= 4:
+                raise PyRatesException("Wrong edge data type or not enough arguments")
+            updated.append(edge)
 
         return updated

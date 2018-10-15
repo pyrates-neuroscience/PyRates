@@ -1,5 +1,9 @@
 %YAML 1.2
 ---
+
+aliases:
+  &Edge ExampleEdge
+
 LinearOperator:
   description: Simple example of an operator with a linear equation.
   base: OperatorTemplate
@@ -21,7 +25,7 @@ LinearOperator:
 IncrementOperator:
   description: Simple coupling operator that increments its input by a
   base: OperatorTemplate
-  equation: "x = y + a"
+  equation: "out = inp + a"
   variables:
     x:
       default: output
@@ -48,8 +52,32 @@ ExampleCircuit:
   label: ExNet
   nodes:
     Node: ExampleNode
-  edge_templates:
-    Edge: ExampleEdge
-  edges:
-    - [Node, Node, Edge, LinearOperator, 1]
+    Circuit: SomeCircuit
 
+  edges:
+    # - [Source/op/var, Target/op/var, Edge class, target op, (, weight (, delay))]
+    - source: Node/LinearOperator/y
+      target: Node/LinearOperator/x
+      template: *Edge
+      variables:
+        IncrementOperator/a: 2
+        weight: 1
+        delay: 0
+
+MatrixCircuit:
+  description: Example circuit of circuit built from a matrix
+  base: CircuitFromMatrix
+  label: MatNet
+  nodes:
+    LocalNet: ExampleCircuit
+    ExtraNode: ExampleNode
+  matrix: [[1,0,1],
+           [0,1,0],
+           [1,1,0]]
+  node_map:
+    1-3: LocalNet
+    5-8: ExampleNode
+  edge_map:
+    - [source, target, template, variables]
+      # define templates and variables by edge source and target
+      # or give an external matrix of edge arguments

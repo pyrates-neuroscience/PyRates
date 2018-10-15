@@ -17,14 +17,14 @@ SigmoidPRO:
       r * V: "m_max / (1 + exp(s*(V_thr - V)))"
     remove: ["L_PRO * "]
 
-  options:
-    normalize:
-      description: "If true, firing rate will be
-        normalized to be zero at firing threshold."
-      default: False
-      values:
-        True:
-          append: "- m_max/(1 + exp(s * V_thr))"
+  #  options:
+  #    normalize:
+  #      description: "If true, firing rate will be
+  #        normalized to be zero at firing threshold."
+  #      default: False
+  #      values:
+  #        True:
+  #          append: "- m_max/(1 + exp(s * V_thr))"
     # not the most elegant solution, but does the job
 
   variables:
