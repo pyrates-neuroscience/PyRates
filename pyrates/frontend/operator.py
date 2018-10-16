@@ -1,10 +1,11 @@
 # external imports
 import re
-from typing import Union
+from copy import deepcopy
+from typing import Union, List
 
 # pyrates internal imports
 from pyrates import PyRatesException
-from pyrates.frontend.abc import AbstractBaseTemplate
+from pyrates.frontend.abc import AbstractBaseTemplate, AbstractBaseIR
 from pyrates.frontend.yaml_parser import TemplateLoader, deep_freeze
 
 # meta infos
@@ -12,69 +13,41 @@ __author__ = " Daniel Rose"
 __status__ = "Development"
 
 
-class OperatorTemplate(AbstractBaseTemplate):
-    """Generic template for an operator with a name, equation(s), variables and possible
-    initialization conditions. The template can be used to create variations of a specific
-    equation or variables."""
+class OperatorIR(AbstractBaseIR):
+    cache = {}
 
-    cache = {}  # tracks all unique instances of applied operator templates
+    def __init__(self, equation: List[str], inputs: list, output: str):
 
-    # key_map = {}  # tracks renaming of of operator keys to have shorter unique keys
+        self.output = output
+        self.inputs = inputs
+        self.equations = equation
 
-    def __init__(self, name: str, path: str, equation: str, variables: dict, description: str):
-        """For now: only allow single equation in operator template."""
+    @classmethod
+    def from_template(cls, template, return_key=False):
+        key = template.name
 
-        super().__init__(name, path, description)
-
-        self.equation = equation
-        self.variables = variables
-
-    def apply(self, return_key=False):
-        """Returns the non-editable but unique, cashed definition of the operator."""
-
-        key = self.name
         try:
-            instance, variables = self.cache[key]
+            instance, variables = cls.cache[key]
             # instance = defrost(instance)
             # variables = defrost(variables)
-            instance, variables = dict(instance), dict(variables)
+            # instance, variables = dict(instance), dict(variables)
         except KeyError:
             # get variable definitions and specified default values
             # ToDo: remove variable separation: instead pass variables detached from equation?
-            variables, inputs, output = self._separate_variables()
+            variables, inputs, output = cls._separate_variables(template)
 
             # reduce order of ODE if necessary
-            *equation, variables = self._reduce_ode_order(self.equation, variables)
+            *equation, variables = cls._reduce_ode_order(template.equation, variables)
 
             # operator instance is invoked as a dictionary of equation and variable definition
             # this may be subject to change
-            instance = dict(equation=equation, inputs=inputs, output=output)
-            self.cache[key] = (deep_freeze(instance), deep_freeze(variables))
+            instance = cls(equation=equation, inputs=inputs, output=output)
+            cls.cache[key] = (instance, variables)
 
         if return_key:
-            # # shorten key
-            # ######################
-            # if key in self.key_map:  # fetch already known key from map
-            #     new_key = self.key_map[key]
-            # else:  # create new unique short key
-            #     base_name = key[0].split(".")[-1]
-            #
-            #     # ensure uniqueness
-            #     for counter in range(max_count):  # max 1000 iterations by default
-            #         new_key = f"{base_name}:{counter}"
-            #         if new_key in self.key_map.values():
-            #             continue  # increment counter
-            #         else:  # use current new op_key
-            #             self.key_map[key] = new_key
-            #             break
-            #     else:
-            #         raise RecursionError(
-            #             f"Maximum number of iterations (={max_count}) reached. This number can be changed by setting"
-            #             f"the 'max_count' argument on the OperatorTemplate.apply() method.")
-            return instance, variables, key
+            return instance.copy(), deepcopy(variables), key
         else:
-            return instance, variables
-        # TODO: return operator instance
+            return instance.copy(), deepcopy(variables)
 
     @staticmethod
     def _reduce_ode_order(equation: str, variables):
@@ -106,7 +79,8 @@ class OperatorTemplate(AbstractBaseTemplate):
         else:
             return equation, variables
 
-    def _separate_variables(self):
+    @classmethod
+    def _separate_variables(cls, template):
         """
         Return variable definitions and the respective values.
 
@@ -115,18 +89,17 @@ class OperatorTemplate(AbstractBaseTemplate):
         variables
         inputs
         output
-        values
         """
         # this part can be improved a lot with a proper expression parser
 
         variables = {}
         inputs = {}
         output = None
-        for variable, properties in self.variables.items():
+        for variable, properties in template.variables.items():
             var_dict = {}
             for prop, expr in properties.items():
                 if prop == "default":
-                    var_dict = self._parse_vprops(expr)
+                    var_dict = cls._parse_vprops(expr)
 
                     # else: don't pass information for that variable
 
@@ -198,6 +171,50 @@ class OperatorTemplate(AbstractBaseTemplate):
                 dtype = "float32"  # base assumption
 
         return dict(vtype=vtype, dtype=dtype, value=value)
+
+    def copy(self):
+        return self.__class__(self.equations, self.inputs, self.output)
+
+    def _getter(self, key: str):
+        """
+        Checks if a variable named by key exists in an equation.
+        Parameters
+        ----------
+        key
+
+        Returns
+        -------
+        key
+        """
+
+        for equation in self.equations:
+            if key in equation:
+                return key
+        else:
+            raise PyRatesException(f"Variable `{key}` not found in equations {self.equations}")
+
+
+class OperatorTemplate(AbstractBaseTemplate):
+    """Generic template for an operator with a name, equation(s), variables and possible
+    initialization conditions. The template can be used to create variations of a specific
+    equation or variables."""
+
+    cache = {}  # tracks all unique instances of applied operator templates
+
+    # key_map = {}  # tracks renaming of of operator keys to have shorter unique keys
+
+    def __init__(self, name: str, path: str, equation: str, variables: dict, description: str):
+        """For now: only allow single equation in operator template."""
+
+        super().__init__(name, path, description)
+
+        self.equation = equation
+        self.variables = variables
+
+    def apply(self, return_key=False, *args, **kwargs):
+        """Returns the non-editable but unique, cashed definition of the operator."""
+
+        return super().apply(return_key=return_key)
 
 
 class OperatorTemplateLoader(TemplateLoader):
