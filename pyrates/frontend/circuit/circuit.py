@@ -7,13 +7,13 @@ arguments. For more detailed descriptions, see the respective docstrings.
 """
 
 # external packages
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Tuple
 from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle
 from copy import deepcopy
 
 # pyrates internal imports
-from pyrates.frontend.abc import AbstractBaseTemplate
-from pyrates.frontend.edge.edge import EdgeTemplate
+from pyrates.frontend.abc import AbstractBaseTemplate, AbstractBaseIR
+from pyrates.frontend.edge import EdgeTemplate, EdgeIR
 from pyrates.frontend.node import NodeTemplate
 from pyrates import PyRatesException
 from pyrates.frontend.yaml_parser import TemplateLoader
@@ -25,7 +25,7 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 
-class Circuit(MultiDiGraph):
+class CircuitIR(AbstractBaseIR):
     """Custom graph datastructure that represents a network of nodes and edges with associated equations
     and variables."""
 
@@ -50,6 +50,8 @@ class Circuit(MultiDiGraph):
         self.label = label
         self.label_counter = {}
         self.template = template
+
+        self.graph = MultiDiGraph()
 
         label_map = self.add_nodes_from(nodes, from_templates=True)
 
@@ -92,13 +94,11 @@ class Circuit(MultiDiGraph):
             node_list = []
             for label, template in nodes.items():
                 # ensure label uniqueness
-                node_list.append((label_map[label], template.apply()))
-                # assuming unique labels
-            super().add_nodes_from(node_list, **attr)
+                self.graph.add_node(label_map[label], node=template.apply())
         else:  # default networkx behaviour
             for old, new in label_map.items():
                 nodes[new] = nodes.pop(old)
-            super().add_nodes_from(nodes, **attr)
+            self.graph.add_nodes_from(nodes, **attr)
         return label_map
 
     def add_node(self, label: str, template: NodeTemplate = None,
@@ -109,9 +109,9 @@ class Circuit(MultiDiGraph):
 
         if template:
 
-            super().add_node(label, node=template.apply(), **attr)
+            self.graph.add_node(label, node=template.apply(), **attr)
         else:  # default networkx behaviour
-            super().add_node(label, node=node, **attr)
+            self.graph.add_node(label, node=node, **attr)
 
         return label
 
@@ -132,16 +132,13 @@ class Circuit(MultiDiGraph):
         edge_list = []
         for (source, target, template, values) in edges:
             # get edge template and instantiate it
-            edge_type = template.apply()  # type: dict # edge spec
+            edge_ir = template.apply()  # type: EdgeIR # edge spec
 
             # get weight
             weight = values.pop("weight", 1)
             # get delay
             delay = values.pop("delay", 0)
 
-            # coupling_op = edge_type["operators"]
-            # self._ensure_io_consistency(source, target, target_operator,
-            #                             coupling_op["inputs"], coupling_op["output"])
             # ToDo: Implement source/op/var syntax
             # take apart source and target strings
             # for circuit from circuit:
@@ -149,18 +146,17 @@ class Circuit(MultiDiGraph):
             # for ... in nodes...
 
             # test, if variables at source and target exist and reference them properly
-            source_var, target_var = self._identify_sources_targets(source, target,
-                                                                    edge_type["operators"],
-                                                                    label_map)
+            source, target = self._identify_sources_targets(source, target, edge_ir, label_map)
 
-            edge_list.append((source, target,  # edge_unique_key,
-                              {**edge_type,
+            edge_list.append((source[0], target[0],  # edge_unique_key,
+                              {"edge_ir": edge_ir,
                                # "target_operator": target_operator,
                                "weight": weight,
                                "delay": delay,
-                               "source_var": source_var,
-                               "target_var": target_var}))
-        super().add_edges_from(edge_list, **attr)
+                               "source_var": "/".join(source[-2:]),
+                               "target_var": "/".join(target[-2:])
+                               }))
+        self.graph.add_edges_from(edge_list, **attr)
 
     def _get_unique_label(self, label: str) -> str:
         """
@@ -180,251 +176,54 @@ class Circuit(MultiDiGraph):
             self.label_counter[label] = 0
 
         # set label
-        unique_label = f"{label}:{self.label_counter[label]}"
+        unique_label = f"{label}.{self.label_counter[label]}"
 
         return unique_label
 
     # noinspection PyUnresolvedReferences
     def _identify_sources_targets(self, source: str, target: str,
-                                  op_graph: DiGraph, label_map: dict=None) -> (str, str):
-        # 1: get reference for source variable
-        ######################################
-        # if label_map:
-        #     source = label_map[source]
-        #     target = label_map[target]
+                                  edge_ir: EdgeIR, label_map: dict = None):
 
-        # ToDo: Move source/target var identification to edge creation
-        # Step 1: Detect edge input variable
-        ####################################
-        # noinspection PyTypeChecker
-        in_op = [op for op, in_degree in op_graph.in_degree if in_degree == 0]  # type: List[dict]
+        input_var = edge_ir.input
+        output_var = edge_ir.output
+        # separate source and target specifiers
+        *source_path, source_op, source_var = source.split("/")
+        *target_path, target_op, target_var = target.split("/")
+        source_node = label_map[source_path[-1]]
+        target_node = label_map[target_path[-1]]
 
-        # multiple input operations are possible, as long as they require the same singular input variable
-        in_var = set()
-        for op_key in in_op:
-            for var in op_graph.nodes[op_key]["inputs"]:
-                in_var.add(var)
+        # ignore circuits for now:
+        source_path = "/".join((source_node, source_op, source_var))
+        target_path = "/".join((target_node, target_op, target_var))
+        # check if path is valid
+        try:
+            _ = self[source_path]
+            _ = self[target_path]
+        except KeyError:
+            raise PyRatesException(f"Could not find either `{source_path}` or `{target_path}` in network graph.")
 
-        if len(in_var) != 1:
-            raise PyRatesException("Too many or too little input variables found. Exactly one input variable is "
-                                   "required per edge.")
-        else:
-            source_var = in_var.pop()
+        source = (source_node, source_op, source_var)
+        target = (target_node, target_op, target_var)
+        return source, target
 
-        # Step 2: Detect edge output variable
+    def _getter(self, key):
+        return self.graph.nodes[key]["node"]
 
-        # Step 2: identify source variable
-        ##################################
-        # for now assume format source = "node/op/var"
+    @property
+    def nodes(self):
+        return self.graph.nodes
 
-        source_node, source_op, source_var = source.split("/")
+    @property
+    def edges(self):
+        return self.graph.edges
 
-        # collect all output variables (the case, if source op/var not defined)
-        # source_out_vars = {}  # type: Dict[str, list]
-        # source_op_graph = self.nodes[source]["operators"]
-        # for op_key, data in source_op_graph.nodes(data=True):
-        #     out_var = data["output"]
-        #     if out_var not in source_out_vars:
-        #         source_out_vars[out_var] = []
-        #     source_out_vars[out_var].append(op_key)
+    @classmethod
+    def from_template(cls, template):
 
-        # # check for uniqueness of output variable
-        # if len(source_out_vars[source_var]) > 1:
-        #     raise PyRatesException(f"Too many operators found for source variable `{source_var}`. The source variable"
-        #                            f" of an edge needs to be a unique output in the source node.")
-
-        # assign output variable and operator as source_var
-        # source_out_op = source_out_vars[source_var][0]
-        operators = self.nodes[source_node]
-        source_path = f"{source_op}/{source_var}"
-        # note source variable and operator as input in input operators
-        for op in in_op:
-            op_graph.nodes[op]["inputs"][source_var]["source"].append(source_path)
-            # this should be transmitted back as a side effect, since op_graph references the actual DiGraph instance
-
-        # 2: get reference for target variable
-        ######################################
-        # simplification: assume target operator is defined by name:0
-
-        # try to find single output variable
-        # noinspection PyTypeChecker
-        out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]  # type: List[dict]
-
-        # only one single output operator allowed
-        if len(out_op) != 1:
-            raise PyRatesException("Too many or too little output operators found. Exactly one output operator and "
-                                   "associated output variable is required per edge.")
-
-        target_var = op_graph.nodes[out_op[0]]["output"]
-        target_op_graph = self.nodes[target]["operators"]
-        target_op_name = f"{target_operator.split('.')[-1]}:0"
-        target_op = target_op_graph.nodes[target_op_name]
-
-        if target_var not in target_op["inputs"]:
-            raise PyRatesException(f"Could not find target variable {target_var} in target operator {target_op_name}  "
-                                   f"of node {target}.")
-
-        target_path = f"{target_op_name}/{target_var}"
-
-        return source_path, target_path
-
-    # def __repr__(self):
-    #     return f"Circuit '{self.label}'"
-
-    # def add_edge(self, *args, **kwargs):
-    #
-    #     raise NotImplementedError("Adding single edges is not implemented.")
-
-    # def _ensure_io_consistency(self, source: str, target: str, target_operator: str,
-    #                            input_var: List[str], output_var: str):
-    #     """Test, if inputs and output of coupling operator are present as output/input of source/target,
-    #     respectively.
-    #
-    #     Parameters
-    #     ----------
-    #     source
-    #     target
-    #     target_operator
-    #     input_var
-    #     output_var
-    #
-    #     Returns
-    #     -------
-    #     None
-    #     """
-    #     if len(input_var) > 1:
-    #         raise ValueError("Too many input variables defined in `input_var`. "
-    #                          "Edges only accept one input variable.")
-    #     # step 1: find source output variable
-    #     assert self.nodes[source]["output"] == input_var[0]
-    #
-    #     # step 2: find target input variable
-    #     target_node = self.nodes[target]
-    #     # hard-coded variant of operator instance key with no additional options applied
-    #     target_op = target_node["operators"][(target_operator, None)]
-    #     assert output_var in target_op["inputs"]  # could be replaced by target_node["inputs"],
-    #     # if it contained info about operators
+        return cls(template.label, template.nodes, template.edges, template.path)
 
     def network_def(self):
-        """A bit of a workaround to connect interfaces of frontend and backend.
-        TODO: clean up/simplify interface"""
-        # import re
-
-        network_def = MultiDiGraph()
-
-        edge_list = []
-        node_dict = {}
-
-        # reorganize node to conform with backend API
-        #############################################
-        for node_key, data in self.nodes(data=True):
-            # reformat all node internals into operators + operator_args
-            node_dict[node_key] = {}  # type: Dict[str, Union[dict, list]]
-            node_dict[node_key] = dict(self._nd_reformat_operators(data))
-            op_order = self._nd_get_operator_order(data["operators"])  # type: list
-            node_dict[node_key]["operator_order"] = op_order
-
-        # reorganize edge to conform with backend API
-        #############################################
-        for source, target, data in self.edges(data=True):
-            # reformat all edge internals into operators + operator_args
-            op_data = self._nd_reformat_operators(data)
-            op_order = self._nd_get_operator_order(data["operators"])
-
-            # move edge operators to nodes
-            # using dictionary update method, assuming no conflicts in operator names
-            # this fails, if multiple edges on one source node use the same coupling operator
-            # todo: implement conflict management for multiple edges with same operators per source node
-            node_dict[source]["operators"].update(op_data["operators"])
-            node_dict[source]["operator_args"].update(op_data["operator_args"])
-
-            for op in op_order:
-                if op not in node_dict[source]["operator_order"]:
-                    node_dict[source]["operator_order"].append(op)
-
-            # simplify edges and save into edge_list
-            # find single output operator to save new reference to source variable after reformatting
-            op_graph = data["operators"]
-            out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]
-            out_var = op_graph.nodes[out_op[0]]["output"]
-            source_var = f"{out_op[0]}/{out_var}"
-
-            edge_list.append((source, target, {"source_var": source_var,
-                                               "target_var": data["target_var"],
-                                               "weight": data["weight"],
-                                               "delay": data["delay"]}))
-
-        # network_def.add_nodes_from(node_dict)
-        for key, node in node_dict.items():
-            network_def.add_node(key, **node)
-        network_def.add_edges_from(edge_list)
-
-        return network_def  # return MultiDiGraph as needed by Network class
-
-    @staticmethod
-    def _nd_reformat_operators(data):
-        operator_args = dict()
-        operators = dict()
-
-        for op_key, op_dict in data["operators"].nodes(data=True):
-            op_cp = deepcopy(op_dict)  # duplicate operator info
-
-            var_dict = op_cp.pop("variables")
-
-            for var_key, var_props in var_dict.items():
-                var_prop_cp = deepcopy(var_props)  # duplicate variable properties
-
-                if var_key in op_dict["values"]:  # workaround to get values back into operator_args
-                    var_prop_cp["value"] = op_dict["values"][var_key]
-
-                var_prop_cp["vtype"] = var_prop_cp.pop("variable_type")
-                var_prop_cp["dtype"] = var_prop_cp.pop("data_type")
-                var_prop_cp["shape"] = ()  # default to scalars for now
-                var_prop_cp.pop("unit", None)
-                var_prop_cp.pop("description", None)
-                var_prop_cp.pop("name", None)
-                # var_prop_cp["name"] = f"{new_op_key}/{var_key}"  # has been trown out
-                operator_args[f"{op_key}/{var_key}"] = deepcopy(var_prop_cp)
-
-            op_cp["equations"] = op_cp.pop("equation")
-            op_cp.pop("values", None)
-            operators[op_key] = op_cp
-
-        reformatted = dict(operator_args=operator_args,
-                           operators=operators,
-                           inputs={})
-        return reformatted
-
-    @staticmethod
-    def _nd_get_operator_order(op_graph: DiGraph) -> list:
-        """
-
-        Parameters
-        ----------
-        op_graph
-
-        Returns
-        -------
-        op_order
-        """
-        # check, if cycles are present in operator graph (which would be problematic
-        try:
-            find_cycle(op_graph)
-        except NetworkXNoCycle:
-            pass
-        else:
-            raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
-
-        op_order = []
-        graph = op_graph.copy()  # type: DiGraph
-        while graph.nodes:
-            # noinspection PyTypeChecker
-            primary_nodes = [node for node, in_degree in graph.in_degree if in_degree == 0]
-            op_order.extend(primary_nodes)
-            graph.remove_nodes_from(primary_nodes)
-
-        return op_order
-
+        return BackendIRFormatter.network_def(self)
 
 class CircuitTemplate(AbstractBaseTemplate):
 
@@ -460,9 +259,9 @@ class CircuitTemplate(AbstractBaseTemplate):
         if not label:
             label = self.label
 
-        return Circuit(label, self.nodes, self.edges, self.path)
+        return CircuitIR(label, self.nodes, self.edges, self.path)
 
-    def _get_edge_templates(self, edges: List[list]):
+    def _get_edge_templates(self, edges: List[tuple]):
         """
         Reformat edges from [source, target, template_path, variables] to
         [source, target, template_object, variables]
@@ -480,8 +279,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         for edge in edges:
             path = edge[2]
             path = self._format_path(path)
-            edge[2] = EdgeTemplate.from_yaml(path)
-            edges_with_templates.append(tuple(edge))
+            temp = EdgeTemplate.from_yaml(path)
+            edges_with_templates.append((*edge[0:2], temp, *edge[3:]))
         return edges_with_templates
 
 
@@ -558,3 +357,131 @@ class CircuitTemplateLoader(TemplateLoader):
             updated.append(edge)
 
         return updated
+
+
+class BackendIRFormatter:
+
+    @classmethod
+    def network_def(cls, circuit: CircuitIR):
+        """A bit of a workaround to connect interfaces of frontend and backend.
+        TODO: clean up/simplify interface"""
+        # import re
+
+        network_def = MultiDiGraph()
+
+        edge_list = []
+        node_dict = {}
+
+        # reorganize node to conform with backend API
+        #############################################
+        for node_key, data in circuit.graph.nodes(data=True):
+            node = data["node"]
+            # reformat all node internals into operators + operator_args
+            node_dict[node_key] = {}  # type: Dict[str, Union[list, dict]]
+            node_dict[node_key] = dict(cls._nd_reformat_operators(node.op_graph))
+            op_order = cls._nd_get_operator_order(node.op_graph)  # type: list
+            # noinspection PyTypeChecker
+            node_dict[node_key]["operator_order"] = op_order
+
+        # reorganize edge to conform with backend API
+        #############################################
+        for source, target, data in circuit.graph.edges(data=True):
+            edge = data["edge_ir"]
+            # reformat all edge internals into operators + operator_args
+            op_data = cls._nd_reformat_operators(edge.op_graph)
+            op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
+
+            # move edge operators to nodes
+            # using dictionary update method, assuming no conflicts in operator names
+            # this fails, if multiple edges on one source node use the same coupling operator
+            # todo: implement conflict management for multiple edges with same operators per source node
+            node_dict[source]["operators"].update(op_data["operators"])
+            node_dict[source]["operator_args"].update(op_data["operator_args"])
+
+            for op in op_order:
+                if op not in node_dict[source]["operator_order"]:
+                    # noinspection PyUnresolvedReferences
+                    node_dict[source]["operator_order"].append(op)
+
+            # simplify edges and save into edge_list
+            # find single output operator to save new reference to source variable after reformatting
+            op_graph = edge.op_graph
+            out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]
+            out_var = edge[out_op[0]].output
+            source_var = f"{out_op[0]}/{out_var}"
+
+            edge_list.append((source, target, {"source_var": source_var,
+                                               "target_var": data["target_var"],
+                                               "weight": data["weight"],
+                                               "delay": data["delay"]}))
+
+        # network_def.add_nodes_from(node_dict)
+        for key, node in node_dict.items():
+            network_def.add_node(key, **node)
+        network_def.add_edges_from(edge_list)
+
+        return network_def  # return MultiDiGraph as needed by Network class
+
+    @staticmethod
+    def _nd_reformat_operators(op_graph: DiGraph):
+        operator_args = dict()
+        operators = dict()
+
+        for op_key, op_dict in op_graph.nodes(data=True):
+            op_cp = deepcopy(op_dict)  # duplicate operator info
+            var_dict = op_cp.pop("variables")
+
+            for var_key, var_props in var_dict.items():
+                var_prop_cp = deepcopy(var_props)  # duplicate variable properties
+
+                # if var_key in op_dict["variables"]:  # workaround to get values back into operator_args
+                #     var_prop_cp["value"] = deepcopy(op_dict["values"][var_key])
+
+                var_prop_cp["shape"] = ()  # default to scalars for now
+                var_prop_cp.pop("unit", None)
+                var_prop_cp.pop("description", None)
+                var_prop_cp.pop("name", None)
+                # var_prop_cp["name"] = f"{new_op_key}/{var_key}"  # has been thrown out
+                operator_args[f"{op_key}/{var_key}"] = deepcopy(var_prop_cp)
+
+            op_cp["equations"] = op_cp["operator"].equations
+            op_cp["inputs"] = op_cp["operator"].inputs
+            op_cp["output"] = op_cp["operator"].output
+            # op_cp.pop("values", None)
+            op_cp.pop("operator", None)
+            operators[op_key] = op_cp
+
+        reformatted = dict(operator_args=operator_args,
+                           operators=operators,
+                           inputs={})
+        return reformatted
+
+    @staticmethod
+    def _nd_get_operator_order(op_graph: DiGraph) -> list:
+        """
+
+        Parameters
+        ----------
+        op_graph
+
+        Returns
+        -------
+        op_order
+        """
+        # check, if cycles are present in operator graph (which would be problematic
+        try:
+            find_cycle(op_graph)
+        except NetworkXNoCycle:
+            pass
+        else:
+            raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
+
+        op_order = []
+        graph = op_graph.copy()  # type: DiGraph
+        while graph.nodes:
+            # noinspection PyTypeChecker
+            primary_nodes = [node for node, in_degree in graph.in_degree if in_degree == 0]
+            op_order.extend(primary_nodes)
+            graph.remove_nodes_from(primary_nodes)
+
+        return op_order

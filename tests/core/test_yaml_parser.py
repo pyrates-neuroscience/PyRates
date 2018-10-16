@@ -1,6 +1,7 @@
 """ Tests for the parser that translates circuits and components defined in YAML into the intermediate
 python representation.
 """
+from pyrates.utility import deep_compare
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -160,8 +161,8 @@ def test_circuit_instantiation():
     # used to be: test if two edges refer to the same coupling operator by comparing ids
     # this is why we referenced by "operator"
     # now: compare operators directly
-    for op_key, op in circuit.edges[("JR_PC:0", "JR_IIN:0", 0)]["operators"].nodes(data=True):
-        assert op == circuit.edges[('JR_PC:0', 'JR_EIN:0', 0)]["operators"].nodes[op_key]
+    for op_key, op in circuit.edges[("JR_PC.0", "JR_IIN.0", 0)]["edge_ir"].op_graph.nodes(data=True):
+        assert op["operator"].equations == circuit.edges[('JR_PC.0', 'JR_EIN.0', 0)]["edge_ir"][op_key].equations
 
 
 def test_equation_alteration():
@@ -175,7 +176,7 @@ def test_equation_alteration():
 
     operator, values = template.apply()
 
-    assert operator["equation"] == ["V = k * I"]
+    assert operator.equations == ["V = k * I"]
 
 
 def test_network_def_workaround():
@@ -188,31 +189,32 @@ def test_network_def_workaround():
 
     nd = circuit.network_def()
 
-    operator_order = ['JansenRitExcitatorySynapseRCO:0',
-                      'JansenRitInhibitorySynapseRCO:0',
-                      'JansenRitCPO:0',
-                      'JansenRitPRO:0',
-                      'LinearCouplingOperator:0']
+    operator_order = ['JansenRitExcitatorySynapseRCO',
+                      'JansenRitInhibitorySynapseRCO',
+                      'JansenRitCPO',
+                      'JansenRitPRO',
+                      'LinearCouplingOperator']
     inputs = {}
 
     cpo_i = {'dtype': 'float32',
              'shape': (),
-             'vtype': 'state_var'}
+             'vtype': 'state_var',
+             'value': None}
 
     jr_cpo = {'equations': ['V = k * I'],
               'inputs': {'I': {'reduce_dim': True,
-                               'source': ['JansenRitExcitatorySynapseRCO:0/I',
-                                          'JansenRitInhibitorySynapseRCO:0/I']}},
+                               'source': ['JansenRitExcitatorySynapseRCO/I',
+                                          'JansenRitInhibitorySynapseRCO/I']}},
               'output': 'V'}
-    # assert dict(nd.nodes["JR_PC:0"]) == JR_PC
-    node = nd.nodes["JR_PC:0"]
+    # assert dict(nd.nodes["JR_PC.0"]) == JR_PC
+    node = nd.nodes["JR_PC.0"]
     edge = {'delay': 0,
-            'source_var': 'LinearCouplingOperator:0/m_in',
-            'target_var': 'JansenRitExcitatorySynapseRCO:0/m_in',
+            'source_var': 'LinearCouplingOperator/m_in',
+            'target_var': 'JansenRitExcitatorySynapseRCO/m_in',
             'weight': 108.0}
     assert node["operator_order"] == operator_order
     assert node["inputs"] == inputs
-    assert node["operator_args"]['JansenRitCPO:0/I'] == cpo_i
-    assert node["operators"]['JansenRitExcitatorySynapseRCO:0']["inputs"]["m_in"]["source"] == []
-    assert node["operators"]['JansenRitCPO:0'] == jr_cpo
-    assert dict(nd.edges[('JR_EIN:0', 'JR_PC:0', 0)]) == edge
+    assert node["operator_args"]['JansenRitCPO/I'] == cpo_i
+    assert node["operators"]['JansenRitExcitatorySynapseRCO']["inputs"]["m_in"]["source"] == []
+    assert node["operators"]['JansenRitCPO'] == jr_cpo
+    assert dict(nd.edges[('JR_EIN.0', 'JR_PC.0', 0)]) == edge
