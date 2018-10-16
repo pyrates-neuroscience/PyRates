@@ -26,7 +26,7 @@ sparseness_e = 0.2
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 150
+n_jrcs = 200
 
 # connectivity parameters
 c_intra = 135.
@@ -85,7 +85,9 @@ for i in range(0, n_jrcs):
                               'inputs': {},
                               'output': 'psp'},
                           'operator_ptr': {
-                              'equations': ["v = psp", "m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                              'equations': ["v = psp",
+                                            "m_out = m_max / (1. + e^(r * (v_th - v)))",
+                                            "d/dt * v_th = lr * (m_out - m_target)"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn_e', 'operator_rtp_syn_i'],
                                                  'reduce_dim': True}},
                               'output': 'm_out'}},
@@ -102,6 +104,10 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
+                              'operator_ptr/v_th': {'vtype': 'state_var',
+                                                    'dtype': 'float32',
+                                                    'shape': (),
+                                                    'value': 6e-3},
                               'operator_rtp_syn_e/psp': {'vtype': 'state_var',
                                                          'dtype': 'float32',
                                                          'shape': (),
@@ -142,10 +148,14 @@ for i in range(0, n_jrcs):
                                                  'dtype': 'float32',
                                                  'shape': (),
                                                  'value': 560.},
-                              'operator_ptr/v_th': {'vtype': 'constant',
-                                                    'dtype': 'float32',
-                                                    'shape': (),
-                                                    'value': 6e-3},
+                              'operator_ptr/m_target': {'vtype': 'constant',
+                                                        'dtype': 'float32',
+                                                        'shape': (),
+                                                        'value': 0.16},
+                              'operator_ptr/lr': {'vtype': 'constant',
+                                                  'dtype': 'float32',
+                                                  'shape': (),
+                                                  'value': 1e-3},
                               'operator_rtp_syn_e/u': {'vtype': 'constant',
                                                        'dtype': 'float32',
                                                        'shape': (),
@@ -314,19 +324,18 @@ for a in range(0, n_nodes):
 ###############
 
 gr = tf.Graph()
-net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
+net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize=True)
 
 # network simulation
 ####################
 
 results, ActTime = net.run(simulation_time=simulation_time,
-                           outputs={'V': ('pc/0', 'operator_ptr', 'v')},
-                           sampling_step_size=1e-3,
-                           out_dir='/tmp/log/')
+                           outputs={'V': net.nodes['pc/0']['operator_ptr/v']},
+                           sampling_step_size=1e-3)
 
 # results
 #########
 
-#mne_obj = mne_from_dataframe(sim_results=results)
+mne_obj = mne_from_dataframe(sim_results=results)
 results.plot()
 show()

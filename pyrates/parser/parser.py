@@ -8,7 +8,6 @@ from numbers import Number
 import math
 import tensorflow as tf
 import typing as tp
-import numpy as np
 
 # pyrates internal imports
 
@@ -1225,7 +1224,7 @@ def round_to_prec(x, prec=0):
 #                  rhs: tp.Union[tf.Operation, tf.Tensor],
 #                  state_var: tp.Union[tf.Variable, tf.Tensor],
 #                  dt: tp.Optional[float] = None,
-#                  tf_graph: tp.Optional[tf.Graph] = None
+#                  _tf_graph: tp.Optional[tf.Graph] = None
 #                  ) -> None:
 #         """Instantiates solver.
 #         """
@@ -1238,20 +1237,20 @@ def round_to_prec(x, prec=0):
 #         # initialize additional attributes
 #         ##################################
 #
-#         self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+#         self._tf_graph = _tf_graph if _tf_graph else tf.get_default_graph()
 #
 #     def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
 #         """Creates tensorflow method for performing a single differentiation step.
 #         """
 #
-#         with self.tf_graph.as_default():
+#         with self._tf_graph.as_default():
 #
 #             # go through integration expressions to solve DE
 #             ################################################
 #
 #             # parse the integration expression
 #             expr_args = {'dt': {'var': self.dt, 'dependency': False}, 'rhs': {'var': self.rhs, 'dependency': False}}
-#             parser = TFExpressionParser(self.integration_expression, expr_args, tf_graph=self.tf_graph)
+#             parser = TFExpressionParser(self.integration_expression, expr_args, _tf_graph=self._tf_graph)
 #             op = parser.parse_expr()
 #
 #             # update the target state variable

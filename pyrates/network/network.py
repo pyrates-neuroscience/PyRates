@@ -69,7 +69,7 @@ class Network(MultiDiGraph):
 
     Attributes
     ----------
-    node_arg_map
+    _node_arg_map
         Used internally for vectorization.
 
     Methods
@@ -87,7 +87,7 @@ class Network(MultiDiGraph):
                  net_config: MultiDiGraph,
                  dt: float = 1e-3,
                  tf_graph: Optional[tf.Graph] = None,
-                 vectorize: bool = False,
+                 vectorize: str = 'nodes',
                  key: Optional[str] = None
                  ) -> None:
         """Instantiation of network.
@@ -103,20 +103,21 @@ class Network(MultiDiGraph):
 
         self.key = key if key else 'net/0'
         self.dt = dt
-        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+        self._tf_graph = tf_graph if tf_graph else tf.get_default_graph()
         self.states = []
-        self.node_arg_map = {}
+        self._node_arg_map = {}
 
         # vectorize passed dictionaries
         ###############################
 
-        if vectorize:
-            net_config = self.vectorize(net_config=net_config, first_lvl_vec=vectorize, second_lvl_vec=False)
+        net_config = self._vectorize(net_config=net_config,
+                                     first_lvl_vec=vectorize == 'nodes',
+                                     second_lvl_vec=vectorize == 'ops')
 
         # create objects on tensorflow graph
         ####################################
 
-        with self.tf_graph.as_default():
+        with self._tf_graph.as_default():
 
             with tf.variable_scope(self.key):
 
@@ -166,6 +167,183 @@ class Network(MultiDiGraph):
                     if len(edge_updates) > 0:
                         self.step = tf.tuple(edge_updates, name='network_update')
 
+    def run(self,
+            simulation_time: Optional[float] = None,
+            inputs: Optional[dict] = None,
+            outputs: Optional[dict] = None,
+            sampling_step_size: Optional[float] = None,
+            out_dir: Optional[str] = None,
+            verbose: bool=True
+            ) -> Tuple[DataFrame, float]:
+        """Simulate the network behavior over time via a tensorflow session.
+
+        Parameters
+        ----------
+        simulation_time
+            Simulation time in seconds.
+        inputs
+            Inputs for placeholder variables. Each key is a tuple that specifies a placeholder variable in the graph
+            in the following format: (node_name, op_name, var_name). Each value is an array that defines the input for
+            the placeholder variable over time (first dimension).
+        outputs
+            Output variables that will be returned. Each key is the desired name of an output variable and each value is
+            a tuple that specifies a variable in the graph in the following format: (node_name, op_name, var_name).
+        sampling_step_size
+            Time in seconds between sampling points of the output variables.
+        out_dir
+            Directory in which to store outputs.
+        verbose
+            If true, status updates will be printed to the console.
+
+        Returns
+        -------
+        tuple
+            First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
+            simulation time in seconds.
+
+        """
+
+        # prepare simulation
+        ####################
+
+        # basic simulation parameters initialization
+        if simulation_time:
+            sim_steps = int(simulation_time / self.dt)
+        else:
+            sim_steps = 1
+
+        if not sampling_step_size:
+            sampling_step_size = self.dt
+        sampling_steps = int(sampling_step_size / self.dt)
+
+        # define output variables
+        if not outputs:
+            outputs_tmp = dict()
+        else:
+            outputs_tmp = dict()
+            for key, val in outputs.items():
+                if val[0] == 'all':
+                    for node in self.nodes.keys():
+                        outputs_tmp[f'{node}/{key}'] = self.get_var(node=node, op=val[1], var=val[2])
+                elif val[0] in self.nodes.keys() or val[0] in self._node_arg_map.keys():
+                    outputs_tmp[key] = self.get_var(node=val[0], op=val[1], var=val[2])
+                elif any([val[0] in key for key in self.nodes.keys()]):
+                    for node in self.nodes.keys():
+                        if val[0] in node:
+                            outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
+                else:
+                    for node in self._node_arg_map.keys():
+                        if val[0] in node:
+                            outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
+
+        # add output collector variables to graph
+        output_col = {}
+        store_ops = []
+        with self._tf_graph.as_default():
+            for key, var in outputs_tmp.items():
+                output_col[key] = tf.get_variable(name=key,
+                                                  dtype=tf.float32,
+                                                  shape=[int(sim_steps / sampling_steps)] + list(var.shape),
+                                                  initializer=tf.constant_initializer())
+                out_idx = tf.Variable(0, dtype=tf.int32, name='out_var_idx')
+                store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
+            with tf.control_dependencies(store_ops):
+                store_ops.append(out_idx.assign_add(1))
+            store_outputs = tf.group(store_ops, name='output_storage')
+
+        # linearize input dictionary
+        if inputs:
+            inp = list()
+            for step in range(sim_steps):
+                inp_dict = dict()
+                for key, val in inputs.items():
+                    var = self.get_var(node=key[0], op=key[1], var=key[2])
+                    shape = var.shape
+                    if len(val) > 1:
+                        inp_dict[key] = np.reshape(val[step], shape)
+                    else:
+                        inp_dict[key] = np.reshape(val, shape)
+                inp.append(inp_dict)
+        else:
+            inp = [None for _ in range(sim_steps)]
+
+        # run simulation
+        ################
+
+        with tf.Session(graph=self._tf_graph) as sess:
+
+            # initialize session log
+            if out_dir:
+                writer = tf.summary.FileWriter(out_dir, graph=self._tf_graph)
+
+            # initialize all variables
+            sess.run(tf.global_variables_initializer())
+
+            results = []
+            t_start = t.time()
+
+            # simulate network behavior for each time-step
+            for step in range(sim_steps):
+
+                sess.run(self.step, inp[step])
+                sess.run(store_outputs)
+
+            t_end = t.time()
+
+            # display simulation time
+            if verbose:
+                if simulation_time:
+                    print(f"{simulation_time}s of network behavior were simulated in {t_end - t_start} s given a "
+                          f"simulation resolution of {self.dt} s.")
+                else:
+                    print(f"Network computations finished after {t_end - t_start} seconds.")
+
+            # close session log
+            if out_dir:
+                writer.close()
+
+            # store output variables
+            for i, (key, var) in enumerate(output_col.items()):
+                if i == 0:
+                    var = np.squeeze(var.eval())
+                    out_vars = DataFrame(data=var,
+                                         columns=[f'{key}_{j}' for j in range(var.shape[1])])
+                else:
+                    var = np.squeeze(var.eval())
+                    for j in range(var.shape[1]):
+                        out_vars[f'{key}_{j}'] = var[:, j]
+
+        return out_vars, (t_end - t_start)
+
+    def get_var(self, var: str, node: str, op: str) -> Union[tf.Tensor, tf.Variable]:
+        """Extracts variable from a specific operator of a specific node in the graph.
+
+
+        Parameters
+        ----------
+        var
+            Variable name.
+        node
+            Node name.
+        op
+            Operator name.
+
+        Returns
+        -------
+        Union[tf.Tensor, tf.Variable]
+            Tensorflow representation of the variable.
+
+        """
+
+        try:
+            return self.nodes[node][f'{op}/{var}']
+        except KeyError:
+            node, op, var, idx = self._node_arg_map[node][f'{op}/{var}']
+            try:
+                return self.nodes[node][f'{op}/{var}'][idx[0]: idx[1]]
+            except ValueError:
+                return self.nodes[node][f'{op}/{var}'][idx]
+
     def add_node(self, node: str, ops: dict, op_args: dict, op_order: list) -> None:
         """
 
@@ -191,7 +369,7 @@ class Network(MultiDiGraph):
 
         node_attr = {}
 
-        with self.tf_graph.as_default():
+        with self._tf_graph.as_default():
 
             # initialize variable scope of node
             with tf.variable_scope(node):
@@ -215,7 +393,7 @@ class Network(MultiDiGraph):
 
                         # get tensorflow variables and the variable names from operation_args
                         op_args_tf = parse_dict(var_dict=op_args_raw,
-                                                tf_graph=self.tf_graph)
+                                                tf_graph=self._tf_graph)
 
                         # bind tensorflow variables to node
                         for var_name, var in op_args_tf.items():
@@ -390,6 +568,8 @@ class Network(MultiDiGraph):
             Name of the output variable on the source node (including the operator name).
         target_var
             Name of the target variable on the target node (including the operator name).
+        source_to_edge_map
+        edge_to_target_map
         weight
             Weighting constant that will be applied to the source output.
         delay
@@ -413,7 +593,7 @@ class Network(MultiDiGraph):
         # add projection operation of edge to tensorflow graph
         ######################################################
 
-        with self.tf_graph.as_default():
+        with self._tf_graph.as_default():
 
             # set variable scope of edge
             edge_idx = self.number_of_edges(source_node, target_node)
@@ -473,7 +653,7 @@ class Network(MultiDiGraph):
                                        'indices': edge_to_target_map['indices']}
 
                 # parse into tensorflow graph
-                op_args_tf = parse_dict(op_args, self.tf_graph)
+                op_args_tf = parse_dict(op_args, self._tf_graph)
 
                 # add source and target variables
                 op_args_tf['tvar'] = target_var_tf
@@ -515,7 +695,7 @@ class Network(MultiDiGraph):
 
         evals = []
 
-        with self.tf_graph.as_default():
+        with self._tf_graph.as_default():
 
             # set variable scope
             with tf.variable_scope(variable_scope):
@@ -524,7 +704,7 @@ class Network(MultiDiGraph):
                 for i, expr in enumerate(expressions):
 
                     # parse equation
-                    update, expression_args = parse_equation(expr, expression_args, tf_graph=self.tf_graph)
+                    update, expression_args = parse_equation(expr, expression_args, tf_graph=self._tf_graph)
 
                     # store tensorflow operation in list
                     evals.append(update)
@@ -545,8 +725,8 @@ class Network(MultiDiGraph):
 
             return tf.group(evals_complete, name=f'{variable_scope}_eval'), expression_args
 
-    def vectorize(self, net_config: MultiDiGraph, first_lvl_vec: bool = True, second_lvl_vec: bool=True
-                  ) -> MultiDiGraph:
+    def _vectorize(self, net_config: MultiDiGraph, first_lvl_vec: bool = True, second_lvl_vec: bool=True
+                   ) -> MultiDiGraph:
         """Method that goes through the nodes and edges dicts and vectorizes those that are governed by the same
         operators/equations.
 
@@ -600,9 +780,9 @@ class Network(MultiDiGraph):
                         i += 1
 
                 # vectorize over nodes
-                new_net_config = self.vectorize_nodes(new_net_config=new_net_config,
-                                                      old_net_config=net_config,
-                                                      nodes=nodes)
+                new_net_config = self._vectorize_nodes(new_net_config=new_net_config,
+                                                       old_net_config=net_config,
+                                                       nodes=nodes)
 
             # adjust edges accordingly
             ##########################
@@ -625,11 +805,11 @@ class Network(MultiDiGraph):
 
                     # vectorize over edges
                     for edges in edge_col.values():
-                        new_net_config = self.vectorize_edges(edges=edges,
-                                                              source=source_new,
-                                                              target=target_new,
-                                                              new_net_config=new_net_config,
-                                                              old_net_config=net_config)
+                        new_net_config = self._vectorize_edges(edges=edges,
+                                                               source=source_new,
+                                                               target=target_new,
+                                                               new_net_config=new_net_config,
+                                                               old_net_config=net_config)
 
             net_config = new_net_config.copy()
             new_net_config.clear()
@@ -640,7 +820,7 @@ class Network(MultiDiGraph):
         if second_lvl_vec:
 
             new_net_config = MultiDiGraph()
-            new_net_config.add_node('net', operators={}, op_order=[], operator_args={}, inputs={})
+            new_net_config.add_node(self.key, operators={}, op_order=[], operator_args={}, inputs={})
 
             # vectorize node operators
             ###########################
@@ -716,10 +896,10 @@ class Network(MultiDiGraph):
                                 node_indices.append(node_idx)
 
                                 # vectorize op
-                                self.vectorize_ops(new_node=new_net_config.nodes['net'],
-                                                   net_config=net_config,
-                                                   op_key=op_key,
-                                                   nodes=nodes_to_vec.copy())
+                                self._vectorize_ops(new_node=new_net_config.nodes['net'],
+                                                    net_config=net_config,
+                                                    op_key=op_key,
+                                                    nodes=nodes_to_vec.copy())
 
                                 # indicate where vectorization was performed
                                 for node_key_tmp, node_idx_tmp, op_idx_tmp in \
@@ -733,10 +913,10 @@ class Network(MultiDiGraph):
                             else:
 
                                 # add operation to new net configuration
-                                self.vectorize_ops(new_node=new_net_config.nodes['net'],
-                                                   net_config=net_config,
-                                                   op_key=op_key,
-                                                   nodes=[node_key])
+                                self._vectorize_ops(new_node=new_net_config.nodes['net'],
+                                                    net_config=net_config,
+                                                    op_key=op_key,
+                                                    nodes=[node_key])
 
                                 # mark operation on node as checked
                                 op_info['vectorized'][node_idx][op_idx] = True
@@ -765,11 +945,11 @@ class Network(MultiDiGraph):
 
             # vectorize over edges
             for edges in edge_col.values():
-                new_net_config = self.vectorize_edges(edges=edges,
-                                                      source=source_new,
-                                                      target=target_new,
-                                                      new_net_config=new_net_config,
-                                                      old_net_config=net_config)
+                new_net_config = self._vectorize_edges(edges=edges,
+                                                       source=source_new,
+                                                       target=target_new,
+                                                       new_net_config=new_net_config,
+                                                       old_net_config=net_config)
 
             net_config = new_net_config.copy()
             new_net_config.clear()
@@ -951,11 +1131,11 @@ class Network(MultiDiGraph):
 
         return net_config
 
-    def vectorize_nodes(self,
-                        nodes: List[str],
-                        new_net_config: MultiDiGraph,
-                        old_net_config: MultiDiGraph
-                        ) -> MultiDiGraph:
+    def _vectorize_nodes(self,
+                         nodes: List[str],
+                         new_net_config: MultiDiGraph,
+                         old_net_config: MultiDiGraph
+                         ) -> MultiDiGraph:
         """Combines all nodes in list to a single node and adds node to new net config.
 
         Parameters
@@ -980,7 +1160,31 @@ class Network(MultiDiGraph):
 
         node_ref = nodes.pop()
         new_node = old_net_config.nodes[node_ref]
-        self.node_arg_map[node_ref] = {}
+        self._node_arg_map[node_ref] = {}
+
+        # define new node's name
+        node_idx = 0
+        node_ref_tmp = node_ref.split('/')[0] if '/'in node_ref else node_ref
+        if all([node_ref_tmp in node_name for node_name in nodes]):
+            node_name = node_ref_tmp
+        else:
+            node_name = node_ref_tmp
+            for n in nodes:
+                n_tmp = n.split('/')[0] if '/' in n else n
+                node_name += f'_{n_tmp}'
+                test_names = []
+                for test_name in nodes:
+                    test_name_tmp = test_name.split('/')[0] if '/' in test_name else test_name
+                    test_names.append(test_name_tmp)
+                if all([test_name in node_name for test_name in test_names]):
+                    break
+
+        while True:
+            new_node_name = f"{node_name}/{node_idx}"
+            if new_node_name in new_net_config.nodes.keys():
+                node_idx += 1
+            else:
+                break
 
         # go through node attributes and store their value and shape
         arg_vals, arg_shapes = {}, {}
@@ -1002,7 +1206,7 @@ class Network(MultiDiGraph):
                 arg_shapes[arg_name] = (1,)
 
             # save index of original node's attributes in new nodes attributes
-            self.node_arg_map[node_ref][arg_name] = 0
+            self._node_arg_map[node_ref][arg_name] = [new_node_name, arg_name, 0]
 
         # go through rest of the nodes and extract their argument shapes and values
         ###########################################################################
@@ -1010,7 +1214,7 @@ class Network(MultiDiGraph):
         for i, node_name in enumerate(nodes):
 
             node = old_net_config.nodes[node_name]
-            self.node_arg_map[node_name] = {}
+            self._node_arg_map[node_name] = {}
 
             # go through arguments
             for arg_name in arg_vals.keys():
@@ -1028,7 +1232,7 @@ class Network(MultiDiGraph):
                         arg_shapes[arg_name] = tuple(arg['shape'])
 
                 # save index of original node's attributes in new nodes attributes
-                self.node_arg_map[node_name][arg_name] = i + 1
+                self._node_arg_map[node_name][arg_name] = [new_node_name, arg_name, i + 1]
 
         # go through new arguments and update shape and values
         for arg_name, arg in new_node['operator_args'].items():
@@ -1042,35 +1246,18 @@ class Network(MultiDiGraph):
         # add new, vectorized node to dictionary
         ########################################
 
-        # define name of new node
-        if '/'in node_ref:
-            node_ref = node_ref.split('/')[0]
-        if all([node_ref in node_name for node_name in nodes]):
-            node_name = node_ref
-        else:
-            node_name = node_ref
-            for n in nodes:
-                node_name += f'_{n}'
-
         # add new node to new net config
-        node_idx = 0
-        while True:
-            new_node_name = f"{node_name}/{node_idx}"
-            if new_node_name in new_net_config.nodes.keys():
-                node_idx += 1
-            else:
-                new_net_config.add_node(new_node_name, **new_node)
-                break
+        new_net_config.add_node(new_node_name, **new_node)
 
         return new_net_config
 
-    def vectorize_edges(self,
-                        edges: list,
-                        source: str,
-                        target:str,
-                        new_net_config: MultiDiGraph,
-                        old_net_config: MultiDiGraph
-                        ) -> MultiDiGraph:
+    def _vectorize_edges(self,
+                         edges: list,
+                         source: str,
+                         target:str,
+                         new_net_config: MultiDiGraph,
+                         old_net_config: MultiDiGraph
+                         ) -> MultiDiGraph:
         """Combines edges in list and adds a new edge to the new net config.
 
         Parameters
@@ -1114,8 +1301,8 @@ class Network(MultiDiGraph):
                         raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
                                          f" cannot be applied to networks with variables of 2 or more"
                                          f" dimensions. Delay of edge between {edge[0]} and {edge[1]} has shape"
-                                         f" {edge_dict['delay'].shape}. Please turn of the `vectorize` option or change the"
-                                         f" edges' dimensionality.")
+                                         f" {edge_dict['delay'].shape}. Please turn of the `vectorize` option or change"
+                                         f" the edges' dimensionality.")
                     delays = list(edge_dict['delay'])
                 else:
                     delays = edge_dict['delay']
@@ -1130,8 +1317,8 @@ class Network(MultiDiGraph):
                         raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
                                          f" cannot be applied to networks with variables of 2 or more"
                                          f" dimensions. Weight of edge between {edge[0]} and {edge[1]} has shape"
-                                         f" {edge_dict['weight'].shape}. Please turn of the `vectorize` option or change the"
-                                         f" edges' dimensionality.")
+                                         f" {edge_dict['weight'].shape}. Please turn of the `vectorize` option or"
+                                         f" change the edges' dimensionality.")
                     weights = list(edge_dict['weight'])
                 else:
                     weights = edge_dict['weight']
@@ -1158,7 +1345,7 @@ class Network(MultiDiGraph):
                 if delays:
                     delay_col += delays
                 if 'source_idx' in edge_dict.keys():
-                    idx = self.node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']]
+                    _, _, idx = self._node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']]
                     if type(idx) is tuple:
                         idx = range(idx[0], idx[1])
                         idx_new = []
@@ -1171,9 +1358,10 @@ class Network(MultiDiGraph):
                         idx_new = idx
                     old_svar_idx.append(idx_new)
                 else:
-                    old_svar_idx.append(self.node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']])
+                    _, _, idx_new = self._node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']]
+                    old_svar_idx.append(idx_new)
                 if 'target_idx' in edge_dict.keys():
-                    idx = self.node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']]
+                    _, _, idx = self._node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']]
                     if type(idx) is tuple:
                         idx = range(idx[0], idx[1])
                         idx_new = []
@@ -1186,7 +1374,8 @@ class Network(MultiDiGraph):
                         idx_new = idx
                     old_tvar_idx.append(idx_new)
                 else:
-                    old_tvar_idx.append(self.node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']])
+                    _, _, idx_new = self._node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']]
+                    old_tvar_idx.append(idx_new)
 
             # create new, vectorized edge
             #############################
@@ -1207,12 +1396,12 @@ class Network(MultiDiGraph):
 
         return new_net_config
 
-    def vectorize_ops(self,
-                      op_key: str,
-                      nodes: list,
-                      new_node: dict,
-                      net_config: MultiDiGraph
-                      ) -> None:
+    def _vectorize_ops(self,
+                       op_key: str,
+                       nodes: list,
+                       new_node: dict,
+                       net_config: MultiDiGraph
+                       ) -> None:
         """Vectorize all instances of an operation across nodes and put them into a single-node network.
 
         Parameters
@@ -1229,8 +1418,8 @@ class Network(MultiDiGraph):
         ref_node = net_config.nodes[node_name_tmp]
         op = ref_node['operators'][op_key]
 
-        if node_name_tmp not in self.node_arg_map.keys():
-            self.node_arg_map[node_name_tmp] = {}
+        if node_name_tmp not in self._node_arg_map.keys():
+            self._node_arg_map[node_name_tmp] = {}
 
         # collect input dependencies of all nodes
         #########################################
@@ -1262,8 +1451,8 @@ class Network(MultiDiGraph):
 
                     for node_name in nodes:
 
-                        if node_name not in self.node_arg_map.keys():
-                            self.node_arg_map[node_name] = {}
+                        if node_name not in self._node_arg_map.keys():
+                            self._node_arg_map[node_name] = {}
 
                         # extract node arg value and shape
                         arg_tmp = net_config.nodes[node_name]['operator_args'][key]
@@ -1280,13 +1469,13 @@ class Network(MultiDiGraph):
                         idx_new = arg['value'].shape[0]
                         idx = (idx_old, idx_new)
 
-                        # add information to node_arg_map
-                        self.node_arg_map[node_name][key] = idx
+                        # add information to _node_arg_map
+                        self._node_arg_map[node_name][key] = [self.key, key, idx]
 
                 else:
 
-                    # add information to node_arg_map
-                    self.node_arg_map[node_name_tmp][key] = (0, arg['value'].shape[0])
+                    # add information to _node_arg_map
+                    self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
 
                 # change shape of argument
                 arg['shape'] = arg['value'].shape
@@ -1304,105 +1493,3 @@ class Network(MultiDiGraph):
         # add operator args
         for key, arg in op_args.items():
             new_node['operator_args'][key] = arg
-
-    def run(self, simulation_time: Optional[float] = None, inputs: Optional[dict] = None,
-            outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None) -> Tuple[DataFrame, float]:
-        """Simulate the network behavior over time via a tensorflow session.
-
-        Parameters
-        ----------
-        simulation_time
-        inputs
-        outputs
-        sampling_step_size
-
-        Returns
-        -------
-        list
-
-        """
-
-        # prepare simulation
-        ####################
-
-        # basic simulation parameters initialization
-        if simulation_time:
-            sim_steps = int(simulation_time / self.dt)
-        else:
-            sim_steps = 1
-
-        if not sampling_step_size:
-            sampling_step_size = self.dt
-        sampling_steps = int(sampling_step_size / self.dt)
-
-        # define output variables
-        if not outputs:
-            outputs = dict()
-            #for name, node in self.nodes.items():
-            #    outputs[name + '_v'] = getattr(node['handle'], 'name')
-
-        # linearize input dictionary
-        if inputs:
-            inp = list()
-            for step in range(sim_steps):
-                inp_dict = dict()
-                for key, val in inputs.items():
-                    shape = key.shape
-                    if len(val) > 1:
-                        inp_dict[key] = np.reshape(val[step], shape)
-                    else:
-                        inp_dict[key] = np.reshape(val, shape)
-                inp.append(inp_dict)
-        else:
-            inp = [None for _ in range(sim_steps)]
-
-        # run simulation
-        ################
-
-        time = 0.
-        times = []
-        with tf.Session(graph=self.tf_graph) as sess:
-
-            # writer = tf.summary.FileWriter('/tmp/log/', graph=self.tf_graph)
-
-            # initialize all variables
-            sess.run(tf.global_variables_initializer())
-
-            results = []
-            t_start = t.time()
-
-            # simulate network behavior for each time-step
-            for step in range(sim_steps):
-
-                sess.run(self.step, inp[step])
-
-                # save simulation results
-                if step % sampling_steps == 0:
-                    results.append([np.squeeze(var.eval()) for var in outputs.values()])
-                    time += sampling_step_size
-                    times.append(time)
-
-            t_end = t.time()
-
-            # display simulation time
-            if simulation_time:
-                print(f"{simulation_time}s of network behavior were simulated in {t_end - t_start} s given a "
-                      f"simulation resolution of {self.dt} s.")
-            else:
-                print(f"Network computations finished after {t_end - t_start} seconds.")
-            # writer.close()
-
-            # store results in pandas dataframe
-            results = np.array(results)
-            if len(results.shape) > 2:
-                n_steps, n_vars, n_nodes = results.shape
-            else:
-                n_steps, n_vars = results.shape
-                n_nodes = 1
-            results = np.reshape(results, (n_steps, n_nodes * n_vars))
-            columns = []
-            for var in outputs.keys():
-                columns += [f"{var}_{i}" for i in range(n_nodes)]
-            results_final = DataFrame(data=results, columns=columns, index=times)
-
-        return results_final, (t_end - t_start)
