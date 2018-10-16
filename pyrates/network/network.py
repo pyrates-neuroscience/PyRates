@@ -14,7 +14,7 @@ from networkx import MultiDiGraph
 from pyrates.parser import parse_dict, parse_equation
 
 # meta infos
-__author__ = "Richard Gast, Karim Ahmed"
+__author__ = "Richard Gast"
 __status__ = "development"
 
 
