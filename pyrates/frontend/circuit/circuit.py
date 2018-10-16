@@ -132,12 +132,13 @@ class CircuitIR(AbstractBaseIR):
         edge_list = []
         for (source, target, template, values) in edges:
             # get edge template and instantiate it
-            edge_ir = template.apply()  # type: EdgeIR # edge spec
-
-            # get weight
+            values = deepcopy(values)
             weight = values.pop("weight", 1)
             # get delay
             delay = values.pop("delay", 0)
+
+            edge_ir = template.apply(values=values)  # type: EdgeIR # edge spec
+            # get weight
 
             # ToDo: Implement source/op/var syntax
             # take apart source and target strings
@@ -218,12 +219,13 @@ class CircuitIR(AbstractBaseIR):
         return self.graph.edges
 
     @classmethod
-    def from_template(cls, template):
+    def from_template(cls, template, *args, **kwargs):
 
         return cls(template.label, template.nodes, template.edges, template.path)
 
     def network_def(self):
         return BackendIRFormatter.network_def(self)
+
 
 class CircuitTemplate(AbstractBaseTemplate):
 
@@ -261,7 +263,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return CircuitIR(label, self.nodes, self.edges, self.path)
 
-    def _get_edge_templates(self, edges: List[tuple]):
+    def _get_edge_templates(self, edges: List[Union[tuple, dict]]):
         """
         Reformat edges from [source, target, template_path, variables] to
         [source, target, template_object, variables]
@@ -274,9 +276,10 @@ class CircuitTemplate(AbstractBaseTemplate):
         -------
         edges_with_templates
         """
-
         edges_with_templates = []
         for edge in edges:
+            if isinstance(edge, dict):
+                edge = (edge["source"], edge["target"], edge["template"], edge["variables"])
             path = edge[2]
             path = self._format_path(path)
             temp = EdgeTemplate.from_yaml(path)

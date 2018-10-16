@@ -13,9 +13,9 @@ class EdgeTemplate(GraphEntityTemplate):
 
 class EdgeIR(GraphEntityIR):
 
-    def __init__(self, operators: dict, template: EdgeTemplate = None):
+    def __init__(self, operators: dict, template: EdgeTemplate = None, values: dict=None):
 
-        super().__init__(operators, template)
+        super().__init__(operators, template, values)
 
         # Step 1: Detect edge input variable
         ####################################
@@ -51,9 +51,9 @@ class EdgeIR(GraphEntityIR):
         self.output = f"{out_op[0]}/{out_var}"
 
     @classmethod
-    def from_template(cls, template):
+    def from_template(cls, template, *args, **kwargs):
 
-        instance = super().from_template(template)
+        instance = super().from_template(template, *args, **kwargs)
         return instance
 
 

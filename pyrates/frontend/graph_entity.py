@@ -11,15 +11,31 @@ from pyrates.frontend.yaml_parser import TemplateLoader
 class GraphEntityIR(AbstractBaseIR):
     """Intermediate representation for nodes and edges."""
 
-    def __init__(self, operators: dict, template: OperatorTemplate=None):
+    def __init__(self, operators: dict, template: OperatorTemplate=None, values: dict=None):
 
         self.op_graph = DiGraph()
         all_outputs = {}  # type: Dict[str, dict]
         self.template = template
         # op_inputs, op_outputs = set(), set()
+        if values:
+            values.pop("weight", None)
+            values.pop("delay", None)
+            value_updates = {}
+            for key, value in values.items():
+                op_name, var_name = key.split("/")
+                if op_name not in value_updates:
+                    value_updates[op_name] = {}
+                value_updates[op_name][var_name] = value
 
         for op_template in operators:
             op_instance, op_variables, key = op_template.apply(return_key=True)
+            # update variables:
+            if values:
+                # noinspection PyUnboundLocalVariable
+                if key in value_updates:
+                    for vname in value_updates[key]:
+                        op_variables[vname]["value"] = value_updates[key][vname]
+                        # should fail, if variable is unknown
             # add operator as node to local operator_graph
             # ToDo: separate variable def and operator def so one can be private and the other shared
             self.op_graph.add_node(key, operator=op_instance, variables=op_variables)
@@ -44,7 +60,6 @@ class GraphEntityIR(AbstractBaseIR):
                         # add predecessor output as source; this would also work for non-equal variable names
                         name = f"{predecessor}/{out_var}"
                         self[op_key].inputs[in_var]["source"].append(name)
-                        # ToDo: Problem... operator instances are right now shared
                         self.op_graph.add_edge(predecessor, op_key)
                 else:
                     pass  # means, that 'source' will remain an empty list and no incoming edge will be added
@@ -72,9 +87,9 @@ class GraphEntityIR(AbstractBaseIR):
         return self.op_graph.nodes[key]["operator"]
 
     @classmethod
-    def from_template(cls, template):
+    def from_template(cls, template, values: dict=None):
 
-        return cls(operators=template.operators, template=template)
+        return cls(operators=template.operators, template=template, values=values)
 
 
 class GraphEntityTemplate(AbstractBaseTemplate):

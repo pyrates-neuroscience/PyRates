@@ -173,7 +173,8 @@ class OperatorIR(AbstractBaseIR):
         return dict(vtype=vtype, dtype=dtype, value=value)
 
     def copy(self):
-        return self.__class__(self.equations, self.inputs, self.output)
+
+        return self.__class__(deepcopy(self.equations), deepcopy(self.inputs), deepcopy(self.output))
 
     def _getter(self, key: str):
         """

@@ -52,8 +52,7 @@ ExampleCircuit:
   label: ExNet
   nodes:
     Node: ExampleNode
-    Circuit: SomeCircuit
-
+#    Circuit: SomeCircuit
   edges:
     # - [Source/op/var, Target/op/var, Edge class, target op, (, weight (, delay))]
     - source: Node/LinearOperator/y

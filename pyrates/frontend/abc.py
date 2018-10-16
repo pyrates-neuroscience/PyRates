@@ -84,7 +84,7 @@ class AbstractBaseIR:
         raise NotImplementedError
 
     @classmethod
-    def from_template(cls, template):
+    def from_template(cls, template, **kwargs):
         """Invoke IR instance from a given template"""
         raise NotImplementedError
 
