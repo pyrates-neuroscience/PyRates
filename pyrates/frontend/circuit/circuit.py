@@ -363,6 +363,7 @@ class CircuitTemplateLoader(TemplateLoader):
 
 
 class BackendIRFormatter:
+    label_counter = {}  # type: Dict[str, int]
 
     @classmethod
     def network_def(cls, circuit: CircuitIR):
@@ -389,34 +390,10 @@ class BackendIRFormatter:
         # reorganize edge to conform with backend API
         #############################################
         for source, target, data in circuit.graph.edges(data=True):
-            edge = data["edge_ir"]
-            # reformat all edge internals into operators + operator_args
-            op_data = cls._nd_reformat_operators(edge.op_graph)
-            op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
+            # move edge operators to node
+            node_dict[target], edge = cls._move_edge_ops_to_node(target, node_dict[target], data)
 
-            # move edge operators to nodes
-            # using dictionary update method, assuming no conflicts in operator names
-            # this fails, if multiple edges on one source node use the same coupling operator
-            # todo: implement conflict management for multiple edges with same operators per source node
-            node_dict[source]["operators"].update(op_data["operators"])
-            node_dict[source]["operator_args"].update(op_data["operator_args"])
-
-            for op in op_order:
-                if op not in node_dict[source]["operator_order"]:
-                    # noinspection PyUnresolvedReferences
-                    node_dict[source]["operator_order"].append(op)
-
-            # simplify edges and save into edge_list
-            # find single output operator to save new reference to source variable after reformatting
-            op_graph = edge.op_graph
-            out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]
-            out_var = edge[out_op[0]].output
-            source_var = f"{out_op[0]}/{out_var}"
-
-            edge_list.append((source, target, {"source_var": source_var,
-                                               "target_var": data["target_var"],
-                                               "weight": data["weight"],
-                                               "delay": data["delay"]}))
+            edge_list.append((source, target, dict(**edge)))
 
         # network_def.add_nodes_from(node_dict)
         for key, node in node_dict.items():
@@ -488,3 +465,88 @@ class BackendIRFormatter:
             graph.remove_nodes_from(primary_nodes)
 
         return op_order
+
+    @classmethod
+    def _move_edge_ops_to_node(cls, target, node_dict: dict, edge_dict: dict) -> (dict, dict):
+        """
+
+        Parameters
+        ----------
+        target
+            Key identifying target node in network graph
+        node_dict
+            Dictionary of target node (to move operators into)
+        edge_dict
+            Dictionary with edge properties (to move operators from)
+        Returns
+        -------
+        node_dict
+            Updated dictionary of target node
+        edge_dict
+             Dictionary of reformatted edge
+        """
+        # grab all edge variables
+        edge = edge_dict["edge_ir"]  # type: EdgeIR
+        source_var = edge_dict["source_var"]
+        target_var = edge_dict["target_var"]
+        weight = edge_dict["weight"]
+        delay = edge_dict["delay"]
+        input_var = edge.input
+        output_var = edge.output
+
+        # reformat all edge internals into operators + operator_args
+        op_data = cls._nd_reformat_operators(edge.op_graph)  # type: dict
+        op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
+        operators = op_data["operators"]
+        operator_args = op_data["operator_args"]
+
+        # initialize label in case anything needs to be renamed
+        label_map = {}  # type: Dict[str, str]
+
+        # ToDo: Simplification: cache combinations of op instance and op args with assigned label
+
+        # go through each operator to move them to target node
+        for op, op_dict in operators.items():
+
+            # check if operator name is already known in target node
+            if op in node_dict["operators"]:
+
+                # check if values in operator_args are different
+                for variable, var_props in operator_args.items():
+                    if variable.startswith(op) and variable in node_dict["operator_args"]:
+                        if var_props["value"] == node_dict["operator_args"][variable]["value"]
+                            # rename operator, if any value in operator args is different
+                            pass
+                            # get current count from operator label_count by node identifier
+                            # then add renamed operator
+                            # add renamed operator to op_order after position of original operator
+                pass
+            else:
+                # add operator
+                # prepend operator to op_order
+                # append
+                pass
+
+            node_dict[target]["operators"].update(op_data["operators"])
+            node_dict[target]["operator_args"].update(op_data["operator_args"])
+            # ToDo: move operators to target instead of source
+            # ToDo: check existence of operators in target graph
+
+            for op in op_order:
+                if op not in node_dict[source]["operator_order"]:
+                    # noinspection PyUnresolvedReferences
+                    node_dict[source]["operator_order"].append(op)
+
+            # simplify edges and save into edge_list
+            # find single output operator to save new reference to source variable after reformatting
+            op_graph = edge.op_graph
+            out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]
+            out_var = edge[out_op[0]].output
+            source_var = f"{out_op[0]}/{out_var}"
+
+        edge = {"source_var": source_var,
+         "target_var": data["target_var"],
+         "weight": data["weight"],
+         "delay": data["delay"]})
+        # set target_var to singular input of last operator added
+        return node_dict, target_var
