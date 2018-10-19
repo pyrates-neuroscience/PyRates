@@ -26,7 +26,7 @@ sparseness_e = 0.2
 sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
-n_jrcs = 150
+n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
@@ -89,7 +89,7 @@ for i in range(0, n_jrcs):
                               'inputs': {'psp': {'sources': ['operator_rtp_syn_e', 'operator_rtp_syn_i'],
                                                  'reduce_dim': True}},
                               'output': 'm_out'}},
-            'op_order': ['operator_rtp_syn_e', 'operator_rtp_syn_i', 'operator_ptr'],
+            'operator_order': ['operator_rtp_syn_e', 'operator_rtp_syn_i', 'operator_ptr'],
             'operator_args': {'operator_rtp_syn_e/m_in': {'vtype': 'state_var',
                                                           'dtype': 'float32',
                                                           'shape': (),
@@ -169,7 +169,7 @@ for i in range(0, n_jrcs):
                               'inputs': {'psp': {'sources': ['operator_rtp_syn'],
                                                  'reduce_dim': False}},
                               'output': 'm_out'}},
-            'op_order': ['operator_rtp_syn', 'operator_ptr'],
+            'operator_order': ['operator_rtp_syn', 'operator_ptr'],
             'operator_args': {'operator_rtp_syn/m_in': {'vtype': 'state_var',
                                                         'dtype': 'float32',
                                                         'shape': (),
@@ -225,7 +225,7 @@ for i in range(0, n_jrcs):
                               'inputs': {'psp': {'sources': ['operator_rtp_syn'],
                                                  'reduce_dim': False}},
                               'output': 'm_out'}},
-            'op_order': ['operator_rtp_syn', 'operator_ptr'],
+            'operator_order': ['operator_rtp_syn', 'operator_ptr'],
             'operator_args': {'operator_rtp_syn/m_in': {'vtype': 'state_var',
                                                         'dtype': 'float32',
                                                         'shape': (),
@@ -305,6 +305,7 @@ for a in range(0, n_nodes):
 
             edge['source_var'] = 'operator_ptr/m_out'
             edge['weight'] = c
+            edge['delay'] = None
 
             s = source.split('/')[0]
             t = target.split('/')[0]
@@ -314,7 +315,7 @@ for a in range(0, n_nodes):
 ###############
 
 gr = tf.Graph()
-net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
+net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
 
 # network simulation
 ####################

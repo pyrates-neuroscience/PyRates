@@ -30,11 +30,11 @@ def test_simple_example():
 
     # Step 4: Create tensorflow graph
     from pyrates.network import Network
-    net = Network(net_def, dt=5e-4, vectorize=True)
-    tf_graph = net.tf_graph
+    net = Network(net_def, dt=5e-4, vectorize='nodes')
 
     # Step 5: Run simulation
-    net.run(simulation_time=1.,
-            outputs={"V": net.nodes['pc/0']['operator_ptr/v']},
-            sampling_step_size=1e-3)
+    results, _ = net.run(simulation_time=1.,
+                         outputs={"V": ('all', 'operator_ptr' , 'v')},
+                         sampling_step_size=1e-3)
 
+    results.plot()

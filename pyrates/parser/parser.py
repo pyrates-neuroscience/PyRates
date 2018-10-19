@@ -340,7 +340,8 @@ class ExpressionParser(ParserElement):
             op1 = self.parse(expr_stack)
 
             # enable automatic broadcasting
-            if hasattr(op1, 'shape') and hasattr(op2, 'shape') and op1.shape != op2.shape:
+            if hasattr(op1, 'shape') and hasattr(op2, 'shape') and \
+                    op1.shape != op2.shape and len(op1.shape) > 0 and len(op2.shape) > 0:
                 if len(op1.shape) > len(op2.shape):
                     target_shape = op1.shape
                     if 1 in target_shape:
