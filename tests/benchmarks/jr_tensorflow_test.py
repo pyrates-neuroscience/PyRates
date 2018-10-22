@@ -85,7 +85,7 @@ for i in range(0, n_jrcs):
                               'inputs': {},
                               'output': 'psp'},
                           'operator_ptr': {
-                              'equations': ["v = psp", "m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                              'equations': ["m_out = m_max / (1. + e^(r * (v_th - psp)))"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn_e', 'operator_rtp_syn_i'],
                                                  'reduce_dim': True}},
                               'output': 'm_out'}},
@@ -102,6 +102,10 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
+                              'operator_ptr/psp': {'vtype': 'state_var',
+                                                   'dtype': 'float32',
+                                                   'shape': (),
+                                                   'value': 0.},
                               'operator_rtp_syn_e/psp': {'vtype': 'state_var',
                                                          'dtype': 'float32',
                                                          'shape': (),
@@ -165,7 +169,7 @@ for i in range(0, n_jrcs):
                                'inputs': {},
                                'output': 'psp'},
                           'operator_ptr': {
-                              'equations': ["v = psp", "m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                              'equations': ["m_out = m_max / (1. + e^(r * (v_th - psp)))"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn'],
                                                  'reduce_dim': False}},
                               'output': 'm_out'}},
@@ -178,6 +182,10 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
+                              'operator_ptr/psp': {'vtype': 'state_var',
+                                                   'dtype': 'float32',
+                                                   'shape': (),
+                                                   'value': 0.},
                               'operator_rtp_syn/psp': {'vtype': 'state_var',
                                                        'dtype': 'float32',
                                                        'shape': (),
@@ -221,7 +229,7 @@ for i in range(0, n_jrcs):
                                'inputs': {},
                                'output': 'psp'},
                           'operator_ptr': {
-                              'equations': ["v = psp", "m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                              'equations': ["m_out = m_max / (1. + e^(r * (v_th - psp)))"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn'],
                                                  'reduce_dim': False}},
                               'output': 'm_out'}},
@@ -234,6 +242,10 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
+                              'operator_ptr/psp': {'vtype': 'state_var',
+                                                   'dtype': 'float32',
+                                                   'shape': (),
+                                                   'value': 0.},
                               'operator_rtp_syn/psp': {'vtype': 'state_var',
                                                        'dtype': 'float32',
                                                        'shape': (),
@@ -305,7 +317,7 @@ for a in range(0, n_nodes):
 
             edge['source_var'] = 'operator_ptr/m_out'
             edge['weight'] = c
-            edge['delay'] = None
+            edge['delay'] = 0
 
             s = source.split('/')[0]
             t = target.split('/')[0]
@@ -321,7 +333,7 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 ####################
 
 results, ActTime = net.run(simulation_time=simulation_time,
-                           outputs={'V': ('pc/0', 'operator_ptr', 'v')},
+                           outputs={'V': ('all', 'operator_ptr', 'psp')},
                            sampling_step_size=1e-3,
                            out_dir='/tmp/log/')
 
