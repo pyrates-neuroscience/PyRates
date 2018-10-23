@@ -142,7 +142,7 @@ def test_2_3_edge():
     # test correct projection and dependencies between operations of edge
     #####################################################################
 
-    ops1 = {'op_1': {'equations': ["d/dt * a = -a + 2.", "b = a*2."], 'inputs': {}, 'output': 'b'},
+    ops1 = {'op_1': {'equations': ["d/dt * a = -a", "b = a*2."], 'inputs': {}, 'output': 'b'},
             'op_2': {'equations': ["c = b / sum(b)"], 'inputs': {'b': {'sources': ['op_1'], 'reduce_dim': False}},
                      'output': 'c'}
             }
@@ -198,7 +198,9 @@ def test_2_3_edge():
     net = Network(gr, vectorize='none', key='test_edge', dt=1e-3, tf_graph=tf.Graph())
     results, _ = net.run(simulation_time=3e-3, outputs={'r1': ('n1', 'op_1', 'b'), 'r2': ('n2', 'op_1', 'b')})
 
-    assert results['r1_0'].values[-1] != results['r2_0'].values[-1]
+    assert results['r1_0'].values[-1] > 0.
+    assert results['r1_0'].values[-1] < 1.
+    assert results['r1_0'].values[-1] < results['r2_0'].values[-1]
 
 
 def test_2_4_vectorization():
@@ -274,5 +276,7 @@ def test_2_4_vectorization():
 
     error1 = nmrse(results1.values, results2.values)
     error2 = nmrse(results1.values, results3.values)
+
+    assert np.sum(results1.values) > 0.
     assert np.sum(error1) == pytest.approx(0., rel=1e-6)
     assert np.sum(error2) == pytest.approx(0., rel=1e-6)

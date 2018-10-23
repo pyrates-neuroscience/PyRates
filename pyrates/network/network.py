@@ -231,7 +231,7 @@ class Network(MultiDiGraph):
                             outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
                 else:
                     for node in self._node_arg_map.keys():
-                        if val[0] in node:
+                        if val[0] in node and 'comb' not in node:
                             outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
 
         # add output collector variables to graph
@@ -243,7 +243,7 @@ class Network(MultiDiGraph):
                 for key, var in outputs_tmp.items():
                     output_col[key] = tf.get_variable(name=key,
                                                       dtype=tf.float32,
-                                                      shape=[int(sim_steps / sampling_steps)] + list(var.shape),
+                                                      shape=[int(sim_steps / sampling_steps) + 1] + list(var.shape),
                                                       initializer=tf.constant_initializer())
                     store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
                 with tf.control_dependencies(store_ops):
@@ -276,6 +276,7 @@ class Network(MultiDiGraph):
 
             # initialize all variables
             sess.run(tf.global_variables_initializer())
+            sess.run(store_outputs)
             t_start = t.time()
 
             # simulate network behavior for each time-step
@@ -313,6 +314,7 @@ class Network(MultiDiGraph):
                             out_vars[f'{key}_{j}'] = var[:, j]
                     except IndexError:
                         out_vars[key] = var
+            out_vars['time'] = np.arange(0., simulation_time + sampling_step_size * 0.5, sampling_step_size)
 
         return out_vars, (t_end - t_start)
 
@@ -341,23 +343,15 @@ class Network(MultiDiGraph):
         except KeyError:
             node, var, idx = self._node_arg_map[node][f'{op}/{var}']
             if node in self._node_arg_map.keys():
-                node, var, idx2 = self._node_arg_map[node][var]
-            else:
-                idx2 = None
-            if idx2:
+                op, var = var.split('/')
                 try:
-                    tf_var = self.nodes[node][var][idx2[0]: idx2[1]]
+                    return self.get_var(var, node, op)[idx[0]:idx[1]]
                 except TypeError:
-                    tf_var = self.nodes[node][var][idx2]
-                try:
-                    tf_var = tf_var[idx[0]:idx[1]]
-                except TypeError:
-                    tf_var = tf_var[idx]
-            else:
-                try:
-                    tf_var = self.nodes[node][var][idx[0]: idx[1]]
-                except TypeError:
-                    tf_var = self.nodes[node][var][idx]
+                    return self.get_var(var, node, op)[idx]
+            try:
+                tf_var = self.nodes[node][var][idx[0]: idx[1]]
+            except TypeError:
+                tf_var = self.nodes[node][var][idx]
 
         return tf_var
 
@@ -1122,14 +1116,14 @@ class Network(MultiDiGraph):
                         eqs = [f"{var_name} = {var_name}_col_{j}"]
 
                         # add buffer operator to node
-                        node['operators'][f'{var_name}_collector_{j}'] = {
+                        node['operators'][f'{op_name}_{var_name}_col_{j}'] = {
                             'equations': eqs,
                             'inputs': {},
                             'output': var_name}
-                        node['operator_order'] = [f'{var_name}_collector_{j}'] + node['operator_order']
+                        node['operator_order'] = [f'{op_name}_{var_name}_col_{j}'] + node['operator_order']
 
                         # add buffer variable to node arguments
-                        node['operator_args'][f'{var_name}_collector_{j}/{var_name}_col_{j}'] = {
+                        node['operator_args'][f'{op_name}_{var_name}_col_{j}/{var_name}_col_{j}'] = {
                             'vtype': 'state_var',
                             'dtype': 'float32',
                             'shape': target_shape,
@@ -1139,14 +1133,15 @@ class Network(MultiDiGraph):
                         # handle operator dependencies
                         if var_name in node['operators'][op_name]['inputs'].keys():
                             node['operators'][op_name]['inputs'][var_name]['sources'].append(
-                                f'{var_name}_collector_{j}')
+                                f'{op_name}_{var_name}_col_{j}')
                         else:
-                            node['operators'][op_name]['inputs'][var_name] = {'sources': [f'{var_name}_collector_{j}'],
+                            node['operators'][op_name]['inputs'][var_name] = {'sources': [f'{op_name}_'
+                                                                                          f'{var_name}_col_{j}'],
                                                                               'reduce_dim': True}
 
                         # update edge information
                         edge = net_config.edges[input_info['sources'][j]]
-                        edge['target_var'] = f'{var_name}_collector_{j}/{var_name}_col_{j}'
+                        edge['target_var'] = f'{op_name}_{var_name}_col_{j}/{var_name}_col_{j}'
 
         return net_config
 
@@ -1212,19 +1207,25 @@ class Network(MultiDiGraph):
         for arg_name, arg in new_node['operator_args'].items():
 
             # extract argument value and shape
-            if len(arg['shape']) == 2:
-                raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
-                                 f" cannot be applied to networks with variables of 2 or more"
-                                 f" dimensions. Variable {arg_name} has shape {arg['shape']}. Please"
-                                 f" turn of the `vectorize` option or change the dimensionality of the argument.")
-            if len(arg['shape']) == 1:
-                if type(arg['value']) is float:
-                    arg['value'] = np.zeros(arg['shape']) + arg['value']
-                arg_vals[arg_name] = list(arg['value'])
-                arg_shapes[arg_name] = tuple(arg['shape'])
+            if arg['vtype'] == 'raw':
+                if type(arg['value']) is list or type(arg['value']) is tuple:
+                    arg_vals[arg_name] = list(arg['value'])
+                else:
+                    arg_vals[arg_name] = arg['value']
             else:
-                arg_vals[arg_name] = [arg['value']]
-                arg_shapes[arg_name] = (1,)
+                if len(arg['shape']) == 2:
+                    raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
+                                     f" cannot be applied to networks with variables of 2 or more"
+                                     f" dimensions. Variable {arg_name} has shape {arg['shape']}. Please"
+                                     f" turn of the `vectorize` option or change the dimensionality of the argument.")
+                if len(arg['shape']) == 1:
+                    if type(arg['value']) is float:
+                        arg['value'] = np.zeros(arg['shape']) + arg['value']
+                    arg_vals[arg_name] = list(arg['value'])
+                    arg_shapes[arg_name] = tuple(arg['shape'])
+                else:
+                    arg_vals[arg_name] = [arg['value']]
+                    arg_shapes[arg_name] = (1,)
 
             # save index of original node's attributes in new nodes attributes
             self._node_arg_map[node_ref][arg_name] = [new_node_name, arg_name, 0]
@@ -1244,14 +1245,19 @@ class Network(MultiDiGraph):
                 arg = node['operator_args'][arg_name]
 
                 # extract value and shape of argument
-                if len(arg['shape']) == 0:
-                    arg_vals[arg_name].append(arg['value'])
+                if arg['vtype'] == 'raw':
+                    if type(arg['value']) is list or type(arg['value']) is tuple:
+                        for j, val in enumerate(arg['value']):
+                            arg_vals[arg_name][j] += val
                 else:
-                    if type(arg['value']) is float:
-                        arg['value'] = np.zeros(arg['shape']) + arg['value']
-                    arg_vals[arg_name] += list(arg['value'])
-                    if arg['shape'][0] > arg_shapes[arg_name][0]:
-                        arg_shapes[arg_name] = tuple(arg['shape'])
+                    if len(arg['shape']) == 0:
+                        arg_vals[arg_name].append(arg['value'])
+                    else:
+                        if type(arg['value']) is float:
+                            arg['value'] = np.zeros(arg['shape']) + arg['value']
+                        arg_vals[arg_name] += list(arg['value'])
+                        if arg['shape'][0] > arg_shapes[arg_name][0]:
+                            arg_shapes[arg_name] = tuple(arg['shape'])
 
                 # save index of original node's attributes in new nodes attributes
                 self._node_arg_map[node_name][arg_name] = [new_node_name, arg_name, i + 1]
@@ -1475,54 +1481,75 @@ class Network(MultiDiGraph):
         for key, arg in ref_node['operator_args'].items():
 
             arg = arg.copy()
-            if not hasattr(arg['value'], 'shape'):
-                arg['value'] = np.array(arg['value'])
-            if arg['value'].shape != arg['shape']:
-                try:
-                    arg['value'] = np.reshape(arg['value'], arg['shape'])
-                except ValueError:
-                    arg['value'] = np.zeros(arg['shape']) + arg['value']
 
             if op_key in key:
 
-                # go through nodes and extract shape and value information for arg
-                if nodes:
+                if arg['vtype'] == 'raw':
 
-                    self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+                    if type(arg['value']) is list:
 
-                    for node_name in nodes:
+                        self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, len(arg['value']))]
 
-                        if node_name not in self._node_arg_map.keys():
-                            self._node_arg_map[node_name] = {}
+                        for node_name in nodes:
 
-                        # extract node arg value and shape
-                        arg_tmp = net_config.nodes[node_name]['operator_args'][key]
-                        val = arg_tmp['value']
-                        dims = tuple(arg_tmp['shape'])
+                            if node_name not in self._node_arg_map.keys():
 
-                        # append value to argument dictionary
-                        if len(dims) > 0 and type(val) is float:
-                            val = np.zeros(dims) + val
-                        else:
-                            val = np.reshape(np.array(val), dims)
-                        if len(dims) == 0:
-                            idx_old = 0
-                        else:
-                            idx_old = arg['value'].shape[0]
-                        arg['value'] = np.append(arg['value'], val, axis=0)
-                        idx_new = arg['value'].shape[0]
-                        idx = (idx_old, idx_new)
+                                self._node_arg_map[node_name] = {}
 
-                        # add information to _node_arg_map
-                        self._node_arg_map[node_name][key] = [self.key, key, idx]
+                                new_val = net_config.nodes[node_name]['operator_args'][key]['value']
+                                old_idx = len(arg['value'])
+                                arg['value'].append(new_val)
+
+                                self._node_arg_map[node_name_tmp][key] = [self.key, key, (old_idx, arg['value'].shape[0])]
 
                 else:
 
-                    # add information to _node_arg_map
-                    self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+                    if not hasattr(arg['value'], 'shape'):
+                        arg['value'] = np.array(arg['value'])
+                    if arg['value'].shape != arg['shape']:
+                        try:
+                            arg['value'] = np.reshape(arg['value'], arg['shape'])
+                        except ValueError:
+                            arg['value'] = np.zeros(arg['shape']) + arg['value']
 
-                # change shape of argument
-                arg['shape'] = arg['value'].shape
+                    # go through nodes and extract shape and value information for arg
+                    if nodes:
+
+                        self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+
+                        for node_name in nodes:
+
+                            if node_name not in self._node_arg_map.keys():
+                                self._node_arg_map[node_name] = {}
+
+                            # extract node arg value and shape
+                            arg_tmp = net_config.nodes[node_name]['operator_args'][key]
+                            val = arg_tmp['value']
+                            dims = tuple(arg_tmp['shape'])
+
+                            # append value to argument dictionary
+                            if len(dims) > 0 and type(val) is float:
+                                val = np.zeros(dims) + val
+                            else:
+                                val = np.reshape(np.array(val), dims)
+                            if len(dims) == 0:
+                                idx_old = 0
+                            else:
+                                idx_old = arg['value'].shape[0]
+                            arg['value'] = np.append(arg['value'], val, axis=0)
+                            idx_new = arg['value'].shape[0]
+                            idx = (idx_old, idx_new)
+
+                            # add information to _node_arg_map
+                            self._node_arg_map[node_name][key] = [self.key, key, idx]
+
+                    else:
+
+                        # add information to _node_arg_map
+                        self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+
+                    # change shape of argument
+                    arg['shape'] = arg['value'].shape
 
                 # add argument to new node's argument dictionary
                 op_args[key] = arg

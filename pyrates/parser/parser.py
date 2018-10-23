@@ -676,6 +676,7 @@ class TFExpressionParser(ExpressionParser):
                  "cos": tf.cos,
                  "tan": tf.tan,
                  "abs": tf.abs,
+                 "sqrt": tf.sqrt,
                  "max": tf.reduce_max,
                  "min": tf.reduce_min,
                  "argmax": tf.argmax,

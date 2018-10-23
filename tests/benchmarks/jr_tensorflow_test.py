@@ -18,20 +18,20 @@ from pyrates.utility import mne_from_dataframe
 
 # general
 step_size = 1e-3
-simulation_time = 3.0
+simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
-sparseness_e = 0.2
-sparseness_i = sparseness_e * 0.5
+sparseness_e = 0.1
+sparseness_i = sparseness_e * 1.0
 
 # No_of_JansenRitCircuit
 n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter_e = 100. / (n_jrcs * sparseness_e / 0.01)
-c_inter_i = 50. / (n_jrcs * sparseness_e / 0.01)
+c_inter_e = 0. / (n_jrcs * sparseness_e / 0.01)
+c_inter_i = 0. / (n_jrcs * sparseness_e / 0.01)
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -67,7 +67,7 @@ for i in range(n_jrcs):
                 C_e[i * 3, j * 3] = weight_e * c_inter_e
             weight_i = np.random.uniform()
             if weight_i > (1 - sparseness_i):
-                C_i[i * 3 + 2, j * 3] = weight_i * c_inter_i
+                C_i[i * 3, j * 3 + 2] = weight_i * c_inter_i
 
 # define network dictionary
 ###########################
@@ -75,7 +75,7 @@ for i in range(n_jrcs):
 graph = MultiDiGraph()
 for i in range(0, n_jrcs):
     data = {'operators': {'operator_rtp_syn_e': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau ^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + 220. + randn(s) * 22.) - 2./tau * x - 1./tau ^2 * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -150,14 +150,12 @@ for i in range(0, n_jrcs):
                                                     'dtype': 'float32',
                                                     'shape': (),
                                                     'value': 6e-3},
-                              'operator_rtp_syn_e/u': {'vtype': 'constant',
-                                                       'dtype': 'float32',
-                                                       'shape': (),
-                                                       'value': 220.},
                               'operator_rtp_syn_i/u': {'vtype': 'constant',
                                                        'dtype': 'float32',
                                                        'shape': (),
-                                                       'value': 0.}
+                                                       'value': 0.},
+                              'operator_rtp_syn_e/s': {'vtype': 'raw',
+                                                       'value': [1]},
                               },
             'inputs': {}
             }
@@ -333,13 +331,16 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 ####################
 
 results, ActTime = net.run(simulation_time=simulation_time,
-                           outputs={'V': ('all', 'operator_ptr', 'psp')},
+                           outputs={'V': ('pc', 'operator_ptr', 'psp')},
                            sampling_step_size=1e-3,
                            out_dir='/tmp/log/')
 
 # results
 #########
 
+from pyrates.utility import plot_timeseries, plot_graph
 #mne_obj = mne_from_dataframe(sim_results=results)
-results.plot()
+plot_timeseries(data=results, variable='psp[V]', ci=None)
+#plot_graph(graph, out_file='test.png')
+#results.plot()
 show()
