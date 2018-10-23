@@ -22,7 +22,7 @@ simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
-sparseness_e = 0.1
+sparseness_e = 0.
 sparseness_i = sparseness_e * 1.0
 
 # No_of_JansenRitCircuit
@@ -30,8 +30,8 @@ n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter_e = 0. / (n_jrcs * sparseness_e / 0.01)
-c_inter_i = 0. / (n_jrcs * sparseness_e / 0.01)
+c_inter_e = 0. #/ (n_jrcs * sparseness_e / 0.01)
+c_inter_i = 0. #/ (n_jrcs * sparseness_e / 0.01)
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -75,7 +75,7 @@ for i in range(n_jrcs):
 graph = MultiDiGraph()
 for i in range(0, n_jrcs):
     data = {'operators': {'operator_rtp_syn_e': {
-                               'equations': ["d/dt * x = H/tau * (m_in + 220. + randn(s) * 22.) - 2./tau * x - 1./tau ^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + 220.) - 2./tau * x - 1./tau ^2 * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -333,7 +333,8 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 results, ActTime = net.run(simulation_time=simulation_time,
                            outputs={'V': ('pc', 'operator_ptr', 'psp')},
                            sampling_step_size=1e-3,
-                           out_dir='/tmp/log/')
+                           #out_dir='/tmp/log/'
+                           )
 
 # results
 #########

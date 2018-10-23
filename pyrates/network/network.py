@@ -140,16 +140,10 @@ class Network(MultiDiGraph):
                     # collect update operation of node
                     node_updates.append(self.nodes[node_name]['update'])
 
-                # group the update operations of all nodes
-                self.step = tf.group(node_updates, name='network_nodes_update')
-
                 # initialize edges
                 ##################
-
                 with tf.control_dependencies(node_updates):
-
                     edge_updates = []
-
                     for source_name, target_name, edge_idx in net_config.edges:
 
                         # add edge to network
@@ -161,9 +155,13 @@ class Network(MultiDiGraph):
                         # collect project operation of edge
                         edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
 
-                    # group project operations of all edges
-                    if len(edge_updates) > 0:
-                        self.step = tf.group(edge_updates, name='network_update')
+                # create network update operation
+                #################################
+
+                if len(edge_updates) > 0:
+                    self.step = tf.group(edge_updates, name='network_update')
+                else:
+                    self.step = tf.group(node_updates, name='network_update')
 
     def run(self,
             simulation_time: Optional[float] = None,
@@ -171,7 +169,7 @@ class Network(MultiDiGraph):
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
             out_dir: Optional[str] = None,
-            verbose: bool=True
+            verbose: bool=True,
             ) -> Tuple[DataFrame, float]:
         """Simulate the network behavior over time via a tensorflow session.
 
@@ -205,10 +203,9 @@ class Network(MultiDiGraph):
         ####################
 
         # basic simulation parameters initialization
-        if simulation_time:
-            sim_steps = int(simulation_time / self.dt)
-        else:
-            sim_steps = 1
+        if not simulation_time:
+            simulation_time = self.dt
+        sim_steps = int(simulation_time / self.dt)
 
         if not sampling_step_size:
             sampling_step_size = self.dt
@@ -246,8 +243,9 @@ class Network(MultiDiGraph):
                                                       shape=[int(sim_steps / sampling_steps) + 1] + list(var.shape),
                                                       initializer=tf.constant_initializer())
                     store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
+
                 with tf.control_dependencies(store_ops):
-                    store_outputs = out_idx.assign_add(1)
+                    sample = out_idx.assign_add(1)
 
         # linearize input dictionary
         if inputs:
@@ -276,14 +274,14 @@ class Network(MultiDiGraph):
 
             # initialize all variables
             sess.run(tf.global_variables_initializer())
-            sess.run(store_outputs)
+            sess.run(sample)
             t_start = t.time()
 
             # simulate network behavior for each time-step
             for step in range(sim_steps):
                 sess.run(self.step, inp[step])
                 if step % sampling_steps == 0:
-                    sess.run(store_outputs)
+                    sess.run(sample)
 
             # display simulation time
             t_end = t.time()
@@ -731,9 +729,10 @@ class Network(MultiDiGraph):
                         evals_uncomplete.append(ev)
 
                 # group the tensorflow operations across expressions
-                for ev in evals_uncomplete:
-                    assign_op = self._assign_to_var(ev[0], ev[1])
-                    evals_complete.append(assign_op)
+                with tf.control_dependencies(evals_complete):
+                    for ev in evals_uncomplete:
+                        assign_op = self._assign_to_var(ev[0], ev[1])
+                        evals_complete.append(assign_op)
 
             return tf.group(evals_complete, name=f'{variable_scope}_eval'), expression_args
 
@@ -1583,12 +1582,10 @@ class Network(MultiDiGraph):
 
         """
 
-        with self._tf_graph.as_default():
-
+        try:
+            return var.assign(val)
+        except ValueError:
             try:
-                return var.assign(val)
+                return var[:, 0].assign(val)
             except ValueError:
-                try:
-                    return var[:, 0].assign(val)
-                except ValueError:
-                    return var.assign(tf.squeeze(val))
+                return var.assign(tf.squeeze(val))

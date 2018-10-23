@@ -70,9 +70,9 @@ def test_2_1_operator():
     result1, _ = net1.run(outputs={'b1': ('n', 'op1', 'b'), 'a1': ('n', 'op1', 'a')})
     result2, _ = net2.run(outputs={'b2': ('n', 'op1', 'b')})
 
-    assert result1['a1'].values[-1] == pytest.approx(0.002, rel=1e-6)
-    assert np.sum(result1['b1'].values[:]) == pytest.approx(1., rel=1e-6)
-    assert result1['b1'].values[-1] == result2['b2'].values[-1]
+    assert result1['a1_0'].values[-1] == pytest.approx(0.002, rel=1e-6)
+    assert np.sum(result1.values[1, :10]) == pytest.approx(1., rel=1e-6)
+    assert result1['b1_0'].values[-1] == result2['b2_0'].values[-1]
 
 
 def test_2_2_node():
@@ -125,9 +125,9 @@ def test_2_2_node():
     net = Network(gr, vectorize='none', key='test_node', tf_graph=tf.Graph())
     results, _ = net.run(outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n1', 'op_2', 'c')})
 
-    assert results['r1'].values[-1] != pytest.approx(1., rel=1e-2)
-    assert np.sum(results['r1'].values) == pytest.approx(1., rel=1e-6)
-    assert results['r1'].values[-1] == results['r2'].values[-1]
+    assert results['r1_0'].values[-1] == results['r1_0'].values[0]
+    assert np.sum(results.values[0, :10]) == pytest.approx(1., rel=1e-6)
+    assert results['r1_0'].values[-1] == results['r2_0'].values[-1]
 
 
 def test_2_3_edge():
@@ -151,10 +151,11 @@ def test_2_3_edge():
                      'output': 'c'}
             }
 
+    a = np.random.rand(10)
     op_args1 = {'op_1/a': {'vtype': 'state_var',
                            'shape': (10,),
                            'dtype': 'float32',
-                           'value': np.random.rand(10)},
+                           'value': a},
                 'op_1/b': {'vtype': 'state_var',
                            'shape': (10,),
                            'dtype': 'float32',
@@ -166,7 +167,7 @@ def test_2_3_edge():
     op_args2 = {'op_1/a': {'vtype': 'state_var',
                            'shape': (10,),
                            'dtype': 'float32',
-                           'value': np.random.rand(10)},
+                           'value': a},
                 'op_1/b': {'vtype': 'state_var',
                            'shape': (10,),
                            'dtype': 'float32',
@@ -199,7 +200,6 @@ def test_2_3_edge():
     results, _ = net.run(simulation_time=3e-3, outputs={'r1': ('n1', 'op_1', 'b'), 'r2': ('n2', 'op_1', 'b')})
 
     assert results['r1_0'].values[-1] > 0.
-    assert results['r1_0'].values[-1] < 1.
     assert results['r1_0'].values[-1] < results['r2_0'].values[-1]
 
 
@@ -270,13 +270,15 @@ def test_2_4_vectorization():
     net1 = Network(gr1, vectorize='none', key='no_vec', dt=1e-3, tf_graph=tf.Graph())
     net2 = Network(gr2, vectorize='nodes', key='node_vec', dt=1e-3, tf_graph=tf.Graph())
     net3 = Network(gr3, vectorize='ops', key='op_vec', dt=1e-3, tf_graph=tf.Graph())
-    results1, _ = net1.run(simulation_time=5e-3, outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
-    results2, _ = net2.run(simulation_time=5e-3, outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
-    results3, _ = net3.run(simulation_time=5e-3, outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
+    results1, _ = net1.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
+    results2, _ = net2.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
+    results3, _ = net3.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
+
+    results1.pop('time'), results2.pop('time'), results3.pop('time')
 
     error1 = nmrse(results1.values, results2.values)
     error2 = nmrse(results1.values, results3.values)
 
     assert np.sum(results1.values) > 0.
-    assert np.sum(error1) == pytest.approx(0., rel=1e-6)
-    assert np.sum(error2) == pytest.approx(0., rel=1e-6)
+    assert np.mean(error1) == pytest.approx(0., rel=1e-5)
+    assert np.mean(error2) == pytest.approx(0., rel=1e-5)
