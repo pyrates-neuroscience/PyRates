@@ -17,8 +17,8 @@ from pyrates.utility import mne_from_dataframe
 ######################
 
 # general
-step_size = 1e-3
-simulation_time = 1.0
+step_size = 1e-4
+simulation_time = 3.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
@@ -75,7 +75,7 @@ for i in range(n_jrcs):
 graph = MultiDiGraph()
 for i in range(0, n_jrcs):
     data = {'operators': {'operator_rtp_syn_e': {
-                               'equations': ["d/dt * x = H/tau * (m_in + 220.) - 2./tau * x - 1./tau ^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + 220. + randn(s) * 22.) - 2./tau * x - 1./tau ^2 * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -325,13 +325,13 @@ for a in range(0, n_nodes):
 ###############
 
 gr = tf.Graph()
-net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
+net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
 
 # network simulation
 ####################
 
 results, ActTime = net.run(simulation_time=simulation_time,
-                           outputs={'V': ('pc', 'operator_ptr', 'psp')},
+                           outputs={'V': ('all', 'operator_ptr', 'psp')},
                            sampling_step_size=1e-3,
                            #out_dir='/tmp/log/'
                            )

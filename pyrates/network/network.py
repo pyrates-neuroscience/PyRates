@@ -142,18 +142,18 @@ class Network(MultiDiGraph):
 
                 # initialize edges
                 ##################
-                with tf.control_dependencies(node_updates):
-                    edge_updates = []
-                    for source_name, target_name, edge_idx in net_config.edges:
+                edge_updates = []
+                for source_name, target_name, edge_idx in net_config.edges:
 
-                        # add edge to network
-                        edge_info = net_config.edges[source_name, target_name, edge_idx]
-                        self.add_edge(source_node=source_name,
-                                      target_node=target_name,
-                                      **edge_info)
+                    # add edge to network
+                    edge_info = net_config.edges[source_name, target_name, edge_idx]
+                    self.add_edge(source_node=source_name,
+                                  target_node=target_name,
+                                  dependencies=node_updates,
+                                  **edge_info)
 
-                        # collect project operation of edge
-                        edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
+                    # collect project operation of edge
+                    edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
 
                 # create network update operation
                 #################################
@@ -570,7 +570,8 @@ class Network(MultiDiGraph):
                  source_to_edge_map: Optional[dict] = None,
                  edge_to_target_map: Optional[dict] = None,
                  weight: Optional[Union[float, list, np.ndarray]] = 1.,
-                 delay: Optional[Union[float, list, np.ndarray]] = 0.
+                 delay: Optional[Union[float, list, np.ndarray]] = 0.,
+                 dependencies: Optional[list] = None
                  ) -> None:
         """Add edge to the network that connects two variables from a source and a target node.
 
@@ -590,6 +591,8 @@ class Network(MultiDiGraph):
             Weighting constant that will be applied to the source output.
         delay
             Time that it takes for the source output to arrive at the target.
+        dependencies
+            List with tensorflow operations which the edge has to wait for.
 
         Returns
         -------
@@ -665,13 +668,15 @@ class Network(MultiDiGraph):
                 # parse into tensorflow graph
                 op_args_tf = parse_dict(op_args, self._tf_graph)
 
-                # add source and target variables
-                op_args_tf['tvar'] = target_var_tf
-                op_args_tf['svar'] = source_var_tf
-
                 # bring tensorflow variables in parser format
                 for var_name, var in op_args_tf.items():
                     op_args_tf[var_name] = {'var': var, 'dependency': False}
+
+                # add source and target variables
+                op_args_tf['tvar'] = {'var': target_var_tf, 'dependency': True if dependencies else False,
+                                      'op': dependencies}
+                op_args_tf['svar'] = {'var': source_var_tf, 'dependency': True if dependencies else False,
+                                      'op': dependencies}
 
                 # add operator to tensorflow graph
                 tf_op, op_args_tf = self.add_operator(op['equations'], op_args_tf, 'coupling_op')
@@ -719,20 +724,23 @@ class Network(MultiDiGraph):
                     # store tensorflow operation in list
                     evals.append(update)
 
-                # check which rhs evaluations still have to be assigned to their lhs variable
+                # go through evals and assign right-hand side updates to left-hand sides for all equations except DEs
                 evals_complete = []
-                evals_uncomplete = []
+                de_lhs = []
+                de_rhs = []
                 for ev in evals:
                     if ev[1] is None:
                         evals_complete.append(ev[0])
-                    else:
-                        evals_uncomplete.append(ev)
-
-                # group the tensorflow operations across expressions
-                with tf.control_dependencies(evals_complete):
-                    for ev in evals_uncomplete:
-                        assign_op = self._assign_to_var(ev[0], ev[1])
+                    elif not ev[2]:
+                        assign_op = self._assign_to_var(ev[0], ev[1], add=False)
                         evals_complete.append(assign_op)
+                    else:
+                        de_lhs.append(ev[0])
+                        de_rhs.append(ev[1])
+
+                # go through DEs and assign rhs to lhs
+                for lhs, rhs in zip(de_lhs, de_rhs):
+                    evals_complete.append(self._assign_to_var(lhs, rhs, add=True, dependencies=de_rhs))
 
             return tf.group(evals_complete, name=f'{variable_scope}_eval'), expression_args
 
@@ -1564,7 +1572,11 @@ class Network(MultiDiGraph):
         for key, arg in op_args.items():
             new_node['operator_args'][key] = arg
 
-    def _assign_to_var(self, var: tf.Variable, val: Union[tf.Variable, tf.Operation, tf.Tensor]
+    def _assign_to_var(self,
+                       var: tf.Variable,
+                       val: Union[tf.Variable, tf.Operation, tf.Tensor],
+                       add: Optional[bool] = False,
+                       dependencies: Optional[list] = None
                        ) -> Union[tf.Variable, tf.Operation, tf.Tensor]:
         """
 
@@ -1574,6 +1586,10 @@ class Network(MultiDiGraph):
             Tensorflow variable.
         val
             New value that should be assigned to variable.
+        add
+            If true, assign_add will be used instead of assign.
+        dependencies
+            List of tensorflow operations the assign op should wait for to finish.
 
         Returns
         -------
@@ -1582,10 +1598,23 @@ class Network(MultiDiGraph):
 
         """
 
-        try:
-            return var.assign(val)
-        except ValueError:
-            try:
-                return var[:, 0].assign(val)
-            except ValueError:
-                return var.assign(tf.squeeze(val))
+        if not dependencies:
+            dependencies = []
+
+        with tf.control_dependencies(dependencies):
+            if add:
+                try:
+                    return var.assign_add(self.dt * val)
+                except ValueError:
+                    try:
+                        return var[:, 0].assign_add(self.dt * val)
+                    except ValueError:
+                        return var.assign_add(self.dt * tf.squeeze(val))
+            else:
+                try:
+                    return var.assign(val)
+                except ValueError:
+                    try:
+                        return var[:, 0].assign(val)
+                    except ValueError:
+                        return var.assign(tf.squeeze(val))

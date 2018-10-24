@@ -258,27 +258,10 @@ class ExpressionParser(ParserElement):
         # turn expression into operation
         op = self.parse(self.expr_stack[:])
 
-        if self.lhs and self.solve:
+        # extract update operation
+        update = self.args.pop('rhs')['var'] if 'rhs' in self.args.keys() else None
 
-            # set integration step-size
-            try:
-                dt = self.args['dt']['var']
-            except KeyError:
-                raise ValueError('Integration step-size has to be passed for differential equations. Please '
-                                 'add a field `dt` to `args` with the corresponding value.')
-
-            # solve differential equation
-            update = op + self.args['dt']['var'] * self.args.pop('rhs')['var']
-
-        elif 'rhs' in self.args.keys():
-
-            update = self.args.pop('rhs')['var']
-
-        else:
-
-            update = None
-
-        return op, update
+        return op, update, self.solve
 
     def push_first(self, strg, loc, toks):
         """Push tokens in first-to-last order to expression stack.
@@ -743,7 +726,8 @@ class TFExpressionParser(ExpressionParser):
             dependencies = []
             for arg in expr_stack:
                 if arg in self.args.keys() and self.args[arg]['dependency']:
-                    dependencies.append(self.args[arg]['op'])
+                    dependencies += self.args[arg]['op'] if type(self.args[arg]['op']) is list else \
+                        [self.args[arg]['op']]
 
             # create tensorflow operation/variable
             with tf.control_dependencies(dependencies):
