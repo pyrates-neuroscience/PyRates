@@ -20,7 +20,7 @@ np.random.seed(1)
 
 # general
 step_size = 1e-3
-simulation_time = 3.0
+simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
@@ -161,7 +161,7 @@ for i in range(0, n_jrcs):
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 0.},
-                              'operator_rtp_syn_e/u': {'vtype': 'constant',
+                              'operator_rtp_syn_e/u': {'vtype': 'placeholder',
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 220.},
@@ -337,7 +337,7 @@ for a in range(0, n_nodes):
 
 inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 22.
 gr = tf.Graph()
-net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
+net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
 
 # network simulation
 ####################
@@ -345,7 +345,7 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 results, ActTime = net.run(simulation_time=simulation_time,
                            outputs={'V': ('all', 'operator_ptr', 'psp')},
                            sampling_step_size=1e-3,
-                           # inputs={('pc', 'operator_rtp_syn_e', 'u'): inp}
+                           inputs={('pc', 'operator_rtp_syn_e', 'u'): inp},
                            out_dir='/tmp/log/'
                            )
 

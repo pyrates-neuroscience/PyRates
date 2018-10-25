@@ -213,20 +213,36 @@ class Network(MultiDiGraph):
 
         # define output variables
         if not outputs:
+
             outputs_tmp = dict()
+
         else:
+
             outputs_tmp = dict()
+
+            # go through  output variables
             for key, val in outputs.items():
+
                 if val[0] == 'all':
+
+                    # collect output variable from every node in network
                     for node in self.nodes.keys():
                         outputs_tmp[f'{node}/{key}'] = self.get_var(node=node, op=val[1], var=val[2])
+
                 elif val[0] in self.nodes.keys() or val[0] in self._node_arg_map.keys():
+
+                    # get output variable of specific network node
                     outputs_tmp[key] = self.get_var(node=val[0], op=val[1], var=val[2])
+
                 elif any([val[0] in key for key in self.nodes.keys()]):
+
+                    # get output variable from network nodes of a certain type
                     for node in self.nodes.keys():
                         if val[0] in node:
                             outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
                 else:
+
+                    # get output variable of specific, vectorized  network node
                     for node in self._node_arg_map.keys():
                         if val[0] in node and 'comb' not in node:
                             outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
@@ -235,18 +251,24 @@ class Network(MultiDiGraph):
         output_col = {}
         store_ops = []
         with self._tf_graph.as_default():
-            with tf.variable_scope(self.key):
-                with tf.variable_scope('output_col'):
-                    out_idx = tf.Variable(0, dtype=tf.int32, name='out_var_idx')
-                    for key, var in outputs_tmp.items():
-                        output_col[key] = tf.get_variable(name=key,
-                                                          dtype=tf.float32,
-                                                          shape=[int(sim_steps / sampling_steps) + 1] + list(var.shape),
-                                                          initializer=tf.constant_initializer())
-                        store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
+            with tf.variable_scope(f'{self.key}_output_col'):
 
-                    with tf.control_dependencies(store_ops):
-                        sample = out_idx.assign_add(1)
+                # create counting index for collector variables
+                out_idx = tf.Variable(0, dtype=tf.int32, name='out_var_idx')
+
+                # add collector variables to the graph
+                for key, var in outputs_tmp.items():
+                    output_col[key] = tf.get_variable(name=key,
+                                                      dtype=tf.float32,
+                                                      shape=[int(sim_steps / sampling_steps) + 1] + list(var.shape),
+                                                      initializer=tf.constant_initializer())
+
+                    # add collect operation to the graph
+                    store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
+
+                # create increment operator for counting index
+                with tf.control_dependencies(store_ops):
+                    sample = out_idx.assign_add(1)
 
         # linearize input dictionary
         if inputs:
@@ -254,45 +276,64 @@ class Network(MultiDiGraph):
             for step in range(sim_steps):
                 inp_dict = dict()
                 for key, val in inputs.items():
-                    if key[0] == 'all':
-                        if len(self.nodes.keys()) == 1:
-                            var = self.get_var(node=self.key, op=key[1], var=key[2])
-                            inp_dict[var] = np.reshape(val[step], var.shape)
-                        else:
+
+                    if self.key in self.nodes.keys():
+
+                        # fully vectorized case: add vectorized placeholder variable to input dictionary
+                        var = self.get_var(node=self.key, op=key[1], var=key[2])
+                        inp_dict[var] = np.reshape(val[step], var.shape)
+
+                    elif any(['comb' in key_tmp for key_tmp in self.nodes.keys()]):
+
+                        # node-vectorized case
+                        if key[0] == 'all':
+
+                            # go through all nodes, extract the variable and add it to input dict
                             for i, node in enumerate(self.nodes.keys()):
                                 var = self.get_var(node=node, op=key[1], var=key[2])
                                 inp_dict[var] = np.reshape(val[step, i], var.shape)
-                    elif key[0] in self.nodes.keys() or key[0] in self._node_arg_map.keys():
-                        var = self.get_var(node=key[0], op=key[1], var=key[2])
-                        inp_dict[var] = np.reshape(val[step], var.shape)
-                    elif any([key[0] in key_tmp for key_tmp in self.nodes.keys()]):
-                        if any(['comb' in key_tmp for key_tmp in self.nodes.keys()]):
+
+                        elif key[0] in self.nodes.keys():
+
+                            # add placeholder variable of node(s) to input dictionary
+                            var = self.get_var(node=key[0], op=key[1], var=key[2])
+                            inp_dict[var] = np.reshape(val[step], var.shape)
+
+                        elif any([key[0] in key_tmp for key_tmp in self.nodes.keys()]):
+
+                            # add vectorized placeholder variable of specified node type to input dictionary
                             for node in list(self.nodes.keys()):
                                 if key[0] in node:
                                     break
                             var = self.get_var(node=node, op=key[1], var=key[2])
                             inp_dict[var] = np.reshape(val[step], var.shape)
-                        else:
-                            i = 0
-                            for node in list(self.nodes.keys()):
-                                if key[0] in node:
-                                    var = self.get_var(node=node, op=key[1], var=key[2])
-                                    inp_dict[var] = val[step, i]
-                                    i += 1
+
                     else:
-                        if '/' in key[0]:
-                            for i, node in enumerate(self._node_arg_map.keys()):
-                                if key[0] in node and 'comb' not in node:
+
+                        # non-vectorized case
+                        if key[0] == 'all':
+
+                            # go through all nodes, extract the variable and add it to input dict
+                            for i, node in enumerate(self.nodes.keys()):
+                                var = self.get_var(node=node, op=key[1], var=key[2])
+                                inp_dict[var] = np.reshape(val[step, i], var.shape)
+
+                        elif any([key[0] in key_tmp for key_tmp in self.nodes.keys()]):
+
+                            # extract variables from nodes of specified type
+                            i = 0
+                            for node in self.nodes.keys():
+                                if key[0] in node:
                                     var = self.get_var(node=node, op=key[1], var=key[2])
-                                    inp_dict[var] = val[step, i]
-                        else:
-                            for i, node in enumerate(self._node_arg_map.keys()):
-                                if key[0] in node and 'comb' in node:
-                                    break
-                            var = self.get_var(node=node, op=key[1], var=key[2])
-                            inp_dict[var] = np.reshape(val[step], var.shape)
+                                    inp_dict[var] = np.reshape(val[step, i], var.shape)
+                                    i += 1
+
+                # add input dictionary to placeholder input liust
                 inp.append(inp_dict)
+
         else:
+
+            # create list of nones (no placeholder variables should exist)
             inp = [None for _ in range(sim_steps)]
 
         # run simulation
@@ -307,16 +348,14 @@ class Network(MultiDiGraph):
             # initialize all variables
             sess.run(tf.global_variables_initializer())
 
-            with tf.variable_scope(self.key):
+            sess.run(sample)
+            t_start = t.time()
 
-                sess.run(sample)
-                t_start = t.time()
-
-                # simulate network behavior for each time-step
-                for step in range(sim_steps):
-                    sess.run(self.step, inp[step])
-                    if step % sampling_steps == 0:
-                        sess.run(sample)
+            # simulate network behavior for each time-step
+            for step in range(sim_steps):
+                sess.run(self.step, inp[step])
+                if step % sampling_steps == 0:
+                    sess.run(sample)
 
             # display simulation time
             t_end = t.time()
@@ -520,7 +559,7 @@ class Network(MultiDiGraph):
                                     # append variable and operation to list
                                     out_vars.append(tf_var_tmp2)
                                     out_var_idx.append(out_var_idx_tmp)
-                                    out_ops.append(tf_var_tmp2)
+                                    out_ops += [tf_var_tmp2]
 
                             # add inputs to argument dictionary (in reduced or stacked form)
                             ################################################################
@@ -566,9 +605,8 @@ class Network(MultiDiGraph):
                             if var_name not in op_args_tf.keys():
                                 op_args_tf[var_name] = {'var': tf.get_variable(name=var_name, shape=tf_var.shape,
                                                                                dtype=tf_var.dtype)}
-                            with tf.control_dependencies(out_ops):
-                                update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var,
-                                                             dependencies=out_ops)
+                            update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var,
+                                                         dependencies=out_ops)
                             op_args_tf[var_name].update({'dependency': True,
                                                          'op': update})
 
