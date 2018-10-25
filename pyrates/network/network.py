@@ -138,7 +138,7 @@ class Network(MultiDiGraph):
                                   op_order=node_info['operator_order'])
 
                     # collect update operation of node
-                    node_updates.append(self.nodes[node_name]['update'])
+                    node_updates += self.nodes[node_name]['update']
 
                 # initialize edges
                 ##################
@@ -153,7 +153,7 @@ class Network(MultiDiGraph):
                                   **edge_info)
 
                     # collect project operation of edge
-                    edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
+                    edge_updates += self.edges[source_name, target_name, edge_idx]['update']
 
                 # create network update operation
                 #################################
@@ -235,17 +235,18 @@ class Network(MultiDiGraph):
         output_col = {}
         store_ops = []
         with self._tf_graph.as_default():
-            with tf.variable_scope(f'{self.key}_output_col'):
-                out_idx = tf.Variable(0, dtype=tf.int32, name='out_var_idx')
-                for key, var in outputs_tmp.items():
-                    output_col[key] = tf.get_variable(name=key,
-                                                      dtype=tf.float32,
-                                                      shape=[int(sim_steps / sampling_steps) + 1] + list(var.shape),
-                                                      initializer=tf.constant_initializer())
-                    store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
+            with tf.variable_scope(self.key):
+                with tf.variable_scope('output_col'):
+                    out_idx = tf.Variable(0, dtype=tf.int32, name='out_var_idx')
+                    for key, var in outputs_tmp.items():
+                        output_col[key] = tf.get_variable(name=key,
+                                                          dtype=tf.float32,
+                                                          shape=[int(sim_steps / sampling_steps) + 1] + list(var.shape),
+                                                          initializer=tf.constant_initializer())
+                        store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
 
-                with tf.control_dependencies(store_ops):
-                    sample = out_idx.assign_add(1)
+                    with tf.control_dependencies(store_ops):
+                        sample = out_idx.assign_add(1)
 
         # linearize input dictionary
         if inputs:
@@ -253,12 +254,43 @@ class Network(MultiDiGraph):
             for step in range(sim_steps):
                 inp_dict = dict()
                 for key, val in inputs.items():
-                    var = self.get_var(node=key[0], op=key[1], var=key[2])
-                    shape = var.shape
-                    if len(val) > 1:
-                        inp_dict[key] = np.reshape(val[step], shape)
+                    if key[0] == 'all':
+                        if len(self.nodes.keys()) == 1:
+                            var = self.get_var(node=self.key, op=key[1], var=key[2])
+                            inp_dict[var] = np.reshape(val[step], var.shape)
+                        else:
+                            for i, node in enumerate(self.nodes.keys()):
+                                var = self.get_var(node=node, op=key[1], var=key[2])
+                                inp_dict[var] = np.reshape(val[step, i], var.shape)
+                    elif key[0] in self.nodes.keys() or key[0] in self._node_arg_map.keys():
+                        var = self.get_var(node=key[0], op=key[1], var=key[2])
+                        inp_dict[var] = np.reshape(val[step], var.shape)
+                    elif any([key[0] in key_tmp for key_tmp in self.nodes.keys()]):
+                        if any(['comb' in key_tmp for key_tmp in self.nodes.keys()]):
+                            for node in list(self.nodes.keys()):
+                                if key[0] in node:
+                                    break
+                            var = self.get_var(node=node, op=key[1], var=key[2])
+                            inp_dict[var] = np.reshape(val[step], var.shape)
+                        else:
+                            i = 0
+                            for node in list(self.nodes.keys()):
+                                if key[0] in node:
+                                    var = self.get_var(node=node, op=key[1], var=key[2])
+                                    inp_dict[var] = val[step, i]
+                                    i += 1
                     else:
-                        inp_dict[key] = np.reshape(val, shape)
+                        if '/' in key[0]:
+                            for i, node in enumerate(self._node_arg_map.keys()):
+                                if key[0] in node and 'comb' not in node:
+                                    var = self.get_var(node=node, op=key[1], var=key[2])
+                                    inp_dict[var] = val[step, i]
+                        else:
+                            for i, node in enumerate(self._node_arg_map.keys()):
+                                if key[0] in node and 'comb' in node:
+                                    break
+                            var = self.get_var(node=node, op=key[1], var=key[2])
+                            inp_dict[var] = np.reshape(val[step], var.shape)
                 inp.append(inp_dict)
         else:
             inp = [None for _ in range(sim_steps)]
@@ -274,14 +306,17 @@ class Network(MultiDiGraph):
 
             # initialize all variables
             sess.run(tf.global_variables_initializer())
-            sess.run(sample)
-            t_start = t.time()
 
-            # simulate network behavior for each time-step
-            for step in range(sim_steps):
-                sess.run(self.step, inp[step])
-                if step % sampling_steps == 0:
-                    sess.run(sample)
+            with tf.variable_scope(self.key):
+
+                sess.run(sample)
+                t_start = t.time()
+
+                # simulate network behavior for each time-step
+                for step in range(sim_steps):
+                    sess.run(self.step, inp[step])
+                    if step % sampling_steps == 0:
+                        sess.run(sample)
 
             # display simulation time
             t_end = t.time()
@@ -445,7 +480,7 @@ class Network(MultiDiGraph):
                                                          f"Input Variable {var_name} has not been calculated yet.")
 
                                     # append variable and operation to list
-                                    out_ops.append(op_args[out_var]['op'])
+                                    out_ops += op_args[out_var]['op']
                                     out_vars.append(op_args[out_var]['var'])
 
                                 # for multiple input operators
@@ -470,22 +505,22 @@ class Network(MultiDiGraph):
                                             raise ValueError(
                                                 f"Invalid dependencies found in operator: {op['equations']}. Input"
                                                 f" Variable {var_name} has not been calculated yet.")
-                                        out_ops_tmp.append(op_args[out_var]['op'])
+                                        out_ops_tmp += op_args[out_var]['op']
                                         out_vars_tmp.append(op_args[out_var]['var'])
 
                                     # add tensorflow operations for grouping the inputs together
                                     with tf.control_dependencies(out_ops_tmp):
                                         tf_var_tmp = tf.parallel_stack(out_vars_tmp)
                                         if inp['reduce_dim'][i]:
-                                            tf_var_tmp = tf.reduce_sum(tf_var_tmp, 0)
+                                            tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
                                         else:
-                                            tf_var_tmp = tf.reshape(tf_var_tmp,
-                                                                    shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
+                                            tf_var_tmp2 = tf.reshape(tf_var_tmp,
+                                                                     shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
 
                                     # append variable and operation to list
-                                    out_vars.append(tf_var_tmp)
+                                    out_vars.append(tf_var_tmp2)
                                     out_var_idx.append(out_var_idx_tmp)
-                                    out_ops.append(tf.group(out_ops_tmp))
+                                    out_ops.append(tf_var_tmp2)
 
                             # add inputs to argument dictionary (in reduced or stacked form)
                             ################################################################
@@ -494,55 +529,54 @@ class Network(MultiDiGraph):
                             if len(out_vars) > 1:
 
                                 # find shape of smallest input variable
-                                min_shape = min([outvar.shape[0] if len(outvar.shape) > 0 else 0 for outvar in out_vars])
+                                min_shape = min([outvar.shape[0] if len(outvar.shape) > 0 else 0
+                                                 for outvar in out_vars])
 
                                 # append inpout variables to list and reshape them if necessary
                                 out_vars_new = []
-                                for out_var in out_vars:
-
-                                    shape = out_var.shape[0] if len(out_var.shape) > 0 else 0
-
-                                    if shape > min_shape:
-                                        if shape % min_shape != 0:
-                                            raise ValueError(f"Shapes of inputs do not match: "
-                                                             f"{inp['sources']} cannot be stacked.")
-                                        multiplier = shape // min_shape
-                                        for j in range(multiplier):
-                                            out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
-                                    else:
-                                        out_vars_new.append(out_var)
-
-                                # stack input variables or sum them up
                                 with tf.control_dependencies(out_ops):
+
+                                    for out_var in out_vars:
+
+                                        shape = out_var.shape[0] if len(out_var.shape) > 0 else 0
+
+                                        if shape > min_shape:
+                                            if shape % min_shape != 0:
+                                                raise ValueError(f"Shapes of inputs do not match: "
+                                                                 f"{inp['sources']} cannot be stacked.")
+                                            multiplier = shape // min_shape
+                                            for j in range(multiplier):
+                                                out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
+                                        else:
+                                            out_vars_new.append(out_var)
+
+                                    # stack input variables or sum them up
                                     tf_var = tf.parallel_stack(out_vars_new)
                                     if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
                                         tf_var = tf.reduce_sum(tf_var, 0)
                                     else:
                                         tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
-                                    tf_op = tf.group(out_ops)
 
                             # for a single input variable
                             else:
 
                                 tf_var = out_vars[0]
-                                tf_op = out_ops[0]
 
                             # add input variable information to argument dictionary
-                            if var_name in op_args_tf.keys():
-                                with tf.control_dependencies([tf_op]):
-                                    update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var)
-                                    op_args_tf[var_name].update({'dependency': True,
-                                                                 'op': update})
-                            else:
-                                op_args_tf[var_name] = {'dependency': True,
-                                                        'var': tf_var,
-                                                        'op': tf_op}
+                            if var_name not in op_args_tf.keys():
+                                op_args_tf[var_name] = {'var': tf.get_variable(name=var_name, shape=tf_var.shape,
+                                                                               dtype=tf_var.dtype)}
+                            with tf.control_dependencies(out_ops):
+                                update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var,
+                                                             dependencies=out_ops)
+                            op_args_tf[var_name].update({'dependency': True,
+                                                         'op': update})
 
                         # create tensorflow operator
-                        tf_op_new, op_args_tf = self.add_operator(expressions=op['equations'],
-                                                                  expression_args=op_args_tf,
-                                                                  variable_scope=op_name)
-                        tf_ops.append(tf_op_new)
+                        tf_ops_new, op_args_tf = self.add_operator(expressions=op['equations'],
+                                                                   expression_args=op_args_tf,
+                                                                   variable_scope=op_name)
+                        tf_ops += tf_ops_new
 
                         # bind newly created tf variables to node
                         for var_name, tf_var in op_args_tf.items():
@@ -552,12 +586,12 @@ class Network(MultiDiGraph):
                             op_args[attr_name] = tf_var
 
                         # handle dependencies
-                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops[-1]
+                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops
                         for arg in op_args.values():
                             arg['dependency'] = False
 
                 # group tensorflow versions of all operators to a single 'step' operation
-                node_attr['update'] = tf.group(tf_ops, name=f"{self.key}_update")
+                node_attr['update'] = tf_ops
 
         # call super method
         super().add_node(node, **node_attr)
@@ -679,12 +713,12 @@ class Network(MultiDiGraph):
                                       'op': dependencies}
 
                 # add operator to tensorflow graph
-                tf_op, op_args_tf = self.add_operator(op['equations'], op_args_tf, 'coupling_op')
+                tf_ops, op_args_tf = self.add_operator(op['equations'], op_args_tf, 'coupling_op')
 
         # add edge to networkx graph
         ############################
 
-        super().add_edge(source_node, target_node, update=tf_op, **op_args_tf)
+        super().add_edge(source_node, target_node, update=tf_ops, **op_args_tf)
 
     def add_operator(self, expressions: List[str], expression_args: dict, variable_scope: str
                      ) -> Tuple[Union[tf.Tensor, tf.Variable, tf.Operation], dict]:
@@ -739,10 +773,15 @@ class Network(MultiDiGraph):
                         de_rhs.append(ev[1])
 
                 # go through DEs and assign rhs to lhs
+                deps = evals_complete + de_rhs
+                de_complete = []
                 for lhs, rhs in zip(de_lhs, de_rhs):
-                    evals_complete.append(self._assign_to_var(lhs, rhs, add=True, dependencies=de_rhs))
+                    de_complete.append(self._assign_to_var(lhs, rhs, add=True, dependencies=deps))
 
-            return tf.group(evals_complete, name=f'{variable_scope}_eval'), expression_args
+                if de_complete:
+                    return de_complete, expression_args
+                else:
+                    return evals_complete, expression_args
 
     def _vectorize(self, net_config: MultiDiGraph, vectorization_mode: Optional[str] = 'nodes') -> MultiDiGraph:
         """Method that goes through the nodes and edges dicts and vectorizes those that are governed by the same

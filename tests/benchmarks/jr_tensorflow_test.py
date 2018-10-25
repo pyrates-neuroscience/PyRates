@@ -16,13 +16,15 @@ from pyrates.utility import mne_from_dataframe
 # parameter definition
 ######################
 
+np.random.seed(1)
+
 # general
-step_size = 1e-4
+step_size = 1e-3
 simulation_time = 3.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
-sparseness_e = 0.
+sparseness_e = 0.1
 sparseness_i = sparseness_e * 1.0
 
 # No_of_JansenRitCircuit
@@ -30,8 +32,8 @@ n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter_e = 0. #/ (n_jrcs * sparseness_e / 0.01)
-c_inter_i = 0. #/ (n_jrcs * sparseness_e / 0.01)
+c_inter_e = 0. / (n_jrcs * sparseness_e / 0.01)
+c_inter_i = 0. / (n_jrcs * sparseness_e / 0.01)
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -64,10 +66,10 @@ for i in range(n_jrcs):
         if i != j:
             weight_e = np.random.uniform()
             if weight_e > (1 - sparseness_e):
-                C_e[i * 3, j * 3] = weight_e * c_inter_e
+                C_e[i * 3, j * 3] = np.random.uniform() * c_inter_e
             weight_i = np.random.uniform()
             if weight_i > (1 - sparseness_i):
-                C_i[i * 3, j * 3 + 2] = weight_i * c_inter_i
+                C_i[i * 3, j * 3 + 2] = np.random.uniform() * c_inter_i
 
 # define network dictionary
 ###########################
@@ -75,7 +77,7 @@ for i in range(n_jrcs):
 graph = MultiDiGraph()
 for i in range(0, n_jrcs):
     data = {'operators': {'operator_rtp_syn_e': {
-                               'equations': ["d/dt * x = H/tau * (m_in + 220. + randn(s) * 22.) - 2./tau * x - 1./tau ^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau ^2 * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -88,7 +90,12 @@ for i in range(0, n_jrcs):
                               'equations': ["m_out = m_max / (1. + e^(r * (v_th - psp)))"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn_e', 'operator_rtp_syn_i'],
                                                  'reduce_dim': True}},
-                              'output': 'm_out'}},
+                              'output': 'm_out'},
+                          #'rand_op': {
+                          #    'equations': ["u = randn(s, 220., 22.)"],
+                          #    'inputs': {},
+                          #    'output': 'u'}
+                          },
             'operator_order': ['operator_rtp_syn_e', 'operator_rtp_syn_i', 'operator_ptr'],
             'operator_args': {'operator_rtp_syn_e/m_in': {'vtype': 'state_var',
                                                           'dtype': 'float32',
@@ -154,8 +161,12 @@ for i in range(0, n_jrcs):
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 0.},
-                              'operator_rtp_syn_e/s': {'vtype': 'raw',
-                                                       'value': [1]},
+                              'operator_rtp_syn_e/u': {'vtype': 'constant',
+                                                       'dtype': 'float32',
+                                                       'shape': (),
+                                                       'value': 220.},
+                              'rand_op/s': {'vtype': 'raw',
+                                            'value': [1]},
                               },
             'inputs': {}
             }
@@ -324,8 +335,9 @@ for a in range(0, n_nodes):
 # network setup
 ###############
 
+inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 22.
 gr = tf.Graph()
-net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
+net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
 
 # network simulation
 ####################
@@ -333,7 +345,8 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 results, ActTime = net.run(simulation_time=simulation_time,
                            outputs={'V': ('all', 'operator_ptr', 'psp')},
                            sampling_step_size=1e-3,
-                           #out_dir='/tmp/log/'
+                           # inputs={('pc', 'operator_rtp_syn_e', 'u'): inp}
+                           out_dir='/tmp/log/'
                            )
 
 # results
