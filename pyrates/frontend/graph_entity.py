@@ -17,10 +17,11 @@ class GraphEntityIR(AbstractBaseIR):
         all_outputs = {}  # type: Dict[str, dict]
         self.template = template
         # op_inputs, op_outputs = set(), set()
+
+        value_updates = {}
         if values:
             values.pop("weight", None)
             values.pop("delay", None)
-            value_updates = {}
             for key, value in values.items():
                 op_name, var_name = key.split("/")
                 if op_name not in value_updates:
@@ -28,14 +29,14 @@ class GraphEntityIR(AbstractBaseIR):
                 value_updates[op_name][var_name] = value
 
         for op_template in operators:
-            op_instance, op_variables, key = op_template.apply(return_key=True)
+            if op_template.name in value_updates:
+                values_to_update = value_updates[op_template.name]
+            else:
+                values_to_update = None
+            op_instance, op_variables, key = op_template.apply(return_key=True,
+                                                               values=values_to_update)
             # update variables:
-            if values:
-                # noinspection PyUnboundLocalVariable
-                if key in value_updates:
-                    for vname in value_updates[key]:
-                        op_variables[vname]["value"] = value_updates[key][vname]
-                        # should fail, if variable is unknown
+
             # add operator as node to local operator_graph
             # ToDo: separate variable def and operator def so one can be private and the other shared
             self.op_graph.add_node(key, operator=op_instance, variables=op_variables)

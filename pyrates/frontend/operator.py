@@ -15,6 +15,8 @@ __status__ = "Development"
 
 class OperatorIR(AbstractBaseIR):
     cache = {}
+    key_map = {}
+    key_counter = {}
 
     def __init__(self, equation: List[str], inputs: list, output: str):
 
@@ -23,8 +25,27 @@ class OperatorIR(AbstractBaseIR):
         self.equations = equation
 
     @classmethod
-    def from_template(cls, template, return_key=False):
-        key = template.name
+    def from_template(cls, template, return_key=False, values: dict = None):
+
+        # figure out key name of given combination of template and assigned values
+        name = template.name
+        if values:
+            # if values are given, figure out, whether combination is known
+            frozen_values = deep_freeze(values)
+            try:
+                key = cls.key_map[(name, frozen_values)]
+            except KeyError:
+                # not known, need to assign new key and register key in key_map
+                if name in cls.key_counter:
+                    key = f"{name}.{cls.key_counter[name]+1}"
+                    cls.key_counter[name] += 1
+                else:
+                    key = f"{name}.1"
+                    cls.key_counter[name] = 1
+                cls.key_map[(name, frozen_values)] = key
+
+        else:  # without additional values specified, default name is op_name.0
+            key = f"{name}.0"
 
         try:
             instance, variables = cls.cache[key]
@@ -41,6 +62,13 @@ class OperatorIR(AbstractBaseIR):
 
             # operator instance is invoked as a dictionary of equation and variable definition
             # this may be subject to change
+
+            if values:
+                for vname in values:
+                    # only values are updated, assuming all other specs remain the same
+                    variables[vname]["value"] = values[vname]
+                    # should fail, if variable is unknown
+
             instance = cls(equation=equation, inputs=inputs, output=output)
             cls.cache[key] = (instance, variables)
 
@@ -212,10 +240,10 @@ class OperatorTemplate(AbstractBaseTemplate):
         self.equation = equation
         self.variables = variables
 
-    def apply(self, return_key=False, *args, **kwargs):
+    def apply(self, return_key=False, values: dict=None):
         """Returns the non-editable but unique, cashed definition of the operator."""
 
-        return super().apply(return_key=return_key)
+        return super().apply(return_key=return_key, values=values)
 
 
 class OperatorTemplateLoader(TemplateLoader):
