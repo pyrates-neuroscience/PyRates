@@ -25,7 +25,7 @@ LinearOperator:
 IncrementOperator:
   description: Simple coupling operator that increments its input by a
   base: OperatorTemplate
-  equation: "out = inp + a"
+  equation: "x = y + a"
   variables:
     x:
       default: output

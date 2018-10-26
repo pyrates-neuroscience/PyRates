@@ -16,22 +16,24 @@ from pyrates.utility import mne_from_dataframe
 # parameter definition
 ######################
 
+np.random.seed(1)
+
 # general
 step_size = 1e-3
-simulation_time = 3.0
+simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
-sparseness_e = 0.2
-sparseness_i = sparseness_e * 0.5
+sparseness_e = 0.1
+sparseness_i = sparseness_e * 1.0
 
 # No_of_JansenRitCircuit
-n_jrcs = 150
+n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter_e = 100. / (n_jrcs * sparseness_e / 0.01)
-c_inter_i = 50. / (n_jrcs * sparseness_e / 0.01)
+c_inter_e = 0. / (n_jrcs * sparseness_e / 0.01)
+c_inter_i = 0. / (n_jrcs * sparseness_e / 0.01)
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -64,10 +66,10 @@ for i in range(n_jrcs):
         if i != j:
             weight_e = np.random.uniform()
             if weight_e > (1 - sparseness_e):
-                C_e[i * 3, j * 3] = weight_e * c_inter_e
+                C_e[i * 3, j * 3] = np.random.uniform() * c_inter_e
             weight_i = np.random.uniform()
             if weight_i > (1 - sparseness_i):
-                C_i[i * 3 + 2, j * 3] = weight_i * c_inter_i
+                C_i[i * 3, j * 3 + 2] = np.random.uniform() * c_inter_i
 
 # define network dictionary
 ###########################
@@ -85,11 +87,16 @@ for i in range(0, n_jrcs):
                               'inputs': {},
                               'output': 'psp'},
                           'operator_ptr': {
-                              'equations': ["v = psp", "m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                              'equations': ["m_out = m_max / (1. + e^(r * (v_th - psp)))"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn_e', 'operator_rtp_syn_i'],
                                                  'reduce_dim': True}},
-                              'output': 'm_out'}},
-            'op_order': ['operator_rtp_syn_e', 'operator_rtp_syn_i', 'operator_ptr'],
+                              'output': 'm_out'},
+                          #'rand_op': {
+                          #    'equations': ["u = randn(s, 220., 22.)"],
+                          #    'inputs': {},
+                          #    'output': 'u'}
+                          },
+            'operator_order': ['operator_rtp_syn_e', 'operator_rtp_syn_i', 'operator_ptr'],
             'operator_args': {'operator_rtp_syn_e/m_in': {'vtype': 'state_var',
                                                           'dtype': 'float32',
                                                           'shape': (),
@@ -102,6 +109,10 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
+                              'operator_ptr/psp': {'vtype': 'state_var',
+                                                   'dtype': 'float32',
+                                                   'shape': (),
+                                                   'value': 0.},
                               'operator_rtp_syn_e/psp': {'vtype': 'state_var',
                                                          'dtype': 'float32',
                                                          'shape': (),
@@ -146,14 +157,16 @@ for i in range(0, n_jrcs):
                                                     'dtype': 'float32',
                                                     'shape': (),
                                                     'value': 6e-3},
-                              'operator_rtp_syn_e/u': {'vtype': 'constant',
-                                                       'dtype': 'float32',
-                                                       'shape': (),
-                                                       'value': 220.},
                               'operator_rtp_syn_i/u': {'vtype': 'constant',
                                                        'dtype': 'float32',
                                                        'shape': (),
-                                                       'value': 0.}
+                                                       'value': 0.},
+                              'operator_rtp_syn_e/u': {'vtype': 'placeholder',
+                                                       'dtype': 'float32',
+                                                       'shape': (),
+                                                       'value': 220.},
+                              'rand_op/s': {'vtype': 'raw',
+                                            'value': [1]},
                               },
             'inputs': {}
             }
@@ -165,11 +178,11 @@ for i in range(0, n_jrcs):
                                'inputs': {},
                                'output': 'psp'},
                           'operator_ptr': {
-                              'equations': ["v = psp", "m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                              'equations': ["m_out = m_max / (1. + e^(r * (v_th - psp)))"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn'],
                                                  'reduce_dim': False}},
                               'output': 'm_out'}},
-            'op_order': ['operator_rtp_syn', 'operator_ptr'],
+            'operator_order': ['operator_rtp_syn', 'operator_ptr'],
             'operator_args': {'operator_rtp_syn/m_in': {'vtype': 'state_var',
                                                         'dtype': 'float32',
                                                         'shape': (),
@@ -178,6 +191,10 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
+                              'operator_ptr/psp': {'vtype': 'state_var',
+                                                   'dtype': 'float32',
+                                                   'shape': (),
+                                                   'value': 0.},
                               'operator_rtp_syn/psp': {'vtype': 'state_var',
                                                        'dtype': 'float32',
                                                        'shape': (),
@@ -221,11 +238,11 @@ for i in range(0, n_jrcs):
                                'inputs': {},
                                'output': 'psp'},
                           'operator_ptr': {
-                              'equations': ["v = psp", "m_out = m_max / (1. + e^(r * (v_th - v)))"],
+                              'equations': ["m_out = m_max / (1. + e^(r * (v_th - psp)))"],
                               'inputs': {'psp': {'sources': ['operator_rtp_syn'],
                                                  'reduce_dim': False}},
                               'output': 'm_out'}},
-            'op_order': ['operator_rtp_syn', 'operator_ptr'],
+            'operator_order': ['operator_rtp_syn', 'operator_ptr'],
             'operator_args': {'operator_rtp_syn/m_in': {'vtype': 'state_var',
                                                         'dtype': 'float32',
                                                         'shape': (),
@@ -234,6 +251,10 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
+                              'operator_ptr/psp': {'vtype': 'state_var',
+                                                   'dtype': 'float32',
+                                                   'shape': (),
+                                                   'value': 0.},
                               'operator_rtp_syn/psp': {'vtype': 'state_var',
                                                        'dtype': 'float32',
                                                        'shape': (),
@@ -305,6 +326,7 @@ for a in range(0, n_nodes):
 
             edge['source_var'] = 'operator_ptr/m_out'
             edge['weight'] = c
+            edge['delay'] = 0
 
             s = source.split('/')[0]
             t = target.split('/')[0]
@@ -313,6 +335,7 @@ for a in range(0, n_nodes):
 # network setup
 ###############
 
+inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 22.
 gr = tf.Graph()
 net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
 
@@ -320,13 +343,18 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 ####################
 
 results, ActTime = net.run(simulation_time=simulation_time,
-                           outputs={'V': ('pc/0', 'operator_ptr', 'v')},
+                           outputs={'V': ('all', 'operator_ptr', 'psp')},
                            sampling_step_size=1e-3,
-                           out_dir='/tmp/log/')
+                           inputs={('pc', 'operator_rtp_syn_e', 'u'): inp},
+                           out_dir='/tmp/log/'
+                           )
 
 # results
 #########
 
+from pyrates.utility import plot_timeseries, plot_graph
 #mne_obj = mne_from_dataframe(sim_results=results)
-results.plot()
+plot_timeseries(data=results, variable='psp[V]', ci=None)
+#plot_graph(graph, out_file='test.png')
+#results.plot()
 show()

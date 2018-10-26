@@ -110,9 +110,7 @@ class Network(MultiDiGraph):
         # vectorize passed dictionaries
         ###############################
 
-        net_config = self._vectorize(net_config=net_config,
-                                     first_lvl_vec=vectorize == 'nodes',
-                                     second_lvl_vec=vectorize == 'ops')
+        net_config = self._vectorize(net_config=net_config, vectorization_mode=vectorize)
 
         # create objects on tensorflow graph
         ####################################
@@ -137,35 +135,33 @@ class Network(MultiDiGraph):
                     self.add_node(node=node_name,
                                   ops=node_info['operators'],
                                   op_args=node_args,
-                                  op_order=node_info['op_order'])
+                                  op_order=node_info['operator_order'])
 
                     # collect update operation of node
-                    node_updates.append(self.nodes[node_name]['update'])
-
-                # group the update operations of all nodes
-                self.step = tf.tuple(node_updates, name='network_nodes_update')
+                    node_updates += self.nodes[node_name]['update']
 
                 # initialize edges
                 ##################
+                edge_updates = []
+                for source_name, target_name, edge_idx in net_config.edges:
 
-                with tf.control_dependencies(self.step):
+                    # add edge to network
+                    edge_info = net_config.edges[source_name, target_name, edge_idx]
+                    self.add_edge(source_node=source_name,
+                                  target_node=target_name,
+                                  dependencies=node_updates,
+                                  **edge_info)
 
-                    edge_updates = []
+                    # collect project operation of edge
+                    edge_updates += self.edges[source_name, target_name, edge_idx]['update']
 
-                    for source_name, target_name, edge_idx in net_config.edges:
+                # create network update operation
+                #################################
 
-                        # add edge to network
-                        edge_info = net_config.edges[source_name, target_name, edge_idx]
-                        self.add_edge(source_node=source_name,
-                                      target_node=target_name,
-                                      **edge_info)
-
-                        # collect project operation of edge
-                        edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
-
-                    # group project operations of all edges
-                    if len(edge_updates) > 0:
-                        self.step = tf.tuple(edge_updates, name='network_update')
+                if len(edge_updates) > 0:
+                    self.step = tf.group(edge_updates, name='network_update')
+                else:
+                    self.step = tf.group(node_updates, name='network_update')
 
     def run(self,
             simulation_time: Optional[float] = None,
@@ -173,7 +169,7 @@ class Network(MultiDiGraph):
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
             out_dir: Optional[str] = None,
-            verbose: bool=True
+            verbose: bool=True,
             ) -> Tuple[DataFrame, float]:
         """Simulate the network behavior over time via a tensorflow session.
 
@@ -207,10 +203,9 @@ class Network(MultiDiGraph):
         ####################
 
         # basic simulation parameters initialization
-        if simulation_time:
-            sim_steps = int(simulation_time / self.dt)
-        else:
-            sim_steps = 1
+        if not simulation_time:
+            simulation_time = self.dt
+        sim_steps = int(simulation_time / self.dt)
 
         if not sampling_step_size:
             sampling_step_size = self.dt
@@ -218,38 +213,62 @@ class Network(MultiDiGraph):
 
         # define output variables
         if not outputs:
+
             outputs_tmp = dict()
+
         else:
+
             outputs_tmp = dict()
+
+            # go through  output variables
             for key, val in outputs.items():
+
                 if val[0] == 'all':
+
+                    # collect output variable from every node in network
                     for node in self.nodes.keys():
                         outputs_tmp[f'{node}/{key}'] = self.get_var(node=node, op=val[1], var=val[2])
+
                 elif val[0] in self.nodes.keys() or val[0] in self._node_arg_map.keys():
+
+                    # get output variable of specific network node
                     outputs_tmp[key] = self.get_var(node=val[0], op=val[1], var=val[2])
+
                 elif any([val[0] in key for key in self.nodes.keys()]):
+
+                    # get output variable from network nodes of a certain type
                     for node in self.nodes.keys():
                         if val[0] in node:
                             outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
                 else:
+
+                    # get output variable of specific, vectorized  network node
                     for node in self._node_arg_map.keys():
-                        if val[0] in node:
+                        if val[0] in node and 'comb' not in node:
                             outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
 
         # add output collector variables to graph
         output_col = {}
         store_ops = []
         with self._tf_graph.as_default():
-            for key, var in outputs_tmp.items():
-                output_col[key] = tf.get_variable(name=key,
-                                                  dtype=tf.float32,
-                                                  shape=[int(sim_steps / sampling_steps)] + list(var.shape),
-                                                  initializer=tf.constant_initializer())
+            with tf.variable_scope(f'{self.key}_output_col'):
+
+                # create counting index for collector variables
                 out_idx = tf.Variable(0, dtype=tf.int32, name='out_var_idx')
-                store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
-            with tf.control_dependencies(store_ops):
-                store_ops.append(out_idx.assign_add(1))
-            store_outputs = tf.group(store_ops, name='output_storage')
+
+                # add collector variables to the graph
+                for key, var in outputs_tmp.items():
+                    output_col[key] = tf.get_variable(name=key,
+                                                      dtype=tf.float32,
+                                                      shape=[int(sim_steps / sampling_steps) + 1] + list(var.shape),
+                                                      initializer=tf.constant_initializer())
+
+                    # add collect operation to the graph
+                    store_ops.append(tf.scatter_update(output_col[key], out_idx, var))
+
+                # create increment operator for counting index
+                with tf.control_dependencies(store_ops):
+                    sample = out_idx.assign_add(1)
 
         # linearize input dictionary
         if inputs:
@@ -257,14 +276,64 @@ class Network(MultiDiGraph):
             for step in range(sim_steps):
                 inp_dict = dict()
                 for key, val in inputs.items():
-                    var = self.get_var(node=key[0], op=key[1], var=key[2])
-                    shape = var.shape
-                    if len(val) > 1:
-                        inp_dict[key] = np.reshape(val[step], shape)
+
+                    if self.key in self.nodes.keys():
+
+                        # fully vectorized case: add vectorized placeholder variable to input dictionary
+                        var = self.get_var(node=self.key, op=key[1], var=key[2])
+                        inp_dict[var] = np.reshape(val[step], var.shape)
+
+                    elif any(['comb' in key_tmp for key_tmp in self.nodes.keys()]):
+
+                        # node-vectorized case
+                        if key[0] == 'all':
+
+                            # go through all nodes, extract the variable and add it to input dict
+                            for i, node in enumerate(self.nodes.keys()):
+                                var = self.get_var(node=node, op=key[1], var=key[2])
+                                inp_dict[var] = np.reshape(val[step, i], var.shape)
+
+                        elif key[0] in self.nodes.keys():
+
+                            # add placeholder variable of node(s) to input dictionary
+                            var = self.get_var(node=key[0], op=key[1], var=key[2])
+                            inp_dict[var] = np.reshape(val[step], var.shape)
+
+                        elif any([key[0] in key_tmp for key_tmp in self.nodes.keys()]):
+
+                            # add vectorized placeholder variable of specified node type to input dictionary
+                            for node in list(self.nodes.keys()):
+                                if key[0] in node:
+                                    break
+                            var = self.get_var(node=node, op=key[1], var=key[2])
+                            inp_dict[var] = np.reshape(val[step], var.shape)
+
                     else:
-                        inp_dict[key] = np.reshape(val, shape)
+
+                        # non-vectorized case
+                        if key[0] == 'all':
+
+                            # go through all nodes, extract the variable and add it to input dict
+                            for i, node in enumerate(self.nodes.keys()):
+                                var = self.get_var(node=node, op=key[1], var=key[2])
+                                inp_dict[var] = np.reshape(val[step, i], var.shape)
+
+                        elif any([key[0] in key_tmp for key_tmp in self.nodes.keys()]):
+
+                            # extract variables from nodes of specified type
+                            i = 0
+                            for node in self.nodes.keys():
+                                if key[0] in node:
+                                    var = self.get_var(node=node, op=key[1], var=key[2])
+                                    inp_dict[var] = np.reshape(val[step, i], var.shape)
+                                    i += 1
+
+                # add input dictionary to placeholder input liust
                 inp.append(inp_dict)
+
         else:
+
+            # create list of nones (no placeholder variables should exist)
             inp = [None for _ in range(sim_steps)]
 
         # run simulation
@@ -279,18 +348,17 @@ class Network(MultiDiGraph):
             # initialize all variables
             sess.run(tf.global_variables_initializer())
 
-            results = []
+            sess.run(sample)
             t_start = t.time()
 
             # simulate network behavior for each time-step
             for step in range(sim_steps):
-
                 sess.run(self.step, inp[step])
-                sess.run(store_outputs)
-
-            t_end = t.time()
+                if step % sampling_steps == 0:
+                    sess.run(sample)
 
             # display simulation time
+            t_end = t.time()
             if verbose:
                 if simulation_time:
                     print(f"{simulation_time}s of network behavior were simulated in {t_end - t_start} s given a "
@@ -302,16 +370,23 @@ class Network(MultiDiGraph):
             if out_dir:
                 writer.close()
 
-            # store output variables
+            # store output variables in data frame
             for i, (key, var) in enumerate(output_col.items()):
                 if i == 0:
                     var = np.squeeze(var.eval())
-                    out_vars = DataFrame(data=var,
-                                         columns=[f'{key}_{j}' for j in range(var.shape[1])])
+                    try:
+                        out_vars = DataFrame(data=var,
+                                             columns=[f'{key}_{j}' for j in range(var.shape[1])])
+                    except IndexError:
+                        out_vars = DataFrame(data=var, columns=[key])
                 else:
                     var = np.squeeze(var.eval())
-                    for j in range(var.shape[1]):
-                        out_vars[f'{key}_{j}'] = var[:, j]
+                    try:
+                        for j in range(var.shape[1]):
+                            out_vars[f'{key}_{j}'] = var[:, j]
+                    except IndexError:
+                        out_vars[key] = var
+            out_vars['time'] = np.arange(0., simulation_time + sampling_step_size * 0.5, sampling_step_size)
 
         return out_vars, (t_end - t_start)
 
@@ -336,13 +411,21 @@ class Network(MultiDiGraph):
         """
 
         try:
-            return self.nodes[node][f'{op}/{var}']
+            tf_var = self.nodes[node][f'{op}/{var}']
         except KeyError:
-            node, op, var, idx = self._node_arg_map[node][f'{op}/{var}']
+            node, var, idx = self._node_arg_map[node][f'{op}/{var}']
+            if node in self._node_arg_map.keys():
+                op, var = var.split('/')
+                try:
+                    return self.get_var(var, node, op)[idx[0]:idx[1]]
+                except TypeError:
+                    return self.get_var(var, node, op)[idx]
             try:
-                return self.nodes[node][f'{op}/{var}'][idx[0]: idx[1]]
-            except ValueError:
-                return self.nodes[node][f'{op}/{var}'][idx]
+                tf_var = self.nodes[node][var][idx[0]: idx[1]]
+            except TypeError:
+                tf_var = self.nodes[node][var][idx]
+
+        return tf_var
 
     def add_node(self, node: str, ops: dict, op_args: dict, op_order: list) -> None:
         """
@@ -436,7 +519,7 @@ class Network(MultiDiGraph):
                                                          f"Input Variable {var_name} has not been calculated yet.")
 
                                     # append variable and operation to list
-                                    out_ops.append(op_args[out_var]['op'])
+                                    out_ops += op_args[out_var]['op']
                                     out_vars.append(op_args[out_var]['var'])
 
                                 # for multiple input operators
@@ -461,21 +544,22 @@ class Network(MultiDiGraph):
                                             raise ValueError(
                                                 f"Invalid dependencies found in operator: {op['equations']}. Input"
                                                 f" Variable {var_name} has not been calculated yet.")
-                                        out_ops_tmp.append(op_args[out_var]['op'])
+                                        out_ops_tmp += op_args[out_var]['op']
                                         out_vars_tmp.append(op_args[out_var]['var'])
 
                                     # add tensorflow operations for grouping the inputs together
-                                    tf_var_tmp = tf.parallel_stack(out_vars_tmp)
-                                    if inp['reduce_dim'][i]:
-                                        tf_var_tmp = tf.reduce_sum(tf_var_tmp, 0)
-                                    else:
-                                        tf_var_tmp = tf.reshape(tf_var_tmp,
-                                                                shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
+                                    with tf.control_dependencies(out_ops_tmp):
+                                        tf_var_tmp = tf.parallel_stack(out_vars_tmp)
+                                        if inp['reduce_dim'][i]:
+                                            tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
+                                        else:
+                                            tf_var_tmp2 = tf.reshape(tf_var_tmp,
+                                                                     shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
 
                                     # append variable and operation to list
-                                    out_vars.append(tf_var_tmp)
+                                    out_vars.append(tf_var_tmp2)
                                     out_var_idx.append(out_var_idx_tmp)
-                                    out_ops.append(tf.group(out_ops_tmp))
+                                    out_ops += [tf_var_tmp2]
 
                             # add inputs to argument dictionary (in reduced or stacked form)
                             ################################################################
@@ -484,49 +568,53 @@ class Network(MultiDiGraph):
                             if len(out_vars) > 1:
 
                                 # find shape of smallest input variable
-                                min_shape = min([outvar.shape[0] if len(outvar.shape) > 0 else 0 for outvar in out_vars])
+                                min_shape = min([outvar.shape[0] if len(outvar.shape) > 0 else 0
+                                                 for outvar in out_vars])
 
                                 # append inpout variables to list and reshape them if necessary
                                 out_vars_new = []
-                                for out_var in out_vars:
+                                with tf.control_dependencies(out_ops):
 
-                                    shape = out_var.shape[0] if len(out_var.shape) > 0 else 0
+                                    for out_var in out_vars:
 
-                                    if shape > min_shape:
-                                        if shape % min_shape != 0:
-                                            raise ValueError(f"Shapes of inputs do not match: "
-                                                             f"{inp['sources']} cannot be stacked.")
-                                        multiplier = shape // min_shape
-                                        for j in range(multiplier):
-                                            out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
+                                        shape = out_var.shape[0] if len(out_var.shape) > 0 else 0
+
+                                        if shape > min_shape:
+                                            if shape % min_shape != 0:
+                                                raise ValueError(f"Shapes of inputs do not match: "
+                                                                 f"{inp['sources']} cannot be stacked.")
+                                            multiplier = shape // min_shape
+                                            for j in range(multiplier):
+                                                out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
+                                        else:
+                                            out_vars_new.append(out_var)
+
+                                    # stack input variables or sum them up
+                                    tf_var = tf.parallel_stack(out_vars_new)
+                                    if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
+                                        tf_var = tf.reduce_sum(tf_var, 0)
                                     else:
-                                        out_vars_new.append(out_var)
-
-                                # stack input variables or sum them up
-                                tf_var = tf.parallel_stack(out_vars_new)
-                                if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
-                                    tf_var = tf.reduce_sum(tf_var, 0)
-                                else:
-                                    tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
-
-                                tf_op = tf.group(out_ops)
+                                        tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
 
                             # for a single input variable
                             else:
 
                                 tf_var = out_vars[0]
-                                tf_op = out_ops[0]
 
                             # add input variable information to argument dictionary
-                            op_args_tf[var_name] = {'dependency': True,
-                                                    'var': tf_var,
-                                                    'op': tf_op}
+                            if var_name not in op_args_tf.keys():
+                                op_args_tf[var_name] = {'var': tf.get_variable(name=var_name, shape=tf_var.shape,
+                                                                               dtype=tf_var.dtype)}
+                            update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var,
+                                                         dependencies=out_ops)
+                            op_args_tf[var_name].update({'dependency': True,
+                                                         'op': update})
 
                         # create tensorflow operator
-                        tf_op_new, op_args_tf = self.add_operator(expressions=op['equations'],
-                                                                  expression_args=op_args_tf,
-                                                                  variable_scope=op_name)
-                        tf_ops.append(tf_op_new)
+                        tf_ops_new, op_args_tf = self.add_operator(expressions=op['equations'],
+                                                                   expression_args=op_args_tf,
+                                                                   variable_scope=op_name)
+                        tf_ops += tf_ops_new
 
                         # bind newly created tf variables to node
                         for var_name, tf_var in op_args_tf.items():
@@ -536,12 +624,12 @@ class Network(MultiDiGraph):
                             op_args[attr_name] = tf_var
 
                         # handle dependencies
-                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops[-1]
+                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops
                         for arg in op_args.values():
                             arg['dependency'] = False
 
                 # group tensorflow versions of all operators to a single 'step' operation
-                node_attr['update'] = tf.group(tf_ops, name=f"{self.key}_update")
+                node_attr['update'] = tf_ops
 
         # call super method
         super().add_node(node, **node_attr)
@@ -554,7 +642,8 @@ class Network(MultiDiGraph):
                  source_to_edge_map: Optional[dict] = None,
                  edge_to_target_map: Optional[dict] = None,
                  weight: Optional[Union[float, list, np.ndarray]] = 1.,
-                 delay: Optional[Union[float, list, np.ndarray]] = 0.
+                 delay: Optional[Union[float, list, np.ndarray]] = 0.,
+                 dependencies: Optional[list] = None
                  ) -> None:
         """Add edge to the network that connects two variables from a source and a target node.
 
@@ -574,6 +663,8 @@ class Network(MultiDiGraph):
             Weighting constant that will be applied to the source output.
         delay
             Time that it takes for the source output to arrive at the target.
+        dependencies
+            List with tensorflow operations which the edge has to wait for.
 
         Returns
         -------
@@ -612,25 +703,19 @@ class Network(MultiDiGraph):
                 _, target_var_name = target_var.split('/')
                 delay_idx = "" if np.sum(delay) == 0 else "[d]"
 
-                # create index for edge equation if necessary
-                if edge_to_target_map and len(target_var_tf.shape) == 1:
-                    edge_idx = "[:,0]"
-                elif len(target_var_tf.shape) == 0:
-                    edge_idx = "[0]"
-                else:
-                    edge_idx = ""
-
                 # set up coupling operator
                 op = {'equations': [f"tvar{delay_idx} = ({edge_to_target_mapping}"
-                                    f"( c * ({source_to_edge_mapping} svar))){edge_idx}"],
+                                    f"( c * ({source_to_edge_mapping} svar)))"],
                       'inputs': {},
                       'output': target_var}
 
                 # create edge operator arguments dictionary
                 if type(weight) is np.ndarray:
                     weight_shape = weight.shape if len(weight.shape) == 2 else weight.shape + (1,)
-                else:
+                elif type(weight) is list:
                     weight_shape = (len(weight), 1)
+                else:
+                    weight_shape = ()
                 op_args = {'c': {'vtype': 'constant',
                                  'dtype': 'float32',
                                  'shape': weight_shape,
@@ -655,21 +740,23 @@ class Network(MultiDiGraph):
                 # parse into tensorflow graph
                 op_args_tf = parse_dict(op_args, self._tf_graph)
 
-                # add source and target variables
-                op_args_tf['tvar'] = target_var_tf
-                op_args_tf['svar'] = source_var_tf
-
                 # bring tensorflow variables in parser format
                 for var_name, var in op_args_tf.items():
                     op_args_tf[var_name] = {'var': var, 'dependency': False}
 
+                # add source and target variables
+                op_args_tf['tvar'] = {'var': target_var_tf, 'dependency': True if dependencies else False,
+                                      'op': dependencies}
+                op_args_tf['svar'] = {'var': source_var_tf, 'dependency': True if dependencies else False,
+                                      'op': dependencies}
+
                 # add operator to tensorflow graph
-                tf_op, op_args_tf = self.add_operator(op['equations'], op_args_tf, 'coupling_op')
+                tf_ops, op_args_tf = self.add_operator(op['equations'], op_args_tf, 'coupling_op')
 
         # add edge to networkx graph
         ############################
 
-        super().add_edge(source_node, target_node, update=tf_op, **op_args_tf)
+        super().add_edge(source_node, target_node, update=tf_ops, **op_args_tf)
 
     def add_operator(self, expressions: List[str], expression_args: dict, variable_scope: str
                      ) -> Tuple[Union[tf.Tensor, tf.Variable, tf.Operation], dict]:
@@ -709,24 +796,32 @@ class Network(MultiDiGraph):
                     # store tensorflow operation in list
                     evals.append(update)
 
-                # check which rhs evaluations still have to be assigned to their lhs variable
+                # go through evals and assign right-hand side updates to left-hand sides for all equations except DEs
                 evals_complete = []
-                evals_uncomplete = []
+                de_lhs = []
+                de_rhs = []
                 for ev in evals:
                     if ev[1] is None:
                         evals_complete.append(ev[0])
+                    elif not ev[2]:
+                        assign_op = self._assign_to_var(ev[0], ev[1], add=False)
+                        evals_complete.append(assign_op)
                     else:
-                        evals_uncomplete.append(ev)
+                        de_lhs.append(ev[0])
+                        de_rhs.append(ev[1])
 
-                # group the tensorflow operations across expressions
-                with tf.control_dependencies(evals_complete):
-                    for ev in evals_uncomplete:
-                        evals_complete.append(ev[0].assign(ev[1]))
+                # go through DEs and assign rhs to lhs
+                deps = evals_complete + de_rhs
+                de_complete = []
+                for lhs, rhs in zip(de_lhs, de_rhs):
+                    de_complete.append(self._assign_to_var(lhs, rhs, add=True, dependencies=deps))
 
-            return tf.group(evals_complete, name=f'{variable_scope}_eval'), expression_args
+                if de_complete:
+                    return de_complete, expression_args
+                else:
+                    return evals_complete, expression_args
 
-    def _vectorize(self, net_config: MultiDiGraph, first_lvl_vec: bool = True, second_lvl_vec: bool=True
-                   ) -> MultiDiGraph:
+    def _vectorize(self, net_config: MultiDiGraph, vectorization_mode: Optional[str] = 'nodes') -> MultiDiGraph:
         """Method that goes through the nodes and edges dicts and vectorizes those that are governed by the same
         operators/equations.
 
@@ -734,10 +829,9 @@ class Network(MultiDiGraph):
         ----------
         net_config
             See argument description at class level.
-        first_lvl_vec
-            If True, first stage (vectorization over nodes and edges) will be included.
-        second_lvl_vec
-            If True, second stage (vectorization over operations) will be performed as well.
+        vectorization_mode
+            Can be 'none' for no vectorization, 'nodes' for vectorization over nodes and 'ops' for vectorization over
+            nodes and operations.
 
         Returns
         -------
@@ -748,7 +842,7 @@ class Network(MultiDiGraph):
         # First stage: Vectorize over nodes
         ###################################
 
-        if first_lvl_vec:
+        if vectorization_mode in 'nodesops':
 
             new_net_config = MultiDiGraph()
 
@@ -756,7 +850,7 @@ class Network(MultiDiGraph):
             node_ops = []
             node_names = []
             for node_name, node in net_config.nodes.items():
-                node_ops.append(set(node['op_order']))
+                node_ops.append(set(node['operator_order']))
                 node_names.append(node_name)
 
             # get unique node names
@@ -817,10 +911,10 @@ class Network(MultiDiGraph):
         # Second stage: Vectorize over operators
         ########################################
 
-        if second_lvl_vec:
+        if vectorization_mode == 'ops':
 
             new_net_config = MultiDiGraph()
-            new_net_config.add_node(self.key, operators={}, op_order=[], operator_args={}, inputs={})
+            new_net_config.add_node(self.key, operators={}, operator_order=[], operator_args={}, inputs={})
 
             # vectorize node operators
             ###########################
@@ -828,11 +922,11 @@ class Network(MultiDiGraph):
             # collect all operation keys, arguments and dependencies of each node
             op_info = {'keys': [], 'args': [], 'vectorized': [], 'deps': []}
             for node in net_config.nodes.values():
-                op_info['keys'].append(node['op_order'])
+                op_info['keys'].append(node['operator_order'])
                 op_info['args'].append(list(node['operator_args'].keys()))
                 op_info['vectorized'].append([False] * len(op_info['keys'][-1]))
                 node_deps = []
-                for op_name in node['op_order']:
+                for op_name in node['operator_order']:
                     op = node['operators'][op_name]
                     op_deps = []
                     for _, inputs in op['inputs'].items():
@@ -896,7 +990,7 @@ class Network(MultiDiGraph):
                                 node_indices.append(node_idx)
 
                                 # vectorize op
-                                self._vectorize_ops(new_node=new_net_config.nodes['net'],
+                                self._vectorize_ops(new_node=new_net_config.nodes[self.key],
                                                     net_config=net_config,
                                                     op_key=op_key,
                                                     nodes=nodes_to_vec.copy())
@@ -913,7 +1007,7 @@ class Network(MultiDiGraph):
                             else:
 
                                 # add operation to new net configuration
-                                self._vectorize_ops(new_node=new_net_config.nodes['net'],
+                                self._vectorize_ops(new_node=new_net_config.nodes[self.key],
                                                     net_config=net_config,
                                                     op_key=op_key,
                                                     nodes=[node_key])
@@ -930,7 +1024,7 @@ class Network(MultiDiGraph):
             ##########################
 
             # set source and target
-            source_new, target_new = 'net', 'net'
+            source_new, target_new = self.key, self.key
 
             # collect old edges that connect the same source and target variables
             edge_col = {}
@@ -964,57 +1058,60 @@ class Network(MultiDiGraph):
             edge = net_config.edges[source_name, target_name, edge_name]
             source_var = net_config.nodes[source_name]['operator_args'][edge['source_var']]
             target_var = net_config.nodes[target_name]['operator_args'][edge['target_var']]
-            n_sources = source_var['shape'][0]
-            n_targets = target_var['shape'][0]
-            n_edges = edge['edge_idx'][-1][1]
+            n_sources = source_var['shape'][0] if source_var['shape'] else 1
+            n_targets = target_var['shape'][0] if target_var['shape'] else 1
 
-            # create mapping from source to edge variables
-            ##############################################
+            if 'edge_idx' in edge.keys():
 
-            # create mapping from lower dimensional source to higher dimensional edge space
-            smap_shape = (n_edges, n_sources)
-            smap = []
-            identity_map = True
-            for edge_idx, source_idx in zip(edge['edge_idx'], edge['source_idx']):
-                if type(source_idx) is tuple:
-                    for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), range(source_idx[0], source_idx[1])):
-                        smap.append([e_idx, s_idx])
-                elif type(source_idx) is list:
-                    for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), source_idx):
-                        smap.append([e_idx, s_idx])
-                else:
-                    for e_idx in range(edge_idx[0], edge_idx[1]):
-                        smap.append([e_idx, source_idx])
-                if smap[-1][0] != smap[-1][1]:
-                    identity_map = False
+                n_edges = edge['edge_idx'][-1][1]
 
-            # add mapping to edge attributs
-            if n_edges != n_sources or not identity_map:
-                edge['source_to_edge_map'] = {'indices': smap, 'dense_shape': smap_shape}
+                # create mapping from source to edge variables
+                ##############################################
 
-            # create mapping from edge to target variables
-            ##############################################
+                # create mapping from lower dimensional source to higher dimensional edge space
+                smap_shape = (n_edges, n_sources)
+                smap = []
+                identity_map = True
+                for edge_idx, source_idx in zip(edge['edge_idx'], edge['source_idx']):
+                    if type(source_idx) is tuple:
+                        for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), range(source_idx[0], source_idx[1])):
+                            smap.append([e_idx, s_idx])
+                    elif type(source_idx) is list:
+                        for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), source_idx):
+                            smap.append([e_idx, s_idx])
+                    else:
+                        for e_idx in range(edge_idx[0], edge_idx[1]):
+                            smap.append([e_idx, source_idx])
+                    if smap[-1][0] != smap[-1][1]:
+                        identity_map = False
 
-            # create mapping from lower dimensional source to higher dimensional edge space
-            tmap_shape = (n_targets, n_edges)
-            tmap = []
-            identity_map = True
-            for edge_idx, target_idx in zip(edge['edge_idx'], edge['target_idx']):
-                if type(target_idx) is tuple:
-                    for t_idx, e_idx in zip(range(target_idx[0], target_idx[1]), range(edge_idx[0], edge_idx[1])):
-                        tmap.append([t_idx, e_idx])
-                elif type(target_idx) is list:
-                    for t_idx, e_idx in zip(target_idx, range(edge_idx[0], edge_idx[1])):
-                        tmap.append([t_idx, e_idx])
-                else:
-                    for e_idx in range(edge_idx[0], edge_idx[1]):
-                        tmap.append([target_idx, e_idx])
-                if tmap[-1][0] != tmap[-1][1]:
-                    identity_map = False
+                # add mapping to edge attributs
+                if n_edges != n_sources or not identity_map:
+                    edge['source_to_edge_map'] = {'indices': smap, 'dense_shape': smap_shape}
 
-            # add mapping to edge attributs
-            if n_edges != n_sources or not identity_map:
-                edge['edge_to_target_map'] = {'indices': tmap, 'dense_shape': tmap_shape}
+                # create mapping from edge to target variables
+                ##############################################
+
+                # create mapping from lower dimensional source to higher dimensional edge space
+                tmap_shape = (n_targets, n_edges)
+                tmap = []
+                identity_map = True
+                for edge_idx, target_idx in zip(edge['edge_idx'], edge['target_idx']):
+                    if type(target_idx) is tuple:
+                        for t_idx, e_idx in zip(range(target_idx[0], target_idx[1]), range(edge_idx[0], edge_idx[1])):
+                            tmap.append([t_idx, e_idx])
+                    elif type(target_idx) is list:
+                        for t_idx, e_idx in zip(target_idx, range(edge_idx[0], edge_idx[1])):
+                            tmap.append([t_idx, e_idx])
+                    else:
+                        for e_idx in range(edge_idx[0], edge_idx[1]):
+                            tmap.append([target_idx, e_idx])
+                    if tmap[-1][0] != tmap[-1][1]:
+                        identity_map = False
+
+                # add mapping to edge attributs
+                if n_edges != n_sources or not identity_map:
+                    edge['edge_to_target_map'] = {'indices': tmap, 'dense_shape': tmap_shape}
 
             # add information about edge projection to target node
             ######################################################
@@ -1074,7 +1171,7 @@ class Network(MultiDiGraph):
                             'equations': eqs,
                             'inputs': {},
                             'output': var_name}
-                        node['op_order'] = [f'{var_name}_buffering_{j}'] + node['op_order']
+                        node['operator_order'] = [f'{var_name}_buffering_{j}'] + node['operator_order']
 
                         # add buffer variable to node arguments
                         node['operator_args'][f'{var_name}_buffering_{j}/{var_name}_buffer_{j}'] = {
@@ -1103,14 +1200,14 @@ class Network(MultiDiGraph):
                         eqs = [f"{var_name} = {var_name}_col_{j}"]
 
                         # add buffer operator to node
-                        node['operators'][f'{var_name}_collector_{j}'] = {
+                        node['operators'][f'{op_name}_{var_name}_col_{j}'] = {
                             'equations': eqs,
                             'inputs': {},
                             'output': var_name}
-                        node['op_order'] = [f'{var_name}_collector_{j}'] + node['op_order']
+                        node['operator_order'] = [f'{op_name}_{var_name}_col_{j}'] + node['operator_order']
 
                         # add buffer variable to node arguments
-                        node['operator_args'][f'{var_name}_collector_{j}/{var_name}_col_{j}'] = {
+                        node['operator_args'][f'{op_name}_{var_name}_col_{j}/{var_name}_col_{j}'] = {
                             'vtype': 'state_var',
                             'dtype': 'float32',
                             'shape': target_shape,
@@ -1120,14 +1217,15 @@ class Network(MultiDiGraph):
                         # handle operator dependencies
                         if var_name in node['operators'][op_name]['inputs'].keys():
                             node['operators'][op_name]['inputs'][var_name]['sources'].append(
-                                f'{var_name}_collector_{j}')
+                                f'{op_name}_{var_name}_col_{j}')
                         else:
-                            node['operators'][op_name]['inputs'][var_name] = {'sources': [f'{var_name}_collector_{j}'],
+                            node['operators'][op_name]['inputs'][var_name] = {'sources': [f'{op_name}_'
+                                                                                          f'{var_name}_col_{j}'],
                                                                               'reduce_dim': True}
 
                         # update edge information
                         edge = net_config.edges[input_info['sources'][j]]
-                        edge['target_var'] = f'{var_name}_collector_{j}/{var_name}_col_{j}'
+                        edge['target_var'] = f'{op_name}_{var_name}_col_{j}/{var_name}_col_{j}'
 
         return net_config
 
@@ -1160,13 +1258,14 @@ class Network(MultiDiGraph):
 
         node_ref = nodes.pop()
         new_node = old_net_config.nodes[node_ref]
-        self._node_arg_map[node_ref] = {}
+        if node_ref not in self._node_arg_map.keys():
+            self._node_arg_map[node_ref] = {}
 
         # define new node's name
         node_idx = 0
         node_ref_tmp = node_ref.split('/')[0] if '/'in node_ref else node_ref
         if all([node_ref_tmp in node_name for node_name in nodes]):
-            node_name = node_ref_tmp
+            node_name = f'{node_ref_tmp}_comb'
         else:
             node_name = node_ref_tmp
             for n in nodes:
@@ -1178,6 +1277,7 @@ class Network(MultiDiGraph):
                     test_names.append(test_name_tmp)
                 if all([test_name in node_name for test_name in test_names]):
                     break
+            node_name += '_comb'
 
         while True:
             new_node_name = f"{node_name}/{node_idx}"
@@ -1191,19 +1291,25 @@ class Network(MultiDiGraph):
         for arg_name, arg in new_node['operator_args'].items():
 
             # extract argument value and shape
-            if len(arg['shape']) == 2:
-                raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
-                                 f" cannot be applied to networks with variables of 2 or more"
-                                 f" dimensions. Variable {arg_name} has shape {arg['shape']}. Please"
-                                 f" turn of the `vectorize` option or change the dimensionality of the argument.")
-            if len(arg['shape']) == 1:
-                if type(arg['value']) is float:
-                    arg['value'] = np.zeros(arg['shape']) + arg['value']
-                arg_vals[arg_name] = list(arg['value'])
-                arg_shapes[arg_name] = tuple(arg['shape'])
+            if arg['vtype'] == 'raw':
+                if type(arg['value']) is list or type(arg['value']) is tuple:
+                    arg_vals[arg_name] = list(arg['value'])
+                else:
+                    arg_vals[arg_name] = arg['value']
             else:
-                arg_vals[arg_name] = [arg['value']]
-                arg_shapes[arg_name] = (1,)
+                if len(arg['shape']) == 2:
+                    raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
+                                     f" cannot be applied to networks with variables of 2 or more"
+                                     f" dimensions. Variable {arg_name} has shape {arg['shape']}. Please"
+                                     f" turn of the `vectorize` option or change the dimensionality of the argument.")
+                if len(arg['shape']) == 1:
+                    if type(arg['value']) is float:
+                        arg['value'] = np.zeros(arg['shape']) + arg['value']
+                    arg_vals[arg_name] = list(arg['value'])
+                    arg_shapes[arg_name] = tuple(arg['shape'])
+                else:
+                    arg_vals[arg_name] = [arg['value']]
+                    arg_shapes[arg_name] = (1,)
 
             # save index of original node's attributes in new nodes attributes
             self._node_arg_map[node_ref][arg_name] = [new_node_name, arg_name, 0]
@@ -1214,7 +1320,8 @@ class Network(MultiDiGraph):
         for i, node_name in enumerate(nodes):
 
             node = old_net_config.nodes[node_name]
-            self._node_arg_map[node_name] = {}
+            if node_name not in self._node_arg_map.keys():
+                self._node_arg_map[node_name] = {}
 
             # go through arguments
             for arg_name in arg_vals.keys():
@@ -1222,14 +1329,19 @@ class Network(MultiDiGraph):
                 arg = node['operator_args'][arg_name]
 
                 # extract value and shape of argument
-                if len(arg['shape']) == 0:
-                    arg_vals[arg_name].append(arg['value'])
+                if arg['vtype'] == 'raw':
+                    if type(arg['value']) is list or type(arg['value']) is tuple:
+                        for j, val in enumerate(arg['value']):
+                            arg_vals[arg_name][j] += val
                 else:
-                    if type(arg['value']) is float:
-                        arg['value'] = np.zeros(arg['shape']) + arg['value']
-                    arg_vals[arg_name] += list(arg['value'])
-                    if arg['shape'][0] > arg_shapes[arg_name][0]:
-                        arg_shapes[arg_name] = tuple(arg['shape'])
+                    if len(arg['shape']) == 0:
+                        arg_vals[arg_name].append(arg['value'])
+                    else:
+                        if type(arg['value']) is float:
+                            arg['value'] = np.zeros(arg['shape']) + arg['value']
+                        arg_vals[arg_name] += list(arg['value'])
+                        if arg['shape'][0] > arg_shapes[arg_name][0]:
+                            arg_shapes[arg_name] = tuple(arg['shape'])
 
                 # save index of original node's attributes in new nodes attributes
                 self._node_arg_map[node_name][arg_name] = [new_node_name, arg_name, i + 1]
@@ -1254,7 +1366,7 @@ class Network(MultiDiGraph):
     def _vectorize_edges(self,
                          edges: list,
                          source: str,
-                         target:str,
+                         target: str,
                          new_net_config: MultiDiGraph,
                          old_net_config: MultiDiGraph
                          ) -> MultiDiGraph:
@@ -1326,6 +1438,18 @@ class Network(MultiDiGraph):
                 # match dimensionality of delay and weight
                 if not delays or not weights:
                     pass
+                elif 'int' in str(type(delays)):
+                    try:
+                        delays = [delays] * len(weights)
+                    except TypeError:
+                        delays = [delays]
+                        weights = [weights]
+                elif 'float' in str(type(weights)) or 'int' in str(type(weights)):
+                    try:
+                        weights = [weights] * len(delays)
+                    except TypeError:
+                        delays = [delays]
+                        weights = [weights]
                 elif len(delays) > 1 and len(weights) == 1:
                     weights = weights * len(delays)
                 elif len(weights) > 1 and len(delays) == 1:
@@ -1444,41 +1568,72 @@ class Network(MultiDiGraph):
 
             if op_key in key:
 
-                # go through nodes and extract shape and value information for arg
-                arg['value'] = np.array(arg['value'])
+                if arg['vtype'] == 'raw':
 
-                if nodes:
+                    if type(arg['value']) is list:
 
-                    for node_name in nodes:
+                        self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, len(arg['value']))]
 
-                        if node_name not in self._node_arg_map.keys():
-                            self._node_arg_map[node_name] = {}
+                        for node_name in nodes:
 
-                        # extract node arg value and shape
-                        arg_tmp = net_config.nodes[node_name]['operator_args'][key]
-                        val = arg_tmp['value']
-                        dims = tuple(arg_tmp['shape'])
+                            if node_name not in self._node_arg_map.keys():
 
-                        # append value to argument dictionary
-                        if len(dims) > 0 and type(val) is float:
-                            val = np.zeros(dims) + val
-                        else:
-                            val = np.array(val)
-                        idx_old = 0 if len(dims) == 0 else arg['value'].shape[0]
-                        arg['value'] = np.append(arg['value'], val, axis=0)
-                        idx_new = arg['value'].shape[0]
-                        idx = (idx_old, idx_new)
+                                self._node_arg_map[node_name] = {}
 
-                        # add information to _node_arg_map
-                        self._node_arg_map[node_name][key] = [self.key, key, idx]
+                                new_val = net_config.nodes[node_name]['operator_args'][key]['value']
+                                old_idx = len(arg['value'])
+                                arg['value'].append(new_val)
+
+                                self._node_arg_map[node_name_tmp][key] = [self.key, key, (old_idx, arg['value'].shape[0])]
 
                 else:
 
-                    # add information to _node_arg_map
-                    self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+                    if not hasattr(arg['value'], 'shape'):
+                        arg['value'] = np.array(arg['value'])
+                    if arg['value'].shape != arg['shape']:
+                        try:
+                            arg['value'] = np.reshape(arg['value'], arg['shape'])
+                        except ValueError:
+                            arg['value'] = np.zeros(arg['shape']) + arg['value']
 
-                # change shape of argument
-                arg['shape'] = arg['value'].shape
+                    # go through nodes and extract shape and value information for arg
+                    if nodes:
+
+                        self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+
+                        for node_name in nodes:
+
+                            if node_name not in self._node_arg_map.keys():
+                                self._node_arg_map[node_name] = {}
+
+                            # extract node arg value and shape
+                            arg_tmp = net_config.nodes[node_name]['operator_args'][key]
+                            val = arg_tmp['value']
+                            dims = tuple(arg_tmp['shape'])
+
+                            # append value to argument dictionary
+                            if len(dims) > 0 and type(val) is float:
+                                val = np.zeros(dims) + val
+                            else:
+                                val = np.reshape(np.array(val), dims)
+                            if len(dims) == 0:
+                                idx_old = 0
+                            else:
+                                idx_old = arg['value'].shape[0]
+                            arg['value'] = np.append(arg['value'], val, axis=0)
+                            idx_new = arg['value'].shape[0]
+                            idx = (idx_old, idx_new)
+
+                            # add information to _node_arg_map
+                            self._node_arg_map[node_name][key] = [self.key, key, idx]
+
+                    else:
+
+                        # add information to _node_arg_map
+                        self._node_arg_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+
+                    # change shape of argument
+                    arg['shape'] = arg['value'].shape
 
                 # add argument to new node's argument dictionary
                 op_args[key] = arg
@@ -1488,8 +1643,55 @@ class Network(MultiDiGraph):
 
         # add operator
         new_node['operators'][op_key] = op
-        new_node['op_order'].append(op_key)
+        new_node['operator_order'].append(op_key)
 
         # add operator args
         for key, arg in op_args.items():
             new_node['operator_args'][key] = arg
+
+    def _assign_to_var(self,
+                       var: tf.Variable,
+                       val: Union[tf.Variable, tf.Operation, tf.Tensor],
+                       add: Optional[bool] = False,
+                       dependencies: Optional[list] = None
+                       ) -> Union[tf.Variable, tf.Operation, tf.Tensor]:
+        """
+
+        Parameters
+        ----------
+        var
+            Tensorflow variable.
+        val
+            New value that should be assigned to variable.
+        add
+            If true, assign_add will be used instead of assign.
+        dependencies
+            List of tensorflow operations the assign op should wait for to finish.
+
+        Returns
+        -------
+        Union[tf.Variable, tf.Operation, tf.Tensor]
+            Handle for assign operation.
+
+        """
+
+        if not dependencies:
+            dependencies = []
+
+        with tf.control_dependencies(dependencies):
+            if add:
+                try:
+                    return var.assign_add(self.dt * val)
+                except ValueError:
+                    try:
+                        return var[:, 0].assign_add(self.dt * val)
+                    except ValueError:
+                        return var.assign_add(self.dt * tf.squeeze(val))
+            else:
+                try:
+                    return var.assign(val)
+                except ValueError:
+                    try:
+                        return var[:, 0].assign(val)
+                    except ValueError:
+                        return var.assign(tf.squeeze(val))
