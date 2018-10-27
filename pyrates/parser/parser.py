@@ -823,6 +823,9 @@ def parse_dict(var_dict: dict,
 
         for var_name, var in var_dict.items():
 
+            # make sure that value of variable is a number
+            if var['value'] is None:
+                var['value'] = 0
             if var['vtype'] == 'raw':
 
                 # just extract raw variable value

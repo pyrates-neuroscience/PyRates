@@ -133,7 +133,7 @@ class OperatorIR(AbstractBaseIR):
 
                     # separate in/out specification from variable type specification
                     if var_dict["vtype"] == "input":
-                        inputs[variable] = dict(source=[], reduce_dim=True)  # default to True for now
+                        inputs[variable] = dict(sources=[], reduce_dim=True)  # default to True for now
                         var_dict["vtype"] = "state_var"
                     elif var_dict["vtype"] == "output":
                         if output is None:

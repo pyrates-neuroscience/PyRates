@@ -488,127 +488,131 @@ class Network(MultiDiGraph):
 
                         for var_name, inp in op['inputs'].items():
 
-                            # collect input variable calculation operations
-                            out_ops = []
-                            out_vars = []
-                            out_var_idx = []
+                            if inp['sources']:
 
-                            # go through inputs to variable
-                            for i, inp_op in enumerate(inp['sources']):
+                                # collect input variable calculation operations
+                                out_ops = []
+                                out_vars = []
+                                out_var_idx = []
 
-                                if type(inp_op) is list and len(inp_op) == 1:
-                                    inp_op = inp_op[0]
+                                # go through inputs to variable
+                                for i, inp_op in enumerate(inp['sources']):
 
-                                # collect output variable and operation of the input operator(s)
-                                ################################################################
+                                    if type(inp_op) is list and len(inp_op) == 1:
+                                        inp_op = inp_op[0]
 
-                                # for a single input operator
-                                if type(inp_op) is str:
+                                    # collect output variable and operation of the input operator(s)
+                                    ################################################################
 
-                                    # get name and extract index from it if necessary
-                                    out_name = ops[inp_op]['output']
-                                    if '[' in out_name:
-                                        idx_start, idx_stop = out_name.find('['), out_name.find(']')
-                                        out_var_idx.append(out_name[idx_start + 1:idx_stop])
-                                        out_var = f"{inp_op}/{out_name[:idx_start]}"
-                                    else:
-                                        out_var_idx.append(None)
-                                        out_var = f"{inp_op}/{out_name}"
-                                    if out_var not in op_args.keys():
-                                        raise ValueError(f"Invalid dependencies found in operator: {op['equations']}. "
-                                                         f"Input Variable {var_name} has not been calculated yet.")
-
-                                    # append variable and operation to list
-                                    out_ops += op_args[out_var]['op']
-                                    out_vars.append(op_args[out_var]['var'])
-
-                                # for multiple input operators
-                                else:
-
-                                    out_vars_tmp = []
-                                    out_var_idx_tmp = []
-                                    out_ops_tmp = []
-
-                                    for inp_op_tmp in inp_op:
+                                    # for a single input operator
+                                    if type(inp_op) is str:
 
                                         # get name and extract index from it if necessary
-                                        out_name = ops[inp_op_tmp]['output']
+                                        out_name = ops[inp_op]['output']
                                         if '[' in out_name:
                                             idx_start, idx_stop = out_name.find('['), out_name.find(']')
                                             out_var_idx.append(out_name[idx_start + 1:idx_stop])
-                                            out_var = f"{inp_op_tmp}/{out_name[:idx_start]}"
+                                            out_var = f"{inp_op}/{out_name[:idx_start]}"
                                         else:
-                                            out_var_idx_tmp.append(None)
-                                            out_var = f"{inp_op_tmp}/{out_name}"
+                                            out_var_idx.append(None)
+                                            out_var = f"{inp_op}/{out_name}"
                                         if out_var not in op_args.keys():
-                                            raise ValueError(
-                                                f"Invalid dependencies found in operator: {op['equations']}. Input"
-                                                f" Variable {var_name} has not been calculated yet.")
-                                        out_ops_tmp += op_args[out_var]['op']
-                                        out_vars_tmp.append(op_args[out_var]['var'])
+                                            raise ValueError(f"Invalid dependencies found in operator: "
+                                                             f"{op['equations']}. Input Variable {var_name} has not "
+                                                             f"been calculated yet.")
 
-                                    # add tensorflow operations for grouping the inputs together
-                                    with tf.control_dependencies(out_ops_tmp):
-                                        tf_var_tmp = tf.parallel_stack(out_vars_tmp)
-                                        if inp['reduce_dim'][i]:
-                                            tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
-                                        else:
-                                            tf_var_tmp2 = tf.reshape(tf_var_tmp,
-                                                                     shape=(tf_var_tmp.shape[0] * tf_var_tmp.shape[1],))
+                                        # append variable and operation to list
+                                        out_ops += op_args[out_var]['op']
+                                        out_vars.append(op_args[out_var]['var'])
 
-                                    # append variable and operation to list
-                                    out_vars.append(tf_var_tmp2)
-                                    out_var_idx.append(out_var_idx_tmp)
-                                    out_ops += [tf_var_tmp2]
-
-                            # add inputs to argument dictionary (in reduced or stacked form)
-                            ################################################################
-
-                            # for multiple multiple input operations
-                            if len(out_vars) > 1:
-
-                                # find shape of smallest input variable
-                                min_shape = min([outvar.shape[0] if len(outvar.shape) > 0 else 0
-                                                 for outvar in out_vars])
-
-                                # append inpout variables to list and reshape them if necessary
-                                out_vars_new = []
-                                with tf.control_dependencies(out_ops):
-
-                                    for out_var in out_vars:
-
-                                        shape = out_var.shape[0] if len(out_var.shape) > 0 else 0
-
-                                        if shape > min_shape:
-                                            if shape % min_shape != 0:
-                                                raise ValueError(f"Shapes of inputs do not match: "
-                                                                 f"{inp['sources']} cannot be stacked.")
-                                            multiplier = shape // min_shape
-                                            for j in range(multiplier):
-                                                out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
-                                        else:
-                                            out_vars_new.append(out_var)
-
-                                    # stack input variables or sum them up
-                                    tf_var = tf.parallel_stack(out_vars_new)
-                                    if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
-                                        tf_var = tf.reduce_sum(tf_var, 0)
+                                    # for multiple input operators
                                     else:
-                                        tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
 
-                            # for a single input variable
-                            else:
+                                        out_vars_tmp = []
+                                        out_var_idx_tmp = []
+                                        out_ops_tmp = []
 
-                                tf_var = out_vars[0]
+                                        for inp_op_tmp in inp_op:
 
-                            # add input variable information to argument dictionary
-                            if var_name not in op_args_tf.keys():
-                                op_args_tf[var_name] = {'var': tf.get_variable(name=var_name, shape=tf_var.shape,
-                                                                               dtype=tf_var.dtype)}
-                            update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var,
-                                                         dependencies=out_ops)
-                            op_args_tf[var_name].update({'dependency': True,
-                                                         'op': update})
+                                            # get name and extract index from it if necessary
+                                            out_name = ops[inp_op_tmp]['output']
+                                            if '[' in out_name:
+                                                idx_start, idx_stop = out_name.find('['), out_name.find(']')
+                                                out_var_idx.append(out_name[idx_start + 1:idx_stop])
+                                                out_var = f"{inp_op_tmp}/{out_name[:idx_start]}"
+                                            else:
+                                                out_var_idx_tmp.append(None)
+                                                out_var = f"{inp_op_tmp}/{out_name}"
+                                            if out_var not in op_args.keys():
+                                                raise ValueError(
+                                                    f"Invalid dependencies found in operator: {op['equations']}. Input"
+                                                    f" Variable {var_name} has not been calculated yet.")
+                                            out_ops_tmp += op_args[out_var]['op']
+                                            out_vars_tmp.append(op_args[out_var]['var'])
+
+                                        # add tensorflow operations for grouping the inputs together
+                                        with tf.control_dependencies(out_ops_tmp):
+                                            tf_var_tmp = tf.parallel_stack(out_vars_tmp)
+                                            if inp['reduce_dim'][i]:
+                                                tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
+                                            else:
+                                                tf_var_tmp2 = tf.reshape(tf_var_tmp,
+                                                                         shape=(tf_var_tmp.shape[0] *
+                                                                                tf_var_tmp.shape[1],))
+
+                                        # append variable and operation to list
+                                        out_vars.append(tf_var_tmp2)
+                                        out_var_idx.append(out_var_idx_tmp)
+                                        out_ops += [tf_var_tmp2]
+
+                                # add inputs to argument dictionary (in reduced or stacked form)
+                                ################################################################
+
+                                # for multiple multiple input operations
+                                if len(out_vars) > 1:
+
+                                    # find shape of smallest input variable
+                                    min_shape = min([outvar.shape[0] if len(outvar.shape) > 0 else 0
+                                                     for outvar in out_vars])
+
+                                    # append inpout variables to list and reshape them if necessary
+                                    out_vars_new = []
+                                    with tf.control_dependencies(out_ops):
+
+                                        for out_var in out_vars:
+
+                                            shape = out_var.shape[0] if len(out_var.shape) > 0 else 0
+
+                                            if shape > min_shape:
+                                                if shape % min_shape != 0:
+                                                    raise ValueError(f"Shapes of inputs do not match: "
+                                                                     f"{inp['sources']} cannot be stacked.")
+                                                multiplier = shape // min_shape
+                                                for j in range(multiplier):
+                                                    out_vars_new.append(out_var[j * min_shape:(j + 1) * min_shape])
+                                            else:
+                                                out_vars_new.append(out_var)
+
+                                        # stack input variables or sum them up
+                                        tf_var = tf.parallel_stack(out_vars_new)
+                                        if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
+                                            tf_var = tf.reduce_sum(tf_var, 0)
+                                        else:
+                                            tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
+
+                                # for a single input variable
+                                else:
+
+                                    tf_var = out_vars[0]
+
+                                # add input variable information to argument dictionary
+                                if var_name not in op_args_tf.keys():
+                                    op_args_tf[var_name] = {'var': tf.get_variable(name=var_name, shape=tf_var.shape,
+                                                                                   dtype=tf_var.dtype)}
+                                update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var,
+                                                             dependencies=out_ops)
+                                op_args_tf[var_name].update({'dependency': True,
+                                                             'op': update})
 
                         # create tensorflow operator
                         tf_ops_new, op_args_tf = self.add_operator(expressions=op['equations'],
@@ -639,8 +643,8 @@ class Network(MultiDiGraph):
                  target_node: str,
                  source_var: str,
                  target_var: str,
-                 source_idx: list,
-                 target_idx: list,
+                 source_idx: Optional[list] = None,
+                 target_idx: Optional[list] = None,
                  weight: Optional[Union[float, list, np.ndarray]] = 1.,
                  delay: Optional[Union[float, list, np.ndarray]] = 0.,
                  dependencies: Optional[list] = None
@@ -695,13 +699,16 @@ class Network(MultiDiGraph):
                 with tf.control_dependencies(dependencies):
 
                     # apply edge weights to source variable
-                    try:
-                        updates = tf.gather_nd(svar, source_idx)
-                    except ValueError:
+                    if not source_idx:
+                        updates = svar
+                    else:
                         try:
-                            updates = tf.gather_nd(svar[:, 0], source_idx)
+                            updates = tf.gather_nd(svar, source_idx)
                         except ValueError:
-                            updates = tf.gather_nd(tf.squeeze(svar), source_idx)
+                            try:
+                                updates = tf.gather_nd(svar[:, 0], source_idx)
+                            except ValueError:
+                                updates = tf.gather_nd(tf.squeeze(svar), source_idx)
                     if updates.shape == c.shape:
                         updates = updates * c
                     elif len(c.shape) < len(updates.shape):
@@ -712,19 +719,28 @@ class Network(MultiDiGraph):
                         updates = updates * c
 
                     # apply update to target variable
-                    if delay:
+                    if delay and target_idx:
 
-                        # apply update with delay to buffer
+                        # apply update with delay to indices in buffer
                         target_idx = [idx + [d] for idx, d in zip(target_idx, delay)]
                         try:
                             tf_op = tf.scatter_nd_add(tvar, target_idx, updates)
                         except ValueError:
                             tf_op = tf.scatter_nd_add(tvar, target_idx, tf.squeeze(updates))
 
-                    else:
+                    elif not target_idx and not delay:
 
                         # apply update directly to target variable
-                        target_idx = [idx[0] if type(idx) is list else idx for idx in target_idx]
+                        tf_op_pre = tvar.assign(np.zeros(tvar.shape))
+                        tf_op = self._assign_to_var(tvar, updates, add=True, dependencies=[tf_op_pre])
+
+                    else:
+
+                        # apply update via target or delay indices
+                        if not target_idx:
+                            target_idx = [d for d in delay] if type(delay) is list else [delay]
+                        else:
+                            target_idx = [idx[0] if type(idx) is list else idx for idx in target_idx]
                         tf_op_pre = tvar.assign(np.zeros(tvar.shape))
                         with tf.control_dependencies([tf_op_pre]):
                             try:

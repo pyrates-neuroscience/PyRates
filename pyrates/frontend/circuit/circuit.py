@@ -559,7 +559,6 @@ class BackendIRFormatter:
 
         out_op = op_order[-1]
         out_var = operators[out_op]['output']
-        out_var_long = f"{out_op}/{out_var}"
         if added_ops:
             # append operator output to target operator sources
             # assume that only last operator in edge operator_order gives the output
@@ -567,12 +566,12 @@ class BackendIRFormatter:
             #     if out_var in node_dict["operators"][op_name]["inputs"]:
             #         if out_var_long not in node_dict["operators"][op_name]["inputs"][out_var]:
             #             # add reference to source operator that was previously in an edge
-            #             node_dict["operators"][op_name]["inputs"][out_var].append(out_var_long)
+            #             node_dict["operators"][op_name]["inputs"][out_var].append(output_var)
 
             # shortcut, since target_var and output_var are known:
             target_op, target_vname = target_var.split("/")
-            if output_var not in node_dict["operators"][target_op]["inputs"][target_vname]["source"]:
-                node_dict["operators"][target_op]["inputs"][target_vname]["source"].append(output_var)
+            if output_var not in node_dict["operators"][target_op]["inputs"][target_vname]["sources"]:
+                node_dict["operators"][target_op]["inputs"][target_vname]["sources"].append(out_op)
 
         # simplify edges and save into edge_list
         # op_graph = edge.op_graph

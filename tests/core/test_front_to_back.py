@@ -34,7 +34,7 @@ def test_simple_example():
 
     # Step 5: Run simulation
     results, _ = net.run(simulation_time=1.,
-                         outputs={"V": ('all', 'operator_ptr' , 'v')},
+                         outputs={"V": ('Node.0', 'LinearOperator.0', 'y')},
                          sampling_step_size=1e-3)
 
     results.plot()

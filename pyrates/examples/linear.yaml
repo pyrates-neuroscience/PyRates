@@ -11,10 +11,10 @@ LinearOperator:
   variables:
     m:
       description: linear scaling coefficient
-      default: 1
+      default: 1.
     n:
       description: additive offset
-      default: 0
+      default: 0.
     x:
       description: independent variable
       default: input
@@ -32,7 +32,7 @@ IncrementOperator:
     y:
       default: input
     a:
-      default: 1
+      default: 1.
 
 ExampleNode:
   description: Simple example with one operator
@@ -59,8 +59,8 @@ ExampleCircuit:
       target: Node/LinearOperator/x
       template: *Edge
       variables:
-        IncrementOperator/a: 2
-        weight: 1
+        IncrementOperator/a: 2.
+        weight: 1.
         delay: 0
 
 MatrixCircuit:
