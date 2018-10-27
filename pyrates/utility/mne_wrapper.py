@@ -23,7 +23,6 @@ __status__ = 'Development'
 def mne_from_dataframe(sim_results: DataFrame,
                        ch_types: Union[str, List[str]] = 'eeg',
                        ch_names: Optional[Union[str, List[str]]] = None,
-                       target_variable: str = 'membrane_potential',
                        events: Optional[np.ndarray] = None,
                        event_keys: Optional[List[str]] = None,
                        epoch_start: Optional[float] = None,
@@ -41,9 +40,6 @@ def mne_from_dataframe(sim_results: DataFrame,
         Type of the channels, the observation time-series of the observers refer to.
     ch_names
         Name of each channel/observation time-series.
-    target_variable
-        State variable that is to be extracted from the observer. Only needed, if the observer is a
-        :class:'CircuitObserver'.
     events
         2D array defining events during the simulation. For a more detailed documentation, see the docstring for
         parameter `events` of :class:`mne.Epochs`.

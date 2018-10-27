@@ -153,7 +153,7 @@ class Network(MultiDiGraph):
                                   **edge_info)
 
                     # collect project operation of edge
-                    edge_updates += self.edges[source_name, target_name, edge_idx]['update']
+                    edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
 
                 # create network update operation
                 #################################
@@ -639,8 +639,8 @@ class Network(MultiDiGraph):
                  target_node: str,
                  source_var: str,
                  target_var: str,
-                 source_to_edge_map: Optional[dict] = None,
-                 edge_to_target_map: Optional[dict] = None,
+                 source_idx: list,
+                 target_idx: list,
                  weight: Optional[Union[float, list, np.ndarray]] = 1.,
                  delay: Optional[Union[float, list, np.ndarray]] = 0.,
                  dependencies: Optional[list] = None
@@ -657,8 +657,8 @@ class Network(MultiDiGraph):
             Name of the output variable on the source node (including the operator name).
         target_var
             Name of the target variable on the target node (including the operator name).
-        source_to_edge_map
-        edge_to_target_map
+        source_idx
+        target_idx
         weight
             Weighting constant that will be applied to the source output.
         delay
@@ -672,91 +672,79 @@ class Network(MultiDiGraph):
 
         """
 
-        # extract variables from source and target
-        ##########################################
-
-        source, target = self.nodes[source_node], self.nodes[target_node]
-
-        # get source and target variables
-        source_var_tf = source[source_var]
-        target_var_tf = target[target_var]
-
         # add projection operation of edge to tensorflow graph
         ######################################################
 
         with self._tf_graph.as_default():
 
             # set variable scope of edge
+
             edge_idx = self.number_of_edges(source_node, target_node)
+
             with tf.variable_scope(f'{source_node}_{target_node}_{edge_idx}'):
 
-                # create edge operator dictionary
-                #################################
-
-                # check whether mappings between source, edge and target space have to be performed
-                source_to_edge_mapping = "smap @ " if source_to_edge_map else ""
-                edge_to_target_mapping = "tmap @ " if edge_to_target_map else ""
-
-                # create index for delay if necessary
-                if not delay:
-                    delay = np.array([0])
-                _, target_var_name = target_var.split('/')
-                delay_idx = "" if np.sum(delay) == 0 else "[d]"
-
-                # set up coupling operator
-                op = {'equations': [f"tvar{delay_idx} = ({edge_to_target_mapping}"
-                                    f"( c * ({source_to_edge_mapping} svar)))"],
-                      'inputs': {},
-                      'output': target_var}
-
-                # create edge operator arguments dictionary
-                if type(weight) is np.ndarray:
-                    weight_shape = weight.shape if len(weight.shape) == 2 else weight.shape + (1,)
-                elif type(weight) is list:
-                    weight_shape = (len(weight), 1)
-                else:
-                    weight_shape = ()
-                op_args = {'c': {'vtype': 'constant',
-                                 'dtype': 'float32',
-                                 'shape': weight_shape,
-                                 'value': weight}
-                           }
-                if np.sum(delay) > 0:
-                    op_args['d'] = {'vtype': 'constant',
-                                    'dtype': 'int32',
-                                    'shape': delay.shape if type(delay) is np.ndarray else len(delay),
-                                    'value': delay}
-                if source_to_edge_map is not None:
-                    op_args['smap'] = {'vtype': 'constant_sparse',
-                                       'shape': source_to_edge_map['dense_shape'],
-                                       'value': [1.] * len(source_to_edge_map['indices']),
-                                       'indices': source_to_edge_map['indices']}
-                if edge_to_target_map is not None:
-                    op_args['tmap'] = {'vtype': 'constant_sparse',
-                                       'shape': edge_to_target_map['dense_shape'],
-                                       'value': [1.] * len(edge_to_target_map['indices']),
-                                       'indices': edge_to_target_map['indices']}
-
-                # parse into tensorflow graph
-                op_args_tf = parse_dict(op_args, self._tf_graph)
-
-                # bring tensorflow variables in parser format
-                for var_name, var in op_args_tf.items():
-                    op_args_tf[var_name] = {'var': var, 'dependency': False}
-
-                # add source and target variables
-                op_args_tf['tvar'] = {'var': target_var_tf, 'dependency': True if dependencies else False,
-                                      'op': dependencies}
-                op_args_tf['svar'] = {'var': source_var_tf, 'dependency': True if dependencies else False,
-                                      'op': dependencies}
+                # create edge operator arguments
+                source, target = self.nodes[source_node], self.nodes[target_node]
+                c = tf.constant(weight, name='c')
+                svar = source[source_var]
+                tvar = target[target_var]
 
                 # add operator to tensorflow graph
-                tf_ops, op_args_tf = self.add_operator(op['equations'], op_args_tf, 'coupling_op')
+                ##################################
+
+                with tf.control_dependencies(dependencies):
+
+                    # apply edge weights to source variable
+                    try:
+                        updates = tf.gather_nd(svar, source_idx)
+                    except ValueError:
+                        try:
+                            updates = tf.gather_nd(svar[:, 0], source_idx)
+                        except ValueError:
+                            updates = tf.gather_nd(tf.squeeze(svar), source_idx)
+                    if updates.shape == c.shape:
+                        updates = updates * c
+                    elif len(c.shape) < len(updates.shape):
+                        updates = updates * tf.reshape(c, [c.shape[0], updates.shape[1]])
+                    elif len(updates.shape) < len(c.shape):
+                        updates = updates * tf.squeeze(c)
+                    else:
+                        updates = updates * c
+
+                    # apply update to target variable
+                    if delay:
+
+                        # apply update with delay to buffer
+                        target_idx = [idx + [d] for idx, d in zip(target_idx, delay)]
+                        try:
+                            tf_op = tf.scatter_nd_add(tvar, target_idx, updates)
+                        except ValueError:
+                            tf_op = tf.scatter_nd_add(tvar, target_idx, tf.squeeze(updates))
+
+                    else:
+
+                        # apply update directly to target variable
+                        target_idx = [idx[0] if type(idx) is list else idx for idx in target_idx]
+                        tf_op_pre = tvar.assign(np.zeros(tvar.shape))
+                        with tf.control_dependencies([tf_op_pre]):
+                            try:
+                                tf_op = tf.scatter_add(tvar, target_idx, updates)
+                            except ValueError:
+                                try:
+                                    tf_op = tf.scatter_add(tvar[:, 0], target_idx, updates)
+                                except (ValueError, AttributeError):
+                                    try:
+                                        tf_op = tf.scatter_add(tvar, target_idx, tf.squeeze(updates))
+                                    except ValueError:
+                                        tf_op = tf.scatter_add(tvar,
+                                                               target_idx,
+                                                               tf.reshape(updates, [updates.shape[0], tvar.shape[1]])
+                                                               )
 
         # add edge to networkx graph
         ############################
 
-        super().add_edge(source_node, target_node, update=tf_ops, **op_args_tf)
+        super().add_edge(source_node, target_node, update=tf_op, svar=svar, tvar=tvar, weight=c, delay=delay)
 
     def add_operator(self, expressions: List[str], expression_args: dict, variable_scope: str
                      ) -> Tuple[Union[tf.Tensor, tf.Variable, tf.Operation], dict]:
@@ -1054,84 +1042,21 @@ class Network(MultiDiGraph):
         # 1. Go through edges and create mappings between source, edge and target variables
         for source_name, target_name, edge_name in net_config.edges:
 
-            # extract edge information
-            edge = net_config.edges[source_name, target_name, edge_name]
-            source_var = net_config.nodes[source_name]['operator_args'][edge['source_var']]
-            target_var = net_config.nodes[target_name]['operator_args'][edge['target_var']]
-            n_sources = source_var['shape'][0] if source_var['shape'] else 1
-            n_targets = target_var['shape'][0] if target_var['shape'] else 1
-
-            if 'edge_idx' in edge.keys():
-
-                n_edges = edge['edge_idx'][-1][1]
-
-                # create mapping from source to edge variables
-                ##############################################
-
-                # create mapping from lower dimensional source to higher dimensional edge space
-                smap_shape = (n_edges, n_sources)
-                smap = []
-                identity_map = True
-                for edge_idx, source_idx in zip(edge['edge_idx'], edge['source_idx']):
-                    if type(source_idx) is tuple:
-                        for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), range(source_idx[0], source_idx[1])):
-                            smap.append([e_idx, s_idx])
-                    elif type(source_idx) is list:
-                        for e_idx, s_idx in zip(range(edge_idx[0], edge_idx[1]), source_idx):
-                            smap.append([e_idx, s_idx])
-                    else:
-                        for e_idx in range(edge_idx[0], edge_idx[1]):
-                            smap.append([e_idx, source_idx])
-                    if smap[-1][0] != smap[-1][1]:
-                        identity_map = False
-
-                # add mapping to edge attributs
-                if n_edges != n_sources or not identity_map:
-                    edge['source_to_edge_map'] = {'indices': smap, 'dense_shape': smap_shape}
-
-                # create mapping from edge to target variables
-                ##############################################
-
-                # create mapping from lower dimensional source to higher dimensional edge space
-                tmap_shape = (n_targets, n_edges)
-                tmap = []
-                identity_map = True
-                for edge_idx, target_idx in zip(edge['edge_idx'], edge['target_idx']):
-                    if type(target_idx) is tuple:
-                        for t_idx, e_idx in zip(range(target_idx[0], target_idx[1]), range(edge_idx[0], edge_idx[1])):
-                            tmap.append([t_idx, e_idx])
-                    elif type(target_idx) is list:
-                        for t_idx, e_idx in zip(target_idx, range(edge_idx[0], edge_idx[1])):
-                            tmap.append([t_idx, e_idx])
-                    else:
-                        for e_idx in range(edge_idx[0], edge_idx[1]):
-                            tmap.append([target_idx, e_idx])
-                    if tmap[-1][0] != tmap[-1][1]:
-                        identity_map = False
-
-                # add mapping to edge attributs
-                if n_edges != n_sources or not identity_map:
-                    edge['edge_to_target_map'] = {'indices': tmap, 'dense_shape': tmap_shape}
-
             # add information about edge projection to target node
-            ######################################################
-
+            edge = net_config.edges[source_name, target_name, edge_name]
             if edge['target_var'] not in net_config.nodes[target_name]['inputs']:
                 net_config.nodes[target_name]['inputs'][edge['target_var']] = {
                     'sources': [(source_name, target_name, edge_name)],
-                    'delay': [np.max(edge['delay'])],
+                    'delay': np.max(edge['delay']),
                     'reduce_dim': True}
             else:
                 net_config.nodes[target_name]['inputs'][edge['target_var']]['sources'].append(
                     (source_name, target_name, edge_name))
-                net_config.nodes[target_name]['inputs'][edge['target_var']]['delay'].append(np.max(edge['delay']))
-
-            # clean up edge
-            ###############
-
-            for key in ['edge_idx', 'source_idx', 'target_idx']:
-                if key in edge.keys():
-                    edge.pop(key)
+                max_delay = np.max(edge['delay'])
+                if max_delay:
+                    if not net_config.nodes[target_name]['inputs'][edge['target_var']]['delay'] \
+                            or max_delay > net_config.nodes[target_name]['inputs'][edge['target_var']]['delay']:
+                        net_config.nodes[target_name]['inputs'][edge['target_var']]['delay'] = max_delay
 
         # 2. go through nodes and create mapping for their inputs
         for node_name, node in net_config.nodes.items():
@@ -1144,54 +1069,62 @@ class Network(MultiDiGraph):
                 target_shape = node['operator_args'][in_var]['shape']
                 n_inputs = len(input_info['sources'])
 
+                max_delay = input_info['delay']
+
                 # loop over different input sources
                 for j in range(n_inputs):
 
                     # handle delays
                     ###############
 
-                    max_delay = input_info['delay'][j]
-
                     if max_delay:
 
                         # create buffer equations
                         if len(target_shape) == 1:
-                            eqs = [f"{var_name} = {var_name}_buffer_{j}[0]",
-                                   f"{var_name}_buffer_{j}_tmp = {var_name}_buffer_{j}[1:]",
-                                   f"{var_name}_buffer_{j}[0:-1] = {var_name}_buffer_{j}_tmp",
-                                   f"{var_name}_buffer_{j}[-1] = 0."]
+                            eqs_op_read = [f"{var_name} = {var_name}_buffer_{j}[0]"]
+                            eqs_op_rotate = [f"{var_name}_buffer_{j}_tmp = {var_name}_buffer_{j}[1:]",
+                                             f"{var_name}_buffer_{j}[0:-1] = {var_name}_buffer_{j}_tmp",
+                                             f"{var_name}_buffer_{j}[-1] = 0."]
                         else:
-                            eqs = [f"{var_name} = {var_name}_buffer_{j}[:, 0]",
-                                   f"{var_name}_buffer_{j}_tmp = {var_name}_buffer_{j}[:,1:]",
-                                   f"{var_name}_buffer_{j}[:,0:-1] = {var_name}_buffer_{j}_tmp",
-                                   f"{var_name}_buffer_{j}[:,-1] = 0."]
+                            eqs_op_read = [f"{var_name} = {var_name}_buffer_{j}[:, 0]"]
+                            eqs_op_rotate = [f"{var_name}_buffer_{j}_tmp = {var_name}_buffer_{j}[:, 1:]",
+                                             f"{var_name}_buffer_{j}[:, 0:-1] = {var_name}_buffer_{j}_tmp",
+                                             f"{var_name}_buffer_{j}[:, -1] = 0."]
 
-                        # add buffer operator to node
-                        node['operators'][f'{var_name}_buffering_{j}'] = {
-                            'equations': eqs,
+                        # add buffer operators to node
+                        node['operators'][f'{op_name}_{var_name}_rotate_buffer_{j}'] = {
+                            'equations': eqs_op_rotate,
                             'inputs': {},
+                            'output': f'{var_name}_buffer_{j}'}
+                        node['operators'][f'{op_name}_{var_name}_read_buffer_{j}'] = {
+                            'equations': eqs_op_read,
+                            'inputs': {f'{var_name}_buffer_{j}':
+                                           {'sources': [f'{op_name}_{var_name}_rotate_buffer_{j}'],
+                                            'reduce_dim': False}},
                             'output': var_name}
-                        node['operator_order'] = [f'{var_name}_buffering_{j}'] + node['operator_order']
+                        node['operator_order'] = [f'{op_name}_{var_name}_rotate_buffer_{j}'] + \
+                                                 [f'{op_name}_{var_name}_read_buffer_{j}'] + node['operator_order']
 
                         # add buffer variable to node arguments
-                        node['operator_args'][f'{var_name}_buffering_{j}/{var_name}_buffer_{j}'] = {
+                        node['operator_args'][f'{op_name}_{var_name}_rotate_buffer_{j}/{var_name}_buffer_{j}'] = {
                             'vtype': 'state_var',
                             'dtype': 'float32',
-                            'shape': target_shape + (max_delay, ),
+                            'shape': [target_shape[0] if len(target_shape) > 0 else 1, max_delay + 1],
                             'value': 0.
-                            }
+                        }
 
                         # handle operator dependencies
                         if var_name in node['operators'][op_name]['inputs'].keys():
                             node['operators'][op_name]['inputs'][var_name]['sources'].append(
-                                f'{var_name}_buffering_{j}')
+                                f'{op_name}_{var_name}_read_buffer_{j}')
                         else:
-                            node['operators'][op_name]['inputs'][var_name] = {'sources': [f'{var_name}_buffering_{j}'],
+                            node['operators'][op_name]['inputs'][var_name] = {'sources':
+                                                                              [f'{op_name}_{var_name}_read_buffer_{j}'],
                                                                               'reduce_dim': True}
 
                         # update edge information
                         edge = net_config.edges[input_info['sources'][j]]
-                        edge['target_var'] = f'{var_name}_buffering_{j}/{var_name}_buffer_{j}'
+                        edge['target_var'] = f'{op_name}_{var_name}_rotate_buffer_{j}/{var_name}_buffer_{j}'
 
                     # handle multiple projections to same variable
                     elif n_inputs > 1:
@@ -1238,16 +1171,17 @@ class Network(MultiDiGraph):
 
         Parameters
         ----------
+        nodes
+            Names of the nodes to be combined.
         new_net_config
             Networkx MultiDiGraph with nodes and edges as defined in init.
         old_net_config
             Networkx MultiDiGraph with nodes and edges as defined in init.
-        nodes
-            Names of the nodes to be combined.
 
         Returns
         -------
         MultiDiGraph
+            Updated new net configuration.
 
         """
 
@@ -1375,14 +1309,20 @@ class Network(MultiDiGraph):
         Parameters
         ----------
         edges
+            Identifiers of the edges that should be vectorized/added to new net config.
         source
+            Name of the source node
         target
+            Name of the target node
         new_net_config
+            Networkx MultiDiGraph containing the new, vectorized nodes.
         old_net_config
+            Networkx MultiDiGraph containing the old, non-vectorized network configuration.
 
         Returns
         -------
         MultiDiGraph
+            Updated network graph (with new, vectorized edges added).
 
         """
 
@@ -1395,7 +1335,6 @@ class Network(MultiDiGraph):
 
             weight_col = []
             delay_col = []
-            old_edge_idx = []
             old_svar_idx = []
             old_tvar_idx = []
 
@@ -1407,7 +1346,9 @@ class Network(MultiDiGraph):
                 if 'delay' not in edge_dict.keys():
                     delays = None
                 elif 'int' in str(type(edge_dict['delay'])):
-                    delays = [edge_dict['delay']]
+                    delays = [edge_dict['delay'] + 1]
+                elif'float' in str(type(edge_dict['delay'])):
+                    delays = [int(edge_dict['delay']/self.dt) + 1]
                 elif type(edge_dict['delay']) is np.ndarray:
                     if len(edge_dict['delay'].shape) > 1:
                         raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
@@ -1415,15 +1356,21 @@ class Network(MultiDiGraph):
                                          f" dimensions. Delay of edge between {edge[0]} and {edge[1]} has shape"
                                          f" {edge_dict['delay'].shape}. Please turn of the `vectorize` option or change"
                                          f" the edges' dimensionality.")
+                    if 'float' in edge_dict['delay'].dtype:
+                        edge_dict['delay'] = np.ndarray(edge_dict['delay'] / self.dt + 1, dtype=np.int32)
                     delays = list(edge_dict['delay'])
+                elif edge_dict['delay']:
+                    delays = [int(d/self.dt) + 1 if 'float' in str(type(d)) else d + 1 for d in edge_dict['delay']]
                 else:
-                    delays = edge_dict['delay']
+                    delays = None
 
                 # check weight of edge
                 if 'weight' not in edge_dict.keys():
                     weights = None
                 elif 'float' in str(type(edge_dict['weight'])):
                     weights = [edge_dict['weight']]
+                elif 'int' in str(type(edge_dict['weight'])):
+                    weights = [float(edge_dict['weight'])]
                 elif type(edge_dict['weight']) is np.ndarray:
                     if len(edge_dict['weight'].shape) > 1:
                         raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
@@ -1438,18 +1385,6 @@ class Network(MultiDiGraph):
                 # match dimensionality of delay and weight
                 if not delays or not weights:
                     pass
-                elif 'int' in str(type(delays)):
-                    try:
-                        delays = [delays] * len(weights)
-                    except TypeError:
-                        delays = [delays]
-                        weights = [weights]
-                elif 'float' in str(type(weights)) or 'int' in str(type(weights)):
-                    try:
-                        weights = [weights] * len(delays)
-                    except TypeError:
-                        delays = [delays]
-                        weights = [weights]
                 elif len(delays) > 1 and len(weights) == 1:
                     weights = weights * len(delays)
                 elif len(weights) > 1 and len(delays) == 1:
@@ -1461,13 +1396,10 @@ class Network(MultiDiGraph):
                                      f" edge's attributes.")
 
                 # add weight, delay and variable indices to collector lists
-                if weights:
-                    old_edge_idx.append((len(weight_col), len(weight_col) + len(weights)))
-                    weight_col += weights
-                else:
-                    old_edge_idx.append((old_edge_idx[-1][1], old_edge_idx[-1][1] + 1))
                 if delays:
                     delay_col += delays
+                if weights:
+                    weight_col += weights
                 if 'source_idx' in edge_dict.keys():
                     _, _, idx = self._node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']]
                     if type(idx) is tuple:
@@ -1479,10 +1411,14 @@ class Network(MultiDiGraph):
                             else:
                                 idx_new.append(idx[i])
                     else:
-                        idx_new = idx
+                        idx_new = [idx]
                     old_svar_idx.append(idx_new)
                 else:
                     _, _, idx_new = self._node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']]
+                    if type(idx_new) is int:
+                        idx_new = [idx_new]
+                    else:
+                        idx_new = list(idx_new)
                     old_svar_idx.append(idx_new)
                 if 'target_idx' in edge_dict.keys():
                     _, _, idx = self._node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']]
@@ -1495,10 +1431,14 @@ class Network(MultiDiGraph):
                             else:
                                 idx_new.append(idx[i])
                     else:
-                        idx_new = idx
+                        idx_new = [idx]
                     old_tvar_idx.append(idx_new)
                 else:
                     _, _, idx_new = self._node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']]
+                    if type(idx_new) is int:
+                        idx_new = [idx_new]
+                    else:
+                        idx_new = list(idx_new)
                     old_tvar_idx.append(idx_new)
 
             # create new, vectorized edge
@@ -1511,7 +1451,6 @@ class Network(MultiDiGraph):
             # change delay and weight attributes
             new_edge['delay'] = delay_col if delay_col else None
             new_edge['weight'] = weight_col if weight_col else None
-            new_edge['edge_idx'] = old_edge_idx
             new_edge['source_idx'] = old_svar_idx
             new_edge['target_idx'] = old_tvar_idx
 
@@ -1584,7 +1523,9 @@ class Network(MultiDiGraph):
                                 old_idx = len(arg['value'])
                                 arg['value'].append(new_val)
 
-                                self._node_arg_map[node_name_tmp][key] = [self.key, key, (old_idx, arg['value'].shape[0])]
+                                self._node_arg_map[node_name_tmp][key] = [self.key,
+                                                                          key,
+                                                                          (old_idx, arg['value'].shape[0])]
 
                 else:
 
@@ -1688,10 +1629,13 @@ class Network(MultiDiGraph):
                     except ValueError:
                         return var.assign_add(self.dt * tf.squeeze(val))
             else:
-                try:
-                    return var.assign(val)
-                except ValueError:
+                if hasattr(var, 'shape') and not hasattr(val, 'shape'):
+                    return var.assign(tf.zeros(var.shape) + val)
+                else:
                     try:
-                        return var[:, 0].assign(val)
+                        return var.assign(val)
                     except ValueError:
-                        return var.assign(tf.squeeze(val))
+                        try:
+                            return var[:, 0].assign(val)
+                        except ValueError:
+                            return var.assign(tf.squeeze(val))

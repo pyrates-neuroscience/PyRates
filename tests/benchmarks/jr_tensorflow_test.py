@@ -16,7 +16,7 @@ from pyrates.utility import mne_from_dataframe
 # parameter definition
 ######################
 
-np.random.seed(1)
+#np.random.seed(1)
 
 # general
 step_size = 1e-3
@@ -25,15 +25,14 @@ n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
 sparseness_e = 0.1
-sparseness_i = sparseness_e * 1.0
+sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
 n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter_e = 0. / (n_jrcs * sparseness_e / 0.01)
-c_inter_i = 0. / (n_jrcs * sparseness_e / 0.01)
+c_inter = 20.
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -53,23 +52,31 @@ for _ in range(n_jrcs):
 C_e = np.zeros((n_nodes, n_nodes))
 C_i = np.zeros((n_nodes, n_nodes))
 
+# inter-circuit connectivity
 for i in range(n_jrcs):
-    # intra-circuit connectivity
+    for j in range(n_jrcs - 1):
+        if i != j:
+            weight_e = np.random.uniform()
+            if weight_e > (1 - sparseness_e):
+                C_e[i * 3, j * 3] = np.random.uniform()
+            weight_i = np.random.uniform()
+            if weight_i > (1 - sparseness_i):
+                C_e[i * 3 + 2, j * 3] = np.random.uniform()
+
+for i in range(n_nodes):
+    ce_sum = np.sum(C_e[i, :])
+    if ce_sum > 0:
+        C_e[i, :] /= ce_sum
+C_e *= c_inter
+
+# intra-circuit connectivity
+for i in range(n_jrcs):
     C_e[i * 3:(i + 1) * 3, i * 3:(i + 1) * 3] = np.array([[0., 0.8 * c_intra, 0.],
                                                           [1.0 * c_intra, 0., 0.],
                                                           [0.25 * c_intra, 0., 0.]])
     C_i[i * 3:(i + 1) * 3, i * 3:(i + 1) * 3] = np.array([[0., 0., 0.25 * c_intra],
                                                           [0., 0., 0.],
                                                           [0., 0., 0.]])
-    # inter-circuit connectivity
-    for j in range(n_jrcs - 1):
-        if i != j:
-            weight_e = np.random.uniform()
-            if weight_e > (1 - sparseness_e):
-                C_e[i * 3, j * 3] = np.random.uniform() * c_inter_e
-            weight_i = np.random.uniform()
-            if weight_i > (1 - sparseness_i):
-                C_i[i * 3, j * 3 + 2] = np.random.uniform() * c_inter_i
 
 # define network dictionary
 ###########################
@@ -326,7 +333,10 @@ for a in range(0, n_nodes):
 
             edge['source_var'] = 'operator_ptr/m_out'
             edge['weight'] = c
-            edge['delay'] = 0
+            if int(a/3) == int(b/3):
+                edge['delay'] = 0e-3
+            else:
+                edge['delay'] = 2e-3
 
             s = source.split('/')[0]
             t = target.split('/')[0]
@@ -343,18 +353,19 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 ####################
 
 results, ActTime = net.run(simulation_time=simulation_time,
-                           outputs={'V': ('all', 'operator_ptr', 'psp')},
+                           outputs={'V': ('pc', 'operator_ptr', 'psp')},
                            sampling_step_size=1e-3,
                            inputs={('pc', 'operator_rtp_syn_e', 'u'): inp},
-                           out_dir='/tmp/log/'
+                           #out_dir='/tmp/log/'
                            )
 
 # results
 #########
 
-from pyrates.utility import plot_timeseries, plot_graph
+from pyrates.utility import plot_timeseries, write_graph, plot_fc
 #mne_obj = mne_from_dataframe(sim_results=results)
 plot_timeseries(data=results, variable='psp[V]', ci=None)
-#plot_graph(graph, out_file='test.png')
+plot_fc(data=results, metric='cov') #, fmin=7., fmax=11., mt_bandwidth=4.)
+#write_graph(graph, out_file='test.png')
 #results.plot()
 show()

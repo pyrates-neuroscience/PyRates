@@ -207,7 +207,7 @@ class ExpressionParser(ParserElement):
             # apply indexing to atoms
             indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
             index_base = (self.expr.suppress() | index_comb)
-            index_full = index_base + ZeroOrMore((index_comb + index_base))
+            index_full = index_base + ZeroOrMore((index_comb + index_base)) + ZeroOrMore(index_comb)
             index_multiples << index_full + ZeroOrMore((arg_comb + index_full))
 
             # hierarchical relationships between mathematical and logical operations
@@ -348,6 +348,10 @@ class ExpressionParser(ParserElement):
             elif hasattr(op1, 'dense_shape') and hasattr(op2, 'shape'):
                 if len(op2.shape) == 1:
                     op2 = self.funcs['reshape'](op2, list(op2.shape) + [1])
+            elif hasattr(op1, 'shape'):
+                op2 = self.funcs['zeros'](op1.shape) + op2
+            elif hasattr(op2, 'shape'):
+                op1 = self.funcs['zeros'](op2.shape) + op1
 
             # combine elements via mathematical/boolean operator
             try:
@@ -417,7 +421,8 @@ class ExpressionParser(ParserElement):
 
                         # perform variable update for indexed variable
                         update = self.args.pop('rhs')['var']
-                        self._op_tmp = eval(f"self.funcs['scatter_update'](op_to_idx, {idx}, update)")
+                        self._op_tmp = eval(f"self.funcs['scatter_update'](op_to_idx, self.funcs['squeeze']({idx}), "
+                                            f"self.funcs['squeeze'](update))")
 
                 else:
 
