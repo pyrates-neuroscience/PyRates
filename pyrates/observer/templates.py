@@ -227,6 +227,7 @@ class fMRIObserver(ExternalObserver):
             Resulting BOLD signal at each voxel of interest.
 
         """
+
         if not k1:
             k1 = 7*self.p
         if not k3:

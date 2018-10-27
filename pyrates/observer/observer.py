@@ -6,6 +6,7 @@ to transform these observations into a specified external observation modality (
 """
 
 # external packages
+import tensorflow as tf
 import numpy as np
 from typing import Optional, List
 from pandas import DataFrame
@@ -38,25 +39,25 @@ class CircuitObserver(object):
     """
 
     def __init__(self,
-                 circuit: object,
+                 network: object,
                  sampling_step_size: Optional[float] = None,
-                 target_populations: Optional[List[str]] = None,
+                 target_nodes: Optional[List[str]] = None,
                  target_states: Optional[List[str]] = None
                  ) -> None:
         """Instantiates base circuit observer.
         """
 
-        self.sampling_step_size = sampling_step_size if sampling_step_size else circuit.step_size
-        if not target_populations:
-            self.population_labels = [pop for pop in circuit.populations.keys() if 'dummy' not in pop]
+        self.sampling_step_size = sampling_step_size if sampling_step_size else network.dt
+        if not target_nodes:
+            self.node_labels = [pop for pop in network.nodes.keys() if 'dummy' not in pop]
         else:
-            self.population_labels = target_populations
+            self.node_labels = target_nodes
         if not target_states:
-            self.target_states = ['membrane_potential']
+            self.target_states = ['V']
         else:
             self.target_states = target_states
 
-        self.states = [[[] for _ in self.population_labels] for __ in self.target_states]
+        self.states = [[[] for _ in self.node_labels] for __ in self.target_states]
 
         self.precision = int(np.log10(1 / self.sampling_step_size)) + 2
         self.time = list()

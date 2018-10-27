@@ -1,0 +1,36 @@
+%YAML 1.2
+---
+
+CouplingOperator:
+  description: >
+    Base template for a coupling operator that transforms outgoing firing rate of the pre-synaptic
+    neural mass to incoming firing rate at the post-synaptic neural mass.
+  base: OperatorTemplate
+  equation: "L_CO * m_in = c * m_out"
+  variables:
+    L_CO:
+      description: Linear differential operator
+      default: 1
+      unit: null
+    m_in:
+      description: Mean incoming firing rate at pre-synaptic terminal
+      unit: 1/s
+      default: output
+    c:
+      description:
+        Connectivity constant that reflects connection strength
+        from one neural population on another.
+      unit: null
+      default: 1
+    m_out:
+      description: Mean outgoing firing rate at axonal hillock of pre-synaptic neuron.
+      unit: 1/s
+      default: input
+
+
+BaseEdge:
+  description: Basic template for an edge.
+  base: EdgeTemplate
+  operators:
+    CouplingOperator:
+      defaults: null

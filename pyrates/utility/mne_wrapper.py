@@ -6,9 +6,9 @@ objects.
 import mne
 import numpy as np
 from typing import Union, Optional, List
+from pandas import DataFrame
 
 # pyrates internal imports
-from pyrates.observer import CircuitObserver, EEGMEGObserver
 
 # meta infos
 __author__ = 'Richard Gast'
@@ -20,31 +20,26 @@ __status__ = 'Development'
 ############################################################
 
 
-def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
-                      ch_types: Union[str, List[str]] = 'eeg',
-                      ch_names: Optional[Union[str, List[str]]] = None,
-                      target_variable: str = 'membrane_potential',
-                      events: Optional[np.ndarray] = None,
-                      event_keys: Optional[List[str]] = None,
-                      epoch_start: Optional[float] = None,
-                      epoch_end: Optional[float] = None,
-                      epoch_duration: Optional[float] = None,
-                      epoch_averaging: bool = False,
-                      ) -> Union[mne.io.Raw, mne.Epochs, mne.Evoked]:
+def mne_from_dataframe(sim_results: DataFrame,
+                       ch_types: Union[str, List[str]] = 'eeg',
+                       ch_names: Optional[Union[str, List[str]]] = None,
+                       events: Optional[np.ndarray] = None,
+                       event_keys: Optional[List[str]] = None,
+                       epoch_start: Optional[float] = None,
+                       epoch_end: Optional[float] = None,
+                       epoch_duration: Optional[float] = None,
+                       epoch_averaging: bool = False,
+                       ) -> Union[mne.io.Raw, mne.Epochs, mne.Evoked]:
     """Uses the data stored on a circuit to create a raw/epoch/evoked mne object.
 
     Parameters
     ----------
-    observer
-        Instance of an :class:`CircuitObserver` (found on every :class:`Circuit` instance on which `run()` was called)
-        or an :class:`EEGMEGObserver` (needs to be instantiated from an internal observer).
+    sim_results
+        Pandas dataframe in which circuit simulation results are stored (output of circuit's `run` function).
     ch_types
         Type of the channels, the observation time-series of the observers refer to.
     ch_names
         Name of each channel/observation time-series.
-    target_variable
-        State variable that is to be extracted from the observer. Only needed, if the observer is a
-        :class:'CircuitObserver'.
     events
         2D array defining events during the simulation. For a more detailed documentation, see the docstring for
         parameter `events` of :class:`mne.Epochs`.
@@ -75,18 +70,11 @@ def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
     # extract information from arguments
     ####################################
 
-    # circuit information
-    if type(observer) is CircuitObserver:
-        states = np.array(observer.states)
-        states = states[observer.target_states.index(target_variable), :, :].squeeze()
-    else:
-        states = observer.observe(store_observations=False).values.T
-
-    sfreq = 1/observer.sampling_step_size
+    dt = sim_results.index[1] - sim_results.index[0]
 
     # channel information
     if not ch_names:
-        ch_names = observer.population_labels
+        ch_names = list(sim_results.keys())
     if type(ch_types) is str:
         ch_types = [ch_types for _ in range(len(ch_names))]
 
@@ -94,16 +82,16 @@ def mne_from_observer(observer: Union[CircuitObserver, EEGMEGObserver],
     if not epoch_start:
         epoch_start = -0.2 if not epoch_duration else 0.
     if not epoch_end:
-        epoch_end = 0.5 if not epoch_duration else epoch_duration - 1/sfreq
+        epoch_end = 0.5 if not epoch_duration else epoch_duration - 1/dt
 
     # create raw mne object
     #######################
 
     # create mne info object
-    info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=sfreq)
+    info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=1/dt)
 
     # create raw object from info and circuit data
-    raw = mne.io.RawArray(data=states, info=info)
+    raw = mne.io.RawArray(data=sim_results[ch_names].values.T, info=info)
 
     # create final mne object
     #########################

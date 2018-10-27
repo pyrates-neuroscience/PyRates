@@ -104,6 +104,12 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# pytest
+.pytest_cache/
+
+# VS Code
+.vscode/
+
 
 ######################
 ### PyCharm files ####
@@ -118,3 +124,4 @@ venv.bak/
 #############################
 
 type_info.json
+
