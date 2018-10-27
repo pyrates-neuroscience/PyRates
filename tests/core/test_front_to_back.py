@@ -30,7 +30,7 @@ def test_simple_example():
 
     # Step 4: Create tensorflow graph
     from pyrates.network import Network
-    net = Network(net_def, dt=5e-4, vectorize='nodes')
+    net = Network(net_def, dt=5e-4, vectorize='none')
 
     # Step 5: Run simulation
     results, _ = net.run(simulation_time=1.,

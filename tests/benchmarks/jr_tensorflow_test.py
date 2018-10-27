@@ -20,15 +20,15 @@ from pyrates.utility import mne_from_dataframe
 
 # general
 step_size = 1e-3
-simulation_time = 1.0
+simulation_time = 10.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
-sparseness_e = 0.1
+sparseness_e = 0.05
 sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 20
 
 # connectivity parameters
 c_intra = 135.
@@ -334,9 +334,9 @@ for a in range(0, n_nodes):
             edge['source_var'] = 'operator_ptr/m_out'
             edge['weight'] = c
             if int(a/3) == int(b/3):
-                edge['delay'] = 0e-3
+                edge['delay'] = 0.
             else:
-                edge['delay'] = 2e-3
+                edge['delay'] = np.random.uniform(0., 6e-3)
 
             s = source.split('/')[0]
             t = target.split('/')[0]
@@ -365,7 +365,8 @@ results, ActTime = net.run(simulation_time=simulation_time,
 from pyrates.utility import plot_timeseries, write_graph, plot_fc
 #mne_obj = mne_from_dataframe(sim_results=results)
 plot_timeseries(data=results, variable='psp[V]', ci=None)
-plot_fc(data=results, metric='cov') #, fmin=7., fmax=11., mt_bandwidth=4.)
+plot_fc(data=results, metric='imcoh', plot_style='circular_graph', threshold=0.5, fmin=6., fmax=10., faverage=True,
+        mt_bandwidth=4.)
 #write_graph(graph, out_file='test.png')
 #results.plot()
 show()
