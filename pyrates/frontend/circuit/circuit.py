@@ -16,6 +16,7 @@ from pyrates.frontend.abc import AbstractBaseTemplate, AbstractBaseIR
 from pyrates.frontend.edge import EdgeTemplate, EdgeIR
 from pyrates.frontend.node import NodeTemplate
 from pyrates import PyRatesException
+from pyrates.frontend.operator import OperatorIR
 from pyrates.frontend.yaml_parser import TemplateLoader
 
 # from pyrates.frontend.operator import OperatorTemplate
@@ -190,8 +191,12 @@ class CircuitIR(AbstractBaseIR):
         # separate source and target specifiers
         *source_path, source_op, source_var = source.split("/")
         *target_path, target_op, target_var = target.split("/")
+        # re-reference node labels, if necessary
         source_node = label_map[source_path[-1]]
         target_node = label_map[target_path[-1]]
+        # re_reference operator labels, if necessary
+        source_op = self._rename_operator(source_node, source_op)
+        target_op = self._rename_operator(target_node, target_op)
 
         # ignore circuits for now:
         source_path = "/".join((source_node, source_op, source_var))
@@ -206,6 +211,39 @@ class CircuitIR(AbstractBaseIR):
         source = (source_node, source_op, source_var)
         target = (target_node, target_op, target_var)
         return source, target
+
+    def _rename_operator(self, node_label: str, op_label: str) -> str:
+        """
+        References to operators in source/target references may mismatch actual operator labels, due to internal renaming
+        that can not be accounted for in the YAML templates. This method looks for the first instance of an operator in
+        a specific node, assuming it exists at all. Additionally, this assumes, that only one variation of an operator
+        template (of same name) can exist in any single node.
+        Parameters
+        ----------
+        node_label
+        op_label
+
+        Returns
+        -------
+        new_op_label
+
+        """
+
+        key_counter = OperatorIR.key_counter
+        if op_label in key_counter:
+            for i in range(key_counter[op_label]):
+                new_op_label = f"{op_label}.{i+1}"
+                try:
+                    self[node_label][new_op_label]
+                except KeyError:
+                    continue
+            else:
+                raise PyRatesException(f"Could not identify operator with template name {op_label} "
+                                       f"in node {node_label}.")
+        else:
+            new_op_label = f"{op_label}.0"
+
+        return new_op_label
 
     def _getter(self, key):
         return self.graph.nodes[key]["node"]
@@ -363,6 +401,7 @@ class CircuitTemplateLoader(TemplateLoader):
 
 
 class BackendIRFormatter:
+    label_counter = {}  # type: Dict[str, int]
 
     @classmethod
     def network_def(cls, circuit: CircuitIR):
@@ -389,34 +428,10 @@ class BackendIRFormatter:
         # reorganize edge to conform with backend API
         #############################################
         for source, target, data in circuit.graph.edges(data=True):
-            edge = data["edge_ir"]
-            # reformat all edge internals into operators + operator_args
-            op_data = cls._nd_reformat_operators(edge.op_graph)
-            op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
+            # move edge operators to node
+            node_dict[target], edge = cls._move_edge_ops_to_node(target, node_dict[target], data)
 
-            # move edge operators to nodes
-            # using dictionary update method, assuming no conflicts in operator names
-            # this fails, if multiple edges on one source node use the same coupling operator
-            # todo: implement conflict management for multiple edges with same operators per source node
-            node_dict[source]["operators"].update(op_data["operators"])
-            node_dict[source]["operator_args"].update(op_data["operator_args"])
-
-            for op in op_order:
-                if op not in node_dict[source]["operator_order"]:
-                    # noinspection PyUnresolvedReferences
-                    node_dict[source]["operator_order"].append(op)
-
-            # simplify edges and save into edge_list
-            # find single output operator to save new reference to source variable after reformatting
-            op_graph = edge.op_graph
-            out_op = [op for op, out_degree in op_graph.out_degree if out_degree == 0]
-            out_var = edge[out_op[0]].output
-            source_var = f"{out_op[0]}/{out_var}"
-
-            edge_list.append((source, target, {"source_var": source_var,
-                                               "target_var": data["target_var"],
-                                               "weight": data["weight"],
-                                               "delay": data["delay"]}))
+            edge_list.append((source, target, dict(**edge)))
 
         # network_def.add_nodes_from(node_dict)
         for key, node in node_dict.items():
@@ -488,3 +503,97 @@ class BackendIRFormatter:
             graph.remove_nodes_from(primary_nodes)
 
         return op_order
+
+    @classmethod
+    def _move_edge_ops_to_node(cls, target, node_dict: dict, edge_dict: dict) -> (dict, dict):
+        """
+
+        Parameters
+        ----------
+        target
+            Key identifying target node in network graph
+        node_dict
+            Dictionary of target node (to move operators into)
+        edge_dict
+            Dictionary with edge properties (to move operators from)
+        Returns
+        -------
+        node_dict
+            Updated dictionary of target node
+        edge_dict
+             Dictionary of reformatted edge
+        """
+        # grab all edge variables
+        edge = edge_dict["edge_ir"]  # type: EdgeIR
+        source_var = edge_dict["source_var"]
+        target_var = edge_dict["target_var"]
+        weight = edge_dict["weight"]
+        delay = edge_dict["delay"]
+        input_var = edge.input
+        output_var = edge.output
+
+        # reformat all edge internals into operators + operator_args
+        op_data = cls._nd_reformat_operators(edge.op_graph)  # type: dict
+        op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
+        operators = op_data["operators"]
+        operator_args = op_data["operator_args"]
+
+        # operator keys refer to a unique combination of template names and changed values
+
+        # add operators to target node in reverse order, so they can be safely prepended
+        added_ops = False
+        for op_name in reversed(op_order):
+            # check if operator name is already known in target node
+            if op_name in node_dict["operators"]:
+                pass
+            else:
+                added_ops = True
+                # this should all go smoothly, because operator should not be known yet
+                # add operator dict to target node operators
+                node_dict["operators"][op_name] = operators[op_name]
+                # prepend operator to op_order
+                node_dict["operator_order"].insert(0, op_name)
+                # ToDo: consider using collections.deque instead
+                # add operator args to target node
+                node_dict["operator_args"].update(operator_args)
+
+        out_op = op_order[-1]
+        out_var = operators[out_op]['output']
+        out_var_long = f"{out_op}/{out_var}"
+        if added_ops:
+            # append operator output to target operator sources
+            # assume that only last operator in edge operator_order gives the output
+            # for op_name in node_dict["operators"]:
+            #     if out_var in node_dict["operators"][op_name]["inputs"]:
+            #         if out_var_long not in node_dict["operators"][op_name]["inputs"][out_var]:
+            #             # add reference to source operator that was previously in an edge
+            #             node_dict["operators"][op_name]["inputs"][out_var].append(out_var_long)
+
+            # shortcut, since target_var and output_var are known:
+            target_op, target_vname = target_var.split("/")
+            if output_var not in node_dict["operators"][target_op]["inputs"][target_vname]["source"]:
+                node_dict["operators"][target_op]["inputs"][target_vname]["source"].append(output_var)
+
+        # simplify edges and save into edge_list
+        # op_graph = edge.op_graph
+        # in_ops = [op for op, in_degree in op_graph.in_degree if in_degree == 0]
+        # if len(in_ops) == 1:
+        #     # simple case: only one input operator? then it's the first in the operator order.
+        #     target_op = op_order[0]
+        #     target_inputs = operators[target_op]["inputs"]
+        #     if len(target_var) != 1:
+        #         raise PyRatesException("Either too many or too few input variables detected. "
+        #                                "Needs to be exactly one.")
+        #     target_var = list(target_inputs.keys())[0]
+        #     target_var = f"{target_op}/{target_var}"
+        # else:
+        #     raise NotImplementedError("Transforming an edge with multiple input operators is not yet handled.")
+
+        # shortcut to new target war:
+        target_var = input_var
+        edge_dict = {"source_var": source_var,
+                     "target_var": target_var,
+                     "weight": weight,
+                     "delay": delay}
+        # set target_var to singular input of last operator added
+        return node_dict, edge_dict
