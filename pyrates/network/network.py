@@ -676,6 +676,16 @@ class Network(MultiDiGraph):
 
         """
 
+        # check data type of delay
+        ##########################
+
+        if delay:
+            if type(delay) is list:
+                if 'float' in str(type(delay[0])):
+                    delay = [int(d/self.dt) + 1 for d in delay]
+            if 'float' in str(type(delay)):
+                delay = int(delay/self.dt) + 1
+
         # add projection operation of edge to tensorflow graph
         ######################################################
 
@@ -689,9 +699,9 @@ class Network(MultiDiGraph):
 
                 # create edge operator arguments
                 source, target = self.nodes[source_node], self.nodes[target_node]
-                c = tf.constant(weight, name='c')
                 svar = source[source_var]
                 tvar = target[target_var]
+                c = tf.constant(weight, name='c', dtype=svar.dtype)
 
                 # add operator to tensorflow graph
                 ##################################
@@ -700,23 +710,23 @@ class Network(MultiDiGraph):
 
                     # apply edge weights to source variable
                     if not source_idx:
-                        updates = svar
+                        source_val = svar
                     else:
                         try:
-                            updates = tf.gather_nd(svar, source_idx)
+                            source_val = tf.gather_nd(svar, source_idx)
                         except ValueError:
                             try:
-                                updates = tf.gather_nd(svar[:, 0], source_idx)
+                                source_val = tf.gather_nd(svar[:, 0], source_idx)
                             except ValueError:
-                                updates = tf.gather_nd(tf.squeeze(svar), source_idx)
-                    if updates.shape == c.shape:
-                        updates = updates * c
-                    elif len(c.shape) < len(updates.shape):
-                        updates = updates * tf.reshape(c, [c.shape[0], updates.shape[1]])
-                    elif len(updates.shape) < len(c.shape):
-                        updates = updates * tf.squeeze(c)
+                                source_val = tf.gather_nd(tf.squeeze(svar), source_idx)
+                    if source_val.shape == c.shape:
+                        edge_val = source_val * c
+                    elif len(c.shape) > 0 and (len(c.shape) < len(source_val.shape)):
+                        edge_val = source_val * tf.reshape(c, [c.shape[0], source_val.shape[1]])
+                    elif len(source_val.shape) > 0 and (len(source_val.shape) < len(c.shape)):
+                        edge_val = source_val * tf.squeeze(c)
                     else:
-                        updates = updates * c
+                        edge_val = source_val * c
 
                     # apply update to target variable
                     if delay and target_idx:
@@ -724,38 +734,45 @@ class Network(MultiDiGraph):
                         # apply update with delay to indices in buffer
                         target_idx = [idx + [d] for idx, d in zip(target_idx, delay)]
                         try:
-                            tf_op = tf.scatter_nd_add(tvar, target_idx, updates)
+                            tf_op = tf.scatter_nd_add(tvar, target_idx, edge_val)
                         except ValueError:
-                            tf_op = tf.scatter_nd_add(tvar, target_idx, tf.squeeze(updates))
+                            try:
+                                tf_op = tf.scatter_nd_add(tvar, target_idx, tf.squeeze(edge_val))
+                            except ValueError:
+                                tf_op = tf.scatter_nd_add(tvar, target_idx, edge_val[:, 0])
 
-                    elif not target_idx and not delay:
+                    elif not target_idx and delay is None:
 
                         # apply update directly to target variable
-                        tf_op_pre = tvar.assign(np.zeros(tvar.shape))
-                        tf_op = self._assign_to_var(tvar, updates, add=True, dependencies=[tf_op_pre])
+                        tf_op = self._assign_to_var(tvar, edge_val, add=False, solve=False)
 
                     else:
 
                         # apply update via target or delay indices
                         if not target_idx:
-                            target_idx = [d for d in delay] if type(delay) is list else [delay]
+                            if type(delay) is list:
+                                target_idx = [d for d in delay]
+                            elif 'float' in str(type(delay)):
+                                target_idx = [int(delay/self.dt) + 1]
+                            else:
+                                target_idx = [delay]
                         else:
                             target_idx = [idx[0] if type(idx) is list else idx for idx in target_idx]
-                        tf_op_pre = tvar.assign(np.zeros(tvar.shape))
-                        with tf.control_dependencies([tf_op_pre]):
+                        if not delay:
+                            tvar = tvar.assign(np.zeros(tvar.shape), use_locking=True)
+                        try:
+                            tf_op = tf.scatter_add(tvar, target_idx, edge_val)
+                        except ValueError:
                             try:
-                                tf_op = tf.scatter_add(tvar, target_idx, updates)
-                            except ValueError:
+                                tf_op = tf.scatter_add(tvar[:, 0], target_idx, edge_val)
+                            except (ValueError, AttributeError):
                                 try:
-                                    tf_op = tf.scatter_add(tvar[:, 0], target_idx, updates)
-                                except (ValueError, AttributeError):
-                                    try:
-                                        tf_op = tf.scatter_add(tvar, target_idx, tf.squeeze(updates))
-                                    except ValueError:
-                                        tf_op = tf.scatter_add(tvar,
-                                                               target_idx,
-                                                               tf.reshape(updates, [updates.shape[0], tvar.shape[1]])
-                                                               )
+                                    tf_op = tf.scatter_add(tvar, target_idx, tf.squeeze(edge_val))
+                                except ValueError:
+                                    tf_op = tf.scatter_add(tvar,
+                                                           target_idx,
+                                                           tf.reshape(edge_val, [edge_val.shape[0], tvar.shape[1]])
+                                                           )
 
         # add edge to networkx graph
         ############################
@@ -818,7 +835,7 @@ class Network(MultiDiGraph):
                 deps = evals_complete + de_rhs
                 de_complete = []
                 for lhs, rhs in zip(de_lhs, de_rhs):
-                    de_complete.append(self._assign_to_var(lhs, rhs, add=True, dependencies=deps))
+                    de_complete.append(self._assign_to_var(lhs, rhs, add=True, solve=True, dependencies=deps))
 
                 if de_complete:
                     return de_complete, expression_args
@@ -1093,10 +1110,10 @@ class Network(MultiDiGraph):
                     # handle delays
                     ###############
 
-                    if max_delay:
+                    if max_delay is not None:
 
                         # create buffer equations
-                        if len(target_shape) == 1:
+                        if len(target_shape) < 1:
                             eqs_op_read = [f"{var_name} = {var_name}_buffer_{j}[0]"]
                             eqs_op_rotate = [f"{var_name}_buffer_{j}_tmp = {var_name}_buffer_{j}[1:]",
                                              f"{var_name}_buffer_{j}[0:-1] = {var_name}_buffer_{j}_tmp",
@@ -1122,10 +1139,16 @@ class Network(MultiDiGraph):
                                                  [f'{op_name}_{var_name}_read_buffer_{j}'] + node['operator_order']
 
                         # add buffer variable to node arguments
+                        if 'float' in str(type(max_delay)):
+                            max_delay = int(max_delay / self.dt)
+                        if len(target_shape) > 0:
+                            buffer_shape = [target_shape[0], max_delay + 2]
+                        else:
+                            buffer_shape = [ max_delay + 2]
                         node['operator_args'][f'{op_name}_{var_name}_rotate_buffer_{j}/{var_name}_buffer_{j}'] = {
                             'vtype': 'state_var',
                             'dtype': 'float32',
-                            'shape': [target_shape[0] if len(target_shape) > 0 else 1, max_delay + 1],
+                            'shape': buffer_shape,
                             'value': 0.
                         }
 
@@ -1423,12 +1446,14 @@ class Network(MultiDiGraph):
                         idx_new = []
                         for i in edge_dict['source_idx']:
                             if type(i) is tuple:
-                                idx_new.append(idx[i[0]:i[1]])
+                                idx_new.append([idx[i[0]:i[1]]])
+                            elif type(i) is list:
+                                idx_new.append([idx[i[0]]])
                             else:
-                                idx_new.append(idx[i])
+                                idx_new.append([idx[i]])
                     else:
-                        idx_new = [idx]
-                    old_svar_idx.append(idx_new)
+                        idx_new = [[idx]]
+                    old_svar_idx += idx_new
                 else:
                     _, _, idx_new = self._node_arg_map[edge[0]][old_net_config.edges[edge]['source_var']]
                     if type(idx_new) is int:
@@ -1443,12 +1468,14 @@ class Network(MultiDiGraph):
                         idx_new = []
                         for i in edge_dict['target_idx']:
                             if type(i) is tuple:
-                                idx_new.append(idx[i[0]:i[1]])
+                                idx_new.append([idx[i[0]:i[1]]])
+                            elif type(i) is list:
+                                idx_new.append([idx[i[0]]])
                             else:
-                                idx_new.append(idx[i])
+                                idx_new.append([idx[i]])
                     else:
-                        idx_new = [idx]
-                    old_tvar_idx.append(idx_new)
+                        idx_new = [[idx]]
+                    old_tvar_idx += idx_new
                 else:
                     _, _, idx_new = self._node_arg_map[edge[1]][old_net_config.edges[edge]['target_var']]
                     if type(idx_new) is int:
@@ -1610,6 +1637,7 @@ class Network(MultiDiGraph):
                        var: tf.Variable,
                        val: Union[tf.Variable, tf.Operation, tf.Tensor],
                        add: Optional[bool] = False,
+                       solve: Optional[bool] = False,
                        dependencies: Optional[list] = None
                        ) -> Union[tf.Variable, tf.Operation, tf.Tensor]:
         """
@@ -1622,6 +1650,8 @@ class Network(MultiDiGraph):
             New value that should be assigned to variable.
         add
             If true, assign_add will be used instead of assign.
+        solve
+            If true, assign process will be treated as update of a differential equation.
         dependencies
             List of tensorflow operations the assign op should wait for to finish.
 
@@ -1636,14 +1666,19 @@ class Network(MultiDiGraph):
             dependencies = []
 
         with tf.control_dependencies(dependencies):
+
+            # check whether val needs to be solved first
+            if solve:
+                val = self._solve(val)
+
             if add:
                 try:
-                    return var.assign_add(self.dt * val)
+                    return var.assign_add(val)
                 except ValueError:
                     try:
-                        return var[:, 0].assign_add(self.dt * val)
+                        return var[:, 0].assign(var[:, 0] + val)
                     except ValueError:
-                        return var.assign_add(self.dt * tf.squeeze(val))
+                        return var.assign_add(tf.squeeze(val))
             else:
                 if hasattr(var, 'shape') and not hasattr(val, 'shape'):
                     return var.assign(tf.zeros(var.shape) + val)
@@ -1655,3 +1690,9 @@ class Network(MultiDiGraph):
                             return var[:, 0].assign(val)
                         except ValueError:
                             return var.assign(tf.squeeze(val))
+
+    def _solve(self, rhs):
+        """Solves right-hand side of a differential equation.
+        """
+
+        return rhs * self.dt

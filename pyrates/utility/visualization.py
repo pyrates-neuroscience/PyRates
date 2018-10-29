@@ -63,8 +63,8 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
         one of the following synchronization metrics that will be calculated via
         mne.connectivtiy.spectral_connectivity (check out this function for information on its arguments - these can be
         passed via kwargs):
-            - `coh` for absolute coherence
-            - `cohy` for coherence
+            - `coh` for coherence
+            - `cohy` for coherency
             - `imcoh` for imaginary coherence
             - `plv` for phase locking value
             - `ppc` for pairwise phase consistency
@@ -180,6 +180,63 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
     return ax, fc
 
 
+def plot_phase(data, fmin, fmax, bg_style='whitegrid', picks=None, **kwargs):
+    """Plot phase of populations in a polar plot.
+    """
+
+    if 'time' in data.columns.values:
+        idx = data.pop('time')
+        data.index = idx
+
+    if picks:
+        if type(picks[0]) is str:
+            data = data.loc[:, picks]
+        else:
+            data = data.iloc[:, picks]
+
+    # create mne raw data object
+    from pyrates.utility import mne_from_dataframe
+    raw = mne_from_dataframe(data)
+
+    # bandpass filter the raw data
+    filter_args = ['filter_length', 'l_trans_bandwidth', 'h_trans_bandwidth', 'n_jobs', 'method', 'iir_params',
+                   'copy', 'phase', 'fir_window', 'fir_design', 'pad', 'verbose']
+    kwargs_tmp = {}
+    for key in kwargs.keys():
+        if key in filter_args:
+            kwargs_tmp[key] = kwargs.pop(key)
+    raw.filter(l_freq=fmin, h_freq=fmax, **kwargs_tmp)
+
+    # apply hilbert transform and calculate phase of band-passed data
+    raw.apply_hilbert()
+
+    raw_phase = raw.copy()
+    raw_phase.apply_function(get_angle)
+    raw_phase.apply_function(np.real, dtype=np.float32)
+    raw_phase.apply_function(np.unwrap)
+
+    raw_amplitude = raw.copy()
+    raw_amplitude.apply_function(np.abs)
+    raw_amplitude.apply_function(np.real, dtype=np.float32)
+
+    # plot the phase data with seaborn
+    time = data.index
+    data_phase = raw_phase.to_data_frame(scalings={'eeg': 1.})
+    data_phase['time'] = time
+    data_amp = raw_amplitude.to_data_frame(scalings={'eeg': 1.})
+    data_amp['time'] = time
+    data = pd.melt(data_phase, id_vars=['time'], var_name='node', value_name='phase')
+    data_tmp = pd.melt(data_amp, id_vars=['time'], var_name='node', value_name='amplitude')
+    data['amplitude'] = data_tmp['amplitude']
+    sb.set(style=bg_style)
+    ax = sb.FacetGrid(data, hue='node', subplot_kws=dict(polar=True), sharex=False, sharey=False,
+                      despine=False, legend_out=True)
+    ax.map(sb.scatterplot, 'phase', 'amplitude')
+    ax.facet_axis(0, 0).set_ylim(0., 0.01)
+
+    return ax
+
+
 def write_graph(net, out_file='png'):
     """Draw graph from network config.
     """
@@ -189,3 +246,6 @@ def write_graph(net, out_file='png'):
     file_format = out_file.split('.')[1]
     if file_format == 'png':
         pydot_graph.write_png(out_file)
+
+def get_angle(x):
+    return np.angle(x) + np.pi

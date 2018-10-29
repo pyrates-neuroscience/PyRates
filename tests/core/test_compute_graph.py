@@ -255,17 +255,17 @@ def test_2_4_vectorization():
     gr1 = MultiDiGraph()
     gr1.add_node('n1', **deepcopy(n1))
     gr1.add_node('n2', **deepcopy(n2))
-    gr1.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=0, weight=1.)
+    gr1.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=None, weight=1.)
 
     gr2 = MultiDiGraph()
     gr2.add_node('n1', **deepcopy(n1))
     gr2.add_node('n2', **deepcopy(n2))
-    gr2.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=0, weight=1.)
+    gr2.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=None, weight=1.)
 
     gr3 = MultiDiGraph()
     gr3.add_node('n1', **deepcopy(n1))
     gr3.add_node('n2', **deepcopy(n2))
-    gr3.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=0, weight=1.)
+    gr3.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=None, weight=1.)
 
     net1 = Network(gr1, vectorize='none', key='no_vec', dt=1e-3, tf_graph=tf.Graph())
     net2 = Network(gr2, vectorize='nodes', key='node_vec', dt=1e-3, tf_graph=tf.Graph())
