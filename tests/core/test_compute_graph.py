@@ -194,7 +194,7 @@ def test_2_3_edge():
     gr = MultiDiGraph()
     gr.add_node('n1', **n1)
     gr.add_node('n2', **n2)
-    gr.add_edge('n1', 'n2', source_var='op_1/b', target_var='op_1/inp', delay=0, weight=1.)
+    gr.add_edge('n1', 'n2', source_var='op_1/b', target_var='op_1/inp', delay=None, weight=1.)
 
     net = Network(gr, vectorize='none', key='test_edge', dt=1e-3, tf_graph=tf.Graph())
     results, _ = net.run(simulation_time=3e-3, outputs={'r1': ('n1', 'op_1', 'b'), 'r2': ('n2', 'op_1', 'b')})

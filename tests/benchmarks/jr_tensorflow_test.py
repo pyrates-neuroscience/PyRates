@@ -16,6 +16,8 @@ from pyrates.utility import mne_from_dataframe
 # parameter definition
 ######################
 
+np.random.seed(4)
+
 # general
 step_size = 1e-3
 simulation_time = 1.0
@@ -30,7 +32,7 @@ n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter = 0.
+c_inter = 20.
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -331,11 +333,10 @@ for a in range(0, n_nodes):
 
             edge['source_var'] = 'operator_ptr/m_out'
             edge['weight'] = c
-            edge['delay'] = None
-            # if int(a/3) == int(b/3):
-            #     edge['delay'] = 0.
-            # else:
-            #     edge['delay'] = np.random.uniform(0., 6e-3)
+            if int(a/3) == int(b/3):
+                edge['delay'] = 0.
+            else:
+                edge['delay'] = np.random.uniform(0., 6e-3)
 
             s = source.split('/')[0]
             t = target.split('/')[0]
@@ -365,8 +366,8 @@ from pyrates.utility import plot_timeseries, write_graph, plot_fc, plot_phase
 #mne_obj = mne_from_dataframe(sim_results=results)
 ax1 = plot_timeseries(data=results, variable='psp[V]', ci=None)
 ax2 = plot_phase(data=results, fmin=6., fmax=10., picks=[0, 1])
-#plot_fc(data=results, metric='coh', plot_style='circular_graph', threshold=0.5, fmin=6., fmax=10., faverage=True,
-#        mt_bandwidth=4.)
+plot_fc(data=results, metric='coh', plot_style='circular_graph', threshold=0.5, fmin=6., fmax=10., faverage=True,
+        mt_bandwidth=4.)
 #write_graph(graph, out_file='test.png')
 #results.plot()
 show()

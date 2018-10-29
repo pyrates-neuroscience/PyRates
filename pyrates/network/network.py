@@ -628,7 +628,7 @@ class Network(MultiDiGraph):
                             op_args[attr_name] = tf_var
 
                         # handle dependencies
-                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops
+                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops_new
                         for arg in op_args.values():
                             arg['dependency'] = False
 
@@ -825,7 +825,7 @@ class Network(MultiDiGraph):
                     if ev[1] is None:
                         evals_complete.append(ev[0])
                     elif not ev[2]:
-                        assign_op = self._assign_to_var(ev[0], ev[1], add=False)
+                        assign_op = self._assign_to_var(ev[0], ev[1], add=False, dependencies=evals_complete)
                         evals_complete.append(assign_op)
                     else:
                         de_lhs.append(ev[0])
@@ -1135,16 +1135,17 @@ class Network(MultiDiGraph):
                                            {'sources': [f'{op_name}_{var_name}_rotate_buffer_{j}'],
                                             'reduce_dim': False}},
                             'output': var_name}
-                        node['operator_order'] = [f'{op_name}_{var_name}_rotate_buffer_{j}'] + \
-                                                 [f'{op_name}_{var_name}_read_buffer_{j}'] + node['operator_order']
+                        node['operator_order'] = [f'{op_name}_{var_name}_rotate_buffer_{j}',
+                                                  f'{op_name}_{var_name}_read_buffer_{j}',
+                                                  ] + node['operator_order']
 
                         # add buffer variable to node arguments
                         if 'float' in str(type(max_delay)):
-                            max_delay = int(max_delay / self.dt)
+                            max_delay = int(max_delay / self.dt) + 1
                         if len(target_shape) > 0:
-                            buffer_shape = [target_shape[0], max_delay + 2]
+                            buffer_shape = [target_shape[0], max_delay + 1]
                         else:
-                            buffer_shape = [ max_delay + 2]
+                            buffer_shape = [max_delay + 1]
                         node['operator_args'][f'{op_name}_{var_name}_rotate_buffer_{j}/{var_name}_buffer_{j}'] = {
                             'vtype': 'state_var',
                             'dtype': 'float32',
@@ -1385,7 +1386,7 @@ class Network(MultiDiGraph):
                 if 'delay' not in edge_dict.keys():
                     delays = None
                 elif 'int' in str(type(edge_dict['delay'])):
-                    delays = [edge_dict['delay'] + 1]
+                    delays = [edge_dict['delay']]
                 elif'float' in str(type(edge_dict['delay'])):
                     delays = [int(edge_dict['delay']/self.dt) + 1]
                 elif type(edge_dict['delay']) is np.ndarray:
@@ -1399,7 +1400,7 @@ class Network(MultiDiGraph):
                         edge_dict['delay'] = np.ndarray(edge_dict['delay'] / self.dt + 1, dtype=np.int32)
                     delays = list(edge_dict['delay'])
                 elif edge_dict['delay']:
-                    delays = [int(d/self.dt) + 1 if 'float' in str(type(d)) else d + 1 for d in edge_dict['delay']]
+                    delays = [int(d/self.dt) + 1 if 'float' in str(type(d)) else d for d in edge_dict['delay']]
                 else:
                     delays = None
 

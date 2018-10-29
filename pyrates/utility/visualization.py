@@ -230,9 +230,14 @@ def plot_phase(data, fmin, fmax, bg_style='whitegrid', picks=None, **kwargs):
     data['amplitude'] = data_tmp['amplitude']
     sb.set(style=bg_style)
     ax = sb.FacetGrid(data, hue='node', subplot_kws=dict(polar=True), sharex=False, sharey=False,
-                      despine=False, legend_out=True)
+                      despine=False, legend_out=False)
     ax.map(sb.scatterplot, 'phase', 'amplitude')
-    ax.facet_axis(0, 0).set_ylim(0., 0.01)
+
+    # plot customization
+    ax_tmp = ax.facet_axis(0, 0)
+    ax_tmp.set_ylim(np.min(data_tmp['amplitude']), np.max(data_tmp['amplitude']))
+    ax_tmp._axes.yaxis.set_label_coords(1.1, 0.68)
+    ax_tmp.set_ylabel(ax_tmp.get_ylabel(), rotation=0)
 
     return ax
 
