@@ -60,7 +60,7 @@ class GraphEntityIR(AbstractBaseIR):
                     for predecessor, out_var in all_outputs[in_var].items():
                         # add predecessor output as source; this would also work for non-equal variable names
                         name = f"{predecessor}/{out_var}"
-                        self[op_key].inputs[in_var]["source"].append(name)
+                        self[op_key].inputs[in_var]["sources"].append(name)
                         self.op_graph.add_edge(predecessor, op_key)
                 else:
                     pass  # means, that 'source' will remain an empty list and no incoming edge will be added
