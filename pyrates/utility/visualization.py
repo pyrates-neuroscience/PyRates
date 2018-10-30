@@ -15,7 +15,7 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def plot_timeseries(data, variable='value', bg_style="darkgrid", **kwargs):
+def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="darkgrid", **kwargs):
     """Plot timeseries
 
     Parameters
@@ -24,10 +24,13 @@ def plot_timeseries(data, variable='value', bg_style="darkgrid", **kwargs):
         Pandas dataframe containing the results of a pyrates simulation.
     variable
         Name of the variable to be plotted
+    plot_style
+        Can be either `line_plot` for plotting with seaborn.lineplot() or `ridge_plot` for using seaborn.lineplot()
+        on a grid with the y-axis being separated for each population.
     bg_style
         Background style of the seaborn plot
     kwargs
-        Additional key-word arguments for the seaborn.lineplot() function.
+        Additional key-word arguments for the seaborn function.
 
     Returns
     -------
@@ -48,10 +51,47 @@ def plot_timeseries(data, variable='value', bg_style="darkgrid", **kwargs):
         _, ax = plt.subplots()
         kwargs['ax'] = ax
 
-    return sb.lineplot(data=df, x='time', y=variable, hue='node', **kwargs)
+    if plot_style == 'line_plot':
+
+        # simple timeseries plot
+        ax = sb.lineplot(data=df, x='time', y=variable, hue='node', **kwargs)
+
+    elif plot_style == 'ridge_plot':
+
+        # gridded timeseries plot
+        pal = sb.cubehelix_palette(10, rot=-.25, light=.7)
+        ax = sb.FacetGrid(df, row='node', hue='node', aspect=15, height=.5, palette=pal)
+        plt.close(plt.figure(plt.get_fignums()[-2]))
+
+        ax.map(sb.lineplot, 'time', variable, ci=None)
+        ax.map(plt.axhline, y=0, lw=2, clip_on=False)
+
+        # Define and use a simple function to label the plot in axes coordinates
+        def label(x, color, label):
+            ax_tmp = plt.gca()
+            ax_tmp.text(0, .2, label, fontweight="bold", color=color,
+                        ha="left", va="center", transform=ax_tmp.transAxes)
+
+        ax.map(label, 'time')
+
+        # Set the subplots to overlap
+        ax.fig.subplots_adjust(hspace=-.05)
+
+        # Remove axes details that don't play well with overlap
+        ax.set_titles("")
+        ax.set(yticks=[])
+        ax.despine(bottom=True, left=True)
+
+    else:
+
+        raise ValueError(f'Plot style is not supported by this function: {plot_style}. Check the documentation of the '
+                         f'argument `plot_style` for valid options.')
+
+    return ax
 
 
-def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='whitegrid', **kwargs):
+def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='whitegrid', node_order=None,
+            auto_cluster=False, **kwargs):
     """Plot functional connectivity between nodes in network.
 
     Parameters
@@ -80,6 +120,10 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
          their arguments (can be passed to kwargs).
     bg_style
         Only relevant if plot_style == heatmap. Then this will define the style of the background of the plot.
+    node_order
+        Order in which the nodes should appear in the plot.
+    auto_cluster
+        If true, automatic cluster detection will be used to arange the nodes
     kwargs
         Additional arguments for the fc calculation or fc plotting that can be passed.
 
@@ -134,6 +178,32 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
     if threshold:
         fc[fc < threshold] = 0.
 
+    # cluster the columns
+    #####################
+
+    if auto_cluster:
+
+        idx = [i for i in range(len(data.columns.values))]
+
+        # Create a categorical palette to identify the networks
+        network_pal = sb.husl_palette(len(idx), s=.45)
+        networks = data.columns.values
+        network_lut = dict(zip(map(str, networks), network_pal))
+
+        # Convert the palette to vectors that will be drawn on the side of the matrix
+        network_colors = pd.Series(networks, index=data.columns).map(network_lut)
+
+    elif node_order:
+
+        idx = [node_order.index(n) for n in data.columns.values]
+
+    else:
+
+        idx = [i for i in range(len(data.columns.values))]
+
+    fc = fc[idx, :]
+    fc = fc[:, idx]
+
     # plot the functional connectivities
     ####################################
 
@@ -142,14 +212,26 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
 
         # seaborn plot
         if not 'xticklabels' in kwargs.keys():
-            kwargs['xticklabels'] = data.columns.values
+            kwargs['xticklabels'] = data.columns.values[idx]
         if not 'yticklabels' in kwargs.keys():
-            kwargs['yticklabels'] = data.columns.values
+            kwargs['yticklabels'] = data.columns.values[idx]
         if 'ax' not in kwargs.keys():
             _, ax = plt.subplots()
             kwargs['ax'] = ax
+
         sb.set_style(bg_style)
-        ax = sb.heatmap(fc, **kwargs)
+
+        if auto_cluster:
+
+            df = pd.DataFrame(columns=kwargs['xticklabels'], index=kwargs['yticklabels'], data=fc)
+            ax = sb.clustermap(df, center=0, cmap="vlag",
+                               row_colors=network_colors, col_colors=network_colors,
+                               linewidths=.75, figsize=(13, 13))
+            plt.close(plt.figure(plt.get_fignums()[-2]))
+
+        else:
+
+            ax = sb.heatmap(fc, **kwargs)
 
     elif plot_style == 'circular_graph':
 
@@ -231,13 +313,15 @@ def plot_phase(data, fmin, fmax, bg_style='whitegrid', picks=None, **kwargs):
     sb.set(style=bg_style)
     ax = sb.FacetGrid(data, hue='node', subplot_kws=dict(polar=True), sharex=False, sharey=False,
                       despine=False, legend_out=False)
-    ax.map(sb.scatterplot, 'phase', 'amplitude')
+    ax.map(sb.scatterplot, 'phase', 'amplitude', alpha=0.5)
 
     # plot customization
     ax_tmp = ax.facet_axis(0, 0)
     ax_tmp.set_ylim(np.min(data_tmp['amplitude']), np.max(data_tmp['amplitude']))
-    ax_tmp._axes.yaxis.set_label_coords(1.1, 0.68)
+    ax_tmp.axes.yaxis.set_label_coords(1.15, 0.75)
     ax_tmp.set_ylabel(ax_tmp.get_ylabel(), rotation=0)
+    locs, _ = plt.yticks()
+    plt.yticks(locs)
 
     return ax
 

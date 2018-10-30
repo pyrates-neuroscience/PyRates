@@ -108,10 +108,10 @@ def test_1_3_expression_parser_math_ops():
                         ("4. / 5.", 0.8),             # simple division
                         ("4.^2", 16.),                # simple exponentiation
                         ("4 + -5", -1.),              # negation of variable
-                        ("4 * -2", -8.),              # negation of variable in higher-order operation
-                        ("4 + 5 * 2", 14.),           # multiplication before addition
-                        ("(4 + 5) * 2", 18.),         # parentheses before everything
-                        ("4 * 5^2", 100.)             # exponentiation before multiplication
+                        ("4. * -2", -8.),             # negation of variable in higher-order operation
+                        ("4. + 5. * 2.", 14.),        # multiplication before addition
+                        ("(4. + 5.) * 2.", 18.),      # parentheses before everything
+                        ("4. * 5.^2", 100.)           # exponentiation before multiplication
                         ]
 
     # test expression parsers on expression results
@@ -122,7 +122,9 @@ def test_1_3_expression_parser_math_ops():
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
-            result, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+            result, update, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+            if update:
+                result = result.assign(update)
         with tf.Session(graph=gr) as sess:
             sess.run(result)
             result = result.eval()
@@ -157,7 +159,9 @@ def test_1_4_expression_parser_logic_ops():
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
-            result, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+            result, update, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+            if update:
+                result = result.assign(update)
         with tf.Session(graph=gr) as sess:
             sess.run(result)
             assert result.eval()
@@ -170,7 +174,9 @@ def test_1_4_expression_parser_logic_ops():
     # tensorflow-based parser
     gr = tf.get_default_graph()
     with gr.as_default():
-        result, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+        result, update, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+        if update:
+            result = result.assign(update)
     with tf.Session(graph=gr) as sess:
         sess.run(result)
         assert not result.eval()
@@ -185,8 +191,8 @@ def test_1_5_expression_parser_indexing():
     :class:`LambdaExpressionParser`: Documentation of a non-symbolic expression parser.
     """
 
-    A = np.random.randn(10, 10)
-    B = np.eye(10) == 1
+    A = np.array(np.random.randn(10, 10), dtype=np.float32)
+    B = np.eye(10, dtype=np.float32) == 1
 
     # define valid test cases
     #########################
@@ -198,9 +204,9 @@ def test_1_5_expression_parser_indexing():
                            ("A[-1:0:-1]", A[-1:0:-1]),   # single-dim slicing II
                            ("A[4,5]", A[4, 5]),          # two-dim indexing I
                            ("A[5,0:-2]", A[5, 0:-2]),    # two-dim indexing II
-                           ("A[A > 0]", A[A > 0]),       # boolean indexing
+                           ("A[A > 0.]", A[A > 0]),       # boolean indexing
                            ("A[B]", A[np.where(B)]),     # indexing with other array
-                           ("A[int64(2 * 2):8 - 1]",
+                           ("A[int32(2. * 2.):8 - 1]",
                             A[(2 * 2):8 - 1]),           # using expressions as indices
                            ]
 
@@ -212,11 +218,14 @@ def test_1_5_expression_parser_indexing():
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
-            result, _ = TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A),
-                                                                      'dependency': False},
-                                                                'B': {'var': tf.constant(np.argwhere(B)),
-                                                                      'dependency': False}},
-                                           tf_graph=gr).parse_expr()
+            result, update, _ = TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A),
+                                                                              'dependency': False},
+                                                                        'B': {'var': tf.constant(np.argwhere(B)),
+                                                                              'dependency': False}},
+                                                   tf_graph=gr).parse_expr()
+            if update:
+                result = result.assign(update)
+
         with tf.Session(graph=gr) as sess:
             sess.run(result)
             result = result.eval()
@@ -257,14 +266,14 @@ def test_1_6_expression_parser_funcs():
     :class:`LambdaExpressionParser`: Documentation of a non-symbolic expression parser.
     """
 
-    A = np.random.randn(10, 10)
+    A = np.array(np.random.randn(10, 10), dtype=np.float32)
 
     # define valid test cases
     #########################
 
     expressions = [("abs(5.)", 5.),              # simple function call
                    ("abs(-5.)", 5.),             # function call of negative arg
-                   ("abs(4 * -2 + 1)", 7.),       # function call on mathematical expression
+                   ("abs(4. * -2. + 1)", 7.),    # function call on mathematical expression
                    ("int64(4 > 5)", 0),          # function call on boolean expression
                    ("abs(A[A > 0])",
                     np.abs(A[A > 0])),           # function call on indexed variable
@@ -280,8 +289,10 @@ def test_1_6_expression_parser_funcs():
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
-            result, _ = TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A), 'dependency': False}},
-                                           tf_graph=gr).parse_expr()
+            result, update, _ = TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A), 'dependency': False}},
+                                                   tf_graph=gr).parse_expr()
+            if update:
+                result = result.assign(update)
         with tf.Session(graph=gr) as sess:
             sess.run(result)
             result = result.eval()
@@ -307,86 +318,6 @@ def test_1_6_expression_parser_funcs():
             with pytest.raises((IndexError, ValueError, SyntaxError, TypeError)):
                 TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A), 'dependency': False}},
                                    tf_graph=gr).parse_expr()
-
-
-# def test_1_7_solver_init():
-#     """Testing initializations of different equation solvers:
-#
-#     See Also
-#     --------
-#     :class:`Solver`: Detailed documentation of solver attributes and methods.
-#     """
-#
-#     solvers = [NPSolver, TFSolver]
-#
-#     # test minimal minimal call example
-#     ###################################
-#
-#     for Solver in solvers:
-#         solver = Solver(5., np.zeros(shape=()))
-#         assert isinstance(solver, Solver)
-
-
-# def test_1_8_solver_update():
-#     """Testing variable updates performed by solvers:
-#
-#     See Also
-#     --------
-#     :class:`Solver`: Detailed documentation of solver attributes and methods.
-#     """
-#
-#     # simple update
-#     ###############
-#
-#     var = np.ones(shape=(), dtype=np.float32)
-#     new_val = 5.
-#
-#     # numpy-based solver
-#     #upd = NPSolver(new_val, var).solve()
-#     #for u in upd:
-#     #    var_new = u()
-#     #assert var_new == new_val
-#
-#     # tensorflow-based solver
-#     gr = tf.Graph()
-#     with gr.as_default():
-#         v1 = tf.Variable(var, name='v1')
-#         solver = TFSolver(tf.constant(new_val), v1, tf_graph=gr)
-#         update = solver.solve()
-#         state_var = solver.state_var
-#         op = state_var.assign(update)
-#     with tf.Session(graph=gr) as sess:
-#         sess.run(tf.global_variables_initializer())
-#         sess.run(op)
-#         var_new = v1.eval()
-#     assert var_new == new_val
-#
-#     # integration
-#     #############
-#
-#     var = np.ones(shape=(), dtype=np.float32)
-#     new_val = 5.
-#     dt = 0.1
-#
-#     # numpy-based solver
-#     #upd = NPSolver(new_val, var, dt=dt).solve()
-#     #for u in upd:
-#     #    var_new = u()
-#     #assert var_new == pytest.approx(var + new_val * dt, rel=1e-6)
-#
-#     # tensorflow-based solver
-#     gr = tf.Graph()
-#     with gr.as_default():
-#         v1 = tf.Variable(var, name='v1')
-#         solver = TFSolver(tf.constant(new_val), v1, dt=dt, tf_graph=gr)
-#         update = solver.solve()
-#         state_var = solver.state_var
-#         op = state_var.assign(update)
-#     with tf.Session(graph=gr) as sess:
-#         sess.run(tf.global_variables_initializer())
-#         sess.run(op)
-#         var_new = v1.eval()
-#     assert var_new == 1 + dt * new_val
 
 
 def test_1_7_equation_parsing():
@@ -419,11 +350,14 @@ def test_1_7_equation_parsing():
         with gr.as_default():
             v = tf.Variable(args['a']['var'])
             args['a']['var'] = v
-            (tf_var, tf_op), _ = parse_equation(equation=eq, args=args, tf_graph=gr)
+            (tf_var, tf_op, solve), _ = parse_equation(equation=eq, args=args, tf_graph=gr)
             if tf_op is None:
                 update = tf_var
             else:
-                update = tf_var.assign(tf_op)
+                if solve:
+                    update = tf_var.assign(tf_op * 0.1)
+                else:
+                    update = tf_var.assign(tf_op)
         with tf.Session(graph=gr) as sess:
             sess.run(tf.global_variables_initializer())
             sess.run(update)

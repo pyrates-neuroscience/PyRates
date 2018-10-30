@@ -362,12 +362,10 @@ results, ActTime = net.run(simulation_time=simulation_time,
 # results
 #########
 
-from pyrates.utility import plot_timeseries, write_graph, plot_fc, plot_phase
-#mne_obj = mne_from_dataframe(sim_results=results)
-ax1 = plot_timeseries(data=results, variable='psp[V]', ci=None)
+from pyrates.utility import plot_timeseries, plot_fc, plot_phase
+
+ax1 = plot_timeseries(data=results, variable='psp[V]', plot_style='ridge_plot')
 ax2 = plot_phase(data=results, fmin=6., fmax=10., picks=[0, 1])
-plot_fc(data=results, metric='coh', plot_style='circular_graph', threshold=0.5, fmin=6., fmax=10., faverage=True,
-        mt_bandwidth=4.)
-#write_graph(graph, out_file='test.png')
-#results.plot()
+ax3 = plot_fc(data=results, metric='corr', plot_style='heatmap', auto_cluster=True, fmin=6., fmax=10.,
+              mt_bandwidth=4., faverage=True)
 show()
