@@ -203,18 +203,18 @@ def test_network_def_workaround():
 
     jr_cpo = {'equations': ['V = k * I'],
               'inputs': {'I': {'reduce_dim': True,
-                               'source': ['JansenRitExcitatorySynapseRCO.0/I',
-                                          'JansenRitInhibitorySynapseRCO.0/I']}},
+                               'sources': ['JansenRitExcitatorySynapseRCO.0/I',
+                                           'JansenRitInhibitorySynapseRCO.0/I']}},
               'output': 'V'}
     # assert dict(nd.nodes["JR_PC.0"]) == JR_PC
     node = nd.nodes["JR_PC.0"]
     edge = {'delay': 0,
-            'source_var': 'LinearCouplingOperator.0/m_in',
-            'target_var': 'JansenRitExcitatorySynapseRCO.0/m_in',
+            'source_var': 'JansenRitPRO.0/m_out',
+            'target_var': 'LinearCouplingOperator.0/m_out',
             'weight': 108.0}
     assert node["operator_order"] == operator_order
     assert node["inputs"] == inputs
     assert node["operator_args"]['JansenRitCPO.0/I'] == cpo_i
-    assert node["operators"]['JansenRitExcitatorySynapseRCO.0']["inputs"]["m_in"]["source"] == []
+    assert node["operators"]['JansenRitExcitatorySynapseRCO.0']["inputs"]["m_in"]["sources"] == []
     assert node["operators"]['JansenRitCPO.0'] == jr_cpo
     assert dict(nd.edges[('JR_EIN.0', 'JR_PC.0', 0)]) == edge
