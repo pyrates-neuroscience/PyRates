@@ -90,14 +90,14 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
     return ax
 
 
-def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='whitegrid', node_order=None,
-            auto_cluster=False, **kwargs):
+def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whitegrid', node_order=None,
+                      auto_cluster=False, **kwargs):
     """Plot functional connectivity between nodes in network.
 
     Parameters
     ----------
-    data
-        Pandas dataframe containing the timeseries (rows) for each node of interest (columns).
+    fc
+        Pandas dataframe containing or numpy array containing the functional connectivities.
     metric
         Type of connectivtiy measurement that should be used. Can be `cov` for covariance, `corr` for correlation or
         one of the following synchronization metrics that will be calculated via
@@ -136,45 +136,13 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
 
     """
 
-    if 'time' in data.columns.values:
-        idx = data.pop('time')
-        data.index = idx
+    # turn fc into dataframe if necessary
+    if type(fc) is np.ndarray:
+        rows = kwargs['xticklabels'] if 'xticklabels' in kwargs.keys() else [i for i in range(fc.shape[0])]
+        cols = kwargs['yticklabels'] if 'yticklabels' in kwargs.keys() else [i for i in range(fc.shape[0])]
+        fc = pd.DataFrame(fc, index=rows, columns=cols)
 
-    # calculate functional connectivity
-    ###################################
-
-    if metric == 'cov':
-
-        # covariance
-        fc = np.cov(data.values.T)
-
-    elif metric == 'corr':
-
-        # pearsson correlation coefficient
-        fc = np.corrcoef(data.values.T)
-
-    elif metric in 'cohcohyimcohplvppcplipli2_unbiasedwpliwpli2_debiased':
-
-        # phase-based connectivtiy/synchronization measurement
-        from mne.connectivity import spectral_connectivity
-        mne_args = ['indices', 'mode', 'fmin', 'fmax', 'fskip', 'faverage', 'tmin', 'tmax', 'mt_bandwidth',
-                    'mt_adaptive', 'mt_low_bias', 'cwt_freqs', 'cwt_n_cycles', 'block_size', 'n_jobs']
-        kwargs_tmp = {}
-        for key, arg in kwargs.copy().items():
-            if key in mne_args:
-                kwargs_tmp[key] = kwargs.pop(key)
-        fc, _, _, _, _ = spectral_connectivity(np.reshape(data.values.T, (1, data.shape[1], data.shape[0])),
-                                               method=metric,
-                                               sfreq=1./(data.index[1] - data.index[0]),
-                                               verbose=False,
-                                               **kwargs_tmp)
-        fc = fc[:, :, 0]
-
-    else:
-
-        raise ValueError(f'FC metric is not supported by this function: {metric}. Check the documentation of the '
-                         f'argument `metric` for valid options.')
-
+    # apply threshold
     if threshold:
         fc[fc < threshold] = 0.
 
@@ -183,26 +151,26 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
 
     if auto_cluster:
 
-        idx = [i for i in range(len(data.columns.values))]
+        idx = [i for i in range(fc.shape[0])]
 
-        # Create a categorical palette to identify the networks
-        network_pal = sb.husl_palette(len(idx), s=.45)
-        networks = data.columns.values
-        network_lut = dict(zip(map(str, networks), network_pal))
+        # Create a categorical color palette for node groups
+        node_pal = sb.husl_palette(len(idx), s=.45)
+        nodes = fc.columns.values
+        node_lut = dict(zip(map(str, nodes), node_pal))
 
-        # Convert the palette to vectors that will be drawn on the side of the matrix
-        network_colors = pd.Series(networks, index=data.columns).map(network_lut)
+        # Convert the palette to vectors that will be drawn on the side of the fc plot
+        node_colors = pd.Series(nodes, index=fc.columns).map(node_lut)
 
     elif node_order:
 
-        idx = [node_order.index(n) for n in data.columns.values]
+        idx = [node_order.index(n) for n in fc.columns.values]
 
     else:
 
-        idx = [i for i in range(len(data.columns.values))]
+        idx = [i for i in range(len(fc.columns.values))]
 
-    fc = fc[idx, :]
-    fc = fc[:, idx]
+    fc = fc[idx]
+    fc = fc.T[idx]
 
     # plot the functional connectivities
     ####################################
@@ -212,22 +180,15 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
 
         # seaborn plot
         if not 'xticklabels' in kwargs.keys():
-            kwargs['xticklabels'] = data.columns.values[idx]
+            kwargs['xticklabels'] = fc.columns.values[idx]
         if not 'yticklabels' in kwargs.keys():
-            kwargs['yticklabels'] = data.columns.values[idx]
-        if 'ax' not in kwargs.keys():
-            _, ax = plt.subplots()
-            kwargs['ax'] = ax
+            kwargs['yticklabels'] = fc.columns.values[idx]
 
         sb.set_style(bg_style)
 
         if auto_cluster:
 
-            df = pd.DataFrame(columns=kwargs['xticklabels'], index=kwargs['yticklabels'], data=fc)
-            ax = sb.clustermap(df, center=0, cmap="vlag",
-                               row_colors=network_colors, col_colors=network_colors,
-                               linewidths=.75, figsize=(13, 13))
-            plt.close(plt.figure(plt.get_fignums()[-2]))
+            ax = sb.clustermap(data=fc, row_colors=node_colors, col_colors=node_colors, **kwargs)
 
         else:
 
@@ -239,10 +200,8 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
         from mne.viz import circular_layout, plot_connectivity_circle
 
         # create circular node layout
-        node_names = data.columns.values
-        if 'node_order' in kwargs.keys():
-            node_order = kwargs['node_oders']
-        else:
+        node_names = fc.columns.values
+        if not node_order:
             node_order = list(node_names)
         kwargs_tmp = {}
         layout_args = ['start_pos', 'start_between', 'group_boundaries', 'group_sep']
@@ -259,71 +218,70 @@ def plot_fc(data, metric='cov', threshold=None, plot_style='heatmap', bg_style='
         raise ValueError(f'Plot style is not supported by this function: {plot_style}. Check the documentation of the '
                          f'argument `plot_style` for valid options.')
 
-    return ax, fc
+    return ax
 
 
-def plot_phase(data, fmin, fmax, bg_style='whitegrid', picks=None, **kwargs):
+def plot_phase(data, bg_style='whitegrid', **kwargs):
     """Plot phase of populations in a polar plot.
     """
 
-    if 'time' in data.columns.values:
-        idx = data.pop('time')
-        data.index = idx
+    sb.set(style=bg_style)
 
-    if picks:
-        if type(picks[0]) is str:
-            data = data.loc[:, picks]
-        else:
-            data = data.iloc[:, picks]
-
-    # create mne raw data object
-    from pyrates.utility import mne_from_dataframe
-    raw = mne_from_dataframe(data)
-
-    # bandpass filter the raw data
-    filter_args = ['filter_length', 'l_trans_bandwidth', 'h_trans_bandwidth', 'n_jobs', 'method', 'iir_params',
-                   'copy', 'phase', 'fir_window', 'fir_design', 'pad', 'verbose']
+    # create facet grid
+    facet_kwargs = ['col_wrap', 'sharex', 'sharey', 'height', 'aspect', 'palette', 'row_order', 'col_order',
+                    'hue_order', 'hue_kws', 'dropna', 'legend_out', 'margin_titles', 'xlim', 'ylim',
+                    'gridspec_kws', 'size']
     kwargs_tmp = {}
     for key in kwargs.keys():
-        if key in filter_args:
+        if key in facet_kwargs:
             kwargs_tmp[key] = kwargs.pop(key)
-    raw.filter(l_freq=fmin, h_freq=fmax, **kwargs_tmp)
+    ax = sb.FacetGrid(data, hue='node', subplot_kws=dict(polar=True), despine=False)
 
-    # apply hilbert transform and calculate phase of band-passed data
-    raw.apply_hilbert()
-
-    raw_phase = raw.copy()
-    raw_phase.apply_function(get_angle)
-    raw_phase.apply_function(np.real, dtype=np.float32)
-    raw_phase.apply_function(np.unwrap)
-
-    raw_amplitude = raw.copy()
-    raw_amplitude.apply_function(np.abs)
-    raw_amplitude.apply_function(np.real, dtype=np.float32)
-
-    # plot the phase data with seaborn
-    time = data.index
-    data_phase = raw_phase.to_data_frame(scalings={'eeg': 1.})
-    data_phase['time'] = time
-    data_amp = raw_amplitude.to_data_frame(scalings={'eeg': 1.})
-    data_amp['time'] = time
-    data = pd.melt(data_phase, id_vars=['time'], var_name='node', value_name='phase')
-    data_tmp = pd.melt(data_amp, id_vars=['time'], var_name='node', value_name='amplitude')
-    data['amplitude'] = data_tmp['amplitude']
-    sb.set(style=bg_style)
-    ax = sb.FacetGrid(data, hue='node', subplot_kws=dict(polar=True), sharex=False, sharey=False,
-                      despine=False, legend_out=False)
-    ax.map(sb.scatterplot, 'phase', 'amplitude', alpha=0.5)
+    # plot phase and amplitude into polar plot
+    scatter_kwargs = ['style', 'sizes', 'size_order', 'size_norm', 'markers', 'style_order', 'x_bins', 'y_bins',
+                      'units', 'estimator', 'ci', 'n_boot', 'alpha', 'x_jitter', 'y_jitter', 'legend', 'ax']
+    kwargs_tmp2 = {}
+    for key in kwargs.keys():
+        if key in scatter_kwargs:
+            kwargs_tmp2[key] = kwargs.pop(key)
+    ax.map(sb.scatterplot, 'phase', 'amplitude', **kwargs_tmp2)
 
     # plot customization
     ax_tmp = ax.facet_axis(0, 0)
-    ax_tmp.set_ylim(np.min(data_tmp['amplitude']), np.max(data_tmp['amplitude']))
+    ax_tmp.set_ylim(np.min(data['amplitude']), np.max(data['amplitude']))
     ax_tmp.axes.yaxis.set_label_coords(1.15, 0.75)
     ax_tmp.set_ylabel(ax_tmp.get_ylabel(), rotation=0)
     locs, _ = plt.yticks()
     plt.yticks(locs)
+    locs, labels = plt.xticks()
+    labels = [np.round(l._x, 3) for l in labels]
+    plt.xticks(locs, labels)
 
     return ax
+
+
+def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
+    """
+
+    Parameters
+    ----------
+    data
+    fmin
+    fmax
+    tmin
+    kwargs
+
+    Returns
+    -------
+
+    """
+
+    from pyrates.utility import mne_from_dataframe
+    from mne.viz import plot_raw_psd
+
+    raw = mne_from_dataframe(data)
+
+    return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs)
 
 
 def write_graph(net, out_file='png'):
@@ -335,6 +293,3 @@ def write_graph(net, out_file='png'):
     file_format = out_file.split('.')[1]
     if file_format == 'png':
         pydot_graph.write_png(out_file)
-
-def get_angle(x):
-    return np.angle(x) + np.pi

@@ -352,20 +352,23 @@ net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vecto
 # network simulation
 ####################
 
-results, ActTime = net.run(simulation_time=simulation_time,
-                           outputs={'V': ('pc', 'operator_ptr', 'psp')},
-                           sampling_step_size=1e-3,
-                           inputs={('pc', 'operator_rtp_syn_e', 'u'): inp},
-                           #out_dir='/tmp/log/'
-                           )
+results, _ = net.run(simulation_time=simulation_time,
+                     outputs={'V': ('pc', 'operator_ptr', 'psp')},
+                     sampling_step_size=1e-3,
+                     inputs={('pc', 'operator_rtp_syn_e', 'u'): inp},
+                     #out_dir='/tmp/log/'
+                     )
 
 # results
 #########
 
-from pyrates.utility import plot_timeseries, plot_fc, plot_phase
+from pyrates.utility import plot_timeseries, plot_connectivity, plot_phase, analytic_signal, functional_connectivity, \
+    plot_psd
 
-ax1 = plot_timeseries(data=results, variable='psp[V]', plot_style='ridge_plot')
-ax2 = plot_phase(data=results, fmin=6., fmax=10., picks=[0, 1])
-ax3 = plot_fc(data=results, metric='corr', plot_style='heatmap', auto_cluster=True, fmin=6., fmax=10.,
-              mt_bandwidth=4., faverage=True)
+ax1 = plot_timeseries(data=results, variable='psp[V]', plot_style='line_plot')
+phase_amp = analytic_signal(results, fmin=6., fmax=10., nodes=[0, 1])
+ax2 = plot_phase(data=phase_amp)
+fc = functional_connectivity(results)
+ax3 = plot_connectivity(fc, plot_style='heatmap', auto_cluster=True)
+ax4 = plot_psd(results, spatial_colors=False)
 show()
