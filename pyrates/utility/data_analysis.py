@@ -40,6 +40,14 @@ def functional_connectivity(data, metric='cov', **kwargs):
         # pearsson correlation coefficient
         fc = np.corrcoef(data.values.T, **kwargs)
 
+    elif metric == 'csd':
+
+        from mne.time_frequency import csd_array_morlet
+        fc = np.abs(csd_array_morlet(X=np.reshape(data.values, (1, data.shape[1], data.shape[0])),
+                                     sfreq=1./(data.index[1] - data.index[0]),
+                                     ch_names=data.columns.values,
+                                     **kwargs).mean().get_data())
+
     elif metric in 'cohcohyimcohplvppcplipli2_unbiasedwpliwpli2_debiased':
 
         # phase-based connectivtiy/synchronization measurement
@@ -123,3 +131,37 @@ def analytic_signal(data, fmin, fmax, nodes=None, **kwargs):
     data['amplitude'] = data_tmp['amplitude']
 
     return data
+
+
+def time_frequency(data, freqs, method='morlet', output='avg_power', **kwargs):
+    """
+
+    Parameters
+    ----------
+    data
+    freqs
+    output
+    kwargs
+
+    Returns
+    -------
+
+    """
+
+    if 'time' in data.columns.values:
+        idx = data.pop('time')
+        data.index = idx
+
+    if method == 'morlet':
+
+        from mne.time_frequency import tfr_array_morlet
+        return tfr_array_morlet(np.reshape(data.values.T, (1, data.shape[1], data.shape[0])),
+                                sfreq=1./(data.index[1] - data.index[0]),
+                                freqs=freqs, output=output, **kwargs)
+
+    elif method == 'multitaper':
+
+        from mne.time_frequency import tfr_array_multitaper
+        return tfr_array_multitaper(np.reshape(data.values.T, (1, data.shape[1], data.shape[0])),
+                                    sfreq=1. / (data.index[1] - data.index[0]),
+                                    freqs=freqs, output=output, **kwargs)

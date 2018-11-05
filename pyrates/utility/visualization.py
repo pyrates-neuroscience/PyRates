@@ -169,8 +169,8 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
 
         idx = [i for i in range(len(fc.columns.values))]
 
-    fc = fc[idx]
-    fc = fc.T[idx]
+    fc = fc.iloc[idx]
+    fc = fc.T.iloc[idx]
 
     # plot the functional connectivities
     ####################################
@@ -284,6 +284,50 @@ def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
     return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs)
 
 
+def plot_tfr(power, freqs, nodes=None, separate_nodes=True, **kwargs):
+    """
+
+    Parameters
+    ----------
+    power
+    plot_style
+    separate_nodes
+    kwargs
+
+    Returns
+    -------
+
+    """
+
+    if not nodes:
+        nodes = [i for i in range(power.shape[0])]
+    if 'xticklabels' not in kwargs.keys():
+        if 'step_size' in kwargs.keys():
+            xticks = np.round(np.arange(0, power.shape[2]) * kwargs.pop('step_size'), decimals=3)
+            kwargs['xticklabels'] = [str(t) for t in xticks]
+    if 'yticklabels' not in kwargs.keys():
+        kwargs['yticklabels'] = [str(f) for f in freqs]
+
+    if separate_nodes:
+
+        # plot heatmap separately for each node
+        for n in range(power.shape[0]):
+            _, ax = plt.subplots()
+            ax = sb.heatmap(power[n, :, :], ax=ax, **kwargs)
+
+    else:
+
+        # Convert the dataframe to long-form or "tidy" format
+        indices = pd.MultiIndex.from_product((nodes, freqs, range(power.shape[2])), names=('nodes', 'freqs', 'time'))
+        data = pd.DataFrame(power.flatten(), index=indices, columns=('values',)).reset_index()
+
+        # create facet grid
+        ax = sb.FacetGrid(data, col='nodes')
+        ax.map_dataframe(draw_heatmap, 'time', 'freqs', 'values', cbar=False, square=True, **kwargs)
+
+    return ax
+
+
 def write_graph(net, out_file='png'):
     """Draw graph from network config.
     """
@@ -293,3 +337,20 @@ def write_graph(net, out_file='png'):
     file_format = out_file.split('.')[1]
     if file_format == 'png':
         pydot_graph.write_png(out_file)
+
+
+def draw_heatmap(*args, **kwargs):
+    """
+
+    Parameters
+    ----------
+    args
+    kwargs
+
+    Returns
+    -------
+
+    """
+    data = kwargs.pop('data')
+    d = data.pivot(index=args[1], columns=args[0], values=args[2])
+    return sb.heatmap(d, **kwargs)

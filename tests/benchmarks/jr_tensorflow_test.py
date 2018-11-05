@@ -20,7 +20,7 @@ np.random.seed(4)
 
 # general
 step_size = 1e-3
-simulation_time = 1.0
+simulation_time = 10.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
@@ -363,12 +363,16 @@ results, _ = net.run(simulation_time=simulation_time,
 #########
 
 from pyrates.utility import plot_timeseries, plot_connectivity, plot_phase, analytic_signal, functional_connectivity, \
-    plot_psd
+    plot_psd, time_frequency, plot_tfr
 
-ax1 = plot_timeseries(data=results, variable='psp[V]', plot_style='line_plot')
-phase_amp = analytic_signal(results, fmin=6., fmax=10., nodes=[0, 1])
-ax2 = plot_phase(data=phase_amp)
-fc = functional_connectivity(results)
-ax3 = plot_connectivity(fc, plot_style='heatmap', auto_cluster=True)
-ax4 = plot_psd(results, spatial_colors=False)
+#ax1 = plot_timeseries(data=results, variable='psp[V]', plot_style='line_plot')
+#phase_amp = analytic_signal(results, fmin=6., fmax=10., nodes=[0, 1])
+#ax2 = plot_phase(data=phase_amp)
+#fc = functional_connectivity(results, metric='csd', frequencies=[7., 8., 9.])
+#ax3 = plot_connectivity(fc, plot_style='heatmap', auto_cluster=True,
+#                        xticklabels=results.columns.values, yticklabels=results.columns.values)
+#ax4 = plot_psd(results, spatial_colors=False)
+freqs = np.arange(3., 20., 3.)
+power = time_frequency(results, method='morlet', freqs=freqs, n_cycles=5)
+ax5 = plot_tfr(power, freqs=freqs, separate_nodes=False)
 show()
