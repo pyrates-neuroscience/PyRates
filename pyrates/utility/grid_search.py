@@ -42,7 +42,7 @@ def grid_search(circuit, param_grid, simulation_time, inputs, outputs, dt, sampl
         circuits.append(circuit.update(param_updates.to_dict()))
 
     # combine circuits to network
-    circuit_comb = CircuitFromCircuits(circuits)
+    circuit_comb = CircuitIR.from_circuits(circuits)
     net = Network(circuit_comb, dt=dt, vectorize='nodes', key='combined')
 
     # simulate the circuits behavior

@@ -519,7 +519,7 @@ class Network(MultiDiGraph):
                                         if out_var not in op_args.keys():
                                             raise ValueError(f"Invalid dependencies found in operator: "
                                                              f"{op['equations']}. Input Variable {var_name} has not "
-                                                             f"been calculated yet.")
+                                                             f"been calculated yet. Consider changes")
 
                                         # append variable and operation to list
                                         out_ops += op_args[out_var]['op']

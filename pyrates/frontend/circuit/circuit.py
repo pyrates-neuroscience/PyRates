@@ -7,7 +7,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 """
 
 # external packages
-from typing import List, Dict, Any, Union, Tuple
+from typing import List, Dict, Any, Union, Tuple, Optional
 from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle
 from copy import deepcopy
 
@@ -160,6 +160,48 @@ class CircuitIR(AbstractBaseIR):
                                }))
         self.graph.add_edges_from(edge_list, **attr)
 
+    def update_params(self, node_params: Optional[dict] = None, edge_params: Optional[dict] = None):
+        """
+
+        Parameters
+        ----------
+        new_params
+
+        Returns
+        -------
+
+        """
+
+        if node_params:
+
+            for (node_name, op_name, var_name), arg in node_params.items():
+
+                if node_name == 'all':
+
+                    for n, (node, node_attrs) in enumerate(self.nodes.items()):
+                        node_attr = node_attrs['operator_args'][f'{op_name}/{var_name}']
+                        if 'int' in type(arg) or 'float' in type(arg):
+                            node_attr['value'] = arg
+                        else:
+                            node_attr['value'] = arg[n]
+
+                elif node_name in self.nodes.keys():
+
+                    node_attrs = self.nodes[node_name]
+                    node_attrs['operator_args'][f'{op_name}/{var_name}']['value'] = arg
+
+                elif any([node_name in n for n in self.nodes.keys()]):
+
+                    n = 0
+                    for node, node_attrs in self.nodes.items():
+                        if node_name in node:
+                            node_attr = node_attrs['operator_args'][f'{op_name}/{var_name}']
+                            if 'int' in type(arg) or 'float' in type(arg):
+                                node_attr['value'] = arg
+                            else:
+                                node_attr['value'] = arg[n]
+                            n += 1
+
     def _get_unique_label(self, label: str) -> str:
         """
 
@@ -258,8 +300,21 @@ class CircuitIR(AbstractBaseIR):
 
     @classmethod
     def from_template(cls, template, *args, **kwargs):
-
         return cls(template.label, template.nodes, template.edges, template.path)
+
+    @classmethod
+    def from_circuits(cls, circuits: list, connectivity: dict, label):
+
+        # collect nodes
+        nodes = {}
+        for i, c in enumerate(circuits):
+            for n_key, n_attrs in c.nodes.items():
+                nodes[f'{n_key}.{i}'] = n_attrs
+
+        # collect edges
+        edges = []
+
+        return cls(label, nodes, edges)
 
     def network_def(self):
         return BackendIRFormatter.network_def(self)
