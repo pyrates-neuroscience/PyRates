@@ -1,4 +1,5 @@
-"""This module provides parser classes and functions to parse string-based equations into operations.
+"""This module provides parser classes and functions to parse string-based equations into symbolic representations of
+operations.
 """
 
 # external imports
@@ -8,8 +9,6 @@ from numbers import Number
 import math
 import tensorflow as tf
 import typing as tp
-
-# pyrates internal imports
 
 # meta infos
 __author__ = "Richard Gast"
@@ -21,7 +20,8 @@ __status__ = "development"
 
 
 class ExpressionParser(ParserElement):
-    """Base class for parsing mathematical expressions.
+    """Base class for parsing mathematical expressions from a string format into a symbolic representation of the
+    mathematical operation expressed by it.
 
     Parameters
     ----------
@@ -85,9 +85,6 @@ class ExpressionParser(ParserElement):
     push_all_reverse
         Helper function for building up `expr_stack`.
         Pushes all elements of a set of symbolic representations to `expr_stack` in reverse order.
-
-    Examples
-    --------
 
     References
     ----------
@@ -221,11 +218,9 @@ class ExpressionParser(ParserElement):
 
         # base math operations
         self.ops = {}
-        self.sparse_ops = {}
 
         # additional functions
         self.funcs = {}
-        self.sparse_funcs = {}
 
         # allowed data-types
         self.dtypes = {}
@@ -345,27 +340,18 @@ class ExpressionParser(ParserElement):
                             op1 = self.funcs['reshape'](op1, [1, target_shape[0]])
                         else:
                             op1 = self.funcs['reshape'](op1, [target_shape[1], 1])
-            elif hasattr(op1, 'dense_shape') and hasattr(op2, 'shape'):
-                if len(op2.shape) == 1:
-                    op2 = self.funcs['reshape'](op2, list(op2.shape) + [1])
             elif hasattr(op1, 'shape'):
                 op2 = self.funcs['zeros'](op1.shape) + op2
             elif hasattr(op2, 'shape'):
                 op1 = self.funcs['zeros'](op2.shape) + op1
 
             # combine elements via mathematical/boolean operator
-            try:
-                self._op_tmp = self.ops[op](op1, op2)
-            except TypeError:
-                self._op_tmp = self.sparse_ops[op](op1, op2)
+            self._op_tmp = self.ops[op](op1, op2)
 
         elif op in ".T.I":
 
             # transpose/invert expression
-            try:
-                self._op_tmp = self.ops[op](self.parse(expr_stack))
-            except TypeError:
-                self._op_tmp = self.sparse_ops[op](self.parse(expr_stack))
+            self._op_tmp = self.ops[op](self.parse(expr_stack))
 
         elif op == "]":
 
@@ -468,13 +454,6 @@ class ExpressionParser(ParserElement):
             # extract function
             try:
                 f = self.funcs[op[0:-1]]
-            except TypeError:
-                try:
-                    f = self.sparse_funcs[op[0:-1]]
-                except KeyError:
-                    raise KeyError(
-                        f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
-                        f"in arguments dictionary.")
             except KeyError:
                 raise KeyError(f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
                                f"in arguments dictionary.")
@@ -689,18 +668,6 @@ class TFExpressionParser(ExpressionParser):
                  }
         for key, val in funcs.items():
             self.funcs[key] = val
-
-        # counterparts for sparse tensors
-        self.sparse_ops = {"+": tf.sparse_add,
-                           ".T": tf.sparse_transpose,
-                           "@": tf.sparse_tensor_dense_matmul}
-        self.sparse_funcs = {"max": tf.sparse_reduce_max,
-                             "sum": tf.sparse_reduce_sum,
-                             "reshape": tf.sparse_reshape,
-                             "softmax": tf.sparse_softmax,
-                             "boolean_mask": tf.boolean_mask,
-                             "array_idx": tf.sparse_mask
-                             }
 
         dtypes = {"float16": tf.float16,
                   "float32": tf.float32,
