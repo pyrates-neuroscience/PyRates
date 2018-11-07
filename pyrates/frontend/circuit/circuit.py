@@ -10,6 +10,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 from typing import List, Dict, Any, Union, Tuple, Optional
 from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle
 from copy import deepcopy
+from pandas import DataFrame
 
 # pyrates internal imports
 from pyrates.frontend.abc import AbstractBaseTemplate, AbstractBaseIR
@@ -160,47 +161,47 @@ class CircuitIR(AbstractBaseIR):
                                }))
         self.graph.add_edges_from(edge_list, **attr)
 
-    def update_params(self, node_params: Optional[dict] = None, edge_params: Optional[dict] = None):
-        """
-
-        Parameters
-        ----------
-        new_params
-
-        Returns
-        -------
-
-        """
-
-        if node_params:
-
-            for (node_name, op_name, var_name), arg in node_params.items():
-
-                if node_name == 'all':
-
-                    for n, (node, node_attrs) in enumerate(self.nodes.items()):
-                        node_attr = node_attrs['operator_args'][f'{op_name}/{var_name}']
-                        if 'int' in type(arg) or 'float' in type(arg):
-                            node_attr['value'] = arg
-                        else:
-                            node_attr['value'] = arg[n]
-
-                elif node_name in self.nodes.keys():
-
-                    node_attrs = self.nodes[node_name]
-                    node_attrs['operator_args'][f'{op_name}/{var_name}']['value'] = arg
-
-                elif any([node_name in n for n in self.nodes.keys()]):
-
-                    n = 0
-                    for node, node_attrs in self.nodes.items():
-                        if node_name in node:
-                            node_attr = node_attrs['operator_args'][f'{op_name}/{var_name}']
-                            if 'int' in type(arg) or 'float' in type(arg):
-                                node_attr['value'] = arg
-                            else:
-                                node_attr['value'] = arg[n]
-                            n += 1
+    # def update_params(self, node_params: Optional[dict] = None, edge_params: Optional[dict] = None):
+    #     """
+    #
+    #     Parameters
+    #     ----------
+    #     new_params
+    #
+    #     Returns
+    #     -------
+    #
+    #     """
+    #
+    #     if node_params:
+    #
+    #         for (node_name, op_name, var_name), arg in node_params.items():
+    #
+    #             if node_name == 'all':
+    #
+    #                 for n, (node, node_attrs) in enumerate(self.nodes.items()):
+    #                     node_attr = node_attrs['operator_args'][f'{op_name}/{var_name}']
+    #                     if 'int' in type(arg) or 'float' in type(arg):
+    #                         node_attr['value'] = arg
+    #                     else:
+    #                         node_attr['value'] = arg[n]
+    #
+    #             elif node_name in self.nodes.keys():
+    #
+    #                 node_attrs = self.nodes[node_name]
+    #                 node_attrs['operator_args'][f'{op_name}/{var_name}']['value'] = arg
+    #
+    #             elif any([node_name in n for n in self.nodes.keys()]):
+    #
+    #                 n = 0
+    #                 for node, node_attrs in self.nodes.items():
+    #                     if node_name in node:
+    #                         node_attr = node_attrs['operator_args'][f'{op_name}/{var_name}']
+    #                         if 'int' in type(arg) or 'float' in type(arg):
+    #                             node_attr['value'] = arg
+    #                         else:
+    #                             node_attr['value'] = arg[n]
+    #                         n += 1
 
     def _get_unique_label(self, label: str) -> str:
         """
@@ -244,11 +245,11 @@ class CircuitIR(AbstractBaseIR):
         source_path = "/".join((source_node, source_op, source_var))
         target_path = "/".join((target_node, target_op, target_var))
         # check if path is valid
-        try:
-            _ = self[source_path]
-            _ = self[target_path]
-        except KeyError:
-            raise PyRatesException(f"Could not find either `{source_path}` or `{target_path}` in network graph.")
+        for path in (source_path, target_path):
+            try:
+                _ = self[path]
+            except KeyError:
+                raise PyRatesException(f"Could not find `{path}` in network graph.")
 
         source = (source_node, source_op, source_var)
         target = (target_node, target_op, target_var)
@@ -303,13 +304,44 @@ class CircuitIR(AbstractBaseIR):
         return cls(template.label, template.nodes, template.edges, template.path)
 
     @classmethod
-    def from_circuits(cls, circuits: list, connectivity: dict, label):
+    def from_circuits(cls, label: str, circuits: dict, connectivity: Union[list, tuple, DataFrame]=None):
+        """Circuit creation method that takes multiple circuits (templates or instances of `CircuitIR`) as inputs to
+        create one larger circuit out of these. With additional `connectivity` information, these circuit can directly
+        be interlinked.
 
-        # collect nodes
-        nodes = {}
-        for i, c in enumerate(circuits):
-            for n_key, n_attrs in c.nodes.items():
-                nodes[f'{n_key}.{i}'] = n_attrs
+        Parameters
+        ----------
+        label
+            Name of new circuit. Should not collide with any circuit label given in `circuits`.
+        circuits
+            Dictionary with unique circuit labels as keys and circuits as items. Circuits may either be instances of
+            `CircuitTemplate` or `CircuitIR`. Alternatively, a circuit template may also be given via a sub-dictionary
+            with keys `template` and `values`, where `values` is a dictionary of variable value updates for the given
+            template.
+        connectivity
+            Optional `list`, `tuple` or `pandas.DataFrame' with connectivity information to create edges between the
+            given circuits. If `list` or `tuple`, then each item must be formatted the same way as `edges` in
+            `add_edges_from`: ('circuit/source_node/op/var', 'circuit/target_node/op/var', edge_template, variables).
+            If given as a `DataFrame`, keys (indices and column names) must refer to sources and targets as (string of
+            form 'circuit/node/op/var') and items may then be edge templates and associated variables. Empty cells in
+            the DataFrame should be filled with something 'falsy' (as in evaluates to `False` in Python).
+
+        Returns
+        -------
+        circuit
+            instance of `CircuitIR`
+        """
+
+        circuit = cls(label)
+        for name, circ in circuits.items():
+            circuit.add_circuit(name, circ)
+
+        if connectivity:
+            if isinstance(connectivity, list) or isinstance(connectivity, tuple):
+
+
+
+
 
         # collect edges
         edges = []
