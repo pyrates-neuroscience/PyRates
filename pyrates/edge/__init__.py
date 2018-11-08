@@ -1,5 +1,0 @@
-"""
-
-"""
-
-from .edge import Edge
