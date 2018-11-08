@@ -74,8 +74,15 @@ class AbstractBaseIR:
 
         if "/" in key:
             top, *remainder = key.split("/")
-            remainder = "/".join(remainder)
-            return self._getter(top)[remainder]
+            for i, _key in enumerate(remainder):
+                try:
+                    return self._getter(top)["/".join(remainder[i:])]
+                except KeyError:
+                    # if it cannot be found, try to concatenate keys again which corresponds to circuits
+                    # this way nodes of the form 'circuit1/circuit2/.../node' can be found but not entire circuits
+                    top = "/".join((top, _key))
+            else:
+                raise KeyError(f"Unable to find object '{key}'.")
         else:
             return self._getter(key)
 
