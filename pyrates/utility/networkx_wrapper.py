@@ -1,4 +1,4 @@
-"""Defines a few custom functions on the network graph for convenience.
+"""Defines a few custom functions on the backend graph for convenience.
 """
 
 # external packages

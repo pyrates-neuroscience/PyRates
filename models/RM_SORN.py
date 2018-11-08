@@ -3,7 +3,7 @@
 
 import tensorflow as tf
 from networkx import MultiDiGraph
-from pyrates.network import Network
+from pyrates.backend import ComputeGraph
 from matplotlib.pyplot import *
 from pyrates.utility import mne_from_dataframe
 
@@ -69,7 +69,7 @@ for i in range(n_jrcs):
             if weight_i > (1 - sparseness_i):
                 C_i[i * 3 + 2, j * 3] = weight_i * c_inter_i
 
-# define network dictionary
+# define backend dictionary
 ###########################
 
 graph = MultiDiGraph()
@@ -320,13 +320,13 @@ for a in range(0, n_nodes):
             t = target.split('/')[0]
             graph.add_edge(source, target, **edge)
 
-# network setup
+# backend setup
 ###############
 
 gr = tf.Graph()
-net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize=True)
+net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize=True)
 
-# network simulation
+# backend simulation
 ####################
 
 results, ActTime = net.run(simulation_time=simulation_time,

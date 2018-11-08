@@ -768,8 +768,6 @@ def parse_dict(var_dict: dict,
         Each value is a dictionary again containing the variable information (needs at least a field for `vtype`).
     tf_graph
         Instance of `tensorflow.Graph` in which all variables with be initialized.
-    var_scope
-        Optional variable scope under which the variables will be initialized.
 
     Returns
     -------

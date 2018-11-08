@@ -3,9 +3,8 @@
 
 import tensorflow as tf
 from networkx import MultiDiGraph
-from pyrates.network import Network
+from pyrates.backend import ComputeGraph
 from matplotlib.pyplot import *
-from pyrates.utility import mne_from_dataframe
 
 # Comment this out for making GPU available for Tensorflow.
 ###########################################################
@@ -78,7 +77,7 @@ for i in range(n_jrcs):
                                                           [0., 0., 0.],
                                                           [0., 0., 0.]])
 
-# define network dictionary
+# define backend dictionary
 ###########################
 
 graph = MultiDiGraph()
@@ -342,14 +341,14 @@ for a in range(0, n_nodes):
             t = target.split('/')[0]
             graph.add_edge(source, target, **edge)
 
-# network setup
+# backend setup
 ###############
 
 inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
 gr = tf.Graph()
-net = Network(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
+net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
 
-# network simulation
+# backend simulation
 ####################
 
 results, _ = net.run(simulation_time=simulation_time,

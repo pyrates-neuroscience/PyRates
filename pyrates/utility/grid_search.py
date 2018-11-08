@@ -6,14 +6,15 @@ import pandas as pd
 import numpy as np
 
 # pyrates internal imports
-from pyrates.network import Network
+from pyrates.backend import ComputeGraph
+from pyrates.frontend import CircuitIR, CircuitTemplate
 
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit, param_grid, simulation_time, inputs, outputs, dt, sampling_step_size=None):
+def grid_search(circuit_template, param_grid, simulation_time, inputs, outputs, dt, sampling_step_size=None):
     """
 
     Parameters
@@ -34,23 +35,16 @@ def grid_search(circuit, param_grid, simulation_time, inputs, outputs, dt, sampl
     if type(param_grid) is dict:
         param_grid = linearize_grid(param_grid)
 
-    # collect different parametrizations of the circuit
-    n_circuits = param_grid.shape[0]
-    circuits = []
-    for n in n_circuits:
-        param_updates = param_grid[n, :]
-        circuits.append(circuit.update(param_updates.to_dict()))
-
-    # combine circuits to network
-    circuit_comb = CircuitIR.from_circuits(circuits)
-    net = Network(circuit_comb, dt=dt, vectorize='nodes', key='combined')
+    # combine circuits to backend
+    circuit_comb = CircuitIR.from_circuits('combined', circuit_template, param_grid)
+    net = ComputeGraph(circuit_comb, dt=dt, vectorize='nodes', key='combined')
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
                       inputs=inputs,
                       outputs=outputs,
                       sampling_step_size=sampling_step_size)
-    
+
     return results
 
 
