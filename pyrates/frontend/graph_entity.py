@@ -128,6 +128,9 @@ class GraphEntityTemplate(AbstractBaseTemplate):
         path = self._format_path(path)
         return OperatorTemplate.from_yaml(path)
 
+    def apply(self, values: dict=None):
+        return super().apply(values)
+
 
 class GraphEntityTemplateLoader(TemplateLoader):
 

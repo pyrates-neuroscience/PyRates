@@ -51,9 +51,9 @@ class EdgeIR(GraphEntityIR):
         self.output = f"{out_op[0]}/{out_var}"
 
     @classmethod
-    def from_template(cls, template, *args, **kwargs):
+    def from_template(cls, template, values: dict=None):
 
-        instance = super().from_template(template, *args, **kwargs)
+        instance = super().from_template(template, values)
         return instance
 
 

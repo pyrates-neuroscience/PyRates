@@ -31,7 +31,7 @@ class CircuitIR(AbstractBaseIR):
     """Custom graph datastructure that represents a network of nodes and edges with associated equations
     and variables."""
 
-    def __init__(self, label: str, nodes: dict = None,
+    def __init__(self, label: str = "circuit", nodes: dict = None,
                  edges: list = None, template: str = None, **attr):
         """
         Parameters:
@@ -113,12 +113,13 @@ class CircuitIR(AbstractBaseIR):
 
             self.graph.add_node(label, node=template.apply(), **attr)
         else:  # default networkx behaviour
-            self.graph.add_node(label, node=node, **attr)
+            self.graph.add_node(label, **attr)
 
         return label
 
     def add_edges_from(self, edges, label_map: dict = None, **attr):
-        """ Add multiple edges.
+        """ Add multiple edges. This method explicitly assumes, that edges are given in edge_templates instead of
+        existing instances of `EdgeIR`.
 
         Parameters
         ----------
@@ -160,6 +161,60 @@ class CircuitIR(AbstractBaseIR):
                                "target_var": "/".join(target[-2:])
                                }))
         self.graph.add_edges_from(edge_list, **attr)
+
+    def add_edge(self, source: str, target: str, template: EdgeTemplate=None,
+                 values: dict=None, label_map: dict=None, check_consistency=True,
+                 **data):
+        """
+
+        Parameters
+        ----------
+        source
+        target
+        template
+            An instance of `EdgeTemplate` that will be applied using `values` to get an `EdgeIR` instance. If a template
+            is given, any 'edge_ir' that is additionally passed, will be ignored.
+        values
+        label_map
+        data
+            If no template is given, `data` is assumed to conform to the format that is needed to add an edge. I.e.,
+            `data` needs to contain fields for `weight`, `delay`, `edge_ir`, `source_var`, `target_var`.
+
+        Returns
+        -------
+
+        """
+
+        if template:
+            weight = values.pop("weight", 1.)
+            delay = values.pop("delay", 0.)
+            values_to_update = deepcopy(values)
+            edge_ir = template.apply(values_to_update)
+
+            if check_consistency:
+                # test, if variables at source and target exist and reference them properly
+                source, target = self._identify_sources_targets(source, target, edge_ir, label_map)
+
+            else:
+                # assume that source and target strings are already consistent. This should be the case,
+                # if the given strings were coming from existing circuits (instances of `CircuitIR`)
+                # or in general, if operators are not renamed.
+                source = source.split("/")
+                target = target.split("/")
+            source_node = "/".join(source[:-2])
+            target_node = "/".join(target[:-2])
+            source_var = "/".join(source[-2:])
+            target_var = "/".join(target[-2:])
+
+            self.graph.add_edge(source_node, target_node,
+                                {"edge_ir": edge_ir,
+                                 "weight": weight,
+                                 "delay": delay,
+                                 "source_var": source_var,
+                                 "target_var": target_var})
+
+        else:
+            self.graph.add_edge(**data)
 
     # def update_params(self, node_params: Optional[dict] = None, edge_params: Optional[dict] = None):
     #     """
@@ -241,7 +296,8 @@ class CircuitIR(AbstractBaseIR):
         source_op = self._rename_operator(source_node, source_op)
         target_op = self._rename_operator(target_node, target_op)
 
-        # ignore circuits for now:
+        # ignore circuits for now
+        # note: current implementation assumes, that this method is only called, if an edge is added
         source_path = "/".join((source_node, source_op, source_var))
         target_path = "/".join((target_node, target_op, target_var))
         # check if path is valid
@@ -271,7 +327,7 @@ class CircuitIR(AbstractBaseIR):
         new_op_label
 
         """
-
+        # ToDo: reformat OperatorIR --> Operator label remains true to template and version number is stored internally
         key_counter = OperatorIR.key_counter
         if op_label in key_counter:
             for i in range(key_counter[op_label]):
@@ -293,10 +349,12 @@ class CircuitIR(AbstractBaseIR):
 
     @property
     def nodes(self):
+        """Shortcut to self.graph.nodes. See documentation of `networkx.MultiDiGraph.nodes`."""
         return self.graph.nodes
 
     @property
     def edges(self):
+        """Shortcut to self.graph.edges. See documentation of `networkx.MultiDiGraph.edges`."""
         return self.graph.edges
 
     @classmethod
@@ -304,7 +362,7 @@ class CircuitIR(AbstractBaseIR):
         return cls(template.label, template.nodes, template.edges, template.path)
 
     @classmethod
-    def from_circuits(cls, label: str, circuits: dict, connectivity: Union[list, tuple, DataFrame]=None):
+    def from_circuits(cls, label: str, circuits: dict, connectivity: Union[list, tuple, DataFrame] = None):
         """Circuit creation method that takes multiple circuits (templates or instances of `CircuitIR`) as inputs to
         create one larger circuit out of these. With additional `connectivity` information, these circuit can directly
         be interlinked.
@@ -322,9 +380,9 @@ class CircuitIR(AbstractBaseIR):
             Optional `list`, `tuple` or `pandas.DataFrame' with connectivity information to create edges between the
             given circuits. If `list` or `tuple`, then each item must be formatted the same way as `edges` in
             `add_edges_from`: ('circuit/source_node/op/var', 'circuit/target_node/op/var', edge_template, variables).
-            If given as a `DataFrame`, keys (indices and column names) must refer to sources and targets as (string of
-            form 'circuit/node/op/var') and items may then be edge templates and associated variables. Empty cells in
-            the DataFrame should be filled with something 'falsy' (as in evaluates to `False` in Python).
+            If given as a `DataFrame`, keys (indices and column names) must refer to sources and targets, respectively,
+            as (string of form 'circuit/node/op/var') and items may then be edge templates and associated variables.
+            Empty cells in the DataFrame should be filled with something 'falsy' (as in evaluates to `False` in Python).
 
         Returns
         -------
@@ -338,15 +396,59 @@ class CircuitIR(AbstractBaseIR):
 
         if connectivity:
             if isinstance(connectivity, list) or isinstance(connectivity, tuple):
+                circuit.add_edges_from(connectivity)
+            else:
+                try:
+                    for source, row in connectivity.iterrows():
+                        for target, content in row.iteritems():
+                            if content:  # assumes, empty entries evaluate to `False`
+                                circuit.add_edge(source, target, check_consistency=False, **content)
+                except AttributeError:
+                    raise TypeError(f"Invalid data type of variable `connectivity` (type: {type(connectivity)}).")
 
+        return circuit
 
+    def add_circuit(self, label: str, circuit):
+        """ Add a single circuit (with its own nodes and edges) to this circuit (like a subgraph in a graph).
 
+        Parameters
+        ----------
+        label
+            Assigned name of the circuit. If this name is already in use, the label will be renamed in the form
+            `label.idx`.
+        circuit
+            Instance of `CircuitIR` or `CircuitTemplate` or a dictionary, where the key 'template' refers to a
+            `CircuitTemplate` instance and 'values' refers to updates that should be applied to the template.
+        Returns
+        -------
 
+        """
 
-        # collect edges
-        edges = []
+        # parse data type of circuit
+        if isinstance(circuit, dict):
+            circuit = circuit["template"].apply(circuit["values"])  # type: CircuitIR
+        else:
+            try:
+                # if it is a template, apply it
+                circuit = circuit.apply()  # type: CircuitIR
+            except AttributeError:
+                # assume circuit already is a circuitIR or similarly structured construct
+                pass
 
-        return cls(label, nodes, edges)
+        # check if given circuit label already exists in this circuit
+        if label in self:
+            raise PyRatesException(f"Circuit label {label} already exists in this circuit. Please specify a unique "
+                                   f"circuit label.")
+            # may change to a rule to rename circuits (like circuit.0, circuit.1, circuit.2...) with label map and
+            # counter
+
+        # add circuit nodes, node by node, appending circuit label to node name
+
+        for name, data in circuit.nodes(data=True):
+            self.add_node(f"{label}/{name}", **data)
+
+        for source, target, data in circuit.edges(data=True):
+            self.add_edge(f"{label}/{source}", f"{label}/{target}", **data)
 
     def network_def(self):
         return BackendIRFormatter.network_def(self)
