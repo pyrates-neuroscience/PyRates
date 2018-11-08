@@ -5,7 +5,7 @@ from pyrates.frontend.graph_entity import GraphEntityTemplate, GraphEntityTempla
 
 
 class EdgeTemplate(GraphEntityTemplate):
-    """Generic template for an edge in the computational network graph. A single edge may encompass several
+    """Generic template for an edge in the computational backend graph. A single edge may encompass several
     different operators. One template defines a typical structure of a given edge type."""
 
     pass

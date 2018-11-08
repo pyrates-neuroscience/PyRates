@@ -7,7 +7,7 @@ import tensorflow as tf
 import pytest
 
 # pyrates internal imports
-from pyrates.parser import TFExpressionParser, parse_equation
+from pyrates.backend.parser import TFExpressionParser, parse_equation
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"

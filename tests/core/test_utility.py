@@ -238,7 +238,7 @@ def test_5_5_save_run_data_to_file():
     synaptic_inputs = np.zeros((n_time_steps, 1))
     synaptic_inputs[start_stim:end_stim, 0] = mag_stim
 
-    # run network simulation
+    # run backend simulation
     ########################
 
     # print('| Test VII - Jansen-Rit Circuit |')

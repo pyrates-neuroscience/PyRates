@@ -117,7 +117,7 @@ def JR_parameter_study(param_names, param_values, simulation_time=1.0, step_size
         for j, p in enumerate(param_names):
             parameters[p] = param_values[j][i]
 
-        # initialize network
+        # initialize backend
         nmm = NeuralMassModel(connections=parameters['connections'],
                               population_labels=parameters['population_labels'],
                               step_size=parameters['step_size'],

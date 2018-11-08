@@ -28,7 +28,7 @@ __status__ = "Development"
 
 
 class CircuitIR(AbstractBaseIR):
-    """Custom graph datastructure that represents a network of nodes and edges with associated equations
+    """Custom graph datastructure that represents a backend of nodes and edges with associated equations
     and variables."""
 
     def __init__(self, label: str = "circuit", nodes: dict = None,
@@ -305,7 +305,7 @@ class CircuitIR(AbstractBaseIR):
             try:
                 _ = self[path]
             except KeyError:
-                raise PyRatesException(f"Could not find `{path}` in network graph.")
+                raise PyRatesException(f"Could not find `{path}` in backend graph.")
 
         source = (source_node, source_op, source_var)
         target = (target_node, target_op, target_var)
@@ -627,7 +627,7 @@ class BackendIRFormatter:
             network_def.add_node(key, **node)
         network_def.add_edges_from(edge_list)
 
-        return network_def  # return MultiDiGraph as needed by Network class
+        return network_def  # return MultiDiGraph as needed by ComputeGraph class
 
     @staticmethod
     def _nd_reformat_operators(op_graph: DiGraph):
@@ -700,7 +700,7 @@ class BackendIRFormatter:
         Parameters
         ----------
         target
-            Key identifying target node in network graph
+            Key identifying target node in backend graph
         node_dict
             Dictionary of target node (to move operators into)
         edge_dict

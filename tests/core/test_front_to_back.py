@@ -14,7 +14,7 @@ def setup_module():
 
 
 def test_simple_example():
-    """Test of a simple self-connecting one-node network with a linear operator for the full pipeline from YAML
+    """Test of a simple self-connecting one-node backend with a linear operator for the full pipeline from YAML
     to simulation."""
 
     # Step 1: Load Circuit template
@@ -29,8 +29,8 @@ def test_simple_example():
     net_def = circuit.network_def()
 
     # Step 4: Create tensorflow graph
-    from pyrates.network import Network
-    net = Network(net_def, dt=5e-4, vectorize='none')
+    from pyrates.backend import ComputeGraph
+    net = ComputeGraph(net_def, dt=5e-4, vectorize='none')
 
     # Step 5: Run simulation
     results, _ = net.run(simulation_time=1.,

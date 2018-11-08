@@ -11,7 +11,7 @@ import numpy as np
 from networkx import MultiDiGraph
 
 # pyrates imports
-from pyrates.backend import parse_dict, parse_equation
+from pyrates.backend.parser import parse_equation, parse_dict
 
 # meta infos
 __author__ = "Richard Gast"

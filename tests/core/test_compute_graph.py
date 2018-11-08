@@ -9,7 +9,7 @@ import pytest
 from copy import deepcopy
 
 # pyrates internal imports
-from pyrates.network import Network
+from pyrates.backend import ComputeGraph
 from pyrates.utility import nmrse
 
 # meta infos
@@ -55,7 +55,7 @@ def test_2_1_operator():
                  operator_order=['op1'],
                  inputs={}
                  )
-    net1 = Network(net_config=gr1, key='net1', vectorize='none')
+    net1 = ComputeGraph(net_config=gr1, key='net1', vectorize='none')
 
     # version 2 [eq2 -> eq1]
     gr2 = MultiDiGraph()
@@ -65,7 +65,7 @@ def test_2_1_operator():
                  operator_order=['op1'],
                  inputs={}
                  )
-    net2 = Network(net_config=gr2, key='test_op', vectorize='none', tf_graph=tf.Graph())
+    net2 = ComputeGraph(net_config=gr2, key='test_op', vectorize='none', tf_graph=tf.Graph())
 
     result1, _ = net1.run(outputs={'b1': ('n', 'op1', 'b'), 'a1': ('n', 'op1', 'a')})
     result2, _ = net2.run(outputs={'b2': ('n', 'op1', 'b')})
@@ -122,7 +122,7 @@ def test_2_2_node():
     gr.add_node('n1', **n1)
     gr.add_node('n2', **n2)
 
-    net = Network(gr, vectorize='none', key='test_node', tf_graph=tf.Graph())
+    net = ComputeGraph(gr, vectorize='none', key='test_node', tf_graph=tf.Graph())
     results, _ = net.run(outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n1', 'op_2', 'c')})
 
     assert results['r1_0'].values[-1] == results['r1_0'].values[0]
@@ -196,7 +196,7 @@ def test_2_3_edge():
     gr.add_node('n2', **n2)
     gr.add_edge('n1', 'n2', source_var='op_1/b', target_var='op_1/inp', delay=None, weight=1.)
 
-    net = Network(gr, vectorize='none', key='test_edge', dt=1e-3, tf_graph=tf.Graph())
+    net = ComputeGraph(gr, vectorize='none', key='test_edge', dt=1e-3, tf_graph=tf.Graph())
     results, _ = net.run(simulation_time=3e-3, outputs={'r1': ('n1', 'op_1', 'b'), 'r2': ('n2', 'op_1', 'b')})
 
     assert results['r1_0'].values[-1] > 0.
@@ -211,7 +211,7 @@ def test_2_4_vectorization():
     :method:`_vectorize`: Detailed documentation of vectorize method of `ComputeGraph` class.
     """
 
-    # test whether vectorized networks produce same output as non-vectorized network
+    # test whether vectorized networks produce same output as non-vectorized backend
     ################################################################################
 
     ops = {'op_1': {'equations': ["d/dt * a = -a + inp", "b = a*2."], 'inputs': {}, 'output': 'b'},
@@ -267,9 +267,9 @@ def test_2_4_vectorization():
     gr3.add_node('n2', **deepcopy(n2))
     gr3.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=None, weight=1.)
 
-    net1 = Network(gr1, vectorize='none', key='no_vec', dt=1e-3, tf_graph=tf.Graph())
-    net2 = Network(gr2, vectorize='nodes', key='node_vec', dt=1e-3, tf_graph=tf.Graph())
-    net3 = Network(gr3, vectorize='ops', key='op_vec', dt=1e-3, tf_graph=tf.Graph())
+    net1 = ComputeGraph(gr1, vectorize='none', key='no_vec', dt=1e-3, tf_graph=tf.Graph())
+    net2 = ComputeGraph(gr2, vectorize='nodes', key='node_vec', dt=1e-3, tf_graph=tf.Graph())
+    net3 = ComputeGraph(gr3, vectorize='ops', key='op_vec', dt=1e-3, tf_graph=tf.Graph())
     results1, _ = net1.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
     results2, _ = net2.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
     results3, _ = net3.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})

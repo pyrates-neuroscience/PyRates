@@ -102,7 +102,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
                              velocity=1.0, synaptic_input=None, synaptic_input_pops=None,
                              synaptic_input_syns=None, verbose=False):
     """
-    Runs benchmark for a number of JR circuits connected in a network.
+    Runs benchmark for a number of JR circuits connected in a backend.
 
     :param simulation_time:
     :param step_size:
@@ -152,7 +152,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
 
         C *= connectivity_scaling
 
-    # network delays
+    # backend delays
     if D:
 
         D = loadmat('../resources/D')['D']
@@ -167,7 +167,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
 
         D = np.zeros((n_circuits, n_circuits))
 
-    # network input
+    # backend input
     if synaptic_input is None:
         simulation_steps = int(np.ceil(simulation_time / step_size))
         synaptic_input = np.random.uniform(120, 320, (simulation_steps, n_circuits))
@@ -205,7 +205,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
 
     simulation_duration = end_time - start_time
 
-    print("%.2f" % simulation_time, 's simulation of Jansen-Rit network with ', N, 'populations finished after ',
+    print("%.2f" % simulation_time, 's simulation of Jansen-Rit backend with ', N, 'populations finished after ',
           "%.2f" % simulation_duration, ' s.')
 
     return simulation_duration
@@ -251,7 +251,7 @@ if __name__ == "__main__":
                                                       verbose=verbose)
 
     if run_second:
-        # JR network (33 connected JR circuits)
+        # JR backend (33 connected JR circuits)
         sim_dur_JR_network = run_JR_network_benchmark(simulation_time=simulation_duration,
                                                       step_size=step_size,
                                                       D=D,
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     # print("%.2f" % simulation_duration, 's simulation of Jansen-Rit circuit used ',
     #      "%.2f" % (np.sum(mem_use_JR_circuit) * 1e-2), ' MB RAM.')
 
-    # JR network (33 connected JR circuits)
+    # JR backend (33 connected JR circuits)
     # mem_use_JR_network = memory_usage((run_JR_network_benchmark, (simulation_duration, step_size)))
-    # print("%.2f" % simulation_duration, 's simulation of network with 33 JR circuits used ',
+    # print("%.2f" % simulation_duration, 's simulation of backend with 33 JR circuits used ',
     #      "%.2f" % (np.sum(mem_use_JR_network) * 1e-2), ' MB RAM.')

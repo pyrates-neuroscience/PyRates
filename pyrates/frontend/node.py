@@ -6,7 +6,7 @@ class NodeIR(GraphEntityIR):
 
 
 class NodeTemplate(GraphEntityTemplate):
-    """Generic template for a node in the computational network graph. A single node may encompass several
+    """Generic template for a node in the computational backend graph. A single node may encompass several
     different operators. One template defines a typical structure of a given node type."""
 
     pass
