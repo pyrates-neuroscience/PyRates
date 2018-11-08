@@ -55,9 +55,11 @@ class CircuitIR(AbstractBaseIR):
 
         self.graph = MultiDiGraph()
 
-        label_map = self.add_nodes_from(nodes, from_templates=True)
+        if nodes:
+            label_map = self.add_nodes_from(nodes, from_templates=True)
 
-        self.add_edges_from(edges, label_map)
+        if edges:
+            self.add_edges_from(edges, label_map)
 
     # def add_nodes_and_edges(self, nodes: Dict[str, NodeTemplate],
     #                         edges: list,):
@@ -110,10 +112,8 @@ class CircuitIR(AbstractBaseIR):
         label = self._get_unique_label(label)
 
         if template:
-
-            self.graph.add_node(label, node=template.apply(), **attr)
-        else:  # default networkx behaviour
-            self.graph.add_node(label, **attr)
+            node = template.apply()
+        self.graph.add_node(label, node=node, **attr)
 
         return label
 
@@ -214,49 +214,7 @@ class CircuitIR(AbstractBaseIR):
                                  "target_var": target_var})
 
         else:
-            self.graph.add_edge(**data)
-
-    # def update_params(self, node_params: Optional[dict] = None, edge_params: Optional[dict] = None):
-    #     """
-    #
-    #     Parameters
-    #     ----------
-    #     new_params
-    #
-    #     Returns
-    #     -------
-    #
-    #     """
-    #
-    #     if node_params:
-    #
-    #         for (node_name, op_name, var_name), arg in node_params.items():
-    #
-    #             if node_name == 'all':
-    #
-    #                 for n, (node, node_attrs) in enumerate(self.nodes.items()):
-    #                     node_attr = node_attrs['operator_args'][f'{op_name}/{var_name}']
-    #                     if 'int' in type(arg) or 'float' in type(arg):
-    #                         node_attr['value'] = arg
-    #                     else:
-    #                         node_attr['value'] = arg[n]
-    #
-    #             elif node_name in self.nodes.keys():
-    #
-    #                 node_attrs = self.nodes[node_name]
-    #                 node_attrs['operator_args'][f'{op_name}/{var_name}']['value'] = arg
-    #
-    #             elif any([node_name in n for n in self.nodes.keys()]):
-    #
-    #                 n = 0
-    #                 for node, node_attrs in self.nodes.items():
-    #                     if node_name in node:
-    #                         node_attr = node_attrs['operator_args'][f'{op_name}/{var_name}']
-    #                         if 'int' in type(arg) or 'float' in type(arg):
-    #                             node_attr['value'] = arg
-    #                         else:
-    #                             node_attr['value'] = arg[n]
-    #                         n += 1
+            self.graph.add_edge(source, target, **data)
 
     def _get_unique_label(self, label: str) -> str:
         """
@@ -390,7 +348,7 @@ class CircuitIR(AbstractBaseIR):
             instance of `CircuitIR`
         """
 
-        circuit = cls(label)
+        circuit = cls(label, nodes={}, edges=[])
         for name, circ in circuits.items():
             circuit.add_circuit(name, circ)
 
@@ -443,9 +401,8 @@ class CircuitIR(AbstractBaseIR):
             # counter
 
         # add circuit nodes, node by node, appending circuit label to node name
-
         for name, data in circuit.nodes(data=True):
-            self.add_node(f"{label}/{name}", **data)
+            self.add_node(f"{label}/{name}", node=data['node'])
 
         for source, target, data in circuit.edges(data=True):
             self.add_edge(f"{label}/{source}", f"{label}/{target}", **data)

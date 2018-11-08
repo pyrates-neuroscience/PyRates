@@ -35,8 +35,13 @@ def grid_search(circuit_template, param_grid, simulation_time, inputs, outputs, 
     if type(param_grid) is dict:
         param_grid = linearize_grid(param_grid)
 
+    # assign parameter updates to each circuit
+    circuits = {}
+    for n in range(param_grid.shape[0]):
+        circuits[f'{circuit_template.label}_{n}'] = {'template': circuit_template, 'values': param_grid[n, :]}
+
     # combine circuits to backend
-    circuit_comb = CircuitIR.from_circuits('combined', circuit_template, param_grid)
+    circuit_comb = CircuitIR.from_circuits('combined', circuits=circuits)
     net = ComputeGraph(circuit_comb, dt=dt, vectorize='nodes', key='combined')
 
     # simulate the circuits behavior

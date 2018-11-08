@@ -386,7 +386,11 @@ class ComputeGraph(MultiDiGraph):
                             out_vars[f'{key}_{j}'] = var[:, j]
                     except IndexError:
                         out_vars[key] = var
-            out_vars['time'] = np.arange(0., simulation_time + sampling_step_size * 0.5, sampling_step_size)
+
+            if not outputs:
+                out_vars = DataFrame()
+            else:
+                out_vars['time'] = np.arange(0., simulation_time + sampling_step_size * 0.5, sampling_step_size)
 
         return out_vars, (t_end - t_start)
 
