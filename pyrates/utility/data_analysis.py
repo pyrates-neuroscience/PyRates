@@ -2,8 +2,6 @@
 import pandas as pd
 import numpy as np
 
-# pyrates internal imports
-
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
@@ -15,11 +13,29 @@ def functional_connectivity(data, metric='cov', **kwargs):
     Parameters
     ----------
     data
+        Pandas dataframe containing the simulation results.
     metric
+        Type of connectivtiy measurement that should be used.
+            - `cov` for covariance (uses `np.cov`)
+            - `corr` for pearsson correlation (uses `np.corrcoef`)
+            - `csd` for cross-spectral density (uses `mne.time_frequency.csd_array_morlet`)
+            - `coh` for coherenc (uses `mne.connectivtiy.spectral_connectivity`)
+            - `cohy` for coherency (uses `mne.connectivtiy.spectral_connectivity`)
+            - `imcoh` for imaginary coherence (uses `mne.connectivtiy.spectral_connectivity`)
+            - `plv` for phase locking value (uses `mne.connectivtiy.spectral_connectivity`)
+            - `ppc` for pairwise phase consistency (uses `mne.connectivtiy.spectral_connectivity`)
+            - `pli` for phase lag index (uses `mne.connectivtiy.spectral_connectivity`)
+            - `pli2_unbiased` for unbiased estimate of squared phase lag index
+               (uses `mne.connectivtiy.spectral_connectivity`)
+            - `wpli`for weighted phase lag index (uses `mne.connectivtiy.spectral_connectivity`)
+            - `wpli2_debiased` for debiased weighted phase lag index (uses `mne.connectivtiy.spectral_connectivity`)
     kwargs
+        Additional keyword arguments passed to respective function used for fc calculation.
 
     Returns
     -------
+    np.ndarray
+        Pairwise functional connectivity
 
     """
 
@@ -67,17 +83,25 @@ def functional_connectivity(data, metric='cov', **kwargs):
 
 
 def analytic_signal(data, fmin, fmax, nodes=None, **kwargs):
-    """
+    """Calculates analytic signal from simulation results, using the hilbert transform.
 
     Parameters
     ----------
     data
+        Simulation results.
     fmin
+        Lower bound frequency for bandpass filter that will be applied to the data.
     fmax
+        Upper bound frequency for bandpass filter that will be applied to the data.
+    nodes
+        List of node names for which to calculate the analytic signal.
     kwargs
+        Additional keyword arguments that will be passed to the `mne.Raw.filter` method.
 
     Returns
     -------
+    pd.DataFrame
+        Dataframe containing the fields `time`, `node`, `amplitude` and `phase`.
 
     """
 
@@ -96,13 +120,7 @@ def analytic_signal(data, fmin, fmax, nodes=None, **kwargs):
     raw = mne_from_dataframe(data)
 
     # bandpass filter the raw data
-    filter_args = ['filter_length', 'l_trans_bandwidth', 'h_trans_bandwidth', 'n_jobs', 'method', 'iir_params',
-                   'copy', 'phase', 'fir_window', 'fir_design', 'pad', 'verbose']
-    kwargs_tmp = {}
-    for key in kwargs.keys():
-        if key in filter_args:
-            kwargs_tmp[key] = kwargs.pop(key)
-    raw.filter(l_freq=fmin, h_freq=fmax, **kwargs_tmp)
+    raw.filter(l_freq=fmin, h_freq=fmax, **kwargs)
 
     # apply hilbert transform
     raw.apply_hilbert()
@@ -134,17 +152,26 @@ def analytic_signal(data, fmin, fmax, nodes=None, **kwargs):
 
 
 def time_frequency(data, freqs, method='morlet', output='avg_power', **kwargs):
-    """
+    """Calculates time-frequency representation for each node.
 
     Parameters
     ----------
     data
+        Simulation results.
     freqs
+        Frequencies of interest.
+    method
+        Method to be used for TFR calculation. Can be `morlet` for `mne.time_frequency.tfr_array_morlet` or
+        `multitaper` for `mne.time_frequency.tfr_array_multitaper`.
     output
+        Type of the output variable to be calculated. For options, see `mne.time_frequency.tfr_array_morlet`.
     kwargs
+        Additional keyword arguments to be passed to the function used for tfr calculation.
 
     Returns
     -------
+    np.ndarray
+        Time-frequency representation (n x f x t) for each node (n) at each frequency of interest (f) and time (t).
 
     """
 
