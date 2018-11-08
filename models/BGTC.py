@@ -1,4 +1,4 @@
-"""Contains overall BGTC network class plus microcircuit classes for the network nodes
+"""Contains overall BGTC backend class plus microcircuit classes for the backend nodes
 """
 
 __author__ = 'Richard Gast'
@@ -16,7 +16,7 @@ from typing import Optional, List
 
 
 class BGTC(CircuitFromCircuit):
-    """Model of the basal ganglia-thalamocortical network.
+    """Model of the basal ganglia-thalamocortical backend.
     """
 
     def __init__(self,

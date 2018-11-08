@@ -1,4 +1,4 @@
-"""This module contains the node class used to create a network node from a set of operations.
+"""This module contains the node class used to create a backend node from a set of operations.
 """
 
 # external imports

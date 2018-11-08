@@ -1,5 +1,5 @@
-"""This module provides the network class that should be used to set-up any model. It creates a tensorflow graph that
-manages all computations/operations and a networkx graph that represents the network structure (nodes + edges).
+"""This module provides the backend class that should be used to set-up any model. It creates a tensorflow graph that
+manages all computations/operations and a networkx graph that represents the backend structure (nodes + edges).
 """
 
 # external imports
@@ -11,20 +11,20 @@ import numpy as np
 from networkx import MultiDiGraph
 
 # pyrates imports
-from pyrates.parser import parse_dict, parse_equation
+from pyrates.backend import parse_dict, parse_equation
 
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
 
 
-class Network(MultiDiGraph):
-    """Network level class used to set up and simulate networks of nodes and edges defined by sets of operators.
+class ComputeGraph(MultiDiGraph):
+    """ComputeGraph level class used to set up and simulate networks of nodes and edges defined by sets of operators.
 
     Parameters
     ----------
     net_config
-        Networkx MultiDiGraph that defines the configuration of the network. Following information need to be contained
+        Networkx MultiDiGraph that defines the configuration of the backend. Following information need to be contained
         on nodes and edges:
             nodes
                 Key, value pairs defining the nodes. They node keys should look as follows:
@@ -65,7 +65,7 @@ class Network(MultiDiGraph):
         If true, operations and variables on the graph will be automatically vectorized to some extend. Tends to speed
         up simulations substantially.
     key
-        Name of the network.
+        Name of the backend.
 
     Attributes
     ----------
@@ -90,7 +90,7 @@ class Network(MultiDiGraph):
                  vectorize: str = 'nodes',
                  key: Optional[str] = None
                  ) -> None:
-        """Instantiation of network.
+        """Instantiation of backend.
         """
 
         # call of super init
@@ -131,7 +131,7 @@ class Network(MultiDiGraph):
                     node_args['all_ops/dt'] = {'vtype': 'raw',
                                                'value': self.dt}
 
-                    # add node to network
+                    # add node to backend
                     self.add_node(node=node_name,
                                   ops=node_info['operators'],
                                   op_args=node_args,
@@ -145,7 +145,7 @@ class Network(MultiDiGraph):
                 edge_updates = []
                 for source_name, target_name, edge_idx in net_config.edges:
 
-                    # add edge to network
+                    # add edge to backend
                     edge_info = net_config.edges[source_name, target_name, edge_idx]
                     self.add_edge(source_node=source_name,
                                   target_node=target_name,
@@ -155,7 +155,7 @@ class Network(MultiDiGraph):
                     # collect project operation of edge
                     edge_updates.append(self.edges[source_name, target_name, edge_idx]['update'])
 
-                # create network update operation
+                # create backend update operation
                 #################################
 
                 if len(edge_updates) > 0:
@@ -171,7 +171,7 @@ class Network(MultiDiGraph):
             out_dir: Optional[str] = None,
             verbose: bool=True,
             ) -> Tuple[DataFrame, float]:
-        """Simulate the network behavior over time via a tensorflow session.
+        """Simulate the backend behavior over time via a tensorflow session.
 
         Parameters
         ----------
@@ -225,24 +225,24 @@ class Network(MultiDiGraph):
 
                 if val[0] == 'all':
 
-                    # collect output variable from every node in network
+                    # collect output variable from every node in backend
                     for node in self.nodes.keys():
                         outputs_tmp[f'{node}/{key}'] = self.get_var(node=node, op=val[1], var=val[2])
 
                 elif val[0] in self.nodes.keys() or val[0] in self._node_arg_map.keys():
 
-                    # get output variable of specific network node
+                    # get output variable of specific backend node
                     outputs_tmp[key] = self.get_var(node=val[0], op=val[1], var=val[2])
 
                 elif any([val[0] in key for key in self.nodes.keys()]):
 
-                    # get output variable from network nodes of a certain type
+                    # get output variable from backend nodes of a certain type
                     for node in self.nodes.keys():
                         if val[0] in node:
                             outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
                 else:
 
-                    # get output variable of specific, vectorized  network node
+                    # get output variable of specific, vectorized  backend node
                     for node in self._node_arg_map.keys():
                         if val[0] in node and 'comb' not in node:
                             outputs_tmp[f'{key}/{node}'] = self.get_var(node=node, op=val[1], var=val[2])
@@ -351,7 +351,7 @@ class Network(MultiDiGraph):
             sess.run(sample)
             t_start = t.time()
 
-            # simulate network behavior for each time-step
+            # simulate backend behavior for each time-step
             for step in range(sim_steps):
                 sess.run(self.step, inp[step])
                 if step % sampling_steps == 0:
@@ -361,10 +361,10 @@ class Network(MultiDiGraph):
             t_end = t.time()
             if verbose:
                 if simulation_time:
-                    print(f"{simulation_time}s of network behavior were simulated in {t_end - t_start} s given a "
+                    print(f"{simulation_time}s of backend behavior were simulated in {t_end - t_start} s given a "
                           f"simulation resolution of {self.dt} s.")
                 else:
-                    print(f"Network computations finished after {t_end - t_start} seconds.")
+                    print(f"ComputeGraph computations finished after {t_end - t_start} seconds.")
 
             # close session log
             if out_dir:
@@ -649,7 +649,7 @@ class Network(MultiDiGraph):
                  delay: Optional[Union[float, list, np.ndarray]] = 0.,
                  dependencies: Optional[list] = None
                  ) -> None:
-        """Add edge to the network that connects two variables from a source and a target node.
+        """Add edge to the backend that connects two variables from a source and a target node.
 
         Parameters
         ----------
@@ -1357,12 +1357,12 @@ class Network(MultiDiGraph):
         new_net_config
             Networkx MultiDiGraph containing the new, vectorized nodes.
         old_net_config
-            Networkx MultiDiGraph containing the old, non-vectorized network configuration.
+            Networkx MultiDiGraph containing the old, non-vectorized backend configuration.
 
         Returns
         -------
         MultiDiGraph
-            Updated network graph (with new, vectorized edges added).
+            Updated backend graph (with new, vectorized edges added).
 
         """
 
@@ -1509,7 +1509,7 @@ class Network(MultiDiGraph):
                        new_node: dict,
                        net_config: MultiDiGraph
                        ) -> None:
-        """Vectorize all instances of an operation across nodes and put them into a single-node network.
+        """Vectorize all instances of an operation across nodes and put them into a single-node backend.
 
         Parameters
         ----------

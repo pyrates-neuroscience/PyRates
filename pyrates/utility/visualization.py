@@ -1,4 +1,4 @@
-"""Visualization functionality for pyrates networks and network simulations.
+"""Visualization functionality for pyrates networks and backend simulations.
 """
 
 # external imports
@@ -106,7 +106,7 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
 
 def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whitegrid', node_order=None,
                       auto_cluster=False, **kwargs):
-    """Plot functional connectivity between nodes in network.
+    """Plot functional connectivity between nodes in backend.
 
     Parameters
     ----------
@@ -376,7 +376,7 @@ def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
 
 
 def write_graph(net, out_file='png'):
-    """Draw graph from network config.
+    """Draw graph from backend config.
     """
 
     pydot_graph = pydot.to_pydot(net)
