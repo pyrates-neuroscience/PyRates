@@ -348,7 +348,7 @@ class ExpressionParser(ParserElement):
             # combine elements via mathematical/boolean operator
             self._op_tmp = self.ops[op](op1, op2)
 
-        elif op in ".T.I":
+        elif ".T" == op or ".I" == op:
 
             # transpose/invert expression
             self._op_tmp = self.ops[op](self.parse(expr_stack))

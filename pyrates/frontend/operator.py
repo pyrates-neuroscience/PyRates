@@ -97,12 +97,12 @@ class OperatorIR(AbstractBaseIR):
             lhs, rhs = equation.split("=")
             a, var = match.groups()  # returns coefficient `a` and variable `y`
             eq1 = f"d/dt * {var} = {var}_t"
-            eq2 = f"d/dt * {var}_t = {rhs} - ({a})^2 * {var} - 2 * {a} * {var}_t"
+            eq2 = f"d/dt * {var}_t = {rhs} - ({a})^2 * {var} - 2. * {a} * {var}_t"
 
             variables[f"{var}_t"] = {"dtype": "float32",
                                      "description": "integration variable",
                                      "vtype": "state_var",
-                                     "value": 0.}  # ToDo: Figure out how to set initial conditions properly
+                                     "value": variables[var]['value'] if variables[var]['value'] else 0.}
 
             return eq1, eq2, variables
         else:

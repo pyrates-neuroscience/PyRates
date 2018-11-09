@@ -372,6 +372,6 @@ ax3 = plot_connectivity(fc, plot_style='circular_graph', auto_cluster=True,
                         xticklabels=results.columns.values, yticklabels=results.columns.values)
 ax4 = plot_psd(results, spatial_colors=False)
 freqs = np.arange(3., 20., 3.)
-power = time_frequency(results, method='morlet', freqs=freqs, n_cycles=5)
+power = time_frequency(results.iloc[:, 0:3], method='morlet', freqs=freqs, n_cycles=5)
 ax5 = plot_tfr(power, freqs=freqs, separate_nodes=False)
 show()

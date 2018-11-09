@@ -21,7 +21,7 @@ ExponentialSynapseRCO:
 
   equation:
     replace:
-      L_syn: "(d/dt + 1/tau)^2"
+      L_syn: "(d/dt + 1./tau)^2"
       h: "h/tau"
 
   # solution for external input: model as separate connection --> additional vector entry on synapse
@@ -89,7 +89,7 @@ ExponentialSynapseRateToConductance:
 
   equation:
     replace:
-      L_syn: "(d/dt * 1/tau + 1)^2"
+      L_syn: "(d/dt * 1./tau + 1)^2"
       h: "h/pi"
 
   # solution for external input: model as separate connection --> additional vector entry on synapse
