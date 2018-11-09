@@ -99,9 +99,10 @@ class OperatorIR(AbstractBaseIR):
             eq1 = f"d/dt * {var} = {var}_t"
             eq2 = f"d/dt * {var}_t = {rhs} - ({a})^2 * {var} - 2 * {a} * {var}_t"
 
-            variables[f"{var}_t"] = {"data_type": "float32",
+            variables[f"{var}_t"] = {"dtype": "float32",
                                      "description": "integration variable",
-                                     "variable_type": "state_var"}
+                                     "vtype": "state_var",
+                                     "value": 0.}  # ToDo: Figure out how to set initial conditions properly
 
             return eq1, eq2, variables
         else:
@@ -153,11 +154,12 @@ class OperatorIR(AbstractBaseIR):
         """Naive version of a parser for the default key of variables in a template. Returns data type,
         variable type and default value of the variable."""
 
-        value = None
+        value = 0.  # Setting initial conditions for undefined variables to 0. Is that reasonable?
         if isinstance(expr, int):
             vtype = "constant"
             value = expr
-            dtype = "int32"
+            # dtype = "int32"
+            dtype = "float32"  # default to float for maximum compatibility
         elif isinstance(expr, float):
             vtype = "constant"
             value = expr
@@ -176,10 +178,10 @@ class OperatorIR(AbstractBaseIR):
                 vtype = "placeholder"
             else:
                 try:
-                    if "." in expr:
-                        value = float(expr)
-                    else:
-                        value = int(expr)
+                    # if "." in expr:
+                    value = float(expr)  # default to float
+                    # else:
+                    #     value = int(expr)
                     vtype = "constant"
                 except ValueError:
                     raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
@@ -187,14 +189,16 @@ class OperatorIR(AbstractBaseIR):
             if expr.endswith("(float)"):
                 dtype = "float32"  # why float32 and not float64?
             elif expr.endswith("(int)"):
-                dtype = "int32"
+                # dtype = "int32"
+                dtype = "float32"  # default to float for maximum compatibility
             elif "." in expr:
                 dtype = "float32"
-                value = re.search("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)", expr).group()
+                value = float(re.search("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)", expr).group())
                 # see https://stackoverflow.com/questions/12643009/regular-expression-for-floating-point-numbers
             elif re.search("[0-9]+", expr):
-                dtype = "int32"
-                value = re.search("[0-9]+", expr).group()
+                # dtype = "int32"
+                dtype = "float32"  # default to float for maximum compatibility
+                value = float(re.search("[0-9]+", expr).group())
             else:
                 dtype = "float32"  # base assumption
 

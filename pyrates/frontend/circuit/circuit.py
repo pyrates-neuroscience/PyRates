@@ -62,16 +62,6 @@ class CircuitIR(AbstractBaseIR):
         if edges:
             self.add_edges_from(edges, label_map)
 
-    # def add_nodes_and_edges(self, nodes: Dict[str, NodeTemplate],
-    #                         edges: list,):
-    #
-    #     label_map = {}
-    #     edge_list = []
-    #     for label, template in nodes.items():
-    #         # ensure label uniqueness
-    #         label_map[label] = self._get_unique_label(label)
-    #         self.add_node(label_map[label], node=template.apply())
-
     def add_nodes_from(self, nodes: Union[Dict[str, NodeTemplate], Dict[str, dict]],
                        from_templates=True, **attr) -> dict:
         """ Add multiple nodes to circuit. Allows networkx-style adding if from_templates is set to False.
@@ -220,7 +210,7 @@ class CircuitIR(AbstractBaseIR):
             for path in (source, target):
                 if path not in self:
                     raise PyRatesException(f"Failed to add edge, because referenced node `{path}` does not exist in "
-                                           f"network graph.")
+                                           f"network graph. Edges can only be added to existing nodes.")
             self.graph.add_edge(source, target, **data)
 
     def _get_unique_label(self, label: str) -> str:
