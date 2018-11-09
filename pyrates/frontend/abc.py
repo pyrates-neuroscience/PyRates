@@ -74,17 +74,28 @@ class AbstractBaseIR:
 
         if "/" in key:
             top, *remainder = key.split("/")
-            for i, _key in enumerate(remainder):
-                try:
-                    return self._getter(top)["/".join(remainder[i:])]
-                except KeyError:
-                    # if it cannot be found, try to concatenate keys again which corresponds to circuits
-                    # this way nodes of the form 'circuit1/circuit2/.../node' can be found but not entire circuits
-                    top = "/".join((top, _key))
-            else:
-                raise KeyError(f"Unable to find object '{key}'.")
+            try:
+                item = self._getter(top)["/".join(remainder)]
+            except KeyError:
+                # if it cannot be found, try to concatenate keys again which corresponds to circuits
+                # this way nodes of the form 'circuit1/circuit2/.../node' can be found but not entire circuits
+                for i, _next in enumerate(remainder):
+                    top = "/".join((top, _next))
+                    try:
+                        if "/".join(remainder[i+1:]):
+                            item = self._getter(top)["/".join(remainder[i+1:])]
+                        else:
+                            item = self._getter(top)
+                    except KeyError:
+                        continue
+                    else:
+                        break
+                else:
+                    raise KeyError(f"Unable to find object '{key}'.")
         else:
-            return self._getter(key)
+            item = self._getter(key)
+
+        return item
 
     def _getter(self, key):
         """Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass."""

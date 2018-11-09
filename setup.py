@@ -14,4 +14,11 @@ setup(name='PyRates',
                 'tests'],
       zip_safe=False,
       python_requires='>=3.6',
-      install_requires=['numpy', 'matplotlib', 'scipy', 'networkx', 'pandas', 'tensorflow', 'pyparsing'])
+      install_requires=['numpy',
+                        'matplotlib',
+                        'scipy',
+                        'networkx',
+                        'pandas',
+                        'tensorflow',
+                        'pyparsing',
+                        'seaborn'])

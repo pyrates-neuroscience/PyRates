@@ -7,6 +7,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 """
 
 # external packages
+import re
 from typing import List, Dict, Any, Union, Tuple, Optional
 from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle
 from copy import deepcopy
@@ -15,7 +16,7 @@ from pandas import DataFrame
 # pyrates internal imports
 from pyrates.frontend.abc import AbstractBaseTemplate, AbstractBaseIR
 from pyrates.frontend.edge import EdgeTemplate, EdgeIR
-from pyrates.frontend.node import NodeTemplate
+from pyrates.frontend.node import NodeTemplate, NodeIR
 from pyrates import PyRatesException
 from pyrates.frontend.operator import OperatorIR
 from pyrates.frontend.yaml_parser import TemplateLoader
@@ -106,7 +107,7 @@ class CircuitIR(AbstractBaseIR):
         return label_map
 
     def add_node(self, label: str, template: NodeTemplate = None,
-                 node: dict = None, **attr) -> str:
+                 node: NodeIR = None, **attr) -> str:
         """Add single node"""
 
         label = self._get_unique_label(label)
@@ -163,7 +164,7 @@ class CircuitIR(AbstractBaseIR):
         self.graph.add_edges_from(edge_list, **attr)
 
     def add_edge(self, source: str, target: str, template: EdgeTemplate=None,
-                 values: dict=None, label_map: dict=None, check_consistency=True,
+                 values: dict=None, label_map: dict=None, identify_relations=True,
                  **data):
         """
 
@@ -179,6 +180,7 @@ class CircuitIR(AbstractBaseIR):
         data
             If no template is given, `data` is assumed to conform to the format that is needed to add an edge. I.e.,
             `data` needs to contain fields for `weight`, `delay`, `edge_ir`, `source_var`, `target_var`.
+        identify_relations
 
         Returns
         -------
@@ -191,7 +193,7 @@ class CircuitIR(AbstractBaseIR):
             values_to_update = deepcopy(values)
             edge_ir = template.apply(values_to_update)
 
-            if check_consistency:
+            if identify_relations:
                 # test, if variables at source and target exist and reference them properly
                 source, target = self._identify_sources_targets(source, target, edge_ir, label_map)
 
@@ -201,6 +203,7 @@ class CircuitIR(AbstractBaseIR):
                 # or in general, if operators are not renamed.
                 source = source.split("/")
                 target = target.split("/")
+
             source_node = "/".join(source[:-2])
             target_node = "/".join(target[:-2])
             source_var = "/".join(source[-2:])
@@ -214,6 +217,10 @@ class CircuitIR(AbstractBaseIR):
                                  "target_var": target_var})
 
         else:
+            for path in (source, target):
+                if path not in self:
+                    raise PyRatesException(f"Failed to add edge, because referenced node `{path}` does not exist in "
+                                           f"network graph.")
             self.graph.add_edge(source, target, **data)
 
     def _get_unique_label(self, label: str) -> str:
@@ -227,14 +234,36 @@ class CircuitIR(AbstractBaseIR):
         -------
         unique_label
         """
-        # define counter
-        if label in self.label_counter:
-            self.label_counter[label] += 1
-        else:
-            self.label_counter[label] = 0
+        # test, if label already has a counter and separate it, if necessary
+        match = re.match("(.+)[.]([\d]+$)", label)
+        if match:
+            # see if label already exists, just continue if it doesn't
+            if label in self:
+                # create new label
+                # separate base label and counter
+                label, counter = match.groups()
+                counter = int(counter)
+                if label not in self.label_counter:
+                    self.label_counter[label] = counter + 1
+                elif counter > self.label_counter[label]:
+                    self.label_counter[label] = counter + 1
+                else:
+                    self.label_counter[label] += 1
+                # set label
+                unique_label = f"{label}.{self.label_counter[label]}"
+            else:
+                # pass original label
+                unique_label = label
 
-        # set label
-        unique_label = f"{label}.{self.label_counter[label]}"
+        else:
+            # define counter
+            if label in self.label_counter:
+                self.label_counter[label] += 1
+            else:
+                self.label_counter[label] = 0
+
+            # set label
+            unique_label = f"{label}.{self.label_counter[label]}"
 
         return unique_label
 
@@ -260,10 +289,8 @@ class CircuitIR(AbstractBaseIR):
         target_path = "/".join((target_node, target_op, target_var))
         # check if path is valid
         for path in (source_path, target_path):
-            try:
-                _ = self[path]
-            except KeyError:
-                raise PyRatesException(f"Could not find `{path}` in backend graph.")
+            if path not in self:
+                raise PyRatesException(f"Could not find object with key path `{path}`.")
 
         source = (source_node, source_op, source_var)
         target = (target_node, target_op, target_var)
@@ -360,7 +387,7 @@ class CircuitIR(AbstractBaseIR):
                     for source, row in connectivity.iterrows():
                         for target, content in row.iteritems():
                             if content:  # assumes, empty entries evaluate to `False`
-                                circuit.add_edge(source, target, check_consistency=False, **content)
+                                circuit.add_edge(source, target, identify_relations=False, **content)
                 except AttributeError:
                     raise TypeError(f"Invalid data type of variable `connectivity` (type: {type(connectivity)}).")
 
@@ -402,7 +429,7 @@ class CircuitIR(AbstractBaseIR):
 
         # add circuit nodes, node by node, appending circuit label to node name
         for name, data in circuit.nodes(data=True):
-            self.add_node(f"{label}/{name}", node=data['node'])
+            self.add_node(f"{label}/{name}", **data)
 
         for source, target, data in circuit.edges(data=True):
             self.add_edge(f"{label}/{source}", f"{label}/{target}", **data)
@@ -547,7 +574,7 @@ class CircuitTemplateLoader(TemplateLoader):
 
 
 class BackendIRFormatter:
-    label_counter = {}  # type: Dict[str, int]
+    # label_counter = {}  # type: Dict[str, int]
 
     @classmethod
     def network_def(cls, circuit: CircuitIR):
