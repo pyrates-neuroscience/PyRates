@@ -199,7 +199,7 @@ def test_network_def_workaround():
     cpo_i = {'dtype': 'float32',
              'shape': (),
              'vtype': 'state_var',
-             'value': None}
+             'value': 0.}  # 0. is the new default value
 
     jr_cpo = {'equations': ['V = k * I'],
               'inputs': {'I': {'reduce_dim': True,
