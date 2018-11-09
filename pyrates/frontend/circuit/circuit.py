@@ -759,3 +759,29 @@ class BackendIRFormatter:
                      "delay": delay}
         # set target_var to singular input of last operator added
         return node_dict, edge_dict
+
+
+class SubCircuitView(AbstractBaseIR):
+
+    def __init__(self, circuit, subgraph_key: str):
+
+        nodes = (node
+                 for node, data in circuit.graph.nodes(data=True)
+                 if subgraph_key in data["_subgraphs"])
+        self.graph = circuit.graph.subgraph(nodes)
+        self.subcircuits = {key: value
+                            for key, value in circuit.subcircuits
+                            if key in circuit.subcircuits[subgraph_key]}
+
+    def _getter(self, key):
+
+        # look up key in circuits
+        if key in self.subcircuits:
+            return SubCircuitView(self, key)
+        else:
+            return self.graph.nodes[key]["node"]
+
+    @classmethod
+    def from_template(cls, template, **kwargs):
+        raise NotImplementedError(f"{cls} does not implement from_template.")
+
