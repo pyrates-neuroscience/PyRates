@@ -14,7 +14,7 @@ SigmoidPRO:
 
   equation:
     replace:
-      r * V: "m_max / (1 + exp(s*(V_thr - V)))"
+      r * V: "m_max / (1 + e^(s*(V_thr - V)))"
     remove: ["L_PRO * "]
 
   #  options:
@@ -24,7 +24,7 @@ SigmoidPRO:
   #      default: False
   #      values:
   #        True:
-  #          append: "- m_max/(1 + exp(s * V_thr))"
+  #          append: "- m_max/(1 + e^(s * V_thr))"
     # not the most elegant solution, but does the job
 
   variables:

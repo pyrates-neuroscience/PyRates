@@ -100,7 +100,7 @@ class CircuitIR(AbstractBaseIR):
                  node: NodeIR = None, **attr) -> str:
         """Add single node"""
 
-        #label = self._get_unique_label(label)
+        label = self._get_unique_label(label)
 
         if template:
             node = template.apply()
