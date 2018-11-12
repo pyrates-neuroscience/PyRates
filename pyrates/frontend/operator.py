@@ -332,7 +332,7 @@ class OperatorTemplateLoader(TemplateLoader):
     @staticmethod
     def update_variables(variables: dict, updates: dict):
 
-        updated = variables.copy()
+        updated = deepcopy(variables)
 
         for var, var_dict in updates.items():
             if var in updated:
