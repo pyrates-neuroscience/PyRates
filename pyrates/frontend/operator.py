@@ -89,7 +89,7 @@ class OperatorIR(AbstractBaseIR):
         """
 
         # matches pattern of form `(d/dt + a)^2 * y` and extracts `a` and `y`
-        match = re.match("\(\s*d\s*/\s*dt\s*[+-]\s*(\d*/?[a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)",
+        match = re.match(r"\(\s*d\s*/\s*dt\s*[+-]\s*([\d]*[.]?[\d]*/?[a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)",
                          equation)
 
         if match:

@@ -39,8 +39,8 @@ def test_simple_example():
 
     results.plot()
 
-
-def test_3_coupled_jansen_rit_circuits():
+@pytest.mark.parametrize("vectorize", ["none", "nodes", "ops"])
+def test_3_coupled_jansen_rit_circuits(vectorize):
     """Test the simple Jansen-Rit example with three coupled circuits."""
 
     # Step 1: Load Circuit template
@@ -56,4 +56,4 @@ def test_3_coupled_jansen_rit_circuits():
 
     # Step 4: Create tensorflow graph
     from pyrates.backend import ComputeGraph
-    net = ComputeGraph(net_def, dt=5e-4, vectorize='none')
+    net = ComputeGraph(net_def, dt=5e-4, vectorize=vectorize)

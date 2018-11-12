@@ -49,7 +49,7 @@ JansenRitExcitatorySynapseRCO:
 
   variables:
     h:
-      default: 3.25 e-3
+      default: 3.25e-3
     tau:
       default: 10e-3
     u:
