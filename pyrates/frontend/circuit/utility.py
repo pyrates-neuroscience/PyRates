@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Union, Dict
 
 from networkx import MultiDiGraph, DiGraph, find_cycle, NetworkXNoCycle
 
@@ -10,7 +11,7 @@ class BackendIRFormatter:
     # label_counter = {}  # type: Dict[str, int]
 
     @classmethod
-    def network_def(cls, circuit: CircuitIR):
+    def network_def(cls, circuit: CircuitIR, revert_node_names=False):
         """A bit of a workaround to connect interfaces of frontend and backend.
         TODO: clean up/simplify interface"""
         # import re
@@ -25,6 +26,9 @@ class BackendIRFormatter:
         for node_key, data in circuit.graph.nodes(data=True):
             node = data["node"]
             # reformat all node internals into operators + operator_args
+            if revert_node_names:
+                names = node_key.split("/")
+                node_key = ".".join(reversed(names))
             node_dict[node_key] = {}  # type: Dict[str, Union[list, dict]]
             node_dict[node_key] = dict(cls._nd_reformat_operators(node.op_graph))
             op_order = cls._nd_get_operator_order(node.op_graph)  # type: list
@@ -35,6 +39,9 @@ class BackendIRFormatter:
         #############################################
         for source, target, data in circuit.graph.edges(data=True):
             # move edge operators to node
+            if revert_node_names:
+                source = ".".join(reversed(source.split("/")))
+                target = ".".join(reversed(target.split("/")))
             node_dict[target], edge = cls._move_edge_ops_to_node(target, node_dict[target], data)
 
             edge_list.append((source, target, dict(**edge)))
