@@ -22,7 +22,7 @@ CouplingOperator:
         Connectivity constant that reflects connection strength
         from one neural population on another.
       unit: null
-      default: 1
+      default: 1.
     m_out:
       name: outgoing_firing_rate
       description: Mean outgoing firing rate at axonal hillock of pre-synaptic neuron.

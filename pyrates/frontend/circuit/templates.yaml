@@ -50,6 +50,6 @@ MultiJansenRitCircuit:
     JRC1: JansenRitCircuit
     JRC2: JansenRitCircuit
   edges:
-    - [JRC0/JR_PC/JansenRitPRO/m_out, JRC1/JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1}]
-    - [JRC1/JR_PC/JansenRitPRO/m_out, JRC2/JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1}]
-    - [JRC2/JR_IIN/JansenRitPRO/m_out, JRC0/JR_PC/JansenRitInhibitorySynapseRCO/m_in, *LC, {weight: 1}]
+    - [JRC0/JR_PC/JansenRitPRO/m_out, JRC1/JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1.}]
+    - [JRC1/JR_PC/JansenRitPRO/m_out, JRC2/JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1.}]
+    - [JRC2/JR_IIN/JansenRitPRO/m_out, JRC0/JR_PC/JansenRitInhibitorySynapseRCO/m_in, *LC, {weight: 1.}]
