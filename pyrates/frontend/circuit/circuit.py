@@ -445,7 +445,7 @@ class CircuitIR(AbstractBaseIR):
         for source, target, data in circuit.edges(data=True):
             self.add_edge(f"{label}/{source}", f"{label}/{target}", **data)
 
-    def network_def(self, revert_node_names=False):
+    def network_def(self, revert_node_names=True):
         from pyrates.frontend.circuit.utility import BackendIRFormatter
         return BackendIRFormatter.network_def(self, revert_node_names=revert_node_names)
 
@@ -577,7 +577,7 @@ class CircuitTemplateLoader(TemplateLoader):
     def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
         """Add edges to list of edges. Removing or altering is currently not supported."""
 
-        updated = base_edges.copy()
+        updated = deepcopy(base_edges)
         for edge in updates:
             if isinstance(edge, dict):
                 if "variables" in edge:

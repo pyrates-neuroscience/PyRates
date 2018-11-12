@@ -29,10 +29,10 @@ JansenRitCircuit:
 
   edges:
     # [source, target, type, target_operator, weight (, delay)]
-    - [JR_PC/JansenRitPRO/m_out, JR_IIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight : 33.75}]
-    - [JR_PC/JansenRitPRO/m_out, JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight : 135.}]
-    - [JR_EIN/JansenRitPRO/m_out, JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight : 108.}]
-    - [JR_IIN/JansenRitPRO/m_out, JR_PC/JansenRitInhibitorySynapseRCO/m_in, *LC, {weight : 33.75}]
+    - [JR_PC/JansenRitPRO/m_out, JR_IIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 33.75}]
+    - [JR_PC/JansenRitPRO/m_out, JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 135.}]
+    - [JR_EIN/JansenRitPRO/m_out, JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 108.}]
+    - [JR_IIN/JansenRitPRO/m_out, JR_PC/JansenRitInhibitorySynapseRCO/m_in, *LC, {*c : 33.75}]
 
 MultiJansenRitCircuit:
   description: |

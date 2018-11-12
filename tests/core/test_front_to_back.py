@@ -26,7 +26,7 @@ def test_simple_example():
     circuit = tmp.apply()
 
     # Step 3: Reformat frontend IR to backend IR
-    net_def = circuit.network_def()
+    net_def = circuit.network_def(revert_node_names=True)
 
     # Step 4: Create tensorflow graph
     from pyrates.backend import ComputeGraph
@@ -38,6 +38,7 @@ def test_simple_example():
                          sampling_step_size=1e-3)
 
     results.plot()
+
 
 @pytest.mark.parametrize("vectorize", ["none", "nodes", "ops"])
 def test_3_coupled_jansen_rit_circuits(vectorize):
@@ -52,7 +53,7 @@ def test_3_coupled_jansen_rit_circuits(vectorize):
     circuit = tmp.apply()
 
     # Step 3: Reformat frontend IR to backend IR
-    net_def = circuit.network_def()
+    net_def = circuit.network_def(revert_node_names=True)
 
     # Step 4: Create tensorflow graph
     from pyrates.backend import ComputeGraph
