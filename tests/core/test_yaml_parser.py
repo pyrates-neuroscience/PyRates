@@ -161,8 +161,21 @@ def test_circuit_instantiation():
     # used to be: test if two edges refer to the same coupling operator by comparing ids
     # this is why we referenced by "operator"
     # now: compare operators directly
+    edge_to_compare = circuit.edges[('JR_PC.0', 'JR_EIN.0', 0)]["edge_ir"]
     for op_key, op in circuit.edges[("JR_PC.0", "JR_IIN.0", 0)]["edge_ir"].op_graph.nodes(data=True):
-        assert op["operator"].equations == circuit.edges[('JR_PC.0', 'JR_EIN.0', 0)]["edge_ir"][op_key].equations
+        if op_key in edge_to_compare:
+            assert op["operator"].equations == edge_to_compare[op_key].equations
+
+
+def test_multi_circuit_instantiation():
+    """Test, if a circuit with subcircuits is also working."""
+    path = "pyrates.frontend.circuit.templates.MultiJansenRitCircuit"
+    from pyrates.frontend.circuit import CircuitTemplate
+
+    template = CircuitTemplate.from_yaml(path)
+
+    circuit = template.apply()
+    assert circuit
 
 
 def test_equation_alteration():
@@ -189,7 +202,8 @@ def test_network_def_workaround():
 
     nd = circuit.network_def()
 
-    operator_order = ['LinearCouplingOperator.0',
+    operator_order = ['LinearCouplingOperator.3',
+                      'LinearCouplingOperator.1',
                       'JansenRitExcitatorySynapseRCO.0',
                       'JansenRitInhibitorySynapseRCO.0',
                       'JansenRitCPO.0',
@@ -210,11 +224,12 @@ def test_network_def_workaround():
     node = nd.nodes["JR_PC.0"]
     edge = {'delay': 0,
             'source_var': 'JansenRitPRO.0/m_out',
-            'target_var': 'LinearCouplingOperator.0/m_out',
-            'weight': 108.0}
+            'target_var': 'LinearCouplingOperator.3/m_out',
+            'weight': 1}
     assert node["operator_order"] == operator_order
     assert node["inputs"] == inputs
     assert node["operator_args"]['JansenRitCPO.0/I'] == cpo_i
-    assert node["operators"]['JansenRitExcitatorySynapseRCO.0']["inputs"]["m_in"]["sources"] == []
+    assert node["operators"]['JansenRitExcitatorySynapseRCO.0']["inputs"]["m_in"]["sources"] == [
+        'LinearCouplingOperator.3']
     assert node["operators"]['JansenRitCPO.0'] == jr_cpo
     assert dict(nd.edges[('JR_EIN.0', 'JR_PC.0', 0)]) == edge

@@ -8,8 +8,8 @@ arguments. For more detailed descriptions, see the respective docstrings.
 
 # external packages
 import re
-from typing import List, Dict, Any, Union, Tuple, Optional
-from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle, subgraph
+from typing import List, Dict, Union
+from networkx import MultiDiGraph, subgraph
 from copy import deepcopy
 from pandas import DataFrame
 
@@ -29,10 +29,10 @@ __status__ = "Development"
 
 
 class CircuitIR(AbstractBaseIR):
-    """Custom graph datastructure that represents a backend of nodes and edges with associated equations
+    """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
 
-    def __init__(self, label: str = "circuit", nodes: dict = None,
+    def __init__(self, label: str = "circuit", circuits: dict = None, nodes: dict = None,
                  edges: list = None, template: str = None, **attr):
         """
         Parameters:
@@ -52,15 +52,21 @@ class CircuitIR(AbstractBaseIR):
         super().__init__(**attr)
         self.label = label
         self.label_counter = {}
+        self.label_map = {}
         self.template = template
 
         self.graph = MultiDiGraph()
         self.sub_circuits = set()
 
+        if circuits:
+            for key, temp in circuits.items():
+                self.add_circuit(key, temp)
+
         if nodes:
-            label_map = self.add_nodes_from(nodes, from_templates=True)
-            if edges:
-                self.add_edges_from(edges, label_map)
+            self.add_nodes_from(nodes, from_templates=True)
+
+        if edges:
+            self.add_edges_from(edges)
 
     def add_nodes_from(self, nodes: Union[Dict[str, NodeTemplate], Dict[str, dict]],
                        from_templates=True, **attr) -> dict:
@@ -94,21 +100,22 @@ class CircuitIR(AbstractBaseIR):
             for old, new in label_map.items():
                 nodes[new] = nodes.pop(old)
             self.graph.add_nodes_from(nodes, **attr)
-        return label_map
+        # update circuit-wide label map, assuming all labels are now unique
+        self.label_map.update(label_map)
 
     def add_node(self, label: str, template: NodeTemplate = None,
                  node: NodeIR = None, **attr) -> str:
         """Add single node"""
 
-        label = self._get_unique_label(label)
+        new_label = self._get_unique_label(label)
 
         if template:
             node = template.apply()
-        self.graph.add_node(label, node=node, **attr)
+        self.graph.add_node(new_label, node=node, **attr)
 
-        return label
+        self.label_map[label] = new_label
 
-    def add_edges_from(self, edges, label_map: dict = None, **attr):
+    def add_edges_from(self, edges, **attr):
         """ Add multiple edges. This method explicitly assumes, that edges are given in edge_templates instead of
         existing instances of `EdgeIR`.
 
@@ -116,7 +123,6 @@ class CircuitIR(AbstractBaseIR):
         ----------
         edges
             list of edges, each of shape [source/op/var, target/op/var, edge_template, variables]
-        label_map
         attr
 
         Returns
@@ -141,7 +147,7 @@ class CircuitIR(AbstractBaseIR):
             # for ... in nodes...
 
             # test, if variables at source and target exist and reference them properly
-            source, target = self._identify_sources_targets(source, target, edge_ir, label_map)
+            source, target = self._identify_sources_targets(source, target, edge_ir)
 
             edge_list.append((source[0], target[0],  # edge_unique_key,
                               {"edge_ir": edge_ir,
@@ -154,7 +160,7 @@ class CircuitIR(AbstractBaseIR):
         self.graph.add_edges_from(edge_list, **attr)
 
     def add_edge(self, source: str, target: str, template: EdgeTemplate=None,
-                 values: dict=None, label_map: dict=None, identify_relations=True,
+                 values: dict=None, identify_relations=True,
                  **data):
         """
 
@@ -166,7 +172,6 @@ class CircuitIR(AbstractBaseIR):
             An instance of `EdgeTemplate` that will be applied using `values` to get an `EdgeIR` instance. If a template
             is given, any 'edge_ir' that is additionally passed, will be ignored.
         values
-        label_map
         data
             If no template is given, `data` is assumed to conform to the format that is needed to add an edge. I.e.,
             `data` needs to contain fields for `weight`, `delay`, `edge_ir`, `source_var`, `target_var`.
@@ -185,7 +190,7 @@ class CircuitIR(AbstractBaseIR):
 
             if identify_relations:
                 # test, if variables at source and target exist and reference them properly
-                source, target = self._identify_sources_targets(source, target, edge_ir, label_map)
+                source, target = self._identify_sources_targets(source, target, edge_ir)
 
             else:
                 # assume that source and target strings are already consistent. This should be the case,
@@ -259,16 +264,19 @@ class CircuitIR(AbstractBaseIR):
 
     # noinspection PyUnresolvedReferences
     def _identify_sources_targets(self, source: str, target: str,
-                                  edge_ir: EdgeIR, label_map: dict = None):
+                                  edge_ir: EdgeIR):
 
         input_var = edge_ir.input
         output_var = edge_ir.output
         # separate source and target specifiers
-        *source_path, source_op, source_var = source.split("/")
-        *target_path, target_op, target_var = target.split("/")
+        *source_node, source_op, source_var = source.split("/")
+        source_node = "/".join(source_node)
+        *target_node, target_op, target_var = target.split("/")
+        target_node = "/".join(target_node)
+
         # re-reference node labels, if necessary
-        source_node = label_map[source_path[-1]]
-        target_node = label_map[target_path[-1]]
+        source_node = self.label_map[source_node]
+        target_node = self.label_map[target_node]
         # re_reference operator labels, if necessary
         source_op = self._rename_operator(source_node, source_op)
         target_op = self._rename_operator(target_node, target_op)
@@ -277,6 +285,7 @@ class CircuitIR(AbstractBaseIR):
         # note: current implementation assumes, that this method is only called, if an edge is added
         source_path = "/".join((source_node, source_op, source_var))
         target_path = "/".join((target_node, target_op, target_var))
+
         # check if path is valid
         for path in (source_path, target_path):
             if path not in self:
@@ -428,18 +437,23 @@ class CircuitIR(AbstractBaseIR):
         # add circuit reference to sub_circuits set. Needs to be done before adding edges
         self.sub_circuits.add(label)
 
+        # add sub circuit label map items to local label map
+        for old, new in circuit.label_map.items():
+            self.label_map[f"{label}/{old}"] = f"{label}/{new}"
+
         # add edges
         for source, target, data in circuit.edges(data=True):
             self.add_edge(f"{label}/{source}", f"{label}/{target}", **data)
 
     def network_def(self):
+        from pyrates.frontend.circuit.utility import BackendIRFormatter
         return BackendIRFormatter.network_def(self)
 
 
 class CircuitTemplate(AbstractBaseTemplate):
 
     def __init__(self, name: str, path: str, description: str, label: str = "circuit",
-                 nodes: dict = None, edges: List[tuple] = None):
+                 circuits: dict =None, nodes: dict = None, edges: List[tuple] = None):
 
         super().__init__(name, path, description)
 
@@ -450,12 +464,12 @@ class CircuitTemplate(AbstractBaseTemplate):
                     path = self._format_path(path)
                     self.nodes[key] = NodeTemplate.from_yaml(path)
 
-        # self.edge_templates = {}
-        # if edge_templates:
-        #     for key, path in edge_templates.items():
-        #         if isinstance(path, str):
-        #             path = self._format_path(path)
-        #             self.edge_templates[key] = EdgeTemplate.from_yaml(path)
+        self.circuits = {}
+        if circuits:
+            for key, path in circuits.items():
+                if isinstance(path, str):
+                    path = self._format_path(path)
+                    self.circuits[key] = CircuitTemplate.from_yaml(path)
 
         if edges:
             self.edges = self._get_edge_templates(edges)
@@ -470,7 +484,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         if not label:
             label = self.label
 
-        return CircuitIR(label, self.nodes, self.edges, self.path)
+        return CircuitIR(label, self.circuits, self.nodes, self.edges, self.path)
 
     def _get_edge_templates(self, edges: List[Union[tuple, dict]]):
         """
@@ -504,7 +518,7 @@ class CircuitTemplateLoader(TemplateLoader):
 
     @classmethod
     def update_template(cls, base, name: str, path: str, description: str = None,
-                        label: str = None, nodes: dict = None,
+                        label: str = None, circuits: dict = None, nodes: dict = None,
                         edges: List[tuple] = None):
         """Update all entries of the circuit template in their respective ways."""
 
@@ -515,16 +529,14 @@ class CircuitTemplateLoader(TemplateLoader):
             label = base.label
 
         if nodes:
-            nodes = cls.update_nodes(base.nodes, nodes)
+            nodes = cls.update_dict(base.nodes, nodes)
         else:
             nodes = base.nodes
 
-        # removed.
-        # if edge_templates:
-        #     edge_templates = cls.update_nodes(base.edge_templates, edge_templates)
-        #     # note: edge templates have the same properties as node templates, could also call them graph entities
-        # else:
-        #     edge_templates = base.edge_templates
+        if circuits:
+            circuits = cls.update_dict(base.circuits, circuits)
+        else:
+            circuits = base.circuits
 
         if edges:
             edges = cls.update_edges(base.edges, edges)
@@ -532,26 +544,17 @@ class CircuitTemplateLoader(TemplateLoader):
             edges = base.edges
 
         return CircuitTemplate(name=name, path=path, description=description,
-                               label=label, nodes=nodes,
+                               label=label, circuits=circuits, nodes=nodes,
                                edges=edges)
 
     @staticmethod
-    def update_nodes(base_nodes: dict, updates: dict):
+    def update_dict(base_dict: dict, updates: dict):
 
-        updated = deepcopy(base_nodes)
+        updated = deepcopy(base_dict)
 
         updated.update(updates)
 
         return updated
-
-    # @staticmethod
-    # def update_edge_templates(base_edge_templates: dict, updates: dict):
-    #
-    #     updated = deepcopy(base_edge_templates)
-    #
-    #     updated.update(updates)
-    #
-    #     return updated
 
     @staticmethod
     def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
@@ -569,204 +572,6 @@ class CircuitTemplateLoader(TemplateLoader):
             updated.append(edge)
 
         return updated
-
-
-class BackendIRFormatter:
-    # label_counter = {}  # type: Dict[str, int]
-
-    @classmethod
-    def network_def(cls, circuit: CircuitIR):
-        """A bit of a workaround to connect interfaces of frontend and backend.
-        TODO: clean up/simplify interface"""
-        # import re
-
-        network_def = MultiDiGraph()
-
-        edge_list = []
-        node_dict = {}
-
-        # reorganize node to conform with backend API
-        #############################################
-        for node_key, data in circuit.graph.nodes(data=True):
-            node = data["node"]
-            # reformat all node internals into operators + operator_args
-            node_dict[node_key] = {}  # type: Dict[str, Union[list, dict]]
-            node_dict[node_key] = dict(cls._nd_reformat_operators(node.op_graph))
-            op_order = cls._nd_get_operator_order(node.op_graph)  # type: list
-            # noinspection PyTypeChecker
-            node_dict[node_key]["operator_order"] = op_order
-
-        # reorganize edge to conform with backend API
-        #############################################
-        for source, target, data in circuit.graph.edges(data=True):
-            # move edge operators to node
-            node_dict[target], edge = cls._move_edge_ops_to_node(target, node_dict[target], data)
-
-            edge_list.append((source, target, dict(**edge)))
-
-        # network_def.add_nodes_from(node_dict)
-        for key, node in node_dict.items():
-            network_def.add_node(key, **node)
-        network_def.add_edges_from(edge_list)
-
-        return network_def  # return MultiDiGraph as needed by ComputeGraph class
-
-    @staticmethod
-    def _nd_reformat_operators(op_graph: DiGraph):
-        operator_args = dict()
-        operators = dict()
-
-        for op_key, op_dict in op_graph.nodes(data=True):
-            op_cp = deepcopy(op_dict)  # duplicate operator info
-            var_dict = op_cp.pop("variables")
-
-            for var_key, var_props in var_dict.items():
-                var_prop_cp = deepcopy(var_props)  # duplicate variable properties
-
-                # if var_key in op_dict["variables"]:  # workaround to get values back into operator_args
-                #     var_prop_cp["value"] = deepcopy(op_dict["values"][var_key])
-
-                var_prop_cp["shape"] = ()  # default to scalars for now
-                var_prop_cp.pop("unit", None)
-                var_prop_cp.pop("description", None)
-                var_prop_cp.pop("name", None)
-                # var_prop_cp["name"] = f"{new_op_key}/{var_key}"  # has been thrown out
-                operator_args[f"{op_key}/{var_key}"] = deepcopy(var_prop_cp)
-
-            op_cp["equations"] = op_cp["operator"].equations
-            op_cp["inputs"] = op_cp["operator"].inputs
-            op_cp["output"] = op_cp["operator"].output
-            # op_cp.pop("values", None)
-            op_cp.pop("operator", None)
-            operators[op_key] = op_cp
-
-        reformatted = dict(operator_args=operator_args,
-                           operators=operators,
-                           inputs={})
-        return reformatted
-
-    @staticmethod
-    def _nd_get_operator_order(op_graph: DiGraph) -> list:
-        """
-
-        Parameters
-        ----------
-        op_graph
-
-        Returns
-        -------
-        op_order
-        """
-        # check, if cycles are present in operator graph (which would be problematic
-        try:
-            find_cycle(op_graph)
-        except NetworkXNoCycle:
-            pass
-        else:
-            raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
-
-        op_order = []
-        graph = op_graph.copy()  # type: DiGraph
-        while graph.nodes:
-            # noinspection PyTypeChecker
-            primary_nodes = [node for node, in_degree in graph.in_degree if in_degree == 0]
-            op_order.extend(primary_nodes)
-            graph.remove_nodes_from(primary_nodes)
-
-        return op_order
-
-    @classmethod
-    def _move_edge_ops_to_node(cls, target, node_dict: dict, edge_dict: dict) -> (dict, dict):
-        """
-
-        Parameters
-        ----------
-        target
-            Key identifying target node in backend graph
-        node_dict
-            Dictionary of target node (to move operators into)
-        edge_dict
-            Dictionary with edge properties (to move operators from)
-        Returns
-        -------
-        node_dict
-            Updated dictionary of target node
-        edge_dict
-             Dictionary of reformatted edge
-        """
-        # grab all edge variables
-        edge = edge_dict["edge_ir"]  # type: EdgeIR
-        source_var = edge_dict["source_var"]
-        target_var = edge_dict["target_var"]
-        weight = edge_dict["weight"]
-        delay = edge_dict["delay"]
-        input_var = edge.input
-        output_var = edge.output
-
-        # reformat all edge internals into operators + operator_args
-        op_data = cls._nd_reformat_operators(edge.op_graph)  # type: dict
-        op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
-        operators = op_data["operators"]
-        operator_args = op_data["operator_args"]
-
-        # operator keys refer to a unique combination of template names and changed values
-
-        # add operators to target node in reverse order, so they can be safely prepended
-        added_ops = False
-        for op_name in reversed(op_order):
-            # check if operator name is already known in target node
-            if op_name in node_dict["operators"]:
-                pass
-            else:
-                added_ops = True
-                # this should all go smoothly, because operator should not be known yet
-                # add operator dict to target node operators
-                node_dict["operators"][op_name] = operators[op_name]
-                # prepend operator to op_order
-                node_dict["operator_order"].insert(0, op_name)
-                # ToDo: consider using collections.deque instead
-                # add operator args to target node
-                node_dict["operator_args"].update(operator_args)
-
-        out_op = op_order[-1]
-        out_var = operators[out_op]['output']
-        if added_ops:
-            # append operator output to target operator sources
-            # assume that only last operator in edge operator_order gives the output
-            # for op_name in node_dict["operators"]:
-            #     if out_var in node_dict["operators"][op_name]["inputs"]:
-            #         if out_var_long not in node_dict["operators"][op_name]["inputs"][out_var]:
-            #             # add reference to source operator that was previously in an edge
-            #             node_dict["operators"][op_name]["inputs"][out_var].append(output_var)
-
-            # shortcut, since target_var and output_var are known:
-            target_op, target_vname = target_var.split("/")
-            if output_var not in node_dict["operators"][target_op]["inputs"][target_vname]["sources"]:
-                node_dict["operators"][target_op]["inputs"][target_vname]["sources"].append(out_op)
-
-        # simplify edges and save into edge_list
-        # op_graph = edge.op_graph
-        # in_ops = [op for op, in_degree in op_graph.in_degree if in_degree == 0]
-        # if len(in_ops) == 1:
-        #     # simple case: only one input operator? then it's the first in the operator order.
-        #     target_op = op_order[0]
-        #     target_inputs = operators[target_op]["inputs"]
-        #     if len(target_var) != 1:
-        #         raise PyRatesException("Either too many or too few input variables detected. "
-        #                                "Needs to be exactly one.")
-        #     target_var = list(target_inputs.keys())[0]
-        #     target_var = f"{target_op}/{target_var}"
-        # else:
-        #     raise NotImplementedError("Transforming an edge with multiple input operators is not yet handled.")
-
-        # shortcut to new target war:
-        target_var = input_var
-        edge_dict = {"source_var": source_var,
-                     "target_var": target_var,
-                     "weight": weight,
-                     "delay": delay}
-        # set target_var to singular input of last operator added
-        return node_dict, edge_dict
 
 
 class SubCircuitView(AbstractBaseIR):
@@ -789,7 +594,7 @@ class SubCircuitView(AbstractBaseIR):
             return self.top_level_circuit.nodes[key]["node"]
 
     @property
-    def graph(self):
+    def induced_graph(self):
         """Return the subgraph specified by `subgraph_key`."""
 
         nodes = (node for node in self.top_level_circuit.nodes if node.startswith(self.subgraph_key))
@@ -802,5 +607,3 @@ class SubCircuitView(AbstractBaseIR):
     def __str__(self):
 
         return f"{self.__class__.__name__} on '{self.subgraph_key}' in {self.top_level_circuit}"
-
-

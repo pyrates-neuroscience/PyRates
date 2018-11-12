@@ -30,7 +30,7 @@ class GraphEntityIR(AbstractBaseIR):
 
         for op_template in operators:
             if op_template.name in value_updates:
-                values_to_update = value_updates[op_template.name]
+                values_to_update = value_updates.pop(op_template.name)
             else:
                 values_to_update = None
             op_instance, op_variables, key = op_template.apply(return_key=True,
@@ -51,6 +51,12 @@ class GraphEntityIR(AbstractBaseIR):
             all_outputs[out_var][key] = out_var
             # this assumes input and output variables map on each other by equal name
             # with additional information, non-equal names could also be mapped here
+
+        # fail gracefully, if any variables remain in value_updates which means, the there is some typo
+        if value_updates:
+            raise PyRatesException("Found value updates that did not fit any operator by name. This may be due to a "
+                                   "typo in specifying the operator or variable to update. Remaining variables:"
+                                   f"{value_updates}")
 
         # link outputs to inputs
         for op_key in self.op_graph.nodes:

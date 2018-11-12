@@ -5,6 +5,7 @@ aliases:
   - &JRInhibitorySynapse pyrates.frontend.synapse.templates.JansenRitInhibitorySynapseRCO
 
   - &LC pyrates.frontend.edge.templates.LCEdge
+  - &c LinearCouplingOperator/c
 
 JansenRitCircuit:
   description: |
@@ -28,10 +29,10 @@ JansenRitCircuit:
 
   edges:
     # [source, target, type, target_operator, weight (, delay)]
-    - [JR_PC/JansenRitPRO/m_out, JR_IIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 33.75}]
-    - [JR_PC/JansenRitPRO/m_out, JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 135.}]
-    - [JR_EIN/JansenRitPRO/m_out, JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 108.}]
-    - [JR_IIN/JansenRitPRO/m_out, JR_PC/JansenRitInhibitorySynapseRCO/m_in, *LC, {weight: 33.75}]
+    - [JR_PC/JansenRitPRO/m_out, JR_IIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 33.75}]
+    - [JR_PC/JansenRitPRO/m_out, JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 135.}]
+    - [JR_EIN/JansenRitPRO/m_out, JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 108.}]
+    - [JR_IIN/JansenRitPRO/m_out, JR_PC/JansenRitInhibitorySynapseRCO/m_in, *LC, {*c : 33.75}]
 
 MultiJansenRitCircuit:
   description: |
@@ -44,13 +45,11 @@ MultiJansenRitCircuit:
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   base: pyrates.frontend.circuit.circuit.BaseCircuit
   label: MultiJRC
-  nodes:
-    JRC: JansenRitCircuit
-
-  edge_templates:
-    LC: pyrates.frontend.edge.templates.LCEdge
-  # single coupling operator. needs rework for multiple coupling operators in single circuit.
-  # alternative: use YAML tags to hide long names
-
+  circuits:
+    JRC0: JansenRitCircuit
+    JRC1: JansenRitCircuit
+    JRC2: JansenRitCircuit
   edges:
-    - matrix
+    - [JRC0/JR_PC/JansenRitPRO/m_out, JRC1/JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1}]
+    - [JRC1/JR_PC/JansenRitPRO/m_out, JRC2/JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1}]
+    - [JRC2/JR_IIN/JansenRitPRO/m_out, JRC0/JR_PC/JansenRitInhibitorySynapseRCO/m_in, *LC, {weight: 1}]
