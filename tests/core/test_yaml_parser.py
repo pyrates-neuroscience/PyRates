@@ -203,8 +203,8 @@ def test_network_def_workaround():
 
     jr_cpo = {'equations': ['V = k * I'],
               'inputs': {'I': {'reduce_dim': True,
-                               'sources': ['JansenRitExcitatorySynapseRCO.0/I',
-                                           'JansenRitInhibitorySynapseRCO.0/I']}},
+                               'sources': ['JansenRitExcitatorySynapseRCO.0',
+                                           'JansenRitInhibitorySynapseRCO.0']}},
               'output': 'V'}
     # assert dict(nd.nodes["JR_PC.0"]) == JR_PC
     node = nd.nodes["JR_PC.0"]

@@ -9,7 +9,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 # external packages
 import re
 from typing import List, Dict, Any, Union, Tuple, Optional
-from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle
+from networkx import MultiDiGraph, DiGraph, NetworkXNoCycle, find_cycle, subgraph
 from copy import deepcopy
 from pandas import DataFrame
 
@@ -55,12 +55,12 @@ class CircuitIR(AbstractBaseIR):
         self.template = template
 
         self.graph = MultiDiGraph()
+        self.sub_circuits = set()
 
         if nodes:
             label_map = self.add_nodes_from(nodes, from_templates=True)
-
-        if edges:
-            self.add_edges_from(edges, label_map)
+            if edges:
+                self.add_edges_from(edges, label_map)
 
     def add_nodes_from(self, nodes: Union[Dict[str, NodeTemplate], Dict[str, dict]],
                        from_templates=True, **attr) -> dict:
@@ -320,7 +320,11 @@ class CircuitIR(AbstractBaseIR):
         return new_op_label
 
     def _getter(self, key):
-        return self.graph.nodes[key]["node"]
+
+        if key in self.sub_circuits:
+            return SubCircuitView(self, key)
+        else:
+            return self.graph.nodes[key]["node"]
 
     @property
     def nodes(self):
@@ -411,7 +415,7 @@ class CircuitIR(AbstractBaseIR):
                 pass
 
         # check if given circuit label already exists in this circuit
-        if label in self:
+        if label in self.sub_circuits:
             raise PyRatesException(f"Circuit label {label} already exists in this circuit. Please specify a unique "
                                    f"circuit label.")
             # may change to a rule to rename circuits (like circuit.0, circuit.1, circuit.2...) with label map and
@@ -421,6 +425,10 @@ class CircuitIR(AbstractBaseIR):
         for name, data in circuit.nodes(data=True):
             self.add_node(f"{label}/{name}", **data)
 
+        # add circuit reference to sub_circuits set. Needs to be done before adding edges
+        self.sub_circuits.add(label)
+
+        # add edges
         for source, target, data in circuit.edges(data=True):
             self.add_edge(f"{label}/{source}", f"{label}/{target}", **data)
 
@@ -762,26 +770,37 @@ class BackendIRFormatter:
 
 
 class SubCircuitView(AbstractBaseIR):
+    """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
+    level) circuit is referenced locally as 'top_level_circuit' and all subgraph-related information is computed only
+    when needed."""
 
-    def __init__(self, circuit, subgraph_key: str):
+    def __init__(self, top_level_circuit: CircuitIR, subgraph_key: str):
 
-        nodes = (node
-                 for node, data in circuit.graph.nodes(data=True)
-                 if subgraph_key in data["_subgraphs"])
-        self.graph = circuit.graph.subgraph(nodes)
-        self.subcircuits = {key: value
-                            for key, value in circuit.subcircuits
-                            if key in circuit.subcircuits[subgraph_key]}
+        self.top_level_circuit = top_level_circuit
+        self.subgraph_key = subgraph_key
 
-    def _getter(self, key):
+    def _getter(self, key: str):
 
-        # look up key in circuits
-        if key in self.subcircuits:
-            return SubCircuitView(self, key)
+        key = f"{self.subgraph_key}/{key}"
+
+        if key in self.top_level_circuit.sub_circuits:
+            return SubCircuitView(self.top_level_circuit, key)
         else:
-            return self.graph.nodes[key]["node"]
+            return self.top_level_circuit.nodes[key]["node"]
+
+    @property
+    def graph(self):
+        """Return the subgraph specified by `subgraph_key`."""
+
+        nodes = (node for node in self.top_level_circuit.nodes if node.startswith(self.subgraph_key))
+        return subgraph(self.top_level_circuit.graph, nodes)
 
     @classmethod
     def from_template(cls, template, **kwargs):
         raise NotImplementedError(f"{cls} does not implement from_template.")
+
+    def __str__(self):
+
+        return f"{self.__class__.__name__} on '{self.subgraph_key}' in {self.top_level_circuit}"
+
 
