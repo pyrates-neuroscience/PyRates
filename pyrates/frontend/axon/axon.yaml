@@ -16,7 +16,7 @@ PotentialToRateOperator:
     r:
       description: Generic scaling constant that transforms voltage to firing rate.
       unit: 1/(s*V)
-      default: 1
+      default: 1.
     V:
       name: membrane_potential
       description: Mean somatic membrane potential
