@@ -445,9 +445,9 @@ class CircuitIR(AbstractBaseIR):
         for source, target, data in circuit.edges(data=True):
             self.add_edge(f"{label}/{source}", f"{label}/{target}", **data)
 
-    def network_def(self):
+    def network_def(self, revert_node_names=False):
         from pyrates.frontend.circuit.utility import BackendIRFormatter
-        return BackendIRFormatter.network_def(self)
+        return BackendIRFormatter.network_def(self, revert_node_names=revert_node_names)
 
 
 class CircuitTemplate(AbstractBaseTemplate):
