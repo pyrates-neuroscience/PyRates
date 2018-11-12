@@ -101,7 +101,7 @@ class ComputeGraph(MultiDiGraph):
         # additional object attributes
         ##############################
 
-        self.key = key if key else 'net/0'
+        self.key = key if key else 'net.0'
         self.dt = dt
         self._tf_graph = tf_graph if tf_graph else tf.get_default_graph()
         self.states = []
@@ -913,10 +913,10 @@ class ComputeGraph(MultiDiGraph):
                     # collect old edges that connect the same source and target variables
                     edge_col = {}
                     for source, target, edge in net_config.edges:
-                        if source.split('/')[0] in source_new and target.split('/')[0] in target_new:
+                        if source.split('.')[0] in source_new and target.split('.')[0] in target_new:
                             edge_tmp = net_config.edges[source, target, edge]
                             source_var, target_var = edge_tmp['source_var'], edge_tmp['target_var']
-                            key = f"{source_var}{target_var}"
+                            key = f"{source_var}_{target_var}"
                             if key in edge_col.keys():
                                 edge_col[key].append((source, target, edge))
                             else:
@@ -1056,7 +1056,7 @@ class ComputeGraph(MultiDiGraph):
             for source, target, edge in net_config.edges:
                 edge_tmp = net_config.edges[source, target, edge]
                 source_var, target_var = edge_tmp['source_var'], edge_tmp['target_var']
-                key = f"{source_var}{target_var}"
+                key = f"{source_var}_{target_var}"
                 if key in edge_col.keys():
                     edge_col[key].append((source, target, edge))
                 else:
@@ -1241,24 +1241,27 @@ class ComputeGraph(MultiDiGraph):
 
         # define new node's name
         node_idx = 0
-        node_ref_tmp = node_ref.split('/')[0] if '/'in node_ref else node_ref
+        node_ref_tmp = node_ref.split('/')[-1] if '/'in node_ref else node_ref
+        node_ref_tmp = node_ref_tmp.split('.')[0] if '.' in node_ref else node_ref_tmp
         if all([node_ref_tmp in node_name for node_name in nodes]):
             node_name = f'{node_ref_tmp}_comb'
         else:
             node_name = node_ref_tmp
             for n in nodes:
-                n_tmp = n.split('/')[0] if '/' in n else n
+                n_tmp = n.split('/')[-1] if '/' in n else n
+                n_tmp = n_tmp.split('.')[0] if '.' in n else n
                 node_name += f'_{n_tmp}'
                 test_names = []
                 for test_name in nodes:
-                    test_name_tmp = test_name.split('/')[0] if '/' in test_name else test_name
+                    test_name_tmp = test_name.split('/')[-1] if '/' in test_name else test_name
+                    test_name_tmp = test_name_tmp.split('.')[0] if '.' in test_name else test_name
                     test_names.append(test_name_tmp)
                 if all([test_name in node_name for test_name in test_names]):
                     break
             node_name += '_comb'
 
         while True:
-            new_node_name = f"{node_name}/{node_idx}"
+            new_node_name = f"{node_name}.{node_idx}"
             if new_node_name in new_net_config.nodes.keys():
                 node_idx += 1
             else:

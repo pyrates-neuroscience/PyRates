@@ -27,7 +27,7 @@ sparseness_e = 0.1
 sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 2
 
 # connectivity parameters
 c_intra = 135.
@@ -176,7 +176,7 @@ for i in range(0, n_jrcs):
                               },
             'inputs': {}
             }
-    graph.add_node(f'pc/{i}', **data)
+    graph.add_node(f'pc.{i}', **data)
 
     data = {'operators': {'operator_rtp_syn': {
                                'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau ^2 * psp",
@@ -236,7 +236,7 @@ for i in range(0, n_jrcs):
                               },
             'inputs': {}
             }
-    graph.add_node(f'ein/{i}', **data)
+    graph.add_node(f'ein.{i}', **data)
 
     data = {'operators': {'operator_rtp_syn': {
                                'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau ^2 * psp",
@@ -296,7 +296,7 @@ for i in range(0, n_jrcs):
                               },
             'inputs': {}
             }
-    graph.add_node(f'iin/{i}', **data)
+    graph.add_node(f'iin.{i}', **data)
 
 # For the Un_vectorized Connection Dict.
 ########################################
@@ -306,39 +306,39 @@ for a in range(0, n_nodes):
 
         # source stuff
         if b % 3 == 2:
-            source = f'iin/{int(b/3)}'
+            source = f'iin.{int(b/3)}'
             c = C_i[a, b]
         elif b % 3 == 1:
-            source = f'ein/{int(b/3)}'
+            source = f'ein.{int(b/3)}'
             c = C_e[a, b]
         else:
-            source = f'pc/{int(b/3)}'
+            source = f'pc.{int(b/3)}'
             c = C_e[a, b]
 
         if c != 0:
             edge = {}
             if a % 3 == 0:
-                target = f'pc/{int(a/3)}'
+                target = f'pc.{int(a/3)}'
                 if source.split('/')[0] == 'iin':
                     edge['target_var'] = 'operator_rtp_syn_i/m_in'
                 else:
                     edge['target_var'] = 'operator_rtp_syn_e/m_in'
             elif a % 3 == 1:
-                target = f'ein/{int(a/3)}'
+                target = f'ein.{int(a/3)}'
                 edge['target_var'] = 'operator_rtp_syn/m_in'
             else:
-                target = f'iin/{int(a/3)}'
+                target = f'iin.{int(a/3)}'
                 edge['target_var'] = 'operator_rtp_syn/m_in'
 
             edge['source_var'] = 'operator_ptr/m_out'
             edge['weight'] = c
             if int(a/3) == int(b/3):
-                edge['delay'] = 0.
+                edge['delay'] = None  #0.
             else:
-                edge['delay'] = np.random.uniform(0., 6e-3)
+                edge['delay'] = None  #np.random.uniform(0., 6e-3)
 
-            s = source.split('/')[0]
-            t = target.split('/')[0]
+            s = source.split('.')[0]
+            t = target.split('.')[0]
             graph.add_edge(source, target, **edge)
 
 # backend setup
@@ -346,13 +346,13 @@ for a in range(0, n_nodes):
 
 inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
 gr = tf.Graph()
-net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
+net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='none')
 
 # backend simulation
 ####################
 
 results, _ = net.run(simulation_time=simulation_time,
-                     outputs={'V': ('pc', 'operator_ptr', 'psp')},
+                     outputs={'V': ('all', 'operator_ptr', 'psp')},
                      sampling_step_size=1e-3,
                      inputs={('pc', 'operator_rtp_syn_e', 'u'): inp},
                      #out_dir='/tmp/log/'
@@ -373,5 +373,5 @@ ax3 = plot_connectivity(fc, plot_style='circular_graph', auto_cluster=True,
 ax4 = plot_psd(results, spatial_colors=False)
 freqs = np.arange(3., 20., 3.)
 power = time_frequency(results.iloc[:, 0:3], method='morlet', freqs=freqs, n_cycles=5)
-ax5 = plot_tfr(power, freqs=freqs, separate_nodes=False)
+ax5 = plot_tfr(power, freqs=freqs, separate_nodes=True)
 show()
