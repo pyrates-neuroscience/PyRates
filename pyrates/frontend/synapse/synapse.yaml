@@ -8,7 +8,7 @@ RateToCurrentOperator:
     that contributes to the total membrane voltage change."
   base: OperatorTemplate
   equation:
-    "L_syn * I = h * (m_in + u)"
+    "L_syn * I = h * m_in"
   variables:
     L_syn:
       description: Generic linear differential operator
@@ -31,10 +31,6 @@ RateToCurrentOperator:
       description: Mean incoming firing rate at a specific synapse type
       unit: 1/s
       default: input
-    u:
-      description: external input
-      unit: 1/s
-      default: placeholder
 
 
 RateToConductanceOperator:

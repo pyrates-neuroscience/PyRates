@@ -52,6 +52,12 @@ JansenRitExcitatorySynapseRCO:
       default: 3.25 e-3
     tau:
       default: 10e-3
+    u:
+      default: placeholder
+
+  equation:
+    replace:
+      m_in: (m_in + u)
 
 JansenRitInhibitorySynapseRCO:
   description: >

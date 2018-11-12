@@ -38,3 +38,22 @@ def test_simple_example():
                          sampling_step_size=1e-3)
 
     results.plot()
+
+
+def test_3_coupled_jansen_rit_circuits():
+    """Test the simple Jansen-Rit example with three coupled circuits."""
+
+    # Step 1: Load Circuit template
+    from pyrates.frontend.circuit import CircuitTemplate
+    path = "pyrates.frontend.circuit.templates.MultiJansenRitCircuit"
+    tmp = CircuitTemplate.from_yaml(path)
+
+    # Step 2: Instantiate template to create frontend IR
+    circuit = tmp.apply()
+
+    # Step 3: Reformat frontend IR to backend IR
+    net_def = circuit.network_def()
+
+    # Step 4: Create tensorflow graph
+    from pyrates.backend import ComputeGraph
+    net = ComputeGraph(net_def, dt=5e-4, vectorize='none')
