@@ -449,6 +449,23 @@ class CircuitIR(AbstractBaseIR):
         from pyrates.frontend.circuit.utility import BackendIRFormatter
         return BackendIRFormatter.network_def(self, revert_node_names=revert_node_names)
 
+    def to_yaml(self, path: str, name: str = "CircuitTemplate"):
+        """Reformat graph structure into a dictionary that can be saved as YAML template."""
+
+        temp_dict = {}
+        node_dict = {}
+        for node_key, node_data in self.nodes(data=True):
+            node = node_data["node"]
+            if node.template:
+                node_dict[node_key] = node.template
+            else:
+                # if no template is given, build and search deeper for node templates
+                pass
+
+        for source, target, edge_data in self.edges(data=True):
+
+            edge = edge_data["edge_ir"]
+
 
 class CircuitTemplate(AbstractBaseTemplate):
 

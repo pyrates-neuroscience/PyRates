@@ -233,3 +233,13 @@ def test_network_def_workaround():
         'LinearCouplingOperator.3']
     assert node["operators"]['JansenRitCPO.0'] == jr_cpo
     assert dict(nd.edges[('JR_EIN.0', 'JR_PC.0', 0)]) == edge
+
+
+def test_differential_equation_reparsing():
+
+    from pyrates.frontend.node import NodeTemplate
+
+    template = NodeTemplate.from_yaml("pyrates.frontend.population.templates.JansenRitPC")
+    node = template.apply()
+
+    assert len(node["JansenRitExcitatorySynapseRCO.0"].equations) == 2
