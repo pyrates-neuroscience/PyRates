@@ -40,7 +40,7 @@ def test_simple_example():
     results.plot()
 
 
-@pytest.mark.parametrize("vectorize", ["none", "nodes", "ops"])
+@pytest.mark.parametrize("vectorize", ["none", "nodes"])
 def test_3_coupled_jansen_rit_circuits(vectorize):
     """Test the simple Jansen-Rit example with three coupled circuits."""
 

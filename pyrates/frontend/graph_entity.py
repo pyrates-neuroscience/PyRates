@@ -90,7 +90,14 @@ class GraphEntityIR(AbstractBaseIR):
         operator
         """
 
-        return self.op_graph.nodes[key]["operator"]
+        try:
+            return self.op_graph.nodes[key]["operator"]
+        except KeyError as e:
+            if key in str(e):
+                raise KeyError(f"Could not find operator '{key}''")
+            else:
+                raise e
+
 
     @classmethod
     def from_template(cls, template, values: dict=None):
