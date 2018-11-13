@@ -644,6 +644,7 @@ class TFExpressionParser(ExpressionParser):
                  "tan": tf.tan,
                  "abs": tf.abs,
                  "sqrt": tf.sqrt,
+                 "exp": tf.exp,
                  "max": tf.reduce_max,
                  "min": tf.reduce_min,
                  "argmax": tf.argmax,

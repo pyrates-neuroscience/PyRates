@@ -135,7 +135,7 @@ class CircuitIR(AbstractBaseIR):
             values = deepcopy(values)
             weight = values.pop("weight", 1.)
             # get delay
-            delay = values.pop("delay", 0.)
+            delay = values.pop("delay", None)
 
             edge_ir = template.apply(values=values)  # type: EdgeIR # edge spec
             # get weight

@@ -19,7 +19,7 @@ np.random.seed(4)
 
 # general
 step_size = 1e-3
-simulation_time = 10.0
+simulation_time = 3.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
@@ -31,7 +31,7 @@ n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
-c_inter = 20.
+c_inter = 0.
 
 # No of nodes triple the circuit size.
 n_nodes = int(n_jrcs * 3)
@@ -83,12 +83,12 @@ for i in range(n_jrcs):
 graph = MultiDiGraph()
 for i in range(0, n_jrcs):
     data = {'operators': {'operator_rtp_syn_e': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau ^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
                           'operator_rtp_syn_i': {
-                              'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau ^2 * psp",
+                              'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
                                             "d/dt * psp = x"],
                               'inputs': {},
                               'output': 'psp'},
@@ -179,7 +179,7 @@ for i in range(0, n_jrcs):
     graph.add_node(f'pc/{i}', **data)
 
     data = {'operators': {'operator_rtp_syn': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau ^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -239,7 +239,7 @@ for i in range(0, n_jrcs):
     graph.add_node(f'ein/{i}', **data)
 
     data = {'operators': {'operator_rtp_syn': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2./tau * x - 1./tau ^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -337,14 +337,14 @@ for a in range(0, n_nodes):
             else:
                 edge['delay'] = np.random.uniform(0., 6e-3)
 
-            s = source.split('.')[0]
-            t = target.split('.')[0]
+            s = source.split('/')[0]
+            t = target.split('/')[0]
             graph.add_edge(source, target, **edge)
 
 # backend setup
 ###############
 
-inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
+inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 22.
 gr = tf.Graph()
 net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
 
