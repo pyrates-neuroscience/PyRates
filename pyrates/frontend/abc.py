@@ -97,3 +97,20 @@ class AbstractBaseIR:
             return False
         else:
             return True
+
+    def to_dict(self) -> dict:
+        """Return a dictionary representation of the intermediate representation"""
+        raise NotImplementedError
+
+    def to_yaml(self, path: str, name: str):
+
+        dict_repr = {name: self.to_dict()}
+
+        from ruamel.yaml import YAML
+        yaml = YAML()
+
+        from pyrates.utility.filestorage import create_directory
+        create_directory(path)
+        from pathlib import Path
+        path = Path(path)
+        yaml.dump(dict_repr, path)

@@ -243,3 +243,13 @@ def test_differential_equation_reparsing():
     node = template.apply()
 
     assert len(node["JansenRitExcitatorySynapseRCO.0"].equations) == 2
+
+
+def test_yaml_dump():
+    from pyrates.frontend.circuit import CircuitTemplate
+    circuit = CircuitTemplate.from_yaml("pyrates.frontend.circuit.templates.JansenRitCircuit").apply()
+    circuit.to_yaml("../output/yaml_dump.yaml", "DumpedCircuit")
+
+    # reload saved circuit
+    saved_circuit = CircuitTemplate.from_yaml("../output/yaml_dump.yaml.DumpedCircuit").apply()
+    assert saved_circuit
