@@ -461,8 +461,6 @@ class ComputeGraph(MultiDiGraph):
             # initialize variable scope of node
             with tf.variable_scope(node):
 
-                tf_ops = []
-
                 # go through operations
                 for op_name in op_order:
 
@@ -551,18 +549,18 @@ class ComputeGraph(MultiDiGraph):
                                                 raise ValueError(
                                                     f"Invalid dependencies found in operator: {op['equations']}. Input"
                                                     f" Variable {var_name} has not been calculated yet.")
-                                            out_ops_tmp += op_args[out_var].pop(['op'])
+                                            out_ops_tmp += op_args[out_var].pop('op')
                                             out_vars_tmp.append(op_args[out_var]['var'])
 
                                         # add tensorflow operations for grouping the inputs together
                                         with tf.control_dependencies(out_ops_tmp):
-                                            tf_var_tmp = tf.parallel_stack(out_vars_tmp)
-                                        if inp['reduce_dim'][i]:
-                                            tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
-                                        else:
-                                            tf_var_tmp2 = tf.reshape(tf_var_tmp,
-                                                                     shape=(tf_var_tmp.shape[0] *
-                                                                            tf_var_tmp.shape[1],))
+                                            tf_var_tmp = tf.stack(out_vars_tmp)
+                                            if inp['reduce_dim'][i]:
+                                                tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
+                                            else:
+                                                tf_var_tmp2 = tf.reshape(tf_var_tmp,
+                                                                         shape=(tf_var_tmp.shape[0] *
+                                                                                tf_var_tmp.shape[1],))
 
                                         # append variable and operation to list
                                         out_vars.append(tf_var_tmp2)
@@ -598,31 +596,31 @@ class ComputeGraph(MultiDiGraph):
                                                 out_vars_new.append(out_var)
 
                                         # stack input variables or sum them up
-                                        tf_var = tf.parallel_stack(out_vars_new)
+                                        tf_var = tf.stack(out_vars_new)
+
                                         if type(inp['reduce_dim']) is bool and inp['reduce_dim']:
-                                            tf_var = tf.reduce_sum(tf_var, 0)
+                                            tf_var_inp = tf.reduce_sum(tf_var, 0)
                                         else:
-                                            tf_var = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
+                                            tf_var_inp = tf.reshape(tf_var, shape=(tf_var.shape[0] * tf_var.shape[1],))
 
                                 # for a single input variable
                                 else:
 
-                                    tf_var = out_vars[0]
+                                    tf_var_inp = out_vars[0]
 
                                 # add input variable information to argument dictionary
                                 if var_name not in op_args_tf.keys():
-                                    op_args_tf[var_name] = {'var': tf.get_variable(name=var_name, shape=tf_var.shape,
-                                                                                   dtype=tf_var.dtype)}
-                                update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var,
+                                    op_args_tf[var_name] = {'var': tf.get_variable(name=var_name, shape=tf_var_inp.shape,
+                                                                                   dtype=tf_var_inp.dtype)}
+                                update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var_inp,
                                                              dependencies=out_ops)
                                 op_args_tf[var_name].update({'dependency': True,
                                                              'op': update})
 
                         # create tensorflow operator
-                        tf_ops_new, op_args_tf = self.add_operator(expressions=op['equations'],
-                                                                   expression_args=op_args_tf,
-                                                                   variable_scope=op_name)
-                        tf_ops += tf_ops_new
+                        tf_ops, op_args_tf = self.add_operator(expressions=op['equations'],
+                                                               expression_args=op_args_tf,
+                                                               variable_scope=op_name)
 
                         # bind newly created tf variables to node
                         for var_name, tf_var in op_args_tf.items():
@@ -632,7 +630,7 @@ class ComputeGraph(MultiDiGraph):
                             op_args[attr_name] = tf_var
 
                         # handle dependencies
-                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops_new
+                        op_args[f"{op_name}/{op['output']}"]['op'] = tf_ops
                         for arg in op_args.values():
                             arg['dependency'] = False
 

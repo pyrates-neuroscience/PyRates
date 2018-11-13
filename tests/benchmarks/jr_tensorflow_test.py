@@ -27,7 +27,7 @@ sparseness_e = 0.
 sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 100
 
 # connectivity parameters
 c_intra = 135.
@@ -327,9 +327,9 @@ for a in range(0, n_nodes):
             edge['source_var'] = 'PRO.0/m_out'
             edge['weight'] = c
             if int(a/3) == int(b/3):
-                edge['delay'] = None #0.
+                edge['delay'] = 0.
             else:
-                edge['delay'] = None #änp.random.uniform(0., 6e-3)
+                edge['delay'] = 0. #np.random.uniform(0., 6e-3)
 
             graph.add_edge(source, target, **edge)
 
@@ -338,7 +338,7 @@ for a in range(0, n_nodes):
 
 inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
 gr = tf.Graph()
-net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='none')
+net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
 
 # backend simulation
 ####################
@@ -356,7 +356,7 @@ results, _ = net.run(simulation_time=simulation_time,
 from pyrates.utility import plot_timeseries, plot_connectivity, plot_phase, analytic_signal, functional_connectivity, \
     plot_psd, time_frequency, plot_tfr
 
-ax1 = plot_timeseries(data=results, variable='psp[V]', plot_style='line_plot')
+ax1 = plot_timeseries(data=results, variable='psp[V]', plot_style='line_plot', ci=None)
 #phase_amp = analytic_signal(results, fmin=6., fmax=10., nodes=[0, 1])
 #ax2 = plot_phase(data=phase_amp)
 #fc = functional_connectivity(results, metric='csd', frequencies=[7., 8., 9.])
