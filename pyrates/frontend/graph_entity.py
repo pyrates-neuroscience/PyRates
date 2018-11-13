@@ -101,7 +101,7 @@ class GraphEntityIR(AbstractBaseIR):
 class GraphEntityTemplate(AbstractBaseTemplate):
 
     def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
-                 description: str, label: str = None):
+                 description: str = "A node or an edge.", label: str = None):
         """For now: only allow single equation in operator template."""
 
         super().__init__(name, path, description)

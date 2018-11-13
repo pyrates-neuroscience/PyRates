@@ -469,7 +469,7 @@ class CircuitIR(AbstractBaseIR):
 
 class CircuitTemplate(AbstractBaseTemplate):
 
-    def __init__(self, name: str, path: str, description: str, label: str = "circuit",
+    def __init__(self, name: str, path: str, description: str = "A circuit template.", label: str = "circuit",
                  circuits: dict =None, nodes: dict = None, edges: List[tuple] = None):
 
         super().__init__(name, path, description)

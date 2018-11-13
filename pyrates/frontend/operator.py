@@ -240,7 +240,7 @@ class OperatorTemplate(AbstractBaseTemplate):
 
     # key_map = {}  # tracks renaming of of operator keys to have shorter unique keys
 
-    def __init__(self, name: str, path: str, equation: str, variables: dict, description: str):
+    def __init__(self, name: str, path: str, equation: str, variables: dict, description: str = "An operator template."):
         """For now: only allow single equation in operator template."""
 
         super().__init__(name, path, description)
