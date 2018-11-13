@@ -163,7 +163,7 @@ for i in range(0, n_jrcs):
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 0.},
-                              'RPO_e_pc.0/u': {'vtype': 'constant',
+                              'RPO_e_pc.0/u': {'vtype': 'placeholder',
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 220.},
@@ -327,16 +327,16 @@ for a in range(0, n_nodes):
             edge['source_var'] = 'PRO.0/m_out'
             edge['weight'] = c
             if int(a/3) == int(b/3):
-                edge['delay'] = 0.
+                edge['delay'] = None #0.
             else:
-                edge['delay'] = np.random.uniform(0., 6e-3)
+                edge['delay'] = None #änp.random.uniform(0., 6e-3)
 
             graph.add_edge(source, target, **edge)
 
 # backend setup
 ###############
 
-#inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
+inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
 gr = tf.Graph()
 net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='none')
 
@@ -346,7 +346,7 @@ net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, 
 results, _ = net.run(simulation_time=simulation_time,
                      outputs={'V': ('all', 'PRO.0', 'psp')},
                      sampling_step_size=1e-3,
-                     #inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
+                     inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
                      #out_dir='/tmp/log/'
                      )
 
