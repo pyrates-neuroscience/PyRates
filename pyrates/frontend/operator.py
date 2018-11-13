@@ -64,7 +64,11 @@ class OperatorIR(AbstractBaseIR):
             # this may be subject to change
 
             if values:
-                for vname in values:
+                for vname, update in values.items():
+                    # if isinstance(update, dict):
+                    #     if "value" in update:
+                    #         variables[vname["value"]] = update["value"]
+                    #     if "vtype" in
                     # only values are updated, assuming all other specs remain the same
                     variables[vname]["value"] = values[vname]
                     # should fail, if variable is unknown

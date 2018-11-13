@@ -3,7 +3,7 @@ from pyrates.backend import ComputeGraph
 from matplotlib.pyplot import *
 
 # parameters
-n_jrcs = 5
+n_jrcs = 3
 
 # circuit IR setup
 circuit_temp = CircuitTemplate.from_yaml("pyrates.frontend.circuit.templates.JansenRitCircuit")
@@ -14,7 +14,8 @@ circuit_ir = CircuitIR.from_circuits('jrc_net', circuits=circuits).network_def(r
 
 # create backend
 net = ComputeGraph(circuit_ir, vectorize='none')
-inp_pc = 220. + np.random.randn(3000, n_jrcs) * 0.
+# inp_pc = 220. + np.random.randn(3000, n_jrcs) * 0.
+inp_pc = np.full((3000, n_jrcs), 220.)
 inp_in = np.zeros((3000, n_jrcs))
 results, _ = net.run(simulation_time=3.,
                      outputs={'v': ('all', 'JansenRitPRO.0', 'V')},
