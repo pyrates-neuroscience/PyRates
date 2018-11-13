@@ -145,64 +145,65 @@ class BackendIRFormatter:
         input_var = edge.input
         output_var = edge.output
 
-        # reformat all edge internals into operators + operator_args
-        op_data = cls._nd_reformat_operators(edge.op_graph)  # type: dict
-        op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
-        operators = op_data["operators"]
-        operator_args = op_data["operator_args"]
+        if len(edge.op_graph) > 0:
+            # reformat all edge internals into operators + operator_args
+            op_data = cls._nd_reformat_operators(edge.op_graph)  # type: dict
+            op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
+            operators = op_data["operators"]
+            operator_args = op_data["operator_args"]
 
-        # operator keys refer to a unique combination of template names and changed values
+            # operator keys refer to a unique combination of template names and changed values
 
-        # add operators to target node in reverse order, so they can be safely prepended
-        added_ops = False
-        for op_name in reversed(op_order):
-            # check if operator name is already known in target node
-            if op_name in node_dict["operators"]:
-                pass
-            else:
-                added_ops = True
-                # this should all go smoothly, because operator should not be known yet
-                # add operator dict to target node operators
-                node_dict["operators"][op_name] = operators[op_name]
-                # prepend operator to op_order
-                node_dict["operator_order"].insert(0, op_name)
-                # ToDo: consider using collections.deque instead
-                # add operator args to target node
-                node_dict["operator_args"].update(operator_args)
+            # add operators to target node in reverse order, so they can be safely prepended
+            added_ops = False
+            for op_name in reversed(op_order):
+                # check if operator name is already known in target node
+                if op_name in node_dict["operators"]:
+                    pass
+                else:
+                    added_ops = True
+                    # this should all go smoothly, because operator should not be known yet
+                    # add operator dict to target node operators
+                    node_dict["operators"][op_name] = operators[op_name]
+                    # prepend operator to op_order
+                    node_dict["operator_order"].insert(0, op_name)
+                    # ToDo: consider using collections.deque instead
+                    # add operator args to target node
+                    node_dict["operator_args"].update(operator_args)
 
-        out_op = op_order[-1]
-        out_var = operators[out_op]['output']
-        if added_ops:
-            # append operator output to target operator sources
-            # assume that only last operator in edge operator_order gives the output
-            # for op_name in node_dict["operators"]:
-            #     if out_var in node_dict["operators"][op_name]["inputs"]:
-            #         if out_var_long not in node_dict["operators"][op_name]["inputs"][out_var]:
-            #             # add reference to source operator that was previously in an edge
-            #             node_dict["operators"][op_name]["inputs"][out_var].append(output_var)
+            out_op = op_order[-1]
+            out_var = operators[out_op]['output']
+            if added_ops:
+                # append operator output to target operator sources
+                # assume that only last operator in edge operator_order gives the output
+                # for op_name in node_dict["operators"]:
+                #     if out_var in node_dict["operators"][op_name]["inputs"]:
+                #         if out_var_long not in node_dict["operators"][op_name]["inputs"][out_var]:
+                #             # add reference to source operator that was previously in an edge
+                #             node_dict["operators"][op_name]["inputs"][out_var].append(output_var)
 
-            # shortcut, since target_var and output_var are known:
-            target_op, target_vname = target_var.split("/")
-            if output_var not in node_dict["operators"][target_op]["inputs"][target_vname]["sources"]:
-                node_dict["operators"][target_op]["inputs"][target_vname]["sources"].append(out_op)
+                # shortcut, since target_var and output_var are known:
+                target_op, target_vname = target_var.split("/")
+                if output_var not in node_dict["operators"][target_op]["inputs"][target_vname]["sources"]:
+                    node_dict["operators"][target_op]["inputs"][target_vname]["sources"].append(out_op)
 
-        # simplify edges and save into edge_list
-        # op_graph = edge.op_graph
-        # in_ops = [op for op, in_degree in op_graph.in_degree if in_degree == 0]
-        # if len(in_ops) == 1:
-        #     # simple case: only one input operator? then it's the first in the operator order.
-        #     target_op = op_order[0]
-        #     target_inputs = operators[target_op]["inputs"]
-        #     if len(target_var) != 1:
-        #         raise PyRatesException("Either too many or too few input variables detected. "
-        #                                "Needs to be exactly one.")
-        #     target_var = list(target_inputs.keys())[0]
-        #     target_var = f"{target_op}/{target_var}"
-        # else:
-        #     raise NotImplementedError("Transforming an edge with multiple input operators is not yet handled.")
+            # simplify edges and save into edge_list
+            # op_graph = edge.op_graph
+            # in_ops = [op for op, in_degree in op_graph.in_degree if in_degree == 0]
+            # if len(in_ops) == 1:
+            #     # simple case: only one input operator? then it's the first in the operator order.
+            #     target_op = op_order[0]
+            #     target_inputs = operators[target_op]["inputs"]
+            #     if len(target_var) != 1:
+            #         raise PyRatesException("Either too many or too few input variables detected. "
+            #                                "Needs to be exactly one.")
+            #     target_var = list(target_inputs.keys())[0]
+            #     target_var = f"{target_op}/{target_var}"
+            # else:
+            #     raise NotImplementedError("Transforming an edge with multiple input operators is not yet handled.")
 
-        # shortcut to new target war:
-        target_var = input_var
+            # shortcut to new target war:
+            target_var = input_var
         edge_dict = {"source_var": source_var,
                      "target_var": target_var,
                      "weight": weight,

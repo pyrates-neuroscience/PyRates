@@ -30,8 +30,10 @@ class EdgeIR(GraphEntityIR):
 
         if len(in_var) == 1:
             self.input = in_var.pop()
+        elif len(in_var) == 0:
+            self.input = None
         else:
-            raise PyRatesException("Too many or too little input variables found. Exactly one input variable is "
+            raise PyRatesException("Too many input variables found. Exactly one or zero input variables are "
                                    "required per edge.")
 
         # 2: get reference for target variable
@@ -42,13 +44,14 @@ class EdgeIR(GraphEntityIR):
         out_op = [op for op, out_degree in self.op_graph.out_degree if out_degree == 0]  # type: List[str]
 
         # only one single output operator allowed
-        if len(out_op) != 1:
+        if len(out_op) == 1:
+            out_var = self[out_op[0]].output
+            self.output = f"{out_op[0]}/{out_var}"
+        elif len(out_op) == 0:
+            self.output = None
+        else:
             raise PyRatesException("Too many or too little output operators found. Exactly one output operator and "
                                    "associated output variable is required per edge.")
-
-        out_var = self[out_op[0]].output
-
-        self.output = f"{out_op[0]}/{out_var}"
 
     @classmethod
     def from_template(cls, template, values: dict=None):

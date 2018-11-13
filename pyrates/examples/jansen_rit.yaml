@@ -7,7 +7,7 @@ PRO:
   variables:
     m_out:
       default: output
-    V:
+    PSP:
       default: input
     m_max:
       default: 5.
@@ -25,7 +25,7 @@ RPO_e_pc:
     tau:
       default: 10e-3
     u:
-      default: placeholder
+      default: 220.
     m_in:
       default: input
     PSP:
@@ -87,7 +87,7 @@ JRC:
     IIN: IIN
     PC: PC
   edges:
-    - [PC/PRO/m_out, IIN/RPO/m_in, DummyEdge, {weight: 33.75}]
-    - [PC/PRO/m_out, EIN/RPO/m_in, DummyEdge, {weight: 135.}]
-    - [EIN/PRO/m_out, PC/RPO/m_in, DummyEdge, {weight: 108.}]
-    - [IIN/PRO/m_out, PC/RPO/m_in, DummyEdge, {weight: 33.75}]
+    - [PC/PRO/m_out, IIN/RPO_e/m_in, DummyEdge, {weight: 33.75}]
+    - [PC/PRO/m_out, EIN/RPO_e/m_in, DummyEdge, {weight: 135.}]
+    - [EIN/PRO/m_out, PC/RPO_e_pc/m_in, DummyEdge, {weight: 108.}]
+    - [IIN/PRO/m_out, PC/RPO_i/m_in, DummyEdge, {weight: 33.75}]
