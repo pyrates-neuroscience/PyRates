@@ -29,7 +29,7 @@ class CircuitObserver(object):
     circuit
         Instance of :class:`pyrates.circuit.Circuit`, the observer will observe.
     sampling_step_size
-        Step-size with which the circuit states will be stored (default = simulation step-size) [unit = s].
+        Step-size with which the circuit states will be stored (default = simulation update-size) [unit = s].
     target_populations
         Indices referring to the circuit populations, whose states should be observed. By default, all populations are.
     target_states

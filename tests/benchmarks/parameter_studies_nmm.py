@@ -37,7 +37,7 @@ def JR_parameter_study(param_names, param_values, simulation_time=1.0, step_size
     :param param_names: list with name of JR parameters to alter
     :param param_values: list with parameter value lists over which to loop
     :param simulation_time: scalar, indicating the simulation time in seconds of each parameter combination
-    :param step_size: simulation step-size for euler formalism
+    :param step_size: simulation update-size for euler formalism
 
     :return: Array with final pyramidal cell states after simulation time have passed.
 
@@ -149,7 +149,7 @@ def JR_AMPAEfficiency_And_InputStrength_Varied(ampa_efficiencies, synaptic_input
            excitatory interneurons to sweep over [unit = Hz].
     :param simulation_time: scalar, indicating the simulation time for each parameter combination [unit = s]
            (default = 3.0).
-    :param step_size: scalar, indicating the simulation step-size [unit = s] (default = 5e-4).
+    :param step_size: scalar, indicating the simulation update-size [unit = s] (default = 5e-4).
     :param grid_simulation: If True, all combination of ampa efficiencies and synaptic input strengths will be
            simulated. Else, only paired combinations will be considered (default = True).
 

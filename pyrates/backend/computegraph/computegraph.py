@@ -526,7 +526,7 @@ class ComputeGraph(MultiDiGraph):
                                                              f"been calculated yet. Consider changes")
 
                                         # append variable and operation to list
-                                        out_ops += op_args[out_var]['op']
+                                        out_ops += op_args[out_var].pop('op')
                                         out_vars.append(op_args[out_var]['var'])
 
                                     # for multiple input operators
@@ -551,18 +551,18 @@ class ComputeGraph(MultiDiGraph):
                                                 raise ValueError(
                                                     f"Invalid dependencies found in operator: {op['equations']}. Input"
                                                     f" Variable {var_name} has not been calculated yet.")
-                                            out_ops_tmp += op_args[out_var]['op']
+                                            out_ops_tmp += op_args[out_var].pop(['op'])
                                             out_vars_tmp.append(op_args[out_var]['var'])
 
                                         # add tensorflow operations for grouping the inputs together
                                         with tf.control_dependencies(out_ops_tmp):
                                             tf_var_tmp = tf.parallel_stack(out_vars_tmp)
-                                            if inp['reduce_dim'][i]:
-                                                tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
-                                            else:
-                                                tf_var_tmp2 = tf.reshape(tf_var_tmp,
-                                                                         shape=(tf_var_tmp.shape[0] *
-                                                                                tf_var_tmp.shape[1],))
+                                        if inp['reduce_dim'][i]:
+                                            tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
+                                        else:
+                                            tf_var_tmp2 = tf.reshape(tf_var_tmp,
+                                                                     shape=(tf_var_tmp.shape[0] *
+                                                                            tf_var_tmp.shape[1],))
 
                                         # append variable and operation to list
                                         out_vars.append(tf_var_tmp2)
@@ -636,8 +636,11 @@ class ComputeGraph(MultiDiGraph):
                         for arg in op_args.values():
                             arg['dependency'] = False
 
-                # group tensorflow versions of all operators to a single 'step' operation
-                node_attr['update'] = tf_ops
+                # collect remaining operator update operations
+                node_attr['update'] = []
+                for op_arg in op_args.values():
+                    if 'op' in op_arg.keys():
+                        node_attr['update'] += op_arg.pop('op')
 
         # call super method
         super().add_node(node, **node_attr)
@@ -710,6 +713,9 @@ class ComputeGraph(MultiDiGraph):
                 # add operator to tensorflow graph
                 ##################################
 
+                if not dependencies:
+                    dependencies = []
+
                 with tf.control_dependencies(dependencies):
 
                     # apply edge weights to source variable
@@ -762,8 +768,8 @@ class ComputeGraph(MultiDiGraph):
                                 target_idx = [delay]
                         else:
                             target_idx = [idx[0] if type(idx) is list else idx for idx in target_idx]
-                        if not delay:
-                            tvar = tvar.assign(np.zeros(tvar.shape), use_locking=True)
+                        #if not delay:
+                        #    tvar = tvar.assign(np.zeros(tvar.shape), use_locking=True)
                         try:
                             tf_op = tf.scatter_add(tvar, target_idx, edge_val)
                         except ValueError:

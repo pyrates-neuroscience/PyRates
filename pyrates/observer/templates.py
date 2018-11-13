@@ -150,7 +150,7 @@ class fMRIObserver(ExternalObserver):
                   y_old: Union[FloatLike, np.ndarray],
                   **kwargs
                   ) -> FloatLike:
-        """Takes a step of an ODE with right-hand-side f using Euler formalism.
+        """Takes a update of an ODE with right-hand-side f using Euler formalism.
 
         Parameters
         ----------
@@ -179,7 +179,7 @@ class fMRIObserver(ExternalObserver):
         Parameters
         ----------
         bwk_states_old
-            BWK model states from previous step (2D array, n_observations x 4).
+            BWK model states from previous update (2D array, n_observations x 4).
         neural_activity
             vector with neural activity at the voxels of interest (1D array, n_observations)
 

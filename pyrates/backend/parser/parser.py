@@ -690,23 +690,24 @@ class TFExpressionParser(ExpressionParser):
         """Parses string-based expression.
         """
 
-        with self.tf_graph.as_default():
+        # set dependencies and check for sparse tensors
+        ###############################################
 
-            # set dependencies and check for sparse tensors
-            ###############################################
+        # set dependencies
+        dependencies = []
+        for arg in expr_stack:
+            if arg in self.args.keys() and self.args[arg]['dependency']:
+                if type(self.args[arg]['op']) is list:
+                    dependencies += self.args[arg].pop('op')
+                else:
+                    dependencies += [self.args[arg].pop('op')]
+                    self.args[arg]['dependency'] = False
 
-            # set dependencies
-            dependencies = []
-            for arg in expr_stack:
-                if arg in self.args.keys() and self.args[arg]['dependency']:
-                    dependencies += self.args[arg]['op'] if type(self.args[arg]['op']) is list else \
-                        [self.args[arg]['op']]
+        # create tensorflow operation/variable
+        with tf.control_dependencies(dependencies):
+            self._op_tmp = super().parse(expr_stack=expr_stack)
 
-            # create tensorflow operation/variable
-            with tf.control_dependencies(dependencies):
-                self._op_tmp = super().parse(expr_stack=expr_stack)
-
-            return self._op_tmp
+        return self._op_tmp
 
 
 def parse_equation(equation: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None
@@ -738,21 +739,19 @@ def parse_equation(equation: str, args: dict, tf_graph: tp.Optional[tf.Graph] = 
 
     tf_graph = tf_graph if tf_graph else tf.get_default_graph()
 
-    with tf_graph.as_default():
+    # parse rhs
+    rhs_parser = TFExpressionParser(expr_str=rhs, args=args, tf_graph=tf_graph)
+    rhs_op = rhs_parser.parse_expr()
 
-        # parse rhs
-        rhs_parser = TFExpressionParser(expr_str=rhs, args=args, tf_graph=tf_graph)
-        rhs_op = rhs_parser.parse_expr()
+    # handle rhs evaluation
+    if rhs_op[1] is None:
+        rhs_op = rhs_op[0]
+    else:
+        rhs_op = rhs_op[0].assign(rhs_op[1])
+    args['rhs'] = {'var': rhs_op, 'dependency': False}
 
-        # handle rhs evaluation
-        if rhs_op[1] is None:
-            rhs_op = rhs_op[0]
-        else:
-            rhs_op = rhs_op[0].assign(rhs_op[1])
-        args['rhs'] = {'var': rhs_op, 'dependency': False}
-
-        # parse lhs
-        lhs_parser = TFExpressionParser(expr_str=lhs, args=args, lhs=True, tf_graph=tf_graph)
+    # parse lhs
+    lhs_parser = TFExpressionParser(expr_str=lhs, args=args, lhs=True, tf_graph=tf_graph)
 
     return lhs_parser.parse_expr(), args
 
@@ -1171,7 +1170,7 @@ def round_to_prec(x, prec=0):
 #             self.integration_expression = "dt * rhs"
 #
 #     def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
-#         """Creates tensorflow method for performing a single differentiation step.
+#         """Creates tensorflow method for performing a single differentiation update.
 #         """
 #
 #         raise NotImplementedError('This method needs to be implemented at the child class level '
@@ -1200,7 +1199,7 @@ def round_to_prec(x, prec=0):
 #         self._tf_graph = _tf_graph if _tf_graph else tf.get_default_graph()
 #
 #     def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
-#         """Creates tensorflow method for performing a single differentiation step.
+#         """Creates tensorflow method for performing a single differentiation update.
 #         """
 #
 #         with self._tf_graph.as_default():

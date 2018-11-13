@@ -15,7 +15,7 @@ from matplotlib.pyplot import *
 # parameter definition
 ######################
 
-np.random.seed(4)
+#np.random.seed(4)
 
 # general
 step_size = 1e-3
@@ -23,7 +23,7 @@ simulation_time = 3.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
-sparseness_e = 0.1
+sparseness_e = 0.
 sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
@@ -163,7 +163,7 @@ for i in range(0, n_jrcs):
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 0.},
-                              'RPO_e_pc.0/u': {'vtype': 'placeholder',
+                              'RPO_e_pc.0/u': {'vtype': 'constant',
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 220.},
@@ -336,9 +336,9 @@ for a in range(0, n_nodes):
 # backend setup
 ###############
 
-inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
+#inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
 gr = tf.Graph()
-net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
+net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='none')
 
 # backend simulation
 ####################
@@ -346,7 +346,7 @@ net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, 
 results, _ = net.run(simulation_time=simulation_time,
                      outputs={'V': ('all', 'PRO.0', 'psp')},
                      sampling_step_size=1e-3,
-                     inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
+                     #inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
                      #out_dir='/tmp/log/'
                      )
 

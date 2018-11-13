@@ -142,9 +142,9 @@ def interpolate_array(old_step_size: float,
     Parameters
     ----------
     old_step_size
-        Old simulation step size [unit = s].
+        Old simulation update size [unit = s].
     new_step_size
-        New simulation step size [unit = s].
+        New simulation update size [unit = s].
     y
         Vector ar array to be interpolated.
     interpolation_type

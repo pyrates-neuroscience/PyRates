@@ -10,7 +10,7 @@ for i in range(4):
 
 nd = c.network_def()
 
-compute_graph = ComputeGraph(nd, vectorize="none")
+compute_graph = ComputeGraph(nd, vectorize="nodes")
 
 result, _ = compute_graph.run(10., outputs={"V": ("PC", "PRO.0", "PSP")})
 

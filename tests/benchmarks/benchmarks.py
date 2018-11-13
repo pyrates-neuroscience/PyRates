@@ -40,12 +40,12 @@ def run_JR_circuit_benchmark(simulation_time=1.0, step_size=1 / 2048, param_name
     Runs a benchmark on a single Jansen-Rit type microcircuit (3 interconnected neural populations).
 
     :param simulation_time: length of the simulation [unit = s] (default = 60.0).
-    :param step_size: simulation step-size [unit = s] (default = 1e-4).
+    :param step_size: simulation update-size [unit = s] (default = 1e-4).
     :param param_names: list with name of JR parameters to alter (see JR_parameter_study function).
     :param param_values: list with parameter values (see JR_parameter_study function).
     :param synaptic_inputs: input fed to the microcircuit (length must be simulation_time/step_size).
     :param verbose: If true, simulation progress will be displayed.
-    :param variable_step_size: If true, variable step solver will be used.
+    :param variable_step_size: If true, variable update solver will be used.
 
     :return: simulation length in seconds (real-time).
     """
