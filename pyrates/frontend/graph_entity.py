@@ -28,11 +28,11 @@ class GraphEntityIR(AbstractBaseIR):
                     value_updates[op_name] = {}
                 value_updates[op_name][var_name] = value
 
-        for op_template in operators:
+        for op_template, values_to_update in operators.items():
+            if values_to_update is None:
+                values_to_update = {}
             if op_template.name in value_updates:
-                values_to_update = value_updates.pop(op_template.name)
-            else:
-                values_to_update = None
+                values_to_update.update(value_updates.pop(op_template.name, {}))
             op_instance, op_variables, key = op_template.apply(return_key=True,
                                                                values=values_to_update)
             # update variables:

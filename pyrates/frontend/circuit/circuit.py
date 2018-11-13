@@ -314,10 +314,11 @@ class CircuitIR(AbstractBaseIR):
         # ToDo: reformat OperatorIR --> Operator label remains true to template and version number is stored internally
         key_counter = OperatorIR.key_counter
         if op_label in key_counter:
-            for i in range(key_counter[op_label]):
-                new_op_label = f"{op_label}.{i+1}"
+            for i in range(key_counter[op_label]+1):
+                new_op_label = f"{op_label}.{i}"
                 try:
-                    self[node_label][new_op_label]
+                    _ = self[node_label][new_op_label]
+                    break
                 except KeyError:
                     continue
             else:

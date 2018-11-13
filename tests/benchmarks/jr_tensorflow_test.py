@@ -338,7 +338,7 @@ for a in range(0, n_nodes):
 
 inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
 gr = tf.Graph()
-net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
+net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='nodes')
 
 # backend simulation
 ####################

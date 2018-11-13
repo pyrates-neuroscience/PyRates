@@ -13,7 +13,7 @@ PRO:
       default: 5.
     r:
       default: 560.
-    V_thr:  # synonym for V_thr
+    V_thr:
       default: 6e-3
 
 RPO_e_pc:

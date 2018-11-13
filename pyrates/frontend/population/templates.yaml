@@ -50,10 +50,11 @@ JansenRitPC:
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   operators:
-    - pyrates.frontend.synapse.templates.JansenRitExcitatorySynapseRCO
-    - pyrates.frontend.synapse.templates.JansenRitInhibitorySynapseRCO
-    - JansenRitCPO
-    - pyrates.frontend.axon.templates.JansenRitPRO
+    pyrates.frontend.synapse.templates.JansenRitExcitatorySynapseRCO:
+        u: 220.
+    pyrates.frontend.synapse.templates.JansenRitInhibitorySynapseRCO: null
+    JansenRitCPO: null
+    pyrates.frontend.axon.templates.JansenRitPRO: null
   label: JR_PC
 
 
