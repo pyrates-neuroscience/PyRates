@@ -129,26 +129,31 @@ class OperatorIR(AbstractBaseIR):
         inputs = {}
         output = None
         for variable, properties in template.variables.items():
-            var_dict = {}
-            for prop, expr in properties.items():
-                if prop == "default":
-                    var_dict = cls._parse_vprops(expr)
+            var_dict = deepcopy(properties)
+            # default shape is scalar
+            if "shape" not in var_dict:
+                var_dict["shape"] = "(1,)"
 
-                    # else: don't pass information for that variable
+            # identify variable type and data type
+            # note: this assume that a "default" must be given for every variable
+            try:
+                var_dict.update(cls._parse_vprops(var_dict.pop("default")))
+            except KeyError:
+                raise PyRatesException("Variables need to have a 'default' (variable type, data type and/or value) "
+                                       "specified.")
 
-                    # separate in/out specification from variable type specification
-                    if var_dict["vtype"] == "input":
-                        inputs[variable] = dict(sources=[], reduce_dim=True)  # default to True for now
-                        var_dict["vtype"] = "state_var"
-                    elif var_dict["vtype"] == "output":
-                        if output is None:
-                            output = variable  # for now assume maximum one output is present
-                        else:
-                            raise PyRatesException("More than one output specification found in operator. "
-                                                   "Only one output per operator is supported.")
-                        var_dict["vtype"] = "state_var"
+            # separate in/out specification from variable type specification
+            if var_dict["vtype"] == "input":
+                inputs[variable] = dict(sources=[], reduce_dim=True)  # default to True for now
+                var_dict["vtype"] = "state_var"
+            elif var_dict["vtype"] == "output":
+                if output is None:
+                    output = variable  # for now assume maximum one output is present
                 else:
-                    var_dict[prop] = expr
+                    raise PyRatesException("More than one output specification found in operator. "
+                                           "Only one output per operator is supported.")
+                var_dict["vtype"] = "state_var"
+
             variables[variable] = var_dict
 
         return variables, inputs, output
