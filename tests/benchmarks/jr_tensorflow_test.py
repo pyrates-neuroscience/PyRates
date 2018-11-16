@@ -19,7 +19,7 @@ from matplotlib.pyplot import *
 
 # general
 step_size = 1e-3
-simulation_time = 3.0
+simulation_time = 1.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
@@ -27,7 +27,7 @@ sparseness_e = 0.
 sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
-n_jrcs = 100
+n_jrcs = 10
 
 # connectivity parameters
 c_intra = 135.
@@ -329,7 +329,7 @@ for a in range(0, n_nodes):
             if int(a/3) == int(b/3):
                 edge['delay'] = 0.
             else:
-                edge['delay'] = 0. #np.random.uniform(0., 6e-3)
+                edge['delay'] = np.random.uniform(0., 6e-3)
 
             graph.add_edge(source, target, **edge)
 
@@ -338,7 +338,7 @@ for a in range(0, n_nodes):
 
 inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
 gr = tf.Graph()
-net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='ops')
+net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='none')
 
 # backend simulation
 ####################

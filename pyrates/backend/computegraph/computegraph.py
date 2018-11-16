@@ -554,7 +554,7 @@ class ComputeGraph(MultiDiGraph):
 
                                         # add tensorflow operations for grouping the inputs together
                                         with tf.control_dependencies(out_ops_tmp):
-                                            tf_var_tmp = tf.stack(out_vars_tmp)
+                                            tf_var_tmp = tf.parallel_stack(out_vars_tmp)
                                             if inp['reduce_dim'][i]:
                                                 tf_var_tmp2 = tf.reduce_sum(tf_var_tmp, 0)
                                             else:
@@ -612,10 +612,9 @@ class ComputeGraph(MultiDiGraph):
                                 if var_name not in op_args_tf.keys():
                                     op_args_tf[var_name] = {'var': tf.get_variable(name=var_name, shape=tf_var_inp.shape,
                                                                                    dtype=tf_var_inp.dtype)}
-                                update = self._assign_to_var(op_args_tf[var_name]['var'], tf_var_inp,
-                                                             dependencies=out_ops)
-                                op_args_tf[var_name].update({'dependency': True,
-                                                             'op': update})
+                                op_args_tf[var_name]['var'] = self._assign_to_var(op_args_tf[var_name]['var'], tf_var_inp,
+                                                                                  dependencies=out_ops)
+                                op_args_tf[var_name]['dependency'] = False
 
                         # create tensorflow operator
                         tf_ops, op_args_tf = self.add_operator(expressions=op['equations'],
@@ -766,8 +765,8 @@ class ComputeGraph(MultiDiGraph):
                                 target_idx = [delay]
                         else:
                             target_idx = [idx[0] if type(idx) is list else idx for idx in target_idx]
-                        #if not delay:
-                        #    tvar = tvar.assign(np.zeros(tvar.shape), use_locking=True)
+                        if not delay:
+                            tvar = tvar.assign(np.zeros(tvar.shape), use_locking=True)
                         try:
                             tf_op = tf.scatter_add(tvar, target_idx, edge_val)
                         except ValueError:
@@ -840,7 +839,7 @@ class ComputeGraph(MultiDiGraph):
                         de_rhs.append(ev[1])
 
                 # go through DEs and assign rhs to lhs
-                deps = evals_complete + de_rhs
+                deps = de_rhs + evals_complete
                 de_complete = []
                 for lhs, rhs in zip(de_lhs, de_rhs):
                     de_complete.append(self._assign_to_var(lhs, rhs, add=True, solve=True, dependencies=deps))
