@@ -3,7 +3,7 @@
 
 PRO:
   base: OperatorTemplate
-  equation: "m_out = m_max / (1. + exp(r*(V_thr - PSP)))"
+  equations: "m_out = m_max / (1. + exp(r*(V_thr - PSP)))"
   variables:
     m_out:
       default: output
@@ -18,7 +18,9 @@ PRO:
 
 RPO_e_pc:
   base: OperatorTemplate
-  equation: "(d/dt + 1./tau)^2 * PSP = h/tau * (m_in + u)"
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2 * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
       default: 3.25e-3
@@ -30,10 +32,14 @@ RPO_e_pc:
       default: input
     PSP:
       default: output
+    PSP_t:
+      default: variable
 
 RPO_e:
   base: OperatorTemplate
-  equation: "(d/dt + 1./tau)^2 * PSP = h/tau * m_in"
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2 * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
       default: 3.25e-3
@@ -43,10 +49,14 @@ RPO_e:
       default: input
     PSP:
       default: output
+    PSP_t:
+      default: variable
 
 RPO_i:
   base: OperatorTemplate
-  equation: "(d/dt + 1./tau)^2 * PSP = h/tau * m_in"
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2 * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
       default: -22e-3
@@ -56,6 +66,8 @@ RPO_i:
       default: input
     PSP:
       default: output
+    PSP_t:
+      default: variable
 
 PC:
   base: NodeTemplate

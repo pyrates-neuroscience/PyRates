@@ -6,7 +6,7 @@ InstantaneousCPO:
     (current) contributions and instantaneously, i.e. without temporal derivative,
     transforms those currents into a mean somatic membrane potential.
   base: pyrates.frontend.population.population.CurrentToPotentialOperator
-  equation:
+  equations:
     remove: "L_m * "
 
 JansenRitCPO:

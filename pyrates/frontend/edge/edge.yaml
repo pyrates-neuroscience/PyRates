@@ -6,7 +6,7 @@ CouplingOperator:
     Base template for a coupling operator that transforms outgoing firing rate of the pre-synaptic
     neural mass to incoming firing rate at the post-synaptic neural mass.
   base: OperatorTemplate
-  equation: "L_CO * m_in = c * m_out"
+  equations: "L_CO * m_in = c * m_out"
   variables:
     L_CO:
       description: Linear differential operator

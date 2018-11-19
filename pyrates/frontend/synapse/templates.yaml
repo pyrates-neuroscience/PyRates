@@ -19,10 +19,9 @@ ExponentialSynapseRCO:
 
   base: pyrates.frontend.synapse.synapse.RateToCurrentOperator
 
-  equation:
-    replace:
-      L_syn: "(d/dt + 1./tau)^2"
-      h: "h/tau"
+  equations:
+    - 'd/dt * I = I_t'
+    - 'd/dt * I_t =  h/tau * m_in - (1./tau)^2 * I - 2. * 1./tau * I_t'
 
   # solution for external input: model as separate connection --> additional vector entry on synapse
   # TODO: implement external input operator
@@ -35,6 +34,9 @@ ExponentialSynapseRCO:
     h:
       unit: A
       default: constant(float)
+    I_t:
+      description: integration variable
+      default: variable
 
 JansenRitExcitatorySynapseRCO:
   description: >
@@ -46,7 +48,6 @@ JansenRitExcitatorySynapseRCO:
     .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
        of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   base: ExponentialSynapseRCO
-
   variables:
     h:
       default: 3.25e-3
@@ -54,8 +55,7 @@ JansenRitExcitatorySynapseRCO:
       default: 10e-3
     u:
       default: 0.
-
-  equation:
+  equations:
     replace:
       m_in: (m_in + u)
 
@@ -93,7 +93,7 @@ ExponentialSynapseRateToConductance:
 
   base: pyrates.frontend.synapse.synapse.RateToCurrentOperator
 
-  equation:
+  equations:
     replace:
       L_syn: "(d/dt * 1./tau + 1.)^2"
       h: "h/pi"

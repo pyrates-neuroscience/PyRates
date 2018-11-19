@@ -1,5 +1,6 @@
 # external imports
 import re
+from collections import Sequence
 from copy import deepcopy
 from typing import Union, List
 
@@ -18,11 +19,11 @@ class OperatorIR(AbstractBaseIR):
     key_map = {}
     key_counter = {}
 
-    def __init__(self, equation: List[str], inputs: list, output: str):
+    def __init__(self, equations: List[str], inputs: list, output: str):
 
         self.output = output
         self.inputs = inputs
-        self.equations = equation
+        self.equations = equations
 
     @classmethod
     def from_template(cls, template, return_key=False, values: dict = None):
@@ -54,13 +55,17 @@ class OperatorIR(AbstractBaseIR):
             # instance, variables = dict(instance), dict(variables)
         except KeyError:
             # get variable definitions and specified default values
-            # ToDo: remove variable separation: instead pass variables detached from equation?
+            # ToDo: remove variable separation: instead pass variables detached from equations?
             variables, inputs, output = cls._separate_variables(template)
 
             # reduce order of ODE if necessary
-            *equation, variables = cls._reduce_ode_order(template.equation, variables)
+            # this step is currently skipped to streamline equation interface
+            # instead equations need to be given as either non-differential equations or first-order
+            # linear differential equations
+            # *equations, variables = cls._reduce_ode_order(template.equations, variables)
+            equations = template.equations
 
-            # operator instance is invoked as a dictionary of equation and variable definition
+            # operator instance is invoked as a dictionary of equations and variable definition
             # this may be subject to change
 
             if values:
@@ -73,7 +78,7 @@ class OperatorIR(AbstractBaseIR):
                     variables[vname]["value"] = values[vname]
                     # should fail, if variable is unknown
 
-            instance = cls(equation=equation, inputs=inputs, output=output)
+            instance = cls(equations=equations, inputs=inputs, output=output)
             cls.cache[key] = (instance, variables)
 
         if return_key:
@@ -82,23 +87,23 @@ class OperatorIR(AbstractBaseIR):
             return instance.copy(), deepcopy(variables)
 
     @staticmethod
-    def _reduce_ode_order(equation: str, variables):
+    def _reduce_ode_order(equations: str, variables):
         """Checks if a 2nd-order ODE is present and reduces it to two coupled first-order ODEs.
         Currently limited to special case of the form '(d/dt + a)^2 * x = b'.
 
         Parameters
         ----------
-        equation
+        equations
             string of form 'a = b'
         """
 
         # matches pattern of form `(d/dt + a)^2 * y` and extracts `a` and `y`
         match = re.match(r"\(\s*d\s*/\s*dt\s*[+-]\s*([\d]*[.]?[\d]*/?[a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)",
-                         equation)
+                         equations)
 
         if match:
             # assume the entire lhs was matched, fails if there is something remaining on the lhs
-            lhs, rhs = equation.split("=")
+            lhs, rhs = equations.split("=")
             a, var = match.groups()  # returns coefficient `a` and variable `y`
             eq1 = f"d/dt * {var} = {var}_t"
             eq2 = f"d/dt * {var}_t = {rhs} - ({a})^2 * {var} - 2. * {a} * {var}_t"
@@ -110,7 +115,7 @@ class OperatorIR(AbstractBaseIR):
 
             return eq1, eq2, variables
         else:
-            return equation, variables
+            return equations, variables
 
     @classmethod
     def _separate_variables(cls, template):
@@ -219,7 +224,7 @@ class OperatorIR(AbstractBaseIR):
 
     def _getter(self, key: str):
         """
-        Checks if a variable named by key exists in an equation.
+        Checks if a variable named by key exists in an equations.
         Parameters
         ----------
         key
@@ -237,23 +242,27 @@ class OperatorIR(AbstractBaseIR):
 
 
 class OperatorTemplate(AbstractBaseTemplate):
-    """Generic template for an operator with a name, equation(s), variables and possible
+    """Generic template for an operator with a name, equations, variables and possible
     initialization conditions. The template can be used to create variations of a specific
-    equation or variables."""
+    equations or variables."""
 
     cache = {}  # tracks all unique instances of applied operator templates
 
     # key_map = {}  # tracks renaming of of operator keys to have shorter unique keys
 
-    def __init__(self, name: str, path: str, equation: str, variables: dict, description: str = "An operator template."):
-        """For now: only allow single equation in operator template."""
+    def __init__(self, name: str, path: str, equations: Union[list, str], variables: dict,
+                 description: str = "An operator template."):
+        """For now: only allow single equations in operator template."""
 
         super().__init__(name, path, description)
 
-        self.equation = equation
+        if isinstance(equations, str):
+            self.equations = [equations]
+        else:
+            self.equations = equations
         self.variables = variables
 
-    def apply(self, return_key=False, values: dict=None):
+    def apply(self, return_key=False, values: dict = None):
         """Returns the non-editable but unique, cashed definition of the operator."""
 
         return super().apply(return_key=return_key, values=values)
@@ -267,32 +276,42 @@ class OperatorTemplateLoader(TemplateLoader):
         return super().__new__(cls, path, OperatorTemplate)
 
     @classmethod
-    def update_template(cls, base, name: str, path: str, equation: Union[str, dict] = None,
+    def update_template(cls, base, name: str, path: str, equations: Union[str, list, dict] = None,
                         variables: dict = None, description: str = None):
         """Update all entries of the Operator template in their respective ways."""
 
-        if equation:
+        if equations:
             # if it is a string, just replace
-            if isinstance(equation, str):
-                pass  # pass equation string to constructor
+            if isinstance(equations, str):
+                equations = [equations]
+            elif isinstance(equations, list):
+                pass  # pass equations string to constructor
             # else, update according to predefined rules, assuming dict structure
+            elif isinstance(equations, dict):
+                equations = [cls.update_equation(eq, **equations) for eq in base.equations]
+
             else:
-                equation = cls.update_equation(base.equation, **equation)
+                raise TypeError("Unknown data type for attribute 'equations'.")
         else:
-            # copy equation from parent template
-            equation = base.equation
+            # copy equations from parent template
+            equations = base.equations
 
         if variables:
             variables = cls.update_variables(base.variables, variables)
         else:
             variables = base.variables
 
-        rogue_variables = []
+        rogue_variables = set()
         for var in variables:
-            # remove variables that are not present in the equation anymore
-            if var not in equation:
+            # remove variables that are not present in the equations
+            found = False
+            for eq in equations:
+                if var in eq:
+                    found = True
+
+            if not found:
                 # save entries in list, since dictionary must not change size during iteration
-                rogue_variables.append(var)
+                rogue_variables.add(var)
 
         for var in rogue_variables:
             variables.pop(var)
@@ -300,7 +319,7 @@ class OperatorTemplateLoader(TemplateLoader):
         if not description:
             description = base.__doc__  # or do we want to enforce documenting a template?
 
-        return OperatorTemplate(name=name, path=path, equation=equation, variables=variables,
+        return OperatorTemplate(name=name, path=path, equations=equations, variables=variables,
                                 description=description)
 
     @staticmethod

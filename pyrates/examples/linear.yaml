@@ -7,7 +7,7 @@ aliases:
 LinearOperator:
   description: Simple example of an operator with a linear equation.
   base: OperatorTemplate
-  equation: "y = m*x + n"
+  equations: "y = m*x + n"
   variables:
     m:
       description: linear scaling coefficient
@@ -25,7 +25,7 @@ LinearOperator:
 IncrementOperator:
   description: Simple coupling operator that increments its input by a
   base: OperatorTemplate
-  equation: "x = y + a"
+  equations: "x = y + a"
   variables:
     x:
       default: output

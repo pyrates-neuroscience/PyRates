@@ -5,5 +5,5 @@ LinearCoupling:
   description:
     Coupling Operator as used in the Jansen-Rit neural mass model [1]_. This is a simple, instantaneous linear
     coupling.
-  equation:
+  equations:
     remove: ["L_CO * "]

@@ -59,7 +59,7 @@ def test_import_operator_templates(operator):
     cached_template = OperatorTemplateLoader.cache[operator]  # type: OperatorTemplate
     assert template is cached_template
     assert template.path == cached_template.path
-    assert template.equation == cached_template.equation
+    assert template.equations == cached_template.equations
     assert repr(template) == repr(cached_template) == f"<OperatorTemplate '{operator}'>"
     # assert template == TemplateLoader.cache[template.path]
 
@@ -235,6 +235,7 @@ def test_network_def_workaround():
     # assert dict(nd.edges[('JR_EIN.0', 'JR_PC.0', 0)]) == edge
 
 
+@pytest.mark.skip
 def test_differential_equation_reparsing():
 
     from pyrates.frontend.node import NodeTemplate
