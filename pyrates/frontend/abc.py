@@ -72,11 +72,17 @@ class AbstractBaseIR:
         if not isinstance(key, str):
             raise TypeError("Keys must be strings of format `key1/key2/...`.")
 
-        if "/" in key:
-            top, *remainder = key.split("/")
-            item = self._getter(top)["/".join(remainder)]
-        else:
-            item = self._getter(key)
+        try:
+            if "/" in key:
+                top, *remainder = key.split("/")
+                item = self._getter(top)["/".join(remainder)]
+            else:
+                item = self._getter(key)
+        except KeyError as e:
+            if hasattr(self, key):
+                item = getattr(self, key)
+            else:
+                raise e
 
         return item
 
