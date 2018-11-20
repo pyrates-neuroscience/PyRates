@@ -1,7 +1,6 @@
 """ Tests for the parser that translates circuits and components defined in YAML into the intermediate
 python representation.
 """
-from pyrates.utility import deep_compare
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -125,7 +124,7 @@ def test_full_jansen_rit_circuit_template_load():
     template = CircuitTemplate.from_yaml(path)
 
     # test, whether circuit is in loader cache
-    from pyrates.frontend.yaml_parser import TemplateLoader
+    from pyrates.frontend.parser.yaml import TemplateLoader
     assert template is TemplateLoader.cache[path]
 
     # test, whether node templates have been loaded successfully

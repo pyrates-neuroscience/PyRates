@@ -5,13 +5,13 @@ from networkx import DiGraph, find_cycle, NetworkXNoCycle
 from pyrates import PyRatesException
 from pyrates.frontend.abc import AbstractBaseTemplate, AbstractBaseIR
 from pyrates.frontend.operator import OperatorTemplate
-from pyrates.frontend.yaml_parser import TemplateLoader
+from pyrates.frontend.parser.yaml import TemplateLoader
 
 
 class GraphEntityIR(AbstractBaseIR):
     """Intermediate representation for nodes and edges."""
 
-    def __init__(self, operators: dict, template: OperatorTemplate=None, values: dict=None):
+    def __init__(self, operators: dict, template: str =None, values: dict=None):
 
         self.op_graph = DiGraph()
         all_outputs = {}  # type: Dict[str, dict]
@@ -20,22 +20,32 @@ class GraphEntityIR(AbstractBaseIR):
 
         value_updates = {}
         if values:
-            values.pop("weight", None)
-            values.pop("delay", None)
+            # values.pop("weight", None)
+            # values.pop("delay", None)
             for key, value in values.items():
                 op_name, var_name = key.split("/")
                 if op_name not in value_updates:
                     value_updates[op_name] = {}
                 value_updates[op_name][var_name] = value
 
-        for op_template, values_to_update in operators.items():
-            if values_to_update is None:
-                values_to_update = {}
-            if op_template.name in value_updates:
-                values_to_update.update(value_updates.pop(op_template.name, {}))
-            op_instance, op_variables, key = op_template.apply(return_key=True,
-                                                               values=values_to_update)
-            # update variables:
+        for key, item in operators.items():
+            if isinstance(key, OperatorTemplate):
+                op_template = key
+                values_to_update = item
+
+                if values_to_update is None:
+                    values_to_update = {}
+                if op_template.name in value_updates:
+                    values_to_update.update(value_updates.pop(op_template.name, {}))
+                op_instance, op_variables, key = op_template.apply(return_key=True,
+                                                                   values=values_to_update)
+
+            elif isinstance(key, str):
+                op_instance = item["operator"]
+                op_variables = item["variables"]
+
+            else:
+                raise TypeError(f"Unknown type of key `{key}` in operators dictionary")
 
             # add operator as node to local operator_graph
             # ToDo: separate variable def and operator def so one can be private and the other shared

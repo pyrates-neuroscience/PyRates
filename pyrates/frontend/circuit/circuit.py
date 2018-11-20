@@ -19,7 +19,7 @@ from pyrates.frontend.edge import EdgeTemplate, EdgeIR
 from pyrates.frontend.node import NodeTemplate, NodeIR
 from pyrates import PyRatesException
 from pyrates.frontend.operator import OperatorIR
-from pyrates.frontend.yaml_parser import TemplateLoader
+from pyrates.frontend.parser.yaml import TemplateLoader
 
 # from pyrates.frontend.operator import OperatorTemplate
 
@@ -69,7 +69,7 @@ class CircuitIR(AbstractBaseIR):
             self.add_edges_from(edges)
 
     def add_nodes_from(self, nodes: Union[Dict[str, NodeTemplate], Dict[str, dict]],
-                       from_templates=True, **attr) -> dict:
+                       from_templates=True, **attr):
         """ Add multiple nodes to circuit. Allows networkx-style adding if from_templates is set to False.
 
         Parameters

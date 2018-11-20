@@ -13,8 +13,10 @@ class EdgeTemplate(GraphEntityTemplate):
 
 class EdgeIR(GraphEntityIR):
 
-    def __init__(self, operators: dict, template: EdgeTemplate = None, values: dict=None):
+    def __init__(self, operators: dict=None, template: str = None, values: dict=None):
 
+        if operators is None:
+            operators = {}
         super().__init__(operators, template, values)
 
         # Step 1: Detect edge input variable

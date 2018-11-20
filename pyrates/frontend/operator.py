@@ -1,13 +1,13 @@
 # external imports
 import re
-from collections import Sequence
 from copy import deepcopy
 from typing import Union, List
 
 # pyrates internal imports
 from pyrates import PyRatesException
 from pyrates.frontend.abc import AbstractBaseTemplate, AbstractBaseIR
-from pyrates.frontend.yaml_parser import TemplateLoader, deep_freeze
+from pyrates.frontend.parser.yaml import TemplateLoader
+from pyrates.frontend.parser import deep_freeze
 
 # meta infos
 __author__ = " Daniel Rose"

@@ -108,13 +108,13 @@ class AbstractBaseIR:
         """Return a dictionary representation of the intermediate representation"""
         raise NotImplementedError
 
-    @classmethod
-    def from_dict(cls, **kwargs):
-        """Initialize an IR class from a dictionary with all relevant values instead of something else."""
-
-        module = import_module(cls.__module__)
-        template_cls = getattr(module, f"{cls.__name__[-2]}Template")
-        return template_cls(name="", path="", **kwargs)
+    # @classmethod
+    # def from_dict(cls, **kwargs):
+    #     """Initialize an IR class from a dictionary with all relevant values instead of something else."""
+    #
+    #     module = import_module(cls.__module__)
+    #     template_cls = getattr(module, f"{cls.__name__[-2]}Template")
+    #     return template_cls(name="", path="", **kwargs).apply
 
     def to_yaml(self, path: str, name: str):
 
