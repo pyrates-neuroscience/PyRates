@@ -254,7 +254,7 @@ class ExpressionParser(ParserElement):
         op = self.parse(self.expr_stack[:])
 
         # extract update operation
-        update = self.args.pop('rhs')['var'] if 'rhs' in self.args.keys() else None
+        update = self.args.pop('rhs') if 'rhs' in self.args.keys() else None
 
         return op, update, self.solve
 
@@ -400,13 +400,13 @@ class ExpressionParser(ParserElement):
                     if self.solve:
 
                         # perform differential equation update for indexed variable
-                        update = self.args['dt']['var'] * self.args.pop('rhs')['var']
+                        update = self.args['dt'] * self.args.pop('rhs')
                         self._op_tmp = eval(f"self.funcs['scatter_add'](op_to_idx, {idx}, update)")
 
                     else:
 
                         # perform variable update for indexed variable
-                        update = self.args.pop('rhs')['var']
+                        update = self.args.pop('rhs')
                         self._op_tmp = eval(f"self.funcs['scatter_update'](op_to_idx, self.funcs['squeeze']({idx}), "
                                             f"self.funcs['squeeze'](update))")
 
@@ -435,7 +435,7 @@ class ExpressionParser(ParserElement):
         elif op in self.args.keys():
 
             # extract variable from args dict
-            self._op_tmp = self.args[op]['var']
+            self._op_tmp = self.args[op]
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
@@ -490,7 +490,7 @@ class ExpressionParser(ParserElement):
             if self.lhs:
 
                 op_tmp = self.args.pop('rhs')
-                self._op_tmp = op_tmp['var']
+                self._op_tmp = op_tmp
                 self.args[op] = op_tmp
 
             else:
@@ -686,29 +686,6 @@ class TFExpressionParser(ExpressionParser):
         for key, val in dtypes.items():
             self.dtypes[key] = val
 
-    def parse(self, expr_stack: list) -> tp.Union[tf.Operation, tf.Tensor, tf.Variable, float, int]:
-        """Parses string-based expression.
-        """
-
-        # set dependencies and check for sparse tensors
-        ###############################################
-
-        # set dependencies
-        dependencies = []
-        for arg in expr_stack:
-            if arg in self.args.keys() and self.args[arg]['dependency']:
-                if type(self.args[arg]['op']) is list:
-                    dependencies += self.args[arg].pop('op')
-                else:
-                    dependencies += [self.args[arg].pop('op')]
-                    self.args[arg]['dependency'] = False
-
-        # create tensorflow operation/variable
-        with tf.control_dependencies(dependencies):
-            self._op_tmp = super().parse(expr_stack=expr_stack)
-
-        return self._op_tmp
-
 
 def parse_equation(equation: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None
                    ) -> tuple:
@@ -748,7 +725,7 @@ def parse_equation(equation: str, args: dict, tf_graph: tp.Optional[tf.Graph] = 
         rhs_op = rhs_op[0]
     else:
         rhs_op = rhs_op[0].assign(rhs_op[1])
-    args['rhs'] = {'var': rhs_op, 'dependency': False}
+    args['rhs'] = rhs_op
 
     # parse lhs
     lhs_parser = TFExpressionParser(expr_str=lhs, args=args, lhs=True, tf_graph=tf_graph)
