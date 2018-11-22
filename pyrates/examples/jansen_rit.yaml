@@ -20,7 +20,7 @@ RPO_e_pc:
   base: OperatorTemplate
   equations:
     - 'd/dt * PSP = PSP_t'
-    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2 * PSP - 2. * 1./tau * PSP_t'
+    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2. * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
       default: 3.25e-3
@@ -39,7 +39,7 @@ RPO_e:
   base: OperatorTemplate
   equations:
     - 'd/dt * PSP = PSP_t'
-    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2 * PSP - 2. * 1./tau * PSP_t'
+    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2. * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
       default: 3.25e-3
@@ -56,7 +56,7 @@ RPO_i:
   base: OperatorTemplate
   equations:
     - 'd/dt * PSP = PSP_t'
-    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2 * PSP - 2. * 1./tau * PSP_t'
+    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2. * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
       default: -22e-3

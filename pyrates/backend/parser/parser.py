@@ -312,7 +312,7 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            self._op_tmp = self.backend.add_op('neg', self.parse(expr_stack))
+            self._op_tmp = self.backend.add_op('neg', self.parse(expr_stack), **self.parser_kwargs)
 
         elif op in "+-*/^@<=>=!==":
 
@@ -326,7 +326,7 @@ class ExpressionParser(ParserElement):
         elif ".T" == op or ".I" == op:
 
             # transpose/invert expression
-            self._op_tmp = self.backend.add_op(op, self.parse(expr_stack))
+            self._op_tmp = self.backend.add_op(op, self.parse(expr_stack), **self.parser_kwargs)
 
         elif op == "]":
 
@@ -371,7 +371,7 @@ class ExpressionParser(ParserElement):
                 op_to_idx = self.args['vars'][op]
                 self.args['updates'][op] = self.apply_idx(op_to_idx, idx)
                 self.args['lhs_evals'].append(op)
-                self._op_tmp = None
+                self._op_tmp = self.args['updates'][op]
             else:
                 op_to_idx = self.parse(expr_stack)
                 self._op_tmp = self.apply_idx(op_to_idx, idx)
@@ -405,7 +405,7 @@ class ExpressionParser(ParserElement):
                                                        self.args.pop('rhs'),
                                                        dt)
                 self.args['lhs_evals'].append(op)
-                self._op_tmp = None
+                self._op_tmp = self.args['updates'][op]
 
             else:
 
@@ -443,7 +443,7 @@ class ExpressionParser(ParserElement):
                                                            self.args.pop('rhs'),
                                                            dt)
                     self.args['lhs_evals'].append(op)
-                    self._op_tmp = None
+                    self._op_tmp = self.args['updates'][op]
 
                 else:
 
@@ -452,7 +452,7 @@ class ExpressionParser(ParserElement):
                                                               self.args['vars'].pop(op),
                                                               self.args.pop('rhs'))
                     self.args['lhs_evals'].append(op)
-                    self._op_tmp = None
+                    self._op_tmp = self.args['updates'][op]
 
             else:
 
@@ -470,7 +470,7 @@ class ExpressionParser(ParserElement):
 
             # extract data type
             try:
-                self._op_tmp = self.backend.add_op('cast', self.parse(expr_stack), op)
+                self._op_tmp = self.backend.add_op('cast', self.parse(expr_stack), op, **self.parser_kwargs)
             except AttributeError:
                 raise AttributeError(f"Datatype casting error in expression: {self.expr_str}. "
                                      f"{op[0:-1]} is not a valid data-type for this parser.")
@@ -485,12 +485,13 @@ class ExpressionParser(ParserElement):
                     break
                 else:
                     expr_stack.pop()
-            if len(args) == 1:
-                args = args[0]
 
             # apply function to arguments
             try:
-                self._op_tmp = self.backend.add_op(op[0:-1], *tuple(args[::-1]))
+                if len(args) == 1:
+                    self._op_tmp = self.backend.add_op(op[0:-1], args[0], **self.parser_kwargs)
+                else:
+                    self._op_tmp = self.backend.add_op(op[0:-1], *tuple(args[::-1]), **self.parser_kwargs)
             except KeyError:
                 raise KeyError(
                     f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
@@ -509,7 +510,7 @@ class ExpressionParser(ParserElement):
                 try:
                     arg_tmp = parse_dict({f'op_{i}': {'vtype': 'constant',
                                                       'dtype': 'float32',
-                                                      'shape': (1,),
+                                                      'shape': (),
                                                       'value': float(op)}},
                                          self.backend,
                                          **self.parser_kwargs)
@@ -544,7 +545,7 @@ class ExpressionParser(ParserElement):
                 # add new variable to arguments that represents rhs op
                 self.args['updates'][op] = self.args.pop('rhs')
                 self.args['lhs_evals'].append(op)
-                self._op_tmp = None
+                self._op_tmp = self.args['updates'][op]
 
             else:
 
@@ -562,6 +563,9 @@ class ExpressionParser(ParserElement):
         """Tries to match the shapes of arg1 and arg2 such that func can be applied.
         """
 
+        if 'scope' in self.parser_kwargs.keys():
+            kwargs['scope'] = self.parser_kwargs['scope']
+
         try:
             # no broadcasting
             args = []
@@ -575,7 +579,7 @@ class ExpressionParser(ParserElement):
                 kwargs[op2_key] = op2_val
             else:
                 args.append(op2)
-            return self.backend.add_op(*tuple(args), **kwargs)
+            return self.backend.add_op(op, *tuple(args), **kwargs)
 
         # try to broadcast arg1 and arg22 to the same shape
         except (ValueError, KeyError):
@@ -629,7 +633,7 @@ class ExpressionParser(ParserElement):
                     kwargs[op2_key] = op2_val
                 else:
                     args.append(op2_val)
-                self.backend.add_op(op, *tuple(args), **kwargs)
+                return self.backend.add_op(op, *tuple(args), **kwargs)
 
             except (ValueError, KeyError):
 
@@ -637,11 +641,11 @@ class ExpressionParser(ParserElement):
                 if hasattr(op1, 'shape'):
                     shape = self.backend.add_op('shape', op1_val)
                     dtype = self.backend.add_op('dtype', op2_val)
-                    op2_val = self.backend.add_op('zeros', shape, dtype=dtype) + op2_val
+                    op2_val = self.backend.add_op('+', self.backend.add_op('zeros', shape, dtype=dtype), op2_val)
                 else:
                     shape = self.backend.add_op('shape', op2_val)
                     dtype = self.backend.add_op('dtype', op1_val)
-                    op1_val = self.backend.add_op('zeros', shape, dtype=dtype) + op1_val
+                    op1_val = self.backend.add_op('+', self.backend.add_op('zeros', shape, dtype=dtype), op1_val)
 
                 # try to apply function after vectorization
                 args = []
@@ -962,7 +966,7 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
         # make sure that value of variable is a number
         if var['value'] is None:
             var['value'] = 0.
-        init_val = var['value'] if hasattr(var['value'], 'shape') else np.zeros((1,)) + var['value']
+        init_val = var['value'] if hasattr(var['value'], 'shape') else np.zeros(()) + var['value']
         dtype = getattr(tf, var['dtype']) if type(var['dtype']) is str else var['dtype']
         shape = var['shape'] if 'shape' in var.keys() else init_val.shape
 

@@ -27,7 +27,7 @@ sparseness_e = 0.
 sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 1
 
 # connectivity parameters
 c_intra = 135.
@@ -83,12 +83,12 @@ for i in range(n_jrcs):
 graph = MultiDiGraph()
 for i in range(0, n_jrcs):
     data = {'operators': {'RPO_e_pc.0': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2. * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
                           'RPO_i_pc.0': {
-                              'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                              'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2. * psp",
                                             "d/dt * psp = x"],
                               'inputs': {},
                               'output': 'psp'},
@@ -173,7 +173,7 @@ for i in range(0, n_jrcs):
     graph.add_node(f'PC.{i}', **data)
 
     data = {'operators': {'RPO_e.0': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2. * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -233,7 +233,7 @@ for i in range(0, n_jrcs):
     graph.add_node(f'EIN.{i}', **data)
 
     data = {'operators': {'RPO_e.0': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2. * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -348,7 +348,7 @@ results, _ = net.run(simulation_time=simulation_time,
                      outputs={'V': ('all', 'PRO.0', 'psp')},
                      sampling_step_size=1e-3,
                      inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
-                     #out_dir='/tmp/log/'
+                     out_dir='/tmp/log/'
                      )
 
 # results

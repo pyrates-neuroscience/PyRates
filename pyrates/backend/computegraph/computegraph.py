@@ -1776,7 +1776,7 @@ class Network(MultiDiGraph):
                 # remove parsed operators from graph
                 graph.remove_nodes_from(secondary_ops)
 
-        self.node_updates = tf.group(self.node_updates)
+        self.node_updates = self.backend.add_op('group', self.node_updates)
 
         # parse edges
         #############
@@ -1816,7 +1816,7 @@ class Network(MultiDiGraph):
             args['inputs']['source_var'] = svar
 
             # parse mapping
-            args = parse_equation(eq, args, backend=self.backend, scope=(source_node, target_node, edge_idx))
+            args = parse_equation(eq, args, backend=self.backend, scope=f"{source_node}/{target_node}/{edge_idx}")
             args.pop('lhs_evals')
 
             # store information in network config
@@ -1830,17 +1830,30 @@ class Network(MultiDiGraph):
             self.edge_updates.append(edge['target_var'])
 
         # add differential equation updates
-        for node in self.net_config.nodes:
-            op_graph = self._get_node_attr(node, 'op_graph')
-            for op in op_graph.nodes.values():
-                for key, var in op['variables'].items():
-                    if '_old' in key:
-                        key_tmp = key.replace('_old', '')
-                        val = op['variables'][key_tmp]
-                        self.edge_updates.append(
-                            tf.keras.layers.Lambda(lambda x: tf.keras.backend.update(x[0], x[1]))([var, val]))
+        for node_name in self.net_config.nodes:
+            op_graph = self._get_node_attr(node_name, 'op_graph')
+            for op_name, op in op_graph.nodes.items():
+                for key_old, var in op['variables'].items():
 
-        self.edge_updates = tf.group(self.edge_updates)
+                    # check if variable is a state variable updated via a differential equation
+                    if '_old' in key_old:
+
+                        # extract variable name and values
+                        key_new = key_old.replace('_old', '')
+                        var_new = op['variables'][key_new]
+                        var_old = op['variables'][key_old]
+
+                        # define mapping equation and its arguments
+                        eq = f'{key_old} = {key_new}'
+                        args = {'inputs': {key_new: var_new}, 'vars': {key_old: var_old}}
+
+                        # parse mapping
+                        args = parse_equation(eq, args, backend=self.backend, scope=f"{node_name}/{op_name}")
+                        args.pop('lhs_evals')
+
+                        self.edge_updates.append(args['updates'][key_old])
+
+        self.edge_updates = self.backend.add_op('group', self.edge_updates)
 
     def run(self,
             simulation_time: Optional[float] = None,
@@ -1936,12 +1949,13 @@ class Network(MultiDiGraph):
                                                         scope="output_collection")
 
             # add collect operation to the graph
-            store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx, var))
+            store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx, var,
+                                                 scope="output_collection"))
 
-        store_output = tf.group(store_ops)
+        store_output = self.backend.add_op('group', store_ops, scope="output_collection")
 
         # create increment operator for counting index
-        out_idx_incr = self.backend.add_op('+=', out_idx, 1)
+        out_idx_incr = self.backend.add_op('+=', out_idx, 1, scope="output_collection")
 
         # linearize input dictionary
         if inputs:
@@ -2066,7 +2080,7 @@ class Network(MultiDiGraph):
             # retrieve operator and operator args
             op_args = dict()
             op_args['vars'] = self._get_op_attr(node_name, op_name, 'variables')
-            op_args['vars']['dt'] = {'vtype': 'constant', 'dtype': 'float32', 'shape': (1,), 'value': self.dt}
+            op_args['vars']['dt'] = {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}
             op_args['inputs'] = {}
             op_info = self._get_op_attr(node_name, op_name, 'operator')
 
@@ -2119,7 +2133,8 @@ class Network(MultiDiGraph):
                                 in_ops_tmp.append(var)
                                 i += 1
 
-                            in_ops_col.append(self._map_multiple_inputs(in_ops_tmp, reduce_dim))
+                            in_ops_col.append(self._map_multiple_inputs(in_ops_tmp, reduce_dim,
+                                                                        scope=f"{node_name}/{op_name}"))
 
                         else:
 
@@ -2159,7 +2174,7 @@ class Network(MultiDiGraph):
                                 in_ops.append(op)
 
                         # map inputs to target
-                        in_ops = self._map_multiple_inputs(in_ops, inp['reduce_dim'])
+                        in_ops = self._map_multiple_inputs(in_ops, inp['reduce_dim'], scope=f"{node_name}/{op_name}")
 
                     # for a single input variable
                     else:
@@ -2170,7 +2185,7 @@ class Network(MultiDiGraph):
 
             # parse equations into tensorflow
             for eq in op_info['equations']:
-                op_args = parse_equation(eq, op_args, backend=self.backend, scope=(node_name, op_name))
+                op_args = parse_equation(eq, op_args, backend=self.backend, scope=f"{node_name}/{op_name}")
 
             # store operator variables in net config
             op_vars = self._get_op_attr(node_name, op_name, 'variables')
@@ -2180,18 +2195,18 @@ class Network(MultiDiGraph):
 
             # if the operator does not project to others, store its update operations
             if self._get_node_attr(node_name, 'op_graph').out_degree(op_name) == 0:
-                for var_update in op_args['lhs_evals']:
+                for var_update in list(set(op_args['lhs_evals'])):
                     self.node_updates.append(op_args['updates'][var_update])
 
-    def _map_multiple_inputs(self, inputs, reduce_dim):
+    def _map_multiple_inputs(self, inputs, reduce_dim, **kwargs):
         """
         """
 
-        inp = self.backend.add_op('stack', inputs)
+        inp = self.backend.add_op('stack', inputs, **kwargs)
         if reduce_dim:
-            return self.backend.add_op('sum', inp, axis=0)
+            return self.backend.add_op('sum', inp, axis=0, **kwargs)
         else:
-            return self.backend.add_op('reshape', inp, shape=(inp.shape[0] * inp.shape[1],))
+            return self.backend.add_op('reshape', inp, shape=(inp.shape[0] * inp.shape[1],), **kwargs)
 
     def _connect_edge_to_op(self, in_op, node, op, var, n):
         """
@@ -2649,8 +2664,8 @@ class Network(MultiDiGraph):
                                     'equations': eqs_op_rotate},
                           variables=var_dict)
         op_graph.add_node(f'{op}_{var}_buffer_read_{idx}',
-                          operator={'inputs': {var: {'sources': [f'{op}_{var}_buffer_rotate_{idx}'],
-                                                     'reduce_dim': False}},
+                          operator={'inputs': {f'{var}_buffer_{idx}': {'sources': [f'{op}_{var}_buffer_rotate_{idx}'],
+                                                                       'reduce_dim': False}},
                                     'output': var,
                                     'equations': eqs_op_read},
                           variables={})

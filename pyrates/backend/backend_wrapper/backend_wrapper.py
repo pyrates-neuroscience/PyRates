@@ -68,7 +68,11 @@ class TensorflowBackend(tf.Graph):
                     "sigmoid": tf.sigmoid,
                     "tanh": tf.tanh,
                     "gather": tf.gather_nd,
-                    "mask": tf.boolean_mask
+                    "scatter": tf.scatter_nd,
+                    "scatter_update": tf.scatter_update,
+                    "mask": tf.boolean_mask,
+                    "stack": tf.parallel_stack,
+                    "group": tf.group
                     }
 
         self.dtypes = {"float16": tf.float16,
@@ -106,7 +110,7 @@ class TensorflowBackend(tf.Graph):
             writer = tf.summary.FileWriter(out_dir, graph=self)
 
         # start session
-        with tf.Session() as sess:
+        with tf.Session(graph=self) as sess:
 
             # initialize variables on graph
             sess.run(tf.global_variables_initializer())
@@ -165,8 +169,8 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        if scope:
-            scope = self.get_scope(scope)
+        #if scope:
+        #    scope = self.get_scope(scope)
 
         with self.as_default():
             if scope:
@@ -190,8 +194,8 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        if scope:
-            scope = self.get_scope(scope)
+        #if scope:
+        #    scope = self.get_scope(scope)
 
         with self.as_default():
             if scope:
@@ -214,14 +218,14 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        if scope:
-            scope = self.get_scope(scope)
+        #if scope:
+        #    scope = self.get_scope(scope)
 
         with self.as_default():
             if scope:
                 with tf.variable_scope(scope):
-                    return tf.placeholder(name, shape, dtype)
-            return tf.placeholder(name, shape, dtype)
+                    return tf.placeholder(dtype, shape, name)
+            return tf.placeholder(dtype, shape, name)
 
     def add_op(self, op: str, *args, **kwargs):
         """
@@ -237,10 +241,22 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        try:
-            return self.ops[op](*args, **kwargs)
-        except TypeError:
-            return self.ops[op](list(args), **kwargs)
+        scope = kwargs.pop('scope', None)
+        #if scope:
+        #    scope = self.get_scope(scope)
+
+        with self.as_default():
+            if scope:
+                with tf.variable_scope(scope):
+                    try:
+                        return self.ops[op](*args, **kwargs)
+                    except TypeError:
+                        return self.ops[op](list(args), **kwargs)
+            else:
+                try:
+                    return self.ops[op](*args, **kwargs)
+                except TypeError:
+                    return self.ops[op](list(args), **kwargs)
 
     def get_scope(self, scope):
         """
@@ -254,13 +270,14 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        if type(scope) is tuple:
-            for i, s in enumerate(scope):
-                if i == 0:
-                    s_new = tf.VariableScope(s)
-                else:
-                    with tf.variable_scope(s_new):
+        with self.as_default():
+            if type(scope) is tuple:
+                for i, s in enumerate(scope):
+                    if i == 0:
                         s_new = tf.VariableScope(s)
-            return s_new
-        else:
-            return tf.VariableScope(scope)
+                    else:
+                        with tf.variable_scope(s_new):
+                            s_new = tf.VariableScope(s)
+                return s_new
+            else:
+                return tf.VariableScope(scope)
