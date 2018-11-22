@@ -177,7 +177,7 @@ class Thalamus(Circuit):
     def __init__(self, step_size=1e-3, max_synaptic_delay=None, epsilon=1e-10, connectivity=None,
                  connectivity_scaling=20., feedback=None, delays=None, synapse_params=None,
                  axon_params=None, init_states=None, resting_potentials=None):
-        """Instantiates thalamus model.
+        """Instantiates thalamus backend.
         """
 
         # set parameters

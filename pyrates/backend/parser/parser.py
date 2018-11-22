@@ -109,6 +109,8 @@ class ExpressionParser(ParserElement):
         self.args = args
         self.backend = backend
         self.parser_kwargs = kwargs
+
+        # check whether the all important fields exist in args
         if 'updates' not in self.args.keys():
             self.args['updates'] = {}
         if 'vars' not in self.args.keys():
@@ -117,6 +119,11 @@ class ExpressionParser(ParserElement):
             self.args['inputs'] = {}
         if 'lhs_evals' not in self.args.keys():
             self.args['lhs_evals'] = []
+
+        # add functions from args dictionary to backend, if passed
+        for key, val in self.args.items():
+            if callable(val):
+                self.backend.ops[key] = val
 
         # if left-hand side of an equation, check whether it includes a differential operator
         if self.lhs and "d/dt" in expr_str:
@@ -226,23 +233,6 @@ class ExpressionParser(ParserElement):
             factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self.push_first))
             self.expr << factor + ZeroOrMore((op_add + factor).setParseAction(self.push_first))
 
-        # define operations and functions
-        #################################
-
-        # base math operations
-        self.ops = {}
-
-        # additional functions
-        self.funcs = {}
-
-        # allowed data-types
-        self.dtypes = {}
-
-        # add functions from args dictionary, if passed
-        for key, val in self.args.items():
-            if callable(val):
-                self.funcs[key] = val
-
         # extract symbols and operations from expression string
         self.expr_list = self.expr.parseString(self.expr_str)
 
@@ -322,7 +312,7 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            self._op_tmp = self.funcs['lambda'](lambda x: -x)(self.parse(expr_stack))
+            self._op_tmp = self.backend.add_op('neg', self.parse(expr_stack))
 
         elif op in "+-*/^@<=>=!==":
 
@@ -331,12 +321,12 @@ class ExpressionParser(ParserElement):
             op1 = self.parse(expr_stack)
 
             # combine elements via mathematical/boolean operator
-            self._op_tmp = self.broadcast(self.ops[op], op1, op2)
+            self._op_tmp = self.broadcast(op, op1, op2)
 
         elif ".T" == op or ".I" == op:
 
             # transpose/invert expression
-            self._op_tmp = self.ops[op](self.parse(expr_stack))
+            self._op_tmp = self.backend.add_op(op, self.parse(expr_stack))
 
         elif op == "]":
 
@@ -458,7 +448,7 @@ class ExpressionParser(ParserElement):
                 else:
 
                     # update variable according to rhs
-                    self.args['updates'][op] = self.broadcast(self.ops['='],
+                    self.args['updates'][op] = self.broadcast('=',
                                                               self.args['vars'].pop(op),
                                                               self.args.pop('rhs'))
                     self.args['lhs_evals'].append(op)
@@ -480,22 +470,12 @@ class ExpressionParser(ParserElement):
 
             # extract data type
             try:
-                dtype = self.dtypes[op[0:-1]]
+                self._op_tmp = self.backend.add_op('cast', self.parse(expr_stack), op)
             except AttributeError:
-                raise ValueError(f"Datatype casting error in expression: {self.expr_str}. {op[0:-1]} is not a valid "
-                                 f"data-type for this parser.")
-
-            # cast new data type to argument
-            self._op_tmp = self.funcs['cast']([self.parse(expr_stack), dtype])
+                raise AttributeError(f"Datatype casting error in expression: {self.expr_str}. "
+                                     f"{op[0:-1]} is not a valid data-type for this parser.")
 
         elif op[-1] == "(":
-
-            # extract function
-            try:
-                f = self.funcs[op[0:-1]]
-            except KeyError:
-                raise KeyError(f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
-                               f"in arguments dictionary.")
 
             # parse arguments
             args = []
@@ -505,15 +485,16 @@ class ExpressionParser(ParserElement):
                     break
                 else:
                     expr_stack.pop()
+            if len(args) == 1:
+                args = args[0]
 
             # apply function to arguments
-            if len(args) == 1:
-                self._op_tmp = f(args[0])
-            else:
-                try:
-                    self._op_tmp = f(args[::-1])
-                except TypeError:
-                    self._op_tmp = f(*tuple(args[::-1]))
+            try:
+                self._op_tmp = self.backend.add_op(op[0:-1], *tuple(args[::-1]))
+            except KeyError:
+                raise KeyError(
+                    f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
+                    f"in arguments dictionary.")
 
         elif any([op == "True", op == "true", op == "False", op == "false"]):
 
@@ -577,12 +558,11 @@ class ExpressionParser(ParserElement):
 
         return self._op_tmp
 
-    def broadcast(self, func, op1, op2, **kwargs):
+    def broadcast(self, op, op1, op2, **kwargs):
         """Tries to match the shapes of arg1 and arg2 such that func can be applied.
         """
 
         try:
-
             # no broadcasting
             args = []
             if type(op1) is dict:
@@ -595,10 +575,7 @@ class ExpressionParser(ParserElement):
                 kwargs[op2_key] = op2_val
             else:
                 args.append(op2)
-            try:
-                return func(args, **kwargs)
-            except TypeError:
-                return func(*tuple(args), **kwargs)
+            return self.backend.add_op(*tuple(args), **kwargs)
 
         # try to broadcast arg1 and arg22 to the same shape
         except (ValueError, KeyError):
@@ -621,26 +598,26 @@ class ExpressionParser(ParserElement):
                 if len(op1_val.shape) > len(op2_val.shape) and 1 in op1_val.shape:
                     target_shape = op1_val.shape
                     if 1 in target_shape:
-                        op2_val = self.funcs['reshape']([op2_val, target_shape])
+                        op2_val = self.backend.add_op('reshape', op2_val, target_shape)
                     else:
                         idx = list(target_shape).index(op2_val.shape[0])
                         if idx == 0:
-                            op2_val = self.funcs['reshape']([op2_val, [1, op1_val.shape[0]]])
+                            op2_val = self.backend.add_op('reshape', op2_val, [1, op1_val.shape[0]])
                         else:
-                            op2_val = self.funcs['reshape']([op2_val, [op1_val.shape[1], 1]])
+                            op2_val = self.backend.add_op('reshape', op2_val, [op1_val.shape[1], 1])
                 elif len(op2_val.shape) > len(op1_val.shape) and 1 in op2_val.shape:
-                    if func == self.ops['=']:
-                        op2_val = self.funcs['squeeze']([op2_val, -1])
+                    if op == '=':
+                        op2_val = self.backend.add_op('squeeze', op2_val, -1)
                     else:
                         target_shape = op2_val.shape
                         if 1 in target_shape:
-                            op1_val = self.funcs['reshape']([op1_val, target_shape])
+                            op1_val = self.backend.add_op('reshape', op1_val, target_shape)
                         else:
                             idx = list(target_shape).index(op1_val.shape[0])
                             if idx == 0:
-                                op1_val = self.funcs['reshape']([op1_val, [1, target_shape[0]]])
+                                op1_val = self.backend.add_op('reshape', op1_val, [1, target_shape[0]])
                             else:
-                                op1_val = self.funcs['reshape']([op1_val, [target_shape[1], 1]])
+                                op1_val = self.backend.add_op('reshape', op1_val, [target_shape[1], 1])
 
                 # try to apply function after singleton addition
                 args = []
@@ -652,20 +629,19 @@ class ExpressionParser(ParserElement):
                     kwargs[op2_key] = op2_val
                 else:
                     args.append(op2_val)
-                try:
-                    return func(args, **kwargs)
-                except TypeError:
-                    return func(*tuple(args), **kwargs)
+                self.backend.add_op(op, *tuple(args), **kwargs)
 
             except (ValueError, KeyError):
 
                 # transform op1 or op2 from scalar to array
                 if hasattr(op1, 'shape'):
-                    op2_val = self.funcs['zeros']([self.funcs['shape'](op1_val), self.funcs['dtype'](op2_val)]) + \
-                              op2_val
+                    shape = self.backend.add_op('shape', op1_val)
+                    dtype = self.backend.add_op('dtype', op2_val)
+                    op2_val = self.backend.add_op('zeros', shape, dtype=dtype) + op2_val
                 else:
-                    op1_val = self.funcs['zeros']([self.funcs['shape'](op2_val), self.funcs['dtype'](op1_val)]) + \
-                              op1_val
+                    shape = self.backend.add_op('shape', op2_val)
+                    dtype = self.backend.add_op('dtype', op1_val)
+                    op1_val = self.backend.add_op('zeros', shape, dtype=dtype) + op1_val
 
                 # try to apply function after vectorization
                 args = []
@@ -677,10 +653,7 @@ class ExpressionParser(ParserElement):
                     kwargs[op2_key] = op2_val
                 else:
                     args.append(op2_val)
-                try:
-                    return func(args, **kwargs)
-                except TypeError:
-                    return func(*tuple(args), **kwargs)
+                return self.backend.add_op(op, *tuple(args), **kwargs)
 
     def apply_idx(self, op, idx):
         """Apply index to operation.
@@ -697,26 +670,26 @@ class ExpressionParser(ParserElement):
             idx_tmp2 = i.split(':')
             for j in idx_tmp2:
                 if j in self.args['idx'].keys():
-                    exec(f"{j} = self.funcs['squeeze'](self.args['idx'].pop('{j}'))")
+                    exec(f"{j} = self.backend.add_op('squeeze', self.args['idx'].pop('{j}'))")
 
         # apply idx
         try:
             op_idx = eval(f'op[{idx}]')
         except ValueError:
             try:
-                op_idx = eval(f"self.funcs['gather']([op, {idx}])")
+                op_idx = eval(f"self.backend.add_op('gather', op, {idx})")
             except ValueError:
-                op_idx = eval(f"self.funcs['gather']([op, self.funcs['squeeze']({idx})])")
+                op_idx = eval(f"self.backend.add_op('gather', op, self.funcs['squeeze']({idx}))")
         except TypeError:
             if locals()[idx].dtype.is_bool:
-                op_idx = self.broadcast(self.ops['*'], op, eval(f"self.funcs['cast']([{idx}, op.dtype])"))
+                op_idx = self.broadcast('*', op, eval(f"self.backend.add_op('cast', {idx}, op.dtype)"))
             else:
                 raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of the '
                                 f'tensor to be indexed.')
 
         # return indexed variable
         if self.lhs:
-            return self.broadcast(self.ops['='], op_idx, self.args.pop('rhs'))
+            return self.broadcast('=', op_idx, self.args.pop('rhs'))
         else:
             return op_idx
 
@@ -724,9 +697,8 @@ class ExpressionParser(ParserElement):
         """Solves single step of a differential equation.
         """
 
-        var_update = self.broadcast(self.ops['*'], var_delta, dt)
-
-        return self.broadcast(self.ops['+'], var_old, var_update)
+        var_update = self.broadcast('*', var_delta, dt)
+        return self.broadcast('+', var_old, var_update)
 
 
 class KerasExpressionParser(ExpressionParser):
@@ -913,186 +885,6 @@ class KerasExpressionParser(ExpressionParser):
         self.dtypes.update(dtypes)
 
 
-class TFExpressionParser(ExpressionParser):
-    """Expression parser that transforms expression into tensorflow operations on a tensorflow graph.
-
-    Parameters
-    ----------
-    expr_str
-        See docstring of `ExpressionParser`.
-    args
-        See docstring of `ExpressionParser`. Each variable in args needs to be a dictionary with key-value pairs for:
-            - `var`: contains the tensorflow variable.
-            - `dependency`: Boolean. If True, the expression needs to wait for this variable to be calculated/updated
-               before being evaluated.
-    lhs
-        See docstring of `ExpressionParser`.
-
-    Attributes
-    ----------
-    ops
-        Dictionary containing all mathematical operations available for this parser and their syntax. These include:
-            - addition: `+`
-            - subtraction: `-`
-            - multiplication: `*`
-            - division: `/`
-            - modulo: `%`
-            - exponentiation: `^`
-            - matrix multiplication: `@`
-            - matrix transposition: `.T`
-            - matrix inversion: `.I`
-            - logical greater than: `>`
-            - logical less than: `<`
-            - logical equal: `==`
-            - logical unequal: `!=`
-            - logical greater or equal: `>=`
-            - logical smaller or equal: `<=`
-    funcs
-        Dicionary containing all additional functions available for this parser and their syntax. These include:
-            - sinus: `sin()`.
-            - cosinus: `cos()`.
-            - tangens: `tan()`.
-            - absolute: `abs()`.
-            - maximum: `max()`
-            - minimum: `min()`
-            - index of maximum: `argmax()`
-            - index of minimum: `argmin()`
-            - round to next integer: `round()`. Tensorflow name: `tensorflow.to_int32()`.
-            - round to certain decimal point: `roundto()`. Custom function using `tensorflow.round()`. Defined in
-              `pyrates.parser.parser.py`.
-            - sum over dimension(s): `sum()`. Tensorflow name: `reduce_sum()`.
-            - Concatenate multiples of tensor over certain dimension: `tile()`.
-            - Reshape tensor: `reshape()`.
-            - Cut away dimensions of size 1: `squeeze()`.
-            - Cast variable to data-type: `cast()`.
-            - draw random variable from standard normal distribution: `randn()`.
-              Tensorflow name: `tensorflow.random_normal`.
-            - Create array filled with ones: `ones()`.
-            - Create array filled with zeros: `zeros()`.
-            - Apply softmax function to variable: `softmax()`. Tensorflow name: `tensorflow.nn.softmax()`.
-            - Apply boolean mask to array: `boolean_mask()`.
-            - Create new array with non-zero entries at certain indices: `scatter()`.
-              Tensorflow name: `tensorflow.scatter_nd`
-            - Add values to certain entries of tensor: 'scatter_add()'. Tensorflow name: `tensorflow.scatter_nd_add`.
-            - Update values of certain tensor entries: `scatter_update()`.
-              Tensorflow name: `tensorflow.scatter_nd_update`.
-            - Apply tensor as index to other tensor: `array_idx()`. Tensorflow name: `tensorflow.gather_nd`.
-            - Get variable from tensorflow graph or create new variable: `new_var()`:
-              Tensorflow name: `tensorflow.get_variable`.
-        For a detailed documentation of how to use these functions, see the tensorflow Python API.
-    dtypes
-        Dictionary containing all data-types available for this parser. These include:
-            - float16, float32, float64
-            - int16, int32, int64
-            - uint16, uint32, uint64
-            - complex64, complex128,
-            - bool
-        All of those data-types can be used inside a mathematical expression instead of using `cast()`
-        (e.g. `int32(3.631)`.
-    For all other attributes, see docstring of `ExpressionParser`.
-
-    Methods
-    -------
-    See docstrings of `ExpressionParser` methods.
-
-    Examples
-    --------
-
-    References
-    ----------
-
-    """
-
-    def __init__(self, expr_str: str, args: dict, backend: tf.keras.layers.Layer, lhs: bool = False, **kwargs) -> None:
-        """Instantiates tensorflow expression parser.
-        """
-
-        # call super init
-        #################
-
-        super().__init__(expr_str=expr_str, args=args, backend=backend, lhs=lhs, **kwargs)
-
-        # define operations and functions
-        #################################
-
-        # base math operations
-        ops = {"+": tf.keras.layers.Lambda(lambda x: x[0] + x[1]),
-               "-": tf.keras.layers.Lambda(lambda x: x[0] - x[1]),
-               "*": tf.keras.layers.Lambda(lambda x: x[0] * x[1]),
-               "/": tf.keras.layers.Lambda(lambda x: x[0] / x[1]),
-               "%": tf.keras.layers.Lambda(lambda x: x[0] % x[1]),
-               "^": tf.keras.layers.Lambda(lambda x: tf.keras.backend.pow(x[0], x[1])),
-               "@": tf.keras.layers.Lambda(lambda x: tf.keras.backend.dot(x[0], x[1])),
-               ".T": tf.keras.layers.Lambda(lambda x: tf.keras.backend.transpose(x)),
-               ".I": tf.keras.layers.Lambda(lambda x: tf.matrix_inverse(x)),
-               ">": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater(x[0], x[1])),
-               "<": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less(x[0], x[1])),
-               "==": tf.keras.layers.Lambda(lambda x: tf.keras.backend.equal(x[0], x[1])),
-               "!=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.not_equal(x[0], x[1])),
-               ">=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater_equal(x[0], x[1])),
-               "<=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less_equal(x[0], x[1])),
-               "=": tf.keras.backend.update
-               }
-        self.ops.update(ops)
-
-        # additional functions
-        funcs = {"sin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sin(x)),
-                 "cos": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cos(x)),
-                 "tanh": tf.keras.layers.Lambda(lambda x: tf.keras.backend.tanh(x)),
-                 "abs": tf.keras.layers.Lambda(lambda x: tf.keras.backend.abs(x)),
-                 "sqrt": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sqrt(x)),
-                 "sq": tf.keras.layers.Lambda(lambda x: tf.keras.backend.square(x)),
-                 "exp": tf.keras.layers.Lambda(lambda x: tf.keras.backend.exp(x)),
-                 "max": tf.keras.layers.Lambda(lambda x: tf.keras.backend.max(x)),
-                 "min": tf.keras.layers.Lambda(lambda x: tf.keras.backend.min(x)),
-                 "argmax": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmax(x)),
-                 "argmin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmin(x)),
-                 "round": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x)),
-                 "roundto": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x[0] * 10**x[1]) / 10**x[1]),
-                 "sum": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sum(x[0], *x[1])
-                                               if type(x) is list else tf.keras.backend.sum(x)),
-                 "concat": tf.keras.layers.Lambda(lambda x: tf.keras.backend.concatenate(x[0], *x[1])
-                                                  if type(x[0]) is list else tf.keras.backend.concatenate(x)),
-                 "reshape": tf.keras.layers.Lambda(lambda x: tf.keras.backend.reshape(x[0], x[1])
-                                                   if type(x) is list else tf.keras.backend.reshape(x)),
-                 "shape": tf.keras.backend.shape,
-                 "dtype": tf.keras.backend.dtype,
-                 'squeeze': tf.keras.layers.Lambda(lambda x: tf.keras.backend.squeeze(x[0], x[1])
-                                                   if type(x) is list else tf.keras.backend.squeeze(x[0], -1)),
-                 "cast": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cast(x[0], x[1])),
-                 "randn": tf.keras.layers.Lambda(lambda x: tf.keras.backend.random_normal(x[0], *x[1])
-                                                 if "Tensor" in str(type(x[0]))
-                                                 else tf.keras.backend.random_normal(x)),
-                 "ones": tf.keras.layers.Lambda(lambda x: tf.keras.backend.ones(x[0], x[1])
-                                                if "Tensor" in str(type(x[0]))
-                                                else tf.keras.backend.ones(x)),
-                 "zeros": tf.keras.layers.Lambda(lambda x: tf.keras.backend.zeros(x[0], x[1])
-                                                 if "Tensor" in str(type(x[0]))
-                                                 else tf.keras.backend.zeros(x)),
-                 "softmax": tf.keras.layers.Lambda(lambda x: tf.keras.activations.softmax(x[0], *x[1])
-                                                   if type(x[0]) is list else tf.keras.activations.softmax(x)),
-                 "gather": tf.keras.layers.Lambda(lambda x: tf.gather_nd(x[0], x[1])),
-                 "mask": tf.keras.layers.Masking,
-                 "lambda": tf.keras.layers.Lambda
-                 }
-        self.funcs.update(funcs)
-
-        dtypes = {"float16": tf.float16,
-                  "float32": tf.float32,
-                  "float64": tf.float64,
-                  "int16": tf.int16,
-                  "int32": tf.int32,
-                  "int64": tf.int64,
-                  "uint16": tf.uint16,
-                  "uint32": tf.uint32,
-                  "uint64": tf.uint64,
-                  "complex64": tf.complex64,
-                  "complex128": tf.complex128,
-                  "bool": tf.bool
-                  }
-        self.dtypes.update(dtypes)
-
-
 def parse_equation(equation: str, equation_args: dict, backend, **kwargs) -> dict:
     """Parses lhs and rhs of an equation.
 
@@ -1132,11 +924,11 @@ def parse_equation(equation: str, equation_args: dict, backend, **kwargs) -> dic
     lhs, rhs = equation.split(' = ')
 
     # parse rhs
-    rhs_parser = TFExpressionParser(expr_str=rhs, args=equation_args, backend=backend, **kwargs)
+    rhs_parser = ExpressionParser(expr_str=rhs, args=equation_args, backend=backend, **kwargs)
     equation_args = rhs_parser.parse_expr()
 
     # parse lhs
-    lhs_parser = TFExpressionParser(expr_str=lhs, args=equation_args, lhs=True, backend=backend, **kwargs)
+    lhs_parser = ExpressionParser(expr_str=lhs, args=equation_args, lhs=True, backend=backend, **kwargs)
 
     return lhs_parser.parse_expr()
 
@@ -1182,7 +974,7 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
         elif var['vtype'] == 'state_var':
 
             # create a tensorflow variable that can change its value over the course of a simulation
-            tf_var = backend.add_variable(initializer=tf.constant_initializer(init_val),
+            tf_var = backend.add_variable(value=init_val,
                                           name=var_name,
                                           dtype=dtype,
                                           shape=shape,

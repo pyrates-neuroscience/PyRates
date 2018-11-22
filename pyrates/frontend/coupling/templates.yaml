@@ -3,7 +3,7 @@
 LinearCoupling:
   base: pyrates.frontend.coupling.coupling.CouplingOperator
   description:
-    Coupling Operator as used in the Jansen-Rit neural mass model [1]_. This is a simple, instantaneous linear
+    Coupling Operator as used in the Jansen-Rit neural mass backend [1]_. This is a simple, instantaneous linear
     coupling.
   equations:
     remove: ["L_CO * "]
