@@ -9,6 +9,8 @@ from numbers import Number
 import math
 import tensorflow as tf
 import typing as tp
+from copy import copy
+import numpy as np
 
 # meta infos
 __author__ = "Richard Gast"
@@ -91,7 +93,7 @@ class ExpressionParser(ParserElement):
 
     """
 
-    def __init__(self, expr_str: str, args: dict, lhs: bool = False) -> None:
+    def __init__(self, expr_str: str, args: dict, backend, lhs: bool = False, **kwargs) -> None:
         """Instantiates expression parser.
         """
 
@@ -105,9 +107,19 @@ class ExpressionParser(ParserElement):
 
         self.lhs = lhs
         self.args = args
+        self.backend = backend
+        self.parser_kwargs = kwargs
+        if 'updates' not in self.args.keys():
+            self.args['updates'] = {}
+        if 'vars' not in self.args.keys():
+            self.args['vars'] = {}
+        if 'inputs' not in self.args.keys():
+            self.args['inputs'] = {}
+        if 'lhs_evals' not in self.args.keys():
+            self.args['lhs_evals'] = []
 
         # if left-hand side of an equation, check whether it includes a differential operator
-        if "d/dt" in expr_str:
+        if self.lhs and "d/dt" in expr_str:
             lhs_split = expr_str.split('*')
             expr_str = ""
             for lhs_part in lhs_split[1:]:
@@ -116,6 +128,7 @@ class ExpressionParser(ParserElement):
         else:
             self.solve = False
 
+        self.wait_for_idx = False
         self.expr_str = expr_str
 
         # additional attributes
@@ -251,12 +264,12 @@ class ExpressionParser(ParserElement):
             raise ValueError(f"Error while parsing expression: {self.expr_str}. {expr_str} could not be parsed.")
 
         # turn expression into operation
-        op = self.parse(self.expr_stack[:])
+        if self.lhs:
+            self.parse(self.expr_stack[:])
+        else:
+            self.args['rhs'] = self.parse(self.expr_stack[:])
 
-        # extract update operation
-        update = self.args.pop('rhs') if 'rhs' in self.args.keys() else None
-
-        return op, update, self.solve
+        return self.args
 
     def push_first(self, strg, loc, toks):
         """Push tokens in first-to-last order to expression stack.
@@ -309,7 +322,7 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            self._op_tmp = -self.parse(expr_stack)
+            self._op_tmp = self.funcs['lambda'](lambda x: -x)(self.parse(expr_stack))
 
         elif op in "+-*/^@<=>=!==":
 
@@ -317,36 +330,8 @@ class ExpressionParser(ParserElement):
             op2 = self.parse(expr_stack)
             op1 = self.parse(expr_stack)
 
-            # enable automatic broadcasting
-            if hasattr(op1, 'shape') and hasattr(op2, 'shape') and \
-                    op1.shape != op2.shape and len(op1.shape) > 0 and len(op2.shape) > 0:
-                if len(op1.shape) > len(op2.shape):
-                    target_shape = op1.shape
-                    if 1 in target_shape:
-                        op2 = self.funcs['reshape'](op2, target_shape)
-                    else:
-                        idx = list(target_shape).index(op2.shape[0])
-                        if idx == 0:
-                            op2 = self.funcs['reshape'](op2, [1, op1.shape[0]])
-                        else:
-                            op2 = self.funcs['reshape'](op2, [op1.shape[1], 1])
-                elif len(op2.shape) > len(op1.shape) and 1 in op2.shape:
-                    target_shape = op2.shape
-                    if 1 in target_shape:
-                        op1 = self.funcs['reshape'](op1, target_shape)
-                    else:
-                        idx = list(target_shape).index(op1.shape[0])
-                        if idx == 0:
-                            op1 = self.funcs['reshape'](op1, [1, target_shape[0]])
-                        else:
-                            op1 = self.funcs['reshape'](op1, [target_shape[1], 1])
-            elif hasattr(op1, 'shape'):
-                op2 = self.funcs['zeros'](op1.shape) + op2
-            elif hasattr(op2, 'shape'):
-                op1 = self.funcs['zeros'](op2.shape) + op1
-
             # combine elements via mathematical/boolean operator
-            self._op_tmp = self.ops[op](op1, op2)
+            self._op_tmp = self.broadcast(self.ops[op], op1, op2)
 
         elif ".T" == op or ".I" == op:
 
@@ -370,57 +355,36 @@ class ExpressionParser(ParserElement):
             expr_stack.pop()
 
             # build string-based representation of idx
+            if 'idx' not in self.args.keys():
+                self.args['idx'] = {}
             idx = ""
+            i = 0
             for index in indices[::-1]:
-                for i, ind in enumerate(index):
+                for ind in index:
                     if type(ind) == str:
                         idx += ind
                     elif isinstance(ind, Number):
                         idx += f"{ind}"
                     else:
                         try:
-                            exec(f"var_{i} = ind.__copy__()")
+                            self.args['idx'][f'var_{i}'] = ind.__copy__()
                         except AttributeError:
-                            exec(f"var_{i} = copy(ind)")
+                            self.args['idx'][f'var_{i}'] = copy(ind)
                         idx += f"var_{i}"
+                    i += 1
                 idx += ","
             idx = idx[0:-1]
 
-            # apply idx to op
-            op_to_idx = self.parse(expr_stack)
-            try:
-
-                # standard indexing
-                self._op_tmp = eval(f"op_to_idx[{idx}]")
-
-            except (TypeError, ValueError):
-
-                if self.lhs:
-
-                    if self.solve:
-
-                        # perform differential equation update for indexed variable
-                        update = self.args['dt'] * self.args.pop('rhs')
-                        self._op_tmp = eval(f"self.funcs['scatter_add'](op_to_idx, {idx}, update)")
-
-                    else:
-
-                        # perform variable update for indexed variable
-                        update = self.args.pop('rhs')
-                        self._op_tmp = eval(f"self.funcs['scatter_update'](op_to_idx, self.funcs['squeeze']({idx}), "
-                                            f"self.funcs['squeeze'](update))")
-
-                else:
-
-                    try:
-
-                        # indexing by list of indices
-                        self._op_tmp = eval(f"self.funcs['array_idx'](op_to_idx, {idx})")
-
-                    except (TypeError, ValueError):
-
-                        # indexing via boolean array
-                        self._op_tmp = eval(f"self.funcs['boolean_mask'](op_to_idx, {idx})")
+            # extract variable and apply index
+            if self.lhs:
+                op = expr_stack.pop(-1)
+                op_to_idx = self.args['vars'][op]
+                self.args['updates'][op] = self.apply_idx(op_to_idx, idx)
+                self.args['lhs_evals'].append(op)
+                self._op_tmp = None
+            else:
+                op_to_idx = self.parse(expr_stack)
+                self._op_tmp = self.apply_idx(op_to_idx, idx)
 
         elif op == "PI":
 
@@ -432,10 +396,85 @@ class ExpressionParser(ParserElement):
             # return float representation of e
             self._op_tmp = math.e
 
-        elif op in self.args.keys():
+        elif op in self.args['inputs'].keys():
 
-            # extract variable from args dict
-            self._op_tmp = self.args[op]
+            # extract input variable from args dict
+            self._op_tmp = self.args['inputs'][op]
+
+        elif f'{op}_old' in self.args['inputs'].keys():
+
+            if self.lhs:
+
+                # parse dt
+                self.lhs = False
+                dt = self.parse(['dt'])
+                self.lhs = True
+
+                # calculate update of differential equation
+                self.args['updates'][op] = self.update(self.args['inputs'][f'{op}_old'],
+                                                       self.args.pop('rhs'),
+                                                       dt)
+                self.args['lhs_evals'].append(op)
+                self._op_tmp = None
+
+            else:
+
+                # extract state variable from previous time-step from args dict
+                self._op_tmp = self.args['inputs'][f'{op}_old']
+
+        elif op in self.args['vars'].keys():
+
+            if self.lhs:
+
+                if self.solve:
+
+                    # parse dt
+                    self.lhs = False
+                    dt = self.parse(['dt'])
+                    self.lhs = True
+
+                    # get variable
+                    var = self.args['vars'].pop(op)
+
+                    # create old var placeholder
+                    var_name = f'{op}_old'
+                    if var_name not in self.args['inputs'].keys():
+                        old_var = parse_dict({var_name: {'vtype': 'state_var',
+                                                         'dtype': var.dtype,
+                                                         'value': np.zeros(var.shape)}},
+                                             self.backend,
+                                             **self.parser_kwargs)[var_name]
+                    else:
+                        old_var = self.args['inputs'][var_name]
+                    self.args['inputs'][var_name] = old_var
+
+                    # calculate update of differential equation
+                    self.args['updates'][op] = self.update(old_var,
+                                                           self.args.pop('rhs'),
+                                                           dt)
+                    self.args['lhs_evals'].append(op)
+                    self._op_tmp = None
+
+                else:
+
+                    # update variable according to rhs
+                    self.args['updates'][op] = self.broadcast(self.ops['='],
+                                                              self.args['vars'].pop(op),
+                                                              self.args.pop('rhs'))
+                    self.args['lhs_evals'].append(op)
+                    self._op_tmp = None
+
+            else:
+
+                # extract constant/variable from args dict
+                self._op_tmp = op if self.wait_for_idx else self.args['vars'][op]
+
+        elif op in self.args['updates'].keys():
+
+            # extract state variable from args dict
+            self._op_tmp = self.args['updates'][op]
+            if op in self.args['lhs_evals']:
+                self.args['lhs_evals'].pop(self.args['lhs_evals'].index(op))
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
@@ -447,7 +486,7 @@ class ExpressionParser(ParserElement):
                                  f"data-type for this parser.")
 
             # cast new data type to argument
-            self._op_tmp = self.funcs['cast'](self.parse(expr_stack), dtype)
+            self._op_tmp = self.funcs['cast']([self.parse(expr_stack), dtype])
 
         elif op[-1] == "(":
 
@@ -468,7 +507,13 @@ class ExpressionParser(ParserElement):
                     expr_stack.pop()
 
             # apply function to arguments
-            self._op_tmp = f(*tuple(args[::-1]))
+            if len(args) == 1:
+                self._op_tmp = f(args[0])
+            else:
+                try:
+                    self._op_tmp = f(args[::-1])
+                except TypeError:
+                    self._op_tmp = f(*tuple(args[::-1]))
 
         elif any([op == "True", op == "true", op == "False", op == "false"]):
 
@@ -478,20 +523,47 @@ class ExpressionParser(ParserElement):
         elif "." in op:
 
             # return float
-            self._op_tmp = float(op)
+            i = 0
+            while True:
+                try:
+                    arg_tmp = parse_dict({f'op_{i}': {'vtype': 'constant',
+                                                      'dtype': 'float32',
+                                                      'shape': (1,),
+                                                      'value': float(op)}},
+                                         self.backend,
+                                         **self.parser_kwargs)
+                    break
+                except (ValueError, KeyError):
+                    i += 1
+
+            self._op_tmp = arg_tmp[f'op_{i}']
 
         elif op.isnumeric():
 
             # return integer
-            self._op_tmp = int(op)
+            i = 0
+            while True:
+                try:
+                    arg_tmp = parse_dict({f'op_{i}': {'vtype': 'constant',
+                                                      'dtype': 'int32',
+                                                      'shape': (),
+                                                      'value': int(op)}},
+                                         self.backend,
+                                         **self.parser_kwargs)
+                    break
+                except (ValueError, KeyError):
+                    i += 1
+
+            self._op_tmp = arg_tmp[f'op_{i}']
 
         elif op[0].isalpha():
 
             if self.lhs:
 
-                op_tmp = self.args.pop('rhs')
-                self._op_tmp = op_tmp
-                self.args[op] = op_tmp
+                # add new variable to arguments that represents rhs op
+                self.args['updates'][op] = self.args.pop('rhs')
+                self.args['lhs_evals'].append(op)
+                self._op_tmp = None
 
             else:
 
@@ -505,9 +577,160 @@ class ExpressionParser(ParserElement):
 
         return self._op_tmp
 
+    def broadcast(self, func, op1, op2, **kwargs):
+        """Tries to match the shapes of arg1 and arg2 such that func can be applied.
+        """
 
-class TFExpressionParser(ExpressionParser):
-    """Expression parser that transforms expression into tensorflow operations on a tensorflow graph.
+        try:
+
+            # no broadcasting
+            args = []
+            if type(op1) is dict:
+                (op1_key, op1_val), = op1.items()
+                kwargs[op1_key] = op1_val
+            else:
+                args.append(op1)
+            if type(op2) is dict:
+                (op2_key, op2_val), = op2.items()
+                kwargs[op2_key] = op2_val
+            else:
+                args.append(op2)
+            try:
+                return func(args, **kwargs)
+            except TypeError:
+                return func(*tuple(args), **kwargs)
+
+        # try to broadcast arg1 and arg22 to the same shape
+        except (ValueError, KeyError):
+
+            # get key and value of ops if they are dicts
+            if type(op1) is dict:
+                (op1_key, op1_val), = op1.items()
+            else:
+                op1_val = op1
+                op1_key = None
+            if type(op2) is dict:
+                (op2_key, op2_val), = op2.items()
+            else:
+                op2_val = op2
+                op2_key = None
+
+            try:
+
+                # add singleton dimension to either op1 or op2
+                if len(op1_val.shape) > len(op2_val.shape) and 1 in op1_val.shape:
+                    target_shape = op1_val.shape
+                    if 1 in target_shape:
+                        op2_val = self.funcs['reshape']([op2_val, target_shape])
+                    else:
+                        idx = list(target_shape).index(op2_val.shape[0])
+                        if idx == 0:
+                            op2_val = self.funcs['reshape']([op2_val, [1, op1_val.shape[0]]])
+                        else:
+                            op2_val = self.funcs['reshape']([op2_val, [op1_val.shape[1], 1]])
+                elif len(op2_val.shape) > len(op1_val.shape) and 1 in op2_val.shape:
+                    if func == self.ops['=']:
+                        op2_val = self.funcs['squeeze']([op2_val, -1])
+                    else:
+                        target_shape = op2_val.shape
+                        if 1 in target_shape:
+                            op1_val = self.funcs['reshape']([op1_val, target_shape])
+                        else:
+                            idx = list(target_shape).index(op1_val.shape[0])
+                            if idx == 0:
+                                op1_val = self.funcs['reshape']([op1_val, [1, target_shape[0]]])
+                            else:
+                                op1_val = self.funcs['reshape']([op1_val, [target_shape[1], 1]])
+
+                # try to apply function after singleton addition
+                args = []
+                if op1_key:
+                    kwargs[op1_key] = op1_val
+                else:
+                    args.append(op1_val)
+                if op2_key:
+                    kwargs[op2_key] = op2_val
+                else:
+                    args.append(op2_val)
+                try:
+                    return func(args, **kwargs)
+                except TypeError:
+                    return func(*tuple(args), **kwargs)
+
+            except (ValueError, KeyError):
+
+                # transform op1 or op2 from scalar to array
+                if hasattr(op1, 'shape'):
+                    op2_val = self.funcs['zeros']([self.funcs['shape'](op1_val), self.funcs['dtype'](op2_val)]) + \
+                              op2_val
+                else:
+                    op1_val = self.funcs['zeros']([self.funcs['shape'](op2_val), self.funcs['dtype'](op1_val)]) + \
+                              op1_val
+
+                # try to apply function after vectorization
+                args = []
+                if op1_key:
+                    kwargs[op1_key] = op1_val
+                else:
+                    args.append(op1_val)
+                if op2_key:
+                    kwargs[op2_key] = op2_val
+                else:
+                    args.append(op2_val)
+                try:
+                    return func(args, **kwargs)
+                except TypeError:
+                    return func(*tuple(args), **kwargs)
+
+    def apply_idx(self, op, idx):
+        """Apply index to operation.
+        """
+
+        # do some initial checks
+        if self.lhs and self.solve:
+            raise ValueError(f'Indexing of differential equations is currently not supported. Please consider '
+                             f'changing equation {self.expr_str}.')
+
+        # extract variables from index
+        idx_tmp = idx.split(',')
+        for i in idx_tmp:
+            idx_tmp2 = i.split(':')
+            for j in idx_tmp2:
+                if j in self.args['idx'].keys():
+                    exec(f"{j} = self.funcs['squeeze'](self.args['idx'].pop('{j}'))")
+
+        # apply idx
+        try:
+            op_idx = eval(f'op[{idx}]')
+        except ValueError:
+            try:
+                op_idx = eval(f"self.funcs['gather']([op, {idx}])")
+            except ValueError:
+                op_idx = eval(f"self.funcs['gather']([op, self.funcs['squeeze']({idx})])")
+        except TypeError:
+            if locals()[idx].dtype.is_bool:
+                op_idx = self.broadcast(self.ops['*'], op, eval(f"self.funcs['cast']([{idx}, op.dtype])"))
+            else:
+                raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of the '
+                                f'tensor to be indexed.')
+
+        # return indexed variable
+        if self.lhs:
+            return self.broadcast(self.ops['='], op_idx, self.args.pop('rhs'))
+        else:
+            return op_idx
+
+    def update(self, var_old, var_delta, dt):
+        """Solves single step of a differential equation.
+        """
+
+        var_update = self.broadcast(self.ops['*'], var_delta, dt)
+
+        return self.broadcast(self.ops['+'], var_old, var_update)
+
+
+class KerasExpressionParser(ExpressionParser):
+    """Expression parser that transforms expression into keras operations on a tensorflow graph.
 
     Parameters
     ----------
@@ -600,75 +823,79 @@ class TFExpressionParser(ExpressionParser):
 
     """
 
-    def __init__(self, expr_str: str, args: dict, lhs: bool = False,
-                 tf_graph: tp.Optional[tf.Graph] = None) -> None:
-        """Instantiates tensorflow expression parser.
+    def __init__(self, expr_str: str, args: dict, backend: tf.keras.layers.Layer, lhs: bool = False) -> None:
+        """Instantiates keras expression parser.
         """
 
         # call super init
         #################
 
-        super().__init__(expr_str=expr_str, args=args, lhs=lhs)
-
-        # define tensorflow graph on which to create the operations
-        ###########################################################
-
-        self.tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+        super().__init__(expr_str=expr_str, args=args, backend=backend, lhs=lhs)
 
         # define operations and functions
         #################################
 
         # base math operations
-        ops = {"+": tf.add,
-               "-": tf.subtract,
-               "*": tf.multiply,
-               "/": tf.truediv,
-               "%": tf.mod,
-               "^": tf.pow,
-               "@": tf.matmul,
-               ".T": tf.matrix_transpose,
-               ".I": tf.matrix_inverse,
-               ">": tf.greater,
-               "<": tf.less,
-               "==": tf.equal,
-               "!=": tf.not_equal,
-               ">=": tf.greater_equal,
-               "<=": tf.less_equal
+        ops = {"+": tf.keras.layers.Lambda(lambda x: x[0] + x[1]),
+               "-": tf.keras.layers.Lambda(lambda x: x[0] - x[1]),
+               "*": tf.keras.layers.Lambda(lambda x: x[0] * x[1]),
+               "/": tf.keras.layers.Lambda(lambda x: x[0] / x[1]),
+               "%": tf.keras.layers.Lambda(lambda x: x[0] % x[1]),
+               "^": tf.keras.layers.Lambda(lambda x: tf.keras.backend.pow(x[0], x[1])),
+               "@": tf.keras.layers.Lambda(lambda x: tf.keras.backend.dot(x[0], x[1])),
+               ".T": tf.keras.layers.Lambda(lambda x: tf.keras.backend.transpose(x)),
+               ".I": tf.keras.layers.Lambda(lambda x: tf.matrix_inverse(x)),
+               ">": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater(x[0], x[1])),
+               "<": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less(x[0], x[1])),
+               "==": tf.keras.layers.Lambda(lambda x: tf.keras.backend.equal(x[0], x[1])),
+               "!=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.not_equal(x[0], x[1])),
+               ">=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater_equal(x[0], x[1])),
+               "<=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less_equal(x[0], x[1])),
+               "=": tf.keras.backend.update
                }
-        for key, val in ops.items():
-            self.ops[key] = val
+        self.ops.update(ops)
 
         # additional functions
-        funcs = {"sin": tf.sin,
-                 "cos": tf.cos,
-                 "tan": tf.tan,
-                 "abs": tf.abs,
-                 "sqrt": tf.sqrt,
-                 "exp": tf.exp,
-                 "max": tf.reduce_max,
-                 "min": tf.reduce_min,
-                 "argmax": tf.argmax,
-                 "argmin": tf.argmin,
-                 "round": tf.to_int32,
-                 "roundto": round_to_prec,
-                 "sum": tf.reduce_sum,
-                 "tile": tf.tile,
-                 "reshape": tf.reshape,
-                 'squeeze': tf.squeeze,
-                 "cast": tf.cast,
-                 "randn": tf.random_normal,
-                 "ones": tf.ones,
-                 "zeros": tf.zeros,
-                 "softmax": tf.nn.softmax,
-                 "boolean_mask": tf.boolean_mask,
-                 "scatter": tf.scatter_nd,
-                 "scatter_add": tf.scatter_nd_add,
-                 "scatter_update": tf.scatter_nd_update,
-                 "array_idx": tf.gather_nd,
-                 "new_var": tf.get_variable
+        funcs = {"sin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sin(x)),
+                 "cos": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cos(x)),
+                 "tanh": tf.keras.layers.Lambda(lambda x: tf.keras.backend.tanh(x)),
+                 "abs": tf.keras.layers.Lambda(lambda x: tf.keras.backend.abs(x)),
+                 "sqrt": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sqrt(x)),
+                 "sq": tf.keras.layers.Lambda(lambda x: tf.keras.backend.square(x)),
+                 "exp": tf.keras.layers.Lambda(lambda x: tf.keras.backend.exp(x)),
+                 "max": tf.keras.layers.Lambda(lambda x: tf.keras.backend.max(x)),
+                 "min": tf.keras.layers.Lambda(lambda x: tf.keras.backend.min(x)),
+                 "argmax": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmax(x)),
+                 "argmin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmin(x)),
+                 "round": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x)),
+                 "roundto": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x[0] * 10**x[1]) / 10**x[1]),
+                 "sum": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sum(x[0], *x[1])
+                                               if type(x) is list else tf.keras.backend.sum(x)),
+                 "concat": tf.keras.layers.Lambda(lambda x: tf.keras.backend.concatenate(x[0], *x[1])
+                                                  if type(x[0]) is list else tf.keras.backend.concatenate(x)),
+                 "reshape": tf.keras.layers.Lambda(lambda x: tf.keras.backend.reshape(x[0], x[1])
+                                                   if type(x) is list else tf.keras.backend.reshape(x)),
+                 "shape": tf.keras.backend.shape,
+                 "dtype": tf.keras.backend.dtype,
+                 'squeeze': tf.keras.layers.Lambda(lambda x: tf.keras.backend.squeeze(x[0], x[1])
+                                                   if type(x) is list else tf.keras.backend.squeeze(x[0], -1)),
+                 "cast": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cast(x[0], x[1])),
+                 "randn": tf.keras.layers.Lambda(lambda x: tf.keras.backend.random_normal(x[0], *x[1])
+                                                 if "Tensor" in str(type(x[0]))
+                                                 else tf.keras.backend.random_normal(x)),
+                 "ones": tf.keras.layers.Lambda(lambda x: tf.keras.backend.ones(x[0], x[1])
+                                                if "Tensor" in str(type(x[0]))
+                                                else tf.keras.backend.ones(x)),
+                 "zeros": tf.keras.layers.Lambda(lambda x: tf.keras.backend.zeros(x[0], x[1])
+                                                 if "Tensor" in str(type(x[0]))
+                                                 else tf.keras.backend.zeros(x)),
+                 "softmax": tf.keras.layers.Lambda(lambda x: tf.keras.activations.softmax(x[0], *x[1])
+                                                   if type(x[0]) is list else tf.keras.activations.softmax(x)),
+                 "gather": tf.keras.layers.Lambda(lambda x: tf.gather_nd(x[0], x[1])),
+                 "mask": tf.keras.layers.Masking,
+                 "lambda": tf.keras.layers.Lambda
                  }
-        for key, val in funcs.items():
-            self.funcs[key] = val
+        self.funcs.update(funcs)
 
         dtypes = {"float16": tf.float16,
                   "float32": tf.float32,
@@ -683,26 +910,90 @@ class TFExpressionParser(ExpressionParser):
                   "complex128": tf.complex128,
                   "bool": tf.bool
                   }
-        for key, val in dtypes.items():
-            self.dtypes[key] = val
+        self.dtypes.update(dtypes)
 
 
-def parse_equation(equation: str, args: dict, tf_graph: tp.Optional[tf.Graph] = None
-                   ) -> tuple:
-    """Parses lhs and rhs of an equation.
+class TFExpressionParser(ExpressionParser):
+    """Expression parser that transforms expression into tensorflow operations on a tensorflow graph.
 
     Parameters
     ----------
-    equation
-        Mathematical equation in string format.
+    expr_str
+        See docstring of `ExpressionParser`.
     args
-        Dictionary containing all variables and functions needed to evaluate the expression.
-    tf_graph
-        Tensorflow graph on which all operations will be created.
+        See docstring of `ExpressionParser`. Each variable in args needs to be a dictionary with key-value pairs for:
+            - `var`: contains the tensorflow variable.
+            - `dependency`: Boolean. If True, the expression needs to wait for this variable to be calculated/updated
+               before being evaluated.
+    lhs
+        See docstring of `ExpressionParser`.
 
-    Returns
+    Attributes
+    ----------
+    ops
+        Dictionary containing all mathematical operations available for this parser and their syntax. These include:
+            - addition: `+`
+            - subtraction: `-`
+            - multiplication: `*`
+            - division: `/`
+            - modulo: `%`
+            - exponentiation: `^`
+            - matrix multiplication: `@`
+            - matrix transposition: `.T`
+            - matrix inversion: `.I`
+            - logical greater than: `>`
+            - logical less than: `<`
+            - logical equal: `==`
+            - logical unequal: `!=`
+            - logical greater or equal: `>=`
+            - logical smaller or equal: `<=`
+    funcs
+        Dicionary containing all additional functions available for this parser and their syntax. These include:
+            - sinus: `sin()`.
+            - cosinus: `cos()`.
+            - tangens: `tan()`.
+            - absolute: `abs()`.
+            - maximum: `max()`
+            - minimum: `min()`
+            - index of maximum: `argmax()`
+            - index of minimum: `argmin()`
+            - round to next integer: `round()`. Tensorflow name: `tensorflow.to_int32()`.
+            - round to certain decimal point: `roundto()`. Custom function using `tensorflow.round()`. Defined in
+              `pyrates.parser.parser.py`.
+            - sum over dimension(s): `sum()`. Tensorflow name: `reduce_sum()`.
+            - Concatenate multiples of tensor over certain dimension: `tile()`.
+            - Reshape tensor: `reshape()`.
+            - Cut away dimensions of size 1: `squeeze()`.
+            - Cast variable to data-type: `cast()`.
+            - draw random variable from standard normal distribution: `randn()`.
+              Tensorflow name: `tensorflow.random_normal`.
+            - Create array filled with ones: `ones()`.
+            - Create array filled with zeros: `zeros()`.
+            - Apply softmax function to variable: `softmax()`. Tensorflow name: `tensorflow.nn.softmax()`.
+            - Apply boolean mask to array: `boolean_mask()`.
+            - Create new array with non-zero entries at certain indices: `scatter()`.
+              Tensorflow name: `tensorflow.scatter_nd`
+            - Add values to certain entries of tensor: 'scatter_add()'. Tensorflow name: `tensorflow.scatter_nd_add`.
+            - Update values of certain tensor entries: `scatter_update()`.
+              Tensorflow name: `tensorflow.scatter_nd_update`.
+            - Apply tensor as index to other tensor: `array_idx()`. Tensorflow name: `tensorflow.gather_nd`.
+            - Get variable from tensorflow graph or create new variable: `new_var()`:
+              Tensorflow name: `tensorflow.get_variable`.
+        For a detailed documentation of how to use these functions, see the tensorflow Python API.
+    dtypes
+        Dictionary containing all data-types available for this parser. These include:
+            - float16, float32, float64
+            - int16, int32, int64
+            - uint16, uint32, uint64
+            - complex64, complex128,
+            - bool
+        All of those data-types can be used inside a mathematical expression instead of using `cast()`
+        (e.g. `int32(3.631)`.
+    For all other attributes, see docstring of `ExpressionParser`.
+
+    Methods
     -------
-    tuple
+    See docstrings of `ExpressionParser` methods.
 
     Examples
     --------
@@ -712,39 +1003,154 @@ def parse_equation(equation: str, args: dict, tf_graph: tp.Optional[tf.Graph] = 
 
     """
 
+    def __init__(self, expr_str: str, args: dict, backend: tf.keras.layers.Layer, lhs: bool = False, **kwargs) -> None:
+        """Instantiates tensorflow expression parser.
+        """
+
+        # call super init
+        #################
+
+        super().__init__(expr_str=expr_str, args=args, backend=backend, lhs=lhs, **kwargs)
+
+        # define operations and functions
+        #################################
+
+        # base math operations
+        ops = {"+": tf.keras.layers.Lambda(lambda x: x[0] + x[1]),
+               "-": tf.keras.layers.Lambda(lambda x: x[0] - x[1]),
+               "*": tf.keras.layers.Lambda(lambda x: x[0] * x[1]),
+               "/": tf.keras.layers.Lambda(lambda x: x[0] / x[1]),
+               "%": tf.keras.layers.Lambda(lambda x: x[0] % x[1]),
+               "^": tf.keras.layers.Lambda(lambda x: tf.keras.backend.pow(x[0], x[1])),
+               "@": tf.keras.layers.Lambda(lambda x: tf.keras.backend.dot(x[0], x[1])),
+               ".T": tf.keras.layers.Lambda(lambda x: tf.keras.backend.transpose(x)),
+               ".I": tf.keras.layers.Lambda(lambda x: tf.matrix_inverse(x)),
+               ">": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater(x[0], x[1])),
+               "<": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less(x[0], x[1])),
+               "==": tf.keras.layers.Lambda(lambda x: tf.keras.backend.equal(x[0], x[1])),
+               "!=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.not_equal(x[0], x[1])),
+               ">=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater_equal(x[0], x[1])),
+               "<=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less_equal(x[0], x[1])),
+               "=": tf.keras.backend.update
+               }
+        self.ops.update(ops)
+
+        # additional functions
+        funcs = {"sin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sin(x)),
+                 "cos": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cos(x)),
+                 "tanh": tf.keras.layers.Lambda(lambda x: tf.keras.backend.tanh(x)),
+                 "abs": tf.keras.layers.Lambda(lambda x: tf.keras.backend.abs(x)),
+                 "sqrt": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sqrt(x)),
+                 "sq": tf.keras.layers.Lambda(lambda x: tf.keras.backend.square(x)),
+                 "exp": tf.keras.layers.Lambda(lambda x: tf.keras.backend.exp(x)),
+                 "max": tf.keras.layers.Lambda(lambda x: tf.keras.backend.max(x)),
+                 "min": tf.keras.layers.Lambda(lambda x: tf.keras.backend.min(x)),
+                 "argmax": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmax(x)),
+                 "argmin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmin(x)),
+                 "round": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x)),
+                 "roundto": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x[0] * 10**x[1]) / 10**x[1]),
+                 "sum": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sum(x[0], *x[1])
+                                               if type(x) is list else tf.keras.backend.sum(x)),
+                 "concat": tf.keras.layers.Lambda(lambda x: tf.keras.backend.concatenate(x[0], *x[1])
+                                                  if type(x[0]) is list else tf.keras.backend.concatenate(x)),
+                 "reshape": tf.keras.layers.Lambda(lambda x: tf.keras.backend.reshape(x[0], x[1])
+                                                   if type(x) is list else tf.keras.backend.reshape(x)),
+                 "shape": tf.keras.backend.shape,
+                 "dtype": tf.keras.backend.dtype,
+                 'squeeze': tf.keras.layers.Lambda(lambda x: tf.keras.backend.squeeze(x[0], x[1])
+                                                   if type(x) is list else tf.keras.backend.squeeze(x[0], -1)),
+                 "cast": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cast(x[0], x[1])),
+                 "randn": tf.keras.layers.Lambda(lambda x: tf.keras.backend.random_normal(x[0], *x[1])
+                                                 if "Tensor" in str(type(x[0]))
+                                                 else tf.keras.backend.random_normal(x)),
+                 "ones": tf.keras.layers.Lambda(lambda x: tf.keras.backend.ones(x[0], x[1])
+                                                if "Tensor" in str(type(x[0]))
+                                                else tf.keras.backend.ones(x)),
+                 "zeros": tf.keras.layers.Lambda(lambda x: tf.keras.backend.zeros(x[0], x[1])
+                                                 if "Tensor" in str(type(x[0]))
+                                                 else tf.keras.backend.zeros(x)),
+                 "softmax": tf.keras.layers.Lambda(lambda x: tf.keras.activations.softmax(x[0], *x[1])
+                                                   if type(x[0]) is list else tf.keras.activations.softmax(x)),
+                 "gather": tf.keras.layers.Lambda(lambda x: tf.gather_nd(x[0], x[1])),
+                 "mask": tf.keras.layers.Masking,
+                 "lambda": tf.keras.layers.Lambda
+                 }
+        self.funcs.update(funcs)
+
+        dtypes = {"float16": tf.float16,
+                  "float32": tf.float32,
+                  "float64": tf.float64,
+                  "int16": tf.int16,
+                  "int32": tf.int32,
+                  "int64": tf.int64,
+                  "uint16": tf.uint16,
+                  "uint32": tf.uint32,
+                  "uint64": tf.uint64,
+                  "complex64": tf.complex64,
+                  "complex128": tf.complex128,
+                  "bool": tf.bool
+                  }
+        self.dtypes.update(dtypes)
+
+
+def parse_equation(equation: str, equation_args: dict, backend, **kwargs) -> dict:
+    """Parses lhs and rhs of an equation.
+
+    Parameters
+    ----------
+    equation
+        Mathematical equation in string format.
+    equation_args
+        Dictionary containing all variables and functions needed to evaluate the expression.
+    kwargs
+
+    Returns
+    -------
+    dict
+
+    Examples
+    --------
+
+    References
+    ----------
+
+    """
+
+    # parse arguments into correct datatype
+    #######################################
+
+    args_tmp = {}
+    for key, arg in equation_args['vars'].items():
+        if type(arg) is dict and 'vtype' in arg.keys():
+            args_tmp[key] = arg
+    args_tmp = parse_dict(args_tmp, backend, **kwargs)
+    equation_args['vars'].update(args_tmp)
+
+    # parse equation
+    ################
+
     lhs, rhs = equation.split(' = ')
 
-    tf_graph = tf_graph if tf_graph else tf.get_default_graph()
-
     # parse rhs
-    rhs_parser = TFExpressionParser(expr_str=rhs, args=args, tf_graph=tf_graph)
-    rhs_op = rhs_parser.parse_expr()
-
-    # handle rhs evaluation
-    if rhs_op[1] is None:
-        rhs_op = rhs_op[0]
-    else:
-        rhs_op = rhs_op[0].assign(rhs_op[1])
-    args['rhs'] = rhs_op
+    rhs_parser = TFExpressionParser(expr_str=rhs, args=equation_args, backend=backend, **kwargs)
+    equation_args = rhs_parser.parse_expr()
 
     # parse lhs
-    lhs_parser = TFExpressionParser(expr_str=lhs, args=args, lhs=True, tf_graph=tf_graph)
+    lhs_parser = TFExpressionParser(expr_str=lhs, args=equation_args, lhs=True, backend=backend, **kwargs)
 
-    return lhs_parser.parse_expr(), args
+    return lhs_parser.parse_expr()
 
 
-def parse_dict(var_dict: dict,
-               tf_graph: tp.Optional[tf.Graph] = None
-               ) -> dict:
-    """Parses a dictionary with variable information and creates tensorflow variables from that information.
+def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
+    """Parses a dictionary with variable information and creates keras tensorflow variables from that information.
 
     Parameters
     ----------
     var_dict
         Contains key-value pairs for each variable that should be translated into the tensorflow graph.
         Each value is a dictionary again containing the variable information (needs at least a field for `vtype`).
-    tf_graph
-        Instance of `tensorflow.Graph` in which all variables with be initialized.
+    backend
+    kwargs
 
     Returns
     -------
@@ -754,482 +1160,56 @@ def parse_dict(var_dict: dict,
     """
 
     var_dict_tf = {}
+    tf.keras.backend.manual_variable_initialization(True)
 
-    # get tensorflow graph
-    tf_graph = tf_graph if tf_graph else tf.get_default_graph()
+    # go through dictionary items and instantiate variables
+    #######################################################
 
-    with tf_graph.as_default():
+    for var_name, var in var_dict.items():
 
-        # go through dictionary items and instantiate variables
-        #######################################################
+        # make sure that value of variable is a number
+        if var['value'] is None:
+            var['value'] = 0.
+        init_val = var['value'] if hasattr(var['value'], 'shape') else np.zeros((1,)) + var['value']
+        dtype = getattr(tf, var['dtype']) if type(var['dtype']) is str else var['dtype']
+        shape = var['shape'] if 'shape' in var.keys() else init_val.shape
 
-        for var_name, var in var_dict.items():
+        if var['vtype'] == 'raw':
 
-            # make sure that value of variable is a number
-            if var['value'] is None:
-                var['value'] = 0
-            if var['vtype'] == 'raw':
+            # just extract raw variable value
+            tf_var = var['value']
 
-                # just extract raw variable value
-                tf_var = var['value']
+        elif var['vtype'] == 'state_var':
 
-            elif var['vtype'] == 'state_var':
+            # create a tensorflow variable that can change its value over the course of a simulation
+            tf_var = backend.add_variable(initializer=tf.constant_initializer(init_val),
+                                          name=var_name,
+                                          dtype=dtype,
+                                          shape=shape,
+                                          **kwargs)
 
-                # create a tensorflow variable that can change its value over the course of a simulation
-                tf_var = tf.get_variable(name=var_name,
-                                         shape=var['shape'],
-                                         dtype=getattr(tf, var['dtype']),
-                                         initializer=tf.constant_initializer(var['value'])
-                                         )
+        elif var['vtype'] == 'constant':
 
-            elif var['vtype'] == 'constant':
+            # create dense, constant tensor
+            tf_var = backend.add_constant(value=init_val,
+                                          name=var_name,
+                                          shape=shape,
+                                          dtype=dtype,
+                                          **kwargs
+                                          )
 
-                # create dense, constant tensor
-                tf_var = tf.constant(value=var['value'],
-                                     name=var_name,
-                                     shape=var['shape'],
-                                     dtype=getattr(tf, var['dtype'])
-                                     )
+        elif var['vtype'] == 'placeholder':
 
-            elif var['vtype'] == 'placeholder':
+            tf_var = backend.add_placeholder(name=var_name,
+                                             shape=shape,
+                                             dtype=dtype,
+                                             **kwargs
+                                             )
 
-                tf_var = tf.placeholder(name=var_name,
-                                        shape=var['shape'],
-                                        dtype=getattr(tf, var['dtype'])
-                                        )
+        else:
 
-            elif var['vtype'] in 'constant_sparse_state_var_sparse':
+            raise ValueError('Variable type must be `raw`, `state_variable`, `constant` or `placeholder`.')
 
-                # create a sparse tensor
-                tf_var = tf.SparseTensor(dense_shape=var['shape'],
-                                         values=var['value'],
-                                         indices=var['indices']
-                                         )
-
-            else:
-
-                raise ValueError('Variable type must be `raw`, `state_variable`, `constant` or `placeholder`.')
-
-            var_dict_tf[var_name] = tf_var
+        var_dict_tf[var_name] = tf_var
 
     return var_dict_tf
-
-
-def round_to_prec(x, prec=0):
-    prec = 10**prec
-    return tf.round(x * prec) / prec
-
-
-# class LambdaExpressionParser(ExpressionParser):
-#     """Expression parser that turns expressions into lambda functions.
-#     """
-#
-#     def parse(self, expr_stack: list) -> tp.Union[np.ndarray, float, int, tp.Callable]:
-#         """Parse elements in expression stack to lambda function.
-#
-#         Parameters
-#         ----------
-#         expr_stack
-#             Ordered list with expression variables and operations.
-#
-#         Returns
-#         -------
-#         type.Any
-#
-#         """
-#
-#         # get next operation from stack
-#         op = expr_stack.pop()
-#
-#         # check type of operation
-#         #########################
-#
-#         if op == '-one':
-#
-#             # multiply expression by minus one
-#             arg = self.parse(expr_stack)
-#             if callable(arg):
-#                 self._op_tmp = lambda: -arg()
-#             else:
-#                 self._op_tmp = lambda: -arg
-#
-#         elif op in "+-*/^@<=>=!==":
-#
-#             # combine elements via mathematical/boolean operator
-#             op2 = self.parse(expr_stack)
-#             op1 = self.parse(expr_stack)
-#             if callable(op1):
-#                 if callable(op2):
-#                     self._op_tmp = lambda: self.ops[op](op1(), op2())
-#                 else:
-#                     self._op_tmp = lambda: self.ops[op](op1(), op2)
-#             else:
-#                 if callable(op2):
-#                     self._op_tmp = lambda: self.ops[op](op1, op2())
-#                 else:
-#                     self._op_tmp = lambda: self.ops[op](op1, op2)
-#
-#         elif op in ".T.I":
-#
-#             # transpose/invert expression
-#             arg = self.parse(expr_stack)
-#             if callable(arg):
-#                 self._op_tmp = lambda: self.ops[op](arg())
-#             else:
-#                 self._op_tmp = lambda: self.ops[op](arg)
-#
-#         elif op == "]":
-#
-#             # parse indices
-#             indices = []
-#             while len(expr_stack) > 0 and expr_stack[-1] != "[":
-#                 index = []
-#                 while len(expr_stack) > 0 and expr_stack[-1] not in ",[":
-#                     if expr_stack[-1] == ":":
-#                         index.append(expr_stack.pop())
-#                     else:
-#                         index.append(self.parse(expr_stack))
-#                 indices.append(index[::-1])
-#                 if expr_stack[-1] == ",":
-#                     expr_stack.pop()
-#             expr_stack.pop()
-#
-#             # build str representation of idx
-#             idx = ""
-#             global new_vars
-#             new_vars = []
-#             i = 0
-#             for index in indices[::-1]:
-#                 for ind in index:
-#                     if type(ind) == str:
-#                         idx += ind
-#                     elif isinstance(ind, Number):
-#                         idx += f"{ind}"
-#                     else:
-#                         try:
-#                             new_vars.append(ind.__copy__())
-#                         except AttributeError:
-#                             new_vars.append(copy(ind))
-#                         if callable(new_vars[i]):
-#                             idx += f"new_vars[{i}]()"
-#                         else:
-#                             idx += f"new_vars[{i}]"
-#                         i += 1
-#                 idx += ","
-#             idx = idx[0:-1]
-#
-#             # apply indices to op
-#             global op_to_idx
-#             op_to_idx = self.parse(expr_stack)
-#             if callable(op_to_idx):
-#                 exec(f"self._op_tmp = lambda: op_to_idx()[{idx}]")
-#             else:
-#                 exec(f"self._op_tmp = lambda: op_to_idx[{idx}]")
-#
-#         elif op == "PI":
-#
-#             # return float representation of pi
-#             self._op_tmp = math.pi
-#
-#         elif op == "E":
-#
-#             # return float representation of e
-#             self._op_tmp = math.e
-#
-#         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
-#
-#             # extract data type
-#             try:
-#                 dtype = self.dtypes[op[0:-1]]
-#             except AttributeError:
-#                 raise ValueError(f"Datatype casting error in expression: {self.expr_str}. {op[0:-1]} is not a valid "
-#                                  f"data-type for this parser.")
-#
-#             # cast new data type to argument
-#             arg = self.parse(expr_stack)
-#             if callable(arg):
-#                 self._op_tmp = self.funcs['cast'](arg(), dtype)
-#             else:
-#                 self._op_tmp = self.funcs['cast'](arg, dtype)
-#
-#         elif op[-1] == "(":
-#
-#             # extract function
-#             try:
-#                 f = self.funcs[op[0:-1]]
-#             except KeyError:
-#                 raise ValueError(f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
-#                                  f"in arguments dictionary.")
-#
-#             # parse arguments
-#             args = []
-#             while len(expr_stack) > 0:
-#                 args.append(self.parse(expr_stack))
-#                 if len(expr_stack) == 0 or expr_stack[-1] != ",":
-#                     break
-#                 else:
-#                     expr_stack.pop()
-#
-#             # apply function to arguments
-#             self._op_tmp = lambda: f(*tuple([arg() if callable(arg) else arg for arg in args[::-1]]))
-#
-#         elif op in self.args.keys():
-#
-#             # extract variable from args dict
-#             self._op_tmp = self.args[op]
-#
-#         elif any([op == "True", op == "true", op == "False", op == "false"]):
-#
-#             # return boolean
-#             self._op_tmp = True if op in "Truetrue" else False
-#
-#         elif "." in op:
-#
-#             # return float
-#             self._op_tmp = float(op)
-#
-#         elif op[0].isnumeric():
-#
-#             # return integer
-#             self._op_tmp = int(op)
-#
-#         elif op[0].isalpha():
-#
-#             if self.lhs:
-#
-#                 op = self.args['rhs']
-#                 self._op_tmp = op
-#                 self.args[op] = op
-#
-#             else:
-#
-#                 raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
-#                                  f"in the respective arguments dictionary.")
-#
-#         else:
-#
-#             raise ValueError(f"Undefined operation detected in expression: {self.expr_str}. {op} cannot be "
-#                              f"interpreted by this parser.")
-#
-#         return self._op_tmp
-
-
-# class NPExpressionParser(LambdaExpressionParser):
-#     """Expression parser that turns expressions into numpy operations.
-#     """
-#
-#     def __init__(self, expr_str: str, args: dict, lhs: bool = False) -> None:
-#         """Instantiate numpy expression parser.
-#         """
-#
-#         # call super init
-#         #################
-#
-#         super().__init__(expr_str=expr_str, args=args, lhs=lhs)
-#
-#         # define operations and functions
-#         #################################
-#
-#         # base math operations
-#         ops = {"+": np.add,
-#                "-": np.subtract,
-#                "*": np.multiply,
-#                "/": np.true_divide,
-#                "%": np.mod,
-#                "^": np.float_power,
-#                "@": np.matmul,
-#                ".T": np.transpose,
-#                ".I": np.invert,
-#                ">": np.greater,
-#                "<": np.less,
-#                "==": np.equal,
-#                "!=": np.not_equal,
-#                ">=": np.greater_equal,
-#                "<=": np.less_equal
-#                }
-#         for key, val in ops.items():
-#             self.ops[key] = val
-#
-#         # additional functions
-#         funcs = {"sin": np.sin,
-#                  "cos": np.cos,
-#                  "tan": np.tan,
-#                  "abs": np.abs,
-#                  "max": np.max,
-#                  "min": np.min,
-#                  "argmax": np.argmax,
-#                  "argmin": np.argmin,
-#                  "round": np.round,
-#                  "sum": np.sum,
-#                  "tile": np.tile,
-#                  "reshape": np.reshape,
-#                  "cast": np.array,
-#                  "randn": np.random.randn,
-#                  "ones": np.ones,
-#                  "zeros": np.zeros,
-#                  "new_var": np.array
-#                  }
-#         for key, val in funcs.items():
-#             self.funcs[key] = val
-#
-#         dtypes = {"float16": np.float16,
-#                   "float32": np.float32,
-#                   "float64": np.float64,
-#                   "int16": np.int16,
-#                   "int32": np.int32,
-#                   "int64": np.int64,
-#                   "uint16": np.uint16,
-#                   "uint32": np.uint32,
-#                   "uint64": np.uint64,
-#                   "complex64": np.complex64,
-#                   "complex128": np.complex128,
-#                   "bool": tf.bool
-#                   }
-#         for key, val in dtypes.items():
-#             self.dtypes[key] = val
-
-
-# functions using the expression parser
-#######################################
-
-# # solver classes (update lhs according to rhs)
-# ##############################################
-#
-#
-# class Solver(object):
-#     """Base solver class (currently only implements basic forward euler).
-#
-#     Parameters
-#     ----------
-#     rhs
-#         Tensorflow operation that represents right-hand side of a differential equation.
-#     state_var
-#         Tensorflow variable that should be integrated over time.
-#     dt
-#         Step-size of the integration over time [unit = s].
-#
-#     Attributes
-#     ----------
-#
-#     Methods
-#     -------
-#
-#     References
-#     ----------
-#
-#     Examples
-#     --------
-#
-#     """
-#
-#     def __init__(self,
-#                  rhs: tp.Union[tf.Operation, tf.Tensor, tp.Callable, tuple],
-#                  state_var: tp.Union[tf.Variable, tf.Tensor, np.ndarray, float, int],
-#                  dt: tp.Optional[float] = None
-#                  ) -> None:
-#         """Instantiates solver.
-#         """
-#
-#         # initialize instance attributes
-#         ################################
-#
-#         self.rhs = rhs
-#         self.state_var = state_var
-#         self.dt = dt
-#
-#         # define integration expression
-#         ###############################
-#
-#         # TODO: Implement Butcher tableau and its translation into various solver algorithms
-#         if self.dt is None:
-#             self.integration_expression = "rhs"
-#         else:
-#             self.integration_expression = "dt * rhs"
-#
-#     def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
-#         """Creates tensorflow method for performing a single differentiation update.
-#         """
-#
-#         raise NotImplementedError('This method needs to be implemented at the child class level '
-#                                   '(any class inheriting the `Solver` class).')
-#
-#
-# class TFSolver(Solver):
-#
-#     def __init__(self,
-#                  rhs: tp.Union[tf.Operation, tf.Tensor],
-#                  state_var: tp.Union[tf.Variable, tf.Tensor],
-#                  dt: tp.Optional[float] = None,
-#                  _tf_graph: tp.Optional[tf.Graph] = None
-#                  ) -> None:
-#         """Instantiates solver.
-#         """
-#
-#         # call super init
-#         #################
-#
-#         super().__init__(rhs=rhs, state_var=state_var, dt=dt)
-#
-#         # initialize additional attributes
-#         ##################################
-#
-#         self._tf_graph = _tf_graph if _tf_graph else tf.get_default_graph()
-#
-#     def solve(self) -> tp.Union[tf.Operation, tf.Tensor]:
-#         """Creates tensorflow method for performing a single differentiation update.
-#         """
-#
-#         with self._tf_graph.as_default():
-#
-#             # go through integration expressions to solve DE
-#             ################################################
-#
-#             # parse the integration expression
-#             expr_args = {'dt': {'var': self.dt, 'dependency': False}, 'rhs': {'var': self.rhs, 'dependency': False}}
-#             parser = TFExpressionParser(self.integration_expression, expr_args, _tf_graph=self._tf_graph)
-#             op = parser.parse_expr()
-#
-#             # update the target state variable
-#             if self.dt is not None:
-#                 op = self.state_var + op
-#
-#         return op
-#
-#
-# class NPSolver(Solver):
-#
-#     def solve(self) -> list:
-#
-#         steps = list()
-#
-#         # go through integration expressions to solve DE
-#         ################################################
-#
-#         for expr in self.integration_expressions:
-#
-#             # parse the integration expression
-#             expr_args = {'dt': self.dt, 'rhs': self.rhs}
-#             parser = NPExpressionParser(expr, expr_args)
-#             op = parser.parse_expr()
-#
-#             # update the target state variable
-#             if self.dt is None:
-#                 if callable(op):
-#                     update = lambda: op()
-#                 else:
-#                     update = lambda: op
-#             else:
-#                 if callable(op):
-#                     if callable(self.state_var):
-#                         update = lambda: self.state_var() + op()
-#                     else:
-#                         update = lambda: self.state_var + op()
-#                 else:
-#                     if callable(self.state_var):
-#                         update = lambda: self.state_var() + op
-#                     else:
-#                         update = lambda: self.state_var + op
-#             steps.append(update)
-#
-#         return steps
-
