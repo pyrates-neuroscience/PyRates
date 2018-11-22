@@ -32,5 +32,4 @@ BaseEdge:
   description: Basic template for an edge.
   base: EdgeTemplate
   operators:
-    CouplingOperator:
-      defaults: null
+    - CouplingOperator

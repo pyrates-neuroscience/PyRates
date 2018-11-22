@@ -6,7 +6,7 @@ from matplotlib.pyplot import *
 n_jrcs = 2
 
 # circuit IR setup
-circuit_temp = CircuitTemplate.from_yaml("pyrates.frontend.circuit.templates.JansenRitCircuit")
+circuit_temp = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.circuit.JansenRitCircuit")
 circuits = {}
 for n in range(n_jrcs):
     circuits['jrc.' + str(n)] = circuit_temp

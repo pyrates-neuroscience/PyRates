@@ -46,7 +46,7 @@ def test_3_coupled_jansen_rit_circuits(vectorize):
 
     # Step 1: Load Circuit template
     from pyrates.frontend.circuit import CircuitTemplate
-    path = "pyrates.frontend.circuit.templates.MultiJansenRitCircuit"
+    path = "pyrates.examples.jansen_rit.circuit.MultiJansenRitCircuit"
     tmp = CircuitTemplate.from_yaml(path)
 
     # Step 2: Instantiate template to create frontend IR

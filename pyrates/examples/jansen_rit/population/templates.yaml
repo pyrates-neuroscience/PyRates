@@ -5,7 +5,7 @@ InstantaneousCPO:
     Implementation of a current-to-potential operator (CPO) that sums all synaptic
     (current) contributions and instantaneously, i.e. without temporal derivative,
     transforms those currents into a mean somatic membrane potential.
-  base: pyrates.frontend.population.population.CurrentToPotentialOperator
+  base: pyrates.examples.jansen_rit.population.population.CurrentToPotentialOperator
   equations:
     remove: "L_m * "
 
@@ -22,7 +22,7 @@ JansenRitCPO:
   base: InstantaneousCPO
 
 JansenRitIN:
-  base: pyrates.frontend.population.population.NeuralMass
+  base: pyrates.examples.jansen_rit.population.population.NeuralMass
   description: >
     Implementation and parametrization of an (excitatory or inhibitory) interneuron
     following the Jansen-Rit neural mass model [1]_.
@@ -33,13 +33,13 @@ JansenRitIN:
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   operators:
-    - pyrates.frontend.synapse.templates.JansenRitExcitatorySynapseRCO
+    - pyrates.examples.jansen_rit.synapse.templates.JansenRitExcitatorySynapseRCO
     - JansenRitCPO
-    - pyrates.frontend.axon.templates.JansenRitPRO
+    - pyrates.examples.jansen_rit.axon.templates.JansenRitPRO
   label: JR_IN
 
 JansenRitPC:
-  base: pyrates.frontend.population.population.NeuralMass
+  base: pyrates.examples.jansen_rit.population.population.NeuralMass
   description: >
     Implementation and parametrization of projection neuron with inhibitory
     and excitatory synaptic input following the Jansen-Rit neural mass model [1]_.
@@ -50,11 +50,11 @@ JansenRitPC:
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   operators:
-    pyrates.frontend.synapse.templates.JansenRitExcitatorySynapseRCO:
+    pyrates.examples.jansen_rit.synapse.templates.JansenRitExcitatorySynapseRCO:
         u: 220.
-    pyrates.frontend.synapse.templates.JansenRitInhibitorySynapseRCO: null
+    pyrates.examples.jansen_rit.synapse.templates.JansenRitInhibitorySynapseRCO: null
     JansenRitCPO: null
-    pyrates.frontend.axon.templates.JansenRitPRO: null
+    pyrates.examples.jansen_rit.axon.templates.JansenRitPRO: null
   label: JR_PC
 
 
