@@ -1,1 +1,1 @@
-from .computegraph import ComputeGraph, Network
+from .computegraph import ComputeGraph

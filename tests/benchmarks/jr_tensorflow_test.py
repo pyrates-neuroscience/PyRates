@@ -3,7 +3,7 @@
 
 import tensorflow as tf
 from networkx import MultiDiGraph
-from pyrates.backend import ComputeGraph, Network
+from pyrates.backend import ComputeGraph
 from matplotlib.pyplot import *
 
 # Comment this out for making GPU available for Tensorflow.
@@ -27,10 +27,10 @@ sparseness_e = 0.
 sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
-n_jrcs = 1
+n_jrcs = 2
 
 # connectivity parameters
-c_intra = 135.
+c_intra = 0.
 c_inter = 0.
 
 # No of nodes triple the circuit size.
@@ -166,7 +166,7 @@ for i in range(0, n_jrcs):
                               'RPO_e_pc.0/u': {'vtype': 'placeholder',
                                                        'dtype': 'float32',
                                                        'shape': (),
-                                                       'value': 220.},
+                                                       'value': 0.},
                               },
             'inputs': {}
             }
@@ -327,19 +327,20 @@ for a in range(0, n_nodes):
             edge['source_var'] = 'PRO.0/m_out'
             edge['weight'] = c
             if int(a/3) == int(b/3):
-                edge['delay'] = None
+                edge['delay'] = 0.
             else:
-                edge['delay'] = None #np.random.uniform(0., 6e-3)
+                edge['delay'] = np.random.uniform(0., 6e-3)
 
             graph.add_edge(source, target, **edge)
 
 # backend setup
 ###############
 
-inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
+inp = 220. + np.random.randn(int(simulation_time/step_size), 1) * 22.
+inp = np.tile(inp, (1, n_jrcs))
 from pyrates.frontend.parser.graph import circuit_from_graph
 circuit = circuit_from_graph(graph)
-net = Network(net_config=circuit, dt=step_size, vectorize='none')
+net = ComputeGraph(net_config=circuit, dt=step_size, vectorize='none')
 
 # backend simulation
 ####################

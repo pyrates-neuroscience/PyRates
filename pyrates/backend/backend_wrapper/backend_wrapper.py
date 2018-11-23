@@ -89,6 +89,8 @@ class TensorflowBackend(tf.Graph):
                        "bool": tf.bool
                        }
 
+        self.existing_scopes = {}
+
     def run(self, steps, ops, inputs, outputs, sampling_steps=None, sampling_ops=None, out_dir=None):
         """
 
@@ -169,14 +171,14 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        #if scope:
-        #    scope = self.get_scope(scope)
-
-        #with self.as_default():
-        if scope:
-            with tf.variable_scope(scope):
-                return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
-        return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
+        scope, reuse = self.get_scope(scope) if scope else tf.get_variable_scope()
+        with self.as_default():
+            with scope as sc:
+                if reuse:
+                    with tf.name_scope(sc.original_name_scope):
+                        return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
+                else:
+                    return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
 
     def add_constant(self, name, value, shape, dtype, scope=None):
         """
@@ -194,14 +196,14 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        #if scope:
-        #    scope = self.get_scope(scope)
-
-        #with self.as_default():
-        if scope:
-            with tf.variable_scope(scope):
-                return tf.constant(value, dtype, shape, name)
-        return tf.constant(value, dtype, shape, name)
+        scope, reuse = self.get_scope(scope)
+        with self.as_default():
+            with scope as sc:
+                if reuse:
+                    with tf.name_scope(sc.original_name_scope):
+                        return tf.constant(value, dtype, shape, name)
+                else:
+                    return tf.constant(value, dtype, shape, name)
 
     def add_placeholder(self, name, shape, dtype, scope=None):
         """
@@ -218,14 +220,14 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        #if scope:
-        #    scope = self.get_scope(scope)
-
-        #with self.as_default():
-        if scope:
-            with tf.variable_scope(scope):
-                return tf.placeholder(dtype, shape, name)
-        return tf.placeholder(dtype, shape, name)
+        scope, reuse = self.get_scope(scope)
+        with self.as_default():
+            with scope as sc:
+                if reuse:
+                    with tf.name_scope(sc.original_name_scope):
+                        return tf.placeholder(dtype, shape, name)
+                else:
+                    return tf.placeholder(dtype, shape, name)
 
     def add_op(self, op: str, *args, **kwargs):
         """
@@ -242,21 +244,20 @@ class TensorflowBackend(tf.Graph):
         """
 
         scope = kwargs.pop('scope', None)
-        #if scope:
-        #    scope = self.get_scope(scope)
-
-        #with self.as_default():
-        if scope:
-            with tf.variable_scope(scope):
-                try:
-                    return self.ops[op](*args, **kwargs)
-                except TypeError:
-                    return self.ops[op](list(args), **kwargs)
-        else:
-            try:
-                return self.ops[op](*args, **kwargs)
-            except TypeError:
-                return self.ops[op](list(args), **kwargs)
+        scope, reuse = self.get_scope(scope)
+        with self.as_default():
+            with scope as sc:
+                if reuse:
+                    with tf.name_scope(sc.original_name_scope):
+                        try:
+                            return self.ops[op](*args, **kwargs)
+                        except TypeError:
+                            return self.ops[op](list(args), **kwargs)
+                else:
+                    try:
+                        return self.ops[op](*args, **kwargs)
+                    except TypeError:
+                        return self.ops[op](list(args), **kwargs)
 
     def get_scope(self, scope):
         """
@@ -270,14 +271,9 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        #with self.as_default():
-        if type(scope) is tuple:
-            for i, s in enumerate(scope):
-                if i == 0:
-                    s_new = tf.VariableScope(s)
-                else:
-                    with tf.variable_scope(s_new):
-                        s_new = tf.VariableScope(s)
-            return s_new
-        else:
-            return tf.VariableScope(scope)
+        with self.as_default():
+            if scope is None:
+                return tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE)
+            if scope not in self.existing_scopes.keys():
+                self.existing_scopes[scope] = True
+            return tf.variable_scope(scope, reuse=tf.AUTO_REUSE), self.existing_scopes[scope]

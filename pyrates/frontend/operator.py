@@ -137,7 +137,7 @@ class OperatorIR(AbstractBaseIR):
             var_dict = deepcopy(properties)
             # default shape is scalar
             if "shape" not in var_dict:
-                var_dict["shape"] = "(1,)"
+                var_dict["shape"] = (1,)
 
             # identify variable type and data type
             # note: this assume that a "default" must be given for every variable

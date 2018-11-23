@@ -926,7 +926,7 @@ def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs)
 
             for key, var in equation_args['vars'].items():
                 if key == lhs_var:
-                    equation_args['inputs'].update(parse_dict({f'{key}_old': var.copy()}, backend=backend))
+                    equation_args['inputs'].update(parse_dict({f'{key}_old': var.copy()}, backend=backend, **kwargs))
 
         # store left- and right-hand side of equation
         left_hand_sides.append(lhs)
