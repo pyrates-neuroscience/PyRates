@@ -172,11 +172,11 @@ class TensorflowBackend(tf.Graph):
         #if scope:
         #    scope = self.get_scope(scope)
 
-        with self.as_default():
-            if scope:
-                with tf.variable_scope(scope):
-                    return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
-            return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
+        #with self.as_default():
+        if scope:
+            with tf.variable_scope(scope):
+                return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
+        return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
 
     def add_constant(self, name, value, shape, dtype, scope=None):
         """
@@ -197,11 +197,11 @@ class TensorflowBackend(tf.Graph):
         #if scope:
         #    scope = self.get_scope(scope)
 
-        with self.as_default():
-            if scope:
-                with tf.variable_scope(scope):
-                    return tf.constant(value, dtype, shape, name)
-            return tf.constant(value, dtype, shape, name)
+        #with self.as_default():
+        if scope:
+            with tf.variable_scope(scope):
+                return tf.constant(value, dtype, shape, name)
+        return tf.constant(value, dtype, shape, name)
 
     def add_placeholder(self, name, shape, dtype, scope=None):
         """
@@ -221,11 +221,11 @@ class TensorflowBackend(tf.Graph):
         #if scope:
         #    scope = self.get_scope(scope)
 
-        with self.as_default():
-            if scope:
-                with tf.variable_scope(scope):
-                    return tf.placeholder(dtype, shape, name)
-            return tf.placeholder(dtype, shape, name)
+        #with self.as_default():
+        if scope:
+            with tf.variable_scope(scope):
+                return tf.placeholder(dtype, shape, name)
+        return tf.placeholder(dtype, shape, name)
 
     def add_op(self, op: str, *args, **kwargs):
         """
@@ -245,18 +245,18 @@ class TensorflowBackend(tf.Graph):
         #if scope:
         #    scope = self.get_scope(scope)
 
-        with self.as_default():
-            if scope:
-                with tf.variable_scope(scope):
-                    try:
-                        return self.ops[op](*args, **kwargs)
-                    except TypeError:
-                        return self.ops[op](list(args), **kwargs)
-            else:
+        #with self.as_default():
+        if scope:
+            with tf.variable_scope(scope):
                 try:
                     return self.ops[op](*args, **kwargs)
                 except TypeError:
                     return self.ops[op](list(args), **kwargs)
+        else:
+            try:
+                return self.ops[op](*args, **kwargs)
+            except TypeError:
+                return self.ops[op](list(args), **kwargs)
 
     def get_scope(self, scope):
         """
@@ -270,14 +270,14 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        with self.as_default():
-            if type(scope) is tuple:
-                for i, s in enumerate(scope):
-                    if i == 0:
+        #with self.as_default():
+        if type(scope) is tuple:
+            for i, s in enumerate(scope):
+                if i == 0:
+                    s_new = tf.VariableScope(s)
+                else:
+                    with tf.variable_scope(s_new):
                         s_new = tf.VariableScope(s)
-                    else:
-                        with tf.variable_scope(s_new):
-                            s_new = tf.VariableScope(s)
-                return s_new
-            else:
-                return tf.VariableScope(scope)
+            return s_new
+        else:
+            return tf.VariableScope(scope)

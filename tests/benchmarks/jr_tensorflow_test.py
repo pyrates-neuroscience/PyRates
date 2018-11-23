@@ -327,9 +327,9 @@ for a in range(0, n_nodes):
             edge['source_var'] = 'PRO.0/m_out'
             edge['weight'] = c
             if int(a/3) == int(b/3):
-                edge['delay'] = 0.
+                edge['delay'] = None
             else:
-                edge['delay'] = np.random.uniform(0., 6e-3)
+                edge['delay'] = None #np.random.uniform(0., 6e-3)
 
             graph.add_edge(source, target, **edge)
 

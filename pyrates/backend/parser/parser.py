@@ -93,7 +93,7 @@ class ExpressionParser(ParserElement):
 
     """
 
-    def __init__(self, expr_str: str, args: dict, backend, lhs: bool = False, **kwargs) -> None:
+    def __init__(self, expr_str: str, args: dict, backend, lhs: bool = False, solve=False, **kwargs) -> None:
         """Instantiates expression parser.
         """
 
@@ -102,13 +102,15 @@ class ExpressionParser(ParserElement):
 
         super().__init__()
 
-        # bind input args to instance
+        # bind attributes to instance
         #############################
 
+        # input arguments
         self.lhs = lhs
         self.args = args
         self.backend = backend
         self.parser_kwargs = kwargs
+        self.solve = solve
 
         # check whether the all important fields exist in args
         if 'updates' not in self.args.keys():
@@ -125,22 +127,10 @@ class ExpressionParser(ParserElement):
             if callable(val):
                 self.backend.ops[key] = val
 
-        # if left-hand side of an equation, check whether it includes a differential operator
-        if self.lhs and "d/dt" in expr_str:
-            lhs_split = expr_str.split('*')
-            expr_str = ""
-            for lhs_part in lhs_split[1:]:
-                expr_str += lhs_part
-            self.solve = True
-        else:
-            self.solve = False
-
         self.wait_for_idx = False
         self.expr_str = expr_str
 
         # additional attributes
-        #######################
-
         self.expr = None
         self.expr_stack = []
         self.expr_list = []
@@ -412,6 +402,13 @@ class ExpressionParser(ParserElement):
                 # extract state variable from previous time-step from args dict
                 self._op_tmp = self.args['inputs'][f'{op}_old']
 
+        elif op in self.args['updates'].keys():
+
+            # extract state variable from args dict
+            self._op_tmp = self.args['updates'][op]
+            if op in self.args['lhs_evals']:
+                self.args['lhs_evals'].pop(self.args['lhs_evals'].index(op))
+
         elif op in self.args['vars'].keys():
 
             if self.lhs:
@@ -424,7 +421,7 @@ class ExpressionParser(ParserElement):
                     self.lhs = True
 
                     # get variable
-                    var = self.args['vars'].pop(op)
+                    var = self.args['vars'][op]
 
                     # create old var placeholder
                     var_name = f'{op}_old'
@@ -449,7 +446,7 @@ class ExpressionParser(ParserElement):
 
                     # update variable according to rhs
                     self.args['updates'][op] = self.broadcast('=',
-                                                              self.args['vars'].pop(op),
+                                                              self.args['vars'][op],
                                                               self.args.pop('rhs'))
                     self.args['lhs_evals'].append(op)
                     self._op_tmp = self.args['updates'][op]
@@ -458,13 +455,6 @@ class ExpressionParser(ParserElement):
 
                 # extract constant/variable from args dict
                 self._op_tmp = op if self.wait_for_idx else self.args['vars'][op]
-
-        elif op in self.args['updates'].keys():
-
-            # extract state variable from args dict
-            self._op_tmp = self.args['updates'][op]
-            if op in self.args['lhs_evals']:
-                self.args['lhs_evals'].pop(self.args['lhs_evals'].index(op))
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
@@ -889,7 +879,69 @@ class KerasExpressionParser(ExpressionParser):
         self.dtypes.update(dtypes)
 
 
-def parse_equation(equation: str, equation_args: dict, backend, **kwargs) -> dict:
+def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs) -> dict:
+    """
+
+    Parameters
+    ----------
+    equations
+    equation_args
+    backend
+    kwargs
+
+    Returns
+    -------
+
+    """
+
+    # preprocess equations and equation arguments
+    #############################################
+
+    left_hand_sides = []
+    right_hand_sides = []
+    diff_eq = []
+
+    # go through all equations
+    for i, eq in enumerate(equations):
+
+        lhs, rhs = eq.split(' = ')
+
+        # for the left-hand side, check whether it includes a differential operator
+        if "d/dt" in lhs:
+            lhs_split = lhs.split('*')
+            lhs = ""
+            for lhs_part in lhs_split[1:]:
+                lhs += lhs_part
+            diff_eq.append(True)
+        else:
+            diff_eq.append(False)
+
+        # in case of the equations being a differential equation, introduce separate variables for
+        # the old and new value of the variable at each update
+        if diff_eq[-1]:
+
+            # get key of DE variable
+            lhs_var = lhs.split('[')[0]
+            lhs_var = lhs_var.replace(' ', '')
+
+            for key, var in equation_args['vars'].items():
+                if key == lhs_var:
+                    equation_args['inputs'].update(parse_dict({f'{key}_old': var.copy()}, backend=backend))
+
+        # store left- and right-hand side of equation
+        left_hand_sides.append(lhs)
+        right_hand_sides.append(rhs)
+
+    # parse equations
+    #################
+
+    for lhs, rhs, solve in zip(left_hand_sides, right_hand_sides, diff_eq):
+        equation_args = parse_equation(lhs, rhs, equation_args, backend, solve, **kwargs)
+
+    return equation_args
+
+
+def parse_equation(lhs: str, rhs: str, equation_args: dict, backend, solve=False, **kwargs) -> dict:
     """Parses lhs and rhs of an equation.
 
     Parameters
@@ -925,14 +977,12 @@ def parse_equation(equation: str, equation_args: dict, backend, **kwargs) -> dic
     # parse equation
     ################
 
-    lhs, rhs = equation.split(' = ')
-
     # parse rhs
     rhs_parser = ExpressionParser(expr_str=rhs, args=equation_args, backend=backend, **kwargs)
     equation_args = rhs_parser.parse_expr()
 
     # parse lhs
-    lhs_parser = ExpressionParser(expr_str=lhs, args=equation_args, lhs=True, backend=backend, **kwargs)
+    lhs_parser = ExpressionParser(expr_str=lhs, args=equation_args, lhs=True, solve=solve, backend=backend, **kwargs)
 
     return lhs_parser.parse_expr()
 

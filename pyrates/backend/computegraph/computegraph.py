@@ -12,7 +12,7 @@ from networkx import MultiDiGraph
 from copy import copy
 
 # pyrates imports
-from pyrates.backend.parser import parse_equation, parse_dict
+from pyrates.backend.parser import parse_equation_list, parse_dict, parse_equation
 from pyrates.backend.backend_wrapper import TensorflowBackend
 
 # meta infos
@@ -1743,7 +1743,7 @@ class Network(MultiDiGraph):
 
         self.node_updates = []
 
-        for node_name, node in net_config.nodes.items():
+        for node_name, node in self.net_config.nodes.items():
 
             # check operators for cyclic relationships
             op_graph = node['node'].op_graph
@@ -1776,21 +1776,28 @@ class Network(MultiDiGraph):
                 # remove parsed operators from graph
                 graph.remove_nodes_from(secondary_ops)
 
-        self.node_updates = self.backend.add_op('group', self.node_updates)
+        with self.backend.as_default():
+            self.node_updates = self.backend.add_op('group', self.node_updates, name='node_updates')
 
         # parse edges
         #############
 
         self.edge_updates = []
-        for source_node, target_node, edge_idx in net_config.edges:
+        for source_node, target_node, edge_idx in self.net_config.edges:
 
             # extract edge information
             weight = self._get_edge_attr(source_node, target_node, edge_idx, 'weight')
             delay = self._get_edge_attr(source_node, target_node, edge_idx, 'delay')
-            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var')
-            tvar = self._get_edge_attr(source_node, target_node, edge_idx, 'target_var')
+            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=True)
+            tvar = self._get_edge_attr(source_node, target_node, edge_idx, 'target_var', retrieve_from_node=False)
             sidx = self._get_edge_attr(source_node, target_node, edge_idx, 'source_idx')
             tidx = self._get_edge_attr(source_node, target_node, edge_idx, 'target_idx')
+
+            # get target variable from node
+            op, var = tvar.split('/')
+            tvar = self._get_node_attr(target_node, f'{var}_orig', op=op)
+            if not tvar:
+                tvar = self._get_node_attr(target_node, var, op=op)
 
             # define target index
             if delay:
@@ -1812,19 +1819,22 @@ class Network(MultiDiGraph):
                 args['vars']['target_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': tidx}
             if sidx:
                 args['vars']['source_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': sidx}
-            args['vars']['target_var'] = {'vtype': 'state_var', 'dtype': tvar.dtype, 'value': np.zeros(tvar.shape)}
+            args['vars']['target_var'] = tvar
             args['inputs']['source_var'] = svar
 
             # parse mapping
-            args = parse_equation(eq, args, backend=self.backend, scope=f"{source_node}/{target_node}/{edge_idx}")
-            args.pop('lhs_evals')
+            with self.backend.as_default():
+                with tf.variable_scope(f'{source_node}/{target_node}/{edge_idx}'):
+                    args = parse_equation_list([eq], args, backend=self.backend) #scope=f"{source_node}/{target_node}/{edge_idx}")
+                    args.pop('lhs_evals')
 
             # store information in network config
             edge = self.net_config.edges[source_node, target_node, edge_idx]
 
             # update edge attributes
-            for fields in args.values():
-                edge.update(fields)
+            edge.update(args['inputs'])
+            edge.update(args['vars'])
+            edge.update(args['updates'])
 
             # add projection to edge updates
             self.edge_updates.append(edge['target_var'])
@@ -1848,12 +1858,12 @@ class Network(MultiDiGraph):
                         args = {'inputs': {key_new: var_new}, 'vars': {key_old: var_old}}
 
                         # parse mapping
-                        args = parse_equation(eq, args, backend=self.backend, scope=f"{node_name}/{op_name}")
+                        args = parse_equation_list([eq], args, backend=self.backend)  # , scope=f"{node_name}/{op_name}")
                         args.pop('lhs_evals')
 
                         self.edge_updates.append(args['updates'][key_old])
-
-        self.edge_updates = self.backend.add_op('group', self.edge_updates)
+        with self.backend.as_default():
+            self.edge_updates = self.backend.add_op('group', self.edge_updates, name='edge_updates')
 
     def run(self,
             simulation_time: Optional[float] = None,
@@ -1938,24 +1948,33 @@ class Network(MultiDiGraph):
         output_col = {}
         store_ops = []
 
-        # create counting index for collector variables
-        out_idx = self.backend.add_variable(name='out_var_idx', dtype=tf.int32, shape=(), value=0,
-                                            scope="output_collection")
+        with self.backend.as_default():
+            with tf.variable_scope('output_collection'):
+                # create counting index for collector variables
+                out_idx = self.backend.add_variable(name='out_var_idx', dtype=tf.int32, shape=(), value=0
+                                                    #scope="output_collection"
+                                                    )
 
-        # add collector variables to the graph
-        for key, var in outputs_tmp.items():
-            shape = [int(sim_steps / sampling_steps) + 1] + list(var.shape)
-            output_col[key] = self.backend.add_variable(name=key, dtype=tf.float32, shape=shape, value=np.zeros(shape),
-                                                        scope="output_collection")
+                # add collector variables to the graph
+                for key, var in outputs_tmp.items():
+                    shape = [int(sim_steps / sampling_steps) + 1] + list(var.shape)
+                    output_col[key] = self.backend.add_variable(name=key, dtype=tf.float32, shape=shape, value=np.zeros(shape)
+                                                                #scope="output_collection"
+                                                                )
 
-            # add collect operation to the graph
-            store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx, var,
-                                                 scope="output_collection"))
+                    # add collect operation to the graph
+                    store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx, var
+                                                         #scope="output_collection")
+                                                         ))
 
-        store_output = self.backend.add_op('group', store_ops, scope="output_collection")
+                store_output = self.backend.add_op('group', store_ops,
+                                                   #scope="output_collection"
+                                                   )
 
-        # create increment operator for counting index
-        out_idx_incr = self.backend.add_op('+=', out_idx, 1, scope="output_collection")
+                # create increment operator for counting index
+                out_idx_incr = self.backend.add_op('+=', out_idx, 1,
+                                                   #scope="output_collection"
+                                                   )
 
         # linearize input dictionary
         if inputs:
@@ -2075,128 +2094,138 @@ class Network(MultiDiGraph):
 
         """
 
-        for op_name in ops:
+        with self.backend.as_default():
+            with tf.variable_scope(node_name):
 
-            # retrieve operator and operator args
-            op_args = dict()
-            op_args['vars'] = self._get_op_attr(node_name, op_name, 'variables')
-            op_args['vars']['dt'] = {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}
-            op_args['inputs'] = {}
-            op_info = self._get_op_attr(node_name, op_name, 'operator')
+                for op_name in ops:
 
-            # handle operator inputs
-            for var_name, inp in op_info['inputs'].items():
+                    with tf.variable_scope(op_name):
 
-                # go through inputs to variable
-                if inp['sources']:
-                    in_ops_col = []
-                    i = 0
-                    for in_op in inp['sources']:
+                        # retrieve operator and operator args
+                        op_args = dict()
+                        op_args['vars'] = self._get_op_attr(node_name, op_name, 'variables')
+                        op_args['vars']['dt'] = {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}
+                        op_args['inputs'] = {}
+                        op_info = self._get_op_attr(node_name, op_name, 'operator')
 
-                        if type(in_op) is list and len(in_op) == 1:
+                        # handle operator inputs
+                        for var_name, inp in op_info['inputs'].items():
 
-                            if primary_ops:
-                                raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
-                                                 f'This operator should have no node-internal inputs. '
-                                                 f'Please move the operator inputs to the node level or change the '
-                                                 f'input-output relationships between the node operators.')
-                            else:
-                                var = self._get_op_attr(node_name, in_op[0], 'output')
-                                if type(var) is str:
-                                    raise ValueError(f'Wrong operator order on node {node_name}. Operator {op_name} '
-                                                     f'needs input from operator {in_op[0]} which has not been '
-                                                     f'processed yet. Please consider changing the operator order '
-                                                     f'or dependencies.')
-                            in_ops_col.append(var)
-                            i += 1
+                            # go through inputs to variable
+                            if inp['sources']:
+                                in_ops_col = []
+                                i = 0
+                                for in_op in inp['sources']:
 
-                        elif type(in_op) is tuple:
+                                    if type(in_op) is list and len(in_op) == 1:
 
-                            in_ops = in_op[0]
-                            reduce_dim = in_op[1]
+                                        if primary_ops:
+                                            raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
+                                                             f'This operator should have no node-internal inputs. '
+                                                             f'Please move the operator inputs to the node level or change the '
+                                                             f'input-output relationships between the node operators.')
+                                        else:
+                                            var = self._get_op_attr(node_name, in_op[0], 'output')
+                                            if type(var) is str:
+                                                raise ValueError(f'Wrong operator order on node {node_name}. Operator {op_name} '
+                                                                 f'needs input from operator {in_op[0]} which has not been '
+                                                                 f'processed yet. Please consider changing the operator order '
+                                                                 f'or dependencies.')
+                                        in_ops_col.append(var)
+                                        i += 1
 
-                            in_ops_tmp = []
-                            for op in in_ops:
-                                if primary_ops:
-                                    raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
-                                                     f'This operator should have no node-internal inputs. '
-                                                     f'Please move the operator inputs to the node level or change the '
-                                                     f'input-output relationships between the node operators.')
+                                    elif type(in_op) is tuple:
+
+                                        in_ops = in_op[0]
+                                        reduce_dim = in_op[1]
+
+                                        in_ops_tmp = []
+                                        for op in in_ops:
+                                            if primary_ops:
+                                                raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
+                                                                 f'This operator should have no node-internal inputs. '
+                                                                 f'Please move the operator inputs to the node level or change the '
+                                                                 f'input-output relationships between the node operators.')
+                                            else:
+                                                var = self._get_op_attr(node_name, in_op[0], 'output')
+                                                if type(var) is str:
+                                                    raise ValueError(
+                                                        f'Wrong operator order on node {node_name}. Operator {op_name} '
+                                                        f'needs input from operator {op} which has not been '
+                                                        f'processed yet. Please consider changing the operator order '
+                                                        f'or dependencies.')
+                                            in_ops_tmp.append(var)
+                                            i += 1
+
+                                        in_ops_col.append(self._map_multiple_inputs(in_ops_tmp, reduce_dim,
+                                                                                    #scope=f"{node_name}/{op_name}"
+                                                                                    ))
+
+                                    else:
+
+                                        if primary_ops:
+                                            raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
+                                                             f'This operator should have no node-internal inputs. '
+                                                             f'Please move the operator inputs to the node level or change the '
+                                                             f'input-output relationships between the node operators.')
+                                        else:
+                                            var = self._get_op_attr(node_name, in_op, 'output')
+                                            if type(var) is str:
+                                                raise ValueError(f'Wrong operator order on node {node_name}. Operator {op_name} '
+                                                                 f'needs input from operator {in_op[0]} which has not been '
+                                                                 f'processed yet. Please consider changing the operator order '
+                                                                 f'or dependencies.')
+                                        in_ops_col.append(var)
+                                        i += 1
+
+                                # for multiple multiple input operations
+                                if len(in_ops_col) > 1:
+
+                                    # find shape of smallest input variable
+                                    min_shape = min([op.shape[0] if len(op.shape) > 0 else 0 for op in in_ops_col])
+
+                                    # append input variables to list and reshape them if necessary
+                                    in_ops = []
+                                    for op in in_ops_col:
+                                        shape = op.shape[0] if len(op.shape) > 0 else 0
+                                        if shape > min_shape:
+                                            if shape % min_shape != 0:
+                                                raise ValueError(f"Shapes of inputs do not match: "
+                                                                 f"{inp['sources']} cannot be stacked.")
+                                            multiplier = shape // min_shape
+                                            for j in range(multiplier):
+                                                in_ops.append(op[j * min_shape:(j + 1) * min_shape])
+                                        else:
+                                            in_ops.append(op)
+
+                                    # map inputs to target
+                                    in_ops = self._map_multiple_inputs(in_ops, inp['reduce_dim']) #, scope=f"{node_name}/{op_name}")
+
+                                # for a single input variable
                                 else:
-                                    var = self._get_op_attr(node_name, in_op[0], 'output')
-                                    if type(var) is str:
-                                        raise ValueError(
-                                            f'Wrong operator order on node {node_name}. Operator {op_name} '
-                                            f'needs input from operator {op} which has not been '
-                                            f'processed yet. Please consider changing the operator order '
-                                            f'or dependencies.')
-                                in_ops_tmp.append(var)
-                                i += 1
+                                    in_ops = in_ops_col[0]
 
-                            in_ops_col.append(self._map_multiple_inputs(in_ops_tmp, reduce_dim,
-                                                                        scope=f"{node_name}/{op_name}"))
+                                # add input variable to dictionary
+                                op_args['inputs'][var_name] = in_ops
+                                #if var_name in op_args['vars']:
+                                #    op_args['vars'].pop(var_name)
 
-                        else:
+                        # parse equations into tensorflow
+                        op_args = parse_equation_list(op_info['equations'], op_args, backend=self.backend) #, scope=f"{node_name}/{op_name}")
 
-                            if primary_ops:
-                                raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
-                                                 f'This operator should have no node-internal inputs. '
-                                                 f'Please move the operator inputs to the node level or change the '
-                                                 f'input-output relationships between the node operators.')
-                            else:
-                                var = self._get_op_attr(node_name, in_op, 'output')
-                                if type(var) is str:
-                                    raise ValueError(f'Wrong operator order on node {node_name}. Operator {op_name} '
-                                                     f'needs input from operator {in_op[0]} which has not been '
-                                                     f'processed yet. Please consider changing the operator order '
-                                                     f'or dependencies.')
-                            in_ops_col.append(var)
-                            i += 1
+                        # store operator variables in net config
+                        op_vars = self._get_op_attr(node_name, op_name, 'variables')
+                        op_vars.update(op_args['inputs'])
+                        op_vars.update(op_args['vars'])
+                        for key, arg in op_args['updates'].items():
+                            if key in op_vars.keys():
+                                op_vars[f'{key}_orig'] = op_vars.pop(key)
+                                op_vars[key] = arg
 
-                    # for multiple multiple input operations
-                    if len(in_ops_col) > 1:
-
-                        # find shape of smallest input variable
-                        min_shape = min([op.shape[0] if len(op.shape) > 0 else 0 for op in in_ops_col])
-
-                        # append input variables to list and reshape them if necessary
-                        in_ops = []
-                        for op in in_ops_col:
-                            shape = op.shape[0] if len(op.shape) > 0 else 0
-                            if shape > min_shape:
-                                if shape % min_shape != 0:
-                                    raise ValueError(f"Shapes of inputs do not match: "
-                                                     f"{inp['sources']} cannot be stacked.")
-                                multiplier = shape // min_shape
-                                for j in range(multiplier):
-                                    in_ops.append(op[j * min_shape:(j + 1) * min_shape])
-                            else:
-                                in_ops.append(op)
-
-                        # map inputs to target
-                        in_ops = self._map_multiple_inputs(in_ops, inp['reduce_dim'], scope=f"{node_name}/{op_name}")
-
-                    # for a single input variable
-                    else:
-                        in_ops = in_ops_col[0]
-
-                    # add input variable to dictionary
-                    op_args['inputs'][var_name] = in_ops
-
-            # parse equations into tensorflow
-            for eq in op_info['equations']:
-                op_args = parse_equation(eq, op_args, backend=self.backend, scope=f"{node_name}/{op_name}")
-
-            # store operator variables in net config
-            op_vars = self._get_op_attr(node_name, op_name, 'variables')
-            op_vars.update(op_args['inputs'])
-            op_vars.update(op_args['vars'])
-            op_vars.update(op_args['updates'])
-
-            # if the operator does not project to others, store its update operations
-            if self._get_node_attr(node_name, 'op_graph').out_degree(op_name) == 0:
-                for var_update in list(set(op_args['lhs_evals'])):
-                    self.node_updates.append(op_args['updates'][var_update])
+                        # if the operator does not project to others, store its update operations
+                        if self._get_node_attr(node_name, 'op_graph').out_degree(op_name) == 0:
+                            for var_update in list(set(op_args['lhs_evals'])):
+                                self.node_updates.append(op_args['updates'][var_update])
 
     def _map_multiple_inputs(self, inputs, reduce_dim, **kwargs):
         """
@@ -2281,7 +2310,7 @@ class Network(MultiDiGraph):
                 vals_updated.append(self._set_op_attr(node, op, attr, val, net_config=net_config))
             return vals_updated
 
-    def _get_edge_attr(self, source, target, edge, attr, net_config=None):
+    def _get_edge_attr(self, source, target, edge, attr, retrieve_from_node=True, net_config=None):
         """
 
         Parameters
@@ -2302,7 +2331,7 @@ class Network(MultiDiGraph):
 
         try:
             attr_val = net_config.edges[source, target, edge][attr]
-            if 'var' in attr and type(attr_val) is str:
+            if 'var' in attr and type(attr_val) is str and retrieve_from_node:
                 op, var = attr_val.split('/')
                 if 'source' in attr:
                     attr_val = self._get_op_attr(source, op, var, net_config=net_config)
@@ -2636,12 +2665,10 @@ class Network(MultiDiGraph):
         if len(target_shape) < 1:
             eqs_op_read = [f"{var} = {var}_buffer_{idx}[0]"]
             eqs_op_rotate = [f"{var}_buffer_{idx}_tmp = {var}_buffer_{idx}[1:]",
-                             f"{var}_buffer_{idx}[0:-1] = {var}_buffer_{idx}_tmp",
                              f"{var}_buffer_{idx}[-1] = 0."]
         else:
             eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, 0]"]
             eqs_op_rotate = [f"{var}_buffer_{idx}_tmp = {var}_buffer_{idx}[:, 1:]",
-                             f"{var}_buffer_{idx}[:, 0:-1] = {var}_buffer_{idx}_tmp",
                              f"{var}_buffer_{idx}[:, -1] = 0."]
 
         # create buffer variable definitions
@@ -2660,7 +2687,7 @@ class Network(MultiDiGraph):
         # add buffer operators to operator graph
         op_graph.add_node(f'{op}_{var}_buffer_rotate_{idx}',
                           operator={'inputs': {},
-                                    'output': f'{var}_buffer_{idx}',
+                                    'output': f'{var}_buffer_{idx}_tmp',
                                     'equations': eqs_op_rotate},
                           variables=var_dict)
         op_graph.add_node(f'{op}_{var}_buffer_read_{idx}',
