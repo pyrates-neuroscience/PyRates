@@ -127,10 +127,13 @@ class ExpressionParser(ParserElement):
             if callable(val):
                 self.backend.ops[key] = val
 
-        self.wait_for_idx = False
-        self.expr_str = expr_str
+        # collect variables in input field as dependencies
+        deps = kwargs.pop('dependencies', [])
+        self.dependencies = [] #list(self.args['inputs'].values()) + deps
 
         # additional attributes
+        self.wait_for_idx = False
+        self.expr_str = expr_str
         self.expr = None
         self.expr_stack = []
         self.expr_list = []
@@ -311,7 +314,7 @@ class ExpressionParser(ParserElement):
             op1 = self.parse(expr_stack)
 
             # combine elements via mathematical/boolean operator
-            self._op_tmp = self.broadcast(op, op1, op2)
+            self._op_tmp = self.broadcast(op, op1, op2, dependencies=self.dependencies)
 
         elif ".T" == op or ".I" == op:
 
@@ -328,7 +331,10 @@ class ExpressionParser(ParserElement):
                     if expr_stack[-1] == ":":
                         index.append(expr_stack.pop())
                     else:
+                        lhs = self.lhs
+                        self.lhs = False
                         index.append(self.parse(expr_stack))
+                        self.lhs = lhs
                 indices.append(index[::-1])
                 if expr_stack[-1] == ",":
                     expr_stack.pop()
@@ -553,101 +559,152 @@ class ExpressionParser(ParserElement):
         """Tries to match the shapes of arg1 and arg2 such that func can be applied.
         """
 
+        # get important keyword arguments
         if 'scope' in self.parser_kwargs.keys():
             kwargs['scope'] = self.parser_kwargs['scope']
 
-        try:
-            # no broadcasting
-            args = []
-            if type(op1) is dict:
-                (op1_key, op1_val), = op1.items()
-                kwargs[op1_key] = op1_val
+        # get key and value of ops if they are dicts
+        if type(op1) is dict:
+            (op1_key, op1_val), = op1.items()
+        else:
+            op1_val = op1
+            op1_key = None
+        if type(op2) is dict:
+            (op2_key, op2_val), = op2.items()
+        else:
+            op2_val = op2
+            op2_key = None
+
+        if not self.compare_shapes(op1_val, op2_val):
+
+            # try removing singleton dimensions from op1/op2
+            op1_val_tmp, op2_val_tmp = self.match_shapes(op1_val, op2_val, reduce=True)
+            if not self.compare_shapes(op1_val_tmp, op2_val_tmp):
+                op1_val_tmp, op2_val_tmp = self.match_shapes(op1_val_tmp, op2_val_tmp, reduce=False)
+            if self.compare_shapes(op1_val_tmp, op2_val_tmp):
+                op1_val, op2_val = op1_val_tmp, op2_val_tmp
+
+            # if removing the singletons did not work, try vectorizing op1/op2
             else:
-                args.append(op1)
-            if type(op2) is dict:
-                (op2_key, op2_val), = op2.items()
-                kwargs[op2_key] = op2_val
-            else:
-                args.append(op2)
-            return self.backend.add_op(op, *tuple(args), **kwargs)
 
-        # try to broadcast arg1 and arg22 to the same shape
-        except (ValueError, KeyError):
-
-            # get key and value of ops if they are dicts
-            if type(op1) is dict:
-                (op1_key, op1_val), = op1.items()
-            else:
-                op1_val = op1
-                op1_key = None
-            if type(op2) is dict:
-                (op2_key, op2_val), = op2.items()
-            else:
-                op2_val = op2
-                op2_key = None
-
-            try:
-
-                # add singleton dimension to either op1 or op2
-                if len(op1_val.shape) > len(op2_val.shape) and 1 in op1_val.shape:
-                    target_shape = op1_val.shape
-                    if 1 in target_shape:
-                        op2_val = self.backend.add_op('reshape', op2_val, target_shape)
-                    else:
-                        idx = list(target_shape).index(op2_val.shape[0])
-                        if idx == 0:
-                            op2_val = self.backend.add_op('reshape', op2_val, [1, op1_val.shape[0]])
-                        else:
-                            op2_val = self.backend.add_op('reshape', op2_val, [op1_val.shape[1], 1])
-                elif len(op2_val.shape) > len(op1_val.shape) and 1 in op2_val.shape:
-                    if op == '=':
-                        op2_val = self.backend.add_op('squeeze', op2_val, -1)
-                    else:
-                        target_shape = op2_val.shape
-                        if 1 in target_shape:
-                            op1_val = self.backend.add_op('reshape', op1_val, target_shape)
-                        else:
-                            idx = list(target_shape).index(op1_val.shape[0])
-                            if idx == 0:
-                                op1_val = self.backend.add_op('reshape', op1_val, [1, target_shape[0]])
-                            else:
-                                op1_val = self.backend.add_op('reshape', op1_val, [target_shape[1], 1])
-
-                # try to apply function after singleton addition
-                args = []
-                if op1_key:
-                    kwargs[op1_key] = op1_val
-                else:
-                    args.append(op1_val)
-                if op2_key:
-                    kwargs[op2_key] = op2_val
-                else:
-                    args.append(op2_val)
-                return self.backend.add_op(op, *tuple(args), **kwargs)
-
-            except (ValueError, KeyError):
-
-                # transform op1 or op2 from scalar to array
-                if hasattr(op1, 'shape'):
+                if op1.shape.ndims == 0 or (op1.shape.ndims == 1 and op1.shape.dims[0].value == 0):
                     shape = self.backend.add_op('shape', op1_val)
                     dtype = self.backend.add_op('dtype', op2_val)
                     op2_val = self.backend.add_op('+', self.backend.add_op('zeros', shape, dtype=dtype), op2_val)
-                else:
+                elif op2.shape.ndims == 0 or (op2.shape.ndims == 1 and op2.shape.dims[0].value == 0):
                     shape = self.backend.add_op('shape', op2_val)
                     dtype = self.backend.add_op('dtype', op1_val)
                     op1_val = self.backend.add_op('+', self.backend.add_op('zeros', shape, dtype=dtype), op1_val)
 
-                # try to apply function after vectorization
-                args = []
-                if op1_key:
-                    kwargs[op1_key] = op1_val
+        try:
+
+            # try applying the operation with matched shapes
+            return self.apply_op(op, op1_val, op2_val, op1_key, op2_key, **kwargs)
+
+        except TypeError:
+
+            # try to re-cast the data-types of op1/op2
+            try:
+                op2_val_tmp = self.backend.add_op('cast', op2_val, op1_val.dtype)
+                return self.apply_op(op, op1_val, op2_val_tmp, op1_key, op2_key, **kwargs)
+            except TypeError:
+                op1_val_tmp = self.backend.add_op('cast', op1_val, op2_val.dtype)
+                return self.apply_op(op, op1_val_tmp, op2_val, op1_key, op2_key, **kwargs)
+
+        except ValueError:
+
+            # try to match additional keyword arguments to shape of op1
+            for key, var in kwargs.items():
+                if hasattr(var, 'shape'):
+                    _, kwargs[key] = self.match_shapes(op1_val, var, reduce=True)
+            return self.apply_op(op, op1_val, op2_val, op1_key, op2_key, **kwargs)
+
+    def match_shapes(self, op1, op2, reduce=True):
+        """
+
+        Parameters
+        ----------
+        op1
+        op2
+        reduce
+
+        Returns
+        -------
+
+        """
+
+        if len(op1.shape) > len(op2.shape) and 1 in op1.shape:
+
+            if reduce:
+
+                # cut singleton dimension from op1
+                idx = list(op1.shape).index(1)
+                op1 = self.backend.add_op('squeeze', op1, idx)
+            else:
+
+                # reshape op2 to match the shape of op1
+                target_shape = op1.shape
+                if 1 in target_shape:
+                    op2 = self.backend.add_op('reshape', op2, target_shape)
                 else:
-                    args.append(op1_val)
-                if op2_key:
-                    kwargs[op2_key] = op2_val
+                    idx = list(target_shape).index(op2.shape[0])
+                    if idx == 0:
+                        op2 = self.backend.add_op('reshape', op2, [1, op1.shape[0]])
+                    else:
+                        op2 = self.backend.add_op('reshape', op2, [op1.shape[1], 1])
+
+        elif len(op2.shape) > len(op1.shape) and 1 in op2.shape:
+
+            if reduce:
+
+                # cut singleton dimension from op2
+                idx = list(op2.shape).index(1)
+                op2 = self.backend.add_op('squeeze', op2, idx)
+
+            else:
+
+                # reshape op2 to match the shape of op1
+                target_shape = op2.shape
+                if 1 in target_shape:
+                    op1 = self.backend.add_op('reshape', op1, target_shape)
                 else:
-                    args.append(op2_val)
-                return self.backend.add_op(op, *tuple(args), **kwargs)
+                    idx = list(target_shape).index(op1.shape[0])
+                    if idx == 0:
+                        op1 = self.backend.add_op('reshape', op1, [1, target_shape[0]])
+                    else:
+                        op1 = self.backend.add_op('reshape', op1, [target_shape[1], 1])
+
+        return op1, op2
+
+    def apply_op(self, op, x, y, x_key=None, y_key=None, **kwargs):
+        """
+
+        Parameters
+        ----------
+        op
+        x
+        y
+        x_key
+        y_key
+        kwargs
+
+        Returns
+        -------
+
+        """
+
+        # collect arguments
+        args = []
+        if x_key:
+            kwargs[x_key] = x
+        else:
+            args.append(x)
+        if y_key:
+            kwargs[y_key] = y
+        else:
+            args.append(y)
+
+        return self.backend.add_op(op, *tuple(args), **kwargs)
 
     def apply_idx(self, op, idx):
         """Apply index to operation.
@@ -669,23 +726,35 @@ class ExpressionParser(ParserElement):
         # apply idx
         try:
             op_idx = eval(f'op[{idx}]')
-        except ValueError:
-            try:
-                op_idx = eval(f"self.backend.add_op('gather', op, {idx})")
-            except ValueError:
-                op_idx = eval(f"self.backend.add_op('gather', op, self.funcs['squeeze']({idx}))")
-        except TypeError:
+        except ValueError as e:
+            if self.lhs:
+                op_idx = None
+            else:
+                try:
+                    op_idx = eval(f"self.backend.add_op('gather', op, {idx})")
+                except ValueError:
+                    try:
+                        op_idx = eval(f"self.backend.add_op('gather', op, self.backend.add_op('squeeze', {idx}))")
+                    except ValueError as e:
+                        raise e
+        except TypeError as e:
             if locals()[idx].dtype.is_bool:
-                op_idx = self.broadcast('*', op, eval(f"self.backend.add_op('cast', {idx}, op.dtype)"))
+                op_idx = self.broadcast('*', op, eval(f"{idx}"))
             else:
                 raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of the '
                                 f'tensor to be indexed.')
 
         # return indexed variable
         if self.lhs:
-            return self.broadcast('=', op_idx, self.args.pop('rhs'))
+            if op_idx is None:
+                return self.backend.add_op('scatter_add', op, eval(f'{idx}'), updates=self.args.pop('rhs'))
+            else:
+                return self.broadcast('=', op_idx, self.args.pop('rhs'))
         else:
-            return op_idx
+            if op_idx is None:
+                raise e
+            else:
+                return op_idx
 
     def update(self, var_old, var_delta, dt):
         """Solves single step of a differential equation.
@@ -693,6 +762,55 @@ class ExpressionParser(ParserElement):
 
         var_update = self.broadcast('*', var_delta, dt)
         return self.broadcast('+', var_old, var_update)
+
+    def compare_shapes(self, op1, op2):
+        """
+
+        Parameters
+        ----------
+        op1
+        op2
+
+        Returns
+        -------
+
+        """
+
+        if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
+            if op1.shape == op2.shape:
+                return True
+            elif len(op1.shape) == 0:
+                return True
+            elif len(op2.shape) == 0:
+                return True
+            else:
+                return False
+        else:
+            return True
+
+    def compare_dtypes(self, op1, op2):
+        """
+
+        Parameters
+        ----------
+        op1
+        op2
+
+        Returns
+        -------
+
+        """
+
+        if op1.dtype == op2.dtype:
+            return True
+        elif op1.dtype.name in op2.dtype.name:
+            return True
+        elif op2.dtype.name in op1.dtype.name:
+            return True
+        elif op1.dtype.base_dtype == op2.dtype.base_dtype:
+            return True
+        else:
+            return False
 
 
 class KerasExpressionParser(ExpressionParser):
@@ -924,9 +1042,10 @@ def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs)
             lhs_var = lhs.split('[')[0]
             lhs_var = lhs_var.replace(' ', '')
 
-            for key, var in equation_args['vars'].items():
+            for key, var in equation_args['vars'].copy().items():
                 if key == lhs_var:
                     equation_args['inputs'].update(parse_dict({f'{key}_old': var.copy()}, backend=backend, **kwargs))
+                    equation_args['vars'].pop(key)
 
         # store left- and right-hand side of equation
         left_hand_sides.append(lhs)

@@ -19,7 +19,7 @@ from matplotlib.pyplot import *
 
 # general
 step_size = 1e-3
-simulation_time = 1.0
+simulation_time = 3.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
@@ -30,7 +30,7 @@ sparseness_i = sparseness_e * 0.
 n_jrcs = 2
 
 # connectivity parameters
-c_intra = 0.
+c_intra = 135.
 c_inter = 0.
 
 # No of nodes triple the circuit size.
@@ -111,10 +111,6 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
-                              'PRO.0/psp': {'vtype': 'state_var',
-                                                   'dtype': 'float32',
-                                                   'shape': (),
-                                                   'value': 0.},
                               'RPO_e_pc.0/psp': {'vtype': 'state_var',
                                                          'dtype': 'float32',
                                                          'shape': (),
@@ -163,10 +159,10 @@ for i in range(0, n_jrcs):
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 0.},
-                              'RPO_e_pc.0/u': {'vtype': 'placeholder',
+                              'RPO_e_pc.0/u': {'vtype': 'constant',
                                                        'dtype': 'float32',
                                                        'shape': (),
-                                                       'value': 0.},
+                                                       'value': 220.},
                               },
             'inputs': {}
             }
@@ -346,9 +342,9 @@ net = ComputeGraph(net_config=circuit, dt=step_size, vectorize='none')
 ####################
 
 results, _ = net.run(simulation_time=simulation_time,
-                     outputs={'V': ('all', 'PRO.0', 'psp')},
+                     outputs={'V': ('EIN', 'RPO_e.0', 'psp')},
                      sampling_step_size=1e-3,
-                     inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
+                     #inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
                      out_dir='/tmp/log/'
                      )
 

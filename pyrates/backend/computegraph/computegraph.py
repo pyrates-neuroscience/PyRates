@@ -7,11 +7,11 @@ import tensorflow as tf
 from typing import Optional, Tuple, List
 from pandas import DataFrame
 import numpy as np
-from networkx import MultiDiGraph, find_cycle, NetworkXNoCycle, DiGraph
-from copy import copy
+from networkx import MultiDiGraph, find_cycle, NetworkXNoCycle, DiGraph, is_isomorphic
+from copy import copy, deepcopy
 
 # pyrates imports
-from pyrates.backend.parser import parse_equation_list
+from pyrates.backend.parser import parse_equation_list, parse_dict
 from pyrates.backend.backend_wrapper import TensorflowBackend
 from pyrates import PyRatesException
 
@@ -50,15 +50,19 @@ class ComputeGraph(MultiDiGraph):
 
         super().__init__(name=name if name else 'net.0')
 
-        # further basic attributes
+        # instantiate the backend
         self.backend = TensorflowBackend()
-        self._net_config_map = {}
-        self.dt = dt
 
-        # process the network configuration
+        # pre-process the network configuration
+        self.dt = dt
+        self._net_config_map = {}
         self.net_config = self._preprocess_net_config(net_config) if build_in_place \
-            else self._preprocess_net_config(copy(net_config))
-        self.net_config = self._vectorize(net_config=copy(self.net_config), vectorization_mode=vectorize)
+            else self._preprocess_net_config(deepcopy(net_config))
+        self.net_config = self._vectorize(net_config=deepcopy(self.net_config), vectorization_mode=vectorize)
+
+        # set time constant of the network
+        self._dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}},
+                              backend=self.backend)['dt']
 
         # parse node operations
         #######################
@@ -123,14 +127,10 @@ class ComputeGraph(MultiDiGraph):
                 tvar = self._get_node_attr(target_node, var, op=op)
 
             # define target index
-            if delay:
-                if type(delay) is list:
-                    if 'float' in str(type(delay[0])):
-                        delay = [int(d / self.dt) + 1 for d in delay]
-                if 'float' in str(type(delay)):
-                    delay = int(delay / self.dt) + 1
-            if delay and tidx:
-                tidx = [idx + [d] for idx, d in zip(tidx, delay)]
+            if delay is not None and tidx:
+                tidx = [idx + d for idx, d in zip(tidx, delay)]
+            elif not tidx:
+                tidx = list(delay)
 
             # create mapping equation and its arguments
             d = "[target_idx]" if tidx else ""
@@ -413,7 +413,7 @@ class ComputeGraph(MultiDiGraph):
             # retrieve operator and operator args
             op_args = dict()
             op_args['vars'] = self._get_op_attr(node_name, op_name, 'variables')
-            op_args['vars']['dt'] = {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}
+            op_args['vars']['dt'] = self._dt
             op_args['inputs'] = {}
             op_info = self._get_op_attr(node_name, op_name, 'operator')
 
@@ -516,6 +516,8 @@ class ComputeGraph(MultiDiGraph):
 
                     # add input variable to dictionary
                     op_args['inputs'][var_name] = in_ops
+                    if var_name in op_args['vars'].keys():
+                        op_args['vars'].pop(var_name)
 
             # parse equations into tensorflow
             op_args = parse_equation_list(op_info['equations'], op_args, backend=self.backend,
@@ -528,7 +530,7 @@ class ComputeGraph(MultiDiGraph):
             for key, arg in op_args['updates'].items():
                 if key in op_vars.keys():
                     op_vars[f'{key}_orig'] = op_vars.pop(key)
-                    op_vars[key] = arg
+                op_vars[key] = arg
 
             # if the operator does not project to others, store its update operations
             if self._get_node_attr(node_name, 'op_graph').out_degree(op_name) == 0:
@@ -544,22 +546,6 @@ class ComputeGraph(MultiDiGraph):
             return self.backend.add_op('sum', inp, axis=0, **kwargs)
         else:
             return self.backend.add_op('reshape', inp, shape=(inp.shape[0] * inp.shape[1],), **kwargs)
-
-    def _connect_edge_to_op(self, in_op, node, op, var, n):
-        """
-        """
-
-        # create input tensor
-        source, target, edge = in_op
-        var_info = self._get_edge_attr(source, target, edge, 'source_var')
-        inp_tensor = tf.keras.layers.Input(shape=var_info['shape'], dtype=var_info['dtype'])
-        self.inputs[f'{node}/{op}/{var}.{n}'] = inp_tensor
-
-        # update edge to map to input tensor
-        self._set_edge_attr(source, target, edge, 'target_var',
-                            f'{op}/{var}.{n}')
-
-        return inp_tensor
 
     def _get_node_attr(self, node, attr, op=None, net_config=None):
         """
@@ -755,8 +741,17 @@ class ComputeGraph(MultiDiGraph):
         if not net_config:
             net_config = self.net_config
 
-        return [node for node in net_config.nodes.keys() if self._get_node_attr(node, attr,
-                                                                                net_config=net_config) == val]
+        nodes = []
+        for node in net_config.nodes:
+            test_val = self._get_node_attr(node, attr, net_config=net_config)
+            try:
+                if is_isomorphic(val, test_val):
+                    nodes.append(node)
+            except (TypeError, ValueError):
+                if val == test_val:
+                    nodes.append(node)
+
+        return nodes
 
     def _contains_node(self, node, target_node):
         """
@@ -798,16 +793,15 @@ class ComputeGraph(MultiDiGraph):
         if not net_config:
             net_config = self.net_config
 
-        try:
-            return [net_config.edges[source, target, edge]
-                    for edge in range(net_config.graph.number_of_edges(source, target))]
-        except KeyError:
+        if source in net_config.nodes and target in net_config.nodes:
+            return [(source, target, edge) for edge in range(net_config.graph.number_of_edges(source, target))]
+        else:
             edges = []
             for source_tmp in self._net_config_map.keys():
                 for target_tmp in self._net_config_map.keys():
                     if self._contains_node(source, source_tmp) and self._contains_node(target, target_tmp):
-                        edges += [net_config.edges[source_tmp, target_tmp, edge]
-                                  for edge in range(net_config.graph.number_of_edges(source_tmp, target_tmp))]
+                        edges += [(source_tmp, target_tmp, edge) for edge
+                                  in range(net_config.graph.number_of_edges(source_tmp, target_tmp))]
             return edges
 
     def _get_edge_conn(self, source, target, edge, net_config=None):
@@ -905,12 +899,16 @@ class ComputeGraph(MultiDiGraph):
             else:
                 idx_new = [[idx]]
         else:
-            op, var = self.net_config.edges[source, target, edge][var].split('/')
-            _, _, _, idx_new = self._net_config_map[node_to_idx][op][var]
-            if type(idx_new) is int:
-                idx_new = [idx_new]
-            else:
-                idx_new = list(idx_new)
+            try:
+                var = 'source_var' if idx_type == 'source' else 'target_var'
+                op, var = self.net_config.edges[source, target, edge][var].split('/')
+                _, _, _, idx_new = self._net_config_map[node_to_idx][op][var]
+                if type(idx_new) is int:
+                    idx_new = [idx_new]
+                else:
+                    idx_new = list(idx_new)
+            except KeyError:
+                idx_new = None
 
         return idx_new
 
@@ -980,8 +978,6 @@ class ComputeGraph(MultiDiGraph):
                              f"{var}_buffer_{idx}[:, -1] = 0."]
 
         # create buffer variable definitions
-        if 'float' in str(type(buffer_length)):
-            buffer_length = int(buffer_length / self.dt) + 1
         if len(target_shape) > 0:
             buffer_shape = [target_shape[0], buffer_length + 1]
         else:
@@ -1234,7 +1230,7 @@ class ComputeGraph(MultiDiGraph):
                     if not hasattr(delay, 'shape'):
                         delay = np.zeros((1,)) + delay
                     if 'float' in str(delay.dtype):
-                        delay = np.asarray(delay / self.dt, dtype=np.int32)
+                        delay = np.asarray((delay / self.dt) + 1, dtype=np.int32)
                     edge['delay'] = delay
             except KeyError:
                 edge['delay'] = None
@@ -1281,6 +1277,7 @@ class ComputeGraph(MultiDiGraph):
                 # delete vectorized nodes from graph and list
                 for n in nodes_tmp:
                     net_config.graph.remove_node(n)
+                    net_config.label_map.pop(n)
                     nodes.pop(nodes.index(n))
 
             # adjust edges accordingly
@@ -1591,7 +1588,7 @@ class ComputeGraph(MultiDiGraph):
 
         while edges:
 
-            source_tmp, target_tmp, edge_tmp = edges.pop(0)
+            source_tmp, target_tmp, edge_tmp = edges[0]
 
             # get source and target variable
             source_var = self._get_edge_attr(source_tmp, target_tmp, edge_tmp, 'source_var')
@@ -1599,12 +1596,12 @@ class ComputeGraph(MultiDiGraph):
 
             # get edges with equal source and target variables between source and target node
             edges_tmp = []
-            for n, source_tmp, target_tmp, edge_tmp in enumerate(edges):
+            for n, (source_tmp, target_tmp, edge_tmp) in enumerate(edges):
                 if self._get_edge_attr(source_tmp, target_tmp, edge_tmp,
                                        'source_var') == source_var and \
                         self._get_edge_attr(source_tmp, target_tmp, edge_tmp,
                                             'target_var') == target_var:
-                    edge_tmp.append(edges[n])
+                    edges_tmp.append(edges[n])
 
             # vectorize those edges
             #######################
@@ -1628,12 +1625,12 @@ class ComputeGraph(MultiDiGraph):
                         delay_col.append(delay)
                     if weight:
                         weight_col.append(weight)
-                    idx = self._get_edge_var_idx(source, target, idx, 'source')
-                    if idx:
-                        old_svar_idx += idx
-                    idx = self._get_edge_var_idx(source, target, idx, 'target')
-                    if idx:
-                        old_tvar_idx += idx
+                    idx_tmp = self._get_edge_var_idx(source, target, idx, 'source')
+                    if idx_tmp:
+                        old_svar_idx += idx_tmp
+                    idx_tmp = self._get_edge_var_idx(source, target, idx, 'target')
+                    if idx_tmp:
+                        old_tvar_idx += idx_tmp
 
                 # create new, vectorized edge
                 #############################
@@ -1652,7 +1649,7 @@ class ComputeGraph(MultiDiGraph):
                 net_config.add_edge(source_name, target_name, **new_edge)
 
             # delete vectorized edges from list
-            for edge in edge_tmp:
+            for edge in edges_tmp:
                 edges.pop(edges.index(edge))
 
         return net_config

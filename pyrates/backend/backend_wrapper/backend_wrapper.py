@@ -67,12 +67,16 @@ class TensorflowBackend(tf.Graph):
                     "softmax": tf.nn.softmax,
                     "sigmoid": tf.sigmoid,
                     "tanh": tf.tanh,
-                    "gather": tf.gather_nd,
+                    "gather": tf.gather,
+                    "gather_nd": tf.gather_nd,
                     "scatter": tf.scatter_nd,
                     "scatter_update": tf.scatter_update,
+                    "scatter_add": tf.scatter_add,
                     "mask": tf.boolean_mask,
-                    "stack": tf.parallel_stack,
-                    "group": tf.group
+                    "stack": tf.stack,
+                    "pstack": tf.parallel_stack,
+                    "group": tf.group,
+                    "tuple": tf.tuple
                     }
 
         self.dtypes = {"float16": tf.float16,
@@ -171,7 +175,7 @@ class TensorflowBackend(tf.Graph):
 
         """
 
-        scope, reuse = self.get_scope(scope) if scope else tf.get_variable_scope()
+        scope, reuse = self.get_scope(scope)
         with self.as_default():
             with scope as sc:
                 if reuse:
@@ -244,20 +248,23 @@ class TensorflowBackend(tf.Graph):
         """
 
         scope = kwargs.pop('scope', None)
+        dependencies = kwargs.pop('dependencies', [])
+
         scope, reuse = self.get_scope(scope)
         with self.as_default():
             with scope as sc:
-                if reuse:
-                    with tf.name_scope(sc.original_name_scope):
+                with tf.control_dependencies(dependencies):
+                    if reuse:
+                        with tf.name_scope(sc.original_name_scope):
+                            try:
+                                return self.ops[op](*args, **kwargs)
+                            except TypeError:
+                                return self.ops[op](list(args), **kwargs)
+                    else:
                         try:
                             return self.ops[op](*args, **kwargs)
                         except TypeError:
                             return self.ops[op](list(args), **kwargs)
-                else:
-                    try:
-                        return self.ops[op](*args, **kwargs)
-                    except TypeError:
-                        return self.ops[op](list(args), **kwargs)
 
     def get_scope(self, scope):
         """
@@ -273,7 +280,7 @@ class TensorflowBackend(tf.Graph):
 
         with self.as_default():
             if scope is None:
-                return tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE)
+                return tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE), True
             if scope not in self.existing_scopes.keys():
                 self.existing_scopes[scope] = True
             return tf.variable_scope(scope, reuse=tf.AUTO_REUSE), self.existing_scopes[scope]
