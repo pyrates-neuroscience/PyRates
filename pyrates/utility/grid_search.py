@@ -7,7 +7,8 @@ import numpy as np
 
 # pyrates internal imports
 from pyrates.backend import ComputeGraph
-from pyrates.frontend import CircuitIR, CircuitTemplate
+from pyrates.frontend import CircuitTemplate
+from pyrates.ir.circuit import CircuitIR
 
 # meta infos
 __author__ = "Richard Gast"

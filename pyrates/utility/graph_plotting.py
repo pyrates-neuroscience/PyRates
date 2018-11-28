@@ -1,6 +1,6 @@
 """Collection of functions to plot a graph from a circuit/networkx graph."""
 
-from pyrates.frontend import CircuitIR
+from pyrates.ir.circuit import CircuitIR
 
 
 def simple_plot(circuit: CircuitIR, format: str="png", path: str=None, **pydot_args):

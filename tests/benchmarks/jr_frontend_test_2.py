@@ -1,4 +1,5 @@
-from pyrates.frontend.circuit import CircuitTemplate, CircuitIR
+from pyrates.frontend.circuit import CircuitTemplate
+from pyrates.ir.circuit import CircuitIR
 from pyrates.backend import ComputeGraph
 import matplotlib.pyplot as plt
 

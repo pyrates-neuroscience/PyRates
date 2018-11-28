@@ -12,6 +12,13 @@ type_mapping = {dict: "dictionary",
                 str: "yaml"}
 
 
+# alternative:
+class DictLoader: ...
+
+
+loader_mapping = {dict: DictLoader}
+
+
 def deep_freeze(freeze: Union[dict, list, set, tuple]):
     """
 

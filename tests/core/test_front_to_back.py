@@ -26,6 +26,7 @@ def test_simple_example():
     circuit = tmp.apply()
 
     # Step 3: Reformat frontend IR to backend IR
+    # ToDo: adapt this step to new frontend-ir-backend structure
     net_def = circuit.network_def(revert_node_names=True)
 
     # Step 4: Create tensorflow graph
@@ -53,6 +54,7 @@ def test_3_coupled_jansen_rit_circuits(vectorize):
     circuit = tmp.apply()
 
     # Step 3: Reformat frontend IR to backend IR
+    # ToDo: adapt this step to new frontend-ir-backend structure
     net_def = circuit.network_def(revert_node_names=True)
 
     # Step 4: Create tensorflow graph

@@ -1,7 +1,8 @@
 """
 """
-from pyrates.frontend import NodeIR, EdgeIR
-from pyrates.frontend.operator import OperatorIR
+from pyrates.ir.node import NodeIR
+from pyrates.ir.edge import EdgeIR
+from pyrates.ir.operator import OperatorIR
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
