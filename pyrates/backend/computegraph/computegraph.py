@@ -121,7 +121,8 @@ class ComputeGraph(MultiDiGraph):
             edges.append((source_node, target_node, edge_idx))
 
         # get control dependencies on those output variables
-        source_vars = self.backend.add_op('tuple', source_vars, name='node_updates_I', scope=self.name)
+        if source_vars:
+            source_vars = self.backend.add_op('tuple', source_vars, name='node_updates_I', scope=self.name)
 
         # set control dependencies for the remaining node updates
         if self.node_updates:
@@ -178,8 +179,7 @@ class ComputeGraph(MultiDiGraph):
 
             # parse mapping
             args = parse_equation_list([eq], args, backend=self.backend,
-                                       scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}",
-                                       dependencies=self.node_updates)
+                                       scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}")
             args.pop('lhs_evals')
 
             # store information in network config
@@ -213,8 +213,7 @@ class ComputeGraph(MultiDiGraph):
 
                         # parse mapping
                         args = parse_equation_list([eq], args, backend=self.backend,
-                                                   scope=f"{self.name}/{node_name}/{op_name}",
-                                                   dependencies=self.node_updates)
+                                                   scope=f"{self.name}/{node_name}/{op_name}")
 
                         args.pop('lhs_evals')
 
@@ -325,7 +324,7 @@ class ComputeGraph(MultiDiGraph):
             # add collect operation to the graph
             store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx, var,
                                                  scope="output_collection",
-                                                 dependencies=self.node_updates + [out_idx_add]))
+                                                 dependencies=[out_idx_add]))
 
         sampling_op = self.backend.add_op('group', store_ops, name='output_collection')
 
