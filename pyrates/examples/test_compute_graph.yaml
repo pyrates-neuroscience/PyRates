@@ -1,0 +1,105 @@
+%YAML 1.2
+---
+
+# operator templates
+####################
+
+op0:
+  base: OperatorTemplate
+  equations:
+    - "a = b*0.5"
+    - "b = a + 2.0"
+  variables:
+    a:
+      default: output
+    b:
+      default: variable
+
+op1:
+  base: OperatorTemplate
+  equations: "d/dt * a = u - a"
+  variables:
+    a:
+      default: output
+    u:
+      default: input
+
+op2:
+  base: OperatorTemplate
+  equations:
+    - "b = sigmoid(a)"
+    - "d/dt * a = b - a"
+  variables:
+    a:
+      default: output
+    b:
+      default: variable
+
+op3:
+  base: OperatorTemplate
+  equations:
+    - "b = sigmoid(a)"
+    - "d/dt * a = -a + b*c + d^u"
+    - "d/dt * c = a"
+    - "d = abs(cos(c))"
+  variables:
+    a:
+      default: variable
+    b:
+      default: variable
+    c:
+      default: variable
+    d:
+      default: output
+    u:
+      default: input
+
+# population templates
+######################
+
+pop0:
+  base: NodeTemplate
+  operators:
+    - op0
+
+pop1:
+  base: NodeTemplate
+  operators:
+    - op1
+
+pop2:
+  base: NodeTemplate
+  operators:
+    - op2
+
+pop3:
+  base: NodeTemplate
+  operators:
+    - op3
+
+# circuit templates
+###################
+
+net0:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop0
+  edges:
+
+net1:
+  base: CircuitTemplate
+  nodes:
+    pop1: pop1
+  edges:
+
+net2:
+  base: CircuitTemplate
+  nodes:
+    pop2: pop2
+  edges:
+
+net3:
+  base: CircuitTemplate
+  nodes:
+    pop3: pop3
+  edges:
