@@ -127,30 +127,11 @@ class TensorflowBackend(tf.Graph):
 
             # simulate backend behavior for each time-step
             t_start = t.time()
-            if type(ops) is list and type(sampling_ops) is list:
-                for step in range(steps):
-                    if step % sampling_steps == 0:
-                        sess.run(ops + sampling_ops, inputs[step])
-                    else:
-                        sess.run(ops, inputs[step])
-            elif type(ops) is list:
-                for step in range(steps):
-                    if step % sampling_steps == 0:
-                        sess.run(ops + [sampling_ops], inputs[step])
-                    else:
-                        sess.run(ops, inputs[step])
-            elif type(sampling_ops) is list:
-                for step in range(steps):
-                    if step % sampling_steps == 0:
-                        sess.run([ops] + sampling_ops, inputs[step])
-                    else:
-                        sess.run(ops, inputs[step])
-            else:
-                for step in range(steps):
-                    if step % sampling_steps == 0:
-                        sess.run(sampling_ops, inputs[step])
-                    else:
-                        sess.run(ops, inputs[step])
+            for step in range(steps):
+                if step % sampling_steps == 0:
+                    sess.run(sampling_ops, inputs[step])
+                else:
+                    sess.run(ops, inputs[step])
             t_end = t.time()
 
             # close session log
@@ -277,10 +258,9 @@ class TensorflowBackend(tf.Graph):
         """
 
         # process input arguments
-        scope = kwargs.pop('scope', None)
         dependencies = kwargs.pop('dependencies', None)
         assign_to_var = kwargs.pop('assign_to_var', False)
-        scope, reuse = self.get_scope(scope)
+        scope, reuse = self.get_scope(kwargs.pop('scope', None))
 
         # create operation
         with self.as_default():
@@ -309,6 +289,34 @@ class TensorflowBackend(tf.Graph):
                             return var.assign(tf_op)
                         else:
                             return tf_op
+
+    def add_layer(self, ops, *args, **kwargs):
+        """
+
+        Parameters
+        ----------
+        ops
+        args
+        kwargs
+
+        Returns
+        -------
+
+        """
+
+        # process input arguments
+        dependencies = kwargs.pop('dependencies', None)
+        scope, reuse = self.get_scope(kwargs.pop('scope', None))
+
+        # create layer
+        with self.as_default():
+            with scope as sc:
+                with tf.control_dependencies(dependencies):
+                    if reuse:
+                        with tf.name_scope(sc.original_name_scope):
+                            return tf.tuple(ops, *args, **kwargs)
+                    else:
+                        return tf.tuple(ops, *args, **kwargs)
 
     def get_scope(self, scope):
         """

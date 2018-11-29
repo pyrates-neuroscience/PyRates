@@ -54,8 +54,7 @@ def test_2_1_operator():
 
     # simulate operator behavior
     sim_time = 10.0
-    results0, _ = net0.run(sim_time, outputs={'a': ('pop0.0', 'op0.0', 'a'),
-                                              'b': ('pop0.0', 'op0.0', 'b')}, out_dir="/tmp/log")
+    results0, _ = net0.run(sim_time, outputs={'a': ('pop0.0', 'op0.0', 'a')}, out_dir="/tmp/log")
 
     # generate target values
     sim_steps = int(sim_time/dt)
