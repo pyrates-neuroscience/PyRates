@@ -232,15 +232,15 @@ def test_network_def_workaround():
     # assert dict(nd.edges[('JR_EIN.0', 'JR_PC.0', 0)]) == edge
 
 
-@pytest.mark.skip
-def test_differential_equation_reparsing():
-
-    from pyrates.frontend.node import NodeTemplate
-
-    template = NodeTemplate.from_yaml("pyrates.frontend.population.templates.JansenRitIN")
-    node = template.apply()
-
-    assert len(node["JansenRitExcitatorySynapseRCO.0"].equations) == 2
+# @pytest.mark.skip
+# def test_differential_equation_reparsing():
+#
+#     from pyrates.frontend.node import NodeTemplate
+#
+#     template = NodeTemplate.from_yaml("pyrates.frontend.population.templates.JansenRitIN")
+#     node = template.apply()
+#
+#     assert len(node["JansenRitExcitatorySynapseRCO.0"].equations) == 2
 
 
 def test_yaml_dump():
