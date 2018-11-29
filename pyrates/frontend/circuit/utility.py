@@ -4,7 +4,7 @@ from typing import Union, Dict
 from networkx import MultiDiGraph, DiGraph, find_cycle, NetworkXNoCycle
 
 from pyrates import PyRatesException
-from pyrates.frontend import CircuitIR
+from pyrates.ir.circuit import CircuitIR
 
 
 class BackendIRFormatter:
@@ -13,7 +13,7 @@ class BackendIRFormatter:
     @classmethod
     def network_def(cls, circuit: CircuitIR, revert_node_names=False):
         """A bit of a workaround to connect interfaces of frontend and backend.
-        TODO: clean up/simplify interface"""
+        TODO: Remove BackendIRFormatter and adapt corresponding tests"""
         # import re
 
         network_def = MultiDiGraph()

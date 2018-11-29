@@ -1,15 +1,12 @@
-from pyrates.frontend.graph_entity import GraphEntityTemplate, GraphEntityTemplateLoader, GraphEntityIR
-
-
-class NodeIR(GraphEntityIR):
-    pass
+from pyrates.frontend.graph_entity import GraphEntityTemplate, GraphEntityTemplateLoader
+from pyrates.ir.node import NodeIR
 
 
 class NodeTemplate(GraphEntityTemplate):
     """Generic template for a node in the computational backend graph. A single node may encompass several
     different operators. One template defines a typical structure of a given node type."""
 
-    pass
+    target_ir = NodeIR
 
 
 class NodeTemplateLoader(GraphEntityTemplateLoader):
