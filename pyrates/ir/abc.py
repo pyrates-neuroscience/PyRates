@@ -1,5 +1,6 @@
 """
 """
+from typing import Tuple
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -21,6 +22,7 @@ class AbstractBaseIR:
         -------
         item
         """
+
         # check type:
         if not isinstance(key, str):
             raise TypeError("Keys must be strings of format `key1/key2/...`.")

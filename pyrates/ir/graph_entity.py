@@ -110,6 +110,29 @@ class GraphEntityIR(AbstractBaseIR):
             else:
                 raise e
 
+    def __getitem__(self, key: str):
+        """More specific implementation of __getitem__ that distinguishes between operator or variable as output"""
+
+        # check type:
+        if not isinstance(key, str):
+            raise TypeError("Keys must be strings of format `key1/key2/...`.")
+
+        try:
+            if "/" in key:
+                # assume it is operator/variable
+                op, var = key.split("/")
+                item = self.op_graph.nodes[op]["variables"][var]
+            else:
+                # assume it is only operator
+                item = self.op_graph.nodes[key]["operator"]
+        except KeyError as e:
+            if hasattr(self, key):
+                item = getattr(self, key)
+            else:
+                raise e
+
+        return item
+
     @classmethod
     def from_template(cls, template, values: dict=None):
 
