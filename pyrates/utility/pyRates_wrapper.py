@@ -111,7 +111,7 @@ params_test = np.zeros((n_samples, 2))
 params_test[:, 0] = np.linspace(limits[0][0], limits[1][0], n_samples)
 params_test[:, 1] = np.linspace(limits[0][1], limits[1][1], n_samples)
 
-# loop over each parameter combination and simulate model behavior (target data)
+# loop over each parameter combination and simulate backend behavior (target data)
 target_vals = np.zeros((n_samples, n_samples))
 for i, c in enumerate(params_test[:, 0]):
     for j, e in enumerate(params_test[:, 1]):
@@ -143,7 +143,7 @@ for o in order:
     # fit gpc to training data
     gpc_coefs = gpc_obj.expand(np.array(training_vals))
 
-    # predict model behavior given the fitted coefficients and normalized parameter values
+    # predict backend behavior given the fitted coefficients and normalized parameter values
     predicted_vals = np.zeros((n_samples, n_samples))
     for i, c in enumerate(params_normalized[:, 0]):
         for j, e in enumerate(params_normalized[:, 1]):

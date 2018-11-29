@@ -350,7 +350,7 @@ def test_1_7_equation_parsing():
         with gr.as_default():
             v = tf.Variable(args['a']['var'])
             args['a']['var'] = v
-            (tf_var, tf_op, solve), _ = parse_equation(equation=eq, args=args, tf_graph=gr)
+            (tf_var, tf_op, solve), _ = parse_equation(equation=eq, equation_args=args, tf_graph=gr)
             if tf_op is None:
                 update = tf_var
             else:

@@ -11,6 +11,7 @@ from copy import deepcopy
 # pyrates internal imports
 from pyrates.backend import ComputeGraph
 from pyrates.utility import nmrse
+from pyrates.frontend.circuit import CircuitTemplate
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -41,38 +42,92 @@ def test_2_1_operator():
     :method:`add_operator`: Detailed documentation of method for adding operations to instance of `ComputeGraph`.
     """
 
-    # test dependencies between equations of operator
-    #################################################
+    # test correct numerical evaluation of operator with two simple, linear equations
+    #################################################################################
 
-    eq1 = "d/dt * a = a + 2."
-    eq2 = "b = a / sum(a)"
+    # create net config from YAML file
+    net_config0 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net0").apply()
 
-    # version 1 [eq1 -> eq2]
-    gr1 = MultiDiGraph()
-    gr1.add_node('n',
-                 operators={'op1': {'equations': [eq1, eq2], 'inputs': {}, 'output': 'a'}},
-                 operator_args={'op1/a': {'vtype': 'state_var', 'dtype': 'float32', 'shape': (10,), 'value': 0.}},
-                 operator_order=['op1'],
-                 inputs={}
-                 )
-    net1 = ComputeGraph(net_config=gr1, key='net1', vectorize='none')
+    # instantiate compute graph from net config
+    dt = 1e-1
+    net0 = ComputeGraph(net_config=net_config0, name='net0', vectorize='none', dt=dt)
 
-    # version 2 [eq2 -> eq1]
-    gr2 = MultiDiGraph()
-    gr2.add_node('n',
-                 operators={'op1': {'equations': [eq2, eq1], 'inputs': {}, 'output': 'a'}},
-                 operator_args={'op1/a': {'vtype': 'state_var', 'dtype': 'float32', 'shape': (10,), 'value': 0.}},
-                 operator_order=['op1'],
-                 inputs={}
-                 )
-    net2 = ComputeGraph(net_config=gr2, key='test_op', vectorize='none', tf_graph=tf.Graph())
+    # simulate operator behavior
+    sim_time = 10.0
+    results0, _ = net0.run(sim_time, outputs={'a': ('pop0.0', 'op0.0', 'a')}, out_dir="/tmp/log")
 
-    result1, _ = net1.run(outputs={'b1': ('n', 'op1', 'b'), 'a1': ('n', 'op1', 'a')})
-    result2, _ = net2.run(outputs={'b2': ('n', 'op1', 'b')})
+    # generate target values
+    sim_steps = int(sim_time/dt)
+    update0_1 = lambda x: x*0.5
+    update0_0 = lambda x: x + 2.0
+    targets0 = np.zeros((sim_steps+1, 2), dtype=np.float32)
+    for i in range(sim_steps):
+        targets0[i+1, 0] = update0_0(targets0[i, 1])
+        targets0[i+1, 1] = update0_1(targets0[i, 0])
 
-    assert result1['a1_0'].values[-1] == pytest.approx(0.002, rel=1e-6)
-    assert np.sum(result1.values[1, :10]) == pytest.approx(1., rel=1e-6)
-    assert result1['b1_0'].values[-1] == result2['b2_0'].values[-1]
+    # compare results with target values
+    diff0 = results0['a'].values - targets0[1:, 1].T
+    assert np.mean(np.abs(diff0)) == pytest.approx(0., rel=1e-1, abs=1e-5)
+
+    # test correct numerical evaluation of operator with a single differential equation
+    ###################################################################################
+
+    # set up operator in pyrates
+    net_config1 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net1").apply()
+    net1 = ComputeGraph(net_config=net_config1, name='net1', vectorize='none', dt=dt)
+
+    # define input
+    inp = np.zeros((sim_steps, 1)) + 0.5
+
+    # simulate operator behavior
+    results1, _ = net1.run(sim_time, inputs={('pop1.0', 'op1.0', 'u'): inp}, outputs={'a': ('pop1.0', 'op1.0', 'a')})
+
+    # calculate operator behavior from hand
+    update1 = lambda x, y: x + dt*(y-x)
+    targets1 = np.zeros((sim_steps + 1, 1), dtype=np.float32)
+    for i in range(sim_steps):
+        targets1[i+1] = update1(targets1[i], inp[i])
+
+    diff1 = results1['a'].values - targets1[1:].T
+    assert np.mean(np.abs(diff1)) == pytest.approx(0., rel=1e-4, abs=1e-6)
+
+    # test correct numerical evaluation of operator with a two equations (1 ODE, 1 linear eq.)
+    ##########################################################################################
+
+    net_config2 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net2").apply()
+    net2 = ComputeGraph(net_config=net_config2, name='net2', vectorize='none', dt=dt)
+    results2, _ = net2.run(sim_time, outputs={'a': ('pop2.0', 'op2.0', 'a')})
+
+    # calculate operator behavior from hand
+    update2 = lambda x: 1./(1. + np.exp(-x))
+    targets2 = np.zeros((sim_steps + 1, 1), dtype=np.float32)
+    for i in range(sim_steps):
+        y = update2(targets2[i])
+        targets2[i + 1] = update1(targets2[i], y)
+
+    diff2 = results2['a'].values - targets2[1:].T
+    assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-4, abs=1e-6)
+
+    # test correct numerical evaluation of operator with a two coupled DEs and two simple equations
+    ###############################################################################################
+
+    net_config3 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net3").apply()
+    net3 = ComputeGraph(net_config=net_config3, name='net3', vectorize='none', dt=dt)
+    results3, _ = net3.run(sim_time, outputs={'d': ('pop3.0', 'op3.0', 'd')}, out_dir="/tmp/log")
+
+    # calculate operator behavior from hand
+    update3_0 = lambda a, b, c, d, u: a + dt*(-a + b*c + d**u)
+    update3_1 = lambda x, y: x + dt*y
+    update3_2 = lambda x: np.abs(np.cos(x))
+    targets3 = np.zeros((sim_steps + 1, 3), dtype=np.float32)
+    for i in range(sim_steps):
+        y = update2(targets3[i, 0])
+        targets3[i+1, 0] = update3_0(targets3[i, 0], y, targets3[i, 1], targets3[i, 2], inp[i])
+        targets3[i+1, 1] = update3_1(targets3[i, 1], targets3[i, 0])
+        targets3[i+1, 2] = update3_2(targets3[i, 1])
+
+    diff3 = results3['d'].values - targets3[1:, 2].T
+    assert np.mean(np.abs(diff3)) == pytest.approx(0., rel=1e-4, abs=1e-6)
 
 
 def test_2_2_node():

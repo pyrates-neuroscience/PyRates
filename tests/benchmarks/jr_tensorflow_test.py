@@ -19,7 +19,7 @@ from matplotlib.pyplot import *
 
 # general
 step_size = 1e-3
-simulation_time = 1.0
+simulation_time = 3.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
@@ -27,7 +27,7 @@ sparseness_e = 0.
 sparseness_i = sparseness_e * 0.
 
 # No_of_JansenRitCircuit
-n_jrcs = 10
+n_jrcs = 2
 
 # connectivity parameters
 c_intra = 135.
@@ -83,12 +83,12 @@ for i in range(n_jrcs):
 graph = MultiDiGraph()
 for i in range(0, n_jrcs):
     data = {'operators': {'RPO_e_pc.0': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2. * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
                           'RPO_i_pc.0': {
-                              'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                              'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2. * psp",
                                             "d/dt * psp = x"],
                               'inputs': {},
                               'output': 'psp'},
@@ -111,10 +111,6 @@ for i in range(0, n_jrcs):
                                                      'dtype': 'float32',
                                                      'shape': (),
                                                      'value': 0.16},
-                              'PRO.0/psp': {'vtype': 'state_var',
-                                                   'dtype': 'float32',
-                                                   'shape': (),
-                                                   'value': 0.},
                               'RPO_e_pc.0/psp': {'vtype': 'state_var',
                                                          'dtype': 'float32',
                                                          'shape': (),
@@ -163,7 +159,7 @@ for i in range(0, n_jrcs):
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 0.},
-                              'RPO_e_pc.0/u': {'vtype': 'placeholder',
+                              'RPO_e_pc.0/u': {'vtype': 'constant',
                                                        'dtype': 'float32',
                                                        'shape': (),
                                                        'value': 220.},
@@ -173,7 +169,7 @@ for i in range(0, n_jrcs):
     graph.add_node(f'PC.{i}', **data)
 
     data = {'operators': {'RPO_e.0': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2. * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -233,7 +229,7 @@ for i in range(0, n_jrcs):
     graph.add_node(f'EIN.{i}', **data)
 
     data = {'operators': {'RPO_e.0': {
-                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                               'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2. * psp",
                                              "d/dt * psp = x"],
                                'inputs': {},
                                'output': 'psp'},
@@ -336,18 +332,20 @@ for a in range(0, n_nodes):
 # backend setup
 ###############
 
-inp = 220. + np.random.randn(int(simulation_time/step_size), n_jrcs) * 0.
-gr = tf.Graph()
-net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize='none')
+inp = 220. + np.random.randn(int(simulation_time/step_size), 1) * 22.
+inp = np.tile(inp, (1, n_jrcs))
+from pyrates.frontend.parser.graph import circuit_from_graph
+circuit = circuit_from_graph(graph)
+net = ComputeGraph(net_config=circuit, dt=step_size, vectorize='none')
 
 # backend simulation
 ####################
 
 results, _ = net.run(simulation_time=simulation_time,
-                     outputs={'V': ('all', 'PRO.0', 'psp')},
+                     outputs={'V': ('EIN', 'RPO_e.0', 'psp')},
                      sampling_step_size=1e-3,
-                     inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
-                     #out_dir='/tmp/log/'
+                     #inputs={('PC', 'RPO_e_pc.0', 'u'): inp},
+                     out_dir='/tmp/log/'
                      )
 
 # results

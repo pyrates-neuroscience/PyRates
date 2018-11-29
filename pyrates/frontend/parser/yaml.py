@@ -129,7 +129,7 @@ class TemplateLoader:
                         raise PyRatesException(f"Something is wrong with the given YAML template path `{path}`.")
 
                 else:
-                    # import custom defined model with relative or absolute path
+                    # import custom defined backend with relative or absolute path
                     import os
                     file = os.path.join(*parts[:-1])
                     abspath = ""  # empty filepath

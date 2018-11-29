@@ -9,9 +9,7 @@ c = CircuitIR()
 for i in range(4):
     c.add_circuit(f"jrc.{i}", circuit)
 
-nd = c.network_def()
-
-compute_graph = ComputeGraph(nd, vectorize="nodes")
+compute_graph = ComputeGraph(c, vectorize="none")
 
 result, _ = compute_graph.run(10., outputs={"V": ("PC", "PRO.0", "PSP")})
 

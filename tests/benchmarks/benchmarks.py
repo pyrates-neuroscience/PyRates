@@ -178,7 +178,7 @@ def run_JR_network_benchmark(simulation_time=60.0, step_size=1e-4, N=33, C=None,
     circuits = [JansenRitCircuit(step_size=step_size) for _ in range(n_circuits)]
 
     ################
-    # set up model #
+    # set up backend #
     ################
 
     nmm = CircuitFromCircuit(circuits=circuits,

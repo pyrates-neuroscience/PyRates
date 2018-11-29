@@ -23,7 +23,7 @@ __author__ = "Richard Gast"
 
 
 class fMRIObserver(ExternalObserver):
-    """Uses the Balloon-Windkessel (BWK) model to enable observation of BOLD/CBF/CBV from the circuit activity.
+    """Uses the Balloon-Windkessel (BWK) backend to enable observation of BOLD/CBF/CBV from the circuit activity.
 
     Parameters
     ----------
@@ -43,11 +43,11 @@ class fMRIObserver(ExternalObserver):
     alpha
     p
     normalize
-        If true, the neural activity used as input to the BWK model will be normalized to the interval [0, 1].
+        If true, the neural activity used as input to the BWK backend will be normalized to the interval [0, 1].
     init_states
-        Can be used to define the initial states of the BWK model. Needs to be a 2D array with the first dimension equal
+        Can be used to define the initial states of the BWK backend. Needs to be a 2D array with the first dimension equal
         to the number of observation time-series (i.e. voxels of interest) and the second dimension equal to 4 (number
-        of internal states of the BWK model).
+        of internal states of the BWK backend).
 
     """
 
@@ -174,19 +174,19 @@ class fMRIObserver(ExternalObserver):
                              bwk_states_old: np.ndarray,
                              neural_activity: np.ndarray
                              ) -> np.ndarray:
-        """Calculates the change in the BWK model states.
+        """Calculates the change in the BWK backend states.
 
         Parameters
         ----------
         bwk_states_old
-            BWK model states from previous update (2D array, n_observations x 4).
+            BWK backend states from previous update (2D array, n_observations x 4).
         neural_activity
             vector with neural activity at the voxels of interest (1D array, n_observations)
 
         Returns
         -------
         np.ndarray
-            Change in BWK model states (2D array, n_observations x 4).
+            Change in BWK backend states (2D array, n_observations x 4).
         """
 
         # calculate change in signal
@@ -212,7 +212,7 @@ class fMRIObserver(ExternalObserver):
                        k2: float = 2.,
                        k3: Optional[float] = None
                        ) -> np.ndarray:
-        """Calculates the BOLD signal from the BWK model states.
+        """Calculates the BOLD signal from the BWK backend states.
 
         Parameters
         ----------
