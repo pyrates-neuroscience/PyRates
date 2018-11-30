@@ -67,7 +67,7 @@ class ComputeGraph(MultiDiGraph):
         # parse node operations
         #######################
 
-        self.node_updates = []
+        self.node_updates = {}
 
         for node_name, node in self.net_config.nodes.items():
 
@@ -103,32 +103,60 @@ class ComputeGraph(MultiDiGraph):
                 # remove parsed operators from graph
                 graph.remove_nodes_from(secondary_ops)
 
-        # move unconnected node-operator updates to node updates
-        for op_vars in op_updates.values():
-            self.node_updates += list(op_vars.values())
+            # move unconnected node-operator updates to node updates
+            if node_name not in self.node_updates:
+                self.node_updates[node_name] = {}
+            for op_name, vars in op_updates.items():
+                if op_name not in self.node_updates[node_name]:
+                    self.node_updates[node_name][op_name] = {}
+                for var_name, var_update in vars.items():
+                    self.node_updates[node_name][op_name][var_name] = var_update
 
         # collect output variables
-        edges = []
-        source_vars = []
-        source_vars_idx = []
+        source_nodes, target_nodes, edge_indices = [], [], []
+        source_vars, source_vars_idx = [], []
+        op_names, var_names = [], []
         for source_node, target_node, edge_idx in self.net_config.edges:
-            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var')
-            if svar in self.node_updates:
-                self.node_updates.pop(self.node_updates.index(svar))
+            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
+            op, var = svar.split('/')
+            svar = self._get_op_attr(source_node, op, var)
+            if op in self.node_updates[source_node]:
+                if var in self.node_updates[source_node][op]:
+                    self.node_updates[source_node][op].pop(var)
             if svar not in source_vars:
                 source_vars.append(svar)
+            op_names.append(op)
+            var_names.append(var)
             source_vars_idx.append(source_vars.index(svar))
-            edges.append((source_node, target_node, edge_idx))
+            source_nodes.append(source_node)
+            target_nodes.append(target_node)
+            edge_indices.append(edge_idx)
+
+        # add remaining node updates
+        for node_name, ops in self.node_updates.items():
+            for op_name, vars in ops.items():
+                for var_name, var_update in vars.items():
+                    if var_update not in source_vars:
+                        source_vars.append(var_update)
+                    op_names.append(op_name)
+                    var_names.append(var_name)
+                    source_nodes.append(node_name)
+                    source_vars_idx.append(source_vars.index(var_update))
 
         # get control dependencies on those output variables
-        self.node_updates += source_vars
-        self.node_updates = self.backend.add_layer(self.node_updates, name='node_updates', scope=self.name)
+        self.node_updates = self.backend.add_layer(source_vars, name='node_updates', scope=f'{self.name}/')
+
+        # save control dependencies to network config
+        for node_name, op_name, var_name, var_idx in zip(source_nodes, op_names, var_names, source_vars_idx):
+            var = self.node_updates[var_idx]
+            self._set_op_attr(node_name, op_name, var_name, var)
 
         # parse edges
         #############
 
         self.edge_updates = []
-        for (source_node, target_node, edge_idx), svar_idx in zip(edges, source_vars_idx):
+        for source_node, target_node, edge_idx, svar_idx in zip(source_nodes, target_nodes, edge_indices,
+                                                                source_vars_idx):
 
             # extract edge information
             weight = self._get_edge_attr(source_node, target_node, edge_idx, 'weight')
@@ -141,7 +169,7 @@ class ComputeGraph(MultiDiGraph):
             svar = source_vars[svar_idx]
             op, var = tvar.split('/')
             try:
-                tvar = self._get_op_attr(target_node, op, f'{var}_orig')
+                tvar = self._get_op_attr(target_node, op, f'{var}_old')
             except KeyError:
                 tvar = self._get_op_attr(target_node, op, var)
 
@@ -180,7 +208,7 @@ class ComputeGraph(MultiDiGraph):
             # add projection to edge updates
             self.edge_updates.append(edge['target_var'])
 
-        # add differential equation updates to edges
+        # add left-hand side equation updates to edges
         for node_name in self.net_config.nodes:
             op_graph = self._get_node_attr(node_name, 'op_graph')
             for op_name, op in op_graph.nodes.items():
@@ -208,7 +236,7 @@ class ComputeGraph(MultiDiGraph):
                         self.edge_updates.append(args['updates'][key_old])
 
         if self.edge_updates:
-            self.step = self.backend.add_layer(self.edge_updates, scope=self.name, name='network_update')
+            self.step = self.backend.add_layer(self.edge_updates, scope=f'{self.name}/', name='network_update')
         else:
             self.step = self.node_updates
 
@@ -310,7 +338,8 @@ class ComputeGraph(MultiDiGraph):
 
             # add collect operation to the graph
             store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx_add, var,
-                                                 scope="output_collection"))
+                                                 scope="output_collection",
+                                                 dependencies=self.edge_updates))
 
         sampling_op = self.backend.add_op('group', store_ops, name='output_collection')
 
@@ -470,17 +499,17 @@ class ComputeGraph(MultiDiGraph):
                                                  f'Please move the operator inputs to the node level or change the '
                                                  f'input-output relationships between the node operators.')
                             else:
-                                var_name = self._get_op_attr(node_name, in_op[0], 'output', retrieve=False)
-                                var = self._get_op_attr(node_name, in_op[0], var_name)
+                                var_name_tmp = self._get_op_attr(node_name, in_op[0], 'output', retrieve=False)
+                                var = self._get_op_attr(node_name, in_op[0], var_name_tmp)
                                 if type(var) is str:
                                     raise ValueError(f'Wrong operator order on node {node_name}. Operator {op_name} '
                                                      f'needs input from operator {in_op[0]} which has not been '
                                                      f'processed yet. Please consider changing the operator order '
                                                      f'or dependencies.')
                             in_ops_col.append(var)
-                            if var_name in updates[in_op[0]]:
-                                updates[in_op[0]].pop(var_name)
-                            in_ops_deps += updates.pop(in_op[0])
+                            if var_name_tmp in updates[in_op[0]]:
+                                updates[in_op[0]].pop(var_name_tmp)
+                            in_ops_deps += list(updates.pop(in_op[0]).values())
                             i += 1
 
                         elif type(in_op) is tuple:
@@ -497,8 +526,8 @@ class ComputeGraph(MultiDiGraph):
                                                      f'Please move the operator inputs to the node level or change the '
                                                      f'input-output relationships between the node operators.')
                                 else:
-                                    var_name = self._get_op_attr(node_name, op, 'output', retrieve=False)
-                                    var = self._get_op_attr(node_name, op, var_name)
+                                    var_name_tmp = self._get_op_attr(node_name, op, 'output', retrieve=False)
+                                    var = self._get_op_attr(node_name, op, var_name_tmp)
                                     if type(var) is str:
                                         raise ValueError(
                                             f'Wrong operator order on node {node_name}. Operator {op_name} '
@@ -506,9 +535,9 @@ class ComputeGraph(MultiDiGraph):
                                             f'processed yet. Please consider changing the operator order '
                                             f'or dependencies.')
                                 in_ops_tmp.append(var)
-                                if var_name in updates[op]:
-                                    updates[op].pop(var_name)
-                                in_ops_deps_tmp += updates.pop(op)
+                                if var_name_tmp in updates[op]:
+                                    updates[op].pop(var_name_tmp)
+                                in_ops_deps_tmp += list(updates.pop(op).values())
                                 i += 1
 
                             in_ops_col.append(self._map_multiple_inputs(in_ops_tmp, reduce_dim,
@@ -523,17 +552,17 @@ class ComputeGraph(MultiDiGraph):
                                                  f'Please move the operator inputs to the node level or change the '
                                                  f'input-output relationships between the node operators.')
                             else:
-                                var_name = self._get_op_attr(node_name, in_op, 'output', retrieve=False)
-                                var = self._get_op_attr(node_name, in_op, var_name)
+                                var_name_tmp = self._get_op_attr(node_name, in_op, 'output', retrieve=False)
+                                var = self._get_op_attr(node_name, in_op, var_name_tmp)
                                 if type(var) is str:
                                     raise ValueError(f'Wrong operator order on node {node_name}. Operator {op_name} '
                                                      f'needs input from operator {in_op} which has not been '
                                                      f'processed yet. Please consider changing the operator order '
                                                      f'or dependencies.')
                             in_ops_col.append(var)
-                            if var_name in updates[in_op]:
-                                updates[in_op].pop(var_name)
-                            in_ops_deps += updates.pop(in_op)
+                            if var_name_tmp in updates[in_op]:
+                                updates[in_op].pop(var_name_tmp)
+                            in_ops_deps += list(updates.pop(in_op).values())
                             i += 1
 
                     # for multiple multiple input operations
@@ -568,8 +597,8 @@ class ComputeGraph(MultiDiGraph):
 
                     # add input variable to dictionary
                     op_args['inputs'][var_name] = in_ops
-                    if var_name in op_args['vars'].keys():
-                        op_args['vars'].pop(var_name)
+                    #if var_name in op_args['vars'].keys():
+                    #    op_args['vars'].pop(var_name)
 
                 dependencies += in_ops_deps
 
@@ -603,10 +632,9 @@ class ComputeGraph(MultiDiGraph):
 
         # save the layered update for subsequent layers to connect to the layered variables
         for op, var, val in zip(op_names, var_names, update_ops):
-            op_vars = self._get_op_attr(node_name, op, 'variables')
-            if var in op_vars:
-                op_vars[f'{var}_orig'] = op_vars.pop(var)
-            op_vars[var] = val
+            self._set_op_attr(node_name, op, var, val)
+            #if var in op_vars:
+            #    op_vars[f'{var}_orig'] = op_vars.pop(var)
             updates[op][var] = val
 
         return updates
@@ -756,13 +784,18 @@ class ComputeGraph(MultiDiGraph):
             attr = op['operator']['output']
         if attr in op['variables'].keys():
             return op['variables'][attr]
-        elif hasattr(op['operator'], attr) or (hasattr(op['operator'], 'keys') and attr in op['operator'].keys()):
+        elif hasattr(op['operator'], 'keys') and attr in op['operator'].keys():
             return op['operator'][attr]
+        elif hasattr(op['operator'], attr):
+            return getattr(op['operator'], attr)
         else:
             try:
                 return op[attr]
             except KeyError:
-                return None
+                try:
+                    return getattr(op, attr)
+                except AttributeError:
+                    return None
 
     def _set_op_attr(self, node, op, attr, val, net_config=None):
         """
