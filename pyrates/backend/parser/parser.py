@@ -305,7 +305,7 @@ class ExpressionParser(ParserElement):
             # multiply expression by minus one
             self._op_tmp = self.backend.add_op('neg', self.parse(expr_stack), **self.parser_kwargs)
 
-        elif op in "+-*/^@<=>=!==":
+        elif op in "+-**/^@<=>=!==":
 
             # collect elements to combine
             op2 = self.parse(expr_stack)

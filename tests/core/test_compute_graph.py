@@ -54,7 +54,7 @@ def test_2_1_operator():
 
     # simulate operator behavior
     sim_time = 10.0
-    results0, _ = net0.run(sim_time, outputs={'a': ('pop0.0', 'op0.0', 'a')}, out_dir="/tmp/log")
+    results0, _ = net0.run(sim_time, outputs={'a': ('pop0.0', 'op0.0', 'a')})
 
     # generate target values
     sim_steps = int(sim_time/dt)
@@ -69,8 +69,8 @@ def test_2_1_operator():
     diff0 = results0['a'].values - targets0[1:, 1].T
     assert np.mean(np.abs(diff0)) == pytest.approx(0., rel=1e-1, abs=1e-5)
 
-    # test correct numerical evaluation of operator with a single differential equation
-    ###################################################################################
+    # test correct numerical evaluation of operator with a single differential equation and external input
+    ######################################################################################################
 
     # set up operator in pyrates
     net_config1 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net1").apply()
@@ -100,12 +100,12 @@ def test_2_1_operator():
 
     # calculate operator behavior from hand
     update2 = lambda x: 1./(1. + np.exp(-x))
-    targets2 = np.zeros((sim_steps + 1, 1), dtype=np.float32)
+    targets2 = np.zeros((sim_steps + 1, 2), dtype=np.float32)
     for i in range(sim_steps):
-        y = update2(targets2[i])
-        targets2[i + 1] = update1(targets2[i], y)
+        targets2[i+1, 1] = update2(targets2[i, 0])
+        targets2[i+1, 0] = update1(targets2[i, 0], targets2[i, 1])
 
-    diff2 = results2['a'].values - targets2[1:].T
+    diff2 = results2['a'].values - targets2[1:, 0].T
     assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-4, abs=1e-6)
 
     # test correct numerical evaluation of operator with a two coupled DEs and two simple equations
@@ -113,20 +113,21 @@ def test_2_1_operator():
 
     net_config3 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net3").apply()
     net3 = ComputeGraph(net_config=net_config3, name='net3', vectorize='none', dt=dt)
-    results3, _ = net3.run(sim_time, outputs={'d': ('pop3.0', 'op3.0', 'd')}, out_dir="/tmp/log")
+    results3, _ = net3.run(sim_time,
+                           outputs={'b': ('pop3.0', 'op3.0', 'b'),
+                                    'a': ('pop3.0', 'op3.0', 'a')},
+                           inputs={('pop3.0', 'op3.0', 'u'): inp},
+                           out_dir="/tmp/log")
 
     # calculate operator behavior from hand
-    update3_0 = lambda a, b, c, d, u: a + dt*(-a + b*c + d**u)
-    update3_1 = lambda x, y: x + dt*y
-    update3_2 = lambda x: np.abs(np.cos(x))
-    targets3 = np.zeros((sim_steps + 1, 3), dtype=np.float32)
+    update3_0 = lambda a, b, u: a + dt*(-10.*a + b**2 + u)
+    update3_1 = lambda b, a: b + dt*a
+    targets3 = np.zeros((sim_steps + 1, 2), dtype=np.float32)
     for i in range(sim_steps):
-        y = update2(targets3[i, 0])
-        targets3[i+1, 0] = update3_0(targets3[i, 0], y, targets3[i, 1], targets3[i, 2], inp[i])
+        targets3[i+1, 0] = update3_0(targets3[i, 0], targets3[i, 1], inp[i])
         targets3[i+1, 1] = update3_1(targets3[i, 1], targets3[i, 0])
-        targets3[i+1, 2] = update3_2(targets3[i, 1])
 
-    diff3 = results3['d'].values - targets3[1:, 2].T
+    diff3 = results3['a'].values - targets3[1:, 0].T
     assert np.mean(np.abs(diff3)) == pytest.approx(0., rel=1e-4, abs=1e-6)
 
 

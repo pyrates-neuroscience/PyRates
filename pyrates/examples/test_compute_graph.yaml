@@ -38,19 +38,13 @@ op2:
 op3:
   base: OperatorTemplate
   equations:
-    - "b = sigmoid(a)"
-    - "d/dt * a = -a + b*c + d^u"
-    - "d/dt * c = a"
-    - "d = abs(cos(c))"
+    - "d/dt * a = -10.0 * a + b**2 + u"
+    - "d/dt * b = a"
   variables:
     a:
       default: variable
     b:
       default: variable
-    c:
-      default: variable
-    d:
-      default: output
     u:
       default: input
 
