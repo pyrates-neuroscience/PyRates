@@ -236,4 +236,4 @@ class OperatorIR(AbstractBaseIR):
             if key in equation:
                 return key
         else:
-            raise PyRatesException(f"Variable `{key}` not found in equations {self.equations}")
+            raise KeyError(f"Variable `{key}` not found in equations {self.equations}")
