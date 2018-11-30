@@ -21,27 +21,28 @@ class CircuitIR(AbstractBaseIR):
     """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
 
-    def __init__(self, label: str = "circuit", circuits: dict = None, nodes: dict = None,
-                 edges: list = None, template: str = None, **attr):
+    def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
+                 edges: list = None, template: str = None):
         """
         Parameters:
         -----------
         label
             string label, used if circuit is part of other circuits
+            ToDo: check, if this is actually used in practise
         circuits
-            dictionary of sub-circuits to be added
+            Dictionary of sub-circuits to be added. Keys are string labels for circuits that serve as namespaces for the
+            subcircuits. Items must be `CircuitIR` instances.
         nodes
-            dictionary of nodes of form {node_label:NodeIR instance}
+            Dictionary of nodes of form {node_label: `NodeIR` instance}.
         edges
-            list of tuples (source:str, target:str, dict(template=edge_template, variables=coupling_values))
+            List of tuples (source:str, target:str, edge_dict). `edge_dict` should contain the key "edge_ir" with an
+            `EdgeIR` instance as item and optionally entries for "weight" and "delay". `source` and `target` should be
+            formatted as "node/op/var" (with optionally prepended circuits).
         template
-            optional string reference to path to template that this circuit was loaded from, assuming it was loaded
-            from a template
-        attr
-            attribute keyword arguments that are passed to networkx graph constructor.
+            optional string reference to path to template that this circuit was loaded from. Leave empty, if no template
+            was used.
         """
 
-        super().__init__(**attr)
         self.label = label
         self.label_counter = {}
         self.label_map = {}
@@ -66,34 +67,35 @@ class CircuitIR(AbstractBaseIR):
         Parameters
         ----------
         nodes
-            Dictionary with node label as key. The item is a NodeIR instance.
+            Dictionary with node label as key. The item is a NodeIR instance. Note that the item type is not tested
+            here, but passing anything that does not behave like a `NodeIR` may cause problems later.
         attr
             additional keyword attributes that can be added to the node data. (default `networkx` syntax.)
-
-        Returns
-        -------
-        label_map
         """
         # get unique labels for nodes
-        label_map = {}
         for label in nodes:
-            label_map[label] = self._get_unique_label(label)
+            self.label_map[label] = self._get_unique_label(label)
 
         # rename node keys
-        # assign NodeIR instances as "node" keys in a separate dictionary, because networkx saves note attributes into
+        # assign NodeIR instances as "node" keys in a separate dictionary, because networkx saves node attributes into
         # a dictionary
         # reformat dictionary to tuple/generator, since networkx does not parse dictionary correctly in add_nodes_from
-        nodes = ((label_map[key], {"node": node}) for key, node in nodes.items())
+        nodes = ((self.label_map[key], {"node": node}) for key, node in nodes.items())
         self.graph.add_nodes_from(nodes, **attr)
 
-        # update circuit-wide label map, assuming all labels are now unique
-        # TODO: why not just work with instance-wide label map?
-        #  why? because we needed to loop through entire label map before. not needed anymore. change and test after
-        #  rest of refactoring is done.
-        self.label_map.update(label_map)
-
     def add_node(self, label: str, node: NodeIR, **attr):
-        """Add single node"""
+        """Add single node
+
+        Parameters
+        ----------
+        label
+            String to identify node by. Is tested for uniqueness internally, and renamed if necessary. Renamed labels
+            are stored in the `CircuitIR` instance attribute `label_map`.
+        node
+            Instance of `NodeIR`. Will be added with the key "node" to the node dictionary.
+        attr
+            Additional attributes (keyword arguments) that can be added to the node data. (Default `networkx` syntax.)
+        """
 
         new_label = self._get_unique_label(label)
 
@@ -108,9 +110,11 @@ class CircuitIR(AbstractBaseIR):
         Parameters
         ----------
         edges
-            list of edges, each of shape [source/op/var, target/op/var, edge_dict]. The edge_dict must contain the
+            List of edges, each of shape [source/op/var, target/op/var, edge_dict]. The edge_dict must contain the
             keys "edge_ir", and optionally "weight" and "delay".
         attr
+            Additional attributes (keyword arguments) that can be added to the edge data. (Default `networkx` syntax.)
+
 
         Returns
         -------
@@ -118,7 +122,6 @@ class CircuitIR(AbstractBaseIR):
 
         edge_list = []
         for (source, target, edge_dict) in edges:
-            # get edge template and instantiate it
 
             # get weight
             weight = edge_dict.pop("weight", 1.)
@@ -144,7 +147,6 @@ class CircuitIR(AbstractBaseIR):
                  identify_relations=True,
                  **data):
         """
-
         Parameters
         ----------
         source
@@ -162,6 +164,7 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
+        # ToDo: streamline code by removing duplications for source and target
         source_var = ""
         target_var = ""
         if identify_relations:
@@ -204,7 +207,12 @@ class CircuitIR(AbstractBaseIR):
         self.graph.add_edge(source_node, target_node, **attr_dict)
 
     def _get_unique_label(self, label: str) -> str:
-        """
+        """Tests, if a given node `label` already exists in the circuit and renames it uniquely, if necessary.
+        Uniqueness is generally ensure by appending a counter of the form ".0" . If the given label already has a
+        counter, it will be detected ond potentially altered if uniqueness requires it. The resulting (new) label is
+        returned.
+        TODO: cache assigned labels directly in label_map instead of solely returning it (may still want to return it
+         though)
 
         Parameters
         ----------
@@ -216,6 +224,7 @@ class CircuitIR(AbstractBaseIR):
         """
         # test, if label already has a counter and separate it, if necessary
         match = re.match("(.+)[.]([\d]+$)", label)
+        # ToDo: use pyparsing instead of regex for readability
         if match:
             # see if label already exists, just continue if it doesn't
             if label in self:
@@ -247,16 +256,18 @@ class CircuitIR(AbstractBaseIR):
 
         return unique_label
 
-    # noinspection PyUnresolvedReferences
     def _identify_sources_targets(self, source: str, target: str):
 
         # separate source and target specifiers
+        # TODO: streamline code by looping over source and target instead of duplicating the code.
+        #  possibly even separate both into separate function calls to the same (more generic) function
         *source_node, source_op, source_var = source.split("/")
         source_node = "/".join(source_node)
         *target_node, target_op, target_var = target.split("/")
         target_node = "/".join(target_node)
 
         # re-reference node labels, if necessary
+        # TODO: test first, if label actually exists in label map (which has always been the case so far).
         source_node = self.label_map[source_node]
         target_node = self.label_map[target_node]
         # re_reference operator labels, if necessary
@@ -283,6 +294,9 @@ class CircuitIR(AbstractBaseIR):
         that can not be accounted for in the YAML templates. This method looks for the first instance of an operator in
         a specific node, assuming it exists at all. Additionally, this assumes, that only one variation of an operator
         template (of same name) can exist in any single node.
+        Note: The latter assumption becomes invalid, if edge operators are moved to nodes, because in that case multiple
+        variations of the same operator can exist in one node.
+
         Parameters
         ----------
         node_label
