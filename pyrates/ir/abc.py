@@ -22,7 +22,9 @@ class AbstractBaseIR:
         -------
         item
         """
-
+        # TODO:
+        #  idea: split key and then format into an iterator/generator --> hand iterator to getter function,
+        #  so it can decide locally, if it wants to process more than one item in the iterator.
         # check type:
         if not isinstance(key, str):
             raise TypeError("Keys must be strings of format `key1/key2/...`.")
