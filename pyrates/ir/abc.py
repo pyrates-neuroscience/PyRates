@@ -9,7 +9,7 @@ __status__ = "Development"
 class AbstractBaseIR:
     """Abstract base class for intermediate representation classes"""
 
-    def __getitem__(self, key: Union[str, Iterator[str]]):
+    def __getitem__(self, key: str):
         """
         Custom implementation of __getitem__ that dissolves strings of form "key1/key2/key3" into
         lookups of form self[key1][key2][key3].
@@ -26,17 +26,16 @@ class AbstractBaseIR:
         #  idea: split key and then format into an iterator/generator --> hand iterator to getter function,
         #  so it can decide locally, if it wants to process more than one item in the iterator.
         # check type:
-        if hasattr(key, "__next__"):
-            return self.getitem_from_iterator(key)
-        elif isinstance(key, str):
-            # split key by slash (/) into namespaces and put them into an iterator
-            key_iter = iter(key.split("/"))
-        else:
+        if not isinstance(key, str):
             raise TypeError("Keys must be strings of format `key1/key2/...`.")
-            # TODO: or an iterator
 
+        # split key by slash (/) into namespaces and put them into an iterator
+        key_iter = iter(key.split("/"))
         try:
-            item = self[key_iter]
+            key = next(key_iter)
+            item = self.getitem_from_iterator(key, key_iter)
+            for key in key_iter:
+                item = item.getitem_from_iterator(key, key_iter)
         except KeyError as e:
             if hasattr(self, key):
                 item = getattr(self, key)
@@ -45,7 +44,7 @@ class AbstractBaseIR:
 
         return item
 
-    def getitem_from_iterator(self, key):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass."""
         raise NotImplementedError
 

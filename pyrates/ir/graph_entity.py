@@ -92,7 +92,7 @@ class GraphEntityIR(AbstractBaseIR):
             raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node "
                                    "or edge.")
 
-    def getitem_from_iterator(self, key_iter: Iterator[str]):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """
         Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If `key_iter`
         contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of
@@ -100,6 +100,7 @@ class GraphEntityIR(AbstractBaseIR):
 
         Parameters
         ----------
+        key
         key_iter
 
         Returns
@@ -108,16 +109,14 @@ class GraphEntityIR(AbstractBaseIR):
             operator or variable properties
         """
 
-        op = next(key_iter)
-
         try:
             var = next(key_iter)
         except StopIteration:
             # no variable specified, so we return an operator
-            item = self.op_graph.nodes[op]["operator"]
+            item = self.op_graph.nodes[key]["operator"]
         else:
             # variable specified, so we return variable properties instead
-            item = self.op_graph.nodes[op]["variables"][var]
+            item = self.op_graph.nodes[key]["variables"][var]
 
         return item
 

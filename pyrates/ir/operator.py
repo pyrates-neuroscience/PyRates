@@ -2,7 +2,7 @@
 """
 import re
 from copy import deepcopy
-from typing import List, Union
+from typing import List, Union, Iterator
 
 from pyrates import PyRatesException
 from pyrates.frontend.parser import deep_freeze
@@ -220,12 +220,13 @@ class OperatorIR(AbstractBaseIR):
 
         return self.__class__(deepcopy(self.equations), deepcopy(self.inputs), deepcopy(self.output))
 
-    def getitem_from_iterator(self, key: str):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """
         Checks if a variable named by key exists in an equations.
         Parameters
         ----------
         key
+        key_iter
 
         Returns
         -------

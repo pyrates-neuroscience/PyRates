@@ -333,18 +333,12 @@ class CircuitIR(AbstractBaseIR):
 
         return new_op_label
 
-    def getitem_from_iterator(self, key_iter: Iterator[str]):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
 
-        key = next(key_iter)
         if key in self.sub_circuits:
             item = SubCircuitView(self, key)
         else:
             item = self.graph.nodes[key]["node"]
-
-        try:
-            item = item.getitem_from_iterator(key_iter)
-        except StopIteration:
-            pass
 
         return item
 
@@ -502,9 +496,8 @@ class SubCircuitView(AbstractBaseIR):
         self.top_level_circuit = top_level_circuit
         self.subgraph_key = subgraph_key
 
-    def getitem_from_iterator(self, key_iter: Iterator[str]):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
 
-        key = next(key_iter)
         key = f"{self.subgraph_key}/{key}"
 
         if key in self.top_level_circuit.sub_circuits:
