@@ -220,7 +220,7 @@ class OperatorIR(AbstractBaseIR):
 
         return self.__class__(deepcopy(self.equations), deepcopy(self.inputs), deepcopy(self.output))
 
-    def _getter(self, key: str):
+    def getitem_from_iterator(self, key: str):
         """
         Checks if a variable named by key exists in an equations.
         Parameters

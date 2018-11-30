@@ -2,7 +2,7 @@
 """
 import re
 from copy import deepcopy
-from typing import Union, Dict
+from typing import Union, Dict, Iterator
 
 from networkx import MultiDiGraph, subgraph
 from pandas import DataFrame
@@ -333,12 +333,20 @@ class CircuitIR(AbstractBaseIR):
 
         return new_op_label
 
-    def _getter(self, key):
+    def getitem_from_iterator(self, key_iter: Iterator[str]):
 
+        key = next(key_iter)
         if key in self.sub_circuits:
-            return SubCircuitView(self, key)
+            item = SubCircuitView(self, key)
         else:
-            return self.graph.nodes[key]["node"]
+            item = self.graph.nodes[key]["node"]
+
+        try:
+            item = item.getitem_from_iterator(key_iter)
+        except StopIteration:
+            pass
+
+        return item
 
     @property
     def nodes(self):
@@ -494,8 +502,9 @@ class SubCircuitView(AbstractBaseIR):
         self.top_level_circuit = top_level_circuit
         self.subgraph_key = subgraph_key
 
-    def _getter(self, key: str):
+    def getitem_from_iterator(self, key_iter: Iterator[str]):
 
+        key = next(key_iter)
         key = f"{self.subgraph_key}/{key}"
 
         if key in self.top_level_circuit.sub_circuits:
