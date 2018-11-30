@@ -3,7 +3,7 @@ from pyrates.ir.circuit import CircuitIR
 from pyrates.backend import ComputeGraph
 import matplotlib.pyplot as plt
 
-circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.JRC").apply()
+circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC").apply()
 
 c = CircuitIR()
 for i in range(4):
@@ -11,7 +11,7 @@ for i in range(4):
 
 compute_graph = ComputeGraph(c, vectorize="none")
 
-result, _ = compute_graph.run(10., outputs={"V": ("PC", "PRO.0", "PSP")})
+result, _ = compute_graph.run(10., outputs={"V": ("PC", "PRO.0", "PSP")}, out_dir="/tmp/log")
 
 result.pop("time")
 result.plot()

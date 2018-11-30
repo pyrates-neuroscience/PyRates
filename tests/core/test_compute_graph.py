@@ -67,7 +67,7 @@ def test_2_1_operator():
 
     # compare results with target values
     diff0 = results0['a'].values - targets0[1:, 1].T
-    assert np.mean(np.abs(diff0)) == pytest.approx(0., rel=1e-1, abs=1e-5)
+    assert np.mean(np.abs(diff0)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of operator with a single differential equation and external input
     ######################################################################################################
@@ -89,7 +89,7 @@ def test_2_1_operator():
         targets1[i+1] = update1(targets1[i], inp[i])
 
     diff1 = results1['a'].values - targets1[1:].T
-    assert np.mean(np.abs(diff1)) == pytest.approx(0., rel=1e-4, abs=1e-6)
+    assert np.mean(np.abs(diff1)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of operator with a two equations (1 ODE, 1 linear eq.)
     ##########################################################################################
@@ -106,7 +106,7 @@ def test_2_1_operator():
         targets2[i+1, 0] = update1(targets2[i, 0], targets2[i, 1])
 
     diff2 = results2['a'].values - targets2[1:, 0].T
-    assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-4, abs=1e-6)
+    assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of operator with a two coupled DEs and two simple equations
     ###############################################################################################
@@ -128,7 +128,7 @@ def test_2_1_operator():
         targets3[i+1, 1] = update3_1(targets3[i, 1], targets3[i, 0])
 
     diff3 = results3['a'].values - targets3[1:, 0].T
-    assert np.mean(np.abs(diff3)) == pytest.approx(0., rel=1e-4, abs=1e-6)
+    assert np.mean(np.abs(diff3)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
 def test_2_2_node():

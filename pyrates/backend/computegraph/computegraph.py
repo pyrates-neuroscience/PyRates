@@ -20,7 +20,7 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-class ComputeGraph(MultiDiGraph):
+class ComputeGraph(object):
     """Creates an RNN cell that contains all nodes in the network plus their recurrent connections.
 
     Parameters
@@ -48,7 +48,8 @@ class ComputeGraph(MultiDiGraph):
         """Instantiates operator.
         """
 
-        super().__init__(name=name if name else 'net.0')
+        super().__init__()
+        self.name = name
 
         # instantiate the backend
         self.backend = TensorflowBackend()
@@ -56,8 +57,8 @@ class ComputeGraph(MultiDiGraph):
         # pre-process the network configuration
         self.dt = dt
         self._net_config_map = {}
-        self.net_config = self._preprocess_net_config(net_config) if build_in_place \
-            else self._preprocess_net_config(deepcopy(net_config))
+        self.net_config = self._net_config_consistency_check(net_config) if build_in_place \
+            else self._net_config_consistency_check(deepcopy(net_config))
         self.net_config = self._vectorize(net_config=deepcopy(self.net_config), vectorization_mode=vectorize)
 
         # set time constant of the network
@@ -176,7 +177,7 @@ class ComputeGraph(MultiDiGraph):
             # define target index
             if delay is not None and tidx:
                 tidx = [idx + d for idx, d in zip(tidx, delay)]
-            elif not tidx:
+            elif not tidx and delay is not None:
                 tidx = list(delay)
 
             # create mapping equation and its arguments
@@ -480,89 +481,39 @@ class ComputeGraph(MultiDiGraph):
             op_info = self._get_op_attr(node_name, op_name, 'operator')
 
             # handle operator inputs
-            dependencies = []
-            for var_name, inp in op_info.inputs.items():
-
-                in_ops_deps = []
+            for var_name, inp in op_info['inputs'].items():
 
                 # go through inputs to variable
                 if inp['sources']:
+
                     in_ops_col = []
                     i = 0
+
                     for in_op in inp['sources']:
 
-                        if type(in_op) is list and len(in_op) == 1:
-
-                            if primary_ops:
-                                raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
-                                                 f'This operator should have no node-internal inputs. '
-                                                 f'Please move the operator inputs to the node level or change the '
-                                                 f'input-output relationships between the node operators.')
-                            else:
-                                var_name_tmp = self._get_op_attr(node_name, in_op[0], 'output', retrieve=False)
-                                var = self._get_op_attr(node_name, in_op[0], var_name_tmp)
-                                if type(var) is str:
-                                    raise ValueError(f'Wrong operator order on node {node_name}. Operator {op_name} '
-                                                     f'needs input from operator {in_op[0]} which has not been '
-                                                     f'processed yet. Please consider changing the operator order '
-                                                     f'or dependencies.')
-                            in_ops_col.append(var)
-                            if var_name_tmp in updates[in_op[0]]:
-                                updates[in_op[0]].pop(var_name_tmp)
-                            in_ops_deps += list(updates.pop(in_op[0]).values())
-                            i += 1
-
-                        elif type(in_op) is tuple:
+                        if type(in_op) is tuple:
 
                             in_ops = in_op[0]
                             reduce_dim = in_op[1]
-
                             in_ops_tmp = []
-                            in_ops_deps_tmp = []
+
+                            # collect multiple inputs to op
                             for op in in_ops:
-                                if primary_ops:
-                                    raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
-                                                     f'This operator should have no node-internal inputs. '
-                                                     f'Please move the operator inputs to the node level or change the '
-                                                     f'input-output relationships between the node operators.')
-                                else:
-                                    var_name_tmp = self._get_op_attr(node_name, op, 'output', retrieve=False)
-                                    var = self._get_op_attr(node_name, op, var_name_tmp)
-                                    if type(var) is str:
-                                        raise ValueError(
-                                            f'Wrong operator order on node {node_name}. Operator {op_name} '
-                                            f'needs input from operator {op} which has not been '
-                                            f'processed yet. Please consider changing the operator order '
-                                            f'or dependencies.')
-                                in_ops_tmp.append(var)
-                                if var_name_tmp in updates[op]:
-                                    updates[op].pop(var_name_tmp)
-                                in_ops_deps_tmp += list(updates.pop(op).values())
+                                in_ops_tmp.append(self._get_op_input(node_name, op_name, op))
                                 i += 1
 
+                            # map those inputs correctly
                             in_ops_col.append(self._map_multiple_inputs(in_ops_tmp, reduce_dim,
-                                                                        scope=f"{self.name}/{node_name}/{op_name}",
-                                                                        dependencies=in_ops_deps_tmp))
+                                                                        scope=f"{self.name}/{node_name}/{op_name}")
+                                              )
 
                         else:
 
-                            if primary_ops:
-                                raise ValueError(f'Input found in primary operator {op_name} on node {node_name}. '
-                                                 f'This operator should have no node-internal inputs. '
-                                                 f'Please move the operator inputs to the node level or change the '
-                                                 f'input-output relationships between the node operators.')
-                            else:
-                                var_name_tmp = self._get_op_attr(node_name, in_op, 'output', retrieve=False)
-                                var = self._get_op_attr(node_name, in_op, var_name_tmp)
-                                if type(var) is str:
-                                    raise ValueError(f'Wrong operator order on node {node_name}. Operator {op_name} '
-                                                     f'needs input from operator {in_op} which has not been '
-                                                     f'processed yet. Please consider changing the operator order '
-                                                     f'or dependencies.')
-                            in_ops_col.append(var)
-                            if var_name_tmp in updates[in_op]:
-                                updates[in_op].pop(var_name_tmp)
-                            in_ops_deps += list(updates.pop(in_op).values())
+                            if type(in_op) is list and len(in_op) == 1:
+                                in_op = in_op[0]
+
+                            # collect single input to op
+                            in_ops_col.append(self._get_op_input(node_name, op_name, in_op))
                             i += 1
 
                     # for multiple multiple input operations
@@ -587,9 +538,7 @@ class ComputeGraph(MultiDiGraph):
 
                         # map inputs to target
                         in_ops = self._map_multiple_inputs(in_ops, inp['reduce_dim'],
-                                                           scope=f"{self.name}/{node_name}/{op_name}",
-                                                           dependencies=in_ops_deps)
-                        in_ops_deps.clear()
+                                                           scope=f"{self.name}/{node_name}/{op_name}")
 
                     # for a single input variable
                     else:
@@ -597,15 +546,10 @@ class ComputeGraph(MultiDiGraph):
 
                     # add input variable to dictionary
                     op_args['inputs'][var_name] = in_ops
-                    #if var_name in op_args['vars'].keys():
-                    #    op_args['vars'].pop(var_name)
-
-                dependencies += in_ops_deps
 
             # parse equations into tensorflow
-            op_args = parse_equation_list(op_info.equations, op_args, backend=self.backend,
-                                          scope=f"{self.name}/{node_name}/{op_name}",
-                                          dependencies=dependencies)
+            op_args = parse_equation_list(op_info['equations'], op_args, backend=self.backend,
+                                          scope=f"{self.name}/{node_name}/{op_name}")
 
             # store operator variables in net config
             op_vars = self._get_op_attr(node_name, op_name, 'variables')
@@ -633,11 +577,37 @@ class ComputeGraph(MultiDiGraph):
         # save the layered update for subsequent layers to connect to the layered variables
         for op, var, val in zip(op_names, var_names, update_ops):
             self._set_op_attr(node_name, op, var, val)
-            #if var in op_vars:
-            #    op_vars[f'{var}_orig'] = op_vars.pop(var)
             updates[op][var] = val
 
         return updates
+
+    def _get_op_input(self, node, op, in_op, primary_ops=False):
+        """
+
+        Parameters
+        ----------
+        node
+        op
+
+        Returns
+        -------
+
+        """
+
+        if primary_ops:
+            raise ValueError(f'Input found in primary operator {op} on node {node}. '
+                             f'This operator should have no node-internal inputs. '
+                             f'Please move the operator inputs to the node level or change the '
+                             f'input-output relationships between the node operators.')
+        else:
+            var_name = self._get_op_attr(node, in_op, 'output', retrieve=False)
+            var = self._get_op_attr(node, in_op, var_name)
+            if type(var) is str:
+                raise ValueError(f'Wrong operator order on node {node}. Operator {op} '
+                                 f'needs input from operator {in_op} which has not been '
+                                 f'processed yet. Please consider changing the operator order '
+                                 f'or dependencies.')
+        return var
 
     def _map_multiple_inputs(self, inputs, reduce_dim, **kwargs):
         """
@@ -647,7 +617,8 @@ class ComputeGraph(MultiDiGraph):
         if reduce_dim:
             return self.backend.add_op('sum', inp, axis=0, **kwargs)
         else:
-            return self.backend.add_op('reshape', inp, shape=(inp.shape[0] * inp.shape[1],), **kwargs)
+            return self.backend.add_op('reshape', inp, shape=(inp.shape[0] * inp.shape[1],), **kwargs) \
+                if len(inp.shape) > 1 else inp
 
     def _get_node_attr(self, node, attr, op=None, net_config=None):
         """
@@ -791,11 +762,11 @@ class ComputeGraph(MultiDiGraph):
         else:
             try:
                 return op[attr]
-            except KeyError:
+            except KeyError as e:
                 try:
                     return getattr(op, attr)
                 except AttributeError:
-                    return None
+                    raise e
 
     def _set_op_attr(self, node, op, attr, val, net_config=None):
         """
@@ -1176,7 +1147,7 @@ class ComputeGraph(MultiDiGraph):
         s, t, e = edge
         self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_col_{idx}/{var}_col_{idx}', net_config=net_config)
 
-    def _preprocess_net_config(self, net_config: MultiDiGraph) -> MultiDiGraph:
+    def _net_config_consistency_check(self, net_config: MultiDiGraph) -> MultiDiGraph:
         """
 
         Parameters

@@ -1,7 +1,6 @@
 """Runs JRC with tensorflow on population basis
 """
 
-import tensorflow as tf
 from networkx import MultiDiGraph
 from pyrates.backend import ComputeGraph
 from matplotlib.pyplot import *
