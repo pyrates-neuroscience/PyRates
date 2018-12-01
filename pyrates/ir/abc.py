@@ -1,6 +1,6 @@
 """
 """
-from typing import Tuple
+from typing import Tuple, Iterator, Union
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -29,12 +29,13 @@ class AbstractBaseIR:
         if not isinstance(key, str):
             raise TypeError("Keys must be strings of format `key1/key2/...`.")
 
+        # split key by slash (/) into namespaces and put them into an iterator
+        key_iter = iter(key.split("/"))
         try:
-            if "/" in key:
-                top, *remainder = key.split("/")
-                item = self._getter(top)["/".join(remainder)]
-            else:
-                item = self._getter(key)
+            key = next(key_iter)
+            item = self.getitem_from_iterator(key, key_iter)
+            for key in key_iter:
+                item = item.getitem_from_iterator(key, key_iter)
         except KeyError as e:
             if hasattr(self, key):
                 item = getattr(self, key)
@@ -43,7 +44,7 @@ class AbstractBaseIR:
 
         return item
 
-    def _getter(self, key):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass."""
         raise NotImplementedError
 
