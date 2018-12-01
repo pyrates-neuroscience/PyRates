@@ -1,6 +1,6 @@
 """
 """
-from typing import Iterator
+from typing import Iterator, Dict
 
 from networkx import DiGraph, find_cycle, NetworkXNoCycle
 
@@ -15,7 +15,7 @@ __status__ = "Development"
 class GraphEntityIR(AbstractBaseIR):
     """Intermediate representation for nodes and edges."""
 
-    def __init__(self, operators: dict, template: str =None, values: dict=None):
+    def __init__(self, operators: dict, template: str=None, values: dict=None):
 
         self.op_graph = DiGraph()
         all_outputs = {}  # type: Dict[str, dict]
@@ -121,7 +121,3 @@ class GraphEntityIR(AbstractBaseIR):
 
         return item
 
-    @classmethod
-    def from_template(cls, template, values: dict=None):
-
-        return cls(operators=template.operators, template=template, values=values)

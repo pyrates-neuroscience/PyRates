@@ -50,9 +50,3 @@ class EdgeIR(GraphEntityIR):
         else:
             raise PyRatesException("Too many or too little output operators found. Exactly one output operator and "
                                    "associated output variable is required per edge.")
-
-    @classmethod
-    def from_template(cls, template, values: dict=None):
-
-        instance = super().from_template(template, values)
-        return instance

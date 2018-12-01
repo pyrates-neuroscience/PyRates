@@ -316,7 +316,8 @@ class CircuitIR(AbstractBaseIR):
             else:
                 return op_label
 
-        key_counter = OperatorIR.key_counter
+        from pyrates.frontend.operator import OperatorTemplate
+        key_counter = OperatorTemplate.key_counter
         if op_label in key_counter:
             for i in range(key_counter[op_label] + 1):
                 new_op_label = f"{op_label}.{i}"
@@ -326,7 +327,7 @@ class CircuitIR(AbstractBaseIR):
                 except KeyError:
                     continue
             else:
-                raise PyRatesException(f"Could not identify operator with template name {op_label} "
+                raise PyRatesException(f"Could not identify operator with base name {op_label} "
                                        f"in node {node_label}.")
         else:
             new_op_label = f"{op_label}.0"
@@ -416,6 +417,7 @@ class CircuitIR(AbstractBaseIR):
         -------
 
         """
+        # ToDo: disallow usage of templates here
 
         # parse data type of circuit
         if isinstance(circuit, dict):
@@ -478,10 +480,6 @@ class SubCircuitView(AbstractBaseIR):
 
         nodes = (node for node in self.top_level_circuit.nodes if node.startswith(self.subgraph_key))
         return subgraph(self.top_level_circuit.graph, nodes)
-
-    @classmethod
-    def from_template(cls, template, **kwargs):
-        raise NotImplementedError(f"{cls} does not implement from_template.")
 
     def __str__(self):
 

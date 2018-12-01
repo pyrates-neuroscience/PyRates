@@ -48,11 +48,6 @@ class AbstractBaseIR:
         """Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass."""
         raise NotImplementedError
 
-    @classmethod
-    def from_template(cls, template, **kwargs):
-        """Invoke IR instance from a given template"""
-        raise NotImplementedError
-
     def __contains__(self, key):
 
         try:
