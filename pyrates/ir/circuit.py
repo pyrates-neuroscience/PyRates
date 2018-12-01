@@ -353,10 +353,6 @@ class CircuitIR(AbstractBaseIR):
         return self.graph.edges
 
     @classmethod
-    def from_template(cls, template, *args, **kwargs):
-        return template.apply(*args, **kwargs)
-
-    @classmethod
     def from_circuits(cls, label: str, circuits: dict, connectivity: Union[list, tuple, DataFrame] = None):
         """Circuit creation method that takes multiple circuits (templates or instances of `CircuitIR`) as inputs to
         create one larger circuit out of these. With additional `connectivity` information, these circuit can directly
@@ -455,35 +451,6 @@ class CircuitIR(AbstractBaseIR):
             # source_var = data.pop("source_var")
             # target_var = data.pop("target_var")
             self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
-
-    def network_def(self, revert_node_names=True):
-        from pyrates.frontend.circuit.utility import BackendIRFormatter
-        return BackendIRFormatter.network_def(self, revert_node_names=revert_node_names)
-
-    def to_dict(self):
-        """Reformat graph structure into a dictionary that can be saved as YAML template."""
-
-        node_dict = {}
-        for node_key, node_data in self.nodes(data=True):
-            node = node_data["node"]
-            if node.template:
-                node_dict[node_key] = node.template.path
-            else:
-                # if no template is given, build and search deeper for node templates
-                pass
-
-        edge_list = []
-        for source, target, edge_data in self.edges(data=True):
-            edge = edge_data.pop("edge_ir")
-            source = f"{source}/{edge_data['source_var']}"
-            target = f"{target}/{edge_data['target_var']}"
-            edge_list.append((source, target, edge.template.path, dict(weight=edge_data["weight"],
-                                                                       delay=edge_data["delay"])))
-
-        # use Python template as base, since inheritance from YAML templates is ambiguous for circuits
-        base = "CircuitTemplate"
-
-        return dict(nodes=node_dict, edges=edge_list, base=base)
 
 
 class SubCircuitView(AbstractBaseIR):

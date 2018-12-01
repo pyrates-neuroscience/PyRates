@@ -7,7 +7,8 @@ import tensorflow as tf
 import pytest
 
 # pyrates internal imports
-from pyrates.backend.parser import TFExpressionParser, parse_equation
+from pyrates.backend.parser.parser import ExpressionParser, parse_equation
+from pyrates.backend.backend_wrapper import TensorflowBackend
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -40,14 +41,14 @@ def test_1_1_expression_parser_init():
     """
 
     # list parsers to be tested
-    parsers = [TFExpressionParser]
+    backends = [TensorflowBackend]
 
     # test minimal minimal call example
     ###################################
 
-    for Parser in parsers:
-        parser = Parser("a + b", {'a': np.ones((3, 3)), 'b': 5.})
-        assert isinstance(parser, Parser)
+    for Backend in backends:
+        parser = ExpressionParser("a + b", {'a': np.ones((3, 3)), 'b': 5.}, backend=Backend)
+        assert isinstance(parser, ExpressionParser)
 
 
 def test_1_2_expression_parser_parsing_exceptions():
@@ -60,13 +61,12 @@ def test_1_2_expression_parser_parsing_exceptions():
     """
 
     # list parsers to be tested
-    parsers = [TFExpressionParser]
+    parsers = [ExpressionParser]
 
     # test expected exceptions
     ##########################
 
     for Parser in parsers:
-
         # undefined variables
         with pytest.raises(ValueError):
             Parser("a + b", {}).parse_expr()
@@ -102,16 +102,16 @@ def test_1_3_expression_parser_math_ops():
     """
 
     # define test cases
-    math_expressions = [("4 + 5", 9.),                # simple addition
-                        ("4 - 5", -1.),               # simple subtraction
-                        ("4. * 5.", 20.),             # simple multiplication
-                        ("4. / 5.", 0.8),             # simple division
-                        ("4.^2", 16.),                # simple exponentiation
-                        ("4 + -5", -1.),              # negation of variable
-                        ("4. * -2", -8.),             # negation of variable in higher-order operation
-                        ("4. + 5. * 2.", 14.),        # multiplication before addition
-                        ("(4. + 5.) * 2.", 18.),      # parentheses before everything
-                        ("4. * 5.^2", 100.)           # exponentiation before multiplication
+    math_expressions = [("4 + 5", 9.),  # simple addition
+                        ("4 - 5", -1.),  # simple subtraction
+                        ("4. * 5.", 20.),  # simple multiplication
+                        ("4. / 5.", 0.8),  # simple division
+                        ("4.^2", 16.),  # simple exponentiation
+                        ("4 + -5", -1.),  # negation of variable
+                        ("4. * -2", -8.),  # negation of variable in higher-order operation
+                        ("4. + 5. * 2.", 14.),  # multiplication before addition
+                        ("(4. + 5.) * 2.", 18.),  # parentheses before everything
+                        ("4. * 5.^2", 100.)  # exponentiation before multiplication
                         ]
 
     # test expression parsers on expression results
@@ -122,7 +122,7 @@ def test_1_3_expression_parser_math_ops():
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
-            result, update, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+            result, update, _ = ExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
             if update:
                 result = result.assign(update)
         with tf.Session(graph=gr) as sess:
@@ -141,14 +141,14 @@ def test_1_4_expression_parser_logic_ops():
     """
 
     # define test cases
-    logic_expressions = ["4 == 4",                # simple equals
-                         "4 != 5",                # simple not-equals
-                         "4 < 5",                 # simple less
-                         "5 > 4",                 # simple larger
-                         "4 <= 4",                # less equals I
-                         "4 <= 5",                # less equals II
-                         "5 >= 5",                # larger equals I
-                         "5 >= 4",                # larger equals II
+    logic_expressions = ["4 == 4",  # simple equals
+                         "4 != 5",  # simple not-equals
+                         "4 < 5",  # simple less
+                         "5 > 4",  # simple larger
+                         "4 <= 4",  # less equals I
+                         "4 <= 5",  # less equals II
+                         "5 >= 5",  # larger equals I
+                         "5 >= 4",  # larger equals II
                          ]
 
     # test expression parsers on expression results
@@ -159,7 +159,7 @@ def test_1_4_expression_parser_logic_ops():
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
-            result, update, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+            result, update, _ = ExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
             if update:
                 result = result.assign(update)
         with tf.Session(graph=gr) as sess:
@@ -174,7 +174,7 @@ def test_1_4_expression_parser_logic_ops():
     # tensorflow-based parser
     gr = tf.get_default_graph()
     with gr.as_default():
-        result, update, _ = TFExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
+        result, update, _ = ExpressionParser(expr_str=expr, args={}, tf_graph=gr).parse_expr()
         if update:
             result = result.assign(update)
     with tf.Session(graph=gr) as sess:
@@ -197,17 +197,17 @@ def test_1_5_expression_parser_indexing():
     # define valid test cases
     #########################
 
-    indexed_expressions = [("A[:]", A[:]),               # single-dim indexing I
-                           ("A[0]", A[0]),               # single-dim indexing II
-                           ("A[-2]", A[-2]),             # single-dim indexing III
-                           ("A[0:5]", A[0:5]),           # single-dim slicing I
-                           ("A[-1:0:-1]", A[-1:0:-1]),   # single-dim slicing II
-                           ("A[4,5]", A[4, 5]),          # two-dim indexing I
-                           ("A[5,0:-2]", A[5, 0:-2]),    # two-dim indexing II
-                           ("A[A > 0.]", A[A > 0]),       # boolean indexing
-                           ("A[B]", A[np.where(B)]),     # indexing with other array
+    indexed_expressions = [("A[:]", A[:]),  # single-dim indexing I
+                           ("A[0]", A[0]),  # single-dim indexing II
+                           ("A[-2]", A[-2]),  # single-dim indexing III
+                           ("A[0:5]", A[0:5]),  # single-dim slicing I
+                           ("A[-1:0:-1]", A[-1:0:-1]),  # single-dim slicing II
+                           ("A[4,5]", A[4, 5]),  # two-dim indexing I
+                           ("A[5,0:-2]", A[5, 0:-2]),  # two-dim indexing II
+                           ("A[A > 0.]", A[A > 0]),  # boolean indexing
+                           ("A[B]", A[np.where(B)]),  # indexing with other array
                            ("A[int32(2. * 2.):8 - 1]",
-                            A[(2 * 2):8 - 1]),           # using expressions as indices
+                            A[(2 * 2):8 - 1]),  # using expressions as indices
                            ]
 
     # test expression parsers on expression results
@@ -218,11 +218,11 @@ def test_1_5_expression_parser_indexing():
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
-            result, update, _ = TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A),
-                                                                              'dependency': False},
-                                                                        'B': {'var': tf.constant(np.argwhere(B)),
-                                                                              'dependency': False}},
-                                                   tf_graph=gr).parse_expr()
+            result, update, _ = ExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A),
+                                                                            'dependency': False},
+                                                                      'B': {'var': tf.constant(np.argwhere(B)),
+                                                                            'dependency': False}},
+                                                 tf_graph=gr).parse_expr()
             if update:
                 result = result.assign(update)
 
@@ -234,10 +234,10 @@ def test_1_5_expression_parser_indexing():
     # define invalid test cases
     ###########################
 
-    indexed_expressions_wrong = ["A[1.2]",       # indexing with float variables
-                                 "A[all]",       # indexing with undefined key words
-                                 "A[-11]",       # index out of bounds
-                                 "A[0:5:2:1]",   # too many arguments for slicing
+    indexed_expressions_wrong = ["A[1.2]",  # indexing with float variables
+                                 "A[all]",  # indexing with undefined key words
+                                 "A[-11]",  # index out of bounds
+                                 "A[0:5:2:1]",  # too many arguments for slicing
                                  "A[-1::0:-1]",  # wrong slicing syntax II
                                  ]
 
@@ -245,16 +245,15 @@ def test_1_5_expression_parser_indexing():
     ###############################################
 
     for expr in indexed_expressions_wrong:
-
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
             with pytest.raises((IndexError, ValueError, SyntaxError, TypeError)):
-                TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A),
-                                                              'dependency': False},
-                                                        'B': {'var': tf.constant(np.argwhere(B)),
-                                                              'dependency': False}},
-                                   tf_graph=gr).parse_expr()
+                ExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A),
+                                                            'dependency': False},
+                                                      'B': {'var': tf.constant(np.argwhere(B)),
+                                                            'dependency': False}},
+                                 tf_graph=gr).parse_expr()
 
 
 def test_1_6_expression_parser_funcs():
@@ -271,14 +270,14 @@ def test_1_6_expression_parser_funcs():
     # define valid test cases
     #########################
 
-    expressions = [("abs(5.)", 5.),              # simple function call
-                   ("abs(-5.)", 5.),             # function call of negative arg
-                   ("abs(4. * -2. + 1)", 7.),    # function call on mathematical expression
-                   ("int64(4 > 5)", 0),          # function call on boolean expression
+    expressions = [("abs(5.)", 5.),  # simple function call
+                   ("abs(-5.)", 5.),  # function call of negative arg
+                   ("abs(4. * -2. + 1)", 7.),  # function call on mathematical expression
+                   ("int64(4 > 5)", 0),  # function call on boolean expression
                    ("abs(A[A > 0])",
-                    np.abs(A[A > 0])),           # function call on indexed variable
+                    np.abs(A[A > 0])),  # function call on indexed variable
                    ("abs(sin(1.5))",
-                    np.abs(np.sin(1.5))),        # nested function calls
+                    np.abs(np.sin(1.5))),  # nested function calls
                    ]
 
     # test expression parsers on expression results
@@ -289,8 +288,9 @@ def test_1_6_expression_parser_funcs():
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
-            result, update, _ = TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A), 'dependency': False}},
-                                                   tf_graph=gr).parse_expr()
+            result, update, _ = ExpressionParser(expr_str=expr,
+                                                 args={'A': {'var': tf.constant(A), 'dependency': False}},
+                                                 tf_graph=gr).parse_expr()
             if update:
                 result = result.assign(update)
         with tf.Session(graph=gr) as sess:
@@ -301,9 +301,9 @@ def test_1_6_expression_parser_funcs():
     # define invalid test cases
     ###########################
 
-    expressions_wrong = ["abs((4.)",       # wrong parentheses I
-                         "abs[4.]",        # wrong parentheses II
-                         "abs(0. True)",   # no comma separation on arguments
+    expressions_wrong = ["abs((4.)",  # wrong parentheses I
+                         "abs[4.]",  # wrong parentheses II
+                         "abs(0. True)",  # no comma separation on arguments
                          "abs(0.,1,5,3)",  # wrong argument number
                          ]
 
@@ -311,13 +311,12 @@ def test_1_6_expression_parser_funcs():
     ###############################################
 
     for expr in expressions_wrong:
-
         # tensorflow-based parser
         gr = tf.get_default_graph()
         with gr.as_default():
             with pytest.raises((IndexError, ValueError, SyntaxError, TypeError)):
-                TFExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A), 'dependency': False}},
-                                   tf_graph=gr).parse_expr()
+                ExpressionParser(expr_str=expr, args={'A': {'var': tf.constant(A), 'dependency': False}},
+                                 tf_graph=gr).parse_expr()
 
 
 def test_1_7_equation_parsing():
@@ -331,8 +330,8 @@ def test_1_7_equation_parsing():
     # define test equations
     #######################
 
-    equations = ["a = 5. + 2.",              # simple update of variable
-                 "d/dt * a = 5. + 2.",       # simple differential equation
+    equations = ["a = 5. + 2.",  # simple update of variable
+                 "d/dt * a = 5. + 2.",  # simple differential equation
                  ]
     arguments = [{'a': {'var': np.zeros(shape=(), dtype=np.float32), 'dependency': False}},
                  {'a': {'var': np.zeros(shape=(), dtype=np.float32), 'dependency': False},
