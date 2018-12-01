@@ -39,13 +39,47 @@ op3:
   base: OperatorTemplate
   equations:
     - "d/dt * a = -10.0 * a + b**2 + u"
-    - "d/dt * b = a"
+    - "d/dt * b = 0.01 * a"
   variables:
     a:
       default: variable
     b:
       default: variable
     u:
+      default: input
+
+op4:
+  base: OperatorTemplate
+  equations: "d/dt * u = 2."
+  variables:
+    u:
+      default: output
+
+op5:
+  base: OperatorTemplate
+  equations: "d/dt * a = u - a"
+  variables:
+    a:
+      default: output
+    u:
+      default: variable
+
+op6:
+  base: OperatorTemplate
+  equations: "d/dt * u = 4. + tanh(0.5)"
+  variables:
+    u:
+      default: output
+
+op7:
+  base: OperatorTemplate
+  equations: "d/dt * a = u + inp - a"
+  variables:
+    a:
+      default: output
+    u:
+      default: variable
+    inp:
       default: input
 
 # population templates
@@ -71,6 +105,44 @@ pop3:
   operators:
     - op3
 
+pop4:
+  base: NodeTemplate
+  operators:
+    - op4
+    - op1
+
+pop5:
+  base: NodeTemplate
+  operators:
+    - op4
+    - op5
+
+pop6:
+  base: NodeTemplate
+  operators:
+    - op4
+    - op6
+    - op1
+
+pop7:
+  base: NodeTemplate
+  operators:
+    - op4
+    - op3
+    - op1
+
+pop8:
+  base: NodeTemplate
+  operators:
+    - op7
+
+# edge templates
+################
+
+DummyEdge:
+  base: EdgeTemplate
+  operators: []
+
 # circuit templates
 ###################
 
@@ -83,17 +155,69 @@ net0:
 net1:
   base: CircuitTemplate
   nodes:
-    pop1: pop1
+    pop0: pop1
   edges:
 
 net2:
   base: CircuitTemplate
   nodes:
-    pop2: pop2
+    pop0: pop2
   edges:
 
 net3:
   base: CircuitTemplate
   nodes:
-    pop3: pop3
+    pop0: pop3
   edges:
+
+net4:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop4
+  edges:
+
+net5:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop5
+  edges:
+
+net6:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop6
+  edges:
+
+net7:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop7
+  edges:
+
+net8:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop0
+    pop1: pop1
+    pop2: pop1
+  edges:
+    - [pop0/op0/a, pop1/op1/u, DummyEdge, {weight: 2.0}]
+    - [pop0/op0/a, pop2/op1/u, DummyEdge, {weight: 0.5}]
+
+net9:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop1
+    pop1: pop8
+  edges:
+    - [pop0/op1/a, pop1/op7/u, DummyEdge, {weight: 2.0}]
+    - [pop1/op7/a, pop0/op1/u, DummyEdge, {weight: 0.5}]
+
+net10:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop8
+    pop1: pop8
+  edges:
+    - [pop0/op7/a, pop1/op7/u, DummyEdge, {weight: 2.0}]
+    - [pop1/op7/a, pop0/op7/u, DummyEdge, {weight: 0.5}]

@@ -42,8 +42,8 @@ def test_2_1_operator():
     :method:`add_operator`: Detailed documentation of method for adding operations to instance of `ComputeGraph`.
     """
 
-    # test correct numerical evaluation of operator with two simple, linear equations
-    #################################################################################
+    # test correct numerical evaluation of operator with two coupled simple, linear equations
+    #########################################################################################
 
     # create net config from YAML file
     net_config0 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net0").apply()
@@ -80,7 +80,7 @@ def test_2_1_operator():
     inp = np.zeros((sim_steps, 1)) + 0.5
 
     # simulate operator behavior
-    results1, _ = net1.run(sim_time, inputs={('pop1.0', 'op1.0', 'u'): inp}, outputs={'a': ('pop1.0', 'op1.0', 'a')})
+    results1, _ = net1.run(sim_time, inputs={('pop0.0', 'op1.0', 'u'): inp}, outputs={'a': ('pop0.0', 'op1.0', 'a')})
 
     # calculate operator behavior from hand
     update1 = lambda x, y: x + dt*(y-x)
@@ -91,12 +91,12 @@ def test_2_1_operator():
     diff1 = results1['a'].values - targets1[1:].T
     assert np.mean(np.abs(diff1)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
-    # test correct numerical evaluation of operator with a two equations (1 ODE, 1 linear eq.)
-    ##########################################################################################
+    # test correct numerical evaluation of operator with two coupled equations (1 ODE, 1 linear eq.)
+    ################################################################################################
 
     net_config2 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net2").apply()
     net2 = ComputeGraph(net_config=net_config2, name='net2', vectorize='none', dt=dt)
-    results2, _ = net2.run(sim_time, outputs={'a': ('pop2.0', 'op2.0', 'a')})
+    results2, _ = net2.run(sim_time, outputs={'a': ('pop0.0', 'op2.0', 'a')})
 
     # calculate operator behavior from hand
     update2 = lambda x: 1./(1. + np.exp(-x))
@@ -108,20 +108,20 @@ def test_2_1_operator():
     diff2 = results2['a'].values - targets2[1:, 0].T
     assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
-    # test correct numerical evaluation of operator with a two coupled DEs and two simple equations
-    ###############################################################################################
+    # test correct numerical evaluation of operator with a two coupled DEs
+    ######################################################################
 
     net_config3 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net3").apply()
     net3 = ComputeGraph(net_config=net_config3, name='net3', vectorize='none', dt=dt)
     results3, _ = net3.run(sim_time,
-                           outputs={'b': ('pop3.0', 'op3.0', 'b'),
-                                    'a': ('pop3.0', 'op3.0', 'a')},
-                           inputs={('pop3.0', 'op3.0', 'u'): inp},
+                           outputs={'b': ('pop0.0', 'op3.0', 'b'),
+                                    'a': ('pop0.0', 'op3.0', 'a')},
+                           inputs={('pop0.0', 'op3.0', 'u'): inp},
                            out_dir="/tmp/log")
 
     # calculate operator behavior from hand
     update3_0 = lambda a, b, u: a + dt*(-10.*a + b**2 + u)
-    update3_1 = lambda b, a: b + dt*a
+    update3_1 = lambda b, a: b + dt*0.01*a
     targets3 = np.zeros((sim_steps + 1, 2), dtype=np.float32)
     for i in range(sim_steps):
         targets3[i+1, 0] = update3_0(targets3[i, 0], targets3[i, 1], inp[i])
@@ -139,51 +139,87 @@ def test_2_2_node():
     :method:`add_node`: Detailed documentation of method for adding nodes to instance of `ComputeGraph`.
     """
 
-    # test dependencies between operations of node
-    ##############################################
+    # test correct numerical evaluation of node with 2 operators, where op1 projects to op2
+    #######################################################################################
 
-    ops1 = {'op_1': {'equations': ["d/dt * a = a^2", "b = a*2"], 'inputs': {}, 'output': 'b'},
-            'op_2': {'equations': ["c = b / sum(b)"], 'inputs': {'b': {'sources': ['op_1'], 'reduce_dim': False}},
-                     'output': 'c'}
-            }
-    ops2 = {'op_1': {'equations': ["d/dt * a = a^2", "b = a*2"], 'inputs': {}, 'output': 'b'},
-            'op_2': {'equations': ["c = b / sum(b)"], 'inputs': {}, 'output': 'c'}
-            }
+    # set up node in pyrates
+    dt = 1e-1
+    sim_time = 10.
+    sim_steps = int(sim_time/dt)
+    net_config0 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net4").apply()
+    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorize='none', dt=dt)
 
-    op_args = {'op_1/a': {'vtype': 'state_var',
-                          'shape': (10,),
-                          'dtype': 'float32',
-                          'value': 0.5}}
-    op_args1 = op_args.copy()
-    op_args2 = op_args.copy()
-    op_args2['op_2/b'] = {'vtype': 'state_var',
-                          'shape': (10,),
-                          'dtype': 'float32',
-                          'value': 1.}
-    op_args2['op_1/b'] = {'vtype': 'state_var',
-                          'shape': (10,),
-                          'dtype': 'float32',
-                          'value': 1.}
+    # simulate node behavior
+    results0, _ = net0.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
 
-    n1 = {'operators': ops1,
-          'operator_args': op_args1,
-          'operator_order': ['op_1', 'op_2'],
-          'inputs': {}}
-    n2 = {'operators': ops2,
-          'operator_args': op_args2,
-          'operator_order': ['op_2', 'op_1'],
-          'inputs': {}}
+    # calculate node behavior from hand
+    update0 = lambda x: x + dt * 2.
+    update1 = lambda x, y: x + dt * (y - x)
+    targets0 = np.zeros((sim_steps + 1, 2), dtype=np.float32)
+    for i in range(sim_steps):
+        targets0[i+1, 0] = update0(targets0[i, 0])
+        targets0[i+1, 1] = update1(targets0[i, 1], targets0[i+1, 0])
 
-    gr = MultiDiGraph()
-    gr.add_node('n1', **n1)
-    gr.add_node('n2', **n2)
+    diff0 = results0['a'].values - targets0[1:, 1].T
+    assert np.mean(np.abs(diff0)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
-    net = ComputeGraph(gr, vectorize='none', key='test_node', tf_graph=tf.Graph())
-    results, _ = net.run(outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n1', 'op_2', 'c')})
+    # test correct numerical evaluation of node with 2 independent operators
+    ########################################################################
 
-    assert results['r1_0'].values[-1] == results['r1_0'].values[0]
-    assert np.sum(results.values[0, :10]) == pytest.approx(1., rel=1e-6)
-    assert results['r1_0'].values[-1] == results['r2_0'].values[-1]
+    net_config1 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net5").apply()
+    net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorize='none', dt=dt)
+
+    # simulate node behavior
+    results1, _ = net1.run(sim_time, outputs={'a': ('pop0.0', 'op5.0', 'a')})
+
+    # calculate node behavior from hand
+    targets1 = np.zeros((sim_steps + 1, 2), dtype=np.float32)
+    for i in range(sim_steps):
+        targets1[i+1, 0] = update0(targets1[i, 0])
+        targets1[i+1, 1] = update1(targets1[i, 1], 0.)
+
+    diff1 = results1['a'].values - targets1[1:, 1].T
+    assert np.mean(np.abs(diff1)) == pytest.approx(0., rel=1e-6, abs=1e-6)
+
+    # test correct numerical evaluation of node with 2 independent operators projecting to the same target operator
+    ###############################################################################################################
+
+    net_config2 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net6").apply()
+    net2 = ComputeGraph(net_config=net_config2, name='net.2', vectorize='none', dt=dt)
+    results2, _ = net2.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+
+    # calculate node behavior from hand
+    targets2 = np.zeros((sim_steps + 1, 3), dtype=np.float32)
+    update2 = lambda x: x + dt*(4. + np.tanh(0.5))
+    for i in range(sim_steps):
+        targets2[i+1, 0] = update0(targets2[i, 0])
+        targets2[i+1, 1] = update2(targets2[i, 1])
+        targets2[i+1, 2] = update1(targets2[i, 2], targets2[i+1, 0] + targets2[i+1, 1])
+
+    diff2 = results2['a'].values - targets2[1:, 2].T
+    assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-6, abs=1e-6)
+
+    # test correct numerical evaluation of node with 1 source operator projecting to 2 independent targets
+    ######################################################################################################
+
+    net_config3 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net7").apply()
+    net3 = ComputeGraph(net_config=net_config3, name='net.3', vectorize='none', dt=dt)
+    results3, _ = net3.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
+                                              'b': ('pop0.0', 'op3.0', 'b')})
+
+    # calculate node behavior from hand
+    targets3 = np.zeros((sim_steps + 1, 4), dtype=np.float32)
+    update3 = lambda a, b, u: a + dt * (-10. * a + b**2 + u)
+    update4 = lambda x, y: x + dt*0.01*y
+    for i in range(sim_steps):
+        targets3[i+1, 0] = update0(targets2[i, 0])
+        targets3[i+1, 1] = update1(targets3[i, 1], targets3[i+1, 0])
+        targets3[i+1, 2] = update3(targets3[i, 2], targets3[i, 3], targets3[i+1, 0])
+        targets3[i+1, 3] = update4(targets3[i, 3], targets3[i, 2])
+
+    diff3 = np.mean(np.abs(results3['a'].values - targets3[1:, 1].T)) + \
+            np.mean(np.abs(results3['b'].values - targets3[1:, 3].T))
+    assert diff3 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
 def test_2_3_edge():
@@ -195,68 +231,57 @@ def test_2_3_edge():
 
     """
 
-    # test correct projection and dependencies between operations of edge
-    #####################################################################
+    # test correct numerical evaluation of graph with 1 source projecting unidirectional to 2 target nodes
+    ######################################################################################################
 
-    ops1 = {'op_1': {'equations': ["d/dt * a = -a", "b = a*2."], 'inputs': {}, 'output': 'b'},
-            'op_2': {'equations': ["c = b / sum(b)"], 'inputs': {'b': {'sources': ['op_1'], 'reduce_dim': False}},
-                     'output': 'c'}
-            }
-    ops2 = {'op_1': {'equations': ["d/dt * a = -a + inp", "b = a*2"], 'inputs': {}, 'output': 'b'},
-            'op_2': {'equations': ["c = b / sum(b)"], 'inputs': {'b': {'sources': ['op_1'], 'reduce_dim': False}},
-                     'output': 'c'}
-            }
+    # set up edge in pyrates
+    dt = 1e-1
+    sim_time = 10.
+    sim_steps = int(sim_time / dt)
+    net_config0 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net8").apply()
+    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorize='none', dt=dt)
 
-    a = np.random.rand(10)
-    op_args1 = {'op_1/a': {'vtype': 'state_var',
-                           'shape': (10,),
-                           'dtype': 'float32',
-                           'value': a},
-                'op_1/b': {'vtype': 'state_var',
-                           'shape': (10,),
-                           'dtype': 'float32',
-                           'value': 0.},
-                'op_2/c': {'vtype': 'state_var',
-                           'shape': (10,),
-                           'dtype': 'float32',
-                           'value': 1.}}
-    op_args2 = {'op_1/a': {'vtype': 'state_var',
-                           'shape': (10,),
-                           'dtype': 'float32',
-                           'value': a},
-                'op_1/b': {'vtype': 'state_var',
-                           'shape': (10,),
-                           'dtype': 'float32',
-                           'value': 0.},
-                'op_2/c': {'vtype': 'state_var',
-                           'shape': (10,),
-                           'dtype': 'float32',
-                           'value': 1.},
-                'op_1/inp': {'vtype': 'state_var',
-                             'shape': (10,),
-                             'dtype': 'float32',
-                             'value': 0.}
-                }
+    # simulate edge behavior
+    results0, _ = net0.run(sim_time, outputs={'a': ('pop1.0', 'op1.0', 'a'),
+                                              'b': ('pop2.0', 'op1.0', 'a')})
 
-    n1 = {'operators': ops1,
-          'operator_args': op_args1,
-          'operator_order': ['op_1', 'op_2'],
-          'inputs': {}}
-    n2 = {'operators': ops2,
-          'operator_args': op_args2,
-          'operator_order': ['op_1', 'op_2'],
-          'inputs': {}}
+    # calculate edge behavior from hand
+    update0 = lambda x: x * 0.5
+    update1 = lambda x: x + 2.0
+    update2 = lambda x, y: x + dt * (y - x)
+    targets0 = np.zeros((sim_steps + 1, 4), dtype=np.float32)
+    for i in range(sim_steps):
+        targets0[i+1, 0] = update0(targets0[i, 1])
+        targets0[i+1, 1] = update1(targets0[i, 0])
+        targets0[i+1, 2] = update2(targets0[i, 2], targets0[i, 0] * 2.0)
+        targets0[i+1, 3] = update2(targets0[i, 3], targets0[i, 0] * 0.5)
 
-    gr = MultiDiGraph()
-    gr.add_node('n1', **n1)
-    gr.add_node('n2', **n2)
-    gr.add_edge('n1', 'n2', source_var='op_1/b', target_var='op_1/inp', delay=None, weight=1.)
+    diff0 = np.mean(np.abs(results0['a'].values - targets0[1:, 2].T)) + \
+            np.mean(np.abs(results0['b'].values - targets0[1:, 3].T))
+    assert diff0 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
-    net = ComputeGraph(gr, vectorize='none', key='test_edge', dt=1e-3, tf_graph=tf.Graph())
-    results, _ = net.run(simulation_time=3e-3, outputs={'r1': ('n1', 'op_1', 'b'), 'r2': ('n2', 'op_1', 'b')})
+    # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
+    ################################################################################
 
-    assert results['r1_0'].values[-1] > 0.
-    assert results['r1_0'].values[-1] < results['r2_0'].values[-1]
+    # define input
+    inp = np.zeros((sim_steps, 1)) + 0.5
+
+    net_config1 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net9").apply()
+    net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorize='none', dt=dt)
+    results1, _ = net1.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
+                                              'b': ('pop1.0', 'op7.0', 'a')},
+                           inputs={('pop1.0', 'op7.0', 'inp'): inp})
+
+    # calculate edge behavior from hand
+    update3 = lambda x, y, z: x + dt * (y + z - x)
+    targets1 = np.zeros((sim_steps + 1, 2), dtype=np.float32)
+    for i in range(sim_steps):
+        targets1[i + 1, 0] = update2(targets1[i, 0], targets1[i, 1] * 0.5)
+        targets1[i + 1, 1] = update3(targets1[i, 1], targets1[i, 0] * 2.0, inp[i])
+
+    diff1 = np.mean(np.abs(results1['a'].values - targets1[1:, 0].T)) + \
+            np.mean(np.abs(results1['b'].values - targets1[1:, 1].T))
+    assert diff1 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
 def test_2_4_vectorization():
@@ -270,71 +295,32 @@ def test_2_4_vectorization():
     # test whether vectorized networks produce same output as non-vectorized backend
     ################################################################################
 
-    ops = {'op_1': {'equations': ["d/dt * a = -a + inp", "b = a*2."], 'inputs': {}, 'output': 'b'},
-           'op_2': {'equations': ["c = b / 0.5"], 'inputs': {'b': {'sources': ['op_1'], 'reduce_dim': False}},
-                    'output': 'c'}
-           }
+    # define simulation params
+    dt = 1e-1
+    sim_time = 10.
+    sim_steps = int(sim_time / dt)
+    inp = np.zeros((sim_steps, 2))
+    inp[:, 0] = 0.5
 
-    n1 = {'operators': deepcopy(ops),
-          'operator_args': {'op_1/a': {'vtype': 'state_var',
-                                       'shape': (),
-                                       'dtype': 'float32',
-                                       'value': np.random.rand()},
-                            'op_2/c': {'vtype': 'state_var',
-                                       'shape': (),
-                                       'dtype': 'float32',
-                                       'value': 1.},
-                            'op_1/inp': {'vtype': 'state_var',
-                                         'shape': (),
-                                         'dtype': 'float32',
-                                         'value': 0.}
-                            },
-          'operator_order': ['op_1', 'op_2'],
-          'inputs': {}}
-    n2 = {'operators': deepcopy(ops),
-          'operator_args': {'op_1/a': {'vtype': 'state_var',
-                                       'shape': (),
-                                       'dtype': 'float32',
-                                       'value': np.random.rand()},
-                            'op_2/c': {'vtype': 'state_var',
-                                       'shape': (),
-                                       'dtype': 'float32',
-                                       'value': 1.},
-                            'op_1/inp': {'vtype': 'state_var',
-                                         'shape': (),
-                                         'dtype': 'float32',
-                                         'value': 0.}
-                },
-          'operator_order': ['op_1', 'op_2'],
-          'inputs': {}}
+    # set up networks
+    net_config0 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net10").apply()
+    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorize='none', dt=dt, build_in_place=False)
+    net1 = ComputeGraph(net_config=net_config0, name='net.1', vectorize='nodes', dt=dt, build_in_place=False)
+    #net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorize='full', dt=dt, build_in_place=False)
 
-    gr1 = MultiDiGraph()
-    gr1.add_node('n1', **deepcopy(n1))
-    gr1.add_node('n2', **deepcopy(n2))
-    gr1.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=None, weight=1.)
+    # simulate network behaviors
+    results0, _ = net0.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
+                           inputs={('all', 'op7.0', 'inp'): inp})
+    results1, _ = net1.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
+                           inputs={('all', 'op7.0', 'inp'): inp})
+    #results2, _ = net2.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
+    #                       inputs={('all', 'op7.0', 'inp'): inp})
 
-    gr2 = MultiDiGraph()
-    gr2.add_node('n1', **deepcopy(n1))
-    gr2.add_node('n2', **deepcopy(n2))
-    gr2.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=None, weight=1.)
+    results0.pop('time'), results1.pop('time')#, results2.pop('time')
 
-    gr3 = MultiDiGraph()
-    gr3.add_node('n1', **deepcopy(n1))
-    gr3.add_node('n2', **deepcopy(n2))
-    gr3.add_edge('n1', 'n2', source_var='op_2/c', target_var='op_1/inp', delay=None, weight=1.)
-
-    net1 = ComputeGraph(gr1, vectorize='none', key='no_vec', dt=1e-3, tf_graph=tf.Graph())
-    net2 = ComputeGraph(gr2, vectorize='nodes', key='node_vec', dt=1e-3, tf_graph=tf.Graph())
-    net3 = ComputeGraph(gr3, vectorize='ops', key='op_vec', dt=1e-3, tf_graph=tf.Graph())
-    results1, _ = net1.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
-    results2, _ = net2.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
-    results3, _ = net3.run(simulation_time=1., outputs={'r1': ('n1', 'op_2', 'c'), 'r2': ('n2', 'op_2', 'c')})
-
-    results1.pop('time'), results2.pop('time'), results3.pop('time')
-
-    error1 = nmrse(results1.values, results2.values)
-    error2 = nmrse(results1.values, results3.values)
+    error1 = nmrse(results0.values, results1.values)
+    #error2 = nmrse(results0.values, results2.values)
 
     assert np.sum(results1.values) > 0.
-    assert np.mean(error1) == pytest.approx(0., rel=1e-5)
-    assert np.mean(error2) == pytest.approx(0., rel=1e-5)
+    assert np.mean(error1) == pytest.approx(0., rel=1e-6)
+    #assert np.mean(error2) == pytest.approx(0., rel=1e-6)

@@ -206,7 +206,7 @@ class ExpressionParser(ParserElement):
             # basic computation unit
             atom = (Optional("-") + (func_name + self.expr.suppress() + ZeroOrMore((arg_comb.suppress() +
                                                                                     self.expr.suppress()))
-                                     + par_r | pi | e | name | num_float | num_int
+                                     + par_r | name | pi | e | num_float | num_int
                                      ).setParseAction(self.push_first)
                     ).setParseAction(self.push_negone) | \
                    (par_l.suppress() + self.expr.suppress() + par_r.suppress()).setParseAction(self.push_negone)

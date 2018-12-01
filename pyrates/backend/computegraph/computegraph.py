@@ -325,8 +325,8 @@ class ComputeGraph(object):
         store_ops = []
 
         # create counting index for collector variables
-        out_idx = self.backend.add_variable(name='out_var_idx', dtype=tf.int32, shape=(), value=-1,
-                                            scope="output_collection")
+        out_idx = self.backend.add_var(type='state_var', name='out_var_idx', dtype=tf.int32, shape=(), value=-1,
+                                       scope="output_collection")
 
         # create increment operator for counting index
         out_idx_add = self.backend.add_op('+=', out_idx, 1, scope="output_collection")
@@ -334,8 +334,8 @@ class ComputeGraph(object):
         # add collector variables to the graph
         for key, var in outputs_tmp.items():
             shape = [int(sim_steps / sampling_steps)] + list(var.shape)
-            output_col[key] = self.backend.add_variable(name=key, dtype=tf.float32, shape=shape, value=np.zeros(shape),
-                                                        scope="output_collection")
+            output_col[key] = self.backend.add_var(type='state_var', name=key, dtype=tf.float32, shape=shape,
+                                                   value=np.zeros(shape), scope="output_collection")
 
             # add collect operation to the graph
             store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx_add, var,
@@ -902,7 +902,7 @@ class ComputeGraph(object):
 
         # check delay of edge
         delay = self._get_edge_attr(source, target, edge, 'delay', net_config=net_config)
-        if delay.ndim > 1:
+        if delay is not None and delay.ndim > 1:
             raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
                              f" cannot be applied to networks with variables of 2 or more"
                              f" dimensions. Delay of edge {edge} between {source} and {target} has shape"
@@ -911,7 +911,7 @@ class ComputeGraph(object):
 
         # check weight of edge
         weight = self._get_edge_attr(source, target, edge, 'delay', net_config=net_config)
-        if weight.ndim > 1:
+        if weight is not None and weight.ndim > 1:
             raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
                              f" cannot be applied to networks with variables of 2 or more"
                              f" dimensions. Weight of edge {edge} between {source} and {target} has shape"
@@ -919,7 +919,7 @@ class ComputeGraph(object):
                              f" change the edges' dimensionality.")
 
         # match dimensionality of delay and weight
-        if not delay or not weight:
+        if delay is None or weight is None:
             pass
         elif delay.shape[0] > 1 and weight.shape[0] == 1:
             weight = np.tile(weight, (delay.shape[0], 1))
@@ -1355,7 +1355,6 @@ class ComputeGraph(object):
                 # delete vectorized nodes from graph and list
                 for n in nodes_tmp:
                     net_config.graph.remove_node(n)
-                    net_config.label_map.pop(n)
                     nodes.pop(nodes.index(n))
 
             # adjust edges accordingly
@@ -1724,7 +1723,7 @@ class ComputeGraph(object):
                 new_edge['target_idx'] = old_tvar_idx
 
                 # add new edge to new net config
-                net_config.add_edge(source_name, target_name, **new_edge)
+                net_config.graph.add_edge(source_name, target_name, **new_edge)
 
             # delete vectorized edges from list
             for edge in edges_tmp:

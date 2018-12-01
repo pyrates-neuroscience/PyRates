@@ -1,0 +1,92 @@
+%YAML 1.2
+---
+
+PRO:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * r = delta/PI + 2. * r * v"
+    - "d/dt * v = v**2 + eta + J * PSP + I + (PI * r)**2"
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    delta:
+      default: 1.
+    eta:
+      default: -2.5
+    J:
+      default: 10.0
+    PSP:
+      default: input
+    I:
+      default: placeholder
+
+RPO_e:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * r_in - (1./tau)**2 * PSP - 2. * 1./tau * PSP_t'
+  variables:
+    h:
+      default: 3.25
+    tau:
+      default: 10.0
+    r_in:
+      default: input
+    PSP:
+      default: output
+    PSP_t:
+      default: variable
+
+RPO_i:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * r_in - (1./tau)**2 * PSP - 2. * 1./tau * PSP_t'
+  variables:
+    h:
+      default: -22.0
+    tau:
+      default: 20.0
+    r_in:
+      default: input
+    PSP:
+      default: output
+    PSP_t:
+      default: variable
+
+PC:
+  base: NodeTemplate
+  operators:
+    - RPO_e
+    - RPO_i
+    - PRO
+
+IIN:
+  base: NodeTemplate
+  operators:
+    - RPO_e
+    - PRO
+
+EIN:
+  base: NodeTemplate
+  operators:
+    - RPO_e
+    - PRO
+
+DummyEdge:
+  base: EdgeTemplate
+  operators: []
+
+JRC:
+  base: CircuitTemplate
+  nodes:
+    EIN: EIN
+    IIN: IIN
+    PC: PC
+  edges:
+    - [PC/PRO/r, IIN/RPO_e/r_in, DummyEdge, {weight: 33.75}]
+    - [PC/PRO/r, EIN/RPO_e/r_in, DummyEdge, {weight: 135.}]
+    - [EIN/PRO/r, PC/RPO_e/r_in, DummyEdge, {weight: 108.}]
+    - [IIN/PRO/r, PC/RPO_i/r_in, DummyEdge, {weight: 33.75}]
