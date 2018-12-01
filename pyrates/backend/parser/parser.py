@@ -70,7 +70,7 @@ class ExpressionParser(ParserElement):
         Checks whether `expr_str` was successfully parsed into `expr_stack` and translates `expr_stack` into an
         operation `op` representing the evaluation of the full expression.
     parse
-        Parses next element of `expr_stack` into a symbolic representation `_op_tmp` (type of representation depends on
+        Parses next element of `expr_stack` into a symbolic representation `expr_op` (type of representation depends on
         the functions, operations and data-types defined in `funcs`, `ops` and `dtypes`). Is called by `parse_expr`.
     push_first
         Helper function for building up `expr_stack`.
@@ -134,8 +134,7 @@ class ExpressionParser(ParserElement):
         self.expr = None
         self.expr_stack = []
         self.expr_list = []
-        self._op_tmp = None
-        self.op = None
+        self.expr_op = None
 
         # define algebra
         ################
@@ -303,7 +302,7 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            self._op_tmp = self.backend.add_op('neg', self.parse(expr_stack), **self.parser_kwargs)
+            self.expr_op = self.backend.add_op('neg', self.parse(expr_stack), **self.parser_kwargs)
 
         elif op in "+-**/^@<=>=!==":
 
@@ -312,12 +311,12 @@ class ExpressionParser(ParserElement):
             op1 = self.parse(expr_stack)
 
             # combine elements via mathematical/boolean operator
-            self._op_tmp = self.broadcast(op, op1, op2, **self.parser_kwargs)
+            self.expr_op = self.broadcast(op, op1, op2, **self.parser_kwargs)
 
         elif ".T" == op or ".I" == op:
 
             # transpose/invert expression
-            self._op_tmp = self.backend.add_op(op, self.parse(expr_stack), **self.parser_kwargs)
+            self.expr_op = self.backend.add_op(op, self.parse(expr_stack), **self.parser_kwargs)
 
         elif op == "]":
 
@@ -366,20 +365,20 @@ class ExpressionParser(ParserElement):
                 self.lhs = True
                 self.args['updates'][op] = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
-                self._op_tmp = self.args['updates'][op]
+                self.expr_op = self.args['updates'][op]
             else:
                 op_to_idx = self.parse(expr_stack)
-                self._op_tmp = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
+                self.expr_op = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
 
         elif op == "PI":
 
             # return float representation of pi
-            self._op_tmp = math.pi
+            self.expr_op = math.pi
 
         elif op == "E":
 
             # return float representation of e
-            self._op_tmp = math.e
+            self.expr_op = math.e
 
         elif f'{op}_old' in self.args['inputs'].keys():
 
@@ -398,7 +397,7 @@ class ExpressionParser(ParserElement):
                     self.args['updates'][op] = self.backend.add_op('=', self.args['vars'][op], var_update,
                                                                    **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
-                    self._op_tmp = self.args['updates'][op]
+                    self.expr_op = self.args['updates'][op]
 
                 else:
 
@@ -408,17 +407,17 @@ class ExpressionParser(ParserElement):
                                                               self.args.pop('rhs'),
                                                               **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
-                    self._op_tmp = self.args['updates'][op]
+                    self.expr_op = self.args['updates'][op]
 
             else:
 
                 # extract state variable from previous time-step from args dict
-                self._op_tmp = self.args['inputs'][f'{op}_old']
+                self.expr_op = self.args['inputs'][f'{op}_old']
 
         elif op in self.args['inputs'].keys():
 
             # extract input variable from args dict
-            self._op_tmp = self.args['inputs'][op]
+            self.expr_op = self.args['inputs'][op]
 
         elif op in self.args['vars'].keys():
 
@@ -440,7 +439,7 @@ class ExpressionParser(ParserElement):
                     var_update = self.update(old_var, self.args.pop('rhs'), dt, **self.parser_kwargs)
                     self.args['updates'][op] = self.backend.add_op('=', var, var_update, **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
-                    self._op_tmp = self.args['updates'][op]
+                    self.expr_op = self.args['updates'][op]
 
                 else:
 
@@ -450,18 +449,18 @@ class ExpressionParser(ParserElement):
                                                               self.args.pop('rhs'),
                                                               **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
-                    self._op_tmp = self.args['updates'][op]
+                    self.expr_op = self.args['updates'][op]
 
             else:
 
                 # extract constant/variable from args dict
-                self._op_tmp = self.args['vars'][op]
+                self.expr_op = self.args['vars'][op]
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
             # extract data type
             try:
-                self._op_tmp = self.backend.add_op('cast', self.parse(expr_stack), op, **self.parser_kwargs)
+                self.expr_op = self.backend.add_op('cast', self.parse(expr_stack), op[0:-1], **self.parser_kwargs)
             except AttributeError:
                 raise AttributeError(f"Datatype casting error in expression: {self.expr_str}. "
                                      f"{op[0:-1]} is not a valid data-type for this parser.")
@@ -480,9 +479,9 @@ class ExpressionParser(ParserElement):
             # apply function to arguments
             try:
                 if len(args) == 1:
-                    self._op_tmp = self.backend.add_op(op[0:-1], args[0], **self.parser_kwargs)
+                    self.expr_op = self.backend.add_op(op[0:-1], args[0], **self.parser_kwargs)
                 else:
-                    self._op_tmp = self.backend.add_op(op[0:-1], *tuple(args[::-1]), **self.parser_kwargs)
+                    self.expr_op = self.backend.add_op(op[0:-1], *tuple(args[::-1]), **self.parser_kwargs)
             except KeyError:
                 raise KeyError(
                     f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
@@ -491,7 +490,7 @@ class ExpressionParser(ParserElement):
         elif any([op == "True", op == "true", op == "False", op == "false"]):
 
             # return boolean
-            self._op_tmp = True if op in "Truetrue" else False
+            self.expr_op = True if op in "Truetrue" else False
 
         elif "." in op:
 
@@ -499,16 +498,15 @@ class ExpressionParser(ParserElement):
             i = 0
             while i < 1e7:
                 try:
-                    arg_tmp = self.backend.add_constant(f'op_{i}', value=float(op), shape=(),
-                                                        dtype=self.backend.dtypes['float32'],
-                                                        **self.parser_kwargs)
+                    arg_tmp = self.backend.add_var(type='constant', name=f'op_{i}', value=float(op), shape=(),
+                                                   dtype=self.backend.dtypes['float32'], **self.parser_kwargs)
                     break
                 except (ValueError, KeyError) as e:
                     i += 1
             else:
                 raise e
 
-            self._op_tmp = arg_tmp
+            self.expr_op = arg_tmp
 
         elif op.isnumeric():
 
@@ -516,16 +514,15 @@ class ExpressionParser(ParserElement):
             i = 0
             while i < 1e7:
                 try:
-                    arg_tmp = self.backend.add_constant(f'op_{i}', value=int(op), shape=(),
-                                                        dtype=self.backend.dtypes['int32'],
-                                                        **self.parser_kwargs)
+                    arg_tmp = self.backend.add_var(type='constant', name=f'op_{i}', value=int(op), shape=(),
+                                                   dtype=self.backend.dtypes['int32'], **self.parser_kwargs)
                     break
                 except (ValueError, KeyError) as e:
                     i += 1
             else:
                 raise e
 
-            self._op_tmp = arg_tmp
+            self.expr_op = arg_tmp
 
         elif op[0].isalpha():
 
@@ -533,13 +530,13 @@ class ExpressionParser(ParserElement):
 
                 # add new variable to arguments that represents rhs op
                 rhs = self.args.pop('rhs')
-                new_var = self.backend.add_variable(f'lhs_{self.lhs_count}', value=0., shape=rhs.shape, dtype=rhs.dtype,
-                                                    **self.parser_kwargs)
+                new_var = self.backend.add_var(type='state_var', name=f'lhs_{self.lhs_count}', value=0.,
+                                               shape=rhs.shape, dtype=rhs.dtype, **self.parser_kwargs)
                 self.lhs_count += 1
                 self.args['vars'][op] = new_var
                 self.args['updates'][op] = self.broadcast('=', new_var, rhs, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
-                self._op_tmp = self.args['updates'][op]
+                self.expr_op = self.args['updates'][op]
 
             else:
 
@@ -551,7 +548,7 @@ class ExpressionParser(ParserElement):
             raise ValueError(f"Undefined operation detected in expression: {self.expr_str}. {op} cannot be "
                              f"interpreted by this parser.")
 
-        return self._op_tmp
+        return self.expr_op
 
     def broadcast(self, op, op1, op2, **kwargs):
         """Tries to match the shapes of arg1 and arg2 such that func can be applied.
@@ -832,6 +829,9 @@ def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs)
     # preprocess equations and equation arguments
     #############################################
 
+    if 'inputs' not in equation_args:
+        equation_args['inputs'] = {}
+
     left_hand_sides = []
     right_hand_sides = []
     diff_eq = []
@@ -952,49 +952,22 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
 
     for var_name, var in var_dict.items():
 
-        # make sure that value of variable is a number
+        # preprocess variable definition
         if var['value'] is None:
             var['value'] = 0.
         init_val = var['value'] if hasattr(var['value'], 'shape') else np.zeros(()) + var['value']
         dtype = getattr(tf, var['dtype']) if type(var['dtype']) is str else var['dtype']
         shape = var['shape'] if 'shape' in var.keys() else init_val.shape
 
+        # instantiate variable
         if var['vtype'] == 'raw':
-
-            # just extract raw variable value
-            tf_var = var['value']
-
-        elif var['vtype'] == 'state_var':
-
-            # create a tensorflow variable that can change its value over the course of a simulation
-            tf_var = backend.add_variable(value=init_val,
-                                          name=var_name,
-                                          dtype=dtype,
-                                          shape=shape,
-                                          **kwargs)
-
-        elif var['vtype'] == 'constant':
-
-            # create dense, constant tensor
-            tf_var = backend.add_constant(value=init_val,
-                                          name=var_name,
-                                          shape=shape,
-                                          dtype=dtype,
-                                          **kwargs
-                                          )
-
-        elif var['vtype'] == 'placeholder':
-
-            tf_var = backend.add_placeholder(name=var_name,
-                                             shape=shape,
-                                             dtype=dtype,
-                                             **kwargs
-                                             )
-
+            var_dict_tf[var_name] = var['value']
         else:
-
-            raise ValueError('Variable type must be `raw`, `state_variable`, `constant` or `placeholder`.')
-
-        var_dict_tf[var_name] = tf_var
+            var_dict_tf[var_name] = backend.add_var(type=var['vtype'],
+                                                    name=var_name,
+                                                    value=init_val,
+                                                    shape=shape,
+                                                    dtype=dtype,
+                                                    **kwargs)
 
     return var_dict_tf

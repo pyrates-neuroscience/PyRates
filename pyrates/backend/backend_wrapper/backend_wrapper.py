@@ -144,16 +144,17 @@ class TensorflowBackend(tf.Graph):
 
         return outputs, t_end - t_start
 
-    def add_variable(self, name, value, shape=None, dtype=None, **kwargs):
+    def add_var(self, type, name, value=None, shape=None, dtype=None, **kwargs):
         """
 
         Parameters
         ----------
+        type
         name
         value
         shape
         dtype
-        scope
+        kwargs
 
         Returns
         -------
@@ -161,8 +162,11 @@ class TensorflowBackend(tf.Graph):
         """
 
         # processs input arguments
-        scope, reuse = self.get_scope(kwargs.pop('scope', None))
+        scope, reuse = self._get_scope(kwargs.pop('scope', None))
         dependencies = kwargs.pop('dependencies', None)
+
+        if all([arg is None for arg in [shape, value, dtype]]):
+            raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
 
         if shape is None:
             shape = value.shape
@@ -175,73 +179,45 @@ class TensorflowBackend(tf.Graph):
                 with tf.control_dependencies(dependencies):
                     if reuse:
                         with tf.name_scope(sc.original_name_scope):
-                            return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
+                            return self._create_var(type, name, value, shape, dtype, **kwargs)
                     else:
-                        return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value))
+                        if type == 'state_var':
+                            return self.add_state_var(name, shape, dtype,
+                                                      initializer=tf.constant_initializer(value))
+                        elif type == 'constant':
+                            return tf.constant(value, dtype, shape, name)
+                        elif type == 'placeholder':
+                            return tf.placeholder(dtype, shape, name)
+                        else:
+                            raise ValueError(f'`Type` is {type} but needs to be set to `state_var`, `constant` or '
+                                             f'`placeholder`.')
 
-    def add_constant(self, name, value, shape=None, dtype=None, **kwargs):
+    def _create_var(self, type, name, value, shape, dtype, **kwargs):
         """
 
         Parameters
         ----------
+        type
         name
         value
         shape
         dtype
-        scope
+        kwargs
 
         Returns
         -------
 
         """
 
-        # process input arguments
-        scope, reuse = self.get_scope(kwargs.pop('scope', None))
-        dependencies = kwargs.pop('dependencies', None)
-
-        if shape is None:
-            shape = value.shape
-        if dtype is None:
-            dtype = value.dtype
-
-        # create constant
-        with self.as_default():
-            with scope as sc:
-                with tf.control_dependencies(dependencies):
-                    if reuse:
-                        with tf.name_scope(sc.original_name_scope):
-                            return tf.constant(value, dtype, shape, name)
-                    else:
-                        return tf.constant(value, dtype, shape, name)
-
-    def add_placeholder(self, name, shape, dtype, **kwargs):
-        """
-
-        Parameters
-        ----------
-        name
-        shape
-        dtype
-        scope
-
-        Returns
-        -------
-
-        """
-
-        # process input arguments
-        scope, reuse = self.get_scope(kwargs.pop('scope', None))
-        dependencies = kwargs.pop('dependencies', [])
-
-        # create placeholder
-        with self.as_default():
-            with scope as sc:
-                with tf.control_dependencies(dependencies):
-                    if reuse:
-                        with tf.name_scope(sc.original_name_scope):
-                            return tf.placeholder(dtype, shape, name)
-                    else:
-                        return tf.placeholder(dtype, shape, name)
+        if type == 'state_var':
+            return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value), **kwargs)
+        elif type == 'constant':
+            return tf.constant(value, dtype, shape, name, **kwargs)
+        elif type == 'placeholder':
+            return tf.placeholder(dtype, shape, name, **kwargs)
+        else:
+            raise ValueError(f'`Type` is {type} but needs to be set to `state_var`, `constant` or '
+                             f'`placeholder`.')
 
     def add_op(self, op: str, *args, **kwargs):
         """
@@ -260,7 +236,7 @@ class TensorflowBackend(tf.Graph):
         # process input arguments
         dependencies = kwargs.pop('dependencies', None)
         assign_to_var = kwargs.pop('assign_to_var', False)
-        scope, reuse = self.get_scope(kwargs.pop('scope', None))
+        scope, reuse = self._get_scope(kwargs.pop('scope', None))
 
         # create operation
         with self.as_default():
@@ -306,7 +282,7 @@ class TensorflowBackend(tf.Graph):
 
         # process input arguments
         dependencies = kwargs.pop('dependencies', None)
-        scope, reuse = self.get_scope(kwargs.pop('scope', None))
+        scope, reuse = self._get_scope(kwargs.pop('scope', None))
 
         # create layer
         with self.as_default():
@@ -318,7 +294,7 @@ class TensorflowBackend(tf.Graph):
                     else:
                         return tf.tuple(ops, *args, **kwargs)
 
-    def get_scope(self, scope):
+    def _get_scope(self, scope):
         """
 
         Parameters
