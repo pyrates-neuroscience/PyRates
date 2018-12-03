@@ -1,11 +1,11 @@
 """
 """
 
-from pyrates.ir.graph_entity import GraphEntityIR
+from pyrates.ir.operator_graph import OperatorGraph
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-class NodeIR(GraphEntityIR):
+class NodeIR(OperatorGraph):
     pass

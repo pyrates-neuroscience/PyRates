@@ -12,47 +12,22 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-class GraphEntityIR(AbstractBaseIR):
+class OperatorGraph(AbstractBaseIR):
     """Intermediate representation for nodes and edges."""
 
-    def __init__(self, operators: dict, template: str=None, values: dict=None):
+    def __init__(self, operators: dict, template: str = None):
 
         self.op_graph = DiGraph()
         all_outputs = {}  # type: Dict[str, dict]
         self.template = template
         # op_inputs, op_outputs = set(), set()
 
-        value_updates = {}
-        if values:
-            # values.pop("weight", None)
-            # values.pop("delay", None)
-            for key, value in values.items():
-                op_name, var_name = key.split("/")
-                if op_name not in value_updates:
-                    value_updates[op_name] = {}
-                value_updates[op_name][var_name] = value
-
         for key, item in operators.items():
-            if isinstance(key, OperatorTemplate):
-                op_template = key
-                values_to_update = item
 
-                if values_to_update is None:
-                    values_to_update = {}
-                if op_template.name in value_updates:
-                    values_to_update.update(value_updates.pop(op_template.name, {}))
-                op_instance, op_variables, key = op_template.apply(return_key=True,
-                                                                   values=values_to_update)
-
-            elif isinstance(key, str):
-                op_instance = item["operator"]
-                op_variables = item["variables"]
-
-            else:
-                raise TypeError(f"Unknown type of key `{key}` in operators dictionary")
+            op_instance = item["operator"]
+            op_variables = item["variables"]
 
             # add operator as node to local operator_graph
-            # ToDo: separate variable def and operator def so one can be private and the other shared
             self.op_graph.add_node(key, operator=op_instance, variables=op_variables)
 
             # collect all output variables
@@ -65,12 +40,6 @@ class GraphEntityIR(AbstractBaseIR):
             all_outputs[out_var][key] = out_var
             # this assumes input and output variables map on each other by equal name
             # with additional information, non-equal names could also be mapped here
-
-        # fail gracefully, if any variables remain in value_updates which means, the there is some typo
-        if value_updates:
-            raise PyRatesException("Found value updates that did not fit any operator by name. This may be due to a "
-                                   "typo in specifying the operator or variable to update. Remaining variables:"
-                                   f"{value_updates}")
 
         # link outputs to inputs
         for op_key in self.op_graph.nodes:
@@ -122,6 +91,5 @@ class GraphEntityIR(AbstractBaseIR):
         return item
 
     def __iter__(self):
-        """Return an iterator containing all operator labels in this node."""
+        """Return an iterator containing all operator labels in the operator graph."""
         return iter(self.op_graph.nodes)
-

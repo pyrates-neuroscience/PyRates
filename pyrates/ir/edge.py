@@ -1,19 +1,21 @@
 """
 """
+from typing import List
+
 from pyrates import PyRatesException
-from pyrates.ir.graph_entity import GraphEntityIR
+from pyrates.ir.operator_graph import OperatorGraph
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-class EdgeIR(GraphEntityIR):
+class EdgeIR(OperatorGraph):
 
-    def __init__(self, operators: dict=None, template: str = None, values: dict=None):
+    def __init__(self, operators: dict=None, template: str = None):
 
         if operators is None:
             operators = {}
-        super().__init__(operators, template, values)
+        super().__init__(operators, template)
 
         # Step 1: Detect edge input variable
         ####################################

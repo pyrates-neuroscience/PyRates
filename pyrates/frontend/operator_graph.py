@@ -1,13 +1,14 @@
 from typing import Union, List, Type
 
+from pyrates import PyRatesException
 from pyrates.frontend.abc import AbstractBaseTemplate
-from pyrates.ir.graph_entity import GraphEntityIR
+from pyrates.ir.operator_graph import OperatorGraph
 from pyrates.frontend.operator import OperatorTemplate
 from pyrates.frontend.parser.yaml import TemplateLoader
 
 
-class GraphEntityTemplate(AbstractBaseTemplate):
-    target_ir = GraphEntityIR
+class OperatorGraphTemplate(AbstractBaseTemplate):
+    target_ir = OperatorGraph
 
     def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
                  description: str = "A node or an edge.", label: str = None):
@@ -43,19 +44,57 @@ class GraphEntityTemplate(AbstractBaseTemplate):
         return OperatorTemplate.from_yaml(path)
 
     def apply(self, values: dict = None):
+        """ Apply template to gain a node or edge intermediate representation.
 
-        # ToDo: change so that only IR classes are forwarded instead of templates.
-        return self.target_ir(operators=self.operators, template=self.path, values=values)
+        Parameters
+        ----------
+        values
+            dictionary with operator/variable as keys and values to update these variables as items.
+
+        Returns
+        -------
+
+        """
+
+        value_updates = {}
+        if values:
+            for key, value in values.items():
+                op_name, var_name = key.split("/")
+                if op_name not in value_updates:
+                    value_updates[op_name] = {}
+                value_updates[op_name][var_name] = value
+
+        operators = {}
+
+        for template, variations in self.operators.items():
+            values_to_update = variations
+
+            if values_to_update is None:
+                values_to_update = {}
+            if template.name in value_updates:
+                values_to_update.update(value_updates.pop(template.name))
+            op_instance, op_variables, key = template.apply(return_key=True,
+                                                            values=values_to_update)
+            operators[key] = {"operator": op_instance,
+                              "variables": op_variables}
+
+        # fail gracefully, if any variables remain in `values` which means, that there is some typo
+        if value_updates:
+            raise PyRatesException(
+                "Found value updates that did not fit any operator by name. This may be due to a "
+                "typo in specifying the operator or variable to update. Remaining variables:"
+                f"{value_updates}")
+        return self.target_ir(operators=operators, template=self.path)
 
 
-class GraphEntityTemplateLoader(TemplateLoader):
+class OperatorGraphTemplateLoader(TemplateLoader):
 
     def __new__(cls, path, template_class):
 
         return super().__new__(cls, path, template_class)
 
     @classmethod
-    def update_template(cls, template_cls: Type[GraphEntityTemplate], base, name: str, path: str, label: str,
+    def update_template(cls, template_cls: Type[OperatorGraphTemplate], base, name: str, path: str, label: str,
                         operators: Union[str, List[str], dict] = None,
                         description: str = None):
         """Update all entries of a base edge template to a more specific template."""
