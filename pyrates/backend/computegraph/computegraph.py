@@ -121,9 +121,8 @@ class ComputeGraph(object):
             svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
             op, var = svar.split('/')
             svar = self._get_op_attr(source_node, op, var)
-            if op in self.node_updates[source_node]:
-                if var in self.node_updates[source_node][op]:
-                    self.node_updates[source_node][op].pop(var)
+            if op in self.node_updates[source_node] and var in self.node_updates[source_node][op]:
+                self.node_updates[source_node][op].pop(var)
             if svar not in source_vars:
                 source_vars.append(svar)
             op_names.append(op)
@@ -156,18 +155,17 @@ class ComputeGraph(object):
         #############
 
         self.edge_updates = []
-        for source_node, target_node, edge_idx, svar_idx in zip(source_nodes, target_nodes, edge_indices,
-                                                                source_vars_idx):
+        for source_node, target_node, edge_idx in zip(source_nodes, target_nodes, edge_indices):
 
             # extract edge information
             weight = self._get_edge_attr(source_node, target_node, edge_idx, 'weight')
             delay = self._get_edge_attr(source_node, target_node, edge_idx, 'delay')
             sidx = self._get_edge_attr(source_node, target_node, edge_idx, 'source_idx')
             tidx = self._get_edge_attr(source_node, target_node, edge_idx, 'target_idx')
+            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var')
             tvar = self._get_edge_attr(source_node, target_node, edge_idx, 'target_var', retrieve_from_node=False)
 
-            # get source and target variable
-            svar = source_vars[svar_idx]
+            # get original target variable
             op, var = tvar.split('/')
             try:
                 tvar = self._get_op_attr(target_node, op, f'{var}_old')
@@ -292,33 +290,8 @@ class ComputeGraph(object):
         # define output variables
         outputs_tmp = dict()
         if outputs:
-
-            # go through  output variables
             for key, val in outputs.items():
-
-                if val[0] == 'all':
-
-                    # collect output variable from every node in backend
-                    for node in self.net_config.nodes.keys():
-                        outputs_tmp[f'{node}/{key}'] = self._get_node_attr(node=node, op=val[1], attr=val[2])
-
-                elif val[0] in self.net_config.nodes.keys() or val[0] in self._net_config_map.keys():
-
-                    # get output variable of specific backend node
-                    outputs_tmp[key] = self._get_node_attr(node=val[0], op=val[1], attr=val[2])
-
-                elif any([val[0] in key for key in self.net_config.nodes.keys()]):
-
-                    # get output variable from backend nodes of a certain type
-                    for node in self.net_config.nodes.keys():
-                        if val[0] in node:
-                            outputs_tmp[f'{key}/{node}'] = self._get_node_attr(node=node, op=val[1], attr=val[2])
-                else:
-
-                    # get output variable of specific, vectorized  backend node
-                    for node in self._net_config_map.keys():
-                        if val[0] in node and 'comb' not in node:
-                            outputs_tmp[f'{key}/{node}'] = self._get_node_attr(node=node, op=val[1], attr=val[2])
+                outputs_tmp.update(self.get_var(node=val[0], op=val[1], var=val[2], var_name=key))
 
         # add output collector variables to graph
         output_col = {}
@@ -447,6 +420,50 @@ class ComputeGraph(object):
                 print(f"ComputeGraph computations finished after {sim_time} seconds.")
 
         return out_vars, sim_time
+
+    def get_var(self, node: str, op: str, var: str, var_name=None) -> dict:
+        """
+
+        Parameters
+        ----------
+        node
+        op
+        var
+
+        Returns
+        -------
+
+        """
+
+        if not var_name:
+            var_name = var
+        var_col = {}
+
+        if node == 'all':
+
+            # collect output variable from every node in backend
+            for node in self.net_config.nodes.keys():
+                var_col[f'{var_name}/{node}'] = self._get_node_attr(node=node, op=op, attr=var)
+
+        elif node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
+
+            # get output variable of specific backend node
+            var_col[f'{var_name}/{node}'] = self._get_node_attr(node=node, op=op, attr=var)
+
+        elif any([node in key for key in self.net_config.nodes.keys()]):
+
+            # get output variable from backend nodes of a certain type
+            for node_tmp in self.net_config.nodes.keys():
+                if node in node_tmp:
+                    var_col[f'{var_name}/{node_tmp}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
+        else:
+
+            # get output variable of specific, vectorized backend node
+            for node_tmp in self._net_config_map.keys():
+                if node in node_tmp and 'comb' not in node_tmp:
+                    var_col[f'{var_name}/{node_tmp}'] = self._get_node_attr(node=node, op=op, attr=var)
+
+        return var_col
 
     def _add_ops(self, ops, primary_ops, node_name, updates=None):
         """
@@ -750,23 +767,34 @@ class ComputeGraph(object):
         if not net_config:
             net_config = self.net_config
 
-        op = net_config.nodes[node]['node'].op_graph.nodes[op]
+        if node in net_config.nodes:
+            op = net_config.nodes[node]['node'].op_graph.nodes[op]
+            attr_idx = None
+        elif node in self._net_config_map:
+            node, op, attr, attr_idx = self._net_config_map[node][op][attr]
+            op = net_config.nodes[node]['node'].op_graph.nodes[op]
+        else:
+            raise ValueError(f'Node with name {node} is not part of this network.')
+
         if attr == 'output' and retrieve:
             attr = op['operator']['output']
+
         if attr in op['variables'].keys():
-            return op['variables'][attr]
+            attr_val = op['variables'][attr]
         elif hasattr(op['operator'], 'keys') and attr in op['operator'].keys():
-            return op['operator'][attr]
+            attr_val = op['operator'][attr]
         elif hasattr(op['operator'], attr):
-            return getattr(op['operator'], attr)
+            attr_val = getattr(op['operator'], attr)
         else:
             try:
-                return op[attr]
+                attr_val = op[attr]
             except KeyError as e:
                 try:
-                    return getattr(op, attr)
+                    attr_val = getattr(op, attr)
                 except AttributeError:
                     raise e
+
+        return self._apply_idx(attr_val, attr_idx)
 
     def _set_op_attr(self, node, op, attr, val, net_config=None):
         """
@@ -802,6 +830,9 @@ class ComputeGraph(object):
                 return op[attr]
             except KeyError:
                 return None
+
+    def _apply_idx(self, var, idx=None):
+        return var[idx] if idx else var
 
     def _get_nodes_with_attr(self, attr, val, net_config=None):
         """
@@ -910,7 +941,7 @@ class ComputeGraph(object):
                              f" the edges' dimensionality.")
 
         # check weight of edge
-        weight = self._get_edge_attr(source, target, edge, 'delay', net_config=net_config)
+        weight = self._get_edge_attr(source, target, edge, 'weight', net_config=net_config)
         if weight is not None and weight.ndim > 1:
             raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
                              f" cannot be applied to networks with variables of 2 or more"
@@ -1008,12 +1039,16 @@ class ComputeGraph(object):
             net_config = self.net_config
 
         edges_new = {}
+        edge_idx = {}
         for edge in edges:
             if len(edge) == 3:
                 source, target, edge = edge
             else:
                 source, target = edge
-                edge = 0
+                if (source, target) not in edge_idx:
+                    edge_idx[(source, target)] = 0
+                edge = edge_idx[(source, target)]
+                edge_idx[(source, target)] += 1
             edge_info = net_config.edges[source, target, edge]
             if edge_info[attr] not in edges_new.keys():
                 edges_new[edge_info[attr]] = [(source, target, edge)]
@@ -1122,11 +1157,11 @@ class ComputeGraph(object):
         eqs = [f"{var} = {var}_col_{idx}"]
 
         # create collector variable definition
-        var_dict = {f'{op}_{var}_col_{idx}/{var}_col_{idx}': {'vtype': 'state_var',
-                                                              'dtype': 'float32',
-                                                              'shape': target_shape,
-                                                              'value': 0.
-                                                              }}
+        var_dict = {f'{var}_col_{idx}': {'vtype': 'state_var',
+                                         'dtype': 'float32',
+                                         'shape': target_shape,
+                                         'value': 0.
+                                         }}
 
         # add collector operator to operator graph
         op_graph.add_node(f'{op}_{var}_col_{idx}',
@@ -1137,11 +1172,12 @@ class ComputeGraph(object):
         op_graph.add_edge(f'{op}_{var}_col_{idx}', op)
 
         # add input information to target operator
-        if var in op_graph.nodes[op]['inputs'].keys():
-            op_graph.nodes[op]['inputs']['sources'].append(f'{op}_{var}_col_{idx}')
+        op_inputs = self._get_op_attr(node, op, 'inputs')
+        if var in op_inputs.keys():
+            op_inputs[var]['sources'].append(f'{op}_{var}_col_{idx}')
         else:
-            op_graph.nodes[op]['inputs'][var] = {'sources': [f'{op}_{var}_col_{idx}'],
-                                                 'reduce_dim': True}
+            op_inputs[var] = {'sources': [f'{op}_{var}_col_{idx}'],
+                              'reduce_dim': True}
 
         # update edge target information
         s, t, e = edge
@@ -1363,7 +1399,7 @@ class ComputeGraph(object):
             # go through new nodes
             for source in net_config.nodes.keys():
                 for target in net_config.nodes.keys():
-                    _ = self._vectorize_edges(source, target, net_config)
+                    net_config = self._vectorize_edges(source, target, net_config)
 
             # save changes to net config
             self.net_config = copy(net_config)
@@ -1475,7 +1511,12 @@ class ComputeGraph(object):
                 # extract info for input variable connections
                 n_inputs = len(edges)
                 op_name, var_name = in_var.split('/')
-                max_delay = np.max([self._get_edge_attr(s, t, e, 'delay', net_config=net_config) for s, t, e in edges])
+                delays = []
+                for s, t, e in edges:
+                    d = self._get_edge_attr(s, t, e, 'delay', net_config=net_config)
+                    if d is not None:
+                        delays.append(d)
+                max_delay = np.max(delays) if delays else None
 
                 # loop over different input sources
                 for j in range(n_inputs):
@@ -1668,16 +1709,16 @@ class ComputeGraph(object):
             source_tmp, target_tmp, edge_tmp = edges[0]
 
             # get source and target variable
-            source_var = self._get_edge_attr(source_tmp, target_tmp, edge_tmp, 'source_var')
-            target_var = self._get_edge_attr(source_tmp, target_tmp, edge_tmp, 'target_var')
+            source_var = self._get_edge_attr(source_tmp, target_tmp, edge_tmp, 'source_var', retrieve_from_node=False)
+            target_var = self._get_edge_attr(source_tmp, target_tmp, edge_tmp, 'target_var', retrieve_from_node=False)
 
             # get edges with equal source and target variables between source and target node
             edges_tmp = []
             for n, (source_tmp, target_tmp, edge_tmp) in enumerate(edges):
                 if self._get_edge_attr(source_tmp, target_tmp, edge_tmp,
-                                       'source_var') == source_var and \
+                                       'source_var', retrieve_from_node=False) == source_var and \
                         self._get_edge_attr(source_tmp, target_tmp, edge_tmp,
-                                            'target_var') == target_var:
+                                            'target_var', retrieve_from_node=False) == target_var:
                     edges_tmp.append(edges[n])
 
             # vectorize those edges

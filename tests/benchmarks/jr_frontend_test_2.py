@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC").apply()
 
 c = CircuitIR()
-for i in range(4):
+for i in range(3):
     c.add_circuit(f"jrc.{i}", circuit)
 
-compute_graph = ComputeGraph(c, vectorize="none")
+compute_graph = ComputeGraph(c, vectorize="nodes")
 
-result, _ = compute_graph.run(10., outputs={"V": ("PC", "PRO.0", "PSP")}, out_dir="/tmp/log")
+result, _ = compute_graph.run(1., outputs={"V": ("all", "PRO.0", "PSP")}, out_dir="/tmp/log")
 
 result.pop("time")
 result.plot()

@@ -78,7 +78,8 @@ class TensorflowBackend(tf.Graph):
                     "stack": tf.stack,
                     "pstack": tf.parallel_stack,
                     "group": tf.group,
-                    "tuple": tf.tuple
+                    "tuple": tf.tuple,
+                    "no_op": no_op,
                     }
 
         self.dtypes = {"float16": tf.float16,
@@ -496,3 +497,6 @@ class KerasExpressionParser(tf.keras.models.Model):
                   "bool": tf.bool
                   }
         self.dtypes.update(dtypes)
+
+def no_op(*args, **kwargs):
+    pass

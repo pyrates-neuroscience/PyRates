@@ -29,9 +29,9 @@ RPO_e:
     - 'd/dt * PSP_t =  h/tau * r_in - (1./tau)**2 * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
-      default: 3.25
+      default: 3.25e-3
     tau:
-      default: 10.0
+      default: 10e-3
     r_in:
       default: input
     PSP:
