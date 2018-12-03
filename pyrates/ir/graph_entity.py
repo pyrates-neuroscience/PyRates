@@ -121,3 +121,7 @@ class GraphEntityIR(AbstractBaseIR):
 
         return item
 
+    def __iter__(self):
+        """Return an iterator containing all operator labels in this node."""
+        return iter(self.op_graph.nodes)
+

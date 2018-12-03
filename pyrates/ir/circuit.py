@@ -4,6 +4,7 @@ import re
 from copy import deepcopy
 from typing import Union, Dict, Iterator
 
+from pyparsing import Word, ParseException, nums, Literal
 from networkx import MultiDiGraph, subgraph
 from pandas import DataFrame
 
@@ -122,7 +123,6 @@ class CircuitIR(AbstractBaseIR):
 
         edge_list = []
         for (source, target, edge_dict) in edges:
-
             # get weight
             weight = edge_dict.pop("weight", 1.)
             # get delay
@@ -267,7 +267,7 @@ class CircuitIR(AbstractBaseIR):
             # this syntax yields "node" back as default if it is not in label_map
             node = self.label_map.get(node, node)
             # re_reference operator labels, if necessary
-            op = self._rename_operator(node, op)
+            op = self._validate_rename_op_label(self[node], op)
             # ignore circuits for now
             # note: current implementation assumes, that this method is only called, if an edge is added
             path = "/".join((node, op, var))
@@ -278,7 +278,8 @@ class CircuitIR(AbstractBaseIR):
             separated = (node, op, var)
             yield separated
 
-    def _rename_operator(self, node_label: str, op_label: str) -> str:
+    @staticmethod
+    def _validate_rename_op_label(node: NodeIR, op_label: str) -> str:
         """
         References to operators in source/target references may mismatch actual operator labels, due to internal renaming
         that can not be accounted for in the YAML templates. This method looks for the first instance of an operator in
@@ -297,32 +298,36 @@ class CircuitIR(AbstractBaseIR):
         new_op_label
 
         """
-        # ToDo: reformat OperatorIR --> Operator label remains true to template and version number is stored internally
+        # variant 1: label already has a counter --> might actually already exist.
+
         if "." in op_label:
             try:
-                _ = self[node_label][op_label]
+                _ = node[op_label]
             except KeyError:
                 op_label, *_ = op_label.split(".")
             else:
                 return op_label
 
-        from pyrates.frontend.operator import OperatorTemplate
-        key_counter = OperatorTemplate.key_counter
-        if op_label in key_counter:
-            for i in range(key_counter[op_label] + 1):
-                new_op_label = f"{op_label}.{i}"
-                try:
-                    _ = self[node_label][new_op_label]
-                    break
-                except KeyError:
-                    continue
+        # build grammar for pyparsing
+        grammar = Literal(op_label) + "." + Word(nums)
+        found = 0  # count how many matching operators were found
+        for op_key in node:
+            try:
+                grammar.parseString(op_key, parseAll=True)
+            except ParseException:
+                continue
             else:
-                raise PyRatesException(f"Could not identify operator with base name {op_label} "
-                                       f"in node {node_label}.")
-        else:
-            new_op_label = f"{op_label}.0"
+                op_label = op_key
+                found += 1
 
-        return new_op_label
+        if found == 1:
+            return op_label
+        elif not found:
+            raise PyRatesException(f"Could not identify operator with base name '{op_label}' "
+                                   f"in node `{node}`.")
+        else:
+            raise PyRatesException(f"Unable to uniquely identify operator key. "
+                                   f"Found multiple occurrences for operator with base name '{op_label}'.")
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
 
