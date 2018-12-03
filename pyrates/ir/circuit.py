@@ -1,7 +1,6 @@
 """
 """
 import re
-from copy import deepcopy
 from typing import Union, Dict, Iterator
 
 from pyparsing import Word, ParseException, nums, Literal
@@ -11,7 +10,6 @@ from pandas import DataFrame
 from pyrates import PyRatesException
 from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
-from pyrates.ir.operator import OperatorIR
 from pyrates.ir.abc import AbstractBaseIR
 
 __author__ = "Daniel Rose"
@@ -124,12 +122,12 @@ class CircuitIR(AbstractBaseIR):
         edge_list = []
         for (source, target, edge_dict) in edges:
             # get weight
-            weight = edge_dict.pop("weight", 1.)
+            weight = edge_dict.get("weight", 1.)
             # get delay
-            delay = edge_dict.pop("delay", None)
+            delay = edge_dict.get("delay", None)
 
-            edge_ir = edge_dict["edge_ir"]
-            # ToDo: Implement default for empty edges without operators --> no need to provide edge IR
+            # get edge_ir or (if not included) default to an empty edge
+            edge_ir = edge_dict.get("edge_ir", EdgeIR())
 
             # test, if variables at source and target exist and reference them properly
             source, target = self._validate_separate_key_path(source, target)
@@ -290,7 +288,7 @@ class CircuitIR(AbstractBaseIR):
 
         Parameters
         ----------
-        node_label
+        node
         op_label
 
         Returns
