@@ -132,7 +132,7 @@ class CircuitIR(AbstractBaseIR):
             # ToDo: Implement default for empty edges without operators --> no need to provide edge IR
 
             # test, if variables at source and target exist and reference them properly
-            source, target = self._identify_sources_targets(source, target)
+            source, target = self._validate_separate_key_path(source, target)
 
             edge_list.append((source[0], target[0],  # edge_unique_key,
                               {"edge_ir": edge_ir,
@@ -164,12 +164,11 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        # ToDo: streamline code by removing duplications for source and target
         source_var = ""
         target_var = ""
         if identify_relations:
             # test, if variables at source and target exist and reference them properly
-            source, target = self._identify_sources_targets(source, target)
+            source, target = self._validate_separate_key_path(source, target)
         else:
             # assume that source and target strings are already consistent. This should be the case,
             # if the given strings were coming from existing circuits (instances of `CircuitIR`)
@@ -256,37 +255,28 @@ class CircuitIR(AbstractBaseIR):
 
         return unique_label
 
-    def _identify_sources_targets(self, source: str, target: str):
+    def _validate_separate_key_path(self, *paths: str):
 
-        # separate source and target specifiers
-        # TODO: streamline code by looping over source and target instead of duplicating the code.
-        #  possibly even separate both into separate function calls to the same (more generic) function
-        *source_node, source_op, source_var = source.split("/")
-        source_node = "/".join(source_node)
-        *target_node, target_op, target_var = target.split("/")
-        target_node = "/".join(target_node)
+        for key in paths:
 
-        # re-reference node labels, if necessary
-        # TODO: test first, if label actually exists in label map (which has always been the case so far).
-        source_node = self.label_map[source_node]
-        target_node = self.label_map[target_node]
-        # re_reference operator labels, if necessary
-        source_op = self._rename_operator(source_node, source_op)
-        target_op = self._rename_operator(target_node, target_op)
+            # (circuits), node, operator and variable specifiers
+            *node, op, var = key.split("/")
+            node = "/".join(node)
 
-        # ignore circuits for now
-        # note: current implementation assumes, that this method is only called, if an edge is added
-        source_path = "/".join((source_node, source_op, source_var))
-        target_path = "/".join((target_node, target_op, target_var))
-
-        # check if path is valid
-        for path in (source_path, target_path):
+            # re-reference node labels, if necessary
+            # this syntax yields "node" back as default if it is not in label_map
+            node = self.label_map.get(node, node)
+            # re_reference operator labels, if necessary
+            op = self._rename_operator(node, op)
+            # ignore circuits for now
+            # note: current implementation assumes, that this method is only called, if an edge is added
+            path = "/".join((node, op, var))
+            # check if path is valid
             if path not in self:
                 raise PyRatesException(f"Could not find object with key path `{path}`.")
 
-        source = (source_node, source_op, source_var)
-        target = (target_node, target_op, target_var)
-        return source, target
+            separated = (node, op, var)
+            yield separated
 
     def _rename_operator(self, node_label: str, op_label: str) -> str:
         """
