@@ -2,8 +2,9 @@
 """
 import re
 from copy import deepcopy
-from typing import Union, Dict
+from typing import Union, Dict, Iterator
 
+from pyparsing import Word, ParseException, nums, Literal
 from networkx import MultiDiGraph, subgraph
 from pandas import DataFrame
 
@@ -122,7 +123,6 @@ class CircuitIR(AbstractBaseIR):
 
         edge_list = []
         for (source, target, edge_dict) in edges:
-
             # get weight
             weight = edge_dict.pop("weight", 1.)
             # get delay
@@ -132,7 +132,7 @@ class CircuitIR(AbstractBaseIR):
             # ToDo: Implement default for empty edges without operators --> no need to provide edge IR
 
             # test, if variables at source and target exist and reference them properly
-            source, target = self._identify_sources_targets(source, target)
+            source, target = self._validate_separate_key_path(source, target)
 
             edge_list.append((source[0], target[0],  # edge_unique_key,
                               {"edge_ir": edge_ir,
@@ -164,12 +164,11 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        # ToDo: streamline code by removing duplications for source and target
         source_var = ""
         target_var = ""
         if identify_relations:
             # test, if variables at source and target exist and reference them properly
-            source, target = self._identify_sources_targets(source, target)
+            source, target = self._validate_separate_key_path(source, target)
         else:
             # assume that source and target strings are already consistent. This should be the case,
             # if the given strings were coming from existing circuits (instances of `CircuitIR`)
@@ -256,39 +255,31 @@ class CircuitIR(AbstractBaseIR):
 
         return unique_label
 
-    def _identify_sources_targets(self, source: str, target: str):
+    def _validate_separate_key_path(self, *paths: str):
 
-        # separate source and target specifiers
-        # TODO: streamline code by looping over source and target instead of duplicating the code.
-        #  possibly even separate both into separate function calls to the same (more generic) function
-        *source_node, source_op, source_var = source.split("/")
-        source_node = "/".join(source_node)
-        *target_node, target_op, target_var = target.split("/")
-        target_node = "/".join(target_node)
+        for key in paths:
 
-        # re-reference node labels, if necessary
-        # TODO: test first, if label actually exists in label map (which has always been the case so far).
-        source_node = self.label_map[source_node]
-        target_node = self.label_map[target_node]
-        # re_reference operator labels, if necessary
-        source_op = self._rename_operator(source_node, source_op)
-        target_op = self._rename_operator(target_node, target_op)
+            # (circuits), node, operator and variable specifiers
+            *node, op, var = key.split("/")
+            node = "/".join(node)
 
-        # ignore circuits for now
-        # note: current implementation assumes, that this method is only called, if an edge is added
-        source_path = "/".join((source_node, source_op, source_var))
-        target_path = "/".join((target_node, target_op, target_var))
-
-        # check if path is valid
-        for path in (source_path, target_path):
+            # re-reference node labels, if necessary
+            # this syntax yields "node" back as default if it is not in label_map
+            node = self.label_map.get(node, node)
+            # re_reference operator labels, if necessary
+            op = self._validate_rename_op_label(self[node], op)
+            # ignore circuits for now
+            # note: current implementation assumes, that this method is only called, if an edge is added
+            path = "/".join((node, op, var))
+            # check if path is valid
             if path not in self:
                 raise PyRatesException(f"Could not find object with key path `{path}`.")
 
-        source = (source_node, source_op, source_var)
-        target = (target_node, target_op, target_var)
-        return source, target
+            separated = (node, op, var)
+            yield separated
 
-    def _rename_operator(self, node_label: str, op_label: str) -> str:
+    @staticmethod
+    def _validate_rename_op_label(node: NodeIR, op_label: str) -> str:
         """
         References to operators in source/target references may mismatch actual operator labels, due to internal renaming
         that can not be accounted for in the YAML templates. This method looks for the first instance of an operator in
@@ -307,38 +298,45 @@ class CircuitIR(AbstractBaseIR):
         new_op_label
 
         """
-        # ToDo: reformat OperatorIR --> Operator label remains true to template and version number is stored internally
+        # variant 1: label already has a counter --> might actually already exist.
+
         if "." in op_label:
             try:
-                _ = self[node_label][op_label]
+                _ = node[op_label]
             except KeyError:
                 op_label, *_ = op_label.split(".")
             else:
                 return op_label
 
-        key_counter = OperatorIR.key_counter
-        if op_label in key_counter:
-            for i in range(key_counter[op_label] + 1):
-                new_op_label = f"{op_label}.{i}"
-                try:
-                    _ = self[node_label][new_op_label]
-                    break
-                except KeyError:
-                    continue
+        # build grammar for pyparsing
+        grammar = Literal(op_label) + "." + Word(nums)
+        found = 0  # count how many matching operators were found
+        for op_key in node:
+            try:
+                grammar.parseString(op_key, parseAll=True)
+            except ParseException:
+                continue
             else:
-                raise PyRatesException(f"Could not identify operator with template name {op_label} "
-                                       f"in node {node_label}.")
+                op_label = op_key
+                found += 1
+
+        if found == 1:
+            return op_label
+        elif not found:
+            raise PyRatesException(f"Could not identify operator with base name '{op_label}' "
+                                   f"in node `{node}`.")
         else:
-            new_op_label = f"{op_label}.0"
+            raise PyRatesException(f"Unable to uniquely identify operator key. "
+                                   f"Found multiple occurrences for operator with base name '{op_label}'.")
 
-        return new_op_label
-
-    def _getter(self, key):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
 
         if key in self.sub_circuits:
-            return SubCircuitView(self, key)
+            item = SubCircuitView(self, key)
         else:
-            return self.graph.nodes[key]["node"]
+            item = self.graph.nodes[key]["node"]
+
+        return item
 
     @property
     def nodes(self):
@@ -349,10 +347,6 @@ class CircuitIR(AbstractBaseIR):
     def edges(self):
         """Shortcut to self.graph.edges. See documentation of `networkx.MultiDiGraph.edges`."""
         return self.graph.edges
-
-    @classmethod
-    def from_template(cls, template, *args, **kwargs):
-        return template.apply(*args, **kwargs)
 
     @classmethod
     def from_circuits(cls, label: str, circuits: dict, connectivity: Union[list, tuple, DataFrame] = None):
@@ -418,6 +412,7 @@ class CircuitIR(AbstractBaseIR):
         -------
 
         """
+        # ToDo: disallow usage of templates here
 
         # parse data type of circuit
         if isinstance(circuit, dict):
@@ -454,35 +449,6 @@ class CircuitIR(AbstractBaseIR):
             # target_var = data.pop("target_var")
             self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
 
-    def network_def(self, revert_node_names=True):
-        from pyrates.frontend.circuit.utility import BackendIRFormatter
-        return BackendIRFormatter.network_def(self, revert_node_names=revert_node_names)
-
-    def to_dict(self):
-        """Reformat graph structure into a dictionary that can be saved as YAML template."""
-
-        node_dict = {}
-        for node_key, node_data in self.nodes(data=True):
-            node = node_data["node"]
-            if node.template:
-                node_dict[node_key] = node.template.path
-            else:
-                # if no template is given, build and search deeper for node templates
-                pass
-
-        edge_list = []
-        for source, target, edge_data in self.edges(data=True):
-            edge = edge_data.pop("edge_ir")
-            source = f"{source}/{edge_data['source_var']}"
-            target = f"{target}/{edge_data['target_var']}"
-            edge_list.append((source, target, edge.template.path, dict(weight=edge_data["weight"],
-                                                                       delay=edge_data["delay"])))
-
-        # use Python template as base, since inheritance from YAML templates is ambiguous for circuits
-        base = "CircuitTemplate"
-
-        return dict(nodes=node_dict, edges=edge_list, base=base)
-
 
 class SubCircuitView(AbstractBaseIR):
     """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
@@ -494,7 +460,7 @@ class SubCircuitView(AbstractBaseIR):
         self.top_level_circuit = top_level_circuit
         self.subgraph_key = subgraph_key
 
-    def _getter(self, key: str):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
 
         key = f"{self.subgraph_key}/{key}"
 
@@ -509,10 +475,6 @@ class SubCircuitView(AbstractBaseIR):
 
         nodes = (node for node in self.top_level_circuit.nodes if node.startswith(self.subgraph_key))
         return subgraph(self.top_level_circuit.graph, nodes)
-
-    @classmethod
-    def from_template(cls, template, **kwargs):
-        raise NotImplementedError(f"{cls} does not implement from_template.")
 
     def __str__(self):
 

@@ -1,5 +1,7 @@
 """
 """
+from typing import Iterator, Dict
+
 from networkx import DiGraph, find_cycle, NetworkXNoCycle
 
 from pyrates import PyRatesException
@@ -13,7 +15,7 @@ __status__ = "Development"
 class GraphEntityIR(AbstractBaseIR):
     """Intermediate representation for nodes and edges."""
 
-    def __init__(self, operators: dict, template: str =None, values: dict=None):
+    def __init__(self, operators: dict, template: str=None, values: dict=None):
 
         self.op_graph = DiGraph()
         all_outputs = {}  # type: Dict[str, dict]
@@ -91,50 +93,35 @@ class GraphEntityIR(AbstractBaseIR):
             raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node "
                                    "or edge.")
 
-    def _getter(self, key: str):
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """
-        Inoked by __getitem__. Returns operator specified by 'key'
+        Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If `key_iter`
+        contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of
+        a variable that belong to an operator is returned.
+
         Parameters
         ----------
         key
+        key_iter
 
         Returns
         -------
-        operator
+        item
+            operator or variable properties
         """
 
         try:
-            return self.op_graph.nodes[key]["operator"]
-        except KeyError as e:
-            if key in str(e):
-                raise KeyError(f"Could not find operator '{key}''")
-            else:
-                raise e
-
-    def __getitem__(self, key: str):
-        """More specific implementation of __getitem__ that distinguishes between operator or variable as output"""
-
-        # check type:
-        if not isinstance(key, str):
-            raise TypeError("Keys must be strings of format `key1/key2/...`.")
-
-        try:
-            if "/" in key:
-                # assume it is operator/variable
-                op, var = key.split("/")
-                item = self.op_graph.nodes[op]["variables"][var]
-            else:
-                # assume it is only operator
-                item = self.op_graph.nodes[key]["operator"]
-        except KeyError as e:
-            if hasattr(self, key):
-                item = getattr(self, key)
-            else:
-                raise e
+            var = next(key_iter)
+        except StopIteration:
+            # no variable specified, so we return an operator
+            item = self.op_graph.nodes[key]["operator"]
+        else:
+            # variable specified, so we return variable properties instead
+            item = self.op_graph.nodes[key]["variables"][var]
 
         return item
 
-    @classmethod
-    def from_template(cls, template, values: dict=None):
+    def __iter__(self):
+        """Return an iterator containing all operator labels in this node."""
+        return iter(self.op_graph.nodes)
 
-        return cls(operators=template.operators, template=template, values=values)

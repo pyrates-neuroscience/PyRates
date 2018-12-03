@@ -7,7 +7,6 @@ from pyrates.frontend.parser.yaml import TemplateLoader
 
 
 class GraphEntityTemplate(AbstractBaseTemplate):
-
     target_ir = GraphEntityIR
 
     def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
@@ -43,8 +42,10 @@ class GraphEntityTemplate(AbstractBaseTemplate):
         path = self._format_path(path)
         return OperatorTemplate.from_yaml(path)
 
-    def apply(self, values: dict=None):
-        return super().apply(values)
+    def apply(self, values: dict = None):
+
+        # ToDo: change so that only IR classes are forwarded instead of templates.
+        return self.target_ir(operators=self.operators, template=self.path, values=values)
 
 
 class GraphEntityTemplateLoader(TemplateLoader):

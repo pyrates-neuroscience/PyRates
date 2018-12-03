@@ -197,8 +197,8 @@ def test_network_def_workaround():
 
     circuit = template.apply()
 
-    nd = circuit.network_def()
-
+    from pyrates.frontend.parser.graph import circuit_to_network_def
+    nd = circuit_to_network_def(circuit, revert_node_names=True)
     operator_order = ['LinearCouplingOperator.3',
                       'LinearCouplingOperator.1',
                       'JansenRitExcitatorySynapseRCO.0',
@@ -232,21 +232,11 @@ def test_network_def_workaround():
     # assert dict(nd.edges[('JR_EIN.0', 'JR_PC.0', 0)]) == edge
 
 
-# @pytest.mark.skip
-# def test_differential_equation_reparsing():
-#
-#     from pyrates.frontend.node import NodeTemplate
-#
-#     template = NodeTemplate.from_yaml("pyrates.frontend.population.templates.JansenRitIN")
-#     node = template.apply()
-#
-#     assert len(node["JansenRitExcitatorySynapseRCO.0"].equations) == 2
-
-
 def test_yaml_dump():
     from pyrates.frontend.circuit import CircuitTemplate
     circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.circuit.JansenRitCircuit").apply()
-    circuit.to_yaml("../output/yaml_dump.yaml", "DumpedCircuit")
+    from pyrates.frontend.parser.yaml import circuit_to_yaml
+    circuit_to_yaml(circuit, "../output/yaml_dump.yaml", "DumpedCircuit")
 
     # reload saved circuit
     saved_circuit = CircuitTemplate.from_yaml("../output/yaml_dump.yaml.DumpedCircuit").apply()

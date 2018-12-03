@@ -46,7 +46,6 @@ class AbstractBaseTemplate:
 
     def apply(self, *args, **kwargs):
 
-        intermediate_representation = self.target_ir.from_template(self, *args, **kwargs)
-        return intermediate_representation
+        raise NotImplementedError
 
 

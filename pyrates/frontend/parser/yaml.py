@@ -141,3 +141,16 @@ class TemplateLoader:
         return name, file, abspath
 
 
+def circuit_to_yaml(circuit, path: str, name: str):
+
+    from pyrates.frontend.parser.dictionary import circuit_to_dict
+    dict_repr = {name: circuit_to_dict(circuit)}
+
+    from ruamel.yaml import YAML
+    yaml = YAML()
+
+    from pyrates.utility.filestorage import create_directory
+    create_directory(path)
+    from pathlib import Path
+    path = Path(path)
+    yaml.dump(dict_repr, path)
