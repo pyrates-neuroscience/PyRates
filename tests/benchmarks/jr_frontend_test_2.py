@@ -9,7 +9,7 @@ c = CircuitIR()
 for i in range(3):
     c.add_circuit(f"jrc.{i}", circuit)
 
-compute_graph = ComputeGraph(c, vectorize="nodes")
+compute_graph = ComputeGraph(c, vectorize="none")
 
 result, _ = compute_graph.run(1., outputs={"V": ("all", "PRO.0", "PSP")}, out_dir="/tmp/log")
 
