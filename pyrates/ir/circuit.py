@@ -3,7 +3,7 @@
 import re
 from typing import Union, Dict, Iterator
 
-from pyparsing import Word, ParseException, nums, Literal
+from pyparsing import Word, ParseException, nums, Literal, LineEnd, Suppress, alphanums
 from networkx import MultiDiGraph, subgraph
 from pandas import DataFrame
 
@@ -20,14 +20,15 @@ class CircuitIR(AbstractBaseIR):
     """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
 
+    # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
+
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
         """
         Parameters:
         -----------
         label
-            string label, used if circuit is part of other circuits
-            ToDo: check, if this is actually used in practise
+            String label, could be used as fallback when subcircuiting this circuit. Currently not used, though.
         circuits
             Dictionary of sub-circuits to be added. Keys are string labels for circuits that serve as namespaces for the
             subcircuits. Items must be `CircuitIR` instances.
@@ -208,8 +209,6 @@ class CircuitIR(AbstractBaseIR):
         Uniqueness is generally ensure by appending a counter of the form ".0" . If the given label already has a
         counter, it will be detected ond potentially altered if uniqueness requires it. The resulting (new) label is
         returned.
-        TODO: cache assigned labels directly in label_map instead of solely returning it (may still want to return it
-         though)
 
         Parameters
         ----------
@@ -220,8 +219,8 @@ class CircuitIR(AbstractBaseIR):
         unique_label
         """
         # test, if label already has a counter and separate it, if necessary
+        # could use pyparsing instead of regex, but actually seems more robust and simple enough in this case
         match = re.match("(.+)[.]([\d]+$)", label)
-        # ToDo: use pyparsing instead of regex for readability
         if match:
             # see if label already exists, just continue if it doesn't
             if label in self:
