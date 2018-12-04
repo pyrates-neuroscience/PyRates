@@ -164,6 +164,7 @@ class ComputeGraph(object):
             tidx = self._get_edge_attr(source_node, target_node, edge_idx, 'target_idx')
             svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var')
             tvar = self._get_edge_attr(source_node, target_node, edge_idx, 'target_var', retrieve_from_node=False)
+            add_project = self._get_edge_attr(source_node, target_node, edge_idx, 'add_project')
 
             # get original target variable
             op, var = tvar.split('/')
@@ -174,20 +175,23 @@ class ComputeGraph(object):
 
             # define target index
             if delay is not None and tidx:
-                tidx = [idx + d for idx, d in zip(tidx, delay)]
+                tidx = [[idx, d] for idx, d in zip(tidx, delay)]
             elif not tidx and delay is not None:
                 tidx = list(delay)
 
             # create mapping equation and its arguments
             d = "[target_idx]" if tidx else ""
             idx = "[source_idx]" if sidx else ""
-            eq = f"target_var{d} = source_var{idx} * weight"
+            assign = '+=' if add_project else '='
+            eq = f"target_var{d} {assign} source_var{idx} * weight"
             args = {'vars': {}, 'inputs': {}}
             args['vars']['weight'] = {'vtype': 'constant', 'dtype': svar.dtype, 'value': weight}
             if tidx:
-                args['vars']['target_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': tidx}
+                args['vars']['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                              'value': np.array(tidx, dtype=np.int32)}
             if sidx:
-                args['vars']['source_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': sidx}
+                args['vars']['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                              'value': np.array(sidx, dtype=np.float32)}
             args['vars']['target_var'] = tvar
             args['inputs']['source_var'] = svar
 
@@ -291,7 +295,8 @@ class ComputeGraph(object):
         outputs_tmp = dict()
         if outputs:
             for key, val in outputs.items():
-                outputs_tmp.update(self.get_var(node=val[0], op=val[1], var=val[2], var_name=key))
+                outputs_tmp.update(self.get_var(node=val[0], op=val[1], var=val[2], var_name=key,
+                                                scope="output_collection"))
 
         # add output collector variables to graph
         output_col = {}
@@ -421,7 +426,7 @@ class ComputeGraph(object):
 
         return out_vars, sim_time
 
-    def get_var(self, node: str, op: str, var: str, var_name=None) -> dict:
+    def get_var(self, node: str, op: str, var: str, var_name=None, **kwargs) -> dict:
         """
 
         Parameters
@@ -462,6 +467,12 @@ class ComputeGraph(object):
             for node_tmp in self._net_config_map.keys():
                 if node in node_tmp and 'comb' not in node_tmp:
                     var_col[f'{var_name}/{node_tmp}'] = self._get_node_attr(node=node, op=op, attr=var)
+
+        # remove singleton dimensions from vars
+        for key, var in var_col.items():
+            if 1 in var.shape:
+                idx = list(var.shape).index(1)
+                var_col[key] = self.backend.add_op('squeeze', var, idx, **kwargs)
 
         return var_col
 
@@ -1126,10 +1137,11 @@ class ComputeGraph(object):
             inputs[var] = {'sources': [f'{op}_{var}_buffer_read_{idx}'],
                            'reduce_dim': True}
 
-        # update edge target information
+        # update edge information
         s, t, e = edge
         self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_buffer_rotate_{idx}/{var}_buffer_{idx}',
                             net_config=net_config)
+        self._set_edge_attr(s, t, e, 'add_project', True, net_config=net_config)
 
     def _add_synaptic_input_collector(self, node, op, var, idx, edge, net_config=None):
         """
