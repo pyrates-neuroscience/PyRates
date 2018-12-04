@@ -335,13 +335,13 @@ class ComputeGraph(object):
                         var = self._get_node_attr(node=self.name, op=key[1], attr=key[2])
                         inp_dict[var] = np.reshape(val[step], var.shape)
 
-                    elif any(['comb' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                    elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
                         # node-vectorized case
                         if key[0] == 'all':
 
                             # go through all nodes, extract the variable and add it to input dict
-                            for i, node in enumerate(self.net_config.nodes.keys()):
+                            for i, node in enumerate(self._net_config_map.keys()):
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
                                 inp_dict[var] = np.reshape(val[step, i], var.shape)
 
@@ -843,7 +843,7 @@ class ComputeGraph(object):
                 return None
 
     def _apply_idx(self, var, idx=None):
-        return var[idx] if idx else var
+        return var if idx is None else var[idx]
 
     def _get_nodes_with_attr(self, attr, val, net_config=None):
         """

@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # parameters
-dt = 1e-4
-sim_time = 1.
+dt = 1e-3
+sim_time = 4.0
 inp = np.zeros((int(sim_time/dt), 3)) + 0.
 
 # network set-up
@@ -18,8 +18,8 @@ compute_graph = ComputeGraph(c, vectorize="none", dt=dt)
 
 # simulation
 result, _ = compute_graph.run(sim_time,
-                              inputs={("all", "PRO.0", "I"): inp},
-                              outputs={"V": ("PC", "PRO.0", "PSP")},
+                              #inputs={("all", "PRO.0", "I"): inp},
+                              outputs={"r": ("PC", "PRO.0", "r")},
                               out_dir="/tmp/log")
 
 # plotting

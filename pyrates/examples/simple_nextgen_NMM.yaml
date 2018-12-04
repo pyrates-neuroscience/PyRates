@@ -4,8 +4,8 @@
 PRO:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/PI + 2. * r * v"
-    - "d/dt * v = v**2 + eta + J * PSP + I + (PI * r)**2"
+    - "d/dt * r = delta/PI + 2.*r*v"
+    - "d/dt * v = v**2 + eta + J * r + I - (PI*r)**2"
   variables:
     r:
       default: output
@@ -16,11 +16,11 @@ PRO:
     eta:
       default: -2.5
     J:
-      default: 10.0
+      default: 15.
     PSP:
       default: input
     I:
-      default: placeholder
+      default: variable
 
 RPO_e:
   base: OperatorTemplate
@@ -29,9 +29,9 @@ RPO_e:
     - 'd/dt * PSP_t =  h/tau * r_in - (1./tau)**2 * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
-      default: 3.25e-3
+      default: 1.
     tau:
-      default: 10e-3
+      default: 1.
     r_in:
       default: input
     PSP:
@@ -46,9 +46,9 @@ RPO_i:
     - 'd/dt * PSP_t =  h/tau * r_in - (1./tau)**2 * PSP - 2. * 1./tau * PSP_t'
   variables:
     h:
-      default: -22.0
+      default: -2.0
     tau:
-      default: 20.0
+      default: 2.0
     r_in:
       default: input
     PSP:
@@ -59,20 +59,16 @@ RPO_i:
 PC:
   base: NodeTemplate
   operators:
-    - RPO_e
-    - RPO_i
     - PRO
 
 IIN:
   base: NodeTemplate
   operators:
-    - RPO_e
     - PRO
 
 EIN:
   base: NodeTemplate
   operators:
-    - RPO_e
     - PRO
 
 DummyEdge:
@@ -86,7 +82,7 @@ JRC:
     IIN: IIN
     PC: PC
   edges:
-    - [PC/PRO/r, IIN/RPO_e/r_in, DummyEdge, {weight: 33.75, delay: 0.}]
-    - [PC/PRO/r, EIN/RPO_e/r_in, DummyEdge, {weight: 135., delay: 0.}]
-    - [EIN/PRO/r, PC/RPO_e/r_in, DummyEdge, {weight: 108., delay: 0.}]
-    - [IIN/PRO/r, PC/RPO_i/r_in, DummyEdge, {weight: 33.75, delay: 0.}]
+    - [PC/PRO/r, IIN/PRO/I, DummyEdge, {weight: 0.25}]
+    - [PC/PRO/r, EIN/PRO/I, DummyEdge, {weight: 1.}]
+    - [EIN/PRO/r, PC/PRO/I, DummyEdge, {weight: 0.8}]
+    - [IIN/PRO/r, PC/PRO/I, DummyEdge, {weight: 0.25}]

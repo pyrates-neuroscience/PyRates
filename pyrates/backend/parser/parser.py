@@ -670,7 +670,7 @@ class ExpressionParser(ParserElement):
                 op_idx = eval(f'op[{idx}]')
                 return self.broadcast(self.assign, op_idx, update, **kwargs)
             except ValueError:
-                idx = eval(f"{idx}")
+                idx = self._process_idx(idx, op.shape, **locals())
                 try:
                     op_idx = self.backend.add_op('scatter', idx, update, op.shape)
                 except ValueError:
@@ -687,7 +687,7 @@ class ExpressionParser(ParserElement):
             try:
                 op_idx = eval(f'op[{idx}]')
             except ValueError:
-                idx = eval(f"{idx}")
+                idx = self._process_idx(idx, op.shape, **locals())
                 try:
                     if len(idx.shape) > 1:
                         op_idx = self.backend.add_op('gather_nd', op, idx, **kwargs)
@@ -710,10 +710,62 @@ class ExpressionParser(ParserElement):
 
     def update(self, var_old, var_delta, dt, **kwargs):
         """Solves single step of a differential equation.
+
+        Parameters
+        ----------
+        var_old
+        var_delta
+        dt
+        kwargs
+
+        Returns
+        -------
+
         """
+
         kwargs.update(self.parser_kwargs)
         var_update = self.broadcast('*', var_delta, dt, **kwargs)
         return self.broadcast('+', var_old, var_update, **kwargs)
+
+    def _process_idx(self, idx, shape, **kwargs):
+        """
+
+        Parameters
+        ----------
+        idx
+        shape
+        kwargs
+
+        Returns
+        -------
+
+        """
+
+        try:
+            return kwargs[idx]
+        except KeyError:
+            dims = idx.split(',')
+            indices = []
+            for i, dim in enumerate(dims):
+                try:
+                    indices.append([kwargs[dim]])
+                except KeyError:
+                    if ':' in dim:
+                        indices.append([j for j in range(shape[i])])
+                    else:
+                        indices.append([int(dim)])
+            try:
+                return self.backend.add_var(type='constant', name='idx', value=np.array(indices, dtype=np.int32))
+            except ValueError:
+                n_indices = sum([len(ind) for ind in indices])
+                n_dims = len(indices)
+                idx = np.zeros((n_indices, n_dims), dtype=np.int32)
+                n = 0
+                for idx0 in indices[0]:
+                    for idx1 in indices[1]:
+                        idx[n, :] = [idx0, idx1]
+                        n += 1
+                return self.backend.add_var(type='constant', name='idx', value=idx)
 
     def match_shapes(self, op1, op2, adjust_second=True, assign=False):
         """
@@ -761,7 +813,7 @@ class ExpressionParser(ParserElement):
                 # create array of zeros and fill it with op2
                 op1 = self.backend.add_op('+', self.backend.add_op("zeros", op2.shape, op2.dtype, op1))
 
-            elif len(op2.shape) > len(op1.shape) and 1 in op2.shape:
+            elif len(op2.shape) > len(op1.shape) and 1 in op2.shape and len(op1.shape) > 0:
 
                 # reshape op2 to match the shape of op1
                 target_shape = op2.shape
