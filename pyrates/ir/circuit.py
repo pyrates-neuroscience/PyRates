@@ -5,7 +5,7 @@ from copy import deepcopy
 from typing import Union, Dict, Iterator
 
 from pyparsing import Word, ParseException, nums, Literal, LineEnd, Suppress, alphanums
-from networkx import MultiDiGraph, subgraph
+from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGraph
 from pandas import DataFrame
 
 from pyrates import PyRatesException
@@ -455,106 +455,110 @@ class CircuitIR(AbstractBaseIR):
         else:
             nodes = self.nodes(data=True)
 
-        circuit = CircuitIR(nodes=nodes)
-        circuit.sub_circuits = self.sub_circuits
+        # circuit = CircuitIR(nodes=nodes)
+        # circuit.sub_circuits = self.sub_circuits
 
+        op_label_counter = {}
+
+        edges = []
         for source, target, data in self.edges(data=True):
+
+            source_var = data["source_var"]
+            target_var = data["target_var"]
+
+            edge_ir = data["edge_ir"]  # type: EdgeIR
+            op_graph = edge_ir.op_graph
             if copy_data:
-                data = deepcopy(data)
+                op_graph = deepcopy(op_graph)
 
-    @classmethod
-    def _move_edge_ops_to_node(cls, target, node_dict: dict, edge_dict: dict) -> (dict, dict):
-        """
+            input_var = edge_ir.input
+            output_var = edge_ir.output
 
-        Parameters
-        ----------
-        target
-            Key identifying target node in backend graph
-        node_dict
-            Dictionary of target node (to move operators into)
-        edge_dict
-            Dictionary with edge properties (to move operators from)
-        Returns
-        -------
-        node_dict
-            Updated dictionary of target node
-        edge_dict
-             Dictionary of reformatted edge
-        """
-        # grab all edge variables
-        edge = edge_dict["edge_ir"]  # type: EdgeIR
-        source_var = edge_dict["source_var"]
-        target_var = edge_dict["target_var"]
-        weight = edge_dict["weight"]
-        delay = edge_dict["delay"]
-        input_var = edge.input
-        output_var = edge.output
+            weight = data["weight"]
+            delay = data["delay"]
 
-        if len(edge.op_graph) > 0:
-            # reformat all edge internals into operators + operator_args
-            op_data = cls._nd_reformat_operators(edge.op_graph)  # type: dict
-            op_order = cls._nd_get_operator_order(edge.op_graph)  # type: List[str]
-            operators = op_data["operators"]
-            operator_args = op_data["operator_args"]
+            if len(op_graph) > 0:
 
-            # operator keys refer to a unique combination of template names and changed values
+                target_var = self._move_ops_to_target(target, input_var, output_var, target_var, op_graph,
+                                                      op_label_counter, nodes)
+                # side effect: changes op_label_counter and nodes dictionary
 
-            # add operators to target node in reverse order, so they can be safely prepended
-            added_ops = False
-            for op_name in reversed(op_order):
-                # check if operator name is already known in target node
-                if op_name in node_dict["operators"]:
-                    pass
-                else:
-                    added_ops = True
-                    # this should all go smoothly, because operator should not be known yet
-                    # add operator dict to target node operators
-                    node_dict["operators"][op_name] = operators[op_name]
-                    # prepend operator to op_order
-                    node_dict["operator_order"].insert(0, op_name)
-                    # ToDo: consider using collections.deque instead
-                    # add operator args to target node
-                    node_dict["operator_args"].update(operator_args)
+            data = dict(source_var=source_var, target_var=target_var,
+                        edge_ir=EdgeIR(), weight=weight, delay=delay)
+            edges.append((source, target, data))
 
-            out_op = op_order[-1]
-            out_var = operators[out_op]['output']
-            if added_ops:
-                # append operator output to target operator sources
-                # assume that only last operator in edge operator_order gives the output
-                # for op_name in node_dict["operators"]:
-                #     if out_var in node_dict["operators"][op_name]["inputs"]:
-                #         if out_var_long not in node_dict["operators"][op_name]["inputs"][out_var]:
-                #             # add reference to source operator that was previously in an edge
-                #             node_dict["operators"][op_name]["inputs"][out_var].append(output_var)
+        circuit = CircuitIR()
+        circuit.sub_circuits = self.sub_circuits
+        circuit.add_nodes_from(nodes)
+        circuit.add_edges_from(edges)
+        return circuit
 
-                # shortcut, since target_var and output_var are known:
-                target_op, target_vname = target_var.split("/")
-                if output_var not in node_dict["operators"][target_op]["inputs"][target_vname]["sources"]:
-                    node_dict["operators"][target_op]["inputs"][target_vname]["sources"].append(out_op)
+    @staticmethod
+    def _move_ops_to_target(target, input_var, output_var, target_var, op_graph: DiGraph, op_label_counter, nodes):
+        # check, if cycles are present in operator graph (which would be problematic
+        try:
+            find_cycle(op_graph)
+        except NetworkXNoCycle:
+            pass
+        else:
+            raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
 
-            # simplify edges and save into edge_list
-            # op_graph = edge.op_graph
-            # in_ops = [op for op, in_degree in op_graph.in_degree if in_degree == 0]
-            # if len(in_ops) == 1:
-            #     # simple case: only one input operator? then it's the first in the operator order.
-            #     target_op = op_order[0]
-            #     target_inputs = operators[target_op]["inputs"]
-            #     if len(target_var) != 1:
-            #         raise PyRatesException("Either too many or too few input variables detected. "
-            #                                "Needs to be exactly one.")
-            #     target_var = list(target_inputs.keys())[0]
-            #     target_var = f"{target_op}/{target_var}"
-            # else:
-            #     raise NotImplementedError("Transforming an edge with multiple input operators is not yet handled.")
+        target_node = nodes[target]["node"]
+        if target not in op_label_counter:
+            op_label_counter[target] = {}
 
-            # shortcut to new target war:
-            target_var = input_var
-        edge_dict = {"source_var": source_var,
-                     "target_var": target_var,
-                     "weight": weight,
-                     "delay": delay}
-        # set target_var to singular input of last operator added
-        return node_dict, edge_dict
+        key_map = {}
+        # first pass: get all labels right
+        for key in op_graph.nodes:
+            # rename operator key by appending another counter
+            if key in op_label_counter[target]:
+                # already renamed it previously --> increase counter
+                op_label_counter[target][key] += 1
+                key_map[key] = f"{key}.{op_label_counter[target][key]}"
+
+            else:
+                # not renamed previously --> initialize counter to 0
+                op_label_counter[target][key] = 0
+                key_map[key] = f"{key}.0"
+
+        # second pass: add operators to target op graph and rename sources according to key_map
+        for key, data in op_graph.nodes(data=True):
+            op = data["operator"]
+            variables = data["variables"]
+            # go through all input variables and rename source operators
+            for var, var_data in op.inputs.items():
+                sources = []
+                for source_op in var_data["sources"]:
+                    sources.append(key_map[source_op])
+                op.inputs[var]["sources"] = sources
+
+            # add operator to target_node's operator graph
+            # TODO: implement add_node method on OperatorGraph class
+            target_node.op_graph.add_node(key_map[key], operator=op, variables=variables)
+
+        # add edges that previously existed
+        for source_op, target_op in op_graph.edges:
+            # rename edge keys accordingly
+            source_op = key_map[source_op]
+            target_op = key_map[target_op]
+
+            target.op_graph.add_edge(source_op, target_op)
+
+        # add new edges based on output and target of edge
+        target_op, target_var = target_var.split("/")
+        output_op, output_var = output_var.split("/")
+        output_op = key_map[output_op]
+
+        target_node[target_op].inputs[target_var]["sources"].append(output_op)
+
+        # make sure the changes are saved (might not be necessary)
+        nodes[target]["node"] = target_node
+
+        # reassign target variable of edge
+        target_op, target_var = input_var.split("/")
+        return f"{key_map[target_op]}/{target_var}"
+
+
 
 
 
