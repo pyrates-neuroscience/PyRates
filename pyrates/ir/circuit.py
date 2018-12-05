@@ -131,6 +131,14 @@ class CircuitIR(AbstractBaseIR):
             # get edge_ir or (if not included) default to an empty edge
             edge_ir = edge_dict.get("edge_ir", EdgeIR())
 
+            if "target_var" in edge_dict:
+                target_var = edge_dict["target_var"]
+                target = f"{target}/{target_var}"
+
+            if "source_var" in edge_dict:
+                source_var = edge_dict["source_var"]
+                source = f"{source}/{source_var}"
+
             # test, if variables at source and target exist and reference them properly
             source, target = self._validate_separate_key_path(source, target)
 
@@ -258,7 +266,9 @@ class CircuitIR(AbstractBaseIR):
         for key in paths:
 
             # (circuits), node, operator and variable specifiers
+
             *node, op, var = key.split("/")
+
             node = "/".join(node)
 
             # re-reference node labels, if necessary
@@ -455,8 +465,13 @@ class CircuitIR(AbstractBaseIR):
         else:
             nodes = self.nodes(data=True)
 
-        # circuit = CircuitIR(nodes=nodes)
-        # circuit.sub_circuits = self.sub_circuits
+        # this does not preserve additional node attributes
+        # node_attrs = {}
+        for key, data in nodes.items():
+            nodes[key] = data["node"]
+            # node_attrs.update(**data)
+
+        # node_attrs.pop("node")
 
         op_label_counter = {}
 
@@ -503,7 +518,7 @@ class CircuitIR(AbstractBaseIR):
         else:
             raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
 
-        target_node = nodes[target]["node"]
+        target_node = nodes[target]
         if target not in op_label_counter:
             op_label_counter[target] = {}
 
@@ -552,7 +567,7 @@ class CircuitIR(AbstractBaseIR):
         target_node[target_op].inputs[target_var]["sources"].append(output_op)
 
         # make sure the changes are saved (might not be necessary)
-        nodes[target]["node"] = target_node
+        nodes[target] = target_node
 
         # reassign target variable of edge
         target_op, target_var = input_var.split("/")
