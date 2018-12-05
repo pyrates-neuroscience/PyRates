@@ -1421,17 +1421,19 @@ class ComputeGraph(object):
 
         if vectorization_mode == 'full':
 
+            new_node = DiGraph()
+
             # create dictionary of operators of each node that will be used to check whether they have been vectorized
             vec_info = {}
             for node in net_config.nodes:
                 vec_info[node] = {}
                 for op in self._get_node_attr(node, 'op_graph').nodes:
-                    vec_info[op] = False
+                    vec_info[node][op] = False
 
             # go through nodes and vectorize over their operators
             node_idx = 0
             node_key = list(vec_info.keys())[node_idx]
-            while not all([all([vec for vec in node.values]) for node in vec_info.keys()]):
+            while not all([all(node.values()) for node in vec_info.values()]):
 
                 change_node = False
                 op_graph = self._get_node_attr(node_key, 'op_graph').copy()
@@ -1450,7 +1452,7 @@ class ComputeGraph(object):
                             # check whether operator exists at other nodes
                             nodes_to_vec = []
 
-                            for node_key_tmp in enumerate(vec_info.keys()):
+                            for node_key_tmp in vec_info.keys():
 
                                 if node_key_tmp != node_key and op_key in vec_info[node_key_tmp].keys():
 
@@ -1475,7 +1477,8 @@ class ComputeGraph(object):
                                 nodes_to_vec.append(node_key)
                                 self._vectorize_ops(net_config=net_config,
                                                     op_key=op_key,
-                                                    nodes=nodes_to_vec.copy())
+                                                    nodes=nodes_to_vec.copy(),
+                                                    new_node=new_node)
 
                                 # indicate where vectorization was performed
                                 for node_key_tmp in nodes_to_vec:
@@ -1490,7 +1493,8 @@ class ComputeGraph(object):
                                 # add operation to new net configuration
                                 self._vectorize_ops(net_config=net_config,
                                                     op_key=op_key,
-                                                    nodes=[node_key])
+                                                    nodes=[node_key],
+                                                    new_node=new_node)
 
                                 # mark operation on node as checked
                                 vec_info[node_key][op_key] = True
@@ -1787,7 +1791,7 @@ class ComputeGraph(object):
     def _vectorize_ops(self,
                        op_key: str,
                        nodes: list,
-                       new_node: dict,
+                       new_node: DiGraph,
                        net_config: MultiDiGraph
                        ) -> None:
         """Vectorize all instances of an operation across nodes and put them into a single-node backend.
@@ -1803,8 +1807,7 @@ class ComputeGraph(object):
 
         # extract operation in question
         node_name_tmp = nodes.pop(0)
-        ref_node = net_config.nodes[node_name_tmp]
-        op = ref_node['operators'][op_key]
+        op_inputs = self._get_node_attr(node_name_tmp, 'inputs', op_key, net_config=net_config)
 
         if node_name_tmp not in self._net_config_map.keys():
             self._net_config_map[node_name_tmp] = {}
@@ -1813,20 +1816,21 @@ class ComputeGraph(object):
         #########################################
 
         for node in [node_name_tmp] + nodes:
-            for key, arg in net_config.nodes[node]['operators'][op_key]['inputs'].items():
-                if type(op['inputs'][key]['reduce_dim']) is bool:
-                    op['inputs'][key]['reduce_dim'] = [op['inputs'][key]['reduce_dim']]
-                    op['inputs'][key]['sources'] = [op['inputs'][key]['sources']]
+            op_inputs_tmp = self._get_node_attr(node, 'inputs', op_key, net_config=net_config)
+            for key, arg in op_inputs_tmp.items():
+                if type(arg['reduce_dim']) is bool:
+                    op_inputs[key]['reduce_dim'] = [op_inputs[key]['reduce_dim']]
+                    op_inputs[key]['sources'] = [op_inputs[key]['sources']]
                 else:
-                    if arg['sources'] not in op['inputs'][key]['sources']:
-                        op['inputs'][key]['sources'].append(arg['sources'])
-                        op['inputs'][key]['reduce_dim'].append(arg['reduce_dim'])
+                    if arg['sources'] not in op_inputs[key]['sources']:
+                        op_inputs[key]['sources'].append(arg['sources'])
+                        op_inputs[key]['reduce_dim'].append(arg['reduce_dim'])
 
         # extract operator-specific arguments and change their shape and value
         ######################################################################
 
         op_args = {}
-        for key, arg in ref_node['operator_args'].items():
+        for key, arg in self._get_op_attr(node_name_tmp, op_key, 'variables', net_config=net_config).items():
 
             arg = arg.copy()
 

@@ -670,7 +670,7 @@ class ExpressionParser(ParserElement):
                 op_idx = eval(f'op[{idx}]')
                 return self.broadcast(self.assign, op_idx, update, **kwargs)
             except ValueError:
-                idx = self._process_idx(idx, op.shape, **locals())
+                idx = self._process_idx(idx, op.shape, locals())
                 try:
                     op_idx = self.backend.add_op('scatter', idx, update, op.shape)
                 except ValueError:
@@ -687,7 +687,7 @@ class ExpressionParser(ParserElement):
             try:
                 op_idx = eval(f'op[{idx}]')
             except ValueError:
-                idx = self._process_idx(idx, op.shape, **locals())
+                idx = self._process_idx(idx, op.shape, locals())
                 try:
                     if len(idx.shape) > 1:
                         op_idx = self.backend.add_op('gather_nd', op, idx, **kwargs)
@@ -727,14 +727,14 @@ class ExpressionParser(ParserElement):
         var_update = self.broadcast('*', var_delta, dt, **kwargs)
         return self.broadcast('+', var_old, var_update, **kwargs)
 
-    def _process_idx(self, idx, shape, **kwargs):
+    def _process_idx(self, idx, shape, local_vars: dict):
         """
 
         Parameters
         ----------
         idx
         shape
-        kwargs
+        local_vars
 
         Returns
         -------
@@ -742,13 +742,13 @@ class ExpressionParser(ParserElement):
         """
 
         try:
-            return kwargs[idx]
+            return local_vars[idx]
         except KeyError:
             dims = idx.split(',')
             indices = []
             for i, dim in enumerate(dims):
                 try:
-                    indices.append([kwargs[dim]])
+                    indices.append([local_vars[dim]])
                 except KeyError:
                     if ':' in dim:
                         indices.append([j for j in range(shape[i])])

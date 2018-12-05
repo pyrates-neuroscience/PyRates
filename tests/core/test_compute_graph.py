@@ -280,6 +280,52 @@ def test_2_3_edge():
             np.mean(np.abs(results1['b'].values - targets1[1:, 1].T))
     assert diff1 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
+    # test correct numerical evaluation of graph with 2 unidirectionally delay-coupled nodes
+    ########################################################################################
+
+    # define input
+    inp = np.zeros((sim_steps, 1)) + 0.5
+
+    net_config1 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net9").apply()
+    net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorize='none', dt=dt)
+    results1, _ = net1.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
+                                              'b': ('pop1.0', 'op7.0', 'a')},
+                           inputs={('pop1.0', 'op7.0', 'inp'): inp})
+
+    # calculate edge behavior from hand
+    update3 = lambda x, y, z: x + dt * (y + z - x)
+    targets1 = np.zeros((sim_steps + 1, 2), dtype=np.float32)
+    for i in range(sim_steps):
+        targets1[i + 1, 0] = update2(targets1[i, 0], targets1[i, 1] * 0.5)
+        targets1[i + 1, 1] = update3(targets1[i, 1], targets1[i, 0] * 2.0, inp[i])
+
+    diff1 = np.mean(np.abs(results1['a'].values - targets1[1:, 0].T)) + \
+            np.mean(np.abs(results1['b'].values - targets1[1:, 1].T))
+    assert diff1 == pytest.approx(0., rel=1e-6, abs=1e-6)
+
+    # test correct numerical evaluation of graph with 2 unidirectionally, multi-delay-coupled nodes
+    ###############################################################################################
+
+    # define input
+    inp = np.zeros((sim_steps, 1)) + 0.5
+
+    net_config1 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net9").apply()
+    net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorize='none', dt=dt)
+    results1, _ = net1.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
+                                              'b': ('pop1.0', 'op7.0', 'a')},
+                           inputs={('pop1.0', 'op7.0', 'inp'): inp})
+
+    # calculate edge behavior from hand
+    update3 = lambda x, y, z: x + dt * (y + z - x)
+    targets1 = np.zeros((sim_steps + 1, 2), dtype=np.float32)
+    for i in range(sim_steps):
+        targets1[i + 1, 0] = update2(targets1[i, 0], targets1[i, 1] * 0.5)
+        targets1[i + 1, 1] = update3(targets1[i, 1], targets1[i, 0] * 2.0, inp[i])
+
+    diff1 = np.mean(np.abs(results1['a'].values - targets1[1:, 0].T)) + \
+            np.mean(np.abs(results1['b'].values - targets1[1:, 1].T))
+    assert diff1 == pytest.approx(0., rel=1e-6, abs=1e-6)
+
 
 def test_2_4_vectorization():
     """Testing vectorization functionality of ComputeGraph class.
@@ -303,21 +349,21 @@ def test_2_4_vectorization():
     net_config0 = CircuitTemplate.from_yaml("pyrates.examples.test_compute_graph.net10").apply()
     net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorize='none', dt=dt, build_in_place=False)
     net1 = ComputeGraph(net_config=net_config0, name='net.1', vectorize='nodes', dt=dt, build_in_place=False)
-    #net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorize='full', dt=dt, build_in_place=False)
+    net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorize='full', dt=dt, build_in_place=False)
 
     # simulate network behaviors
     results0, _ = net0.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
                            inputs={('all', 'op7.0', 'inp'): inp})
     results1, _ = net1.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
                            inputs={('all', 'op7.0', 'inp'): inp})
-    #results2, _ = net2.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-    #                       inputs={('all', 'op7.0', 'inp'): inp})
+    results2, _ = net2.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
+                           inputs={('all', 'op7.0', 'inp'): inp})
 
     results0.pop('time'), results1.pop('time')#, results2.pop('time')
 
     error1 = nmrse(results0.values, results1.values)
-    #error2 = nmrse(results0.values, results2.values)
+    error2 = nmrse(results0.values, results2.values)
 
-    #assert np.sum(results1.values) > 0.
-    #assert np.mean(error1) == pytest.approx(0., rel=1e-6)
-    #assert np.mean(error2) == pytest.approx(0., rel=1e-6)
+    assert np.sum(results1.values) > 0.
+    assert np.mean(error1) == pytest.approx(0., rel=1e-6)
+    assert np.mean(error2) == pytest.approx(0., rel=1e-6)
