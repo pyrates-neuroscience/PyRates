@@ -15,8 +15,10 @@ class EdgeIR(NodeIR):
 
         super().__init__(operators, template)
 
-        # Step 1: Detect edge input variable
-        ####################################
+    @property
+    def input(self):
+        """Detect input variable of edge, assuming only one input variable exists. This also references the operator
+        the variable belongs to."""
         # noinspection PyTypeChecker
         in_op = [op for op, in_degree in self.op_graph.in_degree if in_degree == 0]  # type: List[str]
 
@@ -27,15 +29,20 @@ class EdgeIR(NodeIR):
                 in_var.add(f"{op_key}/{var}")
 
         if len(in_var) == 1:
-            self.input = in_var.pop()
+            return in_var.pop()
         elif len(in_var) == 0:
-            self.input = None
+            return None
         else:
             raise PyRatesException("Too many input variables found. Exactly one or zero input variables are "
                                    "required per edge.")
 
-        # 2: get reference for output variable
-        ######################################
+    @property
+    def input_var(self):
+        return self.input
+
+    @property
+    def output(self):
+        """Detect output variable of edge, assuming only one output variable exists."""
 
         # try to find single output variable
         # noinspection PyTypeChecker
@@ -44,11 +51,14 @@ class EdgeIR(NodeIR):
         # only one single output operator allowed
         if len(out_op) == 1:
             out_var = self[out_op[0]].output
-            self.output = f"{out_op[0]}/{out_var}"
+            return f"{out_op[0]}/{out_var}"
         elif len(out_op) == 0:
-            self.output = None
+            return None
         else:
             raise PyRatesException("Too many or too little output operators found. Exactly one output operator and "
                                    "associated output variable is required per edge.")
 
+    @property
+    def output_var(self):
+        return self.output
 
