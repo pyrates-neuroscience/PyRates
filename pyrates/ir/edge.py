@@ -3,18 +3,16 @@
 from typing import List
 
 from pyrates import PyRatesException
-from pyrates.ir.operator_graph import OperatorGraph
+from pyrates.ir.node import NodeIR
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-class EdgeIR(OperatorGraph):
+class EdgeIR(NodeIR):
 
     def __init__(self, operators: dict=None, template: str = None):
 
-        if operators is None:
-            operators = {}
         super().__init__(operators, template)
 
         # Step 1: Detect edge input variable
@@ -36,7 +34,7 @@ class EdgeIR(OperatorGraph):
             raise PyRatesException("Too many input variables found. Exactly one or zero input variables are "
                                    "required per edge.")
 
-        # 2: get reference for target variable
+        # 2: get reference for output variable
         ######################################
 
         # try to find single output variable
@@ -52,3 +50,5 @@ class EdgeIR(OperatorGraph):
         else:
             raise PyRatesException("Too many or too little output operators found. Exactly one output operator and "
                                    "associated output variable is required per edge.")
+
+

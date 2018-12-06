@@ -44,10 +44,10 @@ class CircuitIR(AbstractBaseIR):
             was used.
         """
 
+        super().__init__(template)
         self.label = label
         self.label_counter = {}
         self.label_map = {}
-        self.template = template
 
         self.graph = MultiDiGraph()
         self.sub_circuits = set()
@@ -574,9 +574,6 @@ class CircuitIR(AbstractBaseIR):
         return f"{key_map[target_op]}/{target_var}"
 
 
-
-
-
 class SubCircuitView(AbstractBaseIR):
     """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
     level) circuit is referenced locally as 'top_level_circuit' and all subgraph-related information is computed only
@@ -584,6 +581,7 @@ class SubCircuitView(AbstractBaseIR):
 
     def __init__(self, top_level_circuit: CircuitIR, subgraph_key: str):
 
+        super().__init__()
         self.top_level_circuit = top_level_circuit
         self.subgraph_key = subgraph_key
 
