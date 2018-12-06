@@ -4,12 +4,17 @@ from typing import Union
 
 import networkx as nx
 
+from pyrates.frontend.parser.yaml import TemplateLoader
+
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 type_mapping = {dict: "dictionary",
                 nx.MultiDiGraph: "graph",
                 str: "yaml"}
+
+file_loader_mapping = {"yaml": TemplateLoader.load_template_from_yaml,
+                       "yml": TemplateLoader.load_template_from_yaml}
 
 
 # alternative:

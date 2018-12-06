@@ -9,6 +9,9 @@ __status__ = "Development"
 class AbstractBaseIR:
     """Abstract base class for intermediate representation classes"""
 
+    def __init__(self, template: str = None):
+        self.template = template
+
     def __getitem__(self, key: str):
         """
         Custom implementation of __getitem__ that dissolves strings of form "key1/key2/key3" into
@@ -22,9 +25,7 @@ class AbstractBaseIR:
         -------
         item
         """
-        # TODO:
-        #  idea: split key and then format into an iterator/generator --> hand iterator to getter function,
-        #  so it can decide locally, if it wants to process more than one item in the iterator.
+
         # check type:
         if not isinstance(key, str):
             raise TypeError("Keys must be strings of format `key1/key2/...`.")

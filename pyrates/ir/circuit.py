@@ -1,10 +1,11 @@
 """
 """
 import re
+from copy import deepcopy
 from typing import Union, Dict, Iterator
 
 from pyparsing import Word, ParseException, nums, Literal, LineEnd, Suppress, alphanums
-from networkx import MultiDiGraph, subgraph
+from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGraph
 from pandas import DataFrame
 
 from pyrates import PyRatesException
@@ -43,10 +44,10 @@ class CircuitIR(AbstractBaseIR):
             was used.
         """
 
+        super().__init__(template)
         self.label = label
         self.label_counter = {}
         self.label_map = {}
-        self.template = template
 
         self.graph = MultiDiGraph()
         self.sub_circuits = set()
@@ -129,6 +130,14 @@ class CircuitIR(AbstractBaseIR):
 
             # get edge_ir or (if not included) default to an empty edge
             edge_ir = edge_dict.get("edge_ir", EdgeIR())
+
+            if "target_var" in edge_dict:
+                target_var = edge_dict["target_var"]
+                target = f"{target}/{target_var}"
+
+            if "source_var" in edge_dict:
+                source_var = edge_dict["source_var"]
+                source = f"{source}/{source_var}"
 
             # test, if variables at source and target exist and reference them properly
             source, target = self._validate_separate_key_path(source, target)
@@ -257,7 +266,9 @@ class CircuitIR(AbstractBaseIR):
         for key in paths:
 
             # (circuits), node, operator and variable specifiers
+
             *node, op, var = key.split("/")
+
             node = "/".join(node)
 
             # re-reference node labels, if necessary
@@ -446,6 +457,122 @@ class CircuitIR(AbstractBaseIR):
             # target_var = data.pop("target_var")
             self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
 
+    def move_edge_operators_to_nodes(self, copy_data=True):
+        """Returns a new CircuitIR instance, where all operators that were previously in edges are moved to their
+        respective target nodes."""
+        if copy_data:
+            nodes = {key: deepcopy(data) for key, data in self.nodes(data=True)}
+        else:
+            nodes = self.nodes(data=True)
+
+        # this does not preserve additional node attributes
+        # node_attrs = {}
+        for key, data in nodes.items():
+            nodes[key] = data["node"]
+            # node_attrs.update(**data)
+
+        # node_attrs.pop("node")
+
+        op_label_counter = {}
+
+        edges = []
+        for source, target, data in self.edges(data=True):
+
+            source_var = data["source_var"]
+            target_var = data["target_var"]
+
+            edge_ir = data["edge_ir"]  # type: EdgeIR
+            op_graph = edge_ir.op_graph
+            if copy_data:
+                op_graph = deepcopy(op_graph)
+
+            input_var = edge_ir.input
+            output_var = edge_ir.output
+
+            weight = data["weight"]
+            delay = data["delay"]
+
+            if len(op_graph) > 0:
+
+                target_var = self._move_ops_to_target(target, input_var, output_var, target_var, op_graph,
+                                                      op_label_counter, nodes)
+                # side effect: changes op_label_counter and nodes dictionary
+
+            data = dict(source_var=source_var, target_var=target_var,
+                        edge_ir=EdgeIR(), weight=weight, delay=delay)
+            edges.append((source, target, data))
+
+        circuit = CircuitIR()
+        circuit.sub_circuits = self.sub_circuits
+        circuit.add_nodes_from(nodes)
+        circuit.add_edges_from(edges)
+        return circuit
+
+    @staticmethod
+    def _move_ops_to_target(target, input_var, output_var, target_var, op_graph: DiGraph, op_label_counter, nodes):
+        # check, if cycles are present in operator graph (which would be problematic
+        try:
+            find_cycle(op_graph)
+        except NetworkXNoCycle:
+            pass
+        else:
+            raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
+
+        target_node = nodes[target]
+        if target not in op_label_counter:
+            op_label_counter[target] = {}
+
+        key_map = {}
+        # first pass: get all labels right
+        for key in op_graph.nodes:
+            # rename operator key by appending another counter
+            if key in op_label_counter[target]:
+                # already renamed it previously --> increase counter
+                op_label_counter[target][key] += 1
+                key_map[key] = f"{key}.{op_label_counter[target][key]}"
+
+            else:
+                # not renamed previously --> initialize counter to 0
+                op_label_counter[target][key] = 0
+                key_map[key] = f"{key}.0"
+
+        # second pass: add operators to target op graph and rename sources according to key_map
+        for key, data in op_graph.nodes(data=True):
+            op = data["operator"]
+            variables = data["variables"]
+            # go through all input variables and rename source operators
+            for var, var_data in op.inputs.items():
+                sources = []
+                for source_op in var_data["sources"]:
+                    sources.append(key_map[source_op])
+                op.inputs[var]["sources"] = sources
+
+            # add operator to target_node's operator graph
+            # TODO: implement add_node method on OperatorGraph class
+            target_node.op_graph.add_node(key_map[key], operator=op, variables=variables)
+
+        # add edges that previously existed
+        for source_op, target_op in op_graph.edges:
+            # rename edge keys accordingly
+            source_op = key_map[source_op]
+            target_op = key_map[target_op]
+
+            target.op_graph.add_edge(source_op, target_op)
+
+        # add new edges based on output and target of edge
+        target_op, target_var = target_var.split("/")
+        output_op, output_var = output_var.split("/")
+        output_op = key_map[output_op]
+
+        target_node[target_op].inputs[target_var]["sources"].append(output_op)
+
+        # make sure the changes are saved (might not be necessary)
+        nodes[target] = target_node
+
+        # reassign target variable of edge
+        target_op, target_var = input_var.split("/")
+        return f"{key_map[target_op]}/{target_var}"
+
 
 class SubCircuitView(AbstractBaseIR):
     """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
@@ -454,6 +581,7 @@ class SubCircuitView(AbstractBaseIR):
 
     def __init__(self, top_level_circuit: CircuitIR, subgraph_key: str):
 
+        super().__init__()
         self.top_level_circuit = top_level_circuit
         self.subgraph_key = subgraph_key
 
