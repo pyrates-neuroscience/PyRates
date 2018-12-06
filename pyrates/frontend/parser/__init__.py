@@ -13,9 +13,6 @@ type_mapping = {dict: "dictionary",
                 nx.MultiDiGraph: "graph",
                 str: "yaml"}
 
-file_loader_mapping = {"yaml": TemplateLoader.load_template_from_yaml,
-                       "yml": TemplateLoader.load_template_from_yaml}
-
 
 # alternative:
 class DictLoader: ...
