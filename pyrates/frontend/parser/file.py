@@ -3,19 +3,24 @@
 import importlib
 
 from pyrates import PyRatesException
-#from . import file_loader_mapping
+from pyrates.frontend.parser.yaml import load_template_from_yaml
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
+file_loader_mapping = {"yaml": load_template_from_yaml,
+                       "yml": load_template_from_yaml}
 
-# def load_template_from_file(filepath: str, template_name: str):
-#     file, abspath = parse_path(filepath)
-#     filename, extension = file.split(".")
-#     try:
-#         loader = file_loader_mapping[extension]
-#     except KeyError:
-#         raise PyRatesException(f"Could not find loader for file extension {extension}.")
+
+def load_template_from_file(filepath: str, template_name: str):
+    file, abspath = parse_path(filepath)
+    filename, extension = file.split(".")
+    try:
+        loader = file_loader_mapping[extension]
+    except KeyError:
+        raise PyRatesException(f"Could not find loader for file extension {extension}.")
+
+    return loader(filepath, template_name)
 
 
 def parse_path(path: str):

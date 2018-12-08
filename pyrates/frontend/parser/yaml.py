@@ -1,10 +1,45 @@
 """ Some utility functions for parsing YAML-based definitions of circuits and components.
 """
 
-from pyrates.frontend.parser.file import parse_path
-
 __author__ = "Daniel Rose"
 __status__ = "Development"
+
+
+def load_template_from_yaml(path: str):
+    """As name says: Load a template from YAML and return the resulting dictionary.
+
+    Parameters
+    ----------
+
+    path
+        string containing path of YAML template of the form path.to.template or path/to/template.file.TemplateName.
+        The dot notation refers to a path that can be found using python's import functionality. The slash notation
+        refers to a file in an absolute or relative path from the current working directory.
+    """
+    from pyrates.frontend.parser.file import parse_path
+
+    name, filename, directory = parse_path(path)
+    from ruamel.yaml import YAML
+    import os
+
+    yaml = YAML(typ="safe", pure=True)
+
+    if not filename.endswith(".yaml"):
+        filename = f"{filename}.yaml"
+
+    filepath = os.path.join(directory, filename)
+
+    with open(filepath, "r") as file:
+        file_dict = yaml.load(file)
+
+    if name in file_dict:
+        template_dict = file_dict[name]
+        template_dict["path"] = path
+        template_dict["name"] = name
+    else:
+        raise AttributeError(f"Could not find {name} in {filepath}.")
+
+    return template_dict
 
 
 class TemplateLoader:
@@ -27,7 +62,7 @@ class TemplateLoader:
         if path in cls.cache:
             template = cls.cache[path]
         else:
-            template_dict = cls.load_template_from_yaml(path)
+            template_dict = load_template_from_yaml(path)
             try:
                 base_path = template_dict.pop("base")
             except KeyError:
@@ -53,41 +88,6 @@ class TemplateLoader:
             cls.cache[path] = template
 
         return template
-
-    @classmethod
-    def load_template_from_yaml(cls, path: str):
-        """As name says: Load a template from YAML and return the resulting dictionary.
-
-        Parameters
-        ----------
-
-        path
-            string containing path of YAML template of the form path.to.template or path/to/template.file.TemplateName.
-            The dot notation refers to a path that can be found using python's import functionality. The slash notation
-            refers to a file in an absolute or relative path from the current working directory.
-        """
-        name, filename, directory = parse_path(path)
-        from ruamel.yaml import YAML
-        import os
-
-        yaml = YAML(typ="safe", pure=True)
-
-        if not filename.endswith(".yaml"):
-            filename = f"{filename}.yaml"
-
-        filepath = os.path.join(directory, filename)
-
-        with open(filepath, "r") as file:
-            file_dict = yaml.load(file)
-
-        if name in file_dict:
-            template_dict = file_dict[name]
-            template_dict["path"] = path
-            template_dict["name"] = name
-        else:
-            raise AttributeError(f"Could not find {name} in {filepath}.")
-
-        return template_dict
 
     @classmethod
     def update_template(cls, *args, **kwargs):
