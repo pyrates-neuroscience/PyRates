@@ -5,22 +5,20 @@ PRO:
   base: OperatorTemplate
   equations:
     - "d/dt * r = delta/PI + 2.*r*v"
-    - "d/dt * v = v**2 + eta + J * r + I - (PI*r)**2"
+    - "d/dt * v = v**2 + eta + J * r + 10.0 * inp - (PI*r)**2"
   variables:
     r:
       default: output
     v:
       default: variable
     delta:
-      default: 1.
+      default: 4.
     eta:
       default: -2.5
     J:
-      default: 15.
-    PSP:
+      default: 20.0
+    inp:
       default: input
-    I:
-      default: variable
 
 RPO_e:
   base: OperatorTemplate
@@ -82,7 +80,7 @@ JRC:
     IIN: IIN
     PC: PC
   edges:
-    - [PC/PRO/r, IIN/PRO/I, DummyEdge, {weight: 0.25}]
-    - [PC/PRO/r, EIN/PRO/I, DummyEdge, {weight: 1.}]
-    - [EIN/PRO/r, PC/PRO/I, DummyEdge, {weight: 0.8}]
-    - [IIN/PRO/r, PC/PRO/I, DummyEdge, {weight: 0.25}]
+    - [PC/PRO/r, IIN/PRO/inp, DummyEdge, {weight: 0.25}]
+    - [PC/PRO/r, EIN/PRO/inp, DummyEdge, {weight: 1.}]
+    - [EIN/PRO/r, PC/PRO/inp, DummyEdge, {weight: 0.8}]
+    - [IIN/PRO/r, PC/PRO/inp, DummyEdge, {weight: -0.25}]

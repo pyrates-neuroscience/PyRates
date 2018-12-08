@@ -5,15 +5,16 @@ manages all computations/operations and a networkx graph that represents the bac
 # external imports
 import tensorflow as tf
 from typing import Optional, Tuple, List
-from pandas import DataFrame
+from pandas import DataFrame, MultiIndex
 import numpy as np
 from networkx import MultiDiGraph, find_cycle, NetworkXNoCycle, DiGraph, is_isomorphic
-from copy import copy, deepcopy
+from copy import deepcopy
 
 # pyrates imports
 from pyrates.backend.parser import parse_equation_list, parse_dict
 from pyrates.backend.backend_wrapper import TensorflowBackend
 from pyrates import PyRatesException
+from pyrates.ir.circuit import CircuitIR
 
 # meta infos
 __author__ = "Richard Gast"
@@ -27,7 +28,7 @@ class ComputeGraph(object):
     ----------
     net_config
     dt
-    vectorize
+    vectorization
     name
     build_in_place
 
@@ -40,9 +41,9 @@ class ComputeGraph(object):
     """
 
     def __init__(self,
-                 net_config: MultiDiGraph,
+                 net_config: CircuitIR,
                  dt: float=1e-3,
-                 vectorize: str='nodes',
+                 vectorization: str= 'nodes',
                  name: Optional[str]=None,
                  build_in_place=True):
         """Instantiates operator.
@@ -50,6 +51,7 @@ class ComputeGraph(object):
 
         super().__init__()
         self.name = name
+        net_config = net_config.move_edge_operators_to_nodes(copy_data=True)
 
         # instantiate the backend
         self.backend = TensorflowBackend()
@@ -59,7 +61,7 @@ class ComputeGraph(object):
         self._net_config_map = {}
         self.net_config = self._net_config_consistency_check(net_config) if build_in_place \
             else self._net_config_consistency_check(deepcopy(net_config))
-        self.net_config = self._vectorize(net_config=deepcopy(self.net_config), vectorization_mode=vectorize)
+        self.net_config = self._vectorize(net_config=deepcopy(self.net_config), vectorization_mode=vectorization)
 
         # set time constant of the network
         self._dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}},
@@ -175,7 +177,13 @@ class ComputeGraph(object):
 
             # define target index
             if delay is not None and tidx:
-                tidx = [[idx, d] for idx, d in zip(tidx, delay)]
+                tidx_tmp = []
+                for idx, d in zip(tidx, delay):
+                    if type(idx) is list:
+                        tidx_tmp.append(idx + [d])
+                    else:
+                        tidx_tmp.append([idx, d])
+                tidx = tidx_tmp
             elif not tidx and delay is not None:
                 tidx = list(delay)
 
@@ -329,10 +337,10 @@ class ComputeGraph(object):
                 inp_dict = dict()
                 for key, val in inputs.items():
 
-                    if self.name in self.net_config.nodes.keys():
+                    if '_combined' in list(self.net_config.nodes.keys())[0]:
 
                         # fully vectorized case: add vectorized placeholder variable to input dictionary
-                        var = self._get_node_attr(node=self.name, op=key[1], attr=key[2])
+                        var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=key[1], attr=key[2])
                         inp_dict[var] = np.reshape(val[step], var.shape)
 
                     elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
@@ -341,9 +349,12 @@ class ComputeGraph(object):
                         if key[0] == 'all':
 
                             # go through all nodes, extract the variable and add it to input dict
-                            for i, node in enumerate(self._net_config_map.keys()):
+                            i = 0
+                            for node in self.net_config.nodes:
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                inp_dict[var] = np.reshape(val[step, i], var.shape)
+                                i_new = var.shape[0] if len(var.shape) > 0 else 1
+                                inp_dict[var] = np.reshape(val[step, i:i_new], var.shape)
+                                i += i_new
 
                         elif key[0] in self.net_config.nodes.keys():
 
@@ -396,27 +407,35 @@ class ComputeGraph(object):
                                                 sampling_ops=sampling_op, out_dir=out_dir)
 
         # store output variables in data frame
-        for i, (key, var) in enumerate(output_col.items()):
-            if i == 0:
-                var = np.squeeze(var)
-                try:
-                    out_vars = DataFrame(data=var,
-                                         columns=[f'{key}_{j}' for j in range(var.shape[1])])
-                except IndexError:
-                    out_vars = DataFrame(data=var, columns=[key])
+        ######################################
+
+        out_var_vals = []
+        out_var_names = []
+        for key in list(output_col):
+
+            var = output_col.pop(key)
+            if len(var.shape) > 1 and var.shape[1] > 1:
+                for i in range(var.shape[1]):
+                    out_var_vals.append(var[:, i])
+                    var_name, node_name = key.split('/')
+                    out_var_names.append((var_name, f'{node_name}_{i}'))
             else:
-                var = np.squeeze(var)
-                try:
-                    for j in range(var.shape[1]):
-                        out_vars[f'{key}_{j}'] = var[:, j]
-                except IndexError:
-                    out_vars[key] = var
-        if not outputs:
-            out_vars = DataFrame()
-        else:
-            out_vars['time'] = np.arange(0., simulation_time, sampling_step_size)
+                if len(var.shape) > 1:
+                    var = np.squeeze(var)
+                out_var_vals.append(var)
+                out_var_names.append(tuple(key.split('/')))
+
+        # create multi-index
+        index = MultiIndex.from_tuples(out_var_names, names=['var', 'node'])
+
+        # create dataframe
+        out_vars = DataFrame(data=np.asarray(out_var_vals).T,
+                             index=np.arange(0., simulation_time, sampling_step_size),
+                             columns=index)
 
         # display simulation time
+        #########################
+
         if verbose:
             if simulation_time:
                 print(f"{simulation_time}s of backend behavior were simulated in {sim_time} s given a "
@@ -460,13 +479,13 @@ class ComputeGraph(object):
             # get output variable from backend nodes of a certain type
             for node_tmp in self.net_config.nodes.keys():
                 if node in node_tmp:
-                    var_col[f'{var_name}/{node_tmp}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
+                    var_col[f'{var_name}/{node}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
         else:
 
             # get output variable of specific, vectorized backend node
             for node_tmp in self._net_config_map.keys():
-                if node in node_tmp and 'comb' not in node_tmp:
-                    var_col[f'{var_name}/{node_tmp}'] = self._get_node_attr(node=node, op=op, attr=var)
+                if node in node_tmp and '_all' in node_tmp:
+                    var_col[f'{var_name}/{node}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
 
         # remove singleton dimensions from vars
         for key, var in var_col.items():
@@ -515,20 +534,18 @@ class ComputeGraph(object):
                 if inp['sources']:
 
                     in_ops_col = []
-                    i = 0
+                    reduce_inputs = inp['reduce_dim'] if type(inp['reduce_dim']) is bool else False
 
-                    for in_op in inp['sources']:
+                    for i, in_op in enumerate(inp['sources']):
 
-                        if type(in_op) is tuple:
+                        if type(in_op) is list and len(in_op) > 1:
 
-                            in_ops = in_op[0]
-                            reduce_dim = in_op[1]
+                            reduce_dim = inp['reduce_dim'][i]
                             in_ops_tmp = []
 
                             # collect multiple inputs to op
-                            for op in in_ops:
+                            for op in in_op:
                                 in_ops_tmp.append(self._get_op_input(node_name, op_name, op))
-                                i += 1
 
                             # map those inputs correctly
                             in_ops_col.append(self._map_multiple_inputs(in_ops_tmp, reduce_dim,
@@ -542,7 +559,6 @@ class ComputeGraph(object):
 
                             # collect single input to op
                             in_ops_col.append(self._get_op_input(node_name, op_name, in_op))
-                            i += 1
 
                     # for multiple multiple input operations
                     if len(in_ops_col) > 1:
@@ -559,13 +575,13 @@ class ComputeGraph(object):
                                     raise ValueError(f"Shapes of inputs do not match: "
                                                      f"{inp['sources']} cannot be stacked.")
                                 multiplier = shape // min_shape
-                                for j in range(multiplier):
-                                    in_ops.append(op[j * min_shape:(j + 1) * min_shape])
+                                for i in range(multiplier):
+                                    in_ops.append(op[i * min_shape:(i + 1) * min_shape])
                             else:
                                 in_ops.append(op)
 
                         # map inputs to target
-                        in_ops = self._map_multiple_inputs(in_ops, inp['reduce_dim'],
+                        in_ops = self._map_multiple_inputs(in_ops, reduce_inputs,
                                                            scope=f"{self.name}/{node_name}/{op_name}")
 
                     # for a single input variable
@@ -669,10 +685,10 @@ class ComputeGraph(object):
         if op:
             return self._get_op_attr(node, op, attr, net_config=net_config)
         try:
-            return net_config.nodes[node]['node'][attr]
+            return net_config[node][attr]
         except KeyError:
             vals = []
-            for op in net_config.nodes[node]['node']['op_graph'].nodes:
+            for op in net_config[node]:
                 vals.append(self._get_op_attr(node, op, attr, net_config=net_config))
             return vals
 
@@ -778,12 +794,11 @@ class ComputeGraph(object):
         if not net_config:
             net_config = self.net_config
 
-        if node in net_config.nodes:
-            op = net_config.nodes[node]['node'].op_graph.nodes[op]
-            attr_idx = None
-        elif node in self._net_config_map:
+        if node in self._net_config_map and op in self._net_config_map[node] and attr in self._net_config_map[node][op]:
             node, op, attr, attr_idx = self._net_config_map[node][op][attr]
-            op = net_config.nodes[node]['node'].op_graph.nodes[op]
+            return self._apply_idx(self._get_op_attr(node, op, attr, net_config=net_config), attr_idx)
+        elif node in net_config.nodes:
+            op = net_config[node]['op_graph'].nodes[op]
         else:
             raise ValueError(f'Node with name {node} is not part of this network.')
 
@@ -805,7 +820,7 @@ class ComputeGraph(object):
                 except AttributeError:
                     raise e
 
-        return self._apply_idx(attr_val, attr_idx)
+        return attr_val
 
     def _set_op_attr(self, node, op, attr, val, net_config=None):
         """
@@ -825,7 +840,7 @@ class ComputeGraph(object):
         if not net_config:
             net_config = self.net_config
 
-        op = net_config.nodes[node]['node'].op_graph.nodes[op]
+        op = net_config[node]['op_graph'].nodes[op]
         if attr in op['variables'].keys():
             op['variables'][attr] = val
             return op['variables'][attr]
@@ -843,7 +858,24 @@ class ComputeGraph(object):
                 return None
 
     def _apply_idx(self, var, idx=None):
-        return var if idx is None else var[idx]
+        """
+
+        Parameters
+        ----------
+        var
+        idx
+
+        Returns
+        -------
+
+        """
+
+        if idx is None:
+            return var
+        elif type(idx) is tuple:
+            return var[idx[0]:idx[1]]
+        else:
+            return var[idx]
 
     def _get_nodes_with_attr(self, attr, val, net_config=None):
         """
@@ -861,11 +893,24 @@ class ComputeGraph(object):
         if not net_config:
             net_config = self.net_config
 
+        def node_match(n1, n2):
+            for i, eq in enumerate(n1['operator']['equations']):
+                try:
+                    if eq != n2['operator']['equations'][i]:
+                        return False
+                except IndexError:
+                    return False
+            vars1 = list(n1['variables'])
+            vars2 = list(n2['variables'])
+            if vars1 != vars2:
+                return False
+            return True
+
         nodes = []
         for node in net_config.nodes:
             test_val = self._get_node_attr(node, attr, net_config=net_config)
             try:
-                if is_isomorphic(val, test_val):
+                if is_isomorphic(val, test_val, node_match=node_match):
                     nodes.append(node)
             except (TypeError, ValueError):
                 if val == test_val:
@@ -995,16 +1040,18 @@ class ComputeGraph(object):
 
         if idx_type == 'source':
             var = 'source_idx'
+            node_var = 'source_var'
             node_to_idx = source
         elif idx_type == 'target':
             var = 'target_idx'
+            node_var = 'target_var'
             node_to_idx = target
         else:
             raise ValueError('Wrong `idx_type`. Please, choose either `source` or `target`.')
 
         var_idx = self._get_edge_attr(source, target, edge, var, net_config=net_config)
         if var_idx:
-            op, var = self.net_config.edges[source, target, edge][var].split('/')
+            op, var = self.net_config.edges[source, target, edge][node_var].split('/')
             _, _, _, idx = self._net_config_map[node_to_idx][op][var]
             if type(idx) is tuple:
                 idx = range(idx[0], idx[1])
@@ -1020,8 +1067,7 @@ class ComputeGraph(object):
                 idx_new = [[idx]]
         else:
             try:
-                var = 'source_var' if idx_type == 'source' else 'target_var'
-                op, var = self.net_config.edges[source, target, edge][var].split('/')
+                op, var = self.net_config.edges[source, target, edge][node_var].split('/')
                 _, _, _, idx_new = self._net_config_map[node_to_idx][op][var]
                 if type(idx_new) is int:
                     idx_new = [idx_new]
@@ -1095,10 +1141,12 @@ class ComputeGraph(object):
         if len(target_shape) < 1:
             eqs_op_read = [f"{var} = {var}_buffer_{idx}[0]"]
             eqs_op_rotate = [f"{var}_buffer_{idx}_tmp = {var}_buffer_{idx}[1:]",
+                             f"{var}_buffer_{idx}[0:-1] = {var}_buffer_{idx}_tmp",
                              f"{var}_buffer_{idx}[-1] = 0."]
         else:
             eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, 0]"]
             eqs_op_rotate = [f"{var}_buffer_{idx}_tmp = {var}_buffer_{idx}[:, 1:]",
+                             f"{var}_buffer_{idx}[:, 0:-1] = {var}_buffer_{idx}_tmp",
                              f"{var}_buffer_{idx}[:, -1] = 0."]
 
         # create buffer variable definitions
@@ -1195,7 +1243,7 @@ class ComputeGraph(object):
         s, t, e = edge
         self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_col_{idx}/{var}_col_{idx}', net_config=net_config)
 
-    def _net_config_consistency_check(self, net_config: MultiDiGraph) -> MultiDiGraph:
+    def _net_config_consistency_check(self, net_config: CircuitIR) -> CircuitIR:
         """
 
         Parameters
@@ -1414,29 +1462,34 @@ class ComputeGraph(object):
                     net_config = self._vectorize_edges(source, target, net_config)
 
             # save changes to net config
-            self.net_config = copy(net_config)
+            self.net_config = deepcopy(net_config)
 
         # Second stage: Vectorize over operators
         ########################################
 
         if vectorization_mode == 'full':
 
-            new_node = DiGraph()
-
             # create dictionary of operators of each node that will be used to check whether they have been vectorized
             vec_info = {}
             for node in net_config.nodes:
                 vec_info[node] = {}
-                for op in self._get_node_attr(node, 'op_graph').nodes:
+                for op in self._get_node_attr(node, 'op_graph', net_config=net_config).nodes:
                     vec_info[node][op] = False
 
+            # add new node to net config
+            new_node = DiGraph()
+            new_node_name = f'{self.name}_combined'
+            net_config.add_node(new_node_name, node={'op_graph': new_node})
+            new_node_name += '.0'
+
             # go through nodes and vectorize over their operators
+            node_keys = list(vec_info)
             node_idx = 0
-            node_key = list(vec_info.keys())[node_idx]
+            node_key = node_keys[node_idx]
             while not all([all(node.values()) for node in vec_info.values()]):
 
-                change_node = False
-                op_graph = self._get_node_attr(node_key, 'op_graph').copy()
+                changed_node = False
+                op_graph = self._get_node_attr(node_key, 'op_graph', net_config=net_config).copy()
 
                 # vectorize nodes on the operator in their hierarchical order
                 while op_graph.nodes:
@@ -1452,65 +1505,92 @@ class ComputeGraph(object):
                             # check whether operator exists at other nodes
                             nodes_to_vec = []
 
-                            for node_key_tmp in vec_info.keys():
+                            for node_key_tmp in vec_info:
 
-                                if node_key_tmp != node_key and op_key in vec_info[node_key_tmp].keys():
+                                if node_key_tmp != node_key and op_key in vec_info[node_key_tmp]:
 
                                     # check if operator dependencies are vectorized already
                                     deps_vectorized = True
-                                    op_graph_tmp = self._get_node_attr(node_key_tmp, 'op_graph')
+                                    op_graph_tmp = self._get_node_attr(node_key_tmp, 'op_graph', net_config=net_config)
                                     for op_key_tmp in op_graph_tmp.nodes:
-                                        if op_key_tmp != op_key:
+                                        if op_key_tmp == op_key:
                                             for edge in op_graph_tmp.in_edges(op_key_tmp):
                                                 if not vec_info[node_key_tmp][edge[0]]:
+                                                    node_key = node_key_tmp
                                                     deps_vectorized = False
 
                                     if deps_vectorized:
                                         nodes_to_vec.append(node_key_tmp)
                                     else:
-                                        change_node = True
+                                        changed_node = True
                                         break
 
-                            if nodes_to_vec and not change_node:
+                            if nodes_to_vec and not changed_node:
 
                                 # vectorize op
                                 nodes_to_vec.append(node_key)
                                 self._vectorize_ops(net_config=net_config,
                                                     op_key=op_key,
                                                     nodes=nodes_to_vec.copy(),
-                                                    new_node=new_node)
+                                                    new_node=new_node,
+                                                    new_node_name=new_node_name)
 
                                 # indicate where vectorization was performed
                                 for node_key_tmp in nodes_to_vec:
                                     vec_info[node_key_tmp][op_key] = True
 
-                            elif change_node:
+                                # remove vectorized operation from graph
+                                op_graph.remove_node(op_key)
 
+                            elif changed_node:
                                 break
-
                             else:
 
                                 # add operation to new net configuration
                                 self._vectorize_ops(net_config=net_config,
                                                     op_key=op_key,
                                                     nodes=[node_key],
-                                                    new_node=new_node)
+                                                    new_node=new_node,
+                                                    new_node_name=new_node_name)
 
                                 # mark operation on node as checked
                                 vec_info[node_key][op_key] = True
 
-                    # remove parsed operators from graph
-                    op_graph.remove_nodes_from(primary_ops)
+                                # remove vectorized operation from graph
+                                op_graph.remove_node(op_key)
+
+                        else:
+
+                            # remove operation from graph
+                            op_graph.remove_node(op_key)
+
+                    if changed_node:
+                        break
 
                 # increment node
-                if not change_node:
-                    node_idx = node_idx + 1 if node_idx < len(vec_info) - 1 else 0
-                    node_key = list(vec_info.keys())[node_idx]
+                node_idx = node_idx + 1 if node_idx < len(vec_info) - 1 else 0
+                node_key = node_keys[node_idx]
+
+            # delete vectorized nodes from graph
+            for n in list(net_config.nodes):
+                if new_node_name not in n:
+                    net_config.graph.remove_node(n)
+
+            # add dependencies between operators
+            for target_op in self._get_node_attr(new_node_name, 'op_graph', net_config=net_config):
+                op = self._get_node_attr(new_node_name, 'operator', target_op, net_config=net_config)
+                for inp in op['inputs'].values():
+                    for source_op in inp['sources']:
+                        if type(source_op) is list:
+                            for sop in source_op:
+                                new_node.add_edge(sop, target_op)
+                        else:
+                            new_node.add_edge(source_op, target_op)
 
             # adjust edges accordingly
             ##########################
 
-            _ = self._vectorize_edges(self.key, self.key, net_config)
+            net_config = self._vectorize_edges(new_node_name, new_node_name, net_config=net_config)
 
         # Third Stage: Finalize edge vectorization
         ##########################################
@@ -1519,7 +1599,7 @@ class ComputeGraph(object):
         for node_name, node in net_config.nodes.items():
 
             node_inputs = net_config.graph.in_edges(node_name)
-            node_inputs = self._sort_edges(node_inputs, 'target_var')
+            node_inputs = self._sort_edges(node_inputs, 'target_var', net_config=net_config)
 
             # loop over input variables of node
             for i, (in_var, edges) in enumerate(node_inputs.items()):
@@ -1755,9 +1835,9 @@ class ComputeGraph(object):
                     weight, delay = self._get_edge_conn(source, target, idx)
 
                     # add weight, delay and variable indices to collector lists
-                    if delay:
+                    if delay is not None:
                         delay_col.append(delay)
-                    if weight:
+                    if weight is not None:
                         weight_col.append(weight)
                     idx_tmp = self._get_edge_var_idx(source, target, idx, 'source')
                     if idx_tmp:
@@ -1792,6 +1872,7 @@ class ComputeGraph(object):
                        op_key: str,
                        nodes: list,
                        new_node: DiGraph,
+                       new_node_name: str,
                        net_config: MultiDiGraph
                        ) -> None:
         """Vectorize all instances of an operation across nodes and put them into a single-node backend.
@@ -1809,22 +1890,26 @@ class ComputeGraph(object):
         node_name_tmp = nodes.pop(0)
         op_inputs = self._get_node_attr(node_name_tmp, 'inputs', op_key, net_config=net_config)
 
-        if node_name_tmp not in self._net_config_map.keys():
+        if node_name_tmp not in self._net_config_map:
             self._net_config_map[node_name_tmp] = {}
+        if op_key not in self._net_config_map[node_name_tmp]:
+            self._net_config_map[node_name_tmp][op_key] = {}
 
         # collect input dependencies of all nodes
         #########################################
 
-        for node in [node_name_tmp] + nodes:
-            op_inputs_tmp = self._get_node_attr(node, 'inputs', op_key, net_config=net_config)
-            for key, arg in op_inputs_tmp.items():
-                if type(arg['reduce_dim']) is bool:
-                    op_inputs[key]['reduce_dim'] = [op_inputs[key]['reduce_dim']]
-                    op_inputs[key]['sources'] = [op_inputs[key]['sources']]
-                else:
-                    if arg['sources'] not in op_inputs[key]['sources']:
-                        op_inputs[key]['sources'].append(arg['sources'])
-                        op_inputs[key]['reduce_dim'].append(arg['reduce_dim'])
+        nodes_tmp = [node_name_tmp] + nodes
+        if len(nodes_tmp) > 1:
+            for node in nodes_tmp:
+                op_inputs_tmp = self._get_node_attr(node, 'inputs', op_key, net_config=net_config)
+                for key, arg in op_inputs_tmp.items():
+                    if type(op_inputs[key]['reduce_dim']) is bool:
+                        op_inputs[key]['reduce_dim'] = [arg['reduce_dim']]
+                        op_inputs[key]['sources'] = [arg['sources']]
+                    else:
+                        if arg['sources'] not in op_inputs[key]['sources']:
+                            op_inputs[key]['sources'].append(arg['sources'])
+                            op_inputs[key]['reduce_dim'].append(arg['reduce_dim'])
 
         # extract operator-specific arguments and change their shape and value
         ######################################################################
@@ -1834,87 +1919,88 @@ class ComputeGraph(object):
 
             arg = arg.copy()
 
-            if op_key in key:
+            if arg['vtype'] == 'raw':
 
-                if arg['vtype'] == 'raw':
+                if type(arg['value']) is list:
 
-                    if type(arg['value']) is list:
+                    self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
+                                                                        (0, len(arg['value']))]
 
-                        self._net_config_map[node_name_tmp][key] = [self.key, key, (0, len(arg['value']))]
+                    for node_name in nodes:
 
-                        for node_name in nodes:
+                        if node_name not in self._net_config_map:
+                            self._net_config_map[node_name] = {}
+                        if op_key not in self._net_config_map[node_name]:
+                            self._net_config_map[node_name][op_key] = {}
 
-                            if node_name not in self._net_config_map.keys():
+                        new_val = self._get_op_attr(node_name, op_key, key, net_config=net_config)['value']
+                        old_idx = len(arg['value'])
+                        arg['value'].append(new_val)
 
-                                self._net_config_map[node_name] = {}
-
-                                new_val = net_config.nodes[node_name]['operator_args'][key]['value']
-                                old_idx = len(arg['value'])
-                                arg['value'].append(new_val)
-
-                                self._net_config_map[node_name_tmp][key] = [self.key,
-                                                                            key,
-                                                                            (old_idx, arg['value'].shape[0])]
+                        self._net_config_map[node_name][op_key][key] = [new_node_name, op_key, key,
+                                                                        (old_idx, arg['value'].shape[0])]
 
                 else:
 
-                    if not hasattr(arg['value'], 'shape'):
-                        arg['value'] = np.array(arg['value'])
-                    if arg['value'].shape != arg['shape']:
-                        try:
-                            arg['value'] = np.reshape(arg['value'], arg['shape'])
-                        except ValueError:
-                            arg['value'] = np.zeros(arg['shape']) + arg['value']
+                    # add information to _net_config_map
+                    self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key, None]
 
-                    # go through nodes and extract shape and value information for arg
-                    if nodes:
+            else:
 
-                        self._net_config_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+                if not hasattr(arg['value'], 'shape'):
+                    arg['value'] = np.array(arg['value'])
+                if arg['value'].shape != arg['shape']:
+                    try:
+                        arg['value'] = np.reshape(arg['value'], arg['shape'])
+                    except ValueError:
+                        arg['value'] = np.zeros(arg['shape']) + arg['value']
 
-                        for node_name in nodes:
+                # go through nodes and extract shape and value information for arg
+                if nodes:
 
-                            if node_name not in self._net_config_map.keys():
-                                self._net_config_map[node_name] = {}
+                    self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
+                                                                        (0, arg['value'].shape[0])]
 
-                            # extract node arg value and shape
-                            arg_tmp = net_config.nodes[node_name]['operator_args'][key]
-                            val = arg_tmp['value']
-                            dims = tuple(arg_tmp['shape'])
+                    for node_name in nodes:
 
-                            # append value to argument dictionary
-                            if len(dims) > 0 and type(val) is float:
-                                val = np.zeros(dims) + val
-                            else:
-                                val = np.reshape(np.array(val), dims)
-                            if len(dims) == 0:
-                                idx_old = 0
-                            else:
-                                idx_old = arg['value'].shape[0]
-                            arg['value'] = np.append(arg['value'], val, axis=0)
-                            idx_new = arg['value'].shape[0]
-                            idx = (idx_old, idx_new)
+                        if node_name not in self._net_config_map:
+                            self._net_config_map[node_name] = {}
+                        if op_key not in self._net_config_map[node_name]:
+                            self._net_config_map[node_name][op_key] = {}
 
-                            # add information to _net_config_map
-                            self._net_config_map[node_name][key] = [self.key, key, idx]
+                        # extract node arg value and shape
+                        arg_tmp = self._get_op_attr(node_name, op_key, key, net_config=net_config)
+                        val = arg_tmp['value']
+                        dims = tuple(arg_tmp['shape'])
 
-                    else:
+                        # append value to argument dictionary
+                        if len(dims) > 0 and type(val) is float:
+                            val = np.zeros(dims) + val
+                        else:
+                            val = np.reshape(np.array(val), dims)
+                        if len(dims) == 0:
+                            idx_old = 0
+                        else:
+                            idx_old = arg['value'].shape[0]
+                        arg['value'] = np.append(arg['value'], val, axis=0)
+                        idx_new = arg['value'].shape[0]
+                        idx = (idx_old, idx_new)
 
                         # add information to _net_config_map
-                        self._net_config_map[node_name_tmp][key] = [self.key, key, (0, arg['value'].shape[0])]
+                        self._net_config_map[node_name][op_key][key] = [new_node_name, op_key, key, idx]
 
-                    # change shape of argument
-                    arg['shape'] = arg['value'].shape
+                else:
+
+                    # add information to _net_config_map
+                    self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
+                                                                        (0, arg['value'].shape[0])]
+
+                # change shape of argument
+                arg['shape'] = arg['value'].shape
 
                 # add argument to new node's argument dictionary
                 op_args[key] = arg
 
-        # add operator information to new node
-        ######################################
-
-        # add operator
-        new_node['operators'][op_key] = op
-        new_node['operator_order'].append(op_key)
-
-        # add operator args
-        for key, arg in op_args.items():
-            new_node['operator_args'][key] = arg
+        # add operator to node
+        new_node.add_node(op_key, operator=self._get_op_attr(node_name_tmp, op_key, 'operator', net_config=net_config),
+                          variables=op_args)

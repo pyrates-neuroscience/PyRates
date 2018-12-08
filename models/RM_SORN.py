@@ -324,7 +324,7 @@ for a in range(0, n_nodes):
 ###############
 
 gr = tf.Graph()
-net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorize=True)
+net = ComputeGraph(net_config=graph, tf_graph=gr, key='test_net', dt=step_size, vectorization=True)
 
 # backend simulation
 ####################

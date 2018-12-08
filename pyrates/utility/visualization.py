@@ -42,8 +42,9 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
     sb.set_style(bg_style)
 
     # Convert the dataframe to long-form or "tidy" format
+    data['time'] = data.index
     df = pd.melt(data,
-                 id_vars=['time'],
+                 id_vars='time',
                  var_name='node',
                  value_name=variable)
 

@@ -335,7 +335,7 @@ inp = 220. + np.random.randn(int(simulation_time/step_size), 1) * 22.
 inp = np.tile(inp, (1, n_jrcs))
 from pyrates.frontend.parser.graph import circuit_from_graph
 circuit = circuit_from_graph(graph)
-net = ComputeGraph(net_config=circuit, dt=step_size, vectorize='none')
+net = ComputeGraph(net_config=circuit, dt=step_size, vectorization='none')
 
 # backend simulation
 ####################

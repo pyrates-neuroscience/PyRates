@@ -216,8 +216,27 @@ net9:
 net10:
   base: CircuitTemplate
   nodes:
+    pop0: pop1
+    pop1: pop8
+  edges:
+    - [pop0/op1/a, pop1/op7/u, DummyEdge, {weight: 2.0, delay: 0.3}]
+    - [pop1/op7/a, pop0/op1/u, DummyEdge, {weight: 0.5, delay: 0.1}]
+
+net11:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop1
+    pop1: pop8
+  edges:
+    - [pop0/op1/a, pop1/op7/u, DummyEdge, {weight: 2.0, delay: 0.2}]
+    - [pop0/op1/a, pop1/op7/u, DummyEdge, {weight: 0.5, delay: 0.4}]
+
+net12:
+  base: CircuitTemplate
+  nodes:
     pop0: pop8
     pop1: pop8
   edges:
     - [pop0/op7/a, pop1/op7/u, DummyEdge, {weight: 2.0}]
     - [pop1/op7/a, pop0/op7/u, DummyEdge, {weight: 0.5}]
+

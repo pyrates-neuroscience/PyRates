@@ -3,19 +3,19 @@
 import importlib
 
 from pyrates import PyRatesException
-from . import file_loader_mapping
+#from . import file_loader_mapping
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-def load_template_from_file(filepath: str, template_name: str):
-    file, abspath = parse_path(filepath)
-    filename, extension = file.split(".")
-    try:
-        loader = file_loader_mapping[extension]
-    except KeyError:
-        raise PyRatesException(f"Could not find loader for file extension {extension}.")
+# def load_template_from_file(filepath: str, template_name: str):
+#     file, abspath = parse_path(filepath)
+#     filename, extension = file.split(".")
+#     try:
+#         loader = file_loader_mapping[extension]
+#     except KeyError:
+#         raise PyRatesException(f"Could not find loader for file extension {extension}.")
 
 
 def parse_path(path: str):

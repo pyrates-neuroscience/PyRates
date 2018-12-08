@@ -43,7 +43,7 @@ def grid_search(circuit_template, param_grid, simulation_time, inputs, outputs, 
 
     # combine circuits to backend
     circuit_comb = CircuitIR.from_circuits('combined', circuits=circuits)
-    net = ComputeGraph(circuit_comb, dt=dt, vectorize='nodes', key='combined')
+    net = ComputeGraph(circuit_comb, dt=dt, vectorization='nodes', key='combined')
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,

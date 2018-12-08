@@ -33,7 +33,7 @@ def test_simple_example():
 
     # Step 4: Create tensorflow graph
     from pyrates.backend import ComputeGraph
-    net = ComputeGraph(net_def, dt=5e-4, vectorize='none')
+    net = ComputeGraph(net_def, dt=5e-4, vectorization='none')
 
     # Step 5: Run simulation
     results, _ = net.run(simulation_time=1.,
@@ -63,4 +63,4 @@ def test_3_coupled_jansen_rit_circuits(vectorize):
 
     # Step 4: Create tensorflow graph
     from pyrates.backend import ComputeGraph
-    net = ComputeGraph(net_def, dt=5e-4, vectorize=vectorize)
+    net = ComputeGraph(net_def, dt=5e-4, vectorization=vectorize)

@@ -675,10 +675,15 @@ class ExpressionParser(ParserElement):
                     op_idx = self.backend.add_op('scatter', idx, update, op.shape)
                 except ValueError:
                     try:
-                        op, idx = self.match_shapes(op, idx, adjust_second=True)
-                        op_idx = self.backend.add_op('scatter', idx, update, op.shape)
+                        op, update_tmp = self.match_shapes(op, update, adjust_second=True)
+                        op_idx = self.backend.add_op('scatter', idx, update_tmp, op.shape)
                     except ValueError:
-                        idx, update = self.match_shapes(idx, update, adjust_second=True)
+                        if op.shape and idx.shape and op.shape[0] == 1 and len(op.shape) > len(idx.shape):
+                            idx_tmp1 = self.backend.add_op('zeros', (1,) + tuple(idx.shape), dtype=idx.dtype, **kwargs)
+                            idx_tmp2 = self.backend.add_op('reshape', idx, idx_tmp1.shape, **kwargs)
+                            idx = self.broadcast('concat', idx_tmp1, idx_tmp2, axis=1, **kwargs)
+                        else:
+                            op, idx = self.match_shapes(op, idx, adjust_second=True)
                         op_idx = self.backend.add_op('scatter', idx, update, op.shape)
             return self.broadcast(self.assign, op, op_idx, **kwargs)
 

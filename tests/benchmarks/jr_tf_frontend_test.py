@@ -14,7 +14,7 @@ for n in range(n_jrcs):
 circuit_ir = CircuitIR.from_circuits('jrc_net', circuits=circuits).network_def(revert_node_names=True)
 
 # create backend
-net = ComputeGraph(circuit_ir, vectorize='ops')
+net = ComputeGraph(circuit_ir, vectorization='ops')
 #inp_pc = 220. + np.random.randn(3000, n_jrcs) * 0.
 #inp_in = np.zeros((3000, n_jrcs))
 results, _ = net.run(simulation_time=3.,
