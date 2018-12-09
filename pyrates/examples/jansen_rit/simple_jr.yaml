@@ -99,7 +99,7 @@ JRC:
     IIN: IIN
     PC: PC
   edges:
-    - [PC/PRO/m_out, IIN/RPO_e/m_in, DummyEdge, {weight: 33.75, delay: 0.001}]
-    - [PC/PRO/m_out, EIN/RPO_e/m_in, DummyEdge, {weight: 135., delay: 0.001}]
-    - [EIN/PRO/m_out, PC/RPO_e_pc/m_in, DummyEdge, {weight: 108., delay: 0.001}]
-    - [IIN/PRO/m_out, PC/RPO_i/m_in, DummyEdge, {weight: 33.75, delay: 0.001}]
+    - [PC/PRO/m_out, IIN/RPO_e/m_in, DummyEdge, {weight: 33.75, delay: 0.00}]
+    - [PC/PRO/m_out, EIN/RPO_e/m_in, DummyEdge, {weight: 135., delay: 0.00}]
+    - [EIN/PRO/m_out, PC/RPO_e_pc/m_in, DummyEdge, {weight: 108., delay: 0.00}]
+    - [IIN/PRO/m_out, PC/RPO_i/m_in, DummyEdge, {weight: 33.75, delay: 0.00}]

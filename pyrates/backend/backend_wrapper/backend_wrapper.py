@@ -173,6 +173,8 @@ class TensorflowBackend(tf.Graph):
             shape = value.shape
         if dtype is None:
             dtype = value.dtype
+        if value is None:
+            value = np.zeros(shape, dtype=dtype.as_numpy_dtype)
 
         # create variable
         with self.as_default():

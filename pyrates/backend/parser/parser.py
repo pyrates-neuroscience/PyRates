@@ -363,7 +363,12 @@ class ExpressionParser(ParserElement):
             # extract variable and apply index
             if self.lhs:
                 op = expr_stack[-1]
-                op_to_idx = self.args['vars'][op]
+                if op in self.args['updates']:
+                    op_to_idx = self.args['updates'][op]
+                else:
+                    self.lhs = False
+                    op_to_idx = self.parse([op])
+                    self.lhs = True
                 self.args['updates'][op] = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
                 self.expr_op = self.args['updates'][op]
@@ -381,46 +386,24 @@ class ExpressionParser(ParserElement):
             # return float representation of e
             self.expr_op = math.e
 
-        elif f'{op}_old' in self.args['inputs'].keys():
-
-            if self.lhs:
-
-                if self.solve:
-
-                    # parse dt
-                    self.lhs = False
-                    dt = self.parse(['dt'])
-                    self.lhs = True
-
-                    # calculate update of differential equation
-                    var_update = self.update(self.args['inputs'][f'{op}_old'], self.args.pop('rhs'), dt,
-                                             **self.parser_kwargs)
-                    self.args['updates'][op] = self.broadcast(self.assign, self.args['vars'][op], var_update,
-                                                              **self.parser_kwargs)
-                    self.args['lhs_evals'].append(op)
-                    self.expr_op = self.args['updates'][op]
-
-                else:
-
-                    # update variable according to rhs
-                    self.args['updates'][op] = self.broadcast(self.assign,
-                                                              self.args['vars'][op],
-                                                              self.args.pop('rhs'),
-                                                              **self.parser_kwargs)
-                    self.args['lhs_evals'].append(op)
-                    self.expr_op = self.args['updates'][op]
-
-            else:
-
-                # extract state variable from previous time-step from args dict
-                self.expr_op = self.args['inputs'][f'{op}_old']
-
-        elif op in self.args['inputs'].keys():
+        elif op in self.args['inputs']:
 
             # extract input variable from args dict
-            self.expr_op = self.args['inputs'][op]
+            if f'{op}_old' in self.args['vars']:
+                self.args['vars'][op] = self.broadcast(self.assign,
+                                                       self.args['vars'][f'{op}_old'],
+                                                       self.args['inputs'].pop(op),
+                                                       **self.parser_kwargs)
+            elif op in self.args['vars']:
+                self.args['vars'][op] = self.broadcast(self.assign,
+                                                       self.args['vars'][op],
+                                                       self.args['inputs'].pop(op),
+                                                       **self.parser_kwargs)
+            else:
+                self.args['vars'][op] = self.args['inputs'].pop(op)
+            self.expr_op = self.args['vars'][op]
 
-        elif op in self.args['vars'].keys():
+        elif op in self.args['vars']:
 
             if self.lhs:
 
@@ -434,7 +417,7 @@ class ExpressionParser(ParserElement):
                     # get variables
                     var = self.args['vars'][op]
                     var_name = f'{op}_old'
-                    old_var = self.args['inputs'][var_name]
+                    old_var = self.args['vars'][var_name]
 
                     # calculate update of differential equation
                     var_update = self.update(old_var, self.args.pop('rhs'), dt, **self.parser_kwargs)
@@ -445,8 +428,9 @@ class ExpressionParser(ParserElement):
                 else:
 
                     # update variable according to rhs
+                    var = self.args['updates'][op] if op in self.args['updates'] else self.args['vars'][op]
                     self.args['updates'][op] = self.broadcast(self.assign,
-                                                              self.args['vars'][op],
+                                                              var,
                                                               self.args.pop('rhs'),
                                                               **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
@@ -455,7 +439,8 @@ class ExpressionParser(ParserElement):
             else:
 
                 # extract constant/variable from args dict
-                self.expr_op = self.args['vars'][op]
+                self.expr_op = self.args['vars'][f'{op}_old'] if f'{op}_old' in self.args['vars'] \
+                    else self.args['vars'][op]
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
@@ -660,32 +645,51 @@ class ExpressionParser(ParserElement):
                 idx_tmp2 = i.split(':')
                 for j in idx_tmp2:
                     if j in self.args['idx'].keys():
-                        exec(f"{j} = self.args['idx'].pop('{j}')")
+                        exec(f"{j} = self.args['idx']['{j}']")
 
         # apply idx
         if self.lhs:
 
             update = self.args.pop('rhs')
+            op_shape = op.shape
+            op_old = op
+
             try:
-                op_idx = eval(f'op[{idx}]')
-                return self.broadcast(self.assign, op_idx, update, **kwargs)
+                op = eval(f'op[{idx}]')
             except ValueError:
                 idx = self._process_idx(idx, op.shape, locals())
                 try:
-                    op_idx = self.backend.add_op('scatter', idx, update, op.shape)
+                    update = self.backend.add_op('scatter', idx, update, op.shape)
                 except ValueError:
+                    op, update_tmp = self.match_shapes(op, update, adjust_second=True)
+                    if update_tmp.shape == update.shape:
+                        update_tmp = self.backend.add_op('squeeze', update, **kwargs)
                     try:
-                        op, update_tmp = self.match_shapes(op, update, adjust_second=True)
-                        op_idx = self.backend.add_op('scatter', idx, update_tmp, op.shape)
+                        update = self.backend.add_op('scatter', idx, update_tmp, op.shape)
                     except ValueError:
                         if op.shape and idx.shape and op.shape[0] == 1 and len(op.shape) > len(idx.shape):
                             idx_tmp1 = self.backend.add_op('zeros', (1,) + tuple(idx.shape), dtype=idx.dtype, **kwargs)
                             idx_tmp2 = self.backend.add_op('reshape', idx, idx_tmp1.shape, **kwargs)
                             idx = self.broadcast('concat', idx_tmp1, idx_tmp2, axis=1, **kwargs)
+                        elif op.shape and idx.shape and len(op.shape) == len(idx.shape):
+                            idx = [idx]
                         else:
                             op, idx = self.match_shapes(op, idx, adjust_second=True)
-                        op_idx = self.backend.add_op('scatter', idx, update, op.shape)
-            return self.broadcast(self.assign, op, op_idx, **kwargs)
+                        try:
+                            update = self.backend.add_op('scatter', idx, update, op.shape)
+                        except ValueError:
+                            update = self.backend.add_op('scatter', idx, update_tmp, op.shape)
+
+            try:
+                op_new = self.broadcast(self.assign, op, update, **kwargs)
+                self.args.pop('idx')
+                return op_new
+            except ValueError:
+                op_new = self.backend.add_var('state_var', 'var_storage', shape=op_shape, dtype=op.dtype, **kwargs)
+                op_new_fill = self.broadcast(self.assign, op_new, op_old, **kwargs)
+                kwargs['dependencies'] = [op_new_fill]
+                self.args['rhs'] = update
+                return self.apply_idx(op_new, idx, **kwargs)
 
         else:
 
@@ -711,6 +715,7 @@ class ExpressionParser(ParserElement):
                     raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
                                     f'the tensor to be indexed.')
 
+            self.args.pop('idx')
             return op_idx
 
     def update(self, var_old, var_delta, dt, **kwargs):
@@ -762,15 +767,11 @@ class ExpressionParser(ParserElement):
             try:
                 return self.backend.add_var(type='constant', name='idx', value=np.array(indices, dtype=np.int32))
             except ValueError:
-                n_indices = sum([len(ind) for ind in indices])
-                n_dims = len(indices)
-                idx = np.zeros((n_indices, n_dims), dtype=np.int32)
-                n = 0
+                idx = []
                 for idx0 in indices[0]:
                     for idx1 in indices[1]:
-                        idx[n, :] = [idx0, idx1]
-                        n += 1
-                return self.backend.add_var(type='constant', name='idx', value=idx)
+                        idx.append([idx0, idx1])
+                return idx
 
     def match_shapes(self, op1, op2, adjust_second=True, assign=False):
         """
@@ -943,7 +944,7 @@ def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs)
                                                                  'dtype': var.dtype.as_numpy_dtype,
                                                                  'shape': var.shape,
                                                                  'value': 0.}
-                equation_args['inputs'].update(parse_dict({f'{key}_old': var_dict}, backend=backend, **kwargs))
+                equation_args['vars'].update(parse_dict({f'{key}_old': var_dict}, backend=backend, **kwargs))
 
         # store left- and right-hand side of equation
         left_hand_sides.append(lhs)
@@ -985,8 +986,8 @@ def parse_equation(lhs: str, rhs: str, equation_args: dict, backend, solve=False
 
     """
 
-    # parse arguments into correct datatype
-    #######################################
+    # parse arguments
+    #################
 
     args_tmp = {}
     for key, arg in equation_args['vars'].items():

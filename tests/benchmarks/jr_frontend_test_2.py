@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC").apply()
 
 c = CircuitIR()
-for i in range(10):
+for i in range(1):
     c.add_circuit(f"jrc.{i}", circuit)
 
 compute_graph = ComputeGraph(c, vectorization="nodes")

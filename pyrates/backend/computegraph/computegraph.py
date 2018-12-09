@@ -200,7 +200,7 @@ class ComputeGraph(object):
             if sidx:
                 args['vars']['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                               'value': np.array(sidx, dtype=np.float32)}
-            args['vars']['target_var'] = tvar
+            args['inputs']['target_var'] = tvar
             args['inputs']['source_var'] = svar
 
             # parse mapping
@@ -597,7 +597,6 @@ class ComputeGraph(object):
 
             # store operator variables in net config
             op_vars = self._get_op_attr(node_name, op_name, 'variables')
-            op_vars.update(op_args['inputs'])
             op_vars.update(op_args['vars'])
 
             # store update ops in node update collector
@@ -1138,19 +1137,21 @@ class ComputeGraph(object):
         op_graph = self._get_node_attr(node, 'op_graph', net_config=net_config)
 
         # create buffer equations
-        if len(target_shape) < 1:
+        if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
             eqs_op_read = [f"{var} = {var}_buffer_{idx}[0]"]
             eqs_op_rotate = [f"{var}_buffer_{idx}_tmp = {var}_buffer_{idx}[1:]",
                              f"{var}_buffer_{idx}[0:-1] = {var}_buffer_{idx}_tmp",
-                             f"{var}_buffer_{idx}[-1] = 0."]
+                             f"{var}_buffer_{idx}[-1] = 0."
+                             ]
         else:
             eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, 0]"]
             eqs_op_rotate = [f"{var}_buffer_{idx}_tmp = {var}_buffer_{idx}[:, 1:]",
                              f"{var}_buffer_{idx}[:, 0:-1] = {var}_buffer_{idx}_tmp",
-                             f"{var}_buffer_{idx}[:, -1] = 0."]
+                             f"{var}_buffer_{idx}[:, -1] = 0."
+                             ]
 
         # create buffer variable definitions
-        if len(target_shape) > 0:
+        if len(target_shape) > 0 and not (len(target_shape) == 1 and target_shape[0] == 1):
             buffer_shape = [target_shape[0], buffer_length + 1]
         else:
             buffer_shape = [buffer_length + 1]
