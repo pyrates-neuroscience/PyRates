@@ -10,8 +10,8 @@ c = CircuitIR()
 for i in range(1):
     c.add_circuit(f"jrc.{i}", circuit)
 
-compute_graph = ComputeGraph(c, vectorization="nodes")
+compute_graph = ComputeGraph(c, vectorization="none")
 
-result, _ = compute_graph.run(1., outputs={"V": ("PC", "PRO.0", "PSP")}, out_dir="/tmp/log")
+result, _ = compute_graph.run(1., outputs={"V": ("all", "PRO.0", "PSP")}, out_dir="/tmp/log")
 plot_timeseries(result['V'])
 plt.show()

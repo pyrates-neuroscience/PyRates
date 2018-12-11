@@ -22,8 +22,8 @@ simulation_time = 3.0
 n_steps = int(simulation_time / step_size)
 
 # Connection Percentage (If Low that means Connections are few!!)
-sparseness_e = 0.
-sparseness_i = sparseness_e * 0.
+sparseness_e = 1.
+sparseness_i = sparseness_e * 0.5
 
 # No_of_JansenRitCircuit
 n_jrcs = 2
@@ -52,7 +52,7 @@ C_i = np.zeros((n_nodes, n_nodes))
 
 # inter-circuit connectivity
 for i in range(n_jrcs):
-    for j in range(n_jrcs - 1):
+    for j in range(n_jrcs):
         if i != j:
             weight_e = np.random.uniform()
             if weight_e > (1 - sparseness_e):

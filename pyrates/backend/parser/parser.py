@@ -657,29 +657,8 @@ class ExpressionParser(ParserElement):
             try:
                 op = eval(f'op[{idx}]')
             except ValueError:
-                idx = self._process_idx(idx, op.shape, locals())
-                try:
-                    update = self.backend.add_op('scatter', idx, update, op.shape)
-                except ValueError:
-                    op, update_tmp = self.match_shapes(op, update, adjust_second=True)
-                    if update_tmp.shape == update.shape:
-                        update_tmp = self.backend.add_op('squeeze', update, **kwargs)
-                    try:
-                        update = self.backend.add_op('scatter', idx, update_tmp, op.shape)
-                    except ValueError:
-                        if op.shape and idx.shape and op.shape[0] == 1 and len(op.shape) > len(idx.shape):
-                            idx_tmp1 = self.backend.add_op('zeros', (1,) + tuple(idx.shape), dtype=idx.dtype, **kwargs)
-                            idx_tmp2 = self.backend.add_op('reshape', idx, idx_tmp1.shape, **kwargs)
-                            idx = self.broadcast('concat', idx_tmp1, idx_tmp2, axis=1, **kwargs)
-                        elif op.shape and idx.shape and len(op.shape) == len(idx.shape):
-                            idx = [idx]
-                        else:
-                            op, idx = self.match_shapes(op, idx, adjust_second=True)
-                        try:
-                            update = self.backend.add_op('scatter', idx, update, op.shape)
-                        except ValueError:
-                            update = self.backend.add_op('scatter', idx, update_tmp, op.shape)
-
+                idx, update = self._process_idx(idx, op.shape, locals(), update=update, **kwargs)
+                update = self.backend.add_op('scatter', idx, update, op.shape, **kwargs)
             try:
                 op_new = self.broadcast(self.assign, op, update, **kwargs)
                 self.args.pop('idx')
@@ -696,18 +675,11 @@ class ExpressionParser(ParserElement):
             try:
                 op_idx = eval(f'op[{idx}]')
             except ValueError:
-                idx = self._process_idx(idx, op.shape, locals())
-                try:
-                    if len(idx.shape) > 1:
-                        op_idx = self.backend.add_op('gather_nd', op, idx, **kwargs)
-                    else:
-                        op_idx = self.backend.add_op('gather', op, idx, **kwargs)
-                except ValueError:
-                    op, idx = self.match_shapes(op, idx, adjust_second=True)
-                    if len(idx.shape) > 1:
-                        op_idx = self.backend.add_op('gather_nd', op, idx, **kwargs)
-                    else:
-                        op_idx = self.backend.add_op('gather', op, idx, **kwargs)
+                idx = self._process_idx(idx, op.shape, locals(), **kwargs)
+                if len(idx.shape) > 1:
+                    op_idx = self.backend.add_op('gather_nd', op, idx, **kwargs)
+                else:
+                    op_idx = self.backend.add_op('gather', op, idx, **kwargs)
             except TypeError:
                 if locals()[idx].dtype.is_bool:
                     op_idx = self.broadcast('*', op, idx, **kwargs)
@@ -737,7 +709,7 @@ class ExpressionParser(ParserElement):
         var_update = self.broadcast('*', var_delta, dt, **kwargs)
         return self.broadcast('+', var_old, var_update, **kwargs)
 
-    def _process_idx(self, idx, shape, local_vars: dict):
+    def _process_idx(self, idx, shape, local_vars: dict, update=None, **kwargs):
         """
 
         Parameters
@@ -745,14 +717,18 @@ class ExpressionParser(ParserElement):
         idx
         shape
         local_vars
+        update
 
         Returns
         -------
 
         """
 
+        # pre-process index
+        ###################
+
         try:
-            return local_vars[idx]
+            idx = local_vars[idx]
         except KeyError:
             dims = idx.split(',')
             indices = []
@@ -765,13 +741,57 @@ class ExpressionParser(ParserElement):
                     else:
                         indices.append([int(dim)])
             try:
-                return self.backend.add_var(type='constant', name='idx', value=np.array(indices, dtype=np.int32))
+                idx = self.backend.add_var(type='constant', name='idx', value=np.array(indices, dtype=np.int32))
             except ValueError:
                 idx = []
                 for idx0 in indices[0]:
                     for idx1 in indices[1]:
                         idx.append([idx0, idx1])
-                return idx
+
+        # match shape of index and update to shape
+        ##########################################
+
+        if update is not None and idx.shape[0] != update.shape[0]:
+            if update.shape.as_numpy_shape[0] == 1 and len(update.shape) == 1:
+                idx = self.backend.add_op('reshape', idx, (1,) + tuple(idx.shape), **kwargs)
+            else:
+                raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
+                                 f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')
+
+        if len(idx.shape) < 2 and update is not None:
+            idx = self.backend.add_op('reshape', idx, list(idx.shape) + [1], **kwargs)
+
+        if len(idx.shape) > 1:
+
+            shape_diff = len(shape) - idx.shape[1]
+            if shape_diff < 0:
+                raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
+                                 f'length {idx.shape[1]}')
+            elif update is not None:
+
+                # manage shape of updates
+                update_dim = 0
+                if len(update.shape) > 1:
+                    update_dim = len(update.shape[1:])
+                    if update_dim > shape_diff:
+                        singleton = -1 if update.shape[-1] == 1 else list(update_dim).index(1)
+                        update = self.backend.add_op('squeeze', update, axis=singleton, **kwargs)
+                        if len(update.shape) > 1:
+                            update_dim = len(update.shape[1:])
+
+                # manage shape of idx
+                shape_diff = int(shape_diff) - update_dim
+                if shape_diff > 0:
+                    indices = []
+                    for i in range(shape_diff):
+                        indices.append(self.backend.add_op('zeros', (idx.shape[0], 1), dtype=idx.dtype, **kwargs))
+                    indices.append(self.backend.add_op('reshape', idx, indices[-1].shape, **kwargs))
+                    idx = self.backend.add_op('concat', indices, axis=1, **kwargs)
+
+                return idx, update
+        if update is None:
+            return idx
+        return idx, update
 
     def match_shapes(self, op1, op2, adjust_second=True, assign=False):
         """

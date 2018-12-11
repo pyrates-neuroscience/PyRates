@@ -417,13 +417,22 @@ class ComputeGraph(object):
             if len(var.shape) > 1 and var.shape[1] > 1:
                 for i in range(var.shape[1]):
                     out_var_vals.append(var[:, i])
-                    var_name, node_name = key.split('/')
+                    key_split = key.split('/')
+                    var_name = key_split[0]
+                    node_name = ""
+                    for key_tmp in key_split[1:]:
+                        node_name += key_tmp
                     out_var_names.append((var_name, f'{node_name}_{i}'))
             else:
                 if len(var.shape) > 1:
                     var = np.squeeze(var)
                 out_var_vals.append(var)
-                out_var_names.append(tuple(key.split('/')))
+                key_split = key.split('/')
+                var_name = key_split[0]
+                node_name = ""
+                for key_tmp in key_split[1:]:
+                    node_name += key_tmp
+                out_var_names.append((var_name, node_name))
 
         # create multi-index
         index = MultiIndex.from_tuples(out_var_names, names=['var', 'node'])
@@ -1151,10 +1160,10 @@ class ComputeGraph(object):
                              ]
 
         # create buffer variable definitions
-        if len(target_shape) > 0 and not (len(target_shape) == 1 and target_shape[0] == 1):
-            buffer_shape = [target_shape[0], buffer_length + 1]
-        else:
+        if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
             buffer_shape = [buffer_length + 1]
+        else:
+            buffer_shape = [target_shape[0], buffer_length + 1]
         var_dict = {f'{var}_buffer_{idx}': {'vtype': 'state_var',
                                             'dtype': 'float32',
                                             'shape': buffer_shape,
