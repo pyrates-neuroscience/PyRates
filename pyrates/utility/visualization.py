@@ -55,6 +55,8 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
     if plot_style == 'line_plot':
 
         # simple timeseries plot
+        if not 'ci' in kwargs:
+            kwargs['ci'] = None
         ax = sb.lineplot(data=df, x='time', y=variable, hue='node', **kwargs)
 
     elif plot_style == 'ridge_plot':

@@ -1,11 +1,30 @@
 %YAML 1.2
 ---
 
-PRO:
+OP1:
   base: OperatorTemplate
   equations:
     - "d/dt * r = delta/PI + 2.*r*v"
-    - "d/dt * v = v**2 + eta + J * r + 10.0 * inp - (PI*r)**2"
+    - "d/dt * v = v**2 + eta + J * r + inp - (PI*r)**2"
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    delta:
+      default: 1.0
+    eta:
+      default: -5.0
+    J:
+      default: 15.0
+    inp:
+      default: input
+
+OP2:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * r = delta/PI + 2.*r*v"
+    - "d/dt * v = v**2 + eta + J * r + inp - (PI*r)**2"
   variables:
     r:
       default: output
@@ -20,67 +39,45 @@ PRO:
     inp:
       default: input
 
-RPO_e:
-  base: OperatorTemplate
-  equations:
-    - 'd/dt * PSP = PSP_t'
-    - 'd/dt * PSP_t =  h/tau * r_in - (1./tau)**2 * PSP - 2. * 1./tau * PSP_t'
-  variables:
-    h:
-      default: 1.
-    tau:
-      default: 1.
-    r_in:
-      default: input
-    PSP:
-      default: output
-    PSP_t:
-      default: variable
-
-RPO_i:
-  base: OperatorTemplate
-  equations:
-    - 'd/dt * PSP = PSP_t'
-    - 'd/dt * PSP_t =  h/tau * r_in - (1./tau)**2 * PSP - 2. * 1./tau * PSP_t'
-  variables:
-    h:
-      default: -2.0
-    tau:
-      default: 2.0
-    r_in:
-      default: input
-    PSP:
-      default: output
-    PSP_t:
-      default: variable
-
-PC:
+Pop1:
   base: NodeTemplate
   operators:
-    - PRO
+    - OP1
 
-IIN:
+Pop2:
   base: NodeTemplate
   operators:
-    - PRO
-
-EIN:
-  base: NodeTemplate
-  operators:
-    - PRO
+    - OP2
 
 DummyEdge:
   base: EdgeTemplate
   operators: []
 
-JRC:
+Net1:
   base: CircuitTemplate
   nodes:
-    EIN: EIN
-    IIN: IIN
-    PC: PC
+    Pop1: Pop1
   edges:
-    - [PC/PRO/r, IIN/PRO/inp, DummyEdge, {weight: 0.25}]
-    - [PC/PRO/r, EIN/PRO/inp, DummyEdge, {weight: 1.}]
-    - [EIN/PRO/r, PC/PRO/inp, DummyEdge, {weight: 0.8}]
-    - [IIN/PRO/r, PC/PRO/inp, DummyEdge, {weight: -0.25}]
+
+Net2:
+  base: CircuitTemplate
+  nodes:
+    Pop1: Pop2
+  edges:
+
+Net3:
+  base: CircuitTemplate
+  nodes:
+    Pop1: Pop1
+    Pop2: Pop2
+  edges:
+    - [Pop1/OP1/r, Pop2/OP2/inp, {weight: 10.}]
+
+Net4:
+  base: CircuitTemplate
+  nodes:
+    Pop1: Pop1
+    Pop2: Pop2
+  edges:
+    - [Pop1/OP1/r, Pop2/OP2/inp, {weight: 10.}]
+    - [Pop2/OP2/r, Pop1/OP1/inp, {weight: 10.}]

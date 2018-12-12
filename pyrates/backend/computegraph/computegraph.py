@@ -1242,7 +1242,7 @@ class ComputeGraph(object):
         op_graph.add_edge(f'{op}_{var}_col_{idx}', op)
 
         # add input information to target operator
-        op_inputs = self._get_op_attr(node, op, 'inputs')
+        op_inputs = self._get_op_attr(node, op, 'inputs', net_config=net_config)
         if var in op_inputs.keys():
             op_inputs[var]['sources'].append(f'{op}_{var}_col_{idx}')
         else:
@@ -1399,7 +1399,7 @@ class ComputeGraph(object):
             # check weight of edge
             try:
                 weight = edge['weight']
-                if not hasattr(weight, 'shape'):
+                if not hasattr(weight, 'shape') or not weight.shape:
                     weight = np.ones((1,), dtype=np.float32) * weight
                 elif 'float' not in str(weight.dtype):
                     weight = np.asarray(weight, dtype=np.float32)
@@ -1411,7 +1411,7 @@ class ComputeGraph(object):
             try:
                 delay = edge['delay']
                 if delay is not None:
-                    if not hasattr(delay, 'shape'):
+                    if not hasattr(delay, 'shape') or not delay.shape:
                         delay = np.zeros((1,)) + delay
                     if 'float' in str(delay.dtype):
                         delay = np.asarray((delay / self.dt) + 1, dtype=np.int32)

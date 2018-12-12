@@ -15,7 +15,7 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template, param_grid, simulation_time, inputs, outputs, dt, sampling_step_size=None):
+def grid_search(circuit_template, param_grid, simulation_time, inputs, outputs, dt, sampling_step_size=None, **kwargs):
     """
 
     Parameters
@@ -36,20 +36,32 @@ def grid_search(circuit_template, param_grid, simulation_time, inputs, outputs, 
     if type(param_grid) is dict:
         param_grid = linearize_grid(param_grid)
 
-    # assign parameter updates to each circuit
-    circuits = {}
+    # assign parameter updates to each circuit and combine them to unconnected network
+    circuit = CircuitIR()
+    circuit_names = []
     for n in range(param_grid.shape[0]):
-        circuits[f'{circuit_template.label}_{n}'] = {'template': circuit_template, 'values': param_grid[n, :]}
+        circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()
+        circuit_names.append(f'{circuit_tmp.label}_{n}')
+        circuit_tmp = adapt_circuit(circuit_tmp, param_grid.iloc[n, :])
+        circuit.add_circuit(circuit_names[-1], circuit_tmp)
 
-    # combine circuits to backend
-    circuit_comb = CircuitIR.from_circuits('combined', circuits=circuits)
-    net = ComputeGraph(circuit_comb, dt=dt, vectorization='nodes', key='combined')
+    # create backend graph
+    net = ComputeGraph(circuit, dt=dt, **kwargs)
+
+    # adjust input and output of simulation
+    for inp_key, inp in inputs.items():
+        inputs[inp_key] = np.tile(inp, (1, len(circuit_names)))
+
+    outputs_new = {}
+    for name in circuit_names:
+        for out_key, out in outputs.items():
+            outputs_new[f'{name}/{out_key}'] = out
 
     # simulate the circuits behavior
-    results = net.run(simulation_time=simulation_time,
-                      inputs=inputs,
-                      outputs=outputs,
-                      sampling_step_size=sampling_step_size)
+    results, _ = net.run(simulation_time=simulation_time,
+                         inputs=inputs,
+                         outputs=outputs_new,
+                         sampling_step_size=sampling_step_size)
 
     return results
 
@@ -73,3 +85,24 @@ def linearize_grid(grid: dict):
     else:
         new_grid = np.meshgrid(tuple([arg for arg in grid.values()]))
         return pd.DataFrame(new_grid, columns=grid.keys())
+
+
+def adapt_circuit(circuit, params):
+    """
+
+    Parameters
+    ----------
+    circuit
+    params
+
+    Returns
+    -------
+
+    """
+
+    for keys in params.keys():
+        val = params[keys]
+        node, op, var = keys.split('/')
+        circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var]['value'] = float(val)
+
+    return circuit
