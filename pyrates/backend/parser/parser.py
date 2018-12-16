@@ -388,7 +388,7 @@ class ExpressionParser(ParserElement):
 
         elif op in self.args['inputs']:
 
-            # extract input variable from args dict
+            # extract input variable from args dict and move it to the vars collection
             if f'{op}_old' in self.args['vars']:
                 self.args['vars'][op] = self.broadcast(self.assign,
                                                        self.args['vars'][f'{op}_old'],
@@ -401,7 +401,12 @@ class ExpressionParser(ParserElement):
                                                        **self.parser_kwargs)
             else:
                 self.args['vars'][op] = self.args['inputs'].pop(op)
-            self.expr_op = self.args['vars'][op]
+
+            # return variable if right-hand side, else parse variable
+            if self.lhs:
+                self.parse([op])
+            else:
+                self.expr_op = self.args['vars'][op]
 
         elif op in self.args['vars']:
 
@@ -736,8 +741,29 @@ class ExpressionParser(ParserElement):
                 try:
                     indices.append([local_vars[dim]])
                 except KeyError:
-                    if ':' in dim:
+                    if dim == ':':
                         indices.append([j for j in range(shape[i])])
+                    elif ':' in dim:
+                        dim_range_tmp = dim.split(':')
+                        dim_range = []
+                        for d in dim_range_tmp:
+                            try:
+                                d_tmp = local_vars[d]
+                            except KeyError:
+                                d_tmp = int(d)
+                            if (hasattr(d_tmp, 'name') and 'Neg' in d_tmp.name.split('/')[-1]) or \
+                                    (type(d_tmp) is int and d_tmp < 0):
+                                d_tmp = self.backend.add_op('+', d_tmp, shape[i], **kwargs)
+                            dim_range.append(d_tmp)
+                        if len(dim_range) == 3:
+                            indices.append(self.backend.add_op('range', dim_range[0], limit=dim_range[1],
+                                                               delta=dim_range[2], **kwargs))
+                        elif len(dim_range) == 2:
+                            indices.append(self.backend.add_op('range', dim_range[0], limit=dim_range[1], **kwargs))
+                        elif dim[0] == ':':
+                            indices.append(self.backend.add_op('range', limit=dim_range[0], **kwargs))
+                        else:
+                            indices.append(self.backend.add_op('range', dim_range[0], **kwargs))
                     else:
                         indices.append([int(dim)])
             try:
@@ -752,7 +778,7 @@ class ExpressionParser(ParserElement):
         ##########################################
 
         if update is not None and idx.shape[0] != update.shape[0]:
-            if update.shape.as_numpy_shape[0] == 1 and len(update.shape) == 1:
+            if update.shape[0] == 1 and len(update.shape) == 1:
                 idx = self.backend.add_op('reshape', idx, (1,) + tuple(idx.shape), **kwargs)
             else:
                 raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '

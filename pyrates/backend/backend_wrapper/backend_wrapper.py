@@ -66,6 +66,7 @@ class TensorflowBackend(tf.Graph):
                     "randn": tf.random_normal,
                     "ones": tf.ones,
                     "zeros": tf.zeros,
+                    "range": tf.range,
                     "softmax": tf.nn.softmax,
                     "sigmoid": tf.sigmoid,
                     "tanh": tf.tanh,
@@ -98,7 +99,7 @@ class TensorflowBackend(tf.Graph):
 
         self.existing_scopes = {}
 
-    def run(self, steps, ops, inputs, outputs, sampling_steps=None, sampling_ops=None, out_dir=None):
+    def run(self, steps, ops, inputs, outputs, sampling_steps=None, sampling_ops=None, out_dir=None, profile=None):
         """
 
         Parameters
@@ -110,6 +111,7 @@ class TensorflowBackend(tf.Graph):
         sampling_steps
         sampling_ops
         out_dir
+        profile
 
         Returns
         -------
@@ -120,6 +122,15 @@ class TensorflowBackend(tf.Graph):
         if out_dir:
             writer = tf.summary.FileWriter(out_dir, graph=self)
 
+        # initialize profiler
+        if profile is None:
+            profile = ''
+        if 't' in profile:
+            t0 = t.time()
+        if 'm' in profile:
+            meta = tf.RunMetadata()
+            time_and_memory = tf.profiler.ProfileOptionBuilder.time_and_memory()
+
         # start session
         with tf.Session(graph=self) as sess:
 
@@ -127,13 +138,31 @@ class TensorflowBackend(tf.Graph):
             sess.run(tf.global_variables_initializer())
 
             # simulate backend behavior for each time-step
-            t_start = t.time()
-            for step in range(steps):
-                if step % sampling_steps == 0:
-                    sess.run(sampling_ops, inputs[step])
-                else:
-                    sess.run(ops, inputs[step])
-            t_end = t.time()
+            if 'm' in profile:
+                for step in range(steps):
+                    if step % sampling_steps == 0:
+                        sess.run(sampling_ops, inputs[step], run_metadata=meta,
+                                 options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE))
+                    else:
+                        sess.run(ops, inputs[step], run_metadata=meta,
+                                 options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE))
+            else:
+                for step in range(steps):
+                    if step % sampling_steps == 0:
+                        sess.run(sampling_ops, inputs[step])
+                    else:
+                        sess.run(ops, inputs[step])
+
+            # store profiling results
+            if 't' in profile:
+                sim_time = t.time() - t0
+            else:
+                sim_time = 0.
+            if 'm' in profile:
+                peak_memory = tf.profiler.profile(graph=self, run_meta=meta, cmd='op', options=time_and_memory
+                                                       ).total_requested_bytes / 1e6
+            else:
+                peak_memory = 0.
 
             # close session log
             if out_dir:
@@ -143,7 +172,10 @@ class TensorflowBackend(tf.Graph):
             for key, var in outputs.items():
                 outputs[key] = var.eval(sess)
 
-        return outputs, t_end - t_start
+        # return outputs and profiler results
+        if profile:
+            return outputs, sim_time, peak_memory
+        return outputs
 
     def add_var(self, type, name, value=None, shape=None, dtype=None, **kwargs):
         """

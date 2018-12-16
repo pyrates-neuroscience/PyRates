@@ -42,10 +42,10 @@ class ComputeGraph(object):
 
     def __init__(self,
                  net_config: CircuitIR,
-                 dt: float=1e-3,
-                 vectorization: str= 'nodes',
-                 name: Optional[str]=None,
-                 build_in_place=True):
+                 dt: float = 1e-3,
+                 vectorization: str = 'nodes',
+                 name: Optional[str] = None,
+                 build_in_place: bool = True):
         """Instantiates operator.
         """
 
@@ -258,7 +258,8 @@ class ComputeGraph(object):
             sampling_step_size: Optional[float] = None,
             out_dir: Optional[str] = None,
             verbose: bool=True,
-            ) -> Tuple[DataFrame, float]:
+            profile: Optional[str] = None
+            ) -> Tuple[DataFrame, float, float]:
         """Simulate the backend behavior over time via a tensorflow session.
 
         Parameters
@@ -402,9 +403,9 @@ class ComputeGraph(object):
         # run simulation
         ################
 
-        output_col, sim_time = self.backend.run(steps=sim_steps, ops=self.step, inputs=inp,
-                                                outputs=output_col, sampling_steps=sampling_steps,
-                                                sampling_ops=sampling_op, out_dir=out_dir)
+        output_col, time, memory = self.backend.run(steps=sim_steps, ops=self.step, inputs=inp,
+                                                    outputs=output_col, sampling_steps=sampling_steps,
+                                                    sampling_ops=sampling_op, out_dir=out_dir, profile=profile)
 
         # store output variables in data frame
         ######################################
@@ -438,21 +439,24 @@ class ComputeGraph(object):
         index = MultiIndex.from_tuples(out_var_names, names=['var', 'node'])
 
         # create dataframe
-        out_vars = DataFrame(data=np.asarray(out_var_vals).T,
-                             index=np.arange(0., simulation_time, sampling_step_size),
-                             columns=index)
+        if out_var_vals:
+            out_vars = DataFrame(data=np.asarray(out_var_vals).T,
+                                 index=np.arange(0., simulation_time, sampling_step_size),
+                                 columns=index)
+        else:
+            out_vars = DataFrame()
 
         # display simulation time
         #########################
 
         if verbose:
             if simulation_time:
-                print(f"{simulation_time}s of backend behavior were simulated in {sim_time} s given a "
+                print(f"{simulation_time}s of backend behavior were simulated in {time} s given a "
                       f"simulation resolution of {self.dt} s.")
             else:
-                print(f"ComputeGraph computations finished after {sim_time} seconds.")
+                print(f"ComputeGraph computations finished after {time} seconds.")
 
-        return out_vars, sim_time
+        return out_vars, time, memory
 
     def get_var(self, node: str, op: str, var: str, var_name=None, **kwargs) -> dict:
         """

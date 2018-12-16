@@ -290,7 +290,7 @@ def test_2_3_edge():
     net2 = ComputeGraph(net_config=net_config2, name='net.2', vectorization='full', dt=dt)
     results2, _ = net2.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
                                               'b': ('pop1.0', 'op7.0', 'a')},
-                           inputs={('pop1.0', 'op7.0', 'inp'): inp})
+                           inputs={('pop1.0', 'op7.0', 'inp'): inp}, out_dir="/tmp/log")
 
     # calculate edge behavior from hand
     delay0 = int(0.1/dt)

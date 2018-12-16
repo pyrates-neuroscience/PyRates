@@ -41,6 +41,13 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
 
     sb.set_style(bg_style)
 
+    # pre-process data
+    demean = kwargs.pop('demean', False)
+    if demean:
+        for i in range(data.shape[1]):
+            data.iloc[:, i] -= np.mean(data.iloc[:, i])
+            data.iloc[:, i] /= np.std(data.iloc[:, i])
+
     # Convert the dataframe to long-form or "tidy" format
     data['time'] = data.index
     df = pd.melt(data,
@@ -55,44 +62,56 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
     if plot_style == 'line_plot':
 
         # simple timeseries plot
-        if not 'ci' in kwargs:
+        if 'ci' not in kwargs:
             kwargs['ci'] = None
         ax = sb.lineplot(data=df, x='time', y=variable, hue='node', **kwargs)
 
     elif plot_style == 'ridge_plot':
 
         # create color palette
-        col_pal_args = ['start', 'rot', 'gamma', 'hue', 'light', 'dark', 'reverse']
+        col_pal_args = ['start', 'rot', 'gamma', 'hue', 'light', 'dark', 'reverse', 'n_colors']
         kwargs_tmp = {}
-        for key in kwargs.keys():
+        for key in kwargs.copy().keys():
             if key in col_pal_args:
                 kwargs_tmp[key] = kwargs.pop(key)
-        pal = sb.cubehelix_palette(10, **kwargs_tmp)
+        if not 'n_colors' in kwargs_tmp:
+            kwargs_tmp['n_colors'] = 10
+        pal = sb.cubehelix_palette(**kwargs_tmp)
 
         # create facet grid
         grid_args = ['col_wrap', 'sharex', 'sharey', 'height', 'aspect', 'row_order', 'col_order',
                      'dropna', 'legend_out', 'margin_titles', 'xlim', 'ylim', 'gridspec_kws', 'size']
         kwargs_tmp = {}
-        for key in kwargs.keys():
+        for key in kwargs.copy().keys():
             if key in grid_args:
                 kwargs_tmp[key] = kwargs.pop(key)
-        ax = sb.FacetGrid(df, row='node', hue='node', palette=pal, **kwargs_tmp)
+        facet_hue = kwargs.pop('facet_hue', 'node')
+        facet_row = kwargs.pop('facet_row', 'node')
+        ax = sb.FacetGrid(df, row=facet_row, hue=facet_hue, palette=pal, **kwargs_tmp)
         plt.close(plt.figure(plt.get_fignums()[-2]))
 
         # map line plots
         ax.map(sb.lineplot, 'time', variable, ci=None)
         ax.map(plt.axhline, y=0, lw=2, clip_on=False)
 
+        # labeling args
+        label_args = ['fontsize']
+        kwargs_tmp = {}
+        for key in kwargs.copy().keys():
+            if key in label_args:
+                kwargs_tmp[key] = kwargs.pop(key)
+
         # Define and use a simple function to label the plot in axes coordinates
         def label(x, color, label):
             ax_tmp = plt.gca()
-            ax_tmp.text(0, .2, label, fontweight="bold", color=color,
-                        ha="left", va="center", transform=ax_tmp.transAxes)
+            ax_tmp.text(0, .1, label, fontweight="bold", color=color,
+                        ha="left", va="center", transform=ax_tmp.transAxes, **kwargs_tmp)
 
         ax.map(label, 'time')
 
         # Set the subplots to overlap
-        ax.fig.subplots_adjust(hspace=-.05)
+        hspace = kwargs.pop('hspace', -.05)
+        ax.fig.subplots_adjust(hspace=hspace)
 
         # Remove axes details that don't play well with overlap
         ax.set_titles("")
@@ -138,8 +157,8 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
 
     # turn fc into dataframe if necessary
     if type(fc) is np.ndarray:
-        rows = kwargs.pop('xticklabels') if 'xticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
-        cols = kwargs.pop('yticklabels') if 'yticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
+        rows = kwargs.pop('yticklabels') if 'yticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
+        cols = kwargs.pop('xticklabels') if 'xticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
         fc = pd.DataFrame(fc, index=rows, columns=cols)
 
     # apply threshold
@@ -172,7 +191,7 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
 
     else:
 
-        idx = [i for i in range(len(fc.columns.values))]
+        idx = [i for i in range(len(fc.index))]
 
     fc = fc.iloc[idx]
     fc = fc.T.iloc[idx]
@@ -184,19 +203,16 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
     if plot_style == 'heatmap':
 
         # seaborn plot
-        if 'xticklabels' not in kwargs.keys():
+        if 'xticklabels' not in kwargs:
             kwargs['xticklabels'] = fc.columns.values[idx]
-        if 'yticklabels' not in kwargs.keys():
-            kwargs['yticklabels'] = fc.columns.values[idx]
+        if 'yticklabels' not in kwargs:
+            kwargs['yticklabels'] = fc.index[idx]
 
         sb.set_style(bg_style)
 
         if auto_cluster:
-
             ax = sb.clustermap(data=fc, row_colors=node_colors, col_colors=node_colors, **kwargs)
-
         else:
-
             ax = sb.heatmap(fc, **kwargs)
 
     elif plot_style == 'circular_graph':

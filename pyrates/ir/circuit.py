@@ -391,15 +391,22 @@ class CircuitIR(AbstractBaseIR):
         for name, circ in circuits.items():
             circuit.add_circuit(name, circ)
 
-        if connectivity:
+        if connectivity is not None:
             if isinstance(connectivity, list) or isinstance(connectivity, tuple):
                 circuit.add_edges_from(connectivity)
             else:
                 try:
-                    for source, row in connectivity.iterrows():
-                        for target, content in row.iteritems():
+                    for target, row in connectivity.iterrows():
+                        for source, content in row.iteritems():
                             if content:  # assumes, empty entries evaluate to `False`
-                                circuit.add_edge(source, target, identify_relations=False, **content)
+                                snode, tnode = source.split('/')[:-2], target.split('/')[:-2]
+                                svar, tvar = source.split('/')[-2:], target.split('/')[-2:]
+                                snode, tnode = "/".join(snode), "/".join(tnode)
+                                svar, tvar = "/".join(svar), "/".join(tvar)
+                                if "float" in str(type(content)):
+                                    content = {'weight': content, 'delay': None}
+                                content.update({'source_var': svar, 'target_var': tvar})
+                                circuit.add_edge(snode, tnode, edge_ir=None, identify_relations=False, **content)
                 except AttributeError:
                     raise TypeError(f"Invalid data type of variable `connectivity` (type: {type(connectivity)}).")
 
@@ -480,23 +487,20 @@ class CircuitIR(AbstractBaseIR):
 
             source_var = data["source_var"]
             target_var = data["target_var"]
-
-            edge_ir = data["edge_ir"]  # type: EdgeIR
-            op_graph = edge_ir.op_graph
-            if copy_data:
-                op_graph = deepcopy(op_graph)
-
-            input_var = edge_ir.input
-            output_var = edge_ir.output
-
             weight = data["weight"]
             delay = data["delay"]
 
-            if len(op_graph) > 0:
-
-                target_var = self._move_ops_to_target(target, input_var, output_var, target_var, op_graph,
-                                                      op_label_counter, nodes)
-                # side effect: changes op_label_counter and nodes dictionary
+            if "edge_ir" in data and data["edge_ir"]:
+                edge_ir = data["edge_ir"]  # type: EdgeIR
+                op_graph = edge_ir.op_graph
+                if copy_data:
+                    op_graph = deepcopy(op_graph)
+                input_var = edge_ir.input
+                output_var = edge_ir.output
+                if len(op_graph) > 0:
+                    target_var = self._move_ops_to_target(target, input_var, output_var, target_var, op_graph,
+                                                          op_label_counter, nodes)
+                    # side effect: changes op_label_counter and nodes dictionary
 
             data = dict(source_var=source_var, target_var=target_var,
                         edge_ir=EdgeIR(), weight=weight, delay=delay)
