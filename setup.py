@@ -1,18 +1,16 @@
 from setuptools import setup, find_packages
 
-# fixme: folder reference needs to be fixed
+with open("README.md", "r") as fh:
+    long_description = fh.read()
 
-setup(name='PyRates',
+setup(name='pyrates',
       version='0.4.0',
-      description='Neural Mass Modeling Framework',
+      description='Neural Network Modeling Framework',
+      long_description=long_description,
       author='Richard Gast, Daniel Rose',
       author_email='rgast@cbs.mpg.de',
-      license='GPL3',
-      packages=['pyrates',
-                'pyrates.frontend',
-                'pyrates.backend',
-                'pyrates.utility',
-                'tests'],
+      license='GPLv3',
+      packages=find_packages(),
       zip_safe=False,
       python_requires='>=3.6',
       install_requires=['numpy',
@@ -22,4 +20,5 @@ setup(name='PyRates',
                         'pandas',
                         'tensorflow',
                         'pyparsing',
-                        'seaborn'])
+                        'seaborn']
+      )
