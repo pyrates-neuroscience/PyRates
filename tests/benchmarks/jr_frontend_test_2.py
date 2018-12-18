@@ -21,7 +21,7 @@ from pandas import DataFrame
 # parameter definition
 dt = 5e-4
 T = 3.
-C = np.array([68., 128., 135., 270., 675., 1350.])
+C = np.array([135.])
 inp = np.random.uniform(120., 320., (int(T/dt), 1))
 
 def adjust_weights(c, net):
@@ -33,9 +33,9 @@ results = []
 for c in C:
     jrc_config = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC").apply()
     adjust_weights(c/135., jrc_config)
-    jrc_model = ComputeGraph(jrc_config, dt=dt, vectorization='nodes')
-    result, _ = jrc_model.run(simulation_time=T, outputs={f'C_{c}': ('PC', 'PRO.0', 'PSP')},
-                              inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, verbose=False)
+    jrc_model = ComputeGraph(jrc_config, dt=dt, vectorization='full')
+    result = jrc_model.run(simulation_time=T, outputs={f'C_{c}': ('PC', 'PRO.0', 'PSP')},
+                           inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, verbose=False)
     results.append(result)
 
 df = DataFrame()

@@ -42,6 +42,7 @@ class TensorflowBackend(tf.Graph):
                     "<=": tf.less_equal,
                     "=": tf.assign,
                     "+=": tf.assign_add,
+                    "cond": tf.cond,
                     "neg": lambda x: -x,
                     "sin": tf.sin,
                     "cos": tf.cos,
@@ -153,6 +154,10 @@ class TensorflowBackend(tf.Graph):
                     else:
                         sess.run(ops, inputs[step])
 
+            # store output variables in output dictionary
+            for key, var in outputs.items():
+                outputs[key] = var.eval(sess)
+
             # store profiling results
             if 't' in profile:
                 sim_time = t.time() - t0
@@ -160,17 +165,13 @@ class TensorflowBackend(tf.Graph):
                 sim_time = 0.
             if 'm' in profile:
                 peak_memory = tf.profiler.profile(graph=self, run_meta=meta, cmd='op', options=time_and_memory
-                                                       ).total_requested_bytes / 1e6
+                                                       ).total_peak_bytes / 1e6
             else:
                 peak_memory = 0.
 
             # close session log
             if out_dir:
                 writer.close()
-
-            # store output variables in output dictionary
-            for key, var in outputs.items():
-                outputs[key] = var.eval(sess)
 
         # return outputs and profiler results
         if profile:

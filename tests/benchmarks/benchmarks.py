@@ -29,6 +29,7 @@ from pandas import DataFrame
 import matplotlib.pyplot as plt
 from seaborn import cubehelix_palette
 from copy import deepcopy
+import time
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -61,22 +62,40 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
     for i, n in enumerate(Ns):
         for j, p in enumerate(Ps):
 
+            print(f'Running benchmark for n = {n} and p = {p}.')
+
             # define inter-JRC connectivity
+            print('connectivity setup')
+            t0 = time.time()
             C = np.random.uniform(size=(n, n))
             C[C > p] = 0.
             conns = DataFrame(C, columns=[f'jrc_{idx}/PC.0/PRO.0/m_out' for idx in range(n)])
             conns.index = [f'jrc_{idx}/PC.0/RPO_e_pc.0/m_in' for idx in range(n)]
+            print(f'...finished after {time.time() - t0} seconds.')
 
             # define input
             inp = 220 + np.random.randn(int(T / dt), n) * 22.
 
-            # set up networks
+            # set up template
+            print('Frontend template setup')
+            t0 = time.time()
             template = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC")
+            print(f'...finished after {time.time() - t0} seconds.')
+
+            # set up intermediate representation
+            print('IR setup')
+            t0 = time.time()
             circuits = {}
             for idx in range(n):
                 circuits[f'jrc_{idx}'] = deepcopy(template)
             circuit = CircuitIR.from_circuits(label='net', circuits=circuits, connectivity=conns)
+            print(f'...finished after {time.time() - t0} seconds.')
+
+            # set up compute graph
+            print('Compute graph setup')
+            t0 = time.time()
             net = ComputeGraph(circuit, dt=dt, **init_kwargs)
+            print(f'...finished after {time.time() - t0} seconds.')
 
             # run simulations
             _, t, m = net.run(T, inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, outputs={'V': ('PC', 'PRO.0', 'PSP')},
@@ -90,8 +109,8 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
 # parameter definitions
 dt = 1e-3
 T = 1.0
-n_jrcs = [1, 100]
-p_conn = [0.81, 0.01]
+n_jrcs = [1, 10, 100, 1000, 2000]
+p_conn = [0.81, 0.27, 0.09, 0.03, 0.01]
 sim_times = np.zeros((len(n_jrcs), len(p_conn), 4))
 
 # pyrates simulation

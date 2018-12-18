@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(name='pyrates',
-      version='0.4.0',
+      version='0.5.0',
       description='Neural Network Modeling Framework',
       long_description=long_description,
       author='Richard Gast, Daniel Rose',
@@ -20,5 +20,7 @@ setup(name='pyrates',
                         'pandas',
                         'tensorflow',
                         'pyparsing',
-                        'seaborn']
-      )
+                        'seaborn',
+                        'mne',
+                        'yaml',
+                        'pydot'])

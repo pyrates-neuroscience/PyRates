@@ -73,6 +73,7 @@ class CircuitIR(AbstractBaseIR):
         attr
             additional keyword attributes that can be added to the node data. (default `networkx` syntax.)
         """
+
         # get unique labels for nodes
         for label in nodes:
             self.label_map[label] = self._get_unique_label(label)
@@ -467,30 +468,30 @@ class CircuitIR(AbstractBaseIR):
     def move_edge_operators_to_nodes(self, copy_data=True):
         """Returns a new CircuitIR instance, where all operators that were previously in edges are moved to their
         respective target nodes."""
-        if copy_data:
-            nodes = {key: deepcopy(data) for key, data in self.nodes(data=True)}
-        else:
-            nodes = self.nodes(data=True)
+        # if copy_data:
+        #    nodes = {key: deepcopy(data) for key, data in self.nodes(data=True)}
+        # else:
+        #    nodes = {key: data for key, data in self.nodes(data=True)}
 
         # this does not preserve additional node attributes
         # node_attrs = {}
-        for key, data in nodes.items():
-            nodes[key] = data["node"]
-            # node_attrs.update(**data)
+        # for key, data in nodes.items():
+        #    nodes[key] = data["node"]
+        # node_attrs.update(**data)
 
         # node_attrs.pop("node")
 
         op_label_counter = {}
 
-        edges = []
+        # edges = []
         for source, target, data in self.edges(data=True):
 
-            source_var = data["source_var"]
-            target_var = data["target_var"]
-            weight = data["weight"]
-            delay = data["delay"]
+            if "edge_ir" in data and data["edge_ir"] and data["edge_ir"].op_graph:
+                source_var = data["source_var"]
+                target_var = data["target_var"]
+                weight = data["weight"]
+                delay = data["delay"]
 
-            if "edge_ir" in data and data["edge_ir"]:
                 edge_ir = data["edge_ir"]  # type: EdgeIR
                 op_graph = edge_ir.op_graph
                 if copy_data:
@@ -499,18 +500,20 @@ class CircuitIR(AbstractBaseIR):
                 output_var = edge_ir.output
                 if len(op_graph) > 0:
                     target_var = self._move_ops_to_target(target, input_var, output_var, target_var, op_graph,
-                                                          op_label_counter, nodes)
+                                                          op_label_counter, self.nodes)
                     # side effect: changes op_label_counter and nodes dictionary
 
-            data = dict(source_var=source_var, target_var=target_var,
-                        edge_ir=EdgeIR(), weight=weight, delay=delay)
-            edges.append((source, target, data))
+                data.update({'source_var': source_var, 'target_var': target_var, 'edge_ir': EdgeIR(), 'weight': weight,
+                             'delay': delay})
+            # edges.append((source, target, data))
 
-        circuit = CircuitIR()
-        circuit.sub_circuits = self.sub_circuits
-        circuit.add_nodes_from(nodes)
-        circuit.add_edges_from(edges)
-        return circuit
+        # circuit = CircuitIR()
+        # circuit.sub_circuits = self.sub_circuits
+        # circuit.add_nodes_from(nodes)
+        # circuit.add_edges_from(edges)
+        # return circuit
+
+        return self
 
     @staticmethod
     def _move_ops_to_target(target, input_var, output_var, target_var, op_graph: DiGraph, op_label_counter, nodes):
@@ -571,7 +574,7 @@ class CircuitIR(AbstractBaseIR):
         target_node[target_op].inputs[target_var]["sources"].append(output_op)
 
         # make sure the changes are saved (might not be necessary)
-        nodes[target] = target_node
+        # nodes[target] = target_node
 
         # reassign target variable of edge
         target_op, target_var = input_var.split("/")
