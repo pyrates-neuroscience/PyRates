@@ -525,7 +525,7 @@ class CircuitIR(AbstractBaseIR):
         else:
             raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
 
-        target_node = nodes[target]
+        target_node = nodes[target]["node"]
         if target not in op_label_counter:
             op_label_counter[target] = {}
 
