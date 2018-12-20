@@ -37,7 +37,6 @@ def test_circuit_from_graph():
     """Runs JRC with tensorflow on population basis
     """
 
-    from pyrates.backend import ComputeGraph
     import numpy as np
     from networkx import MultiDiGraph
 
@@ -368,8 +367,8 @@ def test_circuit_from_graph():
 
                 graph.add_edge(source, target, **edge)
 
-    from pyrates.frontend.parser.graph import circuit_from_graph
+    from pyrates.frontend.nxgraph import to_circuit
 
-    circuit = circuit_from_graph(graph)
+    circuit = to_circuit(graph)
 
     assert circuit

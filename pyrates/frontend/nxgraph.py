@@ -36,16 +36,15 @@ from networkx import MultiDiGraph, DiGraph, find_cycle, NetworkXNoCycle
 from pyrates import PyRatesException
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.circuit import CircuitIR
-from . import type_mapping
-from .dictionary import node_from_dict
+from pyrates.frontend.dict import to_node
 
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-def circuit_from_graph(graph: nx.MultiDiGraph, label="circuit",
-                       node_creator=node_from_dict):
+def to_circuit(graph: nx.MultiDiGraph, label="circuit",
+               node_creator=to_node):
     """Create a CircuitIR instance out of a networkx.MultiDiGraph"""
 
     circuit = CircuitIR(label)
@@ -70,7 +69,7 @@ def circuit_from_graph(graph: nx.MultiDiGraph, label="circuit",
     return circuit
 
 
-def circuit_to_network_def(circuit, revert_node_names=False):
+def from_circuit(circuit, revert_node_names=False):
     """Old implementation that transforms all information in a circuit to a networkx.MultiDiGraph with a few additional
     transformations that the old backend needed."""
     return Circuit2NetDef.network_def(circuit, revert_node_names)

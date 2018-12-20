@@ -31,16 +31,16 @@
 import importlib
 
 from pyrates import PyRatesException
-from pyrates.frontend.parser.yaml import load_template_from_yaml
+from pyrates.frontend.yaml import to_template
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
-file_loader_mapping = {"yaml": load_template_from_yaml,
-                       "yml": load_template_from_yaml}
+file_loader_mapping = {"yaml": to_template,
+                       "yml": to_template}
 
 
-def load_template_from_file(filepath: str, template_name: str):
+def to_template(filepath: str, template_name: str):
     file, abspath = parse_path(filepath)
     filename, extension = file.split(".")
     try:

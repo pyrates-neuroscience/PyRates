@@ -33,9 +33,9 @@ from typing import Union
 
 # pyrates internal imports
 from pyrates import PyRatesException
-from pyrates.frontend.abc import AbstractBaseTemplate
-from pyrates.frontend.parser import deep_freeze
-from pyrates.frontend.parser.yaml import TemplateLoader
+from pyrates.frontend.template.abc import AbstractBaseTemplate
+from pyrates.frontend.utility import deep_freeze
+from pyrates.frontend.yaml import TemplateLoader
 
 # meta infos
 from pyrates.ir.operator import OperatorIR

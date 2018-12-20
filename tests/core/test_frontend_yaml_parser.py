@@ -74,8 +74,8 @@ def setup_module():
                                       ])
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
-    from pyrates.frontend.operator import OperatorTemplateLoader
-    from pyrates.frontend.operator import OperatorTemplate
+    from pyrates.frontend.template.operator import OperatorTemplateLoader
+    from pyrates.frontend.template.operator import OperatorTemplate
 
     template = OperatorTemplate.from_yaml(operator)  # type: OperatorTemplate
 
@@ -142,15 +142,15 @@ def test_full_jansen_rit_circuit_template_load():
     """Test a simple circuit template, including all nodes and operators to be loaded."""
 
     path = "pyrates.examples.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.circuit import CircuitTemplate
-    from pyrates.frontend.edge.edge import EdgeTemplate
-    from pyrates.frontend.node import NodeTemplate
-    from pyrates.frontend.operator import OperatorTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
+    from pyrates.frontend.template.edge.edge import EdgeTemplate
+    from pyrates.frontend.template.node import NodeTemplate
+    from pyrates.frontend.template.operator import OperatorTemplate
 
     template = CircuitTemplate.from_yaml(path)
 
     # test, whether circuit is in loader cache
-    from pyrates.frontend.parser.yaml import TemplateLoader
+    from pyrates.frontend.yaml import TemplateLoader
     assert template is TemplateLoader.cache[path]
 
     # test, whether node templates have been loaded successfully
@@ -178,7 +178,7 @@ def test_full_jansen_rit_circuit_template_load():
 def test_circuit_instantiation():
     """Test, if apply() functions all work properly"""
     path = "pyrates.examples.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.circuit import CircuitTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
 
     template = CircuitTemplate.from_yaml(path)
 
@@ -195,7 +195,7 @@ def test_circuit_instantiation():
 def test_multi_circuit_instantiation():
     """Test, if a circuit with subcircuits is also working."""
     path = "pyrates.examples.jansen_rit.circuit.MultiJansenRitCircuit"
-    from pyrates.frontend.circuit import CircuitTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
 
     template = CircuitTemplate.from_yaml(path)
 
@@ -208,7 +208,7 @@ def test_equation_alteration():
 
     path = "pyrates.examples.jansen_rit.population.templates.InstantaneousCPO"
     # this template removes the component "L_m * " from the base equation "L_m * V = k * I"
-    from pyrates.frontend.operator import OperatorTemplate
+    from pyrates.frontend.template.operator import OperatorTemplate
 
     template = OperatorTemplate.from_yaml(path)
 
@@ -219,14 +219,14 @@ def test_equation_alteration():
 
 def test_network_def_workaround():
     path = "pyrates.examples.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.circuit import CircuitTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
 
     template = CircuitTemplate.from_yaml(path)
 
     circuit = template.apply()
 
-    from pyrates.frontend.parser.graph import circuit_to_network_def
-    nd = circuit_to_network_def(circuit, revert_node_names=True)
+    from pyrates.frontend.nxgraph import from_circuit
+    nd = from_circuit(circuit, revert_node_names=True)
     operator_order = ['LinearCouplingOperator.3',
                       'LinearCouplingOperator.1',
                       'JansenRitExcitatorySynapseRCO.0',
@@ -261,10 +261,10 @@ def test_network_def_workaround():
 
 
 def test_yaml_dump():
-    from pyrates.frontend.circuit import CircuitTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
     circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.circuit.JansenRitCircuit").apply()
-    from pyrates.frontend.parser.yaml import circuit_to_yaml
-    circuit_to_yaml(circuit, "../output/yaml_dump.yaml", "DumpedCircuit")
+    from pyrates.frontend.yaml import from_circuit
+    from_circuit(circuit, "../output/yaml_dump.yaml", "DumpedCircuit")
 
     # reload saved circuit
     saved_circuit = CircuitTemplate.from_yaml("../output/yaml_dump.yaml.DumpedCircuit").apply()

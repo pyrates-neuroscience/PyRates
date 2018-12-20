@@ -37,7 +37,7 @@ def test_move_edge_ops_to_nodes():
     """Test, if apply() functions all work properly"""
 
     path = "pyrates.examples.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.circuit import CircuitTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
     from pyrates.ir.circuit import CircuitIR
 
     template = CircuitTemplate.from_yaml(path)

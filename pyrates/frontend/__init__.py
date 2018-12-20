@@ -26,9 +26,19 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-from .circuit import CircuitTemplate
-from pyrates.ir.circuit import CircuitIR
-from .node import NodeTemplate
-from pyrates.ir.node import NodeIR
-from .edge import EdgeTemplate
-from pyrates.ir.edge import EdgeIR
+
+from pyrates.frontend.template.circuit import CircuitTemplate
+from pyrates.frontend.template.node import NodeTemplate
+from pyrates.frontend.template.edge import EdgeTemplate
+
+from .nxgraph import to_circuit as circuit_from_nxgraph
+from .nxgraph import from_circuit as nxgraph_from_circuit
+
+from .file import to_template as template_from_file
+
+from .yaml import to_template as template_from_yaml
+from .yaml import from_circuit as yaml_from_circuit
+
+from .dict import from_circuit as dict_from_circuit
+from .dict import to_node as node_from_dict
+from .dict import to_operator as operator_from_dict

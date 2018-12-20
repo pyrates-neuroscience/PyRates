@@ -33,7 +33,7 @@ from copy import deepcopy
 from typing import List, Union, Iterator
 
 from pyrates import PyRatesException
-from pyrates.frontend.parser import deep_freeze
+from pyrates.frontend.utility import deep_freeze
 from pyrates.ir.abc import AbstractBaseIR
 
 __author__ = "Daniel Rose"

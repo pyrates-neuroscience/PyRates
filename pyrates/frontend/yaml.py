@@ -33,7 +33,7 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-def load_template_from_yaml(path: str):
+def to_template(path: str):
     """As name says: Load a template from YAML and return the resulting dictionary.
 
     Parameters
@@ -44,7 +44,7 @@ def load_template_from_yaml(path: str):
         The dot notation refers to a path that can be found using python's import functionality. The slash notation
         refers to a file in an absolute or relative path from the current working directory.
     """
-    from pyrates.frontend.parser.file import parse_path
+    from pyrates.frontend.file import parse_path
 
     name, filename, directory = parse_path(path)
     from ruamel.yaml import YAML
@@ -90,7 +90,7 @@ class TemplateLoader:
         if path in cls.cache:
             template = cls.cache[path]
         else:
-            template_dict = load_template_from_yaml(path)
+            template_dict = to_template(path)
             try:
                 base_path = template_dict.pop("base")
             except KeyError:
@@ -123,10 +123,10 @@ class TemplateLoader:
         raise NotImplementedError
 
 
-def circuit_to_yaml(circuit, path: str, name: str):
+def from_circuit(circuit, path: str, name: str):
 
-    from pyrates.frontend.parser.dictionary import circuit_to_dict
-    dict_repr = {name: circuit_to_dict(circuit)}
+    from pyrates.frontend.dict import from_circuit
+    dict_repr = {name: from_circuit(circuit)}
 
     from ruamel.yaml import YAML
     yaml = YAML()

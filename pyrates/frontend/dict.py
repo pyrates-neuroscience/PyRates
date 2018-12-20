@@ -39,12 +39,12 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-def node_from_dict(node_dict: dict):
+def to_node(node_dict: dict):
     operators = {}
     operator_args = node_dict["operator_args"]
 
     for key, item in node_dict["operators"].items():
-        operators[key] = {"operator": operator_from_dict(item),
+        operators[key] = {"operator": to_operator(item),
                           "variables": {}}
 
     for key, item in operator_args.items():
@@ -54,11 +54,11 @@ def node_from_dict(node_dict: dict):
     return NodeIR(operators=operators)
 
 
-def operator_from_dict(op_dict: dict):
+def to_operator(op_dict: dict):
     return OperatorIR(equations=op_dict["equations"], inputs=op_dict["inputs"], output=op_dict["output"])
 
 
-def circuit_to_dict(circuit: CircuitIR):
+def from_circuit(circuit: CircuitIR):
     """Reformat graph structure into a dictionary that can be saved as YAML template. The current implementation assumes
     that nodes and edges are given by as templates."""
 

@@ -47,7 +47,7 @@ def test_simple_example():
     to simulation."""
 
     # Step 1: Load Circuit template
-    from pyrates.frontend.circuit import CircuitTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
     path = "pyrates.examples.linear.ExampleCircuit"
     tmp = CircuitTemplate.from_yaml(path)
 
@@ -56,8 +56,8 @@ def test_simple_example():
 
     # Step 3: Reformat frontend IR to backend IR
     # ToDo: adapt this step to new frontend-ir-backend structure
-    from pyrates.frontend.parser.graph import circuit_to_network_def
-    net_def = circuit_to_network_def(circuit, revert_node_names=True)
+    from pyrates.frontend.nxgraph import from_circuit
+    net_def = from_circuit(circuit, revert_node_names=True)
 
     # Step 4: Create tensorflow graph
     from pyrates.backend import ComputeGraph
@@ -77,7 +77,7 @@ def test_3_coupled_jansen_rit_circuits(vectorize):
     """Test the simple Jansen-Rit example with three coupled circuits."""
 
     # Step 1: Load Circuit template
-    from pyrates.frontend.circuit import CircuitTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
     path = "pyrates.examples.jansen_rit.circuit.MultiJansenRitCircuit"
     tmp = CircuitTemplate.from_yaml(path)
 
@@ -86,8 +86,8 @@ def test_3_coupled_jansen_rit_circuits(vectorize):
 
     # Step 3: Reformat frontend IR to backend IR
     # ToDo: adapt this step to new frontend-ir-backend structure
-    from pyrates.frontend.parser.graph import circuit_to_network_def
-    net_def = circuit_to_network_def(circuit, revert_node_names=True)
+    from pyrates.frontend.nxgraph import from_circuit
+    net_def = from_circuit(circuit, revert_node_names=True)
 
     # Step 4: Create tensorflow graph
     from pyrates.backend import ComputeGraph

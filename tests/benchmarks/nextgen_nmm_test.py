@@ -26,7 +26,7 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-from pyrates.frontend.circuit import CircuitTemplate
+from pyrates.frontend.template.circuit import CircuitTemplate
 from pyrates.backend import ComputeGraph
 from pyrates.utility import plot_timeseries
 import numpy as np

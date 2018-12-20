@@ -361,8 +361,8 @@ for a in range(0, n_nodes):
 
 inp = 220. + np.random.randn(int(simulation_time/step_size), 1) * 22.
 inp = np.tile(inp, (1, n_jrcs))
-from pyrates.frontend.parser.graph import circuit_from_graph
-circuit = circuit_from_graph(graph)
+from pyrates.frontend.nxgraph import to_circuit
+circuit = to_circuit(graph)
 net = ComputeGraph(net_config=circuit, dt=step_size, vectorization='none')
 
 # backend simulation
@@ -378,8 +378,7 @@ results, _ = net.run(simulation_time=simulation_time,
 # results
 #########
 
-from pyrates.utility import plot_timeseries, plot_connectivity, plot_phase, analytic_signal, functional_connectivity, \
-    plot_psd, time_frequency, plot_tfr
+from pyrates.utility import plot_timeseries
 
 ax1 = plot_timeseries(data=results, variable='psp[V]', plot_style='line_plot', ci=None)
 #phase_amp = analytic_signal(results, fmin=6., fmax=10., nodes=[0, 1])

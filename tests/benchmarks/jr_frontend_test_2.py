@@ -26,10 +26,9 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-from pyrates.frontend.circuit import CircuitTemplate
-from pyrates.ir.circuit import CircuitIR
+from pyrates.frontend.template.circuit import CircuitTemplate
 from pyrates.backend import ComputeGraph
-from pyrates.utility import plot_timeseries, grid_search
+from pyrates.utility import plot_timeseries
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame

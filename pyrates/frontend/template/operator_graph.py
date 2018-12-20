@@ -29,10 +29,10 @@
 from typing import Union, List, Type
 
 from pyrates import PyRatesException
-from pyrates.frontend.abc import AbstractBaseTemplate
+from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.ir.operator_graph import OperatorGraph
-from pyrates.frontend.operator import OperatorTemplate
-from pyrates.frontend.parser.yaml import TemplateLoader
+from pyrates.frontend.template.operator import OperatorTemplate
+from pyrates.frontend.yaml import TemplateLoader
 
 
 class OperatorGraphTemplate(AbstractBaseTemplate):
