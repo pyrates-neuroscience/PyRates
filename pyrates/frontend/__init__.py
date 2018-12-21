@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -27,18 +26,55 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 
-from pyrates.frontend.template.circuit import CircuitTemplate
-from pyrates.frontend.template.node import NodeTemplate
-from pyrates.frontend.template.edge import EdgeTemplate
 
+#############################################################################################################
+# Define shortcuts for different types of input that are defined as frontends to provide a common interface
+# to all implemented type conversions.
+# All functions are renamed explicitly
+#############################################################################################################
+
+# template-based interface
+from .template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
+from .template import to_circuit as circuit_from_template
+from .template import to_node as node_from_template
+from .template import to_edge as edge_from_template
+from .template import to_operator as operator_from_template
+
+# (Legacy) conversion from networkx.MultiDiGraph to a circuit
 from .nxgraph import to_circuit as circuit_from_nxgraph
 from .nxgraph import from_circuit as nxgraph_from_circuit
 
-from .file import to_template as template_from_file
+# reading a template from file
+# from .file import to_template as template_from_file
 
-from .yaml import to_template as template_from_yaml
+# YAML-based interface
+from .yaml import to_template_dict as template_dict_from_yaml_file
 from .yaml import from_circuit as yaml_from_circuit
+from .yaml import to_template as template_from_yaml_file
 
+# dict-based interface
 from .dict import from_circuit as dict_from_circuit
 from .dict import to_node as node_from_dict
 from .dict import to_operator as operator_from_dict
+
+
+def circuit_from_yaml(path: str):
+    """Directly return CircuitIR instance from a yaml file."""
+    return template_from_yaml_file(path, CircuitTemplate).apply()
+
+
+def node_from_yaml(path: str):
+    """Directly return NodeIR instance from a yaml file."""
+    return template_from_yaml_file(path, NodeTemplate).apply()
+
+
+def edge_from_yaml(path: str):
+    """Directly return EdgeIR instance from a yaml file."""
+
+    return template_from_yaml_file(path, EdgeTemplate).apply()
+
+
+def operator_from_yaml(path: str):
+    """Directly return OperatorIR instance from a yaml file."""
+
+    return template_from_yaml_file(path, OperatorTemplate).apply()

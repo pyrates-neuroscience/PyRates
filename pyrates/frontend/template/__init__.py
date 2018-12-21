@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -26,3 +25,30 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
+
+from .node import NodeTemplate
+from .operator import OperatorTemplate
+from .edge import EdgeTemplate
+from .circuit import CircuitTemplate
+
+
+# module-level functions for template conversion
+# writing them out explicitly
+def to_circuit(template: CircuitTemplate):
+    """Takes a circuit template and returns a CircuitIR instance from it."""
+    return template.apply()
+
+
+def to_node(template: NodeTemplate):
+    """Takes a node template and returns a NodeIR instance from it."""
+    return template.apply()
+
+
+def to_edge(template: EdgeTemplate):
+    """Takes a edge template and returns a EdgeIR instance from it."""
+    return template.apply()
+
+
+def to_operator(template: OperatorTemplate):
+    """Takes a operator template and returns a OperatorIR instance from it."""
+    return template.apply()

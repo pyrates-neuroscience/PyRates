@@ -200,3 +200,5 @@ class CircuitTemplateLoader(TemplateLoader):
         return updated
 
 
+def to_circuit(template):
+    return template.apply()

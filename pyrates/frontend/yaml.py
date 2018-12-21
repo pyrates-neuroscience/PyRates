@@ -33,8 +33,8 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-def to_template(path: str):
-    """As name says: Load a template from YAML and return the resulting dictionary.
+def to_template_dict(path: str):
+    """Load a template from YAML and return the resulting dictionary.
 
     Parameters
     ----------
@@ -70,6 +70,10 @@ def to_template(path: str):
     return template_dict
 
 
+def to_template(path: str, template_cls):
+    return template_cls(to_template_dict(path))
+
+
 class TemplateLoader:
     """Class that loads templates from YAML and returns an OperatorTemplate class instance"""
 
@@ -90,7 +94,7 @@ class TemplateLoader:
         if path in cls.cache:
             template = cls.cache[path]
         else:
-            template_dict = to_template(path)
+            template_dict = to_template_dict(path)
             try:
                 base_path = template_dict.pop("base")
             except KeyError:

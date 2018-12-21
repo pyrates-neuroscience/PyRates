@@ -31,13 +31,13 @@
 import importlib
 
 from pyrates import PyRatesException
-from pyrates.frontend.yaml import to_template
+from pyrates.frontend import yaml as _yaml
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
-file_loader_mapping = {"yaml": to_template,
-                       "yml": to_template}
+file_loader_mapping = {"yaml": _yaml.to_template_dict,
+                       "yml": _yaml.to_template_dict}
 
 
 def to_template(filepath: str, template_name: str):
