@@ -1,31 +1,3 @@
-
-# -*- coding: utf-8 -*-
-#
-#
-# PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
-# https://github.com/pyrates-neuroscience/PyRates
-# 
-# Copyright (C) 2017-2018 the original authors (Richard Gast and 
-# Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain 
-# Sciences ("MPI CBS") and contributors
-# 
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
-# 
-# CITATION:
-# 
-# Richard Gast and Daniel Rose et. al. in preparation
 """This module provides parser classes and functions to parse string-based equations into symbolic representations of
 operations.
 """
@@ -120,8 +92,6 @@ class ExpressionParser(ParserElement):
     ----------
 
     """
-
-    lhs_count = 0
 
     def __init__(self, expr_str: str, args: dict, backend, lhs: bool = False, solve=False, assign_add=False,
                  **kwargs) -> None:
@@ -475,6 +445,10 @@ class ExpressionParser(ParserElement):
                 self.expr_op = self.args['vars'][f'{op}_old'] if f'{op}_old' in self.args['vars'] \
                     else self.args['vars'][op]
 
+        elif op in self.args['updates']:
+
+            self.expr_op = self.args['updates'][op]
+
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
             # extract data type
@@ -549,9 +523,8 @@ class ExpressionParser(ParserElement):
 
                 # add new variable to arguments that represents rhs op
                 rhs = self.args.pop('rhs')
-                new_var = self.backend.add_var(type='state_var', name=f'lhs_{self.lhs_count}', value=0.,
+                new_var = self.backend.add_var(type='state_var', name=op, value=0.,
                                                shape=rhs.shape, dtype=rhs.dtype, **self.parser_kwargs)
-                self.lhs_count += 1
                 self.args['vars'][op] = new_var
                 self.args['updates'][op] = self.broadcast(self.assign, new_var, rhs, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
@@ -715,7 +688,7 @@ class ExpressionParser(ParserElement):
                     op_idx = self.backend.add_op('gather', op, idx, **kwargs)
             except TypeError:
                 if locals()[idx].dtype.is_bool:
-                    op_idx = self.broadcast('*', op, idx, **kwargs)
+                    op_idx = self.broadcast('*', op, locals()[idx], **kwargs)
                 else:
                     raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
                                     f'the tensor to be indexed.')
@@ -981,37 +954,17 @@ def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs)
     if 'inputs' not in equation_args:
         equation_args['inputs'] = {}
 
-    left_hand_sides = []
-    right_hand_sides = []
-    diff_eq = []
-    update_type = []
+    # preprocess equations
+    left_hand_sides, right_hand_sides, update_types = preprocess_equations(equations, solver='euler')
 
-    # go through all equations
-    for i, eq in enumerate(equations):
-        if ' += ' in eq:
-            lhs, rhs = eq.split(' +=')
-            update_type.append('add')
-        else:
-            lhs, rhs = eq.split(' = ')
-            update_type.append('update')
+    # go through pre-processed equations and add introduce new variables for old values of state variables
+    for lhs in left_hand_sides:
 
-        # for the left-hand side, check whether it includes a differential operator
-        if "d/dt" in lhs:
-            lhs_split = lhs.split('*')
-            lhs = ""
-            for lhs_part in lhs_split[1:]:
-                lhs += lhs_part
-            diff_eq.append(True)
-        else:
-            diff_eq.append(False)
-
-        # in case of the equations being a differential equation, introduce separate variables for
-        # the old and new value of the variable at each update
-
-        # get key of DE variable
+        # get key of lhs variable
         lhs_var = lhs.split('[')[0]
         lhs_var = lhs_var.replace(' ', '')
 
+        # see whether lhs variable is a state variable. If yes, add variable to argument dictionary (for old value)
         for key, var in equation_args['vars'].copy().items():
             if key == lhs_var and '_old' not in key:
                 var_dict = var.copy() if type(var) is dict else {'vtype': 'state_var',
@@ -1020,16 +973,11 @@ def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs)
                                                                  'value': 0.}
                 equation_args['vars'].update(parse_dict({f'{key}_old': var_dict}, backend=backend, **kwargs))
 
-        # store left- and right-hand side of equation
-        left_hand_sides.append(lhs)
-        right_hand_sides.append(rhs)
-
     # parse equations
     #################
 
-    for lhs, rhs, solve, update in zip(left_hand_sides, right_hand_sides, diff_eq, update_type):
-        equation_args = parse_equation(lhs, rhs, equation_args, backend, solve,
-                                       assign_add=update == 'add', **kwargs)
+    for lhs, rhs, add_assign in zip(left_hand_sides, right_hand_sides, update_types):
+        equation_args = parse_equation(lhs, rhs, equation_args, backend, assign_add=add_assign, **kwargs)
 
     return equation_args
 
@@ -1129,3 +1077,156 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
                                                     **kwargs)
 
     return var_dict_tf
+
+
+def preprocess_equations(eqs: list, solver: str) -> tuple:
+    """
+
+    Parameters
+    ----------
+    eqs
+    solver
+
+    Returns
+    -------
+
+    """
+
+    # collect equation specifics
+    ############################
+
+    lhs_col, rhs_col, add_assign_col = [], [], []
+    de_lhs_col, de_rhs_col, lhs_var_col = [], [], []
+
+    for eq in eqs:
+
+        # split equation into lhs and rhs and check update type
+        if ' += ' in eq:
+            lhs, rhs = eq.split(' += ')
+            add_assign = True
+        else:
+            lhs, rhs = eq.split(' = ')
+            add_assign = False
+
+        # for the left-hand side, check whether it includes a differential operator
+        if "d/dt" in lhs:
+            diff_eq = True
+            lhs_split = lhs.split('*')
+            lhs = "".join(lhs_split[1:])
+        else:
+            diff_eq = False
+
+        # get key of lhs variable
+        lhs_var = lhs.split('[')[0]
+        lhs_var = lhs_var.replace(' ', '')
+
+        # store equation specifics
+        if diff_eq:
+            if add_assign:
+                raise ValueError(f'Wrong assignment method for equation: {eq}. '
+                                 f'A differential equation cannot be combined with a `+=` assign.')
+            de_lhs_col.append(lhs)
+            de_rhs_col.append(rhs)
+            lhs_var_col.append(lhs_var)
+        else:
+            lhs_col.append(lhs)
+            rhs_col.append(rhs)
+            add_assign_col.append(add_assign)
+
+    # solve differential equations
+    ##############################
+
+    eqs_new = []
+
+    if solver == 'euler':
+
+        # use explicit forward euler
+        for lhs, rhs in zip(de_lhs_col, de_rhs_col):
+            eqs_new.append(f"{lhs} += dt * ({rhs})")
+
+    elif solver == 'rk23':
+
+        # use second-order runge-kutta solver
+        k1_col, k2_col, rhs_new = [], [], []
+        for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
+            k1_col.append(f"{lhs_var}_k1 = {rhs}")
+            k1_col.append(f"{lhs_var}_k1_added = ({lhs_var} + dt * {lhs_var}_k1 * 2/3)")
+            for lhs_var_tmp in lhs_var_col:
+                rhs = replace(rhs, lhs_var_tmp, f"{lhs_var_tmp}_k1_added")
+            k2_col.append(f"{lhs_var}_k2 = {rhs}")
+            k2_col.append(f"{lhs} += dt * (0.25 * {lhs_var}_k1 + 0.75 * {lhs_var}_k2)")
+        eqs_new = k1_col + k2_col
+
+    elif solver == 'mp':
+
+        # use second-order runge-kutta solver
+        k1_col, k2_col, rhs_new = [], [], []
+        for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
+            k1_col.append(f"{lhs_var}_k1 = {rhs}")
+            k1_col.append(f"{lhs_var}_k1_added = ({lhs_var} + dt * {lhs_var}_k1 * 0.5)")
+            for lhs_var_tmp in lhs_var_col:
+                rhs = replace(rhs, lhs_var_tmp, f"{lhs_var_tmp}_k1_added")
+            k2_col.append(f"{lhs_var}_k2 = {rhs}")
+            k2_col.append(f"{lhs} += dt * {lhs_var}_k2")
+        eqs_new = k1_col + k2_col
+
+    else:
+
+        raise ValueError(f'Wrong solver type: {solver}. '
+                         f'Please check the docstring of this function for available solvers.')
+
+    # preprocess the newly added differential equation updates
+    ##########################################################
+
+    if eqs_new:
+        lhs_tmp, rhs_tmp, add_assign_tmp = preprocess_equations(eqs_new, solver)
+        lhs_col += lhs_tmp
+        rhs_col += rhs_tmp
+        add_assign_col += add_assign_tmp
+
+    return lhs_col, rhs_col, add_assign_col
+
+
+def replace(eq, term, replacement):
+    """
+
+    Parameters
+    ----------
+    eq
+    term
+    replacement
+
+    Returns
+    -------
+
+    """
+
+    # define follow-up operations/signs that are allowed to follow directly after term in eq
+    allowed_follow_ops = '+=*/^<>=!.%@[]():, '
+
+    # replace every proper appearance of term in eq with replacement
+    ################################################################
+
+    eq_new = ""
+    idx = eq.find(term)
+
+    # go through all appearances of term in eq
+    while idx != -1:
+
+        # get idx of sign that follows after term
+        idx_follow_op = idx+len(term)
+
+        # if it is an allowed sign, replace term, else not
+        if (idx_follow_op < len(eq) and eq[idx_follow_op] in allowed_follow_ops) or idx_follow_op == len(eq):
+            eq_new += f"{eq[:idx]} {replacement}"
+        else:
+            eq_new += f"{eq[:idx_follow_op]}"
+
+        # jump to next appearance of term in eq
+        eq = eq[idx_follow_op:]
+        idx = eq.find(term)
+
+    # add rest of eq to new eq
+    eq_new += eq
+
+    return eq_new

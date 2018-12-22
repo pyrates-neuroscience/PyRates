@@ -1,31 +1,3 @@
-
-# -*- coding: utf-8 -*-
-#
-#
-# PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
-# https://github.com/pyrates-neuroscience/PyRates
-# 
-# Copyright (C) 2017-2018 the original authors (Richard Gast and 
-# Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain 
-# Sciences ("MPI CBS") and contributors
-# 
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
-# 
-# CITATION:
-# 
-# Richard Gast and Daniel Rose et. al. in preparation
 """This module provides the backend class that should be used to set-up any backend. It creates a tensorflow graph that
 manages all computations/operations and a networkx graph that represents the backend structure (nodes + edges).
 """
@@ -187,8 +159,56 @@ class ComputeGraph(object):
             var = self.node_updates[var_idx]
             self._set_op_attr(node_name, op_name, var_name, var)
 
-        # parse edges
-        #############
+        # add layer that contains left-hand side equation updates
+        #########################################################
+
+        self.node_updates_2 = []
+        node_names, op_names, var_names, var_indices = [], [], [], []
+
+        for node_name in self.net_config.nodes:
+            op_graph = self._get_node_attr(node_name, 'op_graph')
+            for op_name, op in op_graph.nodes.items():
+                for key_old, var in op['variables'].items():
+
+                    # check if variable is a state variable updated via a differential equation
+                    if '_old' in key_old:
+                        # extract variable name and values
+                        key_new = key_old.replace('_old', '')
+                        var_new = op['variables'][key_new]
+                        var_old = op['variables'][key_old]
+
+                        # define mapping equation and its arguments
+                        eq = f'{key_old} = {key_new}'
+                        args = {'inputs': {key_new: var_new}, 'vars': {key_old: var_old}}
+
+                        # parse mapping
+                        args = parse_equation_list([eq], args, backend=self.backend,
+                                                   scope=f"{self.name}/{node_name}/{op_name}")
+
+                        args.pop('lhs_evals')
+
+                        # add update operation to edge updates
+                        self.node_updates_2.append(args['updates'][key_old])
+
+                        # add info to lists
+                        node_names.append(node_name)
+                        op_names.append(op_name)
+                        var_names.append(key_old)
+                        var_indices.append(len(self.node_updates_2) - 1)
+
+        # get control dependencies on those output variables
+        if self.node_updates_2:
+            self.node_updates_2 = self.backend.add_layer(self.node_updates_2,
+                                                         name='node_updates_2',
+                                                         scope=f'{self.name}/')
+
+        # save control dependencies to network config
+        for node_name, op_name, var_name, var_idx in zip(node_names, op_names, var_names, var_indices):
+            var = self.node_updates_2[var_idx]
+            self._set_op_attr(node_name, op_name, var_name, var)
+
+        # parse actual edges
+        ####################
 
         self.edge_updates = []
         for source_node, target_node, edge_idx in zip(source_nodes, target_nodes, edge_indices):
@@ -233,13 +253,15 @@ class ComputeGraph(object):
                                               'value': np.array(tidx, dtype=np.int32)}
             if sidx:
                 args['vars']['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                              'value': np.array(sidx, dtype=np.float32)}
+                                              'value': np.array(sidx, dtype=np.int32)}
             args['inputs']['target_var'] = tvar
             args['inputs']['source_var'] = svar
 
             # parse mapping
             args = parse_equation_list([eq], args, backend=self.backend,
-                                       scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}")
+                                       scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}",
+                                       dependencies=self.edge_updates)
+
             args.pop('lhs_evals')
 
             # store information in network config
@@ -253,35 +275,11 @@ class ComputeGraph(object):
             # add projection to edge updates
             self.edge_updates.append(edge['target_var'])
 
-        # add left-hand side equation updates to edges
-        for node_name in self.net_config.nodes:
-            op_graph = self._get_node_attr(node_name, 'op_graph')
-            for op_name, op in op_graph.nodes.items():
-                for key_old, var in op['variables'].items():
-
-                    # check if variable is a state variable updated via a differential equation
-                    if '_old' in key_old:
-
-                        # extract variable name and values
-                        key_new = key_old.replace('_old', '')
-                        var_new = op['variables'][key_new]
-                        var_old = op['variables'][key_old]
-
-                        # define mapping equation and its arguments
-                        eq = f'{key_old} = {key_new}'
-                        args = {'inputs': {key_new: var_new}, 'vars': {key_old: var_old}}
-
-                        # parse mapping
-                        args = parse_equation_list([eq], args, backend=self.backend,
-                                                   scope=f"{self.name}/{node_name}/{op_name}")
-
-                        args.pop('lhs_evals')
-
-                        # add update operation to edge updates
-                        self.edge_updates.append(args['updates'][key_old])
-
         if self.edge_updates:
             self.step = self.backend.add_layer(self.edge_updates, scope=f'{self.name}/', name='network_update')
+        elif self.node_updates_2:
+            self.step = self.backend.add_op('group', [self.node_updates, self.node_updates_2], scope=f'{self.name}/',
+                                            name='network_update')
         else:
             self.step = self.node_updates
 
@@ -362,7 +360,8 @@ class ComputeGraph(object):
             # add collect operation to the graph
             store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx_add, var,
                                                  scope="output_collection",
-                                                 dependencies=self.edge_updates))
+                                                 dependencies=self.edge_updates + self.node_updates_2
+                                                 if self.edge_updates else self.node_updates + self.node_updates_2))
 
         sampling_op = self.backend.add_op('group', store_ops, name='output_collection')
 
@@ -480,8 +479,10 @@ class ComputeGraph(object):
 
         # create dataframe
         if out_var_vals:
-            out_vars = DataFrame(data=np.asarray(out_var_vals).T,
-                                 index=np.arange(0., simulation_time, sampling_step_size),
+            data = np.asarray(out_var_vals).T
+            idx = np.arange(0., simulation_time, sampling_step_size)[-data.shape[0]:]
+            out_vars = DataFrame(data=data,
+                                 index=idx,
                                  columns=index)
         else:
             out_vars = DataFrame()
@@ -1190,35 +1191,37 @@ class ComputeGraph(object):
         target_shape = self._get_op_attr(node, op, var, net_config=net_config)['shape']
         op_graph = self._get_node_attr(node, 'op_graph', net_config=net_config)
 
-        # create buffer equations
-        if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-            eqs_op_read = [f"{var} = {var}_buffer_{idx}[0]"]
-            eqs_op_rotate = [f"{var}_buffer_{idx}_tmp = {var}_buffer_{idx}[1:]",
-                             f"{var}_buffer_{idx}[0:-1] = {var}_buffer_{idx}_tmp",
-                             f"{var}_buffer_{idx}[-1] = 0."
-                             ]
-        else:
-            eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, 0]"]
-            eqs_op_rotate = [f"{var}_buffer_{idx}_tmp = {var}_buffer_{idx}[:, 1:]",
-                             f"{var}_buffer_{idx}[:, 0:-1] = {var}_buffer_{idx}_tmp",
-                             f"{var}_buffer_{idx}[:, -1] = 0."
-                             ]
-
         # create buffer variable definitions
         if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
             buffer_shape = [buffer_length + 1]
+            buffer_shape_reset = [1]
         else:
             buffer_shape = [target_shape[0], buffer_length + 1]
+            buffer_shape_reset = [target_shape[0], 1]
         var_dict = {f'{var}_buffer_{idx}': {'vtype': 'state_var',
                                             'dtype': 'float32',
                                             'shape': buffer_shape,
                                             'value': 0.
-                                            }}
+                                            },
+                    f'{var}_buffer_{idx}_reset': {'vtype': 'constant',
+                                                  'dtype': 'float32',
+                                                  'shape': buffer_shape_reset,
+                                                  'value': 0.
+                                                  }
+                    }
+
+        # create buffer equations
+        if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+            eqs_op_read = [f"{var} = {var}_buffer_{idx}[0]"]
+            eqs_op_rotate = [f"{var}_buffer_{idx} = concat({var}_buffer_{idx}[1:], {var}_buffer_{idx}_reset, 0)"]
+        else:
+            eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, 0]"]
+            eqs_op_rotate = [f"{var}_buffer_{idx} = concat({var}_buffer_{idx}[:, 1:], {var}_buffer_{idx}_reset, 1)"]
 
         # add buffer operators to operator graph
         op_graph.add_node(f'{op}_{var}_buffer_rotate_{idx}',
                           operator={'inputs': {},
-                                    'output': f'{var}_buffer_{idx}_tmp',
+                                    'output': f'{var}_buffer_{idx}',
                                     'equations': eqs_op_rotate},
                           variables=var_dict)
         op_graph.add_node(f'{op}_{var}_buffer_read_{idx}',
@@ -1244,7 +1247,7 @@ class ComputeGraph(object):
         s, t, e = edge
         self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_buffer_rotate_{idx}/{var}_buffer_{idx}',
                             net_config=net_config)
-        self._set_edge_attr(s, t, e, 'add_project', True, net_config=net_config)
+        self._set_edge_attr(s, t, e, 'add_project', val=True, net_config=net_config)
 
     def _add_synaptic_input_collector(self, node, op, var, idx, edge, net_config=None):
         """

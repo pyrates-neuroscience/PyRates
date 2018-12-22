@@ -1,73 +1,51 @@
-
-# -*- coding: utf-8 -*-
-#
-#
-# PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
-# https://github.com/pyrates-neuroscience/PyRates
-# 
-# Copyright (C) 2017-2018 the original authors (Richard Gast and 
-# Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain 
-# Sciences ("MPI CBS") and contributors
-# 
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
-# 
-# CITATION:
-# 
-# Richard Gast and Daniel Rose et. al. in preparation
-from pyrates.frontend.template.circuit import CircuitTemplate
+from pyrates.frontend.circuit import CircuitTemplate
+from pyrates.ir.circuit import CircuitIR
 from pyrates.backend import ComputeGraph
-from pyrates.utility import plot_timeseries
+from pyrates.utility import plot_timeseries, grid_search
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame
 
-# circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC").apply()
-#
-# c = CircuitIR()
-# for i in range(1):
-#    c.add_circuit(f"jrc.{i}", circuit)
-#
-# compute_graph = ComputeGraph(c, vectorization="none")
-# inp = 220. + np.random.randn(int(1./1e-3), 1) * 22.
-# result, _ = compute_graph.run(1., outputs={"V": ("all", "PRO.0", "PSP")}, inputs={("PC", "RPO_e_pc.0", "u"): inp},
-#                               out_dir="/tmp/log")
+circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC").apply()
 
+c = CircuitIR()
+N = 5
+for i in range(N):
+   c.add_circuit(f"jrc.{i}", circuit)
+
+T = 1.
+dt = 1e-3
+compute_graph = ComputeGraph(c, vectorization="nodes", dt=dt)
+inp = 220. + np.random.randn(int(T/dt), N) * 0.
+result = compute_graph.run(T, outputs={"V": ("all", "PRO.0", "PSP")}, inputs={("PC", "RPO_e_pc.0", "u"): inp})
+#plot_timeseries(result['V']
+df = result['V']
+plot_timeseries(df)
+#df['input'] = inp
+#plot_timeseries(df, plot_style='ridge_plot', demean=True, light=0.6, dark=0.3, hue=.95,
+#                n_colors=6, hspace=-.01, fontsize=28, start=-3.0, rot=-0.2, aspect=20, height=2.0)
+plt.show()
 
 # parameter definition
-dt = 5e-4
-T = 3.
-C = np.array([135.])
-inp = np.random.uniform(120., 320., (int(T/dt), 1))
-
-def adjust_weights(c, net):
-    for s, t, e in net.edges:
-        net.edges[s, t, e]['weight'] *= c
-
-# pyrates simulation
-results = []
-for c in C:
-    jrc_config = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC").apply()
-    adjust_weights(c/135., jrc_config)
-    jrc_model = ComputeGraph(jrc_config, dt=dt, vectorization='full')
-    result = jrc_model.run(simulation_time=T, outputs={f'C_{c}': ('PC', 'PRO.0', 'PSP')},
-                           inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, verbose=False)
-    results.append(result)
-
-df = DataFrame()
-for r, c in zip(results, C):
-    df[f'C = {c}'] = r.iloc[r.index > 1.0, 0]
-plot_timeseries(df, plot_style='ridge_plot', demean=True, light=0.6, dark=0.3, hue=.95, n_colors=6, hspace=-.07,
-                fontsize=12, start=-1.85, rot=-0.2)
-plt.show()
+# dt = 1e-4
+# T = 82.
+# taus = np.array([0.01, 0.01, 0.01, 0.01, 0.1, 0.1, 0.1, 0.1, 1., 1., 1., 1., 10., 10., 10., 10.])
+# taus2 = np.array([0.01, 0.1, 1., 10., 0.01, 0.1, 1., 10., 0.01, 0.1, 1., 10., 0.01, 0.1, 1., 10.])
+# inp1 = np.zeros((int(T/dt), 1))
+# inp1[int(6./dt):int((T-20.)/dt)] = 3.
+# inp2 = np.zeros((int(T/dt), 1))
+# inp2[int(4./dt):, 0] = 1. * np.sin(np.pi/20. * np.arange(4., T, dt))
+#
+# from pyrates.utility import grid_search
+# params = {'Pop1.0/Op_tau_e.0/tau': taus, 'Pop1.0/Op_syn_e.0/tau': taus2}
+#
+# # pyrates simulation
+# df = grid_search("pyrates.examples.simple_nextgen_NMM.Net3", params, T,
+#                  inputs={("Pop", "Op_tau_e.0", "inp"): inp1, ("Pop", "Op_syn_e.0", "r_in"): inp2},
+#                  outputs={"v": ("all", "Op_tau_e.0", "v")},
+#                  dt=dt)
+#
+# # plotting
+# plot_timeseries(df['v'].iloc[df.index > 1.0, :], plot_style='ridge_plot', demean=True, light=0.6, dark=0.3, hue=.95,
+#                 n_colors=6, hspace=-.01, fontsize=28, start=-3.0, rot=-0.2, aspect=20, height=2.0)
+# plt.show()

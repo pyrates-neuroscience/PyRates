@@ -82,6 +82,15 @@ op7:
     inp:
       default: input
 
+op8:
+  base: OperatorTemplate
+  equations: "a = 2.0 + u"
+  variables:
+    a:
+      default: output
+    u:
+      default: input
+
 # population templates
 ######################
 
@@ -135,6 +144,11 @@ pop8:
   base: NodeTemplate
   operators:
     - op7
+
+pop9:
+  base: NodeTemplate
+  operators:
+    - op8
 
 # edge templates
 ################
@@ -216,11 +230,11 @@ net9:
 net10:
   base: CircuitTemplate
   nodes:
-    pop0: pop1
-    pop1: pop8
+    pop0: pop9
+    pop1: pop9
   edges:
-    - [pop0/op1/a, pop1/op7/u, DummyEdge, {weight: 2.0, delay: 0.3}]
-    - [pop1/op7/a, pop0/op1/u, DummyEdge, {weight: 0.5, delay: 0.1}]
+    - [pop1/op8/a, pop0/op8/u, DummyEdge, {weight: 0.5, delay: 0.5}]
+    - [pop0/op8/a, pop1/op8/u, DummyEdge, {weight: 2.0, delay: 1.0}]
 
 net11:
   base: CircuitTemplate
@@ -237,6 +251,6 @@ net12:
     pop0: pop8
     pop1: pop8
   edges:
-    - [pop0/op7/a, pop1/op7/u, DummyEdge, {weight: 2.0}]
-    - [pop1/op7/a, pop0/op7/u, DummyEdge, {weight: 0.5}]
+    - [pop0/op7/a, pop1/op7/u, DummyEdge, {weight: 0.1, delay: 0.2}]
+    - [pop1/op7/a, pop0/op7/u, DummyEdge, {weight: 0.5, delay: 0.2}]
 
