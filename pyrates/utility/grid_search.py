@@ -76,6 +76,9 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
         circuit_names.append(f'{circuit_tmp.label}_{n}')
         circuit_tmp = adapt_circuit(circuit_tmp, param_grid.iloc[n, :], param_map)
         circuit.add_circuit(circuit_names[-1], circuit_tmp)
+        param_names = list(param_grid.columns.values)
+        param_info_tmp = [f"{param_names[i]}-{val}" for i, val in enumerate(param_grid.iloc[n, :])]
+        param_info.append("/".join(param_info_tmp))
 
     # create backend graph
     net = ComputeGraph(circuit, dt=dt, **kwargs)
@@ -85,14 +88,14 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
         inputs[inp_key] = np.tile(inp, (1, len(circuit_names)))
 
     # adjust output of simulation to combined network
-    circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()
+    nodes = list(CircuitTemplate.from_yaml(circuit_template).apply().nodes)
     for out_key, out in outputs.copy().items():
-        if out[0] in circuit_tmp.nodes:
+        if out[0] in nodes:
             outputs.pop(out_key)
             for i, name in enumerate(param_info):
                 out_tmp = list(out)
                 out_tmp[0] = f'{circuit_names[i]}/{out_tmp[0]}'
-                outputs[out_key] = tuple(out_tmp)
+                outputs[f'{name}_{out_key}'] = tuple(out_tmp)
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,

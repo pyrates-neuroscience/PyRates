@@ -20,19 +20,13 @@ param_map = {'D': {'var': [(None, 'delay')],
 # perform simulation
 results = grid_search(circuit_template="pyrates.examples.simple_nextgen_NMM.Net6",
                       param_grid=params, param_map=param_map,
-                      inputs={("PC", "Op_e.0", "inp"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
+                      inputs={("PC", "Op_e.0", "inp"): inp}, outputs={"r1": ("PC1.0", "Op_e.0", "r"),
+                                                                      "r2": ("PC2.0", "Op_e.0", "r")},
                       dt=dt, simulation_time=T, sampling_step_size=1e-3)
 
 # plotting
-plot_timeseries(results['r'])
+plot_timeseries(results)
 plt.show()
-
-n = 0
-for i, d in enumerate(params['D']):
-    for j, c in enumerate(params['C']):
-        df = results['r'].iloc[:, n * 2:(n + 1) * 2]
-        data = DataFrame({f'D:{d}, C:{c}, PC1': df.values[:, 0],
-                          f'D:{d}, C:{c}, PC2': df.values[:, 1]})
-        plot_timeseries(data, ci=None)
-        plt.show()
-        n += 1
+plot_timeseries(results, plot_style='ridge_plot', demean=True, light=0.6, dark=0.3, hue=.95,
+                n_colors=6, hspace=-.01, fontsize=28, start=-3.0, rot=-0.2, aspect=20, height=2.0)
+plt.show()
