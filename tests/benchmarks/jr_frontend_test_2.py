@@ -1,5 +1,5 @@
-from pyrates.frontend.circuit import CircuitTemplate
-from pyrates.ir.circuit import CircuitIR
+from pyrates.frontend.template.circuit.circuit import CircuitTemplate
+from pyrates.ir import CircuitIR
 from pyrates.backend import ComputeGraph
 from pyrates.utility import plot_timeseries, grid_search
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC")
 c = CircuitIR()
 N = 5
 for i in range(N):
-   c.add_circuit(f"jrc.{i}", circuit)
+    c.add_circuit(f"jrc.{i}", circuit)
 
 T = 1.
 dt = 1e-3

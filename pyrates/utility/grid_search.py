@@ -43,13 +43,16 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template, param_grid, simulation_time, inputs, outputs, dt, sampling_step_size=None, **kwargs):
+def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
+                sampling_step_size=None, **kwargs):
     """
 
     Parameters
     ----------
-    circuit
+    circuit_template
     param_grid
+    param_map
+    dt
     simulation_time
     inputs
     outputs
@@ -67,29 +70,35 @@ def grid_search(circuit_template, param_grid, simulation_time, inputs, outputs, 
     # assign parameter updates to each circuit and combine them to unconnected network
     circuit = CircuitIR()
     circuit_names = []
+    param_info = []
     for n in range(param_grid.shape[0]):
         circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()
         circuit_names.append(f'{circuit_tmp.label}_{n}')
-        circuit_tmp = adapt_circuit(circuit_tmp, param_grid.iloc[n, :])
+        circuit_tmp = adapt_circuit(circuit_tmp, param_grid.iloc[n, :], param_map)
         circuit.add_circuit(circuit_names[-1], circuit_tmp)
 
     # create backend graph
     net = ComputeGraph(circuit, dt=dt, **kwargs)
 
-    # adjust input and output of simulation
+    # adjust input of simulation to combined network
     for inp_key, inp in inputs.items():
         inputs[inp_key] = np.tile(inp, (1, len(circuit_names)))
 
-    outputs_new = {}
-    for name in circuit_names:
-        for out_key, out in outputs.items():
-            outputs_new[f'{name}/{out_key}'] = out
+    # adjust output of simulation to combined network
+    circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()
+    for out_key, out in outputs.copy().items():
+        if out[0] in circuit_tmp.nodes:
+            outputs.pop(out_key)
+            for i, name in enumerate(param_info):
+                out_tmp = list(out)
+                out_tmp[0] = f'{circuit_names[i]}/{out_tmp[0]}'
+                outputs[out_key] = tuple(out_tmp)
 
     # simulate the circuits behavior
-    results, _ = net.run(simulation_time=simulation_time,
-                         inputs=inputs,
-                         outputs=outputs_new,
-                         sampling_step_size=sampling_step_size)
+    results = net.run(simulation_time=simulation_time,
+                      inputs=inputs,
+                      outputs=outputs,
+                      sampling_step_size=sampling_step_size)
 
     return results
 
@@ -111,26 +120,40 @@ def linearize_grid(grid: dict):
     if len(list(set(arg_lengths))) == 1:
         return pd.DataFrame(grid)
     else:
-        new_grid = np.meshgrid(tuple([arg for arg in grid.values()]))
-        return pd.DataFrame(new_grid, columns=grid.keys())
+        vals, keys = [], []
+        for key, val in grid.items():
+            vals.append(val)
+            keys.append(key)
+        new_grid = np.stack(np.meshgrid(*tuple(vals)), -1).reshape(-1, len(grid))
+        return pd.DataFrame(new_grid, columns=keys)
 
 
-def adapt_circuit(circuit, params):
+def adapt_circuit(circuit, params, param_map):
     """
 
     Parameters
     ----------
     circuit
     params
+    param_map
 
     Returns
     -------
 
     """
 
-    for keys in params.keys():
-        val = params[keys]
-        node, op, var = keys.split('/')
-        circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var]['value'] = float(val)
+    for key in params.keys():
+        val = params[key]
+        for op, var in param_map[key]['var']:
+            nodes = param_map[key]['nodes'] if 'nodes' in param_map[key] else []
+            edges = param_map[key]['edges'] if 'edges' in param_map[key] else []
+            for node in nodes:
+                if op in circuit.nodes[node]['node'].op_graph.nodes:
+                    circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var]['value'] = float(val)
+            for source, target, edge in edges:
+                if op in circuit.edges[source, target, edge]:
+                    circuit.edges[source, target, edge][op][var] = float(val)
+                elif var in circuit.edges[source, target, edge]:
+                    circuit.edges[source, target, edge][var] = float(val)
 
     return circuit

@@ -5,7 +5,7 @@ Op_e:
   base: OperatorTemplate
   equations:
     - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - "d/dt * v = (v**2 + eta + inp) / tau + J*r + r_e - r_i - tau*(PI*r)**2"
+    - "d/dt * v = (v**2 + eta + inp) / tau + J_e * (r + r_e) - J_i * r_i - tau*(PI*r)**2"
   variables:
     r:
       default: output
@@ -21,8 +21,10 @@ Op_e:
       default: 2.0
     eta:
       default: -1.0
-    J:
-      default: 14.142
+    J_e:
+      default: 10.0
+    J_i:
+      default: 12.5
     inp:
       default: input
 
@@ -30,7 +32,7 @@ Op_i:
   base: OperatorTemplate
   equations:
     - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - "d/dt * v = (v**2 + eta + inp) / tau + J*r + r_e + r_i - tau*(PI*r)**2"
+    - "d/dt * v = (v**2 + eta + inp) / tau - J_i* (r + r_i) + J_e * r_e - tau*(PI*r)**2"
   variables:
     r:
       default: output
@@ -46,8 +48,10 @@ Op_i:
       default: 2.0
     eta:
       default: -2.0
-    J:
-      default: -21.213
+    J_e:
+      default: 10.0
+    J_i:
+      default: 12.5
     inp:
       default: input
 
@@ -231,9 +235,9 @@ Net6:
     PC2: Pop_e
     IIN2: Pop_i
   edges:
-    - [PC1/Op_e/r, IIN1/Op_i/r_e, DummyEdge, {weight: 14.142, delay: 0.0}]
-    - [IIN1/Op_i/r, PC1/Op_e/r_i, DummyEdge, {weight: 21.213, delay: 0.0}]
-    - [PC2/Op_e/r, IIN2/Op_i/r_e, DummyEdge, {weight: 14.142, delay: 0.0}]
-    - [IIN2/Op_i/r, PC2/Op_e/r_i, DummyEdge, {weight: 21.213, delay: 0.0}]
-    - [PC1/Op_e/r, PC2/Op_e/r_e, DummyEdge, {weight: 5.0, delay: 0.0}]
-    - [PC2/Op_e/r, PC1/Op_e/r_e, DummyEdge, {weight: 5.0, delay: 0.0}]
+    - [PC1/Op_e/r, IIN1/Op_i/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [IIN1/Op_i/r, PC1/Op_e/r_i, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [PC2/Op_e/r, IIN2/Op_i/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [IIN2/Op_i/r, PC2/Op_e/r_i, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [PC1/Op_e/r, PC2/Op_e/r_e, DummyEdge, {weight: 0.5, delay: 0.0}]
+    - [PC2/Op_e/r, PC1/Op_e/r_e, DummyEdge, {weight: 0.5, delay: 0.0}]

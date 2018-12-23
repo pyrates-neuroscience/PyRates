@@ -34,3 +34,5 @@ backends.
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
+
+from .circuit import CircuitIR
