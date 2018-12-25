@@ -75,8 +75,9 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
         for i in range(data.shape[1]):
             data.iloc[:, i] -= np.mean(data.iloc[:, i])
             data.iloc[:, i] /= np.std(data.iloc[:, i])
+    title = kwargs.pop('title', '')
 
-    # Convert the dataframe to long-form or "tidy" format
+    # Convert the dataframe to long-form or "tidy" format if necessary
     data['time'] = data.index
     df = pd.melt(data,
                  id_vars='time',
@@ -92,7 +93,7 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
         # simple timeseries plot
         if 'ci' not in kwargs:
             kwargs['ci'] = None
-        ax = sb.lineplot(data=df, x='time', y=variable, hue='node', **kwargs)
+        ax = sb.lineplot(data=df, x='time', y=variable, hue='node', **kwargs).set_title(title)
 
     elif plot_style == 'ridge_plot':
 
