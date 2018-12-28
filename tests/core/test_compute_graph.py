@@ -8,7 +8,7 @@ import pytest
 # pyrates internal imports
 from pyrates.backend import ComputeGraph
 from pyrates.utility import nmrse
-from pyrates.frontend.circuit import CircuitTemplate
+from pyrates.frontend import CircuitTemplate
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
