@@ -76,8 +76,9 @@ def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
     from pyrates.frontend.template.operator import OperatorTemplateLoader
     from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.frontend import template_from_yaml_file
 
-    template = OperatorTemplate.from_yaml(operator)  # type: OperatorTemplate
+    template = template_from_yaml_file(operator, OperatorTemplate)  # type: OperatorTemplate
 
     assert template.path in OperatorTemplateLoader.cache
 
