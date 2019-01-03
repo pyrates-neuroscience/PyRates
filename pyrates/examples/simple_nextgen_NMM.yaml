@@ -18,13 +18,13 @@ Op_e:
     tau:
       default: 0.02
     delta:
-      default: 2.0
+      default: 1.0
     eta:
-      default: -1.0
+      default: -2.5
     J_e:
-      default: 10.0
+      default: 12.0
     J_i:
-      default: 12.5
+      default: 2.0
     inp:
       default: input
 
@@ -45,13 +45,13 @@ Op_i:
     tau:
       default: 0.02
     delta:
-      default: 2.0
+      default: 1.0
     eta:
-      default: -2.0
+      default: -1.0
     J_e:
-      default: 10.0
+      default: 12.0
     J_i:
-      default: 12.5
+      default: 2.0
     inp:
       default: input
 
@@ -221,11 +221,11 @@ Net4:
 Net5:
   base: CircuitTemplate
   nodes:
-    Pop1: Pop_e
-    Pop2: Pop_i
+    PC: Pop_e
+    IIN: Pop_i
   edges:
-    - [Pop1/Op_tau_e/r, Pop2/Op_tau_i/inp_syn, DummyEdge, {weight: 15.0}]
-    - [Pop2/Op_tau_i/r, Pop1/Op_tau_e/inp_syn, DummyEdge, {weight: 5.0}]
+    - [PC/Op_e/r, IIN/Op_i/r_e, DummyEdge, {weight: 5.0}]
+    - [IIN/Op_i/r, PC/Op_e/r_i, DummyEdge, {weight: 5.0}]
 
 Net6:
   base: CircuitTemplate

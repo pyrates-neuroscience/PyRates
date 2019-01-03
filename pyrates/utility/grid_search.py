@@ -44,7 +44,7 @@ __status__ = "development"
 
 
 def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
-                sampling_step_size=None, **kwargs):
+                sampling_step_size=None, permute_grid=False, **kwargs):
     """
 
     Parameters
@@ -57,6 +57,8 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     inputs
     outputs
     sampling_step_size
+    permute_grid
+    kwargs
 
     Returns
     -------
@@ -65,7 +67,7 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
 
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
-        param_grid = linearize_grid(param_grid)
+        param_grid = linearize_grid(param_grid, permute_grid)
 
     # assign parameter updates to each circuit and combine them to unconnected network
     circuit = CircuitIR()
@@ -157,12 +159,13 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     return results_final.dropna()
 
 
-def linearize_grid(grid: dict):
+def linearize_grid(grid: dict, permute=False):
     """
 
     Parameters
     ----------
     grid
+    permute
 
     Returns
     -------
@@ -171,7 +174,7 @@ def linearize_grid(grid: dict):
 
     arg_lengths = [len(arg) for arg in grid.values()]
 
-    if len(list(set(arg_lengths))) == 1:
+    if len(list(set(arg_lengths))) == 1 and not permute:
         return pd.DataFrame(grid)
     else:
         vals, keys = [], []

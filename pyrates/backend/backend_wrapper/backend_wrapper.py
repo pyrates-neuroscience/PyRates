@@ -26,13 +26,28 @@
 #
 # Richard Gast and Daniel Rose et. al. in preparation
 
-"""This module provides wrappers for different backends that are needed by the parser class.
+"""Contains wrapper classes for different backends that are needed by the parser module.
+
+A new backend needs to implement the following methods
+
+Methods
+-------
+__init__
+run
+add_var
+add_op
+add_layer
+
+Currently supported backends:
+- Tensorflow: :class:`TensorflowBackend`.
+
 """
 
 # external imports
-import tensorflow as tf
 import time as t
+from typing import Optional, Dict, Callable, List, Union, Tuple, Any
 import numpy as np
+import tensorflow as tf
 
 # meta infos
 __author__ = "Richard Gast"
@@ -40,12 +55,23 @@ __status__ = "development"
 
 
 class TensorflowBackend(tf.Graph):
-    """
+    """Wrapper to tensorflow.
+
+    Parameters
+    ----------
+    ops
+        Additional operations this backend instance can perform, defined as key-value pairs.
+    dtypes
+        Additional data-types this backend instance can use, defined as key-value pairs.
 
     """
 
-    def __init__(self):
-
+    def __init__(self,
+                 ops: Optional[Dict[str, Callable]] = None,
+                 dtypes: Optional[Dict[str, object]] = None
+                 ) -> None:
+        """Instantiates tensorflow backend, i.e. a tensorflow graph.
+        """
         super().__init__()
 
         # define operations and datatypes of the backend
@@ -112,6 +138,8 @@ class TensorflowBackend(tf.Graph):
                     "tuple": tf.tuple,
                     "no_op": no_op,
                     }
+        if ops:
+            self.ops.update(ops)
 
         self.dtypes = {"float16": tf.float16,
                        "float32": tf.float32,
@@ -126,27 +154,59 @@ class TensorflowBackend(tf.Graph):
                        "complex128": tf.complex128,
                        "bool": tf.bool
                        }
+        if dtypes:
+            self.dtypes.update(dtypes)
 
         self.existing_scopes = {}
 
-    def run(self, steps, ops, inputs, outputs, sampling_steps=None, sampling_ops=None, out_dir=None, profile=None):
-        """
+    def run(self,
+            steps: int,
+            ops: List[tf.Operation],
+            inputs: List[dict],
+            outputs: Dict[str, tf.Variable],
+            sampling_steps: Optional[int] = None,
+            sampling_ops: Optional[List[tf.Operation]] = None,
+            out_dir: Optional[str] = None,
+            profile: Optional[str] = None
+            ) -> Union[Dict[str, tf.Variable], Tuple[dict, float, float]]:
+        """Executes all operations in tensorflow graph for a given number of steps.
 
         Parameters
         ----------
         steps
+            Number of graph evaluations.
         ops
+            Graph operations to evaluate.
         inputs
+            Inputs fed into the graph.
         outputs
+            Variables in the graph to store the history from.
         sampling_steps
+            Number of graph execution steps to combine into a single output step.
         sampling_ops
+            Graph operations for output storage.
         out_dir
+            Directory to write the session log into.
         profile
+            Can be used to extract information about graph execution time and memory load. Can be:
+            - `t` for returning the total graph execution time.
+            - `m` for returning the peak memory consumption during graph excecution.
+            - `mt` or `tm` for both
 
         Returns
         -------
+        Union[Dict[str, tf.Variable], Tuple[dict, float, float]]
+            If `profile` was requested, a tuple is returned that contains
+                1) the results dictionary
+                2) the simulation time if `t` was requested, else None.
+                3) the peak memory consumption if `m` was requested, else None.
+            If not, only the results dictionary is returned which contains a numpy array with results for each
+            output key that was provided via `outputs`.
 
         """
+
+        # initializations
+        #################
 
         # initialize session log
         if out_dir:
@@ -161,6 +221,9 @@ class TensorflowBackend(tf.Graph):
             meta = tf.RunMetadata()
             time_and_memory = tf.profiler.ProfileOptionBuilder.time_and_memory()
 
+        # graph execution
+        #################
+
         # start session
         with tf.Session(graph=self) as sess:
 
@@ -169,6 +232,8 @@ class TensorflowBackend(tf.Graph):
 
             # simulate backend behavior for each time-step
             if 'm' in profile:
+
+                # in profiler-mode
                 for step in range(steps):
                     if step % sampling_steps == 0:
                         sess.run(sampling_ops, inputs[step], run_metadata=meta,
@@ -177,11 +242,16 @@ class TensorflowBackend(tf.Graph):
                         sess.run(ops, inputs[step], run_metadata=meta,
                                  options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE))
             else:
+
+                # in non-profiler mode
                 for step in range(steps):
                     if step % sampling_steps == 0:
                         sess.run(sampling_ops, inputs[step])
                     else:
                         sess.run(ops, inputs[step])
+
+            # output storage and clean-up
+            #############################
 
             # store output variables in output dictionary
             for key, var in outputs.items():
@@ -202,35 +272,59 @@ class TensorflowBackend(tf.Graph):
             if out_dir:
                 writer.close()
 
-        # return outputs and profiler results
         if profile:
             return outputs, sim_time, peak_memory
         return outputs
 
-    def add_var(self, type, name, value=None, shape=None, dtype=None, **kwargs):
-        """
+    def add_var(self,
+                vtype: str,
+                name: str,
+                value: Optional[Any] = None,
+                shape: Optional[Union[tuple, list, tf.TensorShape]] = None,
+                dtype: Optional[Union[str, tf.dtypes.DType]] = None,
+                **kwargs
+                ) -> Union[tf.Variable, tf.Tensor]:
+        """Adds a variable to the backend.
 
         Parameters
         ----------
-        type
+        vtype
+            Variable type. Can be
+                - `state_var` for variables that can change over time.
+                - `constant` for non-changing variables.
+                - `placeholder` for variables with a value unknown during initialization.
         name
+            Name of the variable.
         value
+            Value of the variable. Not needed for placeholders.
         shape
+            Shape of the variable.
         dtype
+            Datatype of the variable.
         kwargs
+            Additional keyword arguments passed to the tensorflow functions.
 
         Returns
         -------
+        Union[tf.Variable, tf.Tensor]
+            Handle for the tensorflow variable.
 
         """
 
         # processs input arguments
+        ##########################
+
+        # extract variable scope
         scope, reuse = self._get_scope(kwargs.pop('scope', None))
+
+        # extract graph dependencies
         dependencies = kwargs.pop('dependencies', None)
 
+        # check whether necessary arguments were provided
         if all([arg is None for arg in [shape, value, dtype]]):
             raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
 
+        # set shape, data-type and value
         if shape is None:
             shape = value.shape
         if dtype is None:
@@ -239,96 +333,104 @@ class TensorflowBackend(tf.Graph):
             value = np.zeros(shape, dtype=dtype.as_numpy_dtype)
 
         # create variable
+        #################
+
         with self.as_default():
             with scope as sc:
                 with tf.control_dependencies(dependencies):
+
                     if reuse:
+
+                        # create variable under existing scope
                         with tf.name_scope(sc.original_name_scope):
-                            return self._create_var(type, name, value, shape, dtype, **kwargs)
+                            return self._create_var(vtype, name, value, shape, dtype, **kwargs)
+
                     else:
-                        if type == 'state_var':
-                            return self.add_state_var(name, shape, dtype,
-                                                      initializer=tf.constant_initializer(value))
-                        elif type == 'constant':
-                            return tf.constant(value, dtype, shape, name)
-                        elif type == 'placeholder':
-                            return tf.placeholder(dtype, shape, name)
-                        else:
-                            raise ValueError(f'`Type` is {type} but needs to be set to `state_var`, `constant` or '
-                                             f'`placeholder`.')
 
-    def _create_var(self, type, name, value, shape, dtype, **kwargs):
-        """
+                        # create variable under new scope
+                        return self._create_var(vtype, name, value, shape, dtype, **kwargs)
 
-        Parameters
-        ----------
-        type
-        name
-        value
-        shape
-        dtype
-        kwargs
-
-        Returns
-        -------
-
-        """
-
-        if type == 'state_var':
-            return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value), **kwargs)
-        elif type == 'constant':
-            return tf.constant(value, dtype, shape, name, **kwargs)
-        elif type == 'placeholder':
-            return tf.placeholder(dtype, shape, name, **kwargs)
-        else:
-            raise ValueError(f'`Type` is {type} but needs to be set to `state_var`, `constant` or '
-                             f'`placeholder`.')
-
-    def add_op(self, op: str, *args, **kwargs):
-        """
+    def add_op(self,
+               op: str,
+               *args,
+               **kwargs
+               ) -> tf.Operation:
+        """Add operation to the backend.
 
         Parameters
         ----------
         op
+            Key of the operation. Needs to be a key of `TensorflowGraph.ops`
         args
+            Positional arguments to be passed to the operation.
         kwargs
+            Keyword arguments to be passed to the operation.
 
         Returns
         -------
+        tf.Operation
+            Handle for the tensorflow operation.
 
         """
 
         # process input arguments
-        dependencies = kwargs.pop('dependencies', None)
-        assign_to_var = kwargs.pop('assign_to_var', False)
+        #########################
+
+        # extract scope
         scope, reuse = self._get_scope(kwargs.pop('scope', None))
 
+        # extract graph dependencies
+        dependencies = kwargs.pop('dependencies', None)
+
+        # extract additional infos
+        assign_to_var = kwargs.pop('assign_to_var', False)
+
         # create operation
+        ##################
+
         with self.as_default():
             with scope as sc:
                 with tf.control_dependencies(dependencies):
+
                     if reuse:
+
+                        # create operation under existing scope
                         with tf.name_scope(sc.original_name_scope):
+
+                            # TODO: move this to separate staticmethod that takes op, args and kwargs as arguments
                             try:
                                 tf_op = self.ops[op](*args, **kwargs)
                             except TypeError:
                                 try:
                                     tf_op = self.ops[op](list(args), **kwargs)
                                 except TypeError:
+                                    # TODO: replace this with more generic way of handling args and kwargs
                                     args = list(args)
                                     arg_tmp = args.pop(-1)
                                     tf_op = self.ops[op](args, arg_tmp, **kwargs)
+
+                            # either assign result to new variable and return that variable or return result
                             if assign_to_var:
                                 var = self.add_variable(None,
                                                         value=np.zeros(tf_op.shape, dtype=tf_op.dtype.as_numpy_dtype))
                                 return var.assign(tf_op)
                             else:
                                 return tf_op
+
                     else:
+
+                        # create opeartion under new scope
                         try:
                             tf_op = self.ops[op](*args, **kwargs)
                         except TypeError:
-                            tf_op = self.ops[op](list(args), **kwargs)
+                            try:
+                                tf_op = self.ops[op](list(args), **kwargs)
+                            except TypeError:
+                                args = list(args)
+                                arg_tmp = args.pop(-1)
+                                tf_op = self.ops[op](args, arg_tmp, **kwargs)
+
+                        # either assign result to new variable and return that variable or return result
                         if assign_to_var:
                             var = self.add_variable(None,
                                                     value=np.zeros(tf_op.shape, dtype=tf_op.dtype.as_numpy_dtype))
@@ -336,25 +438,39 @@ class TensorflowBackend(tf.Graph):
                         else:
                             return tf_op
 
-    def add_layer(self, ops, *args, **kwargs):
-        """
+    def add_layer(self,
+                  ops: List[tf.Operation],
+                  *args,
+                  **kwargs
+                  ) -> List[tf.Operation]:
+        """Adds a layer of operations to the backend using `tensorflow.tuple`.
 
         Parameters
         ----------
         ops
+            All tensorflow operations that should be part of this layer.
         args
+            Additional positional arguments to be passed to `tensorflow.tuple`.
         kwargs
+            Additional keyword arguments to be passed to `tensorflow.tuple`.
 
         Returns
         -------
+        List[tf.Operation]
+            List of tensorflow operations with dependencies added (layer operations will all be evaluated before
+            any layer operation can be used in successive layers.)
 
         """
 
         # process input arguments
+        #########################
+
         dependencies = kwargs.pop('dependencies', None)
         scope, reuse = self._get_scope(kwargs.pop('scope', None))
 
         # create layer
+        ##############
+        
         with self.as_default():
             with scope as sc:
                 with tf.control_dependencies(dependencies):
@@ -363,6 +479,41 @@ class TensorflowBackend(tf.Graph):
                             return tf.tuple(ops, *args, **kwargs)
                     else:
                         return tf.tuple(ops, *args, **kwargs)
+
+    @staticmethod
+    def _create_var(vtype: str,
+                    name: str,
+                    value: Optional[Any] = None,
+                    shape: Optional[Union[tuple, list, tf.TensorShape]] = None,
+                    dtype: Optional[Union[str, tf.dtypes.DType]] = None,
+                    **kwargs
+                    ) -> Union[tf.Variable, tf.Tensor]:
+        """Instantiates new variable in backend.
+
+        Parameters
+        ----------
+        vtype
+        name
+        value
+        shape
+        dtype
+        kwargs
+
+        Returns
+        -------
+        Union[tf.Variable, tf.Tensor]
+
+        """
+
+        if vtype == 'state_var':
+            return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value), **kwargs)
+        elif vtype == 'constant':
+            return tf.constant(value, dtype, shape, name, **kwargs)
+        elif vtype == 'placeholder':
+            return tf.placeholder(dtype, shape, name, **kwargs)
+        else:
+            raise ValueError(f'`Type` is {vtype} but needs to be set to `state_var`, `constant` or '
+                             f'`placeholder`.')
 
     def _get_scope(self, scope):
         """

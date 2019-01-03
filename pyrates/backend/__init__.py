@@ -27,7 +27,13 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 """
-
+PyRates backend module including the following sub-modules:
+a) parser
+    Used to parse string-based equations into symbolic backend representations.
+b) computegraph
+    Used to realize hierarchical structure between mathematical equations.
+c) backend_wrapper
+    Interface to the backends available in PyRates.
 """
 
 from .computegraph import ComputeGraph

@@ -425,17 +425,35 @@ class CircuitIR(AbstractBaseIR):
                 circuit.add_edges_from(connectivity)
             else:
                 try:
-                    for target, row in connectivity.iterrows():
-                        for source, content in row.iteritems():
-                            if content:  # assumes, empty entries evaluate to `False`
+                    if isinstance(connectivity, dict):
+                        key, conn_info = connectivity.popitem()
+                        for target, row in conn_info.iterrows():
+                            for source, content in row.iteritems():
                                 snode, tnode = source.split('/')[:-2], target.split('/')[:-2]
                                 svar, tvar = source.split('/')[-2:], target.split('/')[-2:]
                                 snode, tnode = "/".join(snode), "/".join(tnode)
                                 svar, tvar = "/".join(svar), "/".join(tvar)
-                                if "float" in str(type(content)):
-                                    content = {'weight': content, 'delay': None}
+                                content = {key: content} if content else {}
+                                for key_tmp, conn_info_tmp in connectivity.items():
+                                    content_tmp = conn_info_tmp.loc[target, source]
+                                    if content_tmp:
+                                        content.update({key_tmp: content_tmp})
                                 content.update({'source_var': svar, 'target_var': tvar})
-                                circuit.add_edge(snode, tnode, edge_ir=None, identify_relations=False, **content)
+                                if 'weight' in content and content['weight']:
+                                    circuit.add_edge(snode, tnode, edge_ir=None, identify_relations=False,
+                                                     **content)
+                    else:
+                        for target, row in connectivity.iterrows():
+                            for source, content in row.iteritems():
+                                if content:  # assumes, empty entries evaluate to `False`
+                                    snode, tnode = source.split('/')[:-2], target.split('/')[:-2]
+                                    svar, tvar = source.split('/')[-2:], target.split('/')[-2:]
+                                    snode, tnode = "/".join(snode), "/".join(tnode)
+                                    svar, tvar = "/".join(svar), "/".join(tvar)
+                                    if "float" in str(type(content)):
+                                        content = {'weight': content, 'delay': None}
+                                    content.update({'source_var': svar, 'target_var': tvar})
+                                    circuit.add_edge(snode, tnode, edge_ir=None, identify_relations=False, **content)
                 except AttributeError:
                     raise TypeError(f"Invalid data type of variable `connectivity` (type: {type(connectivity)}).")
 

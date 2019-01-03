@@ -26,4 +26,9 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
+
+"""
+Module that contains interfaces to all backends available in PyRates.
+"""
+
 from .backend_wrapper import TensorflowBackend

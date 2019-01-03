@@ -519,7 +519,7 @@ class ExpressionParser(ParserElement):
             i = 0
             while i < 1e7:
                 try:
-                    arg_tmp = self.backend.add_var(type='constant', name=f'op_{i}', value=float(op), shape=(),
+                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{i}', value=float(op), shape=(),
                                                    dtype=self.backend.dtypes['float32'], **self.parser_kwargs)
                     break
                 except (ValueError, KeyError) as e:
@@ -535,7 +535,7 @@ class ExpressionParser(ParserElement):
             i = 0
             while i < 1e7:
                 try:
-                    arg_tmp = self.backend.add_var(type='constant', name=f'op_{i}', value=int(op), shape=(),
+                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{i}', value=int(op), shape=(),
                                                    dtype=self.backend.dtypes['int32'], **self.parser_kwargs)
                     break
                 except (ValueError, KeyError) as e:
@@ -551,7 +551,7 @@ class ExpressionParser(ParserElement):
 
                 # add new variable to arguments that represents rhs op
                 rhs = self.args.pop('rhs')
-                new_var = self.backend.add_var(type='state_var', name=op, value=0.,
+                new_var = self.backend.add_var(vtype='state_var', name=op, value=0.,
                                                shape=rhs.shape, dtype=rhs.dtype, **self.parser_kwargs)
                 self.args['vars'][op] = new_var
                 self.args['updates'][op] = self.broadcast(self.assign, new_var, rhs, **self.parser_kwargs)
@@ -796,7 +796,7 @@ class ExpressionParser(ParserElement):
                     else:
                         indices.append([int(dim)])
             try:
-                idx = self.backend.add_var(type='constant', name='idx', value=np.array(indices, dtype=np.int32))
+                idx = self.backend.add_var(vtype='constant', name='idx', value=np.array(indices, dtype=np.int32))
             except ValueError:
                 idx = []
                 for idx0 in indices[0]:
@@ -1097,7 +1097,7 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
         if var['vtype'] == 'raw':
             var_dict_tf[var_name] = var['value']
         else:
-            var_dict_tf[var_name] = backend.add_var(type=var['vtype'],
+            var_dict_tf[var_name] = backend.add_var(vtype=var['vtype'],
                                                     name=var_name,
                                                     value=init_val,
                                                     shape=shape,

@@ -26,8 +26,7 @@
 #
 # Richard Gast and Daniel Rose et. al. in preparation
 
-"""This module provides the backend class that should be used to set-up any backend. It creates a tensorflow graph that
-manages all computations/operations and a networkx graph that represents the backend structure (nodes + edges).
+"""This module provides the backend class that should be used to set up any backend.
 """
 
 # external imports
@@ -51,21 +50,24 @@ __status__ = "development"
 
 
 class ComputeGraph(object):
-    """Creates an RNN cell that contains all nodes in the network plus their recurrent connections.
+    """Creates a compute graph that contains all nodes in the network plus their recurrent connections.
 
     Parameters
     ----------
     net_config
+        Intermediate representation of the network configuration. For a more detailed description, see the documentation
+        of `pyrates.IR.CircuitIR`.
     dt
+        Step-size with which the network should be simulated later on.
+        Important for discretizing delays, differential equations, ...
     vectorization
+        Defines the mode of automatic parallelization optimization that should be used. Can be `nodes` for lumping all
+        nodes together in a vector, `full` for full vectorization of the network, or `None` for no vectorization.
     name
+        Name of the network.
     build_in_place
-
-    Attributes
-    ----------
-
-    Methods
-    -------
+        If False, a copy of the `net_config``will be made before compute graph creation. Should be used, if the
+        `net_config` will be re-used for multiple compute graphs.
 
     """
 
@@ -77,6 +79,9 @@ class ComputeGraph(object):
                  build_in_place: bool = True):
         """Instantiates operator.
         """
+
+        # set basic attributes
+        ######################
 
         super().__init__()
         self.name = name
@@ -373,7 +378,7 @@ class ComputeGraph(object):
         store_ops = []
 
         # create counting index for collector variables
-        out_idx = self.backend.add_var(type='state_var', name='out_var_idx', dtype=tf.int32, shape=(), value=-1,
+        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype=tf.int32, shape=(), value=-1,
                                        scope="output_collection")
 
         # create increment operator for counting index
@@ -382,7 +387,7 @@ class ComputeGraph(object):
         # add collector variables to the graph
         for key, var in outputs_tmp.items():
             shape = [int(sim_steps / sampling_steps)] + list(var.shape)
-            output_col[key] = self.backend.add_var(type='state_var', name=key, dtype=tf.float32, shape=shape,
+            output_col[key] = self.backend.add_var(vtype='state_var', name=key, dtype=tf.float32, shape=shape,
                                                    value=np.zeros(shape), scope="output_collection")
 
             # add collect operation to the graph
@@ -1499,7 +1504,7 @@ class ComputeGraph(object):
 
         return net_config
 
-    def _vectorize(self, vectorization_mode: Optional[str] = 'nodes') -> MultiDiGraph:
+    def _vectorize(self, vectorization_mode: Optional[str] = 'nodes') -> None:
         """Method that goes through the nodes and edges dicts and vectorizes those that are governed by the same
         operators/equations.
 
