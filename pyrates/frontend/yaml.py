@@ -28,6 +28,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """ Some utility functions for parsing YAML-based definitions of circuits and components.
 """
+from typing import Type
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -68,10 +69,6 @@ def to_template_dict(path: str):
         raise AttributeError(f"Could not find {name} in {filepath}.")
 
     return template_dict
-
-
-def to_template(path: str, template_cls):
-    return template_cls(to_template_dict(path))
 
 
 class TemplateLoader:
@@ -140,3 +137,7 @@ def from_circuit(circuit, path: str, name: str):
     from pathlib import Path
     path = Path(path)
     yaml.dump(dict_repr, path)
+
+
+def to_template(path: str, template_cls):
+    return template_cls.from_yaml(path)
