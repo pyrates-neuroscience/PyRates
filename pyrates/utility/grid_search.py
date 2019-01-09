@@ -42,6 +42,7 @@ from pyrates.ir.circuit import CircuitIR
 __author__ = "Richard Gast"
 __status__ = "development"
 
+
 def cluster_grid_search(hostnames, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
                 sampling_step_size=None, permute_grid=False, **kwargs):
     """
@@ -64,14 +65,41 @@ def cluster_grid_search(hostnames, circuit_template, param_grid, param_map, dt, 
       -------
 
       """
+
+    # linearize parameter grid if necessary
+    if type(param_grid) is dict:
+        linear_grid = linearize_grid(param_grid, permute_grid, add_status_flag=True)
+
+
+
+    # print(list(linear_grid.columns.values))
+    # for index, row in linear_grid.iterrows():
+    #     print(index, row['J_e'], row['J_i'], row['status'])
+    # print(linear_grid.iloc[[2]])
+
     # create a thread for each host and connect via SSH
     # In each Thread:
     #   - connect to host via SSH
     #   - while not all params calculated:
     #       - fetch_parameters()
     #       - run_remote_computation() -> run grid_search() on the remote host
-    pass
 
+
+
+def fetch_params(linear_grid, num_params):
+    """
+
+          Parameters
+          ----------
+          linear_grid
+          num_params
+
+          Returns
+          -------
+          param_list
+
+          """
+    pass
 
 
 def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
@@ -190,13 +218,14 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     return results_final
 
 
-def linearize_grid(grid: dict, permute=False):
+def linearize_grid(grid: dict, permute=False, add_status_flag=False):
     """
 
     Parameters
     ----------
     grid
     permute
+    add_status
 
     Returns
     -------
@@ -206,14 +235,26 @@ def linearize_grid(grid: dict, permute=False):
     arg_lengths = [len(arg) for arg in grid.values()]
 
     if len(list(set(arg_lengths))) == 1 and not permute:
-        return pd.DataFrame(grid)
+        df = pd.DataFrame(grid)
+        if not add_status_flag:
+            return df
+        else:
+            # Add status key to each entry
+            df['status'] = 'unsolved'
+            return df
     else:
         vals, keys = [], []
         for key, val in grid.items():
             vals.append(val)
             keys.append(key)
         new_grid = np.stack(np.meshgrid(*tuple(vals)), -1).reshape(-1, len(grid))
-        return pd.DataFrame(new_grid, columns=keys)
+        df = pd.DataFrame(new_grid, columns=keys)
+        if not add_status_flag:
+            return df
+        else:
+            # Add a status key to each entry
+            df['status'] = 'unsolved'
+            return df
 
 
 def adapt_circuit(circuit, params, param_map):
