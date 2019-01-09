@@ -42,6 +42,37 @@ from pyrates.ir.circuit import CircuitIR
 __author__ = "Richard Gast"
 __status__ = "development"
 
+def cluster_grid_search(hostnames, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
+                sampling_step_size=None, permute_grid=False, **kwargs):
+    """
+
+      Parameters
+      ----------
+      hostnames
+      circuit_template
+      param_grid
+      param_map
+      dt
+      simulation_time
+      inputs
+      outputs
+      sampling_step_size
+      permute_grid
+      kwargs
+
+      Returns
+      -------
+
+      """
+    # create a thread for each host and connect via SSH
+    # In each Thread:
+    #   - connect to host via SSH
+    #   - while not all params calculated:
+    #       - fetch_parameters()
+    #       - run_remote_computation() -> run grid_search() on the remote host
+    pass
+
+
 
 def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
                 sampling_step_size=None, permute_grid=False, **kwargs):
