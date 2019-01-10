@@ -9,3 +9,4 @@ scipy
 seaborn
 mne
 pydot
+pytest

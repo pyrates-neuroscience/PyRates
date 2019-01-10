@@ -8,4 +8,4 @@ install:
 
 # run tests
 script:
-  - pytest
+  - pytest tests/core/
