@@ -1,6 +1,5 @@
 from setuptools import setup, find_packages
-
-LIBRARY_VERSION = "0.5.0"
+from pyrates import __version__
 
 PYRATES_TEAM = "Richard Gast, Daniel Rose"
 
@@ -31,7 +30,7 @@ with open("README.md", "r") as fh:
     DESCRIPTION = fh.read()
 
 setup(name='pyrates',
-      version=LIBRARY_VERSION,
+      version=__version__,
       description='Neural Network Modeling Framework',
       long_description=DESCRIPTION,
       author=PYRATES_TEAM,
