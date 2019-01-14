@@ -32,6 +32,7 @@
 # external imports
 import pandas as pd
 import numpy as np
+import paramiko
 
 # system imports
 from getpass import getuser
@@ -92,8 +93,15 @@ def spawn_thread(host, circuit_template, param_grid, param_map, dt, simulation_t
 def thread_master(host, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
                 sampling_step_size=None, **kwargs):
 
+    env = '/data/u_salomon_software/anaconda3/envs/PyRates/bin/python'
+    workerfile = []
+    command =
+    
     # create SSH Client/Channel
     client = create_ssh_client(host, username=getuser(), password='.')
+
+    # If needed, insert function for copying all necessary files (environments, worker files, log files) here
+    # -> Change paths of env and cluster_grid_search_worker respectively
 
     # Check if 'status'-key is present in param_grid
     if not fetch_param_idx(param_grid, set_status=False).isnull():
@@ -109,8 +117,8 @@ def thread_master(host, circuit_template, param_grid, param_map, dt, simulation_
     else:
         print("No key named 'status' in param_grid")
 
+    client.close()
     print(param_grid)
-    pass
 
 
 def create_ssh_client(host, username, password):
