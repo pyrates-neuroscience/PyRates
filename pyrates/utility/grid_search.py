@@ -33,6 +33,10 @@
 import pandas as pd
 import numpy as np
 
+# system imports
+from getpass import getuser
+from threading import Thread
+
 # pyrates internal imports
 from pyrates.backend import ComputeGraph
 from pyrates.frontend import CircuitTemplate
@@ -47,59 +51,74 @@ def cluster_grid_search(hostnames, circuit_template, param_grid, param_map, dt, 
                 sampling_step_size=None, permute_grid=False, **kwargs):
     """
 
-      Parameters
-      ----------
-      hostnames
-      circuit_template
-      param_grid
-      param_map
-      dt
-      simulation_time
-      inputs
-      outputs
-      sampling_step_size
-      permute_grid
-      kwargs
+    Parameters
+    ----------
+    hostnames
+    circuit_template
+    param_grid
+    param_map
+    dt
+    simulation_time
+    inputs
+    outputs
+    sampling_step_size
+    permute_grid
+    kwargs
 
-      Returns
-      -------
+    Returns
+    -------
 
-      """
+    """
 
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
         linear_grid = linearize_grid(param_grid, permute_grid, add_status_flag=True)
 
+    # start a single thread for each host
+    for host in hostnames:
+        pass
 
 
-    # print(list(linear_grid.columns.values))
-    # for index, row in linear_grid.iterrows():
-    #     print(index, row['J_e'], row['J_i'], row['status'])
-    # print(linear_grid.iloc[[2]])
-
-    # create a thread for each host and connect via SSH
-    # In each Thread:
-    #   - connect to host via SSH
-    #   - while not all params calculated:
-    #       - fetch_parameters()
-    #       - run_remote_computation() -> run grid_search() on the remote host
+def spawn_thread(host, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
+                 sampling_step_size=None, **kwargs):
+    t = Thread(
+        target=thread_master,
+        args=(host, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
+              sampling_step_size)
+    )
+    t.start()
 
 
+def thread_master(host, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
+                sampling_step_size=None, **kwargs):
 
-def fetch_params(linear_grid, num_params):
-    """
+    # create SSH Client/Channel
+    client = create_ssh_client(host, username=getuser(), password='.')
 
-          Parameters
-          ----------
-          linear_grid
-          num_params
+    # Check if 'status'-key is present in param_grid
+    if not fetch_param_idx(param_grid, set_status=False).isnull():
 
-          Returns
-          -------
-          param_list
+        # Check for available parameters to fetch
+        while not fetch_param_idx(param_grid, set_status=False).empty:
 
-          """
+            fetched_param_idx = fetch_param_idx(param_grid)
+            fetched_param_grid = param_grid.iloc[fetched_param_idx]
+
+            client.exec_command()
+
+    else:
+        print("No key named 'status' in param_grid")
+
+    print(param_grid)
     pass
+
+
+def create_ssh_client(host, username, password):
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(host, username=username, password=password)
+    return client
+    # return client.invoke_shell()
 
 
 def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
@@ -286,3 +305,41 @@ def adapt_circuit(circuit, params, param_map):
                     circuit.edges[source, target, edge][var] = float(val)
 
     return circuit
+
+
+def fetch_param_idx(param_grid, num_params=1, set_status=True):
+    """Fetch a pandas.Index([index_list]) with the indices of the first num_params rows of param_grid who's
+    'status'-key equals 'unsolved'
+
+    Parameters
+    ----------
+    param_grid
+        Linearized parameter grid of type pandas.DataFrame.
+    num_params
+        Number of indices to fetch from param_grid. Is 1 by default.
+    set_status
+        If True, sets 'status' key of the fetched rows to 'pending', to exclude them from future calls.
+        Can be used to check param_grid for fetchable or existend keys without changing their 'status' key.
+        Is True by default.
+
+    Returns
+    -------
+    pandas.Index([index_list])
+        Is empty if there are no row indices to be fetched.
+        Is np.nan if param_grid has no key named 'status'.
+        Contains all remaining indices if num_params is higher than fetchable row indices.
+
+
+    """
+    try:
+        # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
+        param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
+    except KeyError:
+        # print("DataFrame doesn't contain a key named 'status'")
+        return pd.Index([np.nan])
+
+    if set_status:
+        param_grid.at[param_idx, 'status'] = 'pending'
+
+    return param_idx
+    # To access the selected data use fetched_params = lin_grid.iloc[param_idx]
