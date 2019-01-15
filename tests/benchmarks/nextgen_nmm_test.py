@@ -3,10 +3,6 @@ from pyrates.backend import ComputeGraph
 from pyrates.utility import plot_timeseries, grid_search
 from pyrates.utility.grid_search import cluster_grid_search
 import numpy as np
-import matplotlib.pyplot as plt
-from pandas import DataFrame
-import pandas as pd
-from pyrates.utility.grid_search import linearize_grid
 
 # parameters
 dt = 1e-4
@@ -36,7 +32,7 @@ results = cluster_grid_search(hostnames=hosts, circuit_template="pyrates.example
 #                       inputs={("PC", "Op_e.0", "inp"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
 #                       dt=dt, simulation_time=T, permute_grid=True)
 
-print(results)
+# print(results)
 
 # with open('/data/hu_salomon/Documents/GridSearch_Results/test.csv', 'w') as f:
 #     results.to_csv(f)

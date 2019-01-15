@@ -35,6 +35,7 @@ import numpy as np
 import paramiko
 
 # system imports
+import ast
 from getpass import getuser
 from threading import Thread
 
@@ -106,61 +107,94 @@ def thread_master(host, circuit_template, param_grid, param_map, dt, simulation_
 
     # create SSH Client/Channel
     # TODO: Implement save password request. Long-term: Implement connection with key-files and no password
-    client = create_ssh_client(host, username=getuser(), password='.')
-
-    # If needed, insert function for copying all necessary files (environments, worker files, log files) here
-    # -> Change paths of env and workerfile respectively
-
-    # Check if 'status'-key is present in param_grid
-    if not fetch_param_idx(param_grid, set_status=False).isnull():
-
-        # TODO: Call exec_command only once and communicate with it via stdin inside the while loop
-
-        # Check for available parameters to fetch
-        while not fetch_param_idx(param_grid, set_status=False).empty:
-
-            param_idx = fetch_param_idx(param_grid, num_params=4)
-            param_grid = param_grid.iloc[param_idx]
-
-            # print(param_grid.to_json())
-
-            # Eventuell exec_command nur einmal ausführen und nur neue parametergrids über stdin senden?
-            # Since input is send as command line arguments to the remote script, all data needs to be parsed as string.
-            # In the remote sript all inputs need to be recreated from their string representations
-            stdin, stdout, stderr = client.exec_command(command +
-                                                        f' --circuit_template="{circuit_template}"'
-                                                        f' --param_grid="{param_grid.to_json()}"'
-                                                        f' --param_map="{param_map}"'
-                                                        f' --inputs="{inputs}"'
-                                                        f' --outputs="{outputs}"'
-                                                        f' --sampling_step_size={sampling_step_size}'
-                                                        f' --dt={dt}'
-                                                        f' --simulation_time={simulation_time}',
-                                                        get_pty=True)
-
-            exit_status = stdout.channel.recv_exit_status()
-
-            for line in iter(stdout.readline, ""):
-                print(line, end="")
-
-            # TODO: Create result file and concatenate the intermediate results directly to this file
-            #
-            # result = pd.read_csv(stdout)
 
 
+    client = create_ssh_client(host, username=getuser(), password='Nofasilium33')
+    if client:
+
+        # If needed, insert function for copying all necessary files (environments, worker files, log files) here
+        # -> Change paths of env and workerfile respectively
+
+        # Check if 'status'-key is present in param_grid
+        if not fetch_param_idx(param_grid, set_status=False).isnull():
+
+            # TODO: Call exec_command only once and communicate with it via stdin inside the while loop
+
+            # Check for available parameters to fetch
+            while not fetch_param_idx(param_grid, set_status=False).empty:
+
+                param_idx = fetch_param_idx(param_grid, num_params=4)
+                param_grid = param_grid.iloc[param_idx]
+
+                # - All input to the remote script needs to be sent as command line arguments
+                # - Dictionaries have to parsed as string -> f' "{dict}"'
+                # - To parse a DataFrame convert it do a dict first using DataFrame.to_dict()
+                # - Beware not to use JSON-like strings or dicts, since JSON is based on double quotas, which are
+                #   eliminated by the shell during the parcing process
+                stdin, stdout, stderr = client.exec_command(command +
+                                                            f' --circuit_template="{circuit_template}"'
+                                                            f' --param_grid="{param_grid.to_dict()}"'
+                                                            f' --param_map="{param_map}"'
+                                                            f' --inputs="\'\'\'{inputs}\'\'\'"'
+                                                            f' --outputs="{outputs}"'
+                                                            f' --sampling_step_size={sampling_step_size}'
+                                                            f' --dt={dt}'
+                                                            f' --simulation_time={simulation_time}',
+                                                            get_pty=True)
+
+                exit_status = stdout.channel.recv_exit_status()
+
+                for line in iter(stdout.readline, ""):
+                    print(line, end="")
+
+                # TODO: Create result file and concatenate the intermediate results directly to this file
+                #
+                # result = pd.read_csv(stdout)
+
+
+        else:
+            print("No key named 'status' in param_grid")
+
+        client.close()
+        # return result
     else:
-        print("No key named 'status' in param_grid")
+        return
 
-    client.close()
-    # return result
+
 
 
 def create_ssh_client(host, username, password):
+    """Connect to a host via SSH
+
+    Parameters
+    ----------
+    host
+        Name or IP-address of the host to connect to
+    username
+    password
+
+    Returns
+    -------
+    paramiko.SSHClient()
+        Throws exception and returns if connection fails. See Paramiko documentation
+
+
+    """
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(host, username=username, password=password)
-    return client
-    # return client.invoke_shell()
+    print(f'Attempting to connect to host \'{host}\'...')
+    try:
+        client.connect(host, username=username, password=password)
+        print(f'\'{host}\': Connection established')
+        return client
+        # return client.invoke_shell()
+    except paramiko.AuthenticationException:
+        print(f'\'{host}\': Couldn\'t establish connection to host \'{host}\'. Authentication failed')
+        return
+    except IOError:
+        print(f'\'{host}\': Couldn\'t establish connection to host \'{host}\'. No such host available')
+        return
+
 
 
 def fetch_param_idx(param_grid, num_params=1, set_status=True):
