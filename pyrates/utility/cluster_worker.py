@@ -10,32 +10,45 @@ from pyrates.utility import grid_search
 
 
 def main(_):
+    # Recreate dictionaries from their string representation and recreate DataFrames
     circuit_template = FLAGS.circuit_template
-
-    # Recreate dictionaries from their string representation
-    param_grid = FLAGS.param_grid
+    param_grid = pd.DataFrame(ast.literal_eval(FLAGS.param_grid))
+    param_map = ast.literal_eval(FLAGS.param_map)
+    outputs = ast.literal_eval(FLAGS.outputs)
+    inputs = ast.literal_eval(FLAGS.inputs)
     sampling_step_size = FLAGS.sampling_step_size
     dt = FLAGS.dt
     simulation_time = FLAGS.simulation_time
 
-    # TODO: Recreate 'param_map', 'inputs' and 'outputs' from their string representation
-    param_map = ast.literal_eval(FLAGS.param_map)
-    inputs = ast.literal_eval(FLAGS.inputs)
-    outputs = ast.literal_eval(FLAGS.outputs)
+    print(param_grid)
+
+    print(f'circuit template: {type(circuit_template)}')
+    print(type(param_grid))
+    print(type(param_map))
+    print(type(inputs))
+    print(type(outputs))
+    print(type(sampling_step_size))
+    print(type(dt))
+    print(type(simulation_time))
+
+    print(inputs)
+    # TODO: Recreate 'inputs' from their string representation
+    # inputs = ast.literal_eval(FLAGS.inputs)
+
 
     # Exclude 'status'-key param_grid because grid_search() can't handle the additional keyword
-    param_grid_arg = param_grid.loc[:, param_grid.columns != "status"]
-
-    results = grid_search(circuit_template=circuit_template,
-                          param_grid=param_grid_arg,
-                          param_map=param_map,
-                          inputs=inputs,
-                          outputs=outputs,
-                          sampling_step_size=sampling_step_size,
-                          dt=dt,
-                          simulation_time=simulation_time)
-
-    print(results.to_string(index=False))
+    # param_grid_arg = param_grid.loc[:, param_grid.columns != "status"]
+    #
+    # results = grid_search(circuit_template=circuit_template,
+    #                       param_grid=param_grid_arg,
+    #                       param_map=param_map,
+    #                       inputs=inputs,
+    #                       outputs=outputs,
+    #                       sampling_step_size=sampling_step_size,
+    #                       dt=dt,
+    #                       simulation_time=simulation_time)
+    #
+    # print(results.to_string(index=False))
 
 
 if __name__ == "__main__":
