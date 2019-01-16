@@ -5,36 +5,31 @@ import ast
 
 # external imports
 import pandas as pd
+from numpy import array
 
 from pyrates.utility import grid_search
 
-
+# TODO: Recreate all necessary input for grid_search from config_file
+# TODO: Change argparse so config_file will be the only argument. Then wait for param_grid from stdin
 def main(_):
     # Recreate dictionaries from their string representation and recreate DataFrames
     circuit_template = FLAGS.circuit_template
     param_grid = pd.DataFrame(ast.literal_eval(FLAGS.param_grid))
     param_map = ast.literal_eval(FLAGS.param_map)
+    # inputs = ast.literal_eval(FLAGS.inputs)
     outputs = ast.literal_eval(FLAGS.outputs)
-    inputs = ast.literal_eval(FLAGS.inputs)
     sampling_step_size = FLAGS.sampling_step_size
     dt = FLAGS.dt
     simulation_time = FLAGS.simulation_time
 
-    print(param_grid)
-
     print(f'circuit template: {type(circuit_template)}')
-    print(type(param_grid))
-    print(type(param_map))
-    print(type(inputs))
-    print(type(outputs))
-    print(type(sampling_step_size))
-    print(type(dt))
-    print(type(simulation_time))
-
-    print(inputs)
-    # TODO: Recreate 'inputs' from their string representation
-    # inputs = ast.literal_eval(FLAGS.inputs)
-
+    print(f'param_grid: {type(param_grid)}')
+    print(f'param_map: {type(param_map)}')
+    # print(f'inputs: {type(inputs)}')
+    print(f'outputs: {type(outputs)}')
+    print(f'sampling_step_size: {type(sampling_step_size)}')
+    print(f'dt: {type(dt)}')
+    print(f'simulation_time: {type(simulation_time)}')
 
     # Exclude 'status'-key param_grid because grid_search() can't handle the additional keyword
     # param_grid_arg = param_grid.loc[:, param_grid.columns != "status"]
