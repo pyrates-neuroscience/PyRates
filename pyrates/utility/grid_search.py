@@ -35,8 +35,10 @@ import numpy as np
 import paramiko
 
 # system imports
-import ast
-from getpass import getuser
+import os
+import json
+import getpass
+from datetime import date
 from threading import Thread
 
 # pyrates internal imports
@@ -49,8 +51,10 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def cluster_grid_search(hostnames, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
-                sampling_step_size=None, permute_grid=False, **kwargs):
+def cluster_grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs, hostnames,
+                        sampling_step_size=None, permute_grid=False, load_config_file=None,
+                        save_config_file=f'{os.getcwd()}/CGS_config_{str(date.today())}_default.json',
+                        **kwargs):
     """
 
     Parameters
@@ -65,105 +69,137 @@ def cluster_grid_search(hostnames, circuit_template, param_grid, param_map, dt, 
     outputs
     sampling_step_size
     permute_grid
+    load_config_file
+    save_config_file
     kwargs
 
     Returns
     -------
 
     """
+    # TODO: Implement proper check weather save_config_file or load_config_file are specified
+    print(save_config_file)
+    if load_config_file is not None:
+        print(f'Loading config file: {load_config_file}')
+        config_fp = load_config_file
+    else:
+        print(f'No load_config_file found')
+        print(f'Creating default config_file: {save_config_file}')
 
-    # linearize parameter grid if necessary
-    if type(param_grid) is dict:
-        # convert linear_grid from dict to pandas.DataFrame
-        linear_grid = linearize_grid(param_grid, permute_grid, add_status_flag=True)
+        # linearize parameter grid if necessary
+        if type(param_grid) is dict:
+            # convert linear_grid from dict to pandas.DataFrame. Add status_flag later
+            param_grid = linearize_grid(param_grid, permute_grid, add_status_flag=False)
 
-    results = pd.DataFrame()
+        create_config_file(save_config_file, circuit_template, param_grid, param_map, dt, simulation_time, inputs,
+                           outputs, hostnames, sampling_step_size, permute_grid, **kwargs)
+
+    # TODO: Load param_grid from config_file and start thread/scheduler
 
     # TODO: Long-term: Implement asynchronous computation instead of multiple threads
-    for host in hostnames:
-        spawn_thread(host, circuit_template, linear_grid, param_map, dt, simulation_time, inputs, outputs, results,
-                sampling_step_size=None, **kwargs)
+    # for host in hostnames:
+    #     spawn_thread(host, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs, results,
+    #             sampling_step_size=None, **kwargs)
+    #
+    # return results
 
-    return results
 
-
-def spawn_thread(host, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs, results,
-                 sampling_step_size=None, **kwargs):
+def spawn_thread(host, config_file):
     t = Thread(
         target=thread_master,
-        args=(host, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs, results,
-              sampling_step_size)
+        args=(host, config_file)
     )
     t.start()
     t.join()
 
 
-def thread_master(host, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs, results,
-                  sampling_step_size=None, **kwargs):
+def thread_master(host, config_file):
 
     env = '/data/u_salomon_software/anaconda3/envs/PyRates/bin/python'
     workerfile = '/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker.py'
     command = env + ' ' + workerfile
 
     # create SSH Client/Channel
-    # TODO: Implement save password request. Long-term: Implement connection with key-files and no password
+    # TODO: Implement connection with key-files and no password
+
+    client = create_ssh_connection(host,
+                                   username=getpass.getuser(),
+                                   password=getpass.getpass(
+                                       prompt='Enter password:', stream=None)
+                                   )
+
+    # Check if create_ssh_connection() didn't return 0
+    # if client:
+
+    # If needed, insert a function to copy all necessary files (environments, worker files, log files) here
+    # -> Change paths of env and workerfile respectively
+
+    # Check if 'status'-key is present in param_grid
+    if not fetch_param_idx(param_grid, set_status=False).isnull():
+        # TODO: Call exec_command only with the config_file as command line argument
+        # TODO: Call exec_command only once and communicate with it via stdin inside the while loop
+        print(f'\'{host}\': Starting computation')
+
+        # Check for available parameters to fetch
+        while not fetch_param_idx(param_grid, set_status=False).empty:
+
+            param_idx = fetch_param_idx(param_grid, num_params=4)
+            param_grid = param_grid.iloc[param_idx]
+
+            # - All input to the remote script needs to be sent as command line arguments
+            # - Dictionaries have to be parsed as string using "" -> f' "{dict}"'
+            # - To parse a DataFrame convert it do a dict first using DataFrame.to_dict()
+            # - Beware not to use JSON-like strings or dicts, since JSON is based on double quotas, which are
+            #   eliminated by the shell during the parcing process
+            # stdin, stdout, stderr = client.exec_command(command +
+            #                                             f' --circuit_template="{circuit_template}"'
+            #                                             f' --param_grid="{param_grid.to_dict()}"'
+            #                                             f' --param_map="{param_map}"'
+            #                                             f' --inputs="{inputs}"'
+            #                                             f' --outputs="{outputs}"'
+            #                                             f' --sampling_step_size={sampling_step_size}'
+            #                                             f' --dt={dt}'
+            #                                             f' --simulation_time={simulation_time}',
+            #                                             get_pty=True)
+            #
+            # exit_status = stdout.channel.recv_exit_status()
+            #
+            # for line in iter(stdout.readline, ""):
+            #     print(line, end="")
+
+            # TODO: Create result file and concatenate the intermediate results directly to this file
+            #
+            # result = pd.read_csv(stdout)
 
 
-    client = create_ssh_client(host, username=getuser(), password='Nofasilium33')
-    if client:
-
-        # If needed, insert function for copying all necessary files (environments, worker files, log files) here
-        # -> Change paths of env and workerfile respectively
-
-        # Check if 'status'-key is present in param_grid
-        if not fetch_param_idx(param_grid, set_status=False).isnull():
-
-            # TODO: Call exec_command only once and communicate with it via stdin inside the while loop
-
-            # Check for available parameters to fetch
-            while not fetch_param_idx(param_grid, set_status=False).empty:
-
-                param_idx = fetch_param_idx(param_grid, num_params=4)
-                param_grid = param_grid.iloc[param_idx]
-
-                # - All input to the remote script needs to be sent as command line arguments
-                # - Dictionaries have to parsed as string -> f' "{dict}"'
-                # - To parse a DataFrame convert it do a dict first using DataFrame.to_dict()
-                # - Beware not to use JSON-like strings or dicts, since JSON is based on double quotas, which are
-                #   eliminated by the shell during the parcing process
-                stdin, stdout, stderr = client.exec_command(command +
-                                                            f' --circuit_template="{circuit_template}"'
-                                                            f' --param_grid="{param_grid.to_dict()}"'
-                                                            f' --param_map="{param_map}"'
-                                                            f' --inputs="\'\'\'{inputs}\'\'\'"'
-                                                            f' --outputs="{outputs}"'
-                                                            f' --sampling_step_size={sampling_step_size}'
-                                                            f' --dt={dt}'
-                                                            f' --simulation_time={simulation_time}',
-                                                            get_pty=True)
-
-                exit_status = stdout.channel.recv_exit_status()
-
-                for line in iter(stdout.readline, ""):
-                    print(line, end="")
-
-                # TODO: Create result file and concatenate the intermediate results directly to this file
-                #
-                # result = pd.read_csv(stdout)
-
-
-        else:
-            print("No key named 'status' in param_grid")
-
-        client.close()
-        # return result
     else:
-        return
+        print("No key named 'status' in param_grid")
+
+    client.close()
+    # return result
 
 
+def create_config_file(config_fp, circuit_template, param_grid, param_map, dt, simulation_time, inputs,
+                       outputs, hostnames, sampling_step_size, permute_grid, **kwargs):
+    config_dict = {
+        "circuit_template": circuit_template,
+        "param_grid": param_grid.to_dict(),
+        "param_map": param_map,
+        "dt": dt,
+        "simulation_time": simulation_time,
+        "inputs": {str(*inputs.keys()): list(*inputs.values())},
+        "outputs": outputs,
+        "hostnames": hostnames,
+        "sampling_step_size": sampling_step_size,
+        "permute_grid": permute_grid,
+        "kwargs": kwargs
+    }
+
+    with open(config_fp, "w") as f:
+        json.dump(config_dict, f, indent=2)
 
 
-def create_ssh_client(host, username, password):
+def create_ssh_connection(host, username, password):
     """Connect to a host via SSH
 
     Parameters
@@ -176,7 +212,7 @@ def create_ssh_client(host, username, password):
     Returns
     -------
     paramiko.SSHClient()
-        Throws exception and returns if connection fails. See Paramiko documentation
+        Throws exception and returns 0 if connection fails. See Paramiko documentation
 
 
     """
@@ -190,11 +226,10 @@ def create_ssh_client(host, username, password):
         # return client.invoke_shell()
     except paramiko.AuthenticationException:
         print(f'\'{host}\': Couldn\'t establish connection to host \'{host}\'. Authentication failed')
-        return
+        return 0
     except IOError:
         print(f'\'{host}\': Couldn\'t establish connection to host \'{host}\'. No such host available')
-        return
-
+        return 0
 
 
 def fetch_param_idx(param_grid, num_params=1, set_status=True):
