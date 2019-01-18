@@ -181,7 +181,7 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
 
                 stdin, stdout, stderr = client.exec_command(command +
                                                             f' --param_grid_arg="{param_grid_arg.to_dict()}"'
-                                                            f' --config_file="{config_file}"',
+                                                            f' --config_file={config_file}',
                                                             get_pty=True)
 
                 # While waiting for the remote computation to finish, other threads can now be active
@@ -199,7 +199,8 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
                 # print(f'\'{thread_name}\': {result}')
                 # print(type(result))
                 # print(result)
-                # TODO: Concatenate results to a results file
+                # TODO: Write results to a file
+                # TODO: Write each result to a single file
                 # TODO: Change status from current param_idx in param_grid from 'pending' to 'done'
 
 
