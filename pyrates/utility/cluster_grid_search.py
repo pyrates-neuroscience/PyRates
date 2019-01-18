@@ -41,15 +41,13 @@ from threading import Thread, currentThread, RLock
 
 # pyrates internal imports
 from pyrates.utility.grid_search import linearize_grid
-# from pyrates.backend import ComputeGraph
-# from pyrates.frontend import CircuitTemplate
-# from pyrates.ir.circuit import CircuitIR
 
 # meta infos
 __author__ = "Christoph Salomon"
 __status__ = "development"
 
 
+# TODO: Add filepath to a folder for result files as argument
 def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
     """
 
@@ -64,7 +62,7 @@ def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
     -------
 
     """
-    # Create parameter grid from config_file.json if not specified otherwise
+    # If no parameter_grid given, create from config_file.json
     if not param_grid:
         try:
             print(f'Loading config file: {config_file}... ', end="")
@@ -104,6 +102,7 @@ def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
 
     lock = RLock()
     threads = []
+    results = pd.DataFrame
     # Start a thread for each host to handle the SSH-connection
     for host in hosts['hostnames']:
         threads.append(spawn_thread(host=host,
@@ -111,28 +110,29 @@ def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
                                     param_grid=param_grid,
                                     config_file=config_file,
                                     password=password,
-                                    lock=lock))
+                                    lock=lock,
+                                    results=results))
 
     # Wait for all threads to finish
     for t in threads:
         t.join()
 
     # print(param_grid)
-    # return results
+    print(results)
     # TODO: Create log file
 
 
-def spawn_thread(host, host_cmd, param_grid, config_file, password, lock):
+def spawn_thread(host, host_cmd, param_grid, config_file, password, lock, results):
     t = Thread(
         name=host,
         target=thread_master,
-        args=(host, host_cmd, param_grid, config_file, password, lock)
+        args=(host, host_cmd, param_grid, config_file, password, lock, results)
     )
     t.start()
     return t
 
 
-def thread_master(host, host_cmd, param_grid, config_file, password, lock):
+def thread_master(host, host_cmd, param_grid, config_file, password, lock, results):
     # Optional via lock: Make sure to connect to every host before starting a computation
     # lock.acquire()
     thread_name = currentThread().getName()
@@ -157,7 +157,7 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
             # TODO: Copy environment, script and config to shared or local directory on the remote host
             # Change paths of host_env and host_file respectively
 
-            # TODO: Call exec_command only once and send updated param_grid via stdin inside the while loop
+            # TODO: Call exec_command only once and send updated param_grid via stdin to the host inside the loop
             # stdin.write()
             # stdin.flush()
 
@@ -194,22 +194,20 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
                 for line in iter(stdout.readline, ""):
                     print(f'[H]\'{thread_name}\': {line}', end="")
 
+                # # TODO: How to distinguish between normal prints and result file in stdout?
                 # result = pd.read_csv(stdout)
 
-                # print(f'\'{thread_name}\': {result}')
-                # print(type(result))
-                # print(result)
-                # TODO: Write results to a file
-                # TODO: Write each result to a single file
+
                 # TODO: Change status from current param_idx in param_grid from 'pending' to 'done'
-
-
         else:
             # If no key named 'status' in param_grid:
             print(f'[T]\'{host}\': "No key named \'status\' in param_grid')
 
+        # TODO: If no shared memory is available, copy result files from host back to local workstation
+
+        # TODO:Change current param_idx in param_grid from 'pending' to 'done'
+
         client.close()
-        # return result
 
 
 def create_ssh_connection(host, username, password):
