@@ -50,16 +50,14 @@ __author__ = "Christoph Salomon"
 __status__ = "development"
 
 
-def cluster_grid_search(hosts, host_config, config_file, param_grid=None, **kwargs):
+def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
     """
 
     Parameters
     ----------
-    hostnames
+    hosts
     config_file
     param_grid
-    py_env
-    worker
     kwargs
 
     Returns
@@ -119,7 +117,7 @@ def cluster_grid_search(hosts, host_config, config_file, param_grid=None, **kwar
     for t in threads:
         t.join()
 
-    print(param_grid)
+    # print(param_grid)
     # return results
     # TODO: Create log file
 
@@ -151,7 +149,7 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
         # Check if 'status'-key is present in param_grid
         if not fetch_param_idx(param_grid, set_status=False).isnull():
 
-            # host_cmd['host_env']: Path to python executable inside a conda environment with installed dependencies:
+            # host_cmd['host_env']: Path to python executable inside a conda environment with installed packages:
             #   'pandas', 'pyrates'
             # host_cmd['host_file']: Path to python script to execute on the remote host
             command = host_cmd['host_env'] + ' ' + host_cmd['host_file']
@@ -170,13 +168,16 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
                 # Make sure all of the following commands are executed before switching to another thread
                 lock.acquire()
 
-                print(f'\'{thread_name}\': fetching index {param_idx}...')
+                print(f'\'{thread_name}\': Fetching index... ', end="")
 
                 # Get index of a parameter combination that hasn't been computed yet
                 param_idx = fetch_param_idx(param_grid)
 
                 # Get parameter combination to pass as argument to the remote host
                 param_grid_arg = param_grid.iloc[param_idx]
+
+                print(f'{param_idx}')
+                print(f'\'{thread_name}\': Starting remote computation')
 
                 stdin, stdout, stderr = client.exec_command(command +
                                                             f' --param_grid_arg="{param_grid_arg.to_dict()}"'
@@ -193,11 +194,14 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
                 for line in iter(stdout.readline, ""):
                     print(f'\'{thread_name}\': {line}', end="")
 
-                print(f'\'{thread_name}\': done!')
+                # result = pd.read_csv(stdout)
 
+                # print(f'\'{thread_name}\': {result}')
+                # print(type(result))
+                # print(result)
                 # TODO: Concatenate results to a results file
                 # TODO: Change status from current param_idx in param_grid from 'pending' to 'done'
-                # result = pd.read_csv(stdout)
+
 
         else:
             # If no key named 'status' in param_grid:
