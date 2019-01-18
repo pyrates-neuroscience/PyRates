@@ -7,11 +7,9 @@ import json
 # external imports
 import pandas as pd
 from pyrates.utility import grid_search
-from pyrates.frontend.template.circuit import CircuitTemplate
-from pyrates.backend import ComputeGraph
 
 
-def test_fnc():
+def dummy():
     x = 0
     for i in range(200000000):
         x = x + 1
@@ -37,12 +35,12 @@ def main(_):
             print("KeyError:", err)
             return
 
-    # Recreate dict param_grid from its string representation and create a DataFrame from it
+    # Recreate param_grid{} from its string representation and create a DataFrame from it
     param_grid = pd.DataFrame(ast.literal_eval(FLAGS.param_grid_arg))
 
     # TODO: Await a param_grid from stdin to start grid_search()
     # TODO: Start grid_search() and print results
-    # test_fnc()
+    # dummy()
 
     # print(param_grid.to_string(index=False))
 
@@ -60,7 +58,6 @@ def main(_):
 
     print(results.to_string(index=False))
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.register("type", "bool", lambda v: v.lower() == "true")
@@ -69,7 +66,7 @@ if __name__ == "__main__":
         "--param_grid_arg",
         type=str,
         default="",
-        help="Parameter grid to use grid_search() on"
+        help="String representation of parameter grid for grid_search()"
     )
 
     parser.add_argument(
