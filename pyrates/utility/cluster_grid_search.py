@@ -26,7 +26,7 @@
 # CITATION:
 #
 # Richard Gast and Daniel Rose et. al. in preparation
-"""Functions for performing parameter grid simulations with pyrates models.
+"""Functions for performing parameter grid simulations in a compute cluster with pyrates models.
 """
 
 # external imports
@@ -50,53 +50,6 @@ __author__ = "Christoph Salomon"
 __status__ = "development"
 
 
-def create_cgs_config_file(config_fp, circuit_template, param_grid, param_map, dt, simulation_time, inputs,
-                           outputs, sampling_step_size=None, permute_grid=False, **kwargs):
-    """
-
-    Parameters
-    ----------
-    config_fp
-    circuit_template
-    param_grid
-    param_map
-    dt
-    simulation_time
-    inputs
-    outputs
-    sampling_step_size
-    permute_grid
-    kwargs
-
-    Returns
-    -------
-
-    """
-
-    # setswitchinterval(1)
-
-    if type(param_grid) is dict:
-        # convert linear_grid from dict to pandas.DataFrame. Add status_flag later
-        param_grid = linearize_grid(param_grid, permute_grid)
-
-    # TODO: Eliminate extra brackets in inputs in config_file
-    config_dict = {
-        "circuit_template": circuit_template,
-        "param_grid": param_grid.to_dict(),
-        "param_map": param_map,
-        "dt": dt,
-        "simulation_time": simulation_time,
-        "inputs": {str(*inputs.keys()): list(*inputs.values())},
-        "outputs": outputs,
-        "sampling_step_size": sampling_step_size,
-        "permute_grid": permute_grid,
-        "kwargs": kwargs
-    }
-
-    with open(config_fp, "w") as f:
-        json.dump(config_dict, f, indent=2)
-
-
 def cluster_grid_search(hosts, host_config, config_file, param_grid=None, **kwargs):
     """
 
@@ -113,7 +66,7 @@ def cluster_grid_search(hosts, host_config, config_file, param_grid=None, **kwar
     -------
 
     """
-    # Create parameter grid from config_file.json if not specified
+    # Create parameter grid from config_file.json if not specified otherwise
     if not param_grid:
         try:
             print(f'Loading config file: {config_file}... ', end="")
@@ -136,23 +89,27 @@ def cluster_grid_search(hosts, host_config, config_file, param_grid=None, **kwar
             print("\nIOError:", err)
             return
     else:
-        print("Linearizing parameter grid...")
+        print("Linearizing parameter grid...", end="")
         param_grid = linearize_grid(param_grid, permute=True)
         # Add 'status' key for scheduler
         param_grid['status'] = 'unsolved'
+        print("done!")
 
     # TODO: Implement threadpool instead of single threads in a loop
     # TODO: Implement asynchronous computation instead of multithreading
-    # Start a thread for each host to handle the SSH-connection
+
     print("Starting threads...")
+
+    # Get password to connect to remote hosts.
     password = getpass.getpass(
         prompt='Enter password:', stream=None)
 
     lock = RLock()
     threads = []
+    # Start a thread for each host to handle the SSH-connection
     for host in hosts['hostnames']:
         threads.append(spawn_thread(host=host,
-                                    host_cmd={hosts['host_env'], hosts['host_file']},
+                                    host_cmd={'host_env': hosts['host_env'], 'host_file': hosts['host_file']},
                                     param_grid=param_grid,
                                     config_file=config_file,
                                     password=password,
@@ -182,55 +139,66 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
     # lock.acquire()
     thread_name = currentThread().getName()
 
+    # TODO: Implement connection with host-key-pairs and no password
     # create SSH Client/Channel
-    # TODO: Implement connection with key-files and no password
     client = create_ssh_connection(host,
                                    username=getpass.getuser(),
                                    password=password)
     # lock.release()
 
-    # Check if create_ssh_connection() didn't return 0
+    # Check if create_ssh_connection() returned 0
     if client:
         # Check if 'status'-key is present in param_grid
         if not fetch_param_idx(param_grid, set_status=False).isnull():
-            # Command to send to remote host
-            command = host_cmd['host_env'] + ' ' + host_cmd['host_file']
-            # TODO: Copy environment, script and config to shared directory or local directory on the host
-            # -> Change paths of env and workerfile respectively
 
-            # TODO: Call exec_command only once and communicate with it via stdin inside the while loop
+            # host_cmd['host_env']: Path to python executable inside a conda environment with installed dependencies:
+            #   'pandas', 'pyrates'
+            # host_cmd['host_file']: Path to python script to execute on the remote host
+            command = host_cmd['host_env'] + ' ' + host_cmd['host_file']
+
+            # TODO: Copy environment, script and config to shared or local directory on the remote host
+            # Change paths of host_env and host_file respectively
+
+            # TODO: Call exec_command only once and send updated param_grid via stdin inside the while loop
             # stdin.write()
             # stdin.flush()
 
-            # Check for available parameters to fetch
+            # Scheduler:
+            # fetch_param_idx() returns empty index if all parameter combinations have been calculated
             while not fetch_param_idx(param_grid, set_status=False).empty:
+
+                # Make sure all of the following commands are executed before switching to another thread
                 lock.acquire()
 
-                param_idx = fetch_param_idx(param_grid)
-                param_grid_arg = param_grid.iloc[param_idx]
                 print(f'\'{thread_name}\': fetching index {param_idx}...')
 
-                # TODO: Pass param_grid_arg as additional argument to exec_command()
+                # Get index of a parameter combination that hasn't been computed yet
+                param_idx = fetch_param_idx(param_grid)
+
+                # Get parameter combination to pass as argument to the remote host
+                param_grid_arg = param_grid.iloc[param_idx]
+
                 stdin, stdout, stderr = client.exec_command(command +
                                                             f' --param_grid_arg="{param_grid_arg.to_dict()}"'
                                                             f' --config_file="{config_file}"',
                                                             get_pty=True)
-                # Pass lock to another thread after a remote computation is started
+
+                # While waiting for the remote computation to finish, other threads can now be active
                 lock.release()
 
+                # Wait for remote computation to finish
                 exit_status = stdout.channel.recv_exit_status()
 
+                # Print what has been sent to the channel standard output (e.g. print())
                 for line in iter(stdout.readline, ""):
                     print(f'\'{thread_name}\': {line}', end="")
 
                 print(f'\'{thread_name}\': done!')
 
-                # TODO: Create result file and concatenate the intermediate results directly to this file
+                # TODO: Concatenate results to a results file
                 # TODO: Change status from current param_idx in param_grid from 'pending' to 'done'
                 # result = pd.read_csv(stdout)
 
-            # print(fetch_param_idx(param_grid, set_status=False).empty)
-            # print(param_grid)
         else:
             # If no key named 'status' in param_grid:
             print(f'\'{host}\': "No key named \'status\' in param_grid')
@@ -306,11 +274,51 @@ def fetch_param_idx(param_grid, num_params=1, set_status=True):
         # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
         param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
     except KeyError:
-        # print("DataFrame doesn't contain a key named 'status'")
         return pd.Index([np.nan])
     if set_status:
         param_grid.at[param_idx, 'status'] = 'pending'
-
     return param_idx
-    # To access the selected data use fetched_params = lin_grid.iloc[param_idx]
 
+
+def create_cgs_config(filepath, circuit_template, param_grid, param_map, dt, simulation_time, inputs,
+                      outputs, sampling_step_size=None, permute_grid=False, **kwargs):
+    """Create a configfile.json containing a config_dict{} with input parameters as key-value pairs
+
+    Parameters
+    ----------
+    filepath
+    circuit_template
+    param_grid
+    param_map
+    dt
+    simulation_time
+    inputs
+    outputs
+    sampling_step_size
+    permute_grid
+    kwargs
+
+    Returns
+    -------
+
+    """
+    if type(param_grid) is dict:
+        # convert linear_grid from dict to pandas.DataFrame.
+        param_grid = linearize_grid(param_grid, permute_grid)
+
+    # TODO: Eliminate redundant brackets in inputs in config_file
+    config_dict = {
+        "circuit_template": circuit_template,
+        "param_grid": param_grid.to_dict(),
+        "param_map": param_map,
+        "dt": dt,
+        "simulation_time": simulation_time,
+        "inputs": {str(*inputs.keys()): list(*inputs.values())},
+        "outputs": outputs,
+        "sampling_step_size": sampling_step_size,
+        "permute_grid": permute_grid,
+        "kwargs": kwargs
+    }
+
+    with open(filepath, "w") as f:
+        json.dump(config_dict, f, indent=2)
