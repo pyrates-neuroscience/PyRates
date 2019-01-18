@@ -7,7 +7,7 @@ import json
 # external imports
 import pandas as pd
 from pyrates.utility import grid_search
-from pyrates.frontend.template.circuit.circuit import CircuitTemplate
+from pyrates.frontend.template.circuit import CircuitTemplate
 from pyrates.backend import ComputeGraph
 
 

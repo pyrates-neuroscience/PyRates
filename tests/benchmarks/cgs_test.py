@@ -38,7 +38,7 @@ hosts = {
         # 'tiber',
     ],
     # Python executable in conda environment with installed packages 'pandas' and 'pyrates'
-    'host_env': "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python3.6",
+    'host_env': "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python",
     # Python script to call on the remote hosts
     'host_file': "/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker.py"
 }
