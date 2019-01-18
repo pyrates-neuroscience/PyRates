@@ -168,7 +168,7 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
                 # Make sure all of the following commands are executed before switching to another thread
                 lock.acquire()
 
-                print(f'\'{thread_name}\': Fetching index... ', end="")
+                print(f'[T]\'{thread_name}\': Fetching index... ', end="")
 
                 # Get index of a parameter combination that hasn't been computed yet
                 param_idx = fetch_param_idx(param_grid)
@@ -177,7 +177,7 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
                 param_grid_arg = param_grid.iloc[param_idx]
 
                 print(f'{param_idx}')
-                print(f'\'{thread_name}\': Starting remote computation')
+                print(f'[T]\'{thread_name}\': Starting remote computation')
 
                 stdin, stdout, stderr = client.exec_command(command +
                                                             f' --param_grid_arg="{param_grid_arg.to_dict()}"'
@@ -192,7 +192,7 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
 
                 # Print what has been sent to the channel standard output (e.g. print())
                 for line in iter(stdout.readline, ""):
-                    print(f'\'{thread_name}\': {line}', end="")
+                    print(f'[H]\'{thread_name}\': {line}', end="")
 
                 # result = pd.read_csv(stdout)
 
@@ -205,7 +205,7 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
 
         else:
             # If no key named 'status' in param_grid:
-            print(f'\'{host}\': "No key named \'status\' in param_grid')
+            print(f'[T]\'{host}\': "No key named \'status\' in param_grid')
 
         client.close()
         # return result
