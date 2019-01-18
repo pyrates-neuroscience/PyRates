@@ -2,11 +2,13 @@
 # from pyrates.backend import ComputeGraph
 # from pyrates.utility import plot_timeseries, grid_search
 # from pyrates.utility.grid_search import create_cgs_config_file
-# import matplotlib.pyplot as plt
+
 # from pandas import DataFrame
 # import os
 # from pyrates.frontend.template.circuit.circuit import
-from pyrates.utility.cluster_grid_search import cluster_grid_search
+
+import matplotlib.pyplot as plt
+from pyrates.utility import cluster_grid_search, plot_timeseries
 import numpy as np
 import time
 
@@ -52,8 +54,8 @@ config = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_config_2019-01-17_def
 
 print("Starting cluster grid search")
 
-results = cluster_grid_search(hosts, config_file=config, param_grid=params)
-
+results = cluster_grid_search.cluster_grid_search(hosts, config_file=config, param_grid=params)
+# print(*results)
 end = time.time()
 
 print('Time elapsed: %.2f seconds' % (end-start))
@@ -73,7 +75,7 @@ print('Time elapsed: %.2f seconds' % (end-start))
     #     f.write("%s\n" % str(row))
 
 #
-# plotting
+# # plotting
 # for j_e in params['J_e']:
 #     for j_i in params['J_i']:
 #         ax = plot_timeseries(results[j_e][j_i], title=f"J_e={j_e}, J_i={j_i}")

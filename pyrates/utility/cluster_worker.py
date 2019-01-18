@@ -39,8 +39,6 @@ def main(_):
     param_grid = pd.DataFrame(ast.literal_eval(FLAGS.param_grid_arg))
 
     # TODO: Await a param_grid from stdin to start grid_search()
-    # TODO: Start grid_search() and print results
-    # dummy()
 
     # print(param_grid.to_string(index=False))
 
@@ -56,7 +54,10 @@ def main(_):
                           dt=dt,
                           simulation_time=simulation_time)
 
-    print(results.to_string(index=False))
+    # TODO: Write results to a (csv?) file in a specified folder
+    # print(results.to_string(index=False))
+    return results
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

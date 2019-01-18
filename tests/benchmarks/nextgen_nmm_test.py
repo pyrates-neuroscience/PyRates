@@ -24,7 +24,7 @@ results = grid_search(circuit_template="pyrates.examples.simple_nextgen_NMM.Net5
                       dt=dt, simulation_time=T, permute_grid=True)
 
 # plotting
-for j_e in params['J_e']:
-    for j_i in params['J_i']:
-        ax = plot_timeseries(results[j_e][j_i], title=f"J_e={j_e}, J_i={j_i}")
-plt.show()
+# for j_e in params['J_e']:
+#     for j_i in params['J_i']:
+#         ax = plot_timeseries(results[j_e][j_i], title=f"J_e={j_e}, J_i={j_i}")
+# plt.show()
