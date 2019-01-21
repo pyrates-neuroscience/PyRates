@@ -85,7 +85,7 @@ class ComputeGraph(object):
 
         super().__init__()
         self.name = name
-        print('moving edge operators to nodes...')
+        # print('moving edge operators to nodes...')
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend
@@ -94,13 +94,13 @@ class ComputeGraph(object):
         # pre-process the network configuration
         self.dt = dt
         self._net_config_map = {}
-        print('checking net config for consistency...')
+        # print('checking net config for consistency...')
         self.net_config = self._net_config_consistency_check(net_config) if build_in_place \
             else self._net_config_consistency_check(deepcopy(net_config))
-        print('start of vectorization')
+        # print('start of vectorization')
         t0 = t.time()
         self._vectorize(vectorization_mode=vectorization)
-        print(f'...finished after {t.time() - t0} seconds.')
+        # print(f'...finished after {t.time() - t0} seconds.')
 
         # set time constant of the network
         self._dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}},
