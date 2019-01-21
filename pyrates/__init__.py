@@ -31,6 +31,7 @@
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
+__version__ = "0.5.0"
 
 
 class PyRatesException(Exception):

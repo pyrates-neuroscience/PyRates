@@ -1,0 +1,12 @@
+numpy
+matplotlib
+networkx
+pandas
+tensorflow>=1.12
+pyparsing
+ruamel.yaml
+scipy
+seaborn
+mne
+pydot
+pytest
