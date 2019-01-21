@@ -199,7 +199,8 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
 
     if auto_cluster:
 
-        idx = [i for i in range(fc.shape[0])]
+        idx_r = [i for i in range(fc.shape[0])]
+        idx_c = [i for i in range(fc.shape[1])]
 
         # Create a categorical color palette for node groups
         col_pal_args = ['h', 's', 'l']
@@ -207,7 +208,7 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
         for key in kwargs.keys():
             if key in col_pal_args:
                 kwargs_tmp[key] = kwargs.pop(key)
-        node_pal = sb.husl_palette(len(idx), **kwargs_tmp)
+        node_pal = sb.husl_palette(len(idx_c), **kwargs_tmp)
         nodes = fc.columns.values
         node_lut = dict(zip(map(str, nodes), node_pal))
 
@@ -216,14 +217,15 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
 
     elif node_order:
 
-        idx = [node_order.index(n) for n in fc.columns.values]
+        idx_c = [node_order.index(n) for n in fc.columns.values]
+        idx_r = [i for i in range(fc.shape[0])]
 
     else:
 
-        idx = [i for i in range(len(fc.index))]
+        idx_r = [i for i in range(fc.shape[0])]
+        idx_c = [i for i in range(fc.shape[1])]
 
-    fc = fc.iloc[idx]
-    fc = fc.T.iloc[idx]
+    fc = fc.iloc[idx_r, idx_c]
 
     # plot the functional connectivities
     ####################################
@@ -233,9 +235,9 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
 
         # seaborn plot
         if 'xticklabels' not in kwargs:
-            kwargs['xticklabels'] = fc.columns.values[idx]
+            kwargs['xticklabels'] = fc.columns.values[idx_c]
         if 'yticklabels' not in kwargs:
-            kwargs['yticklabels'] = fc.index[idx]
+            kwargs['yticklabels'] = fc.index[idx_r]
 
         sb.set_style(bg_style)
 
@@ -363,7 +365,7 @@ def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
 
     raw = mne_from_dataframe(data)
 
-    return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs)
+    return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs).axes
 
 
 def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):

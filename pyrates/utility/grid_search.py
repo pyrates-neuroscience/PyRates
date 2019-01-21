@@ -141,14 +141,14 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
         outs += [out_name] * n_iters
     multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
     multi_idx.append(outs)
-    index = pd.MultiIndex.from_arrays(multi_idx,
-                                      names=list(param_grid.keys()) + ['out_var'])
-    results_final = pd.DataFrame(columns=index, data=np.zeros_like(results.values))
+    index = pd.MultiIndex.from_arrays(multi_idx, names=list(param_grid.keys()) + ['out_var'])
+    index = pd.MultiIndex.from_tuples(list(set(index)), names=list(param_grid.keys()) + ['out_var'])
+    results_final = pd.DataFrame(columns=index, data=np.zeros_like(results.values), index=results.index)
     for col in results.keys():
         params = col[0].split(param_split)
         indices = [None] * len(results_final.columns.names)
         for param in params:
-            var, val = param.split(val_split)
+            var, val = param.split(val_split)[:2]
             idx = list(results_final.columns.names).index(var)
             try:
                 indices[idx] = float(val)
@@ -156,7 +156,7 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
                 indices[idx] = val
         results_final.loc[:, tuple(indices)] = results[col].values
 
-    return results_final.dropna()
+    return results_final
 
 
 def linearize_grid(grid: dict, permute=False):
