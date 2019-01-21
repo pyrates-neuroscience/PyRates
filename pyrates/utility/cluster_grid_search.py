@@ -205,7 +205,7 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock, resul
 
         # TODO: If no shared memory is available, copy result files from host back to local workstation
 
-        # TODO:Change current param_idx in param_grid from 'pending' to 'done'
+        # TODO: Change current param_idx in param_grid from 'pending' to 'done'
 
         client.close()
 
