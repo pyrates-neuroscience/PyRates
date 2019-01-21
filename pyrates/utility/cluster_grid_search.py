@@ -46,14 +46,14 @@ from pyrates.utility.grid_search import linearize_grid
 __author__ = "Christoph Salomon"
 __status__ = "development"
 
-
-# TODO: Add filepath to a folder for result files as argument
-def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
+# TODO: Create class so only self has to be parsed to all the member functions
+# TODO: Add filepath for result files as argument
+def cluster_grid_search(host_config, config_file, log_file=None, param_grid=None, **kwargs):
     """
 
     Parameters
     ----------
-    hosts
+    host_config
     config_file
     param_grid
     kwargs
@@ -62,6 +62,9 @@ def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
     -------
 
     """
+    # Create parameter grid
+    #######################
+
     # If no parameter_grid given, create from config_file.json
     if not param_grid:
         try:
@@ -91,12 +94,18 @@ def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
         param_grid['status'] = 'unsolved'
         print("done!")
 
+    # Check if config file and parameter grid match
+    ###############################################
+
     # TODO: Implement threadpool instead of single threads in a loop
     # TODO: Implement asynchronous computation instead of multithreading
 
-    print("Starting threads...")
+    # Start scheduler
+    #################
 
-    # Get password to connect to remote hosts.
+    print("Starting scheduler...")
+
+    # Get password to connect to cluster nodes.
     password = getpass.getpass(
         prompt='Enter password:', stream=None)
 
@@ -104,45 +113,57 @@ def cluster_grid_search(hosts, config_file, param_grid=None, **kwargs):
     threads = []
     results = pd.DataFrame
     # Start a thread for each host to handle the SSH-connection
-    for host in hosts['hostnames']:
+    for host in host_config['hostnames']:
         threads.append(spawn_thread(host=host,
-                                    host_cmd={'host_env': hosts['host_env'], 'host_file': hosts['host_file']},
+                                    host_cmd={'host_env': host_config['host_env'],
+                                              'host_file': host_config['host_file']},
                                     param_grid=param_grid,
                                     config_file=config_file,
                                     password=password,
-                                    lock=lock,
-                                    results=results))
+                                    lock=lock))
 
     # Wait for all threads to finish
     for t in threads:
         t.join()
 
+    print(f'Computation finished!')
+    # print(f'Resultfile: {result_file}')
+    print(f'Logfile: {log_file}')
     # print(param_grid)
-    print(results)
+    # print(results)
+
+    # Create logfile
+    ################
     # TODO: Create log file
 
 
-def spawn_thread(host, host_cmd, param_grid, config_file, password, lock, results):
+def spawn_thread(host, host_cmd, param_grid, config_file, password, lock):
     t = Thread(
         name=host,
         target=thread_master,
-        args=(host, host_cmd, param_grid, config_file, password, lock, results)
+        args=(host, host_cmd, param_grid, config_file, password, lock)
     )
     t.start()
     return t
 
 
-def thread_master(host, host_cmd, param_grid, config_file, password, lock, results):
-    # Optional via lock: Make sure to connect to every host before starting a computation
-    # lock.acquire()
+def thread_master(host, host_cmd, param_grid, config_file, password, lock):
+
     thread_name = currentThread().getName()
 
+    # Optional via lock: Make sure to connect to every host before starting a computation
+    # lock.acquire()
     # TODO: Implement connection with host-key-pairs and no password
     # create SSH Client/Channel
-    client = create_ssh_connection(host,
-                                   username=getpass.getuser(),
-                                   password=password)
+    with lock:
+        client = create_ssh_connection(host,
+                                       username=getpass.getuser(),
+                                       password=password)
+
+    # Release lock: other threads can now be active
     # lock.release()
+
+    # TODO: Print hardware specifications of node
 
     # Check if create_ssh_connection() returned 0
     if client:
@@ -154,6 +175,9 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock, resul
             # host_cmd['host_file']: Path to python script to execute on the remote host
             command = host_cmd['host_env'] + ' ' + host_cmd['host_file']
 
+            # TODO: Automatically create a folder where the result file is located to put node output files to
+            result_path = f'/data/hu_salomon/Documents/ClusterGridSearch/Results/test/'
+
             # TODO: Copy environment, script and config to shared or local directory on the remote host
             # Change paths of host_env and host_file respectively
 
@@ -163,42 +187,42 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock, resul
 
             # Scheduler:
             # fetch_param_idx() returns empty index if all parameter combinations have been calculated
-            while not fetch_param_idx(param_grid, set_status=False).empty:
+            # lock.acquire()
+            while not fetch_param_idx(param_grid, lock, set_status=False).empty:
 
                 # Make sure all of the following commands are executed before switching to another thread
-                lock.acquire()
+                # lock.acquire()
+                with lock:
+                    print(f'[T]\'{thread_name}\': Fetching index... ', end="")
 
-                print(f'[T]\'{thread_name}\': Fetching index... ', end="")
+                    # Get index of a parameter combination that hasn't been computed yet
+                    param_idx = fetch_param_idx(param_grid, num_params=2)
 
-                # Get index of a parameter combination that hasn't been computed yet
-                param_idx = fetch_param_idx(param_grid)
+                    # Get parameter combination to pass as argument to the remote host
+                    param_grid_arg = param_grid.iloc[param_idx]
 
-                # Get parameter combination to pass as argument to the remote host
-                param_grid_arg = param_grid.iloc[param_idx]
+                    print(f'{param_idx}')
+                    print(f'[T]\'{thread_name}\': Starting remote computation')
 
-                print(f'{param_idx}')
-                print(f'[T]\'{thread_name}\': Starting remote computation')
-
-                stdin, stdout, stderr = client.exec_command(command +
-                                                            f' --param_grid_arg="{param_grid_arg.to_dict()}"'
-                                                            f' --config_file={config_file}',
-                                                            get_pty=True)
+                    stdin, stdout, stderr = client.exec_command(command +
+                                                                f' --param_grid_arg="{param_grid_arg.to_dict()}"'
+                                                                f' --config_file={config_file}'
+                                                                f' --result_path={result_path}',
+                                                                get_pty=True)
 
                 # While waiting for the remote computation to finish, other threads can now be active
-                lock.release()
+                # lock.release()
 
                 # Wait for remote computation to finish
-                exit_status = stdout.channel.recv_exit_status()
+                # exit_status = stdout.channel.recv_exit_status()
 
-                # Print what has been sent to the channel standard output (e.g. print())
+                # node_result.from_csv(node_result_file)
+
+                # Print what has been sent to the channels stdout or stderr
                 for line in iter(stdout.readline, ""):
                     print(f'[H]\'{thread_name}\': {line}', end="")
 
-                # # TODO: How to distinguish between normal prints and result file in stdout?
-                # result = pd.read_csv(stdout)
-
-
-                # TODO: Change status from current param_idx in param_grid from 'pending' to 'done'
+                # TODO: Change status of current param_idx in param_grid from 'pending' to 'done'
         else:
             # If no key named 'status' in param_grid:
             print(f'[T]\'{host}\': "No key named \'status\' in param_grid')
@@ -208,6 +232,9 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock, resul
         # TODO: Change current param_idx in param_grid from 'pending' to 'done'
 
         client.close()
+    else:
+        # If no connection to node was established:
+        return
 
 
 def create_ssh_connection(host, username, password):
@@ -229,7 +256,7 @@ def create_ssh_connection(host, username, password):
     """
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    print(f'Attempting to connect to host \'{host}\'...')
+    # print(f'Connecting to host \'{host}\'...')
     try:
         client.connect(host, username=username, password=password)
         print(f'\'{host}\': Connection established')
@@ -249,7 +276,7 @@ def create_ssh_connection(host, username, password):
         return 0
 
 
-def fetch_param_idx(param_grid, num_params=1, set_status=True):
+def fetch_param_idx(param_grid, lock=None, num_params=1, set_status=True):
     """Fetch a pandas.Index([index_list]) with the indices of the first num_params rows of param_grid who's
     'status'-key equals 'unsolved'
 
@@ -273,14 +300,26 @@ def fetch_param_idx(param_grid, num_params=1, set_status=True):
 
 
     """
-    try:
-        # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
-        param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
-    except KeyError:
-        return pd.Index([np.nan])
-    if set_status:
-        param_grid.at[param_idx, 'status'] = 'pending'
-    return param_idx
+    if lock:
+        with lock:
+            try:
+                # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
+                param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
+            except KeyError:
+                return pd.Index([np.nan])
+            if set_status:
+                param_grid.at[param_idx, 'status'] = 'pending'
+            return param_idx
+    else:
+        try:
+            # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
+            param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
+        except KeyError:
+            return pd.Index([np.nan])
+        if set_status:
+            param_grid.at[param_idx, 'status'] = 'pending'
+        return param_idx
+
 
 
 def create_cgs_config(filepath, circuit_template, param_grid, param_map, dt, simulation_time, inputs,
