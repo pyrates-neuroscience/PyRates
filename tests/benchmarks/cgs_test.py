@@ -42,7 +42,9 @@ hosts = {
     # Python executable in conda environment with installed packages 'pandas' and 'pyrates'
     'host_env': "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python",
     # Python script to call on the remote hosts
-    'host_file': "/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker.py"
+    'host_file': "/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker.py",
+    # Directory on the host to copy host_file and host_env to, if no shared filesystem is available
+    'host_dir': ""
 }
 
 config = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_config_2019-01-17_default.json"
