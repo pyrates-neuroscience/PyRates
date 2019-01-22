@@ -309,10 +309,14 @@ class ComputeGraph(object):
             self.edge_updates.append(edge['target_var'])
 
         if self.edge_updates:
-            self.step = self.backend.add_layer(self.edge_updates, scope=f'{self.name}/', name='network_update')
+            self.step = self.backend.add_layer(self.edge_updates,
+                                               scope=f'{self.name}/', name='network_update')
+            if self.node_updates_2:
+                self.step = self.backend.add_op('group', [self.edge_updates, self.node_updates_2],
+                                                scope=f'{self.name}/', name='network_update')
         elif self.node_updates_2:
-            self.step = self.backend.add_op('group', [self.node_updates, self.node_updates_2], scope=f'{self.name}/',
-                                            name='network_update')
+            self.step = self.backend.add_op('group', [self.node_updates, self.node_updates_2],
+                                            scope=f'{self.name}/', name='network_update')
         else:
             self.step = self.node_updates
 
