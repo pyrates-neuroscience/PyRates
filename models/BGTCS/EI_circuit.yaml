@@ -27,15 +27,15 @@ Op_e:
     tau:
       default: 0.02
     tau_e:
-      default: 0.006
-    tau_i:
       default: 0.01
+    tau_i:
+      default: 0.025
     H_e:
-      default: 0.5
+      default: 0.4
     H_i:
-      default: 0.5
+      default: 0.8
     J:
-      default: 0.5
+      default: 0.75
     delta:
       default: 1.0
     eta:
@@ -81,13 +81,13 @@ Op_i:
     tau:
       default: 0.02
     tau_e:
-      default: 0.006
-    tau_i:
       default: 0.01
+    tau_i:
+      default: 0.025
     H_e:
-      default: 0.5
+      default: 0.4
     H_i:
-      default: 0.5
+      default: 0.8
     J:
       default: 0.5
     delta:
@@ -129,5 +129,5 @@ Net:
     PC: Pop_e
     IIN: Pop_i
   edges:
-    - [PC/Op_e/r, IIN/Op_i/r_in_e, DummyEdge, {weight: 1.0}]
+    - [PC/Op_e/r, IIN/Op_i/r_in_e, DummyEdge, {weight: 0.5}]
     - [IIN/Op_i/r, PC/Op_e/r_in_i, DummyEdge, {weight: 1.0}]

@@ -42,13 +42,13 @@ for i, H_e in enumerate(params['H_e']):
 fig, ax = plt.subplots(ncols=2, figsize=(15, 5), gridspec_kw={})
 cm1 = cubehelix_palette(n_colors=int(len(params['H_e'])*len(params['H_i'])), as_cmap=True, start=2.5, rot=-0.1)
 cm2 = cubehelix_palette(n_colors=int(len(params['H_e'])*len(params['H_i'])), as_cmap=True, start=-2.0, rot=-0.1)
-cax1 = plot_connectivity(max_freq, ax=ax[0], yticklabels=list(np.round(params['H_e'], decimals=1)),
-                         xticklabels=list(np.round(params['H_i'], decimals=1)), cmap=cm1)
+cax1 = plot_connectivity(max_freq, ax=ax[0], yticklabels=list(np.round(params['H_e'], decimals=2)),
+                         xticklabels=list(np.round(params['H_i'], decimals=2)), cmap=cm1)
 cax1.set_xlabel('H_e')
 cax1.set_ylabel('H_i')
 cax1.set_title(f'max freq')
-cax2 = plot_connectivity(freq_pow, ax=ax[1], yticklabels=list(np.round(params['H_e'], decimals=1)),
-                         xticklabels=list(np.round(params['H_i'], decimals=1)), cmap=cm2)
+cax2 = plot_connectivity(freq_pow, ax=ax[1], yticklabels=list(np.round(params['H_e'], decimals=2)),
+                         xticklabels=list(np.round(params['H_i'], decimals=2)), cmap=cm2)
 cax2.set_xlabel('H_e')
 cax2.set_ylabel('H_i')
 cax2.set_title(f'freq pow')

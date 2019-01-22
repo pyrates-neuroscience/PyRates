@@ -59,13 +59,13 @@ for i, t in enumerate(taus):
 
     cm1 = cubehelix_palette(n_colors=int(len(tau_e_scaling)*len(ei_ratio)), as_cmap=True, start=2.5, rot=-0.1)
     cm2 = cubehelix_palette(n_colors=int(len(tau_e_scaling)*len(ei_ratio)), as_cmap=True, start=-2.0, rot=-0.1)
-    cax1 = plot_connectivity(max_freq, ax=ax[0, i], yticklabels=list(np.round(tau_e_scaling, decimals=1)),
-                             xticklabels=list(np.round(ei_ratio, decimals=1)), cmap=cm1)
+    cax1 = plot_connectivity(max_freq, ax=ax[0, i], yticklabels=list(np.round(tau_e_scaling, decimals=2)),
+                             xticklabels=list(np.round(ei_ratio, decimals=2)), cmap=cm1)
     cax1.set_xlabel('tau_e/tau_i')
     cax1.set_ylabel('tau_e/tau')
     cax1.set_title(f'max freq (tau = {t})')
-    cax2 = plot_connectivity(freq_pow, ax=ax[1, i], yticklabels=list(np.round(tau_e_scaling, decimals=1)),
-                             xticklabels=list(np.round(ei_ratio, decimals=1)), cmap=cm2)
+    cax2 = plot_connectivity(freq_pow, ax=ax[1, i], yticklabels=list(np.round(tau_e_scaling, decimals=2)),
+                             xticklabels=list(np.round(ei_ratio, decimals=2)), cmap=cm2)
     cax2.set_xlabel('tau_e/tau_i')
     cax2.set_ylabel('tau_e/tau')
     cax2.set_title(f'freq power (tau = {t})')

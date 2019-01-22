@@ -8,12 +8,12 @@ __status__ = "Development"
 
 
 # parameters
-dt = 1e-4
-T = 5.
+dt = 2e-5
+T = 2.
 inp = 3. + np.random.randn(int(T/dt), 1) * 1.0
 Cs = [1., 2., 4.]
 ei_ratio = np.arange(0.1, 3., 0.1)[::-1]
-io_ratio = np.arange(0.1, 2., 0.05)
+io_ratio = np.arange(0.1, 2., 0.1)
 J_e = np.zeros((int(len(ei_ratio) * len(io_ratio))))
 J_i = np.zeros_like(J_e)
 k_ei = np.zeros_like(J_e)

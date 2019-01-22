@@ -386,7 +386,7 @@ class ComputeGraph(object):
 
         # add collector variables to the graph
         for key, var in outputs_tmp.items():
-            shape = [int(sim_steps / sampling_steps)] + list(var.shape)
+            shape = [int(sim_steps / sampling_steps) + 1] + list(var.shape)
             output_col[key] = self.backend.add_var(vtype='state_var', name=key, dtype=tf.float32, shape=shape,
                                                    value=np.zeros(shape), scope="output_collection")
 
@@ -514,7 +514,7 @@ class ComputeGraph(object):
         if out_var_vals:
             data = np.asarray(out_var_vals).T
             idx = np.arange(0., simulation_time, sampling_step_size)[-data.shape[0]:]
-            out_vars = DataFrame(data=data,
+            out_vars = DataFrame(data=data[0:len(idx), :],
                                  index=idx,
                                  columns=index)
         else:
