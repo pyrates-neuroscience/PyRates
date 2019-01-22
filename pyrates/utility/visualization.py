@@ -84,6 +84,19 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
                  var_name='node',
                  value_name=variable)
 
+    # create color palette
+    if 'cmap' in kwargs:
+        cmap = kwargs.pop('cmap')
+    else:
+        col_pal_args = ['start', 'rot', 'gamma', 'hue', 'light', 'dark', 'reverse', 'n_colors']
+        kwargs_tmp = {}
+        for key in kwargs.copy().keys():
+            if key in col_pal_args:
+                kwargs_tmp[key] = kwargs.pop(key)
+        if 'n_colors' not in kwargs_tmp:
+            kwargs_tmp['n_colors'] = data.shape[1] - 1
+        cmap = sb.cubehelix_palette(**kwargs_tmp)
+
     if 'ax' not in kwargs.keys():
         _, ax = plt.subplots()
         kwargs['ax'] = ax
@@ -93,19 +106,10 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
         # simple timeseries plot
         if 'ci' not in kwargs:
             kwargs['ci'] = None
-        ax = sb.lineplot(data=df, x='time', y=variable, hue='node', **kwargs).set_title(title)
+        ax = sb.lineplot(data=df, x='time', y=variable, hue='node', palette=cmap, **kwargs)
+        ax.set_title(title)
 
     elif plot_style == 'ridge_plot':
-
-        # create color palette
-        col_pal_args = ['start', 'rot', 'gamma', 'hue', 'light', 'dark', 'reverse', 'n_colors']
-        kwargs_tmp = {}
-        for key in kwargs.copy().keys():
-            if key in col_pal_args:
-                kwargs_tmp[key] = kwargs.pop(key)
-        if not 'n_colors' in kwargs_tmp:
-            kwargs_tmp['n_colors'] = 10
-        pal = sb.cubehelix_palette(**kwargs_tmp)
 
         # create facet grid
         grid_args = ['col_wrap', 'sharex', 'sharey', 'height', 'aspect', 'row_order', 'col_order',
@@ -116,7 +120,7 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
                 kwargs_tmp[key] = kwargs.pop(key)
         facet_hue = kwargs.pop('facet_hue', 'node')
         facet_row = kwargs.pop('facet_row', 'node')
-        ax = sb.FacetGrid(df, row=facet_row, hue=facet_hue, palette=pal, **kwargs_tmp)
+        ax = sb.FacetGrid(df, row=facet_row, hue=facet_hue, palette=cmap, **kwargs_tmp)
         plt.close(plt.figure(plt.get_fignums()[-2]))
 
         # map line plots

@@ -16,7 +16,7 @@ Op_e:
     r_i:
       default: input
     tau:
-      default: 0.02
+      default: 1.0
     delta:
       default: 1.0
     eta:
@@ -43,7 +43,7 @@ Op_i:
     r_i:
       default: input
     tau:
-      default: 0.02
+      default: 1.0
     delta:
       default: 1.0
     eta:
@@ -55,104 +55,6 @@ Op_i:
     inp:
       default: input
 
-Op_syn_e:
-  base: OperatorTemplate
-  equations:
-    - 'd/dt * psp = -psp/tau + h/tau * r_in'
-  variables:
-    psp:
-      default: output
-    h:
-      default: 3.25
-    tau:
-      default: 0.1
-    r_in:
-      default: input
-
-Op_syn_i:
-  base: OperatorTemplate
-  equations:
-    - 'd/dt * psp = -psp/tau + h/tau * r_in'
-  variables:
-    h:
-      default: -22
-    tau:
-      default: 0.2
-    r_in:
-      default: input
-    psp:
-      default: output
-
-Op_tau_e:
-  base: OperatorTemplate
-  equations:
-    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - 'd/dt * r_e = (-r_e + J*r + inp + inp_e) / tau_e'
-    - 'd/dt * r_i = (-r_i + inp_i) / tau_i'
-    - "d/dt * v = (v**2 + eta) / tau + r_e - r_i - tau*(PI*r)**2"
-  variables:
-    r:
-      default: output
-    v:
-      default: variable
-    r_e:
-      default: variable
-    r_i:
-      default: variable
-    tau:
-      default: 0.02
-    tau_e:
-      default: 0.001
-    tau_i:
-      default: 0.002
-    delta:
-      default: 2.0
-    eta:
-      default: 0.
-    J:
-      default: 21.213
-    inp:
-      default: input
-    inp_e:
-      default: input
-    inp_i:
-      default: input
-
-Op_tau_i:
-  base: OperatorTemplate
-  equations:
-    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - 'd/dt * r_i = (-r_i + J*r) / tau_i'
-    - 'd/dt * r_e = (-r_e + inp_e + inp) / tau_e'
-    - "d/dt * v = (v**2 + eta) / tau + r_e + r_i - tau*(PI*r)**2"
-  variables:
-    r:
-      default: output
-    v:
-      default: variable
-    r_e:
-      default: variable
-    r_i:
-      default: variable
-    tau:
-      default: 0.02
-    tau_e:
-      default: 0.001
-    tau_i:
-      default: 0.002
-    delta:
-      default: 2.0
-    eta:
-      default: -2.0
-    J:
-      default: -21.213
-    inp:
-      default: input
-    inp_e:
-      default: input
-    inp_i:
-      default: input
-
 Pop_e:
   base: NodeTemplate
   operators:
@@ -162,31 +64,6 @@ Pop_i:
   base: NodeTemplate
   operators:
     - Op_i
-
-Pop_e_syn_e:
-  base: NodeTemplate
-  operators:
-    - Op_tau_e
-
-Pop_e_syn_ei:
-  base: NodeTemplate
-  operators:
-    - Op_tau_e
-    - Op_syn_e
-    - Op_syn_i
-
-Pop_i_syn_e:
-  base: NodeTemplate
-  operators:
-    - Op_tau_i
-    - Op_syn_e
-
-Pop_i_syn_ei:
-  base: NodeTemplate
-  operators:
-    - Op_tau_i
-    - Op_syn_e
-    - Op_syn_i
 
 DummyEdge:
   base: EdgeTemplate
@@ -207,37 +84,8 @@ Net2:
 Net3:
   base: CircuitTemplate
   nodes:
-    Pop1: Pop_e_syn_ei
-  edges:
-
-Net4:
-  base: CircuitTemplate
-  nodes:
-    Pop1: Pop_e_syn_e
-    Pop2: Pop_e_syn_e
-  edges:
-    - [Pop1/Op_tau_e/r, Pop2/Op_tau_e/inp_syn, DummyEdge, {weight: 10.0}]
-
-Net5:
-  base: CircuitTemplate
-  nodes:
     PC: Pop_e
     IIN: Pop_i
   edges:
     - [PC/Op_e/r, IIN/Op_i/r_e, DummyEdge, {weight: 5.0}]
     - [IIN/Op_i/r, PC/Op_e/r_i, DummyEdge, {weight: 5.0}]
-
-Net6:
-  base: CircuitTemplate
-  nodes:
-    PC1: Pop_e
-    IIN1: Pop_i
-    PC2: Pop_e
-    IIN2: Pop_i
-  edges:
-    - [PC1/Op_e/r, IIN1/Op_i/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
-    - [IIN1/Op_i/r, PC1/Op_e/r_i, DummyEdge, {weight: 1.0, delay: 0.0}]
-    - [PC2/Op_e/r, IIN2/Op_i/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
-    - [IIN2/Op_i/r, PC2/Op_e/r_i, DummyEdge, {weight: 1.0, delay: 0.0}]
-    - [PC1/Op_e/r, PC2/Op_e/r_e, DummyEdge, {weight: 0.5, delay: 0.0}]
-    - [PC2/Op_e/r, PC1/Op_e/r_e, DummyEdge, {weight: 0.5, delay: 0.0}]
