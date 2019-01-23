@@ -3,10 +3,25 @@ import argparse
 import sys
 import ast
 import json
+import socket
+import os
 
 # external imports
 import pandas as pd
 from pyrates.utility import grid_search
+
+
+class Logger(object):
+    def __init__(self, logfile):
+        self.terminal = sys.stdout
+        self.log = open(logfile, "a")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        pass
 
 
 def dummy():
@@ -16,12 +31,25 @@ def dummy():
 
 
 def main(_):
-    with open(FLAGS.config_file) as file:
+    compute_id = FLAGS.compute_id
+    hostname = socket.gethostname()
+
+    # Create folder for node specific logfile as a subfolder of global_config directory
+    logfile = f'{os.path.dirname(FLAGS.global_config)}_{compute_id}/Logs/Local_log_{hostname}_{compute_id}.log'
+    os.makedirs(os.path.dirname(logfile), exist_ok=True)
+
+    # Copy all stdout and stderr to logfile
+    sys.stdout = Logger(logfile)
+    sys.stderr = Logger(logfile)
+
+    # TODO: Create logfile for each worker
+    with open(FLAGS.global_config) as file:
         param_dict = json.load(file)
         try:
             circuit_template = param_dict['circuit_template']
             param_map = param_dict['param_map']
 
+            # TODO: Does that work for different, multiple inputs/outputs?
             # Recreate tuple from string representation to use as 'key' in inputs
             inputs = {ast.literal_eval(*param_dict['inputs'].keys()):
                       list(*param_dict['inputs'].values())}
@@ -38,6 +66,7 @@ def main(_):
             # If config_file does not contain any of the necessary keys
             print("KeyError:", err)
             return
+
 
     # Recreate param_grid{} from its string representation and create a DataFrame from it
     param_grid = pd.DataFrame(ast.literal_eval(FLAGS.param_grid_arg))
@@ -79,25 +108,26 @@ if __name__ == "__main__":
     # parser.register("type", "bool", lambda v: v.lower() == "true")
 
     parser.add_argument(
-        "--param_grid_arg",
+        "--global_config",
         type=str,
         default="",
-        help="String representation of parameter grid chunk for grid_search()"
+        help="Config file with all necessary data to start grid_search() except for param_grid"
     )
 
     parser.add_argument(
-        "--config_file",
+        "--local_config",
         type=str,
         default="",
-        help="JSON file containing all necessary input to invoke grid_search()"
+        help="Config file with worker specific instructions. Contains param grid, extra input and commands for further"
+             "signal processing"
+    )
+    parser.add_argument(
+        "--compute_id",
+        type=str,
+        default="",
+        help="Unique ID of the whole parameter computation to differentiate created files from different computations"
     )
 
-    parser.add_argument(
-        "--result_path",
-        type=str,
-        default="",
-        help="Path to save result files to"
-    )
 
     FLAGS = parser.parse_args()
 
