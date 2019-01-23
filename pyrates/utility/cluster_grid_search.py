@@ -65,8 +65,8 @@ def cluster_grid_search(host_config, config_file, param_grid, **kwargs):
     """
     # Create compute ID and global log file
     ###################
-
-    # Unique id of the current call of cluster_grid_search that is added to all filenames created in this computation
+    # Unique id of the current call of cluster_grid_search()
+    # Is added to all filenames of files created during this computation
     # Is Coded as follows: filename_ddmmyy-HHMMSS
     #   with dd: day; mm: month; yy: year; HH: hours; MM: minutes; SS: seconds
     #   at the time of cluster_grid_search() call
