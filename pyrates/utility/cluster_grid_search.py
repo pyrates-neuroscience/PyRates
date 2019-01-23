@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -51,22 +50,19 @@ __status__ = "development"
 # TODO: Create ClusterGridSearch class so only 'self' has to be parsed to all the member functions
 def cluster_grid_search(host_config, config_file, param_grid, **kwargs):
     """
-
     Parameters
     ----------
     host_config
     config_file
     param_grid
     kwargs
-
     Returns
     -------
-
     """
     # Create compute ID and global log file
     ###################
-    # Unique id of the current call of cluster_grid_search()
-    # Is added to all filenames of files created during this computation
+
+    # Unique id of the current call of cluster_grid_search that is added to all filenames created in this computation
     # Is Coded as follows: filename_ddmmyy-HHMMSS
     #   with dd: day; mm: month; yy: year; HH: hours; MM: minutes; SS: seconds
     #   at the time of cluster_grid_search() call
@@ -256,20 +252,16 @@ def thread_master(compute_id, host, host_cmd, param_grid, config_file, password,
 
 def create_ssh_connection(host, username, password):
     """Connect to a host via SSH
-
     Parameters
     ----------
     host
         Name or IP-address of the host to connect to
     username
     password
-
     Returns
     -------
     paramiko.SSHClient()
         Throws exception and returns 0 if connection fails. See Paramiko documentation
-
-
     """
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -296,7 +288,6 @@ def create_ssh_connection(host, username, password):
 def fetch_param_idx(param_grid, lock=None, num_params=1, set_status=True):
     """Fetch a pandas.Index([index_list]) with the indices of the first num_params rows of param_grid who's
     'status'-key equals 'unsolved'
-
     Parameters
     ----------
     param_grid
@@ -307,15 +298,12 @@ def fetch_param_idx(param_grid, lock=None, num_params=1, set_status=True):
         If True, sets 'status' key of the fetched rows to 'pending', to exclude them from future calls.
         Can be used to check param_grid for fetchable or existend keys without changing their 'status' key.
         Is True by default.
-
     Returns
     -------
     pandas.Index([index_list])
         Is empty if there are no row indices to be fetched.
         Is np.nan if param_grid has no key named 'status'.
         Contains all remaining indices if num_params is higher than fetchable row indices.
-
-
     """
     if lock:
         with lock:
@@ -338,11 +326,9 @@ def fetch_param_idx(param_grid, lock=None, num_params=1, set_status=True):
         return param_idx
 
 
-
 def create_cgs_config(filepath, circuit_template, param_grid, param_map, dt, simulation_time, inputs,
                       outputs, sampling_step_size=None, permute_grid=False, **kwargs):
     """Create a configfile.json containing a config_dict{} with input parameters as key-value pairs
-
     Parameters
     ----------
     filepath
@@ -356,10 +342,8 @@ def create_cgs_config(filepath, circuit_template, param_grid, param_map, dt, sim
     sampling_step_size
     permute_grid
     kwargs
-
     Returns
     -------
-
     """
     if type(param_grid) is dict:
         # convert linear_grid from dict to pandas.DataFrame.
