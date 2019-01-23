@@ -37,6 +37,7 @@ import paramiko
 # system imports
 import json
 import getpass
+from datetime import datetime
 from threading import Thread, currentThread, RLock
 
 # pyrates internal imports
@@ -46,9 +47,9 @@ from pyrates.utility.grid_search import linearize_grid
 __author__ = "Christoph Salomon"
 __status__ = "development"
 
-# TODO: Create class so only self has to be parsed to all the member functions
-# TODO: Add filepath for result files as argument
-def cluster_grid_search(host_config, config_file, log_file=None, param_grid=None, **kwargs):
+
+# TODO: Create ClusterGridSearch class so only 'self' has to be parsed to all the member functions
+def cluster_grid_search(host_config, config_file, param_grid, **kwargs):
     """
 
     Parameters
@@ -62,6 +63,15 @@ def cluster_grid_search(host_config, config_file, log_file=None, param_grid=None
     -------
 
     """
+    # Create compute ID and global log file
+    ###################
+
+    # Unique id of the current call of cluster_grid_search that is added to all filenames created in this computation
+    # Is Coded as follows: filename_ddmmyy-HHMMSS
+    #   with dd: day; mm: month; yy: year; HH: hours; MM: minutes; SS: seconds
+    #   at the time of cluster_grid_search() call
+    compute_id = datetime.now().strftime("%d%m%y-%H%M%S")
+
     # Create parameter grid
     #######################
 
@@ -114,7 +124,8 @@ def cluster_grid_search(host_config, config_file, log_file=None, param_grid=None
     results = pd.DataFrame
     # Start a thread for each host to handle the SSH-connection
     for host in host_config['hostnames']:
-        threads.append(spawn_thread(host=host,
+        threads.append(spawn_thread(compute_id=compute_id,
+                                    host=host,
                                     host_cmd={'host_env': host_config['host_env'],
                                               'host_file': host_config['host_file']},
                                     param_grid=param_grid,
@@ -128,7 +139,7 @@ def cluster_grid_search(host_config, config_file, log_file=None, param_grid=None
 
     print(f'Computation finished!')
     # print(f'Resultfile: {result_file}')
-    print(f'Logfile: {log_file}')
+    # print(f'Logfile: {log_file}')
     # print(param_grid)
     # print(results)
 
@@ -137,17 +148,17 @@ def cluster_grid_search(host_config, config_file, log_file=None, param_grid=None
     # TODO: Create log file
 
 
-def spawn_thread(host, host_cmd, param_grid, config_file, password, lock):
+def spawn_thread(compute_id, host, host_cmd, param_grid, config_file, password, lock):
     t = Thread(
         name=host,
         target=thread_master,
-        args=(host, host_cmd, param_grid, config_file, password, lock)
+        args=(compute_id, host, host_cmd, param_grid, config_file, password, lock)
     )
     t.start()
     return t
 
 
-def thread_master(host, host_cmd, param_grid, config_file, password, lock):
+def thread_master(compute_id, host, host_cmd, param_grid, config_file, password, lock):
 
     thread_name = currentThread().getName()
 
@@ -181,7 +192,8 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
             # TODO: Copy environment, script and config to shared or local directory on the remote host
             # Change paths of host_env and host_file respectively
 
-            # TODO: Call exec_command only once and send updated param_grid via stdin to the host inside the loop
+            # TODO: Call exec_command only once and send global config file
+            # TODO: Send node specific config to stdin inside a loop
             # stdin.write()
             # stdin.flush()
 
@@ -201,12 +213,15 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
                     # Get parameter combination to pass as argument to the remote host
                     param_grid_arg = param_grid.iloc[param_idx]
 
-                    print(f'{param_idx}')
+                    print(*param_idx)
+                    # print(f'{param_idx}')
                     print(f'[T]\'{thread_name}\': Starting remote computation')
 
+                    # TODO: Create node specific config file for each computation and send it to the node
                     stdin, stdout, stderr = client.exec_command(command +
-                                                                f' --param_grid_arg="{param_grid_arg.to_dict()}"'
-                                                                f' --config_file={config_file}'
+                                                                f' --global_config={config_file}'
+                                                                f' --local_config=""'
+                                                                f' --param_grid_arg="{param_grid_arg.to_dict()}"'  
                                                                 f' --result_path={result_path}',
                                                                 get_pty=True)
 
@@ -222,7 +237,9 @@ def thread_master(host, host_cmd, param_grid, config_file, password, lock):
                 for line in iter(stdout.readline, ""):
                     print(f'[H]\'{thread_name}\': {line}', end="")
 
-                # TODO: Change status of current param_idx in param_grid from 'pending' to 'done'
+                # TODO: Check if resultfile has been created and is not empty. If so, change status of current
+                #  param_idx in param_grid from 'pending' to 'done'. Otherwise set status to 'failed'
+
         else:
             # If no key named 'status' in param_grid:
             print(f'[T]\'{host}\': "No key named \'status\' in param_grid')
