@@ -128,6 +128,13 @@ if __name__ == "__main__":
         help="Unique ID of the whole parameter computation to differentiate created files from different computations"
     )
 
+    parser.add_argument(
+        "--res_dir",
+        type=str,
+        default="",
+        help="Shared directory or directory on the master to save/copy results to"
+    )
+
 
     FLAGS = parser.parse_args()
 
