@@ -105,7 +105,7 @@ class ClusterGridSearch(object):
             print(f'New working directory created: {self.compute_dir}')
 
         # Create log directory '/Logs' as subdir of the compute directory if it doesn't exist
-        self.log_dir = f'{self.compute_dir}/Logs'
+        self.log_dir = f'{self.compute_dir}/Logs/{self.compute_id}'
         os.makedirs(self.log_dir, exist_ok=True)
 
         # Create grid directory '/Grids' as subdir of the compute directory if it doesn't exist
@@ -121,7 +121,7 @@ class ClusterGridSearch(object):
         os.makedirs(self.res_dir, exist_ok=True)
 
         # Create global logfile 'in ComputeDir/Logs' to copy all stdout to
-        self.global_logfile = f'{self.log_dir}/Global_log_{self.compute_name}.log'
+        self.global_logfile = f'{self.log_dir}/Global_log_{Path(self.global_config).stem}.log'
         os.makedirs(os.path.dirname(self.global_logfile), exist_ok=True)
 
         # Copy all future stdout to logfile
@@ -135,7 +135,7 @@ class ClusterGridSearch(object):
     def __del__(self):
         # Make sure to close all clients when CGS instance is destroyed
         for client in self.clients:
-            client[0].close()
+            client["paramiko_client"].close()
 
     def create_cluster(self, nodes):
         self.nodes = nodes
@@ -153,19 +153,17 @@ class ClusterGridSearch(object):
 
         for node in self.nodes['hostnames']:
             client = ssh_connect(node, username=username, password=password)
-            # client[0]: Paramiko Client
-            # client[1]: Corresponding nodename
-            # client[2]: Local config directory
             if client is not None:
-                # Create subdirectory to save local config files to
-                # See ClusterGridSearch.__scheduler
                 local_config_dir = f'{self.config_dir}/{node}'
                 os.makedirs(local_config_dir, exist_ok=True)
-                self.clients.append([client, node, local_config_dir])
+                self.clients.append({
+                    "paramiko_client": client,
+                    "node_name": node,
+                    "config_dir": local_config_dir})
 
         # TODO: Print/save hardware specifications of each node
 
-    def compute_grid(self, param_grid, permute=True, local_config=None):
+    def compute_grid(self, param_grid, permute=True):
 
         #########################
         # Create parameter grid #
@@ -177,7 +175,13 @@ class ClusterGridSearch(object):
         if isinstance(param_grid, str):
             try:
                 self.param_grid = pd.read_csv(param_grid)
+                if 'status' not in self.param_grid.columns:
+                    self.param_grid['status'] = 'unsolved'
+                else:
+                    # TODO: Set status keys from 'failed' to 'unsolved' to compute them again
+                    pass
                 if os.path.dirname(param_grid) != self.grid_dir:
+                    # Copy parameter grid to CGS instances' grid directory
                     self.param_grid_path = f'{self.grid_dir}/{os.path.basename(param_grid)}'
                     self.param_grid.to_csv(self.param_grid_path, index=False)
                 else:
@@ -185,6 +189,7 @@ class ClusterGridSearch(object):
             except FileNotFoundError as err:
                 print(err)
                 print("Returning!")
+                # Stop computation
                 return
 
         elif isinstance(param_grid, dict):
@@ -208,13 +213,41 @@ class ClusterGridSearch(object):
         else:
             print("Parameter grid unsupported format")
             print("Returning!")
+            # Stop computation
             return
-
-        # TODO: Check if param_grid and param_map match
-        # check_consistency(param_grid, param_map)
 
         print(f'Parameter grid: {self.param_grid_path}')
         print(self.param_grid)
+
+        ##########################################################
+        # Check parameter map and parameter grid for consistency #
+        ##########################################################
+        print("")
+        print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
+        with open(self.global_config) as config:
+            param_dict = json.load(config)
+            try:
+                param_map = param_dict['param_map']
+            except KeyError as err:
+                # If config_file does not contain key 'param_map'
+                print("KeyError:", err)
+                print("Returning!")
+                # Stop computation
+                return
+            if not check_key_consistency(self.param_grid, param_map):
+                print("Not all parameter map keys found in parameter grid")
+                print("Parameter map keys:")
+                print(*list(param_map.keys()))
+                print("Parameter grid keys:")
+                print(*list(self.param_grid.keys()))
+                print("Returning!")
+                # Stop computation
+                return
+            else:
+                print("All parameter map keys found in parameter grid")
+                paramgrid_respath = f'{self.res_dir}/{Path(self.param_grid_path).stem}'
+                os.makedirs(paramgrid_respath, exist_ok=True)
+                # Continuing with computation
 
         #############################
         # Begin cluster computation #
@@ -226,11 +259,12 @@ class ClusterGridSearch(object):
             print("No cluster created")
             print("Please call ClusterGridSearch.create_cluster() first!")
             print("Returning")
+            # Stop computation
             return
         else:
             print(f'Computing grid \'{self.param_grid_path}\' on nodes: ')
             for client in self.clients:
-                print(client[1])
+                print(client["node_name"])
 
         #####################
         # Start thread pool #
@@ -243,98 +277,96 @@ class ClusterGridSearch(object):
 
         # TODO: Implement asynchronous computation instead of multithreading
 
-        threads = [self.__spawn_thread(client, local_config) for client in self.clients]
+        threads = [self.__spawn_thread(client) for client in self.clients]
 
         # Wait for all threads to finish
         for t in threads:
             t.join()
 
         print(f'Computation finished')
-        print(f'Resultfiles in: {self.res_dir}/{Path(self.param_grid_path).stem}')
+        print(f'Find results in: {paramgrid_respath}')
 
-    def __scheduler(self, client, local_config_dir, local_config=None):
+    def __scheduler(self, client, local_config_dir):
 
         thread_name = currentThread().getName()
 
-        # resultfile: /Results/Result_grid_param_paramidx
         # dummy
         # stdin, stdout, stderr = client.exec_command('ls', get_pty=True)
         #
         # for line in iter(stdout.readline, ""):
-        #     print(f'[H]\'{thread_name}\': {line}', end="")
+        #     print(f'[T]\'{thread_name}\': {line}', end="")
+        # return
 
-        # Double check if client is None. Due to other previous security checks that should actually not be possible
-        if client:
+        # If param_grid has a column named 'status'
+        if not fetch_param_idx(self.param_grid, set_status=False).isnull():
+            command = self.nodes['host_env'] + ' ' + self.nodes['host_file']
 
-            # If param_grid has a column named 'status'
-            if not fetch_param_idx(self.param_grid, set_status=False).isnull():
-                command = self.nodes['host_env'] + ' ' + self.nodes['host_file']
+            # TODO: Copy environment, remote script and local configs to a local directory on the host if no shared
+            #  directory is available
 
-                # TODO: Copy environment, remote script and local configs to a local directory on the host if no shared
-                #  directory is available
+            # TODO: Call exec_command only once and send global config file
 
-                # TODO: Call exec_command only once and send global config file
+            # TODO: Send node specific config to stdin inside a loop
+            # channel.send()
+            # stdin.write()
+            # stdin.flush()
 
-                # TODO: Send node specific config to stdin inside a loop
-                # channel.send()
-                # stdin.write()
-                # stdin.flush()
+            local_config_dict = dict()
 
-                while not fetch_param_idx(self.param_grid, lock=self.lock, set_status=False).empty:
+            while not fetch_param_idx(self.param_grid, lock=self.lock, set_status=False).empty:
 
-                    # Ensure that the following code is executed without switching threads in between
-                    with self.lock:
+                # Create local config file
+                local_config_idx = 0
+                local_config_path = f'{local_config_dir}/local_config_{thread_name}_default_{local_config_idx}.json'
 
-                        print(f'[T]\'{thread_name}\': Fetching index... ', end="")
+                # Ensure that the following code is executed without switching threads in between
+                with self.lock:
 
-                        # Get index of a parameter combination that hasn't been computed yet
-                        param_idx = fetch_param_idx(self.param_grid, num_params=2)
+                    print(f'[T]\'{thread_name}\': Fetching index: ', end="")
 
-                        print(*param_idx)
+                    # Get indices of n parameter combinations that haven't been computed yet
+                    param_idx = fetch_param_idx(self.param_grid, num_params=2)
+                    local_config_dict["param_idx"] = param_idx
+                    print(*param_idx)
 
-                        # Get parameter combination to pass as argument to the remote host
-                        param_grid_arg = self.param_grid.iloc[param_idx]
+                    # Get parameter combination to pass as argument to the remote host
+                    param_grid_arg = self.param_grid.iloc[param_idx]
+                    local_config_dict["param_idx"] = param_idx
 
-                        print(f'[T]\'{thread_name}\': Starting remote computation')
+                    print(f'[T]\'{thread_name}\': Creating local config file: {local_config_path}')
+                    json.dump(local_config_dict, local_config_path)
 
-                        # TODO: Create node specific config file for each computation and send it to the node
+                    print(f'[T]\'{thread_name}\': Sending local config to remote host')
 
-                        stdin, stdout, stderr = client.exec_command(command +
-                                                                    f' --global_config={self.global_config}'
-                                                                    f' --local_config={local_config_dir}'
-                                                                    f' --param_grid_arg="{param_grid_arg.to_dict()}"'
-                                                                    f' --result_path={self.res_dir}',
-                                                                    get_pty=True)
+                    stdin, stdout, stderr = client.exec_command(command +
+                                                                f' --global_config={self.global_config}'
+                                                                f' --local_config={local_config_dir}'
+                                                                f' --log_path={self.log_dir}'
+                                                                f' --result_path={self.res_dir}'
+                                                                f' --grid_name={Path(self.param_grid_path).stem}',
+                                                                get_pty=True)
 
-                    # Wait for remote computation to finish
-                    exit_status = stdout.channel.recv_exit_status()
+                # Wait for remote computation to finish
+                stdout.channel.recv_exit_status()
 
-                    # Print what has been sent to the channels stdout or stderr
-                    # for line in iter(stdout.readline, ""):
-                    #     print(f'[H]\'{thread_name}\': {line}', end="")
+                # Print what has been sent to the channels stdout or stderr
+                # for line in iter(stdout.readline, ""):
+                #     print(f'[H]\'{thread_name}\': {line}', end="")
 
-                    # TODO: Check if resultfile has been created and is not empty. If so, change status of current
-                    #  param_idx in param_grid from 'pending' to 'done'. Otherwise set status to 'failed'
-            else:
-                # If no key named 'status' in param_grid:
-                print(f'[T]\'{thread_name}\': "No key named \'status\' in param_grid')
-
-            # TODO: If no shared memory is available, copy result files from host back to local workstation
-
-            # TODO: Change current param_idx in param_grid from 'pending' to 'done'
-
+                # TODO: Check if resultfile has been created and is not empty. If so, change status of current
+                #  param_idx in param_grid from 'pending' to 'done'. Otherwise set status to 'failed'
+                # resultfile = f'CGS_result_{grid_name}_idx_{param_idx[n]}.csv'
         else:
-            # If no connection to node was established:
-            return
+            # If no column named 'status' in param_grid:
+            print(f'[T]\'{thread_name}\': "No column named \'status\' in param_grid')
 
-    def __spawn_thread(self, client, local_config):
-        # client[0]: Paramiko client
-        # client[1]: Name of corresponding node
-        # client[2]: Directory to store local config files for each node
+        # TODO: If no shared memory is available, copy result files from host back to local workstation
+
+    def __spawn_thread(self, client):
         t = Thread(
-            name=client[1],
+            name=client["node_name"],
             target=self.__scheduler,
-            args=(client[0], client[2], local_config)
+            args=(client["paramiko_client"], client["config_dir"])
         )
         t.start()
         return t
@@ -344,7 +376,7 @@ class ClusterGridSearch(object):
 
 
 def create_cgs_config(filepath, circuit_template, param_map, dt, simulation_time, inputs,
-                      outputs, sampling_step_size=None, permute_grid=False, **kwargs):
+                      outputs, sampling_step_size=None, **kwargs):
     """Create a configfile.json containing a config_dict{} with input parameters as key-value pairs
 
     Parameters
@@ -357,7 +389,6 @@ def create_cgs_config(filepath, circuit_template, param_map, dt, simulation_time
     inputs
     outputs
     sampling_step_size
-    permute_grid
     kwargs
 
     Returns
@@ -374,7 +405,6 @@ def create_cgs_config(filepath, circuit_template, param_map, dt, simulation_time
         "inputs": {str(*inputs.keys()): list(*inputs.values())},
         "outputs": outputs,
         "sampling_step_size": sampling_step_size,
-        "permute_grid": permute_grid,
         "kwargs": kwargs
     }
 
@@ -466,3 +496,9 @@ def fetch_param_idx(param_grid, lock=False, num_params=1, set_status=True):
         if set_status:
             param_grid.at[param_idx, 'status'] = 'pending'
         return param_idx
+
+
+def check_key_consistency(param_grid, param_map):
+    grid_key_lst = list(param_grid.keys())
+    map_key_lst = list(param_map.keys())
+    return all((map_key in grid_key_lst for map_key in map_key_lst))
