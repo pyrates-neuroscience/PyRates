@@ -73,8 +73,8 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     circuit = CircuitIR()
     circuit_names = []
     param_info = []
-    param_split = "--"
-    val_split = "-"
+    param_split = "__"
+    val_split = "--"
     comb = "_"
     for n in range(param_grid.shape[0]):
         circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()

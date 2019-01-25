@@ -8,8 +8,8 @@ __status__ = "Development"
 
 
 # parameters
-dt = 2e-5
-T = 2.
+dt = 1e-4
+T = 5.
 inp = 3. + np.random.randn(int(T/dt), 1) * 1.0
 Cs = [1., 2., 4.]
 ei_ratio = np.arange(0.1, 3., 0.1)[::-1]

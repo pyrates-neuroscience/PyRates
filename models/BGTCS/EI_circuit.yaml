@@ -29,13 +29,13 @@ Op_e:
     tau_e:
       default: 0.01
     tau_i:
-      default: 0.025
+      default: 0.02
     H_e:
-      default: 0.4
+      default: 0.3
     H_i:
-      default: 0.8
+      default: 0.3
     J:
-      default: 0.75
+      default: 0.25
     delta:
       default: 1.0
     eta:
@@ -83,11 +83,11 @@ Op_i:
     tau_e:
       default: 0.01
     tau_i:
-      default: 0.025
+      default: 0.02
     H_e:
-      default: 0.4
+      default: 0.3
     H_i:
-      default: 0.8
+      default: 0.3
     J:
       default: 0.5
     delta:
