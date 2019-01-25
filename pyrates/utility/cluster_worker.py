@@ -5,6 +5,7 @@ import ast
 import json
 import socket
 import os
+from pathlib import Path
 
 # external imports
 import pandas as pd
@@ -34,15 +35,15 @@ def main(_):
     compute_id = FLAGS.compute_id
     hostname = socket.gethostname()
 
-    # Create folder for node specific logfile as a subfolder of global_config directory
-    logfile = f'{os.path.dirname(FLAGS.global_config)}_{compute_id}/Logs/Local_log_{hostname}_{compute_id}.log'
+    # Create logfile in Log directory
+    logfile = f'{FLAGS.log_path}/Local_log_{Path(FLAGS.global_config).stem}_{hostname}.log'
+
     os.makedirs(os.path.dirname(logfile), exist_ok=True)
 
     # Copy all stdout and stderr to logfile
     sys.stdout = Logger(logfile)
     sys.stderr = Logger(logfile)
 
-    # TODO: Create logfile for each worker
     with open(FLAGS.global_config) as file:
         param_dict = json.load(file)
         try:
@@ -66,7 +67,6 @@ def main(_):
             # If config_file does not contain any of the necessary keys
             print("KeyError:", err)
             return
-
 
     # Recreate param_grid{} from its string representation and create a DataFrame from it
     param_grid = pd.DataFrame(ast.literal_eval(FLAGS.param_grid_arg))
@@ -99,6 +99,7 @@ def main(_):
         # file = f'/data/hu_salomon/Documents/ClusterGridSearch/Results/test_gridIdx_{grid_idx}.csv'
         # print(f'Writing results to: {file}')
         # temp.to_csv(file, index=False)
+    # TODO: Create output_file for each result in results
 
     # TODO: Send output_file back to host if there is no shared memory space available
 
@@ -121,6 +122,14 @@ if __name__ == "__main__":
         help="Config file with worker specific instructions. Contains param grid, extra input and commands for further"
              "signal processing"
     )
+
+    parser.add_argument(
+        "--log_path",
+        type=str,
+        default="",
+        help="Directory to create local logfile in"
+    )
+
     parser.add_argument(
         "--compute_id",
         type=str,
@@ -134,7 +143,6 @@ if __name__ == "__main__":
         default="",
         help="Shared directory or directory on the master to save/copy results to"
     )
-
 
     FLAGS = parser.parse_args()
 
