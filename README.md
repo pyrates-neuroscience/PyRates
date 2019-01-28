@@ -23,7 +23,7 @@ Reference
 ---------
 
 If you use this framework, please cite:
-PYRATESPAPERCITATION
+Gast, R., Knoesche, T. R., Daniel, R., Moeller, H. E., and Weiskopf, N. (2018). “P168 pyrates: A python framework for rate-based neural simulations.” BMC Neuroscience. 27th Annual Computational Neuroscience Meeting (CNS*2018): Part One.
 
 Contact
 -------
