@@ -28,4 +28,4 @@ PYRATESPAPERCITATION
 Contact
 -------
 
-If you have questions, problems or suggestions regarding PyRates, please write an email to PYRATESMAIL.
+If you have questions, problems or suggestions regarding PyRates, please contact [Richard Gast](https://www.cbs.mpg.de/person/59190/376039) or [Daniel Rose](https://www.cbs.mpg.de/person/51141/374227).
