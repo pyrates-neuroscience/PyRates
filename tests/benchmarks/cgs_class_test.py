@@ -1,20 +1,16 @@
 
-
-from pandas import DataFrame
-from pyrates.utility.grid_search import linearize_grid
 from pyrates.utility.cluster_grid_search_class import ClusterGridSearch
 import numpy as np
-import time
 
-# print("Start!")
+print("Start!")
 
 global_config = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestConfig.json"
 
 host_config = {
     'hostnames': [
         'animals',
-        'spanien',
-        'tschads'
+        'tschad'
+        # 'spanien'
         # 'osttimor'
         # 'tiber',
     ],
@@ -26,7 +22,7 @@ host_config = {
     'host_dir': ""
 }
 
-params = {'J_e': np.arange(8., 12., 2.), 'J_i': np.arange(2., 4., 2.)}
+params = {'J_e': np.arange(8., 16., 2.), 'J_i': np.arange(2., 12., 2.)}
 
 # param_grid = linearize_grid(params, permute=True)
 
@@ -36,10 +32,10 @@ dir = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestDir"
 
 cgs = ClusterGridSearch(global_config, dir)
 cgs.create_cluster(host_config)
-cgs.compute_grid(param_grid)
+cgs.compute_grid(params)
 # parameters
 # dt = 1e-4
-# T = 2.stream
+# T = 2.stream# params = {'J_e': np.arange(8., 12., 2.), 'J_i': np.arange(2., 4., 2.)}
 
 # inp needs to be of type 'list', instead of type 'ndarray', to store it in JSON file
 # has no effect on original grid_search()

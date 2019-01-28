@@ -204,7 +204,7 @@ def thread_master(compute_id, host, host_cmd, param_grid, config_file, password,
                     print(f'[T]\'{thread_name}\': Fetching index... ', end="")
 
                     # Get index of a parameter combination that hasn't been computed yet
-                    param_idx = fetch_param_idx(param_grid, num_params=2)
+                    param_idx = fetch_param_idx(param_grid, num_params=4)
 
                     # Get parameter combination to pass as argument to the remote host
                     param_grid_arg = param_grid.iloc[param_idx]
