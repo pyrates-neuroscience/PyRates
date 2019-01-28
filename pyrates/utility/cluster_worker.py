@@ -9,6 +9,8 @@ from pathlib import Path
 
 # external imports
 import pandas as pd
+# TODO: Loading pyrates takes very long, also on the remote hosts. Makes the computation extremely long, especially
+#   when remote script is called multiple times, everytime loading pyrates again
 from pyrates.utility import grid_search
 
 
@@ -25,54 +27,50 @@ class Logger(object):
         pass
 
 
-def dummy():
-    x = 0
-    for i in range(200000000):
-        x = x + 1
-
-
 def main(_):
-    compute_id = FLAGS.compute_id
+    # TODO: Create more outputs to track the progress in the logfile
+    # TODO: Add timestamps
+
     hostname = socket.gethostname()
 
-    # Create logfile in Log directory
-    logfile = f'{FLAGS.log_path}/Local_log_{Path(FLAGS.global_config).stem}_{hostname}.log'
+    global_config = FLAGS.global_config
+    local_config = FLAGS.local_config
+    local_grid = FLAGS.local_grid
+    log_dir = FLAGS.log_dir
+    res_dir = FLAGS.res_dir
+    grid_name = FLAGS.grid_name
 
+    # Create logfile in Log directory
+    logfile = f'{log_dir}/Local_log_{Path(global_config).stem}_{hostname}.log'
     os.makedirs(os.path.dirname(logfile), exist_ok=True)
 
     # Copy all stdout and stderr to logfile
     sys.stdout = Logger(logfile)
     sys.stderr = Logger(logfile)
 
-    with open(FLAGS.global_config) as file:
-        param_dict = json.load(file)
-        try:
-            circuit_template = param_dict['circuit_template']
-            param_map = param_dict['param_map']
+    with open(global_config) as g_conf:
+        global_config_dict = json.load(g_conf)
 
-            # TODO: Does that work for different, multiple inputs/outputs?
-            # Recreate tuple from string representation to use as 'key' in inputs
-            inputs = {ast.literal_eval(*param_dict['inputs'].keys()):
-                      list(*param_dict['inputs'].values())}
+        circuit_template = global_config_dict['circuit_template']
+        param_map = global_config_dict['param_map']
 
-            # Recreate tuple from list to use as 'values' in outputs
-            outputs = {str(*param_dict['outputs'].keys()):
-                       tuple(*param_dict['outputs'].values())}
+        # TODO: Does that work for different, multiple inputs/outputs?
+        # Recreate tuple from string representation to use as 'key' in inputs
+        inputs = {ast.literal_eval(*global_config_dict['inputs'].keys()):
+                  list(*global_config_dict['inputs'].values())}
 
-            sampling_step_size = param_dict['sampling_step_size']
-            dt = param_dict['dt']
-            simulation_time = param_dict['simulation_time']
-            result_path = FLAGS.result_path
-        except KeyError as err:
-            # If config_file does not contain any of the necessary keys
-            print("KeyError:", err)
-            return
+        # Recreate tuple from list to use as 'values' in outputs
+        outputs = {str(*global_config_dict['outputs'].keys()):
+                   tuple(*global_config_dict['outputs'].values())}
 
-    # Recreate param_grid{} from its string representation and create a DataFrame from it
-    param_grid = pd.DataFrame(ast.literal_eval(FLAGS.param_grid_arg))
+        sampling_step_size = global_config_dict['sampling_step_size']
+        dt = global_config_dict['dt']
+        simulation_time = global_config_dict['simulation_time']
 
-    # Recreate fetched indices
-    param_grid_row_idx = param_grid.index.tolist()
+    param_grid = pd.read_csv(local_grid, index_col=0)
+    param_idx = param_grid.index.tolist()
+
+    # TODO: Print "Awaiting grid" so that the master can catch this line via stdout and send a new parameter grid
 
     # TODO: Await a param_grid from stdin to start grid_search()
 
@@ -88,20 +86,13 @@ def main(_):
                           dt=dt,
                           simulation_time=simulation_time)
 
+    for column in range(len(results.columns)):
+        # TODO: Write name of the column multiindex to file, not only the values
+        results.iloc[:, column].to_csv(f'{res_dir}/CGS_result_{grid_name}_idx_{param_idx[column]}.csv', index=True)
+
     # TODO: Write name of used config file and parameter combination to each result file
-    # Write each result to a separate file
-    # for col_idx, series in results.iteritems():
 
-    # for idx in range(len(results.columns)):
-    #     grid_idx = param_grid_row_idx[idx]
-    #     temp = pd.DataFrame(results.iloc[:, idx])
-    #     print(temp)
-        # file = f'/data/hu_salomon/Documents/ClusterGridSearch/Results/test_gridIdx_{grid_idx}.csv'
-        # print(f'Writing results to: {file}')
-        # temp.to_csv(file, index=False)
-    # TODO: Create output_file for each result in results
-
-    # TODO: Send output_file back to host if there is no shared memory space available
+    # TODO: Send output_file back to host if there is no shared memory available
 
 
 if __name__ == "__main__":
@@ -112,7 +103,7 @@ if __name__ == "__main__":
         "--global_config",
         type=str,
         default="",
-        help="Config file with all necessary data to start grid_search() except for param_grid"
+        help="Config file with all necessary data to start grid_search() except for parameter grid"
     )
 
     parser.add_argument(
@@ -124,24 +115,31 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--log_path",
+        "--local_grid",
+        type=str,
+        default="",
+        help="Path to csv-file with subgrid to compute on the remote machine"
+    )
+
+    parser.add_argument(
+        "--log_dir",
         type=str,
         default="",
         help="Directory to create local logfile in"
     )
 
     parser.add_argument(
-        "--compute_id",
-        type=str,
-        default="",
-        help="Unique ID of the whole parameter computation to differentiate created files from different computations"
-    )
-
-    parser.add_argument(
         "--res_dir",
         type=str,
         default="",
-        help="Shared directory or directory on the master to save/copy results to"
+        help="Directory to save result files to"
+    )
+
+    parser.add_argument(
+        "--grid_name",
+        type=str,
+        default="",
+        help="Name of the parameter grid currently being computed"
     )
 
     FLAGS = parser.parse_args()
