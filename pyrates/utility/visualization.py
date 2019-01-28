@@ -3,7 +3,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
+# network model_templates and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
 # 
 # Copyright (C) 2017-2018 the original authors (Richard Gast and 
@@ -41,6 +41,84 @@ import matplotlib.pyplot as plt
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
+
+
+def create_cmap(name=None, palette_type=None, as_cmap=True, **kwargs):
+    """
+
+    Parameters
+    ----------
+    name
+        Name of the pyrates colormap. If specified, palette_type will be ignored.
+    palette_type
+        Type of the seaborn color palette to use. Only necessary if no name is specified.
+    as_cmap
+        If true, a matplotlib colormap object will be returned. Else a seaborn color palette (list).
+    kwargs
+        Keyword arguments for the wrapped seaborn functions.
+
+    Returns
+    -------
+    list
+        cmap or seaborn color palette.
+
+    """
+
+    from seaborn import cubehelix_palette, dark_palette, light_palette, diverging_palette, hls_palette, husl_palette, \
+        color_palette, crayon_palette, xkcd_palette, mpl_palette
+    import matplotlib.colors as mcolors
+
+    # pyrates internal color maps
+    #############################
+
+    if name == 'pyrates_red':
+        cmap = cubehelix_palette(as_cmap=as_cmap, start=-2.0, rot=-0.1, **kwargs)
+    elif name == 'pyrates_green':
+        cmap = cubehelix_palette(as_cmap=as_cmap, start=2.5, rot=-0.1, **kwargs)
+    elif name == 'pyrates_blue':
+        cmap = dark_palette((210, 90, 60), as_cmap=as_cmap, input='husl', **kwargs)
+    elif name == 'pyrates_yellow':
+        cmap = dark_palette((70, 95, 65), as_cmap=as_cmap, input='husl', **kwargs)
+    elif name == 'pyrates_purple':
+        cmap = dark_palette((270, 50, 55), as_cmap=as_cmap, input='husl', **kwargs)
+    elif '/' in name:
+        name1, name2 = name.split('/')
+        vmin = kwargs.pop('vmin', 0.)
+        vmax = kwargs.pop('vmax', 1.)
+        kwargs1 = kwargs.pop(name1, kwargs)
+        kwargs2 = kwargs.pop(name2, kwargs)
+        cmap1 = create_cmap(name1, **kwargs1, as_cmap=True)
+        cmap2 = create_cmap(name2, **kwargs2, as_cmap=True)
+        n = kwargs.pop('n', 10)
+        colors = np.vstack((cmap1(np.linspace(vmin, vmax, n)), cmap2(np.linspace(vmin, vmax, n)[::-1])))
+        cmap = mcolors.LinearSegmentedColormap.from_list('cmap_diverging', colors)
+    else:
+
+        # seaborn colormaps
+        ###################
+
+        if palette_type == 'cubehelix':
+            cmap = cubehelix_palette(as_cmap=as_cmap, **kwargs)
+        elif palette_type == 'dark':
+            cmap = dark_palette(as_cmap=as_cmap, **kwargs)
+        elif palette_type == 'light':
+            cmap = light_palette(as_cmap=as_cmap, **kwargs)
+        elif palette_type == 'hls':
+            cmap = hls_palette(**kwargs)
+        elif palette_type == 'husl':
+            cmap = husl_palette(**kwargs)
+        elif palette_type == 'diverging':
+            cmap = diverging_palette(as_cmap=as_cmap, **kwargs)
+        elif palette_type == 'crayon':
+            cmap = crayon_palette(**kwargs)
+        elif palette_type == 'xkcd':
+            cmap = xkcd_palette(**kwargs)
+        elif palette_type == 'mpl':
+            cmap = mpl_palette(name, **kwargs)
+        else:
+            cmap = color_palette(name, **kwargs)
+
+    return cmap
 
 
 def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="darkgrid", **kwargs):

@@ -2,7 +2,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural
-# network models and simulations. See also:
+# network model_templates and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
 #
 # Copyright (C) 2017-2018 the original authors (Richard Gast and
@@ -26,17 +26,16 @@
 #
 # Richard Gast and Daniel Rose et. al. in preparation
 
-"""This module provides the backend class that should be used to set up any backend.
+"""This module provides the backend class that should be used to set up any backend in pyrates.
 """
 
 # external imports
 import tensorflow as tf
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Union, Any
 from pandas import DataFrame, MultiIndex
 import numpy as np
 from networkx import MultiDiGraph, find_cycle, NetworkXNoCycle, DiGraph, is_isomorphic
 from copy import deepcopy
-import time as t
 
 # pyrates imports
 from pyrates.backend.parser import parse_equation_list, parse_dict
@@ -85,7 +84,6 @@ class ComputeGraph(object):
 
         super().__init__()
         self.name = name
-        print('moving edge operators to nodes...')
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend
@@ -94,13 +92,9 @@ class ComputeGraph(object):
         # pre-process the network configuration
         self.dt = dt
         self._net_config_map = {}
-        print('checking net config for consistency...')
         self.net_config = self._net_config_consistency_check(net_config) if build_in_place \
             else self._net_config_consistency_check(deepcopy(net_config))
-        print('start of vectorization')
-        t0 = t.time()
         self._vectorize(vectorization_mode=vectorization)
-        print(f'...finished after {t.time() - t0} seconds.')
 
         # set time constant of the network
         self._dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}},
@@ -129,7 +123,7 @@ class ComputeGraph(object):
             # first, parse operators that have no dependencies on other operators
             # noinspection PyTypeChecker
             primary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
-            op_updates = self._add_ops(primary_ops, True, node_name)
+            op_updates = self._add_ops(primary_ops, node_name, primary_ops=True)
 
             # remove parsed operators from graph
             graph.remove_nodes_from(primary_ops)
@@ -140,7 +134,7 @@ class ComputeGraph(object):
                 # get all operators that have no dependencies on other operators
                 # noinspection PyTypeChecker
                 secondary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
-                op_updates = self._add_ops(secondary_ops, False, node_name, updates=op_updates)
+                op_updates = self._add_ops(secondary_ops, node_name, updates=op_updates, primary_ops=False)
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(secondary_ops)
@@ -148,10 +142,10 @@ class ComputeGraph(object):
             # move unconnected node-operator updates to node updates
             if node_name not in self.node_updates:
                 self.node_updates[node_name] = {}
-            for op_name, vars in op_updates.items():
+            for op_name, op_vars in op_updates.items():
                 if op_name not in self.node_updates[node_name]:
                     self.node_updates[node_name][op_name] = {}
-                for var_name, var_update in vars.items():
+                for var_name, var_update in op_vars.items():
                     self.node_updates[node_name][op_name][var_name] = var_update
 
         # collect output variables
@@ -175,8 +169,8 @@ class ComputeGraph(object):
 
         # add remaining node updates
         for node_name, ops in self.node_updates.items():
-            for op_name, vars in ops.items():
-                for var_name, var_update in vars.items():
+            for op_name, op_vars in ops.items():
+                for var_name, var_update in op_vars.items():
                     if var_update not in source_vars:
                         source_vars.append(var_update)
                     op_names.append(op_name)
@@ -328,7 +322,7 @@ class ComputeGraph(object):
             out_dir: Optional[str] = None,
             verbose: bool=True,
             profile: Optional[str] = None
-            ) -> Tuple[DataFrame, float, float]:
+            ) -> Union[DataFrame, Tuple[DataFrame, float, float]]:
         """Simulate the backend behavior over time via a tensorflow session.
 
         Parameters
@@ -349,12 +343,17 @@ class ComputeGraph(object):
         verbose
             If true, status updates will be printed to the console.
         profile
+            Can be used to extract information about graph execution time and memory load. Can be:
+            - `t` for returning the total graph execution time.
+            - `m` for returning the peak memory consumption during graph excecution.
+            - `mt` or `tm` for both
 
         Returns
         -------
-        tuple
+        Union[DataFrame, Tuple[DataFrame, float, float]]
             First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
-            simulation time in seconds.
+            simulation time in seconds and the third the peak memory consumption. If profiling was not chosen during
+            call of the function, only the dataframe will be returned.
 
         """
 
@@ -382,7 +381,7 @@ class ComputeGraph(object):
         store_ops = []
 
         # create counting index for collector variables
-        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype=tf.int32, shape=(), value=-1,
+        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(), value=-1,
                                        scope="output_collection")
 
         # create increment operator for counting index
@@ -391,7 +390,7 @@ class ComputeGraph(object):
         # add collector variables to the graph
         for key, var in outputs_tmp.items():
             shape = [int(sim_steps / sampling_steps) + 1] + list(var.shape)
-            output_col[key] = self.backend.add_var(vtype='state_var', name=key, dtype=tf.float32, shape=shape,
+            output_col[key] = self.backend.add_var(vtype='state_var', name=key, dtype='float32', shape=shape,
                                                    value=np.zeros(shape), scope="output_collection")
 
             # add collect operation to the graph
@@ -537,19 +536,27 @@ class ComputeGraph(object):
             return out_vars, time, memory
         return out_vars
 
-    def get_var(self, node: str, op: str, var: str, var_name=None, **kwargs) -> dict:
-        """
+    def get_var(self, node: str, op: str, var: str, var_name: Optional[str] = None, **kwargs) -> dict:
+        """Extracts a variable from the graph.
 
         Parameters
         ----------
         node
+            Name of the node(s), the variable exists on. Can be 'all' for all nodes, or a sub-string that defines a
+            class of nodes or a specific node name.
         op
+            Name of the operator the variable belongs to.
         var
+            Name of the variable.
         var_name
+            Name under which the variable should be returned
         kwargs
+            Additional keyword arguments that may be used to pass arguments for the backend like name scopes.
 
         Returns
         -------
+        dict
+            Dictionary with all variables found in the network that match the provided signature.
 
         """
 
@@ -589,17 +596,25 @@ class ComputeGraph(object):
 
         return var_col
 
-    def _add_ops(self, ops, primary_ops, node_name, updates=None):
-        """
+    def _add_ops(self, ops: List[str], node_name: str, updates: Optional[dict] = None, primary_ops: bool = False
+                 ) -> dict:
+        """Adds a number of operations to the backend graph.
 
         Parameters
         ----------
         ops
-        primary_ops
+            Names of the operators that should be parsed into the graph.
         node_name
+            Name of the node that the operators belong to.
+        updates
+            Key-value pairs of operations already parsed into the backend graph.
+        primary_ops
+            Indicates, whether the operations are the first to be parsed into the graph or not.
 
         Returns
         -------
+        dict
+            Key-value pairs of all operations currently parsed into the backend graph.
 
         """
 
@@ -639,7 +654,7 @@ class ComputeGraph(object):
 
                             # collect multiple inputs to op
                             for op in in_op:
-                                in_ops_tmp.append(self._get_op_input(node_name, op_name, op))
+                                in_ops_tmp.append(self._get_op_input(node_name, op_name, op, primary_ops))
 
                             # map those inputs correctly
                             in_ops_col.append(self._map_multiple_inputs(in_ops_tmp, reduce_dim,
@@ -652,7 +667,7 @@ class ComputeGraph(object):
                                 in_op = in_op[0]
 
                             # collect single input to op
-                            in_ops_col.append(self._get_op_input(node_name, op_name, in_op))
+                            in_ops_col.append(self._get_op_input(node_name, op_name, in_op, primary_ops))
 
                     # for multiple multiple input operations
                     if len(in_ops_col) > 1:
@@ -702,8 +717,8 @@ class ComputeGraph(object):
 
         # collect update operations
         op_names, var_names, update_ops = [], [], []
-        for op_name, vars in updates.items():
-            for var_name, var in vars.items():
+        for op_name, op_vars in updates.items():
+            for var_name, var in op_vars.items():
                 op_names.append(op_name)
                 var_names.append(var_name)
                 update_ops.append(var)
@@ -718,16 +733,23 @@ class ComputeGraph(object):
 
         return updates
 
-    def _get_op_input(self, node, op, in_op, primary_ops=False):
-        """
+    def _get_op_input(self, node: str, op: str, in_op: str, primary_ops: bool = False
+                      ) -> object:
+        """Extracts inputs of operator.
 
         Parameters
         ----------
         node
+            Name of the node the operators belong to.
         op
+            Name of the target node.
+        in_op
+            Name of the source node.
 
         Returns
         -------
+        object
+            Backend variable.
 
         """
 
@@ -746,8 +768,23 @@ class ComputeGraph(object):
                                  f'or dependencies.')
         return var
 
-    def _map_multiple_inputs(self, inputs, reduce_dim, **kwargs):
-        """
+    def _map_multiple_inputs(self, inputs: list, reduce_dim: bool, **kwargs) -> object:
+        """Creates mapping between multiple input variables and a single output variable.
+
+        Parameters
+        ----------
+        inputs
+            Input variables.
+        reduce_dim
+            If true, input variables will be summed up, if false, they will be concatenated.
+        kwargs
+            Additional keyword arguments for the backend.
+
+        Returns
+        -------
+        object
+            Summed up or concatenated input variables.
+
         """
 
         inp = self.backend.add_op('stack', inputs, **kwargs)
@@ -757,141 +794,157 @@ class ComputeGraph(object):
             return self.backend.add_op('reshape', inp, shape=(inp.shape[0] * inp.shape[1],), **kwargs) \
                 if len(inp.shape) > 1 else inp
 
-    def _get_node_attr(self, node, attr, op=None, net_config=None):
-        """
+    def _get_node_attr(self, node: str, attr: str, op: Optional[str] = None) -> Any:
+        """Extract attribute from node of the network.
 
         Parameters
         ----------
         node
+            Name of the node.
         attr
+            Name of the attribute on the node.
         op
-        net_config
+            Name of the operator. Only needs to be provided for operator variables.
 
         Returns
         -------
+        Any
+            Node attribute.
 
         """
 
-        if not net_config:
-            net_config = self.net_config
-
         if op:
-            return self._get_op_attr(node, op, attr, net_config=net_config)
+            return self._get_op_attr(node, op, attr)
         try:
-            return net_config[node][attr]
+            return self.net_config[node][attr]
         except KeyError:
             vals = []
-            for op in net_config[node]:
-                vals.append(self._get_op_attr(node, op, attr, net_config=net_config))
+            for op in self.net_config[node]:
+                vals.append(self._get_op_attr(node, op, attr))
             return vals
 
-    def _set_node_attr(self, node, attr, val, op=None, net_config=None):
-        """
+    def _set_node_attr(self, node: str, attr: str, val: Any, op: Optional[str] = None) -> Any:
+        """Sets attribute on a node.
 
         Parameters
         ----------
         node
+            Name of the node.
         attr
+            Name of the attribute.
         op
-        net_config
+            Name of the operator, the attribute belongs to. Does not need to be provided for attributes that do not
+            belong to an operator.
 
         Returns
         -------
+        Any
+            New node attribute value.
 
         """
-
-        if not net_config:
-            net_config = self.net_config
 
         if op:
-            return self._set_op_attr(node, op, attr, val, net_config=net_config)
+            return self._set_op_attr(node, op, attr, val)
 
         try:
-            net_config.nodes[node]['node'][attr] = val
+            self.net_config.nodes[node]['node'][attr] = val
         except KeyError:
             vals_updated = []
-            for op in net_config.nodes[node]['node']['op_graph'].nodes:
-                vals_updated.append(self._set_op_attr(node, op, attr, val, net_config=net_config))
+            for op in self.net_config.nodes[node]['node']['op_graph'].nodes:
+                vals_updated.append(self._set_op_attr(node, op, attr, val))
             return vals_updated
 
-    def _get_edge_attr(self, source, target, edge, attr, retrieve_from_node=True, net_config=None):
-        """
+    def _get_edge_attr(self, source: str, target: str, edge: Union[str, int], attr: str,
+                       retrieve_from_node: bool = True) -> Any:
+        """Extracts attribute from edge.
 
         Parameters
         ----------
         source
+            Name of the source node.
         target
+            Name of the target node.
         edge
+            Index or name of the edge.
         attr
-        net_config
+            Name of the attribute
+        retrieve_from_node
+            If true, the attribute will be retrieved from the source or target node. Only relevant if the attribute is
+            'source_var' or 'target_var'. Else, the value of the attribute on the edge will be returned.
 
         Returns
         -------
+        Any
+            Edge attribute.
 
         """
 
-        if not net_config:
-            net_config = self.net_config
-
         try:
-            attr_val = net_config.edges[source, target, edge][attr]
+            attr_val = self.net_config.edges[source, target, edge][attr]
             if 'var' in attr and type(attr_val) is str and retrieve_from_node:
                 op, var = attr_val.split('/')
                 if 'source' in attr:
-                    attr_val = self._get_op_attr(source, op, var, net_config=net_config)
+                    attr_val = self._get_op_attr(source, op, var)
                 else:
-                    attr_val = self._get_op_attr(target, op, var, net_config=net_config)
+                    attr_val = self._get_op_attr(target, op, var)
         except KeyError:
             attr_val = None
 
         return attr_val
 
-    def _set_edge_attr(self, source, target, edge, attr, val, net_config=None):
-        """
+    def _set_edge_attr(self, source: str, target: str, edge: Union[int, str], attr: str, val: Any) -> Any:
+        """Sets value of an edge attribute.
 
         Parameters
         ----------
         source
+            Name of the source node.
         target
+            Name of the target node.
         edge
+            Name or index of the edge.
         attr
+            Name of the attribute.
         val
-        net_config
+            New value of the attribute.
 
         Returns
         -------
+        Any
+            Value of the updated edge attribute.
 
         """
 
-        if not net_config:
-            net_config = self.net_config
+        self.net_config.edges[source, target, edge][attr] = val
+        return self.net_config.edges[source, target, edge][attr]
 
-        net_config.edges[source, target, edge][attr] = val
-        return net_config.edges[source, target, edge][attr]
-
-    def _get_op_attr(self, node, op, attr, net_config=None, retrieve=True):
-        """
+    def _get_op_attr(self, node: str, op: str, attr: str, retrieve: bool = True) -> Any:
+        """Extracts attribute of an operator.
 
         Parameters
         ----------
         node
+            Name of the node.
         op
+            Name of the operator on the node.
         attr
-        net_config
+            Name of the attribute of the operator on the node.
+        retrieve
+            If attribute is output, this can be set to True to receive the handle to the output variable, or to false
+            to receive the name of the output variable.
 
         Returns
         -------
+        Any
+            Operator attribute.
 
         """
 
-        if not net_config:
-            net_config = self.net_config
-
         if node in self._net_config_map and op in self._net_config_map[node] and attr in self._net_config_map[node][op]:
             node, op, attr, attr_idx = self._net_config_map[node][op][attr]
-            return self._apply_idx(self._get_op_attr(node, op, attr, net_config=net_config), attr_idx)
-        elif node in net_config.nodes:
-            op = net_config[node]['op_graph'].nodes[op]
+            return self._apply_idx(self._get_op_attr(node, op, attr), attr_idx)
+        elif node in self.net_config:
+            op = self.net_config[node]['op_graph'].nodes[op]
         else:
             raise ValueError(f'Node with name {node} is not part of this network.')
 

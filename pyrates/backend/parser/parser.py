@@ -2,7 +2,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural
-# network models and simulations. See also:
+# network model_templates and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
 #
 # Copyright (C) 2017-2018 the original authors (Richard Gast and
