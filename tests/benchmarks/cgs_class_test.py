@@ -2,7 +2,7 @@ import time
 
 print("Importing 'pyrates'...", end="")
 start = time.time()
-from pyrates.utility.cluster_grid_search import ClusterGridSearch
+from pyrates.utility.cluster_grid_search_v2 import ClusterGridSearch
 # from pyrates.utility import grid_search
 elapsed = time.time()-start
 print("{0:.3f} seconds".format(elapsed))
@@ -16,16 +16,16 @@ global_config = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestConfig.jso
 
 host_config = {
     'hostnames': [
-        'animals',
-        'tschad',
-        'spanien',
-        'osttimor'
+        'animals'
+        # 'tschad',
+        # 'spanien',
+        # 'osttimor'
         # 'tiber',
     ],
     # Python executable in conda environment with installed packages 'pandas' and 'pyrates'
     'host_env': "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python",
     # Python script to call on the remote hosts
-    'host_file': "/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker.py",
+    'host_file': "/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker_v2.py",
     # Directory on the host to copy host_file and host_env to, if no shared filesystem is available
     'host_dir': ""
 }

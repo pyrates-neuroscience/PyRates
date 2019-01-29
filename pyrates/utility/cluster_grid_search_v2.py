@@ -347,8 +347,6 @@ class ClusterGridSearch(object):
 
         command = f'{self.nodes["host_env"]} {self.nodes["host_file"]}'
 
-        # local_config_dict = dict()
-
         if fetch_param_idx(grid, set_status=False).isnull():
             # If param_grid has no column named 'status':
             print(f'[T]\'{thread_name}\': "No \'status\' column in param_grid')
@@ -366,69 +364,80 @@ class ClusterGridSearch(object):
             subgrid_dir = f'{self.grid_dir}/Subgrids/{thread_name}'
             os.makedirs(subgrid_dir, exist_ok=True)
 
+            stdin, stdout, stderr = client.exec_command(command +
+                                                        f' --global_config={self.global_config}'
+                                                        f' --local_config={local_config}'
+                                                        f' --log_dir={self.log_dir}'
+                                                        f' --res_dir={grid_res_dir}'
+                                                        f' --grid_name={grid_name}',
+                                                        get_pty=True)
+
             while not fetch_param_idx(grid, lock=self.lock, set_status=False).empty:
 
                 # TODO: Read client's stdin and check if the string equals "Awaiting grid". If true, send a new
                 #   parameter grid or an exit command to the host. If false, keep reading stdout.
+                line = stdout.readline()
+                print(line, end="")
 
-                with self.lock:
-                    start_calc = time.time()
+                if "Awaiting grid" in line:
 
-                    # Ensure that the following code is executed without switching threads in between
-                    print(f'[T]\'{thread_name}\': Fetching index: ', end="")
+                    with self.lock:
+                        start_calc = time.time()
 
-                    # Get indices of n parameter combinations that haven't been computed yet and create local config
-                    param_idx = fetch_param_idx(grid, num_params=num_params)
+                        # Ensure that the following code is executed without switching threads in between
+                        print(f'[T]\'{thread_name}\': Fetching index: ', end="")
+
+                        # Get indices of n parameter combinations that haven't been computed yet and create local config
+                        param_idx = fetch_param_idx(grid, num_params=num_params)
+                        for idx in param_idx:
+                            print(f'[{idx}]', end=" ")
+                        print("")
+
+                        # Create parameter sub-grid from fetched indices to pass to the remote host
+                        subgrid = f'{subgrid_dir}/Subgrid_{thread_name}_default_{local_config_idx}.csv'
+
+                        (grid.iloc[param_idx]).to_csv(subgrid, index=True)
+
+                        print(f'[T]\'{thread_name}\': Starting remote computation...')
+
+                        stdin.write(f'{subgrid}\n')
+                        stdin.flush()
+
+                    while "Finished" not in stdout.readline():
+                        time.sleep(0.1)
+
+                    # Print what has been sent to the channels stdout or stderr
+                    # for line in iter(stdout.readline, ""):
+                    #     print(f'[H]\'{thread_name}\': {line}', end="")
+
+                    # Set result status for each computed index in param_grid
                     for idx in param_idx:
-                        print(f'[{idx}]', end=" ")
-                    print("")
-
-                    # Create parameter sub-grid from fetched indices to pass to the remote host
-                    subgrid = f'{subgrid_dir}/Subgrid_{thread_name}_default_{local_config_idx}.csv'
-
-                    (grid.iloc[param_idx]).to_csv(subgrid, index=True)
-
-                    print(f'[T]\'{thread_name}\': Starting remote computation...')
-
-                    stdin, stdout, stderr = client.exec_command(command +
-                                                                f' --global_config={self.global_config}'
-                                                                f' --local_config={local_config}'
-                                                                f' --local_grid={subgrid}'
-                                                                f' --log_dir={self.log_dir}'
-                                                                f' --res_dir={grid_res_dir}'
-                                                                f' --grid_name={grid_name}',
-                                                                get_pty=True)
-
-                # Wait for remote computation to finish
-                # stdout.channel.recv_exit_status()
-
-                # Print what has been sent to the channels stdout or stderr
-                for line in iter(stdout.readline, ""):
-                    print(f'[H]\'{thread_name}\': {line}', end="")
-
-                # Set result status for each computed index in param_grid
-                for idx in param_idx:
-                    res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
-                    try:
-                        if os.path.getsize(res_file) > 0:
-                            grid.at[idx, 'status'] = 'done'
-                            print(f'[T]\'{thread_name}\': Computing index [{idx}]: done!')
-                        else:
+                        res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
+                        try:
+                            if os.path.getsize(res_file) > 0:
+                                grid.at[idx, 'status'] = 'done'
+                                print(f'[T]\'{thread_name}\': Computing index [{idx}]: done!')
+                            else:
+                                grid.at[idx, 'status'] = 'failed'
+                                print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
+                                print(f'[T]\'{thread_name}\': Resultfile {res_file} is empty')
+                        except OSError as e:
                             grid.at[idx, 'status'] = 'failed'
                             print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
-                            print(f'[T]\'{thread_name}\': Resultfile {res_file} is empty')
-                    except OSError as e:
-                        grid.at[idx, 'status'] = 'failed'
-                        print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
-                        print(f'[T]\'{thread_name}\': Resultfile {res_file} not created')
+                            print(f'[T]\'{thread_name}\': Resultfile {res_file} not created')
 
-                local_config_idx += 1
+                    local_config_idx += 1
 
-                elapsed_calc = time.time() - start_calc
-                print("Elapsed time: {0:.3f} seconds".format(elapsed_calc))
+                    elapsed_calc = time.time() - start_calc
+                    print("Elapsed time: {0:.3f} seconds".format(elapsed_calc))
 
             # When no more inidices can be fetched
             print(f'[T]\'{thread_name}\': No more parameter combinations available!')
+            stdin.write("exit\n")
+            stdin.flush()
+
+            # Wait for remote computation to finish
+            stdout.channel.recv_exit_status()
 
 
 def create_cgs_config(filepath, circuit_template, param_map, dt, simulation_time, inputs,

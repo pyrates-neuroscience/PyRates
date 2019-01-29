@@ -26,14 +26,7 @@ results = grid_search(circuit_template="pyrates.examples.simple_nextgen_NMM.Net5
                       inputs={("PC", "Op_e.0", "inp"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
                       dt=dt, simulation_time=T, permute_grid=True)
 
-
-results.to_csv("/data/hu_salomon/Documents/testresult.csv", index=True)
-
-# for col_idx, series in results.iteritems():
-#     grid_idx = results.columns.get_loc(col_idx)
-#     file = f'/data/hu_salomon/Documents/ClusterGridSearch/Results/test_gridIdx_{grid_idx}.csv'
-#     print(f'Writing results to: {file}')
-#     results[col_idx].to_csv(file, index=None)
+# results.to_csv("/data/hu_salomon/Documents/testresult.csv", index=True)
 
 end = time.time()
 
