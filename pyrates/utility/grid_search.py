@@ -77,6 +77,7 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     param_split = "--"
     val_split = "-"
     comb = "_"
+
     for n in range(param_grid.shape[0]):
         circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()
         circuit_names.append(f'{circuit_tmp.label}_{n}')
