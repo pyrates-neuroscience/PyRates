@@ -1,17 +1,25 @@
+import time
 
-from pyrates.utility.cluster_grid_search_class import ClusterGridSearch
+print("Importing 'pyrates'...", end="")
+start = time.time()
+from pyrates.utility.cluster_grid_search import ClusterGridSearch
+# from pyrates.utility import grid_search
+elapsed = time.time()-start
+print("{0:.3f} seconds".format(elapsed))
+
 import numpy as np
 
 print("Start!")
+start = time.time()
 
 global_config = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestConfig.json"
 
 host_config = {
     'hostnames': [
         'animals',
-        'tschad'
-        # 'spanien'
-        # 'osttimor'
+        'tschad',
+        'spanien',
+        'osttimor'
         # 'tiber',
     ],
     # Python executable in conda environment with installed packages 'pandas' and 'pyrates'
@@ -32,7 +40,11 @@ dir = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestDir"
 
 cgs = ClusterGridSearch(global_config, dir)
 cgs.create_cluster(host_config)
-cgs.compute_grid(params)
+res_dir = cgs.compute_grid(params)
+
+elapsed = time.time() - start
+print("Overall elapsed time: {0:.3f} seconds".format(elapsed))
+
 # parameters
 # dt = 1e-4
 # T = 2.stream# params = {'J_e': np.arange(8., 12., 2.), 'J_i': np.arange(2., 4., 2.)}

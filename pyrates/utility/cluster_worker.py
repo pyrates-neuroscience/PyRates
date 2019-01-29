@@ -88,7 +88,8 @@ def main(_):
 
     for column in range(len(results.columns)):
         # TODO: Write name of the column multiindex to file, not only the values
-        results.iloc[:, column].to_csv(f'{res_dir}/CGS_result_{grid_name}_idx_{param_idx[column]}.csv', index=True)
+        res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{param_idx[column]}.csv'
+        results.iloc[:, column].to_csv(res_file, index=True)
 
     # TODO: Write name of used config file and parameter combination to each result file
 
