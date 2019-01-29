@@ -68,8 +68,6 @@ class Logger(object):
     def flush(self):
         pass
 
-# TODO: Add timestamps
-
 
 class ClusterGridSearch(object):
     def __init__(self, global_config, compute_dir=None, **kwargs):
