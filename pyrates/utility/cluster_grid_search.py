@@ -68,6 +68,31 @@ class Logger(object):
         pass
 
 
+class StreamTee(object):
+    # Based on https://gist.github.com/327585 by Anand Kunal
+    def __init__(self, stream1, stream2fp):
+        stream2 = open(stream2fp, "a")
+        self.stream1 = stream1
+        self.stream2 = stream2
+        self.__missing_method_name = None  # Hack!
+
+    def __getattribute__(self, name):
+        return object.__getattribute__(self, name)
+
+    def __getattr__(self, name):
+        self.__missing_method_name = name  # Could also be a property
+        return getattr(self, '__methodmissing__')
+
+    def __methodmissing__(self, *args, **kwargs):
+        # Emit method call to the log copy
+        callable2 = getattr(self.stream2, self.__missing_method_name)
+        callable2(*args, **kwargs)
+
+        # Emit method call to stdout (stream 1)
+        callable1 = getattr(self.stream1, self.__missing_method_name)
+        return callable1(*args, **kwargs)
+
+
 class ClusterGridSearch(object):
     def __init__(self, global_config, compute_dir=None, **kwargs):
         print("Starting cluster grid search!")
@@ -126,7 +151,12 @@ class ClusterGridSearch(object):
         os.makedirs(os.path.dirname(self.global_logfile), exist_ok=True)
 
         # Copy all future stdout to logfile
-        sys.stdout = Logger(self.global_logfile)
+        # sys.stdout = Logger(self.global_logfile)
+        # sys.stderr = Logger(self.global_logfile)
+
+        # logfile = open("/data/hu_salomon/Documents/bla.txt", "w+")
+        sys.stdout = StreamTee(sys.stdout, self.global_logfile)
+        # sys.stderr = StreamTee(sys.stderr, self.global_logfile)
 
         elapsed_dir = time.time() - start_dir
         print("Directories created. Elapsed time: {0:.3f} seconds".format(elapsed_dir))
@@ -327,6 +357,7 @@ class ClusterGridSearch(object):
         print("Computation finished. Elapsed time: {0:.3f} seconds".format(elapsed_comp))
         print(grid)
         print(f'Find results in: {grid_res_dir}/')
+        grid.to_csv(f'{os.path.dirname(param_grid_path)}/{grid_name}_ResultStatus', index=True)
         return grid_res_dir
 
     def __spawn_thread(self, client, grid, grid_name, grid_res_dir):

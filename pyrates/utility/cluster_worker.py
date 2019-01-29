@@ -87,10 +87,9 @@ def main(_):
                           simulation_time=simulation_time)
 
     for column in range(len(results.columns)):
-        # TODO: Write name of the column multiindex to file, not only the values
         res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{param_idx[column]}.csv'
         result = pd.DataFrame(results.iloc[:, column])
-        result.column.names = results.columns.names
+        result.columns.names = results.columns.names
         result.to_csv(res_file, index=True)
 
     # TODO: Write name of used config file and parameter combination to each result file
