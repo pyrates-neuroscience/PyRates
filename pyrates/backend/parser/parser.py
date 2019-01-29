@@ -61,6 +61,14 @@ class ExpressionParser(ParserElement):
         Dictionary containing all variables and functions needed to evaluate the expression.
     lhs
         If True, parser will treat `expr_str` as left-hand side of an equation, if False as right-hand side.
+    solve
+        If True, the parser will treat the left hand side as a differential variable that needs to be integrated over
+        time.
+    assign_add
+        If True, the right hand side will be added to the current value of left hand side. If False, the left hand side
+        value will be replaced with the right hand side.
+    kwargs
+        Additional keyword arguments to be passed to the backend functions.
 
     Attributes
     ----------
@@ -91,33 +99,6 @@ class ExpressionParser(ParserElement):
     dtypes
         Dictionary containing all data-types that can be used within mathematical expressions with a specific instance
         of the `ExpressionParser` (e.g. float32, bool, int32).
-
-    Methods
-    -------
-    parse_expr
-        Checks whether `expr_str` was successfully parsed into `expr_stack` and translates `expr_stack` into an
-        operation `op` representing the evaluation of the full expression.
-    parse
-        Parses next element of `expr_stack` into a symbolic representation `expr_op` (type of representation depends on
-        the functions, operations and data-types defined in `funcs`, `ops` and `dtypes`). Is called by `parse_expr`.
-    push_first
-        Helper function for building up `expr_stack`.
-        Pushes first element of a set of symbolic representations to `expr_stack`.
-    push_last
-        Helper function for building up `expr_stack`.
-        Pushes last element of a set of symbolic representations to `expr_stack`.
-    push_negone
-        Helper function for building up `expr_stack`.
-        Pushes `-1` to `expr_stack`.
-    push_all
-        Helper function for building up `expr_stack`.
-        Pushes all elements of a set of symbolic representations to `expr_stack`.
-    push_all_reverse
-        Helper function for building up `expr_stack`.
-        Pushes all elements of a set of symbolic representations to `expr_stack` in reverse order.
-
-    References
-    ----------
 
     """
 

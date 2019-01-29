@@ -397,12 +397,12 @@ class TensorflowBackend(tf.Graph):
 
                         # create operation under existing scope
                         with tf.name_scope(sc.original_name_scope):
-                            return self._create_op(op, assign_to_var, dependencies, *args, **kwargs)
+                            return self._create_op(op, assign_to_var, *args, **kwargs)
 
                     else:
 
                         # create operation under new scope
-                        return self._create_op(op, assign_to_var, dependencies, *args, **kwargs)
+                        return self._create_op(op, assign_to_var, *args, **kwargs)
 
     def add_layer(self,
                   ops: List[tf.Operation],

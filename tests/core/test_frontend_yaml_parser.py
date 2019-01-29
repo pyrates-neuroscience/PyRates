@@ -66,11 +66,11 @@ def setup_module():
 #         templates = yaml.load(file)
 
 
-@pytest.mark.parametrize("operator", ["pyrates.examples.jansen_rit.axon.axon.PotentialToRateOperator",
-                                      "pyrates.examples.jansen_rit.axon.templates.SigmoidPRO",
-                                      "pyrates.examples.jansen_rit.axon.templates.JansenRitPRO",
-                                      "pyrates.examples.jansen_rit.population.population.CurrentToPotentialOperator",
-                                      "pyrates.examples.jansen_rit.synapse.synapse.RateToCurrentOperator"
+@pytest.mark.parametrize("operator", ["model_templates.jansen_rit.axon.axon.PotentialToRateOperator",
+                                      "model_templates.jansen_rit.axon.templates.SigmoidPRO",
+                                      "model_templates.jansen_rit.axon.templates.JansenRitPRO",
+                                      "model_templates.jansen_rit.population.population.CurrentToPotentialOperator",
+                                      "model_templates.jansen_rit.synapse.synapse.RateToCurrentOperator"
                                       ])
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
@@ -142,7 +142,7 @@ def test_import_operator_templates(operator):
 def test_full_jansen_rit_circuit_template_load():
     """Test a simple circuit template, including all nodes and operators to be loaded."""
 
-    path = "pyrates.examples.jansen_rit.circuit.JansenRitCircuit"
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.frontend.template.circuit import CircuitTemplate
     from pyrates.frontend.template.edge.edge import EdgeTemplate
     from pyrates.frontend.template.node import NodeTemplate
@@ -155,9 +155,9 @@ def test_full_jansen_rit_circuit_template_load():
     assert template is TemplateLoader.cache[path]
 
     # test, whether node templates have been loaded successfully
-    nodes = {"JR_PC": "pyrates.examples.jansen_rit.population.templates.JansenRitPC",
-             "JR_IIN": "pyrates.examples.jansen_rit.population.templates.JansenRitIN",
-             "JR_EIN": "pyrates.examples.jansen_rit.population.templates.JansenRitIN"}
+    nodes = {"JR_PC": "model_templates.jansen_rit.population.templates.JansenRitPC",
+             "JR_IIN": "model_templates.jansen_rit.population.templates.JansenRitIN",
+             "JR_EIN": "model_templates.jansen_rit.population.templates.JansenRitIN"}
 
     for key, value in nodes.items():
         assert isinstance(template.nodes[key], NodeTemplate)
@@ -178,7 +178,7 @@ def test_full_jansen_rit_circuit_template_load():
 
 def test_circuit_instantiation():
     """Test, if apply() functions all work properly"""
-    path = "pyrates.examples.jansen_rit.circuit.JansenRitCircuit"
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.frontend.template.circuit import CircuitTemplate
 
     template = CircuitTemplate.from_yaml(path)
@@ -195,7 +195,7 @@ def test_circuit_instantiation():
 
 def test_multi_circuit_instantiation():
     """Test, if a circuit with subcircuits is also working."""
-    path = "pyrates.examples.jansen_rit.circuit.MultiJansenRitCircuit"
+    path = "model_templates.jansen_rit.circuit.MultiJansenRitCircuit"
     from pyrates.frontend.template.circuit import CircuitTemplate
 
     template = CircuitTemplate.from_yaml(path)
@@ -207,7 +207,7 @@ def test_multi_circuit_instantiation():
 def test_equation_alteration():
     """Test, if properties of a template that mean to alter a certain parent equation are treated correctly"""
 
-    path = "pyrates.examples.jansen_rit.population.templates.InstantaneousCPO"
+    path = "model_templates.jansen_rit.population.templates.InstantaneousCPO"
     # this template removes the component "L_m * " from the base equation "L_m * V = k * I"
     from pyrates.frontend.template.operator import OperatorTemplate
 
@@ -219,7 +219,7 @@ def test_equation_alteration():
 
 
 def test_network_def_workaround():
-    path = "pyrates.examples.jansen_rit.circuit.JansenRitCircuit"
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.frontend.template.circuit import CircuitTemplate
 
     template = CircuitTemplate.from_yaml(path)
@@ -263,7 +263,7 @@ def test_network_def_workaround():
 
 def test_yaml_dump():
     from pyrates.frontend.template.circuit import CircuitTemplate
-    circuit = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.circuit.JansenRitCircuit").apply()
+    circuit = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit").apply()
     from pyrates.frontend.yaml import from_circuit
     from_circuit(circuit, "../output/yaml_dump.yaml", "DumpedCircuit")
 

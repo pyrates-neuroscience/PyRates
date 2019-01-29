@@ -40,13 +40,13 @@ NeuralMass:
   description: Basic template for a neural mass.
   base: NodeTemplate
   operators:
-    pyrates.examples.jansen_rit.synapse.synapse.RateToCurrentOperator:
+    model_templates.jansen_rit.synapse.synapse.RateToCurrentOperator:
       defaults: null
       options: null
     CurrentToPotentialOperator:
       defaults: null
       options: null
-    pyrates.examples.jansen_rit.axon.axon.PotentialToRateOperator:
+    model_templates.jansen_rit.axon.axon.PotentialToRateOperator:
       defaults: null
       options: null
 

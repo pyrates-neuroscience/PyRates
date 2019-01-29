@@ -10,7 +10,7 @@ SigmoidPRO:
     generation in a mathematical model of coupled cortical columns."
     Biological Cybernetics, vol. 73(4), pp. 357-366, 1995."
 
-  base: pyrates.examples.jansen_rit.axon.axon.PotentialToRateOperator
+  base: model_templates.jansen_rit.axon.axon.PotentialToRateOperator
 
   equations:
     replace:

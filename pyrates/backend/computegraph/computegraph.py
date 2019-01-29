@@ -30,11 +30,10 @@
 """
 
 # external imports
-import tensorflow as tf
 from typing import Optional, Tuple, List, Union, Any
 from pandas import DataFrame, MultiIndex
 import numpy as np
-from networkx import MultiDiGraph, find_cycle, NetworkXNoCycle, DiGraph, is_isomorphic
+from networkx import find_cycle, NetworkXNoCycle, DiGraph, is_isomorphic
 from copy import deepcopy
 
 # pyrates imports
@@ -83,7 +82,7 @@ class ComputeGraph(object):
         ######################
 
         super().__init__()
-        self.name = name
+        self.name = name if name else 'net.0'
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend
@@ -123,7 +122,7 @@ class ComputeGraph(object):
             # first, parse operators that have no dependencies on other operators
             # noinspection PyTypeChecker
             primary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
-            op_updates = self._add_ops(primary_ops, node_name, primary_ops=True)
+            op_updates = self._add_ops(primary_ops, node_name=node_name, primary_ops=True)
 
             # remove parsed operators from graph
             graph.remove_nodes_from(primary_ops)
@@ -134,7 +133,7 @@ class ComputeGraph(object):
                 # get all operators that have no dependencies on other operators
                 # noinspection PyTypeChecker
                 secondary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
-                op_updates = self._add_ops(secondary_ops, node_name, updates=op_updates, primary_ops=False)
+                op_updates = self._add_ops(secondary_ops, node_name=node_name, updates=op_updates, primary_ops=False)
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(secondary_ops)
@@ -320,7 +319,7 @@ class ComputeGraph(object):
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
             out_dir: Optional[str] = None,
-            verbose: bool=True,
+            verbose: bool = True,
             profile: Optional[str] = None
             ) -> Union[DataFrame, Tuple[DataFrame, float, float]]:
         """Simulate the backend behavior over time via a tensorflow session.
@@ -734,7 +733,7 @@ class ComputeGraph(object):
         return updates
 
     def _get_op_input(self, node: str, op: str, in_op: str, primary_ops: bool = False
-                      ) -> object:
+                      ) -> Any:
         """Extracts inputs of operator.
 
         Parameters
@@ -748,7 +747,7 @@ class ComputeGraph(object):
 
         Returns
         -------
-        object
+        Any
             Backend variable.
 
         """
@@ -768,7 +767,7 @@ class ComputeGraph(object):
                                  f'or dependencies.')
         return var
 
-    def _map_multiple_inputs(self, inputs: list, reduce_dim: bool, **kwargs) -> object:
+    def _map_multiple_inputs(self, inputs: list, reduce_dim: bool, **kwargs) -> Any:
         """Creates mapping between multiple input variables and a single output variable.
 
         Parameters
@@ -782,7 +781,7 @@ class ComputeGraph(object):
 
         Returns
         -------
-        object
+        Any
             Summed up or concatenated input variables.
 
         """
@@ -968,25 +967,28 @@ class ComputeGraph(object):
 
         return attr_val
 
-    def _set_op_attr(self, node, op, attr, val, net_config=None):
-        """
+    def _set_op_attr(self, node: str, op: str, attr: str, val: Any) -> Any:
+        """Sets value of an operator attribute.
 
         Parameters
         ----------
         node
+            Name of the node.
         op
+            Name of the operator on the node.
         attr
+            Name of the operator attribute on the node.
         val
+            New value of the operator attribute.
 
         Returns
         -------
+        Any
+            Updated attribute value.
 
         """
 
-        if not net_config:
-            net_config = self.net_config
-
-        op = net_config[node]['op_graph'].nodes[op]
+        op = self.net_config[node]['op_graph'].nodes[op]
         if attr in op['variables'].keys():
             op['variables'][attr] = val
             return op['variables'][attr]
@@ -1003,16 +1005,22 @@ class ComputeGraph(object):
             except KeyError:
                 return None
 
-    def _apply_idx(self, var, idx=None):
-        """
+    @staticmethod
+    def _apply_idx(var: Any, idx: Optional[Union[int, tuple]] = None) -> Any:
+        """Applies index to graph variable. Only used for observing graph variables,
+        not for graph internal computations.
 
         Parameters
         ----------
         var
+            Graph variable.
         idx
+            Index to the variable dimensions.
 
         Returns
         -------
+        Any
+            Indexed variable.
 
         """
 
@@ -1023,21 +1031,25 @@ class ComputeGraph(object):
         else:
             return var[idx]
 
-    def _get_nodes_with_attr(self, attr, val, net_config=None):
-        """
+    def _get_nodes_with_attr(self, attr: str, val: Any) -> list:
+        """Extracts nodes from graph for which a certain attribute takes on a certain value.
 
         Parameters
         ----------
         attr
+            Attribute of interest on the nodes.
         val
+            Attribute value that selected nodes should have.
 
         Returns
         -------
+        list
+            Nodes for which the attribute takes on the indicated value.
 
         """
 
-        if not net_config:
-            net_config = self.net_config
+        # function that evaluates whether two node attributes match
+        ###########################################################
 
         def node_match(n1, n2):
             for i, eq in enumerate(n1['operator']['equations']):
@@ -1052,9 +1064,12 @@ class ComputeGraph(object):
                 return False
             return True
 
+        # node selection
+        ################
+
         nodes = []
-        for node in net_config.nodes:
-            test_val = self._get_node_attr(node, attr, net_config=net_config)
+        for node in self.net_config.nodes:
+            test_val = self._get_node_attr(node, attr)
             try:
                 if is_isomorphic(val, test_val, node_match=node_match):
                     nodes.append(node)
@@ -1064,16 +1079,20 @@ class ComputeGraph(object):
 
         return nodes
 
-    def _contains_node(self, node, target_node):
-        """
+    def _contains_node(self, node: str, target_node: str) -> bool:
+        """Checks whether a vectorized graph node contains an original, non-vectorized target node or not.
 
         Parameters
         ----------
         node
+            Vectorized graph node.
         target_node
+            Less vectorized node.
 
         Returns
         -------
+        bool
+            Indicates whether target node is contained in the vectorized node or not.
 
         """
 
@@ -1088,21 +1107,22 @@ class ComputeGraph(object):
         except KeyError:
             raise KeyError(f'Could not identify target node {target_node}.')
 
-    def _get_edges_between(self, source, target, net_config=None):
-        """
+    def _get_edges_between(self, source: str, target: str) -> List[tuple]:
+        """Extract all edges between a source and a target node.
 
         Parameters
         ----------
         source
+            Name of the source node.
         target
+            Name of the target node.
 
         Returns
         -------
+        List[tuple]
+            Collection of all edges between source and target.
 
         """
-
-        if not net_config:
-            net_config = self.net_config
 
         if ('_all' in source and '_all' in target) or ('_combined' in source and '_combined' in target):
             edges = []
@@ -1110,31 +1130,32 @@ class ComputeGraph(object):
                 for target_tmp in self._net_config_map:
                     if self._contains_node(source, source_tmp) and self._contains_node(target, target_tmp):
                         edges += [(source_tmp, target_tmp, edge) for edge
-                                  in range(net_config.graph.number_of_edges(source_tmp, target_tmp))]
+                                  in range(self.net_config.graph.number_of_edges(source_tmp, target_tmp))]
             return edges
         else:
-            return [(source, target, edge) for edge in range(net_config.graph.number_of_edges(source, target))]
+            return [(source, target, edge) for edge in range(self.net_config.graph.number_of_edges(source, target))]
 
-    def _get_edge_conn(self, source, target, edge, net_config=None):
-        """
+    def _get_edge_conn(self, source: str, target: str, edge: Union[int, str]) -> Tuple[np.ndarray, np.ndarray]:
+        """Extracts weight and delay vectors of an edge.
 
         Parameters
         ----------
         source
+            Name of the source node.
         target
+            Name of the target node.
         edge
-        net_config
+            Name of index of the edge.
 
         Returns
         -------
+        Tuple[np.ndarray, np.ndarray]
+            Weight and delay of the edge (both are arrays).
 
         """
 
-        if not net_config:
-            net_config = self.net_config
-
         # check delay of edge
-        delay = self._get_edge_attr(source, target, edge, 'delay', net_config=net_config)
+        delay = self._get_edge_attr(source, target, edge, 'delay')
         if delay is not None and delay.ndim > 1:
             raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
                              f" cannot be applied to networks with variables of 2 or more"
@@ -1143,7 +1164,7 @@ class ComputeGraph(object):
                              f" the edges' dimensionality.")
 
         # check weight of edge
-        weight = self._get_edge_attr(source, target, edge, 'weight', net_config=net_config)
+        weight = self._get_edge_attr(source, target, edge, 'weight')
         if weight is not None and weight.ndim > 1:
             raise ValueError(f"Automatic optimization of the graph (i.e. method `vectorize`"
                              f" cannot be applied to networks with variables of 2 or more"
@@ -1166,23 +1187,24 @@ class ComputeGraph(object):
 
         return weight, delay
 
-    def _get_edge_var_idx(self, source, target, edge, idx_type, net_config=None):
-        """
+    def _get_edge_var_idx(self, source: str, target: str, edge: Union[int, str], idx_type: str) -> Union[list, None]:
+        """Extracts indices of an edge that map vectorized weights and delays to the original edges.
 
         Parameters
         ----------
         source
+            Name of the source node.
         target
+            Name of the target node.
         edge
-        net_config
+            Index or name of the edge.
 
         Returns
         -------
+        Union[list, None]
+            List of indices.
 
         """
-
-        if not net_config:
-            net_config = self.net_config
 
         if idx_type == 'source':
             var = 'source_idx'
@@ -1195,7 +1217,7 @@ class ComputeGraph(object):
         else:
             raise ValueError('Wrong `idx_type`. Please, choose either `source` or `target`.')
 
-        var_idx = self._get_edge_attr(source, target, edge, var, net_config=net_config)
+        var_idx = self._get_edge_attr(source, target, edge, var)
         if var_idx:
             op, var = self.net_config.edges[source, target, edge][node_var].split('/')
             _, _, _, idx = self._net_config_map[node_to_idx][op][var]
@@ -1224,22 +1246,23 @@ class ComputeGraph(object):
 
         return idx_new
 
-    def _sort_edges(self, edges, attr, net_config=None):
-        """
+    def _sort_edges(self, edges: List[tuple], attr: str) -> dict:
+        """Sorts edges according to the given edge attribute.
 
         Parameters
         ----------
         edges
+            Collection of edges of interest.
         attr
-        net_config
+            Name of the edge attribute.
 
         Returns
         -------
+        dict
+            Key-value pairs of the different values the attribute can take on (keys) and the list of edges for which
+            the attribute takes on that value (value).
 
         """
-
-        if not net_config:
-            net_config = self.net_config
 
         edges_new = {}
         edge_idx = {}
@@ -1252,7 +1275,7 @@ class ComputeGraph(object):
                     edge_idx[(source, target)] = 0
                 edge = edge_idx[(source, target)]
                 edge_idx[(source, target)] += 1
-            edge_info = net_config.edges[source, target, edge]
+            edge_info = self.net_config.edges[source, target, edge]
             if edge_info[attr] not in edges_new.keys():
                 edges_new[edge_info[attr]] = [(source, target, edge)]
             else:
@@ -1260,28 +1283,32 @@ class ComputeGraph(object):
 
         return edges_new
 
-    def _add_synaptic_buffer(self, node, op, var, idx, buffer_length, edge, net_config=None):
-        """
+    def _add_edge_buffer(self, node: str, op: str, var: str, idx: int, buffer_length: int, edge: tuple) -> None:
+        """Adds a buffer variable to an edge.
 
         Parameters
         ----------
         node
+            Name of the target node of the edge.
         op
+            Name of the target operator of the edge.
         var
+            Name of the target variable of the edge.
         idx
+            Index of the buffer variable for that specific edge.
         buffer_length
+            Length of the time-buffer that should be added to realize edge delays.
         edge
-        net_config
+            Edge identifier (source_name, target_name, edge_idx).
 
         Returns
         -------
+        None
 
         """
 
-        if not net_config:
-            net_config = self.net_config
-        target_shape = self._get_op_attr(node, op, var, net_config=net_config)['shape']
-        op_graph = self._get_node_attr(node, 'op_graph', net_config=net_config)
+        target_shape = self._get_op_attr(node, op, var)['shape']
+        op_graph = self._get_node_attr(node, 'op_graph')
 
         # create buffer variable definitions
         if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
@@ -1328,7 +1355,7 @@ class ComputeGraph(object):
         op_graph.add_edge(f'{op}_{var}_buffer_read_{idx}', op)
 
         # add input information to target operator
-        inputs = self._get_op_attr(node, op, 'inputs', net_config=net_config)
+        inputs = self._get_op_attr(node, op, 'inputs')
         if var in inputs.keys():
             inputs[var]['sources'].append(f'{op}_{var}_buffer_read_{idx}')
         else:
@@ -1337,31 +1364,33 @@ class ComputeGraph(object):
 
         # update edge information
         s, t, e = edge
-        self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_buffer_rotate_{idx}/{var}_buffer_{idx}',
-                            net_config=net_config)
-        self._set_edge_attr(s, t, e, 'add_project', val=True, net_config=net_config)
+        self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_buffer_rotate_{idx}/{var}_buffer_{idx}')
+        self._set_edge_attr(s, t, e, 'add_project', val=True)
 
-    def _add_synaptic_input_collector(self, node, op, var, idx, edge, net_config=None):
-        """
+    def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
+        """Adds an input collector variable to an edge.
 
         Parameters
         ----------
         node
+            Name of the target node of the edge.
         op
+            Name of the target operator of the edge.
         var
+            Name of the target variable of the edge.
         idx
+            Index of the input collector variable on that edge.
         edge
-        net_config
+            Edge identifier (source_name, target_name, edge_idx).
 
         Returns
         -------
+        None
 
         """
 
-        if not net_config:
-            net_config = self.net_config
-        target_shape = self._get_op_attr(node, op, var, net_config=net_config)['shape']
-        op_graph = self._get_node_attr(node, 'op_graph', net_config=net_config)
+        target_shape = self._get_op_attr(node, op, var)['shape']
+        op_graph = self._get_node_attr(node, 'op_graph')
 
         # create collector equation
         eqs = [f"{var} = {var}_col_{idx}"]
@@ -1382,7 +1411,7 @@ class ComputeGraph(object):
         op_graph.add_edge(f'{op}_{var}_col_{idx}', op)
 
         # add input information to target operator
-        op_inputs = self._get_op_attr(node, op, 'inputs', net_config=net_config)
+        op_inputs = self._get_op_attr(node, op, 'inputs')
         if var in op_inputs.keys():
             op_inputs[var]['sources'].append(f'{op}_{var}_col_{idx}')
         else:
@@ -1391,18 +1420,20 @@ class ComputeGraph(object):
 
         # update edge target information
         s, t, e = edge
-        self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_col_{idx}/{var}_col_{idx}', net_config=net_config)
+        self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_col_{idx}/{var}_col_{idx}')
 
     def _net_config_consistency_check(self, net_config: CircuitIR) -> CircuitIR:
-        """
+        """Checks whether the passed network configuration follows the expected intermediate representation structure.
 
         Parameters
         ----------
         net_config
+            Intermediate representation of the network configuration that should be translated into the backend.
 
         Returns
         -------
-        MultiDiGraph
+        CircuitIR
+            The checked (and maybe slightly altered) network configuration.
 
         """
 
@@ -1473,7 +1504,7 @@ class ComputeGraph(object):
 
                     # check the value of the variable
                     try:
-                        val = var['value']
+                        _ = var['value']
                     except KeyError:
                         if var_defs['value'] is KeyError:
                             raise KeyError(f'Field `value` not found in variable definition of variable {var_name} of '
@@ -1484,13 +1515,13 @@ class ComputeGraph(object):
 
                     # check the shape of the variable
                     try:
-                        val = var['shape']
+                        _ = var['shape']
                     except KeyError:
                         var['shape'] = var_defs['shape']
 
                     # check the data type of the variable
                     try:
-                        val = var['dtype']
+                        _ = var['dtype']
                     except KeyError:
                         var['dtype'] = var_defs['dtype']
 
@@ -1501,7 +1532,7 @@ class ComputeGraph(object):
                 op_fields = ['equations', 'inputs', 'output']
                 for field in op_fields:
                     try:
-                        attr = getattr(op_info, field)
+                        _ = getattr(op_info, field)
                     except KeyError:
                         if field == 'equations':
                             raise KeyError(f'Field {field} not found in `operators` field of operator {op_name} on '
@@ -1524,13 +1555,13 @@ class ComputeGraph(object):
 
             # check whether source and target variable information were provided
             try:
-                svar = edge['source_var']
+                _ = edge['source_var']
             except KeyError:
                 raise KeyError(f'Field `source_var` not found on edge {idx} between {source} and {target}. Every edge '
                                f'needs information about the variable on the source node it should access that needs '
                                f'to be provided at this position.')
             try:
-                tvar = edge['target_var']
+                _ = edge['target_var']
             except KeyError:
                 raise KeyError(f'Field `target_var` not found on edge {idx} between {source} and {target}. Every edge '
                                f'needs information about the variable on the target node it should access that needs '
@@ -1573,7 +1604,7 @@ class ComputeGraph(object):
 
         Returns
         -------
-        Tuple[NodeView, EdgeView]
+        None
 
         """
 
@@ -1594,7 +1625,7 @@ class ComputeGraph(object):
                 nodes_tmp = self._get_nodes_with_attr('op_graph', op_graph)
 
                 # vectorize those nodes
-                _ = self._vectorize_nodes(nodes_tmp.copy())
+                self._vectorize_nodes(list(nodes_tmp))
 
                 # delete vectorized nodes from list
                 for n in nodes_tmp:
@@ -1611,7 +1642,7 @@ class ComputeGraph(object):
 
             # save changes to net config
             for node in list(self.net_config.nodes):
-                if not '_all' in node:
+                if '_all' not in node:
                     self.net_config.graph.remove_node(node)
 
         # Second stage: Vectorize over operators
@@ -1768,16 +1799,16 @@ class ComputeGraph(object):
                     if max_delay is not None:
 
                         # add synaptic buffer to the input variable
-                        self._add_synaptic_buffer(node_name, op_name, var_name, idx=j, buffer_length=max_delay,
-                                                  edge=edges[j])
+                        self._add_edge_buffer(node_name, op_name, var_name, idx=j, buffer_length=max_delay,
+                                              edge=edges[j])
 
                     elif n_inputs > 1:
 
                         # add synaptic input collector to the input variable
-                        self._add_synaptic_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
+                        self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
 
     def _vectorize_nodes(self,
-                         nodes: List[str]
+                         nodes: Union[List[str]]
                          ) -> str:
         """Combines all nodes in list to a single node and adds node to new net config.
 
@@ -1921,7 +1952,9 @@ class ComputeGraph(object):
         Parameters
         ----------
         source_name
+            Name of the source node
         target_name
+            Name of the target node
 
         Returns
         -------
@@ -2012,8 +2045,15 @@ class ComputeGraph(object):
         Parameters
         ----------
         op_key
+            Name of the operator that should be vectorized.
         nodes
+            Collection of node names on which the operator exists.
         new_node
+            Name of the new node that should be added to the graph.
+
+        Returns
+        -------
+        None
 
         """
 
