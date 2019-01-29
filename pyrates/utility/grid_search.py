@@ -32,6 +32,7 @@
 # external imports
 import pandas as pd
 import numpy as np
+from typing import Optional
 
 # pyrates internal imports
 from pyrates.backend import ComputeGraph
@@ -43,25 +44,40 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
-                sampling_step_size=None, permute_grid=False, **kwargs):
-    """
+def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: float, simulation_time: float,
+                inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None,
+                permute_grid: bool = False, **kwargs) -> pd.DataFrame:
+    """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
     Parameters
     ----------
     circuit_template
+        Path to the circuit template.
     param_grid
+        Key-value pairs for each circuit parameter that should be altered over different circuit parametrizations.
     param_map
+        Key-value pairs that map the keys of param_grid to concrete circuit variables.
     dt
+        Simulation step-size in s.
     simulation_time
+        Simulation time in s.
     inputs
+        Inputs as provided to the `run` method of `:class:ComputeGraph`.
     outputs
+        Outputs as provided to the `run` method of `:class:ComputeGraph`.
     sampling_step_size
+        Sampling step-size as provided to the `run` method of `:class:ComputeGraph`.
     permute_grid
+        If true, all combinations of the provided param_grid values will be realized. If false, the param_grid values
+        will be traversed pairwise.
     kwargs
+        Additional keyword arguments passed to the `:class:ComputeGraph` initialization.
 
     Returns
     -------
+    pd.DataFrame
+        Simulation results stored in a multi-index data frame where each index level refers to one of the parameters of
+        param_grid.
 
     """
 
@@ -131,7 +147,7 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     results = net.run(simulation_time=simulation_time,
                       inputs=inputs,
                       outputs=outputs,
-                      sampling_step_size=sampling_step_size)
+                      sampling_step_size=sampling_step_size)    # type: pd.DataFrame
 
     # transform results into long-form dataframe with changed parameters as columns
     multi_idx = [param_grid[key].values for key in param_grid.keys()]
@@ -159,16 +175,20 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     return results_final
 
 
-def linearize_grid(grid: dict, permute=False):
-    """
+def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
+    """Turns the grid into a grid that can be traversed linearly, i.e. pairwise.
 
     Parameters
     ----------
     grid
+        Parameter grid.
     permute
+        If true, all combinations of the parameter values in grid will be created.
 
     Returns
     -------
+    pd.DataFrame
+        Resulting linear grid in form of a data frame.
 
     """
 
@@ -185,17 +205,22 @@ def linearize_grid(grid: dict, permute=False):
         return pd.DataFrame(new_grid, columns=keys)
 
 
-def adapt_circuit(circuit, params, param_map):
-    """
+def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitIR:
+    """Changes the parametrization of a circuit.
 
     Parameters
     ----------
     circuit
+        Circuit instance.
     params
+        Key-value pairs of the parameters that should be changed.
     param_map
+        Map between the keys in params and the circuit variables.
 
     Returns
     -------
+    CircuitIR
+        Updated circuit instance.
 
     """
 

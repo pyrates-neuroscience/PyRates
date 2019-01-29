@@ -207,18 +207,18 @@ class ExpressionParser(ParserElement):
             index_multiples = Forward()
 
             # basic organization units
-            index_start = idx_l.setParseAction(self.push_first)
-            index_end = idx_r.setParseAction(self.push_first)
-            index_comb = colon.setParseAction(self.push_first)
-            arg_comb = comma.setParseAction(self.push_first)
+            index_start = idx_l.setParseAction(self._push_first)
+            index_end = idx_r.setParseAction(self._push_first)
+            index_comb = colon.setParseAction(self._push_first)
+            arg_comb = comma.setParseAction(self._push_first)
 
             # basic computation unit
             atom = (Optional("-") + (func_name + self.expr.suppress() + ZeroOrMore((arg_comb.suppress() +
                                                                                     self.expr.suppress()))
                                      + par_r | name | pi | e | num_float | num_int
-                                     ).setParseAction(self.push_first)
-                    ).setParseAction(self.push_negone) | \
-                   (par_l.suppress() + self.expr.suppress() + par_r.suppress()).setParseAction(self.push_negone)
+                                     ).setParseAction(self._push_first)
+                    ).setParseAction(self._push_negone) | \
+                   (par_l.suppress() + self.expr.suppress() + par_r.suppress()).setParseAction(self._push_negone)
 
             # apply indexing to atoms
             indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
@@ -227,10 +227,10 @@ class ExpressionParser(ParserElement):
             index_multiples << index_full + ZeroOrMore((arg_comb + index_full))
 
             # hierarchical relationships between mathematical and logical operations
-            boolean = indexed + Optional((op_logical + indexed).setParseAction(self.push_first))
-            exponential << boolean + ZeroOrMore((op_exp + Optional(exponential)).setParseAction(self.push_first))
-            factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self.push_first))
-            self.expr << factor + ZeroOrMore((op_add + factor).setParseAction(self.push_first))
+            boolean = indexed + Optional((op_logical + indexed).setParseAction(self._push_first))
+            exponential << boolean + ZeroOrMore((op_exp + Optional(exponential)).setParseAction(self._push_first))
+            factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self._push_first))
+            self.expr << factor + ZeroOrMore((op_add + factor).setParseAction(self._push_first))
 
         # extract symbols and operations from expression string
         self.expr_list = self.expr.parseString(self.expr_str)
@@ -260,30 +260,30 @@ class ExpressionParser(ParserElement):
 
         return self.args
 
-    def push_first(self, strg, loc, toks):
+    def _push_first(self, strg, loc, toks):
         """Push tokens in first-to-last order to expression stack.
         """
         self.expr_stack.append(toks[0])
 
-    def push_negone(self, strg, loc, toks):
+    def _push_negone(self, strg, loc, toks):
         """Push negative one multiplier if on first position in toks.
         """
         if toks and toks[0] == '-':
             self.expr_stack.append('-one')
 
-    def push_all(self, strg, loc, toks):
+    def _push_all(self, strg, loc, toks):
         """Push all tokens to expression stack at once (first-to-last).
         """
         for t in toks:
             self.expr_stack.append(t)
 
-    def push_all_reverse(self, strg, loc, toks):
+    def _push_all_reverse(self, strg, loc, toks):
         """Push all tokens to expression stack at once (last-to-first).
         """
         for t in range(len(toks)-1, -1, -1):
             self.expr_stack.append(toks[t])
 
-    def push_last(self, strg, loc, toks):
+    def _push_last(self, strg, loc, toks):
         """Push tokens in last-to-first order to expression stack.
         """
         self.expr_stack.append(toks[-1])
@@ -298,7 +298,8 @@ class ExpressionParser(ParserElement):
 
         Returns
         -------
-        type.Any
+        tp.Any
+            Parsed expression stack element (object type depends on the backend).
 
         """
 
@@ -551,8 +552,28 @@ class ExpressionParser(ParserElement):
 
         return self.expr_op
 
-    def broadcast(self, op, op1, op2, return_ops=False, **kwargs):
-        """Tries to match the shapes of arg1 and arg2 such that func can be applied.
+    def broadcast(self, op: str, op1: tp.Any, op2: tp.Any, return_ops: bool = False, **kwargs
+                  ) -> tp.Union[tuple, tp.Any]:
+        """Tries to match the shapes of op1 and op2 such that op can be applied. Then applies op to op1 and op2.
+
+        Parameters
+        ----------
+        op
+            Name/key of the backend operation.
+        op1
+            First argument to the operation.
+        op2
+            Second argument to the operation.
+        return_ops
+            If true, the adjusted arguments (op1 and op2) are returned.
+        kwargs
+            Additional keyword arguments to be passed to the backend.
+
+        Returns
+        -------
+        tp.Union[tuple, tp.Any]
+            Output of op applied to op1 and op2. If return_ops, op1 and op2 are also returned.
+
         """
 
         kwargs.update(self.parser_kwargs)
@@ -606,20 +627,29 @@ class ExpressionParser(ParserElement):
             return new_op, op1_val, op2_val
         return new_op
 
-    def apply_op(self, op, x, y, x_key=None, y_key=None, **kwargs):
-        """
+    def apply_op(self, op: str, x: tp.Any, y: tp.Any, x_key: tp.Optional[str] = None, y_key: tp.Optional[str] = None,
+                 **kwargs) -> tp.Any:
+        """Applies a backend operation to variables x and y.
 
         Parameters
         ----------
         op
+            Name/key of the backend operation.
         x
+            First arguments to op.
         y
+            Second argument to op.
         x_key
+            If x is a keyword argument of op, pass the keyword here.
         y_key
+            If y is a keyword argument of op, pass the keyword here.
         kwargs
+            Additional keyword arguments to be passed to op.
 
         Returns
         -------
+        tp.Any
+            Result of applying op to x and y.
 
         """
 
@@ -642,8 +672,23 @@ class ExpressionParser(ParserElement):
 
         return self.backend.add_op(op, *tuple(args), **kwargs)
 
-    def apply_idx(self, op, idx, **kwargs):
-        """Apply index to operation.
+    def apply_idx(self, op: tp.Any, idx: tp.Any, **kwargs) -> tp.Any:
+        """Apply index idx to operation op.
+
+        Parameters
+        ----------
+        op
+            Operation to be indexed.
+        idx
+            Index to op.
+        kwargs
+            Additional keyword arguments to be passed to the indexing functions.
+
+        Returns
+        -------
+        tp.Any
+            Result of applying idx to op.
+
         """
 
         kwargs.update(self.parser_kwargs)
@@ -724,18 +769,25 @@ class ExpressionParser(ParserElement):
         var_update = self.broadcast('*', var_delta, dt, **kwargs)
         return self.broadcast('+', var_old, var_update, **kwargs)
 
-    def _process_idx(self, idx, shape, local_vars: dict, update=None, **kwargs):
-        """
+    def _process_idx(self, idx: tp.Any, shape: tuple, local_vars: dict, update: tp.Optional[tp.Any] = None, **kwargs
+                     ) -> tuple:
+        """Preprocesses the index and a variable update to match the variable shape.
 
         Parameters
         ----------
         idx
+            Index object.
         shape
+            Shape of the variable to be indexed.
         local_vars
+            Dictionary containing all local variables from the environment this function was called from.
         update
+            The update that should be assigned to the variable with shape at the indexed positions.
 
         Returns
         -------
+        tuple
+            Preprocessed index and re-shaped update.
 
         """
 
@@ -810,7 +862,7 @@ class ExpressionParser(ParserElement):
                 if len(update.shape) > 1:
                     update_dim = len(update.shape[1:])
                     if update_dim > shape_diff:
-                        singleton = -1 if update.shape[-1] == 1 else list(update_dim).index(1)
+                        singleton = -1 if update.shape[-1] == 1 else list(update.shape).index(1)
                         update = self.backend.add_op('squeeze', update, axis=singleton, **kwargs)
                         if len(update.shape) > 1:
                             update_dim = len(update.shape[1:])
@@ -829,18 +881,26 @@ class ExpressionParser(ParserElement):
             return idx
         return idx, update
 
-    def match_shapes(self, op1, op2, adjust_second=True, assign=False):
-        """
+    def match_shapes(self, op1: tp.Any, op2: tp.Any, adjust_second: bool = True, assign: bool = False) -> tuple:
+        """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
 
         Parameters
         ----------
         op1
+            First operator.
         op2
+            Second operator.
         assign
+            If true, the re-shaped operators will be assigned to new variables. Else, the manipulation will be performed
+            in place.
         adjust_second
+            If true, the second operator will be re-shaped according to the shape of the first operator. If false,
+            it will be done the other way around.
 
         Returns
         -------
+        tuple
+            The re-shaped operators.
 
         """
 
@@ -851,7 +911,7 @@ class ExpressionParser(ParserElement):
                 # create array of zeros and fill it with op2
                 op2 = self.backend.add_op('+', self.backend.add_op("zeros", op1.shape, op1.dtype), op2)
 
-            elif len(op1.shape) > len(op2.shape) and 1 in op1.shape and len(op2.shape) > 0:
+            elif (len(op1.shape) > len(op2.shape)) and (1 in op1.shape) and (len(op2.shape) > 0):
 
                 # reshape op2 to match the shape of op1
                 target_shape = op1.shape
@@ -875,7 +935,7 @@ class ExpressionParser(ParserElement):
                 # create array of zeros and fill it with op2
                 op1 = self.backend.add_op('+', self.backend.add_op("zeros", op2.shape, op2.dtype, op1))
 
-            elif len(op2.shape) > len(op1.shape) and 1 in op2.shape and len(op1.shape) > 0:
+            elif (len(op2.shape) > len(op1.shape)) and (1 in op2.shape) and (len(op1.shape) > 0):
 
                 # reshape op2 to match the shape of op1
                 target_shape = op2.shape
@@ -894,16 +954,21 @@ class ExpressionParser(ParserElement):
 
         return op1, op2
 
-    def compare_shapes(self, op1, op2):
-        """
+    @staticmethod
+    def compare_shapes(op1: tp.Any, op2: tp.Any) -> bool:
+        """Checks whether the shapes of op1 and op2 are compatible with each other.
 
         Parameters
         ----------
         op1
+            First operator.
         op2
+            Second operator.
 
         Returns
         -------
+        bool
+            If true, the shapes of op1 and op2 are compatible.
 
         """
 
@@ -917,16 +982,21 @@ class ExpressionParser(ParserElement):
         else:
             return True
 
-    def compare_dtypes(self, op1, op2):
-        """
+    @staticmethod
+    def compare_dtypes(op1: tp.Any, op2: tp.Any) -> bool:
+        """Checks whether the data types of op1 and op2 are compatible with each other.
 
         Parameters
         ----------
         op1
+            First operator.
         op2
+            Second operator.
 
         Returns
         -------
+        bool
+            If true, the data types of op1 and op2 are compatible.
 
         """
 
@@ -942,18 +1012,25 @@ class ExpressionParser(ParserElement):
             return False
 
 
-def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs) -> dict:
-    """
+def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
+    """Parses a list of equations into the backend.
 
     Parameters
     ----------
     equations
+        Collection of equations that should be evaluated together.
     equation_args
+        Key-value pairs of arguments needed for parsing the equations.
     backend
+        Backend instance to parse the equations into.
     kwargs
+        Additional keyword arguments to be passed to the backend.
 
     Returns
     -------
+    dict
+        The updated equations args (in-place manipulation of all variables in equation_args happens during
+        equation parsing).
 
     """
 
@@ -991,29 +1068,31 @@ def parse_equation_list(equations: list, equation_args: dict, backend, **kwargs)
     return equation_args
 
 
-def parse_equation(lhs: str, rhs: str, equation_args: dict, backend, solve=False, assign_add=False, **kwargs) -> dict:
+def parse_equation(lhs: str, rhs: str, equation_args: dict, backend: tp.Any, solve: bool = False,
+                   assign_add: bool = False, **kwargs) -> dict:
     """Parses lhs and rhs of an equation.
 
     Parameters
     ----------
     lhs
+        Left hand side of an equation.
     rhs
+        Right hand side of an equation.
     equation_args
         Dictionary containing all variables and functions needed to evaluate the expression.
     backend
+        Backend instance to parse the equation into.
     solve
+        If true, the left hand side will be treated as a differential variable that needs to be integrated over time.
     assign_add
+        If true, the right hand side will be added to the current value of the left hand side instead of replacing it.
     kwargs
+        Additional keyword arguments to be passed to the backend.
 
     Returns
     -------
     dict
-
-    Examples
-    --------
-
-    References
-    ----------
+        The updated equation_args dictionary (variables were manipulated in place during equation parsing).
 
     """
 
@@ -1042,25 +1121,26 @@ def parse_equation(lhs: str, rhs: str, equation_args: dict, backend, solve=False
 
 
 def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
-    """Parses a dictionary with variable information and creates keras tensorflow variables from that information.
+    """Parses a dictionary with variable information and creates backend variables from that information.
 
     Parameters
     ----------
     var_dict
-        Contains key-value pairs for each variable that should be translated into the tensorflow graph.
+        Contains key-value pairs for each variable that should be translated into the backend graph.
         Each value is a dictionary again containing the variable information (needs at least a field for `vtype`).
     backend
+        Backend instance that the variables should be added to.
     kwargs
+        Additional keyword arguments to be passed to the backend.
 
     Returns
     -------
-    Tuple
-        Containing the variables and the variable names.
+    dict
+        Key-value pairs with the backend variable names and handles.
 
     """
 
     var_dict_tf = {}
-    tf.keras.backend.manual_variable_initialization(True)
 
     # go through dictionary items and instantiate variables
     #######################################################
@@ -1089,16 +1169,19 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
 
 
 def preprocess_equations(eqs: list, solver: str) -> tuple:
-    """
+    """Turns differential equations into simple algebraic equations using a certain solver scheme.
 
     Parameters
     ----------
     eqs
+        Collection of equations to be pre-processed.
     solver
+        Type of the solver.
 
     Returns
     -------
-
+    tuple
+        Contains left hand sides, right hand sides and left hand side update modes (= or +=)
     """
 
     # collect equation specifics
@@ -1196,17 +1279,22 @@ def preprocess_equations(eqs: list, solver: str) -> tuple:
     return lhs_col, rhs_col, add_assign_col
 
 
-def replace(eq, term, replacement):
-    """
+def replace(eq: str, term: str, replacement: str) -> str:
+    """Replaces a term in an equation with a replacement term.
 
     Parameters
     ----------
     eq
+        Equation that includes the term.
     term
+        Term that should be replaced.
     replacement
+        Replacement for all occurences of term.
 
     Returns
     -------
+    str
+        The updated equation.
 
     """
 

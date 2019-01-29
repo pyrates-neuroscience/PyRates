@@ -35,6 +35,7 @@ import networkx.drawing.nx_pydot as pydot
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from typing import Union, Optional
 
 # pyrates internal imports
 
@@ -43,8 +44,8 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def create_cmap(name=None, palette_type=None, as_cmap=True, **kwargs):
-    """
+def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True, **kwargs) -> Union[list, plt.Axes]:
+    """Create a colormap or color palette object.
 
     Parameters
     ----------
@@ -59,7 +60,7 @@ def create_cmap(name=None, palette_type=None, as_cmap=True, **kwargs):
 
     Returns
     -------
-    list
+    Union[list, plt.Axes]
         cmap or seaborn color palette.
 
     """
@@ -121,13 +122,14 @@ def create_cmap(name=None, palette_type=None, as_cmap=True, **kwargs):
     return cmap
 
 
-def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="darkgrid", **kwargs):
-    """Plot timeseries
+def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str = 'line_plot',
+                    bg_style: str = 'darkgrid', **kwargs) -> plt.Axes:
+    """Plot timeseries from a data frame.
 
     Parameters
     ----------
     data
-        Pandas dataframe containing the results of a pyrates simulation.
+        Results of a pyrates simulation.
     variable
         Name of the variable to be plotted
     plot_style
@@ -140,8 +142,8 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
 
     Returns
     -------
-    ax
-        Figure handle of the plot.
+    plt.Axes
+        Handle of the figure axes the time-series were plotted into.
 
     """
 
@@ -237,8 +239,9 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
     return ax
 
 
-def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whitegrid', node_order=None,
-                      auto_cluster=False, **kwargs):
+def plot_connectivity(fc: np.ndarray, threshold: Optional[float] = None, plot_style: str = 'heatmap',
+                      bg_style: str = 'whitegrid', node_order: Optional[list] = None, auto_cluster: bool = False,
+                      **kwargs) -> plt.Axes:
     """Plot functional connectivity between nodes in backend.
 
     Parameters
@@ -262,8 +265,9 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
 
     Returns
     -------
-    ax
+    plt.Axes
         Handle of the axis the plot was created in.
+
     """
 
     # turn fc into dataframe if necessary
@@ -365,7 +369,7 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
     return ax
 
 
-def plot_phase(data, bg_style='whitegrid', **kwargs):
+def plot_phase(data: pd.DataFrame, bg_style: str = 'whitegrid', **kwargs) -> sb.FacetGrid:
     """Plot phase of populations in a polar plot.
 
     Parameters
@@ -379,7 +383,7 @@ def plot_phase(data, bg_style='whitegrid', **kwargs):
 
     Returns
     -------
-    ax
+    sb.FacetGrid
         Axis handle of the created plot.
 
     """
@@ -419,7 +423,7 @@ def plot_phase(data, bg_style='whitegrid', **kwargs):
     return ax
 
 
-def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
+def plot_psd(data: pd.DataFrame, fmin: float = 0., fmax: float = 100., tmin: float = 0.0, **kwargs) -> plt.Axes:
     """Plots the power-spectral density for each column in data.
 
     Parameters
@@ -437,7 +441,7 @@ def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
 
     Returns
     -------
-    ax
+    plt.Axes
         Handle of the created plot.
 
     """
@@ -450,7 +454,8 @@ def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
     return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs).axes
 
 
-def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
+def plot_tfr(data: np.ndarray, freqs: list, nodes: Optional[list] = None, separate_nodes: bool = True, **kwargs
+             ) -> plt.Axes:
     """
 
     Parameters
@@ -458,6 +463,10 @@ def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
     data
         Numpy array (n x f x t) containing the instantaneous power estimates for each node (n), each frequency (f) at
         every timestep (t).
+    freqs
+        Frequencies of interest.
+    nodes
+        Nodes of interest in order of interest.
     separate_nodes
         If true, create a separate figure for each node.
     kwargs
@@ -465,7 +474,7 @@ def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
 
     Returns
     -------
-    ax
+    plt.Axes
         Handle of the created plot.
 
     """
@@ -502,23 +511,12 @@ def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
         ax = sb.FacetGrid(data, col='nodes', **kwargs_tmp)
 
         # map heatmaps to grid
-        ax.map_dataframe(draw_heatmap, 'time', 'freqs', 'values', cbar=False, square=True, **kwargs)
+        ax.map_dataframe(_draw_heatmap, 'time', 'freqs', 'values', cbar=False, square=True, **kwargs)
 
     return ax
 
 
-def write_graph(net, out_file='png'):
-    """Draw graph from backend config.
-    """
-
-    pydot_graph = pydot.to_pydot(net)
-
-    file_format = out_file.split('.')[1]
-    if file_format == 'png':
-        pydot_graph.write_png(out_file)
-
-
-def draw_heatmap(*args, **kwargs):
+def _draw_heatmap(*args, **kwargs):
     """Wraps seaborn.heatmap to work with long, tidy format dataframes.
     """
     data = kwargs.pop('data')
