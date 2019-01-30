@@ -131,3 +131,13 @@ Net:
   edges:
     - [PC/Op_e/r, IIN/Op_i/r_in_e, DummyEdge, {weight: 0.5}]
     - [IIN/Op_i/r, PC/Op_e/r_in_i, DummyEdge, {weight: 1.0}]
+
+CMC:
+  base: CircuitTemplate
+  circuits:
+    L3: Net
+    L5: Net
+  edges:
+    - [L3/PC/Op_e/r, L5/IIN/Op_i/r_in_e, DummyEdge, {weight: 0.1}]
+    - [L3/PC/Op_e/r, L5/PC/Op_e/r_in_e, DummyEdge, {weight: 0.1}]
+    - [L5/PC/Op_e/r, L3/IIN/Op_i/r_in_e, DummyEdge, {weight: 0.1}]
