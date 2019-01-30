@@ -35,8 +35,8 @@ print('Time elapsed: %.2f seconds' % (end-start))
 print(results)
 # print(results.columns)
 # plotting
-for j_e in params['J_e']:
-    for j_i in params['J_i']:
-        print(j_e, j_i)
-        ax = plot_timeseries(results[j_e][j_i], title=f"J_e={j_e}, J_i={j_i}")
-plt.show()
+# for j_e in params['J_e']:
+#     for j_i in params['J_i']:
+#         print(j_e, j_i)
+#         ax = plot_timeseries(results[j_e][j_i], title=f"J_e={j_e}, J_i={j_i}")
+# plt.show()
