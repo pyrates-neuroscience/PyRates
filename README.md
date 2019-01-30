@@ -1,5 +1,6 @@
 [![](https://img.shields.io/github/license/pyrates-neuroscience/PyRates.svg)](https://github.com/pyrates-neuroscience/PyRates) 
 [![Build Status](https://travis-ci.com/pyrates-neuroscience/PyRates.svg?branch=master)](https://travis-ci.com/pyrates-neuroscience/PyRates)
+<img src="https://github.com/pyrates-neuroscience/PyRates/blob/master/PyRates_logo.png" width="20%" heigth="20%" align="right">
 
 # PyRates
 PyRates is a framework for neural modeling and simulations, developed by Richard Gast and Daniel Rose at the Max Planck Institute of Human Cognitive and Brain Sciences, Leipzig, Germany. 
