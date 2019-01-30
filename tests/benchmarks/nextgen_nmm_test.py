@@ -1,5 +1,5 @@
-# from pyrates.frontend.template.circuit.circuit import CircuitTemplate
-# from pyrates.backend import ComputeGraph
+from pyrates.frontend.template.circuit.circuit import CircuitTemplate
+from pyrates.backend import ComputeGraph
 from pyrates.utility import plot_timeseries, grid_search
 import numpy as np
 import matplotlib.pyplot as plt

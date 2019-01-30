@@ -1,13 +1,8 @@
 import time
 
-print("Importing 'pyrates'...", end="")
-start = time.time()
-from pyrates.utility.cluster_grid_search import ClusterGridSearch
-# from pyrates.utility import grid_search
-elapsed = time.time()-start
-print("{0:.3f} seconds".format(elapsed))
-
 import numpy as np
+from pyrates.utility.cluster_grid_search import ClusterGridSearch
+
 
 print("Start!")
 start = time.time()
