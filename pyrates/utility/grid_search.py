@@ -1,30 +1,29 @@
-
 # -*- coding: utf-8 -*-
 #
 #
-# PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
+# PyRates software framework for flexible implementation of neural
+# network models and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
-# 
-# Copyright (C) 2017-2018 the original authors (Richard Gast and 
-# Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain 
+#
+# Copyright (C) 2017-2018 the original authors (Richard Gast and
+# Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain
 # Sciences ("MPI CBS") and contributors
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
-# 
+#
 # CITATION:
-# 
+#
 # Richard Gast and Daniel Rose et. al. in preparation
 """Functions for performing parameter grid simulations with pyrates models.
 """
@@ -38,75 +37,14 @@ from pyrates.backend import ComputeGraph
 from pyrates.frontend import CircuitTemplate
 from pyrates.ir.circuit import CircuitIR
 
-
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def cluster_grid_search(hostnames, circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
-                sampling_step_size=None, permute_grid=False, **kwargs):
-    """
-
-      Parameters
-      ----------
-      hostnames
-      circuit_template
-      param_grid
-      param_map
-      dt
-      simulation_time
-      inputs
-      outputs
-      sampling_step_size
-      permute_grid
-      kwargs
-
-      Returns
-      -------
-
-      """
-
-    # linearize parameter grid if necessary
-    if type(param_grid) is dict:
-        linear_grid = linearize_grid(param_grid, permute_grid, add_status_flag=True)
-
-
-
-    # print(list(linear_grid.columns.values))
-    # for index, row in linear_grid.iterrows():
-    #     print(index, row['J_e'], row['J_i'], row['status'])
-    # print(linear_grid.iloc[[2]])
-
-    # create a thread for each host and connect via SSH
-    # In each Thread:
-    #   - connect to host via SSH
-    #   - while not all params calculated:
-    #       - fetch_parameters()
-    #       - run_remote_computation() -> run grid_search() on the remote host
-
-
-
-def fetch_params(linear_grid, num_params):
-    """
-
-          Parameters
-          ----------
-          linear_grid
-          num_params
-
-          Returns
-          -------
-          param_list
-
-          """
-    pass
-
-
 def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
                 sampling_step_size=None, permute_grid=False, **kwargs):
     """
-
     Parameters
     ----------
     circuit_template
@@ -119,10 +57,8 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     sampling_step_size
     permute_grid
     kwargs
-
     Returns
     -------
-
     """
 
     # linearize parameter grid if necessary
@@ -136,7 +72,6 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     param_split = "__"
     val_split = "--"
     comb = "_"
-
     for n in range(param_grid.shape[0]):
         circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()
         circuit_names.append(f'{circuit_tmp.label}_{n}')
@@ -220,57 +155,38 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     return results_final
 
 
-def linearize_grid(grid: dict, permute=False, add_status_flag=False):
+def linearize_grid(grid: dict, permute=False):
     """
-
     Parameters
     ----------
     grid
     permute
-    add_status
-
     Returns
     -------
-
     """
 
     arg_lengths = [len(arg) for arg in grid.values()]
 
     if len(list(set(arg_lengths))) == 1 and not permute:
-        df = pd.DataFrame(grid)
-        if not add_status_flag:
-            return df
-        else:
-            # Add status key to each entry
-            df['status'] = 'unsolved'
-            return df
+        return pd.DataFrame(grid)
     else:
         vals, keys = [], []
         for key, val in grid.items():
             vals.append(val)
             keys.append(key)
         new_grid = np.stack(np.meshgrid(*tuple(vals)), -1).reshape(-1, len(grid))
-        df = pd.DataFrame(new_grid, columns=keys)
-        if not add_status_flag:
-            return df
-        else:
-            # Add a status key to each entry
-            df['status'] = 'unsolved'
-            return df
+        return pd.DataFrame(new_grid, columns=keys)
 
 
 def adapt_circuit(circuit, params, param_map):
     """
-
     Parameters
     ----------
     circuit
     params
     param_map
-
     Returns
     -------
-
     """
 
     for key in params.keys():
