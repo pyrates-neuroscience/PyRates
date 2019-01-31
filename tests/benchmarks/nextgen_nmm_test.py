@@ -5,6 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 # from pandas import DataFrame
 import time
+import os
+
+# disable TF-gpu warnings
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 print("Start!")
 # parameters
@@ -33,10 +37,11 @@ results = grid_search(circuit_template="pyrates.examples.simple_nextgen_NMM.Net5
 # results.to_csv("/data/hu_salomon/Documents/testresult_new.csv", index=True)
 
 end = time.time()
+print(results)
 
 print('Time elapsed: %.2f seconds' % (end-start))
 
-print(results.loc[:, (params['J_e'][0], params['J_i'][0])])
+# print(results.loc[:, (params['J_e'][0], params['J_i'][0])])
 # print(results.columns)
 # plotting
 # for j_e in params['J_e']:
