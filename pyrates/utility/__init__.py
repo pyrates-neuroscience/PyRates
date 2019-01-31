@@ -26,7 +26,8 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-"""
+"""This module contains various convenience functions for data visualization and analysis, wrapping other python
+packages, filestorage and parameter space exploration.
 """
 
 __author__ = "Daniel F. Rose, Richard Gast"
@@ -41,7 +42,6 @@ from .helper_functions import interpolate_array
 from .helper_functions import nmrse
 from .helper_functions import deep_compare
 from .helper_functions import make_iterable
-from .bio_features import *
 from .filestorage import get_simulation_data
 from .filestorage import save_simulation_data_to_file
 from .filestorage import read_simulation_data_from_file

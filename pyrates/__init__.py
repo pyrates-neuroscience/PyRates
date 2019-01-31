@@ -26,7 +26,8 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-"""
+"""Python package for building and simulating complex dynamical systems. Represents the dynamical systems as graphs,
+i.e. networks of nodes connected via edges.
 """
 
 __author__ = "Richard Gast, Daniel Rose"

@@ -8,7 +8,7 @@ import pytest
 
 # pyrates internal imports
 from pyrates.backend.parser import parse_equation_list, parse_dict
-from pyrates.backend.parser.parser import ExpressionParser
+from pyrates.backend.parser import ExpressionParser
 from pyrates.backend.backend_wrapper import TensorflowBackend
 
 # meta infos

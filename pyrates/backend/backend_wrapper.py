@@ -39,7 +39,7 @@ add_op
 add_layer
 
 Currently supported backends:
-- Tensorflow: :class:`TensorflowBackend`.
+- Tensorflow: TensorflowBackend.
 
 """
 
