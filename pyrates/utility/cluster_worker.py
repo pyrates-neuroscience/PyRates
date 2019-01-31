@@ -1,16 +1,15 @@
-# # system imports
-import argparse
+# system imports
+import os
 import sys
 import ast
 import json
+import time
 import socket
-import os
+import argparse
 from pathlib import Path
 
 # external imports
 import pandas as pd
-# TODO: Loading pyrates takes very long, also on the remote hosts. Makes the computation extremely long, especially
-#   when remote script is called multiple times, everytime loading pyrates again
 from pyrates.utility import grid_search
 
 
@@ -28,8 +27,12 @@ class Logger(object):
 
 
 def main(_):
-    # TODO: Create more outputs to track the progress in the logfile
-    # TODO: Add timestamps
+    ##################################################
+    # Load command line arguments and create logfile #
+    ##################################################
+    print("")
+    print("***LOADING COMMAND LINE ARGUMENTS***")
+    start_arg = time.time()
 
     hostname = socket.gethostname()
 
@@ -47,6 +50,16 @@ def main(_):
     # Copy all stdout and stderr to logfile
     sys.stdout = Logger(logfile)
     sys.stderr = Logger(logfile)
+
+    elapsed_arg = time.time() - start_arg
+    print("Command line evaluated. Elapsed time: {0:.3f} seconds".format(elapsed_arg))
+
+    ###########################
+    # Load global config file #
+    ###########################
+    print("")
+    print("***LOADING GLOBAL CONFIG FILE***")
+    start_gconf = time.time()
 
     with open(global_config) as g_conf:
         global_config_dict = json.load(g_conf)
@@ -67,8 +80,17 @@ def main(_):
         dt = global_config_dict['dt']
         simulation_time = global_config_dict['simulation_time']
 
+    elapsed_gconf = time.time() - start_gconf
+    print("Global config loaded. Elapsed time: {0:.3f} seconds".format(elapsed_gconf))
+
+    #########################
+    # LOAD PARAMETER GRID #
+    #########################
+    print("")
+    print("***LOADING PARAMETER GRID***")
+    start_grid = time.time()
+
     param_grid = pd.read_csv(local_grid, index_col=0)
-    param_idx = param_grid.index.tolist()
 
     # TODO: Print "Awaiting grid" so that the master can catch this line via stdout and send a new parameter grid
 
@@ -76,6 +98,16 @@ def main(_):
 
     # Exclude 'status'-key from param_grid because grid_search() can't handle the additional keyword
     param_grid_arg = param_grid.loc[:, param_grid.columns != "status"]
+
+    elapsed_grid = time.time() - start_grid
+    print("Parameter grid loaded. Elapsed time: {0:.3f} seconds".format(elapsed_grid))
+
+    ##########################
+    # COMPUTE PARAMETER GRID #
+    ##########################
+    print("")
+    print("***COMPUTING PARAMETER GRID***")
+    start_comp = time.time()
 
     results = grid_search(circuit_template=circuit_template,
                           param_grid=param_grid_arg,
@@ -86,25 +118,29 @@ def main(_):
                           dt=dt,
                           simulation_time=simulation_time)
 
+    elapsed_comp = time.time() - start_comp
+    print("Parameter grid computed. Elapsed time: {0:.3f} seconds".format(elapsed_comp))
+
+    #######################
+    # CREATE RESULT FILES #
+    #######################
+    print("")
+    print("***CREATING RESULT FILES***")
+    start_res = time.time()
+
     # Columns in results are unsorted
     # Access parameter combinations in param_grid and their corresponding index
     for idx, row in param_grid_arg.iterrows():
         # idx is the index label, e.g. 4,5,6,7 not the absolute index (0,1,2,3)
         res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
-        # Access parameter grid using absolute index
         params = param_grid_arg.iloc[param_grid_arg.index.get_loc(idx), :]
         # Find corresponding result for parameter combination in param_grid
         result = results.loc[:, (params[0], params[1:])]
+        result.index = results.index
         result.to_csv(res_file, index=True)
 
-    # for column in range(len(results.columns)):
-    #     # TODO: Implement check if column number and number or parameter combination in grid match
-    #     res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{param_idx[column]}.csv'
-    #     result = pd.DataFrame(results.iloc[:, column])
-    #     result.columns.names = results.columns.names
-    #     result.to_csv(res_file, index=True)
-
-    # TODO: Write name of used config file and parameter combination to each result file
+    elapsed_res = time.time() - start_res
+    print("Result files created. Elapsed time: {0:.3f} seconds".format(elapsed_res))
 
     # TODO: Send output_file back to host if there is no shared memory available
 

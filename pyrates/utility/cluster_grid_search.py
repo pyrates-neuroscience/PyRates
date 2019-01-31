@@ -156,7 +156,7 @@ class ClusterGridSearch(object):
 
         # logfile = open("/data/hu_salomon/Documents/bla.txt", "w+")
         sys.stdout = StreamTee(sys.stdout, self.global_logfile)
-        # sys.stderr = StreamTee(sys.stderr, self.global_logfile)
+        sys.stderr = StreamTee(sys.stderr, self.global_logfile)
 
         elapsed_dir = time.time() - start_dir
         print("Directories created. Elapsed time: {0:.3f} seconds".format(elapsed_dir))
@@ -187,10 +187,12 @@ class ClusterGridSearch(object):
 
         # Get password to connect to cluster nodes.
         username = getpass.getuser()
-        password = getpass.getpass(prompt='Enter password: ', stream=sys.stderr)
+        # Password request if authentication via Kerberos is not available in your cluster
+        # password = getpass.getpass(prompt='Enter password: ', stream=sys.stderr)
 
         for node in self.nodes['hostnames']:
-            client = ssh_connect(node, username=username, password=password)
+            # client = ssh_connect(node, username=username, password=password)
+            client = ssh_connect(node, username=username)
             if client is not None:
                 local_config_dir = f'{self.config_dir}/{node}'
                 os.makedirs(local_config_dir, exist_ok=True)
@@ -200,6 +202,7 @@ class ClusterGridSearch(object):
                     "config_dir": local_config_dir})
 
         # TODO: Print/save hardware specifications of each node
+
         elapsed_cluster = time.time() - start_cluster
         print("Cluster created. Elapsed time: {0:.3f} seconds".format(elapsed_cluster))
 
@@ -316,6 +319,10 @@ class ClusterGridSearch(object):
         elapsed_check = time.time() - start_check
         print("Consistency check complete. Elapsed time: {0:.3f} seconds".format(elapsed_check))
 
+        # TODO: Dynamically find the best number of params to fetch at once for each worker based on the hardware
+        #  specifications of each worker
+        #  Maybe match with number of CPUs or memory
+
         #############################
         # Begin cluster computation #
         #############################
@@ -370,13 +377,14 @@ class ClusterGridSearch(object):
         return t
 
     def __scheduler(self, client, grid: pd.DataFrame, grid_name: str, grid_res_dir: str,
-                    num_params=4):
-        # TODO: Dynamically find the best number of params to fetch at once for each worker
-        #   Maybe match with number of CPUs or memory
+                    num_params=25, gpu=False):
 
         thread_name = currentThread().getName()
 
-        command = f'{self.nodes["host_env"]} {self.nodes["host_file"]}'
+        if gpu:
+            command = f'{self.nodes["host_env_gpu"]} {self.nodes["host_file"]}'
+        else:
+            command = f'{self.nodes["host_env_cpu"]} {self.nodes["host_file"]}'
 
         # local_config_dict = dict()
 
@@ -403,7 +411,6 @@ class ClusterGridSearch(object):
                 #   parameter grid or an exit command to the host. If false, keep reading stdout.
 
                 with self.lock:
-                    start_calc = time.time()
 
                     # Ensure that the following code is executed without switching threads in between
                     print(f'[T]\'{thread_name}\': Fetching index: ', end="")
@@ -421,6 +428,8 @@ class ClusterGridSearch(object):
 
                     print(f'[T]\'{thread_name}\': Starting remote computation...')
 
+                    start_calc = time.time()
+
                     stdin, stdout, stderr = client.exec_command(command +
                                                                 f' --global_config={self.global_config}'
                                                                 f' --local_config={local_config}'
@@ -431,44 +440,49 @@ class ClusterGridSearch(object):
                                                                 get_pty=True)
 
                 # Wait for remote computation to finish
-                # stdout.channel.recv_exit_status()
+                stdout.channel.recv_exit_status()
 
+                elapsed_calc = time.time() - start_calc
+                print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {elapsed_calc:.3f} seconds')
                 # Print what has been sent to the channels stdout or stderr
-                for line in iter(stdout.readline, ""):
-                    print(f'[H]\'{thread_name}\': {line}', end="")
+                # for line in iter(stdout.readline, ""):
+                #     print(f'[H]\'{thread_name}\': {line}', end="")
 
                 # Set result status for each computed index in param_grid
+                print(f'[T]\'{thread_name}\': Setting result status...')
+                start_check = time.time()
+
                 for idx in param_idx:
                     res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
                     try:
                         if os.path.getsize(res_file) > 0:
                             grid.at[idx, 'status'] = 'done'
-                            print(f'[T]\'{thread_name}\': Computing index [{idx}]: done!')
+                            # print(f'[T]\'{thread_name}\': Computing index [{idx}]: done!')
                         else:
                             grid.at[idx, 'status'] = 'failed'
-                            print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
-                            print(f'[T]\'{thread_name}\': Resultfile {res_file} is empty')
+                            # print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
+                            # print(f'[T]\'{thread_name}\': Resultfile {res_file} is empty')
                     except OSError as e:
                         grid.at[idx, 'status'] = 'failed'
-                        print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
-                        print(f'[T]\'{thread_name}\': Resultfile {res_file} not created')
+                        # print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
+                        # print(f'[T]\'{thread_name}\': Resultfile {res_file} not created')
 
                 local_config_idx += 1
 
-                elapsed_calc = time.time() - start_calc
-                print("Elapsed time: {0:.3f} seconds".format(elapsed_calc))
+                elapsed_check = time.time() - start_check
+                print(f'[T]\'{thread_name}\': Elapsed time: {elapsed_check:.3f} seconds')
 
             # When no more inidices can be fetched
             print(f'[T]\'{thread_name}\': No more parameter combinations available!')
 
 
-def create_cgs_config(filepath, circuit_template, param_map, dt, simulation_time, inputs,
+def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inputs,
                       outputs, sampling_step_size=None, **kwargs):
     """Creates a configfile.json containing a config_dict{} with input parameters as key-value pairs
 
     Parameters
     ----------
-    filepath
+    fp
     circuit_template
     param_map
     dt
@@ -493,11 +507,11 @@ def create_cgs_config(filepath, circuit_template, param_map, dt, simulation_time
         "kwargs": kwargs
     }
 
-    with open(filepath, "w") as f:
+    with open(fp, "w") as f:
         json.dump(config_dict, f, indent=2)
 
 
-def ssh_connect(node, username, password):
+def ssh_connect(node, username, password=None):
     """Connect to a host via SSH
 
     Parameters
@@ -516,10 +530,10 @@ def ssh_connect(node, username, password):
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    # TODO: Create connection with host-key-pair and no password
-
     try:
-        client.connect(node, username=username, password=password)
+        # Using Kerberos authentication to connect to remote machines
+        # If Kerberos is not available in you cluster you need to implement an unechoed password request
+        client.connect(node, username=username, gss_auth=True, gss_kex=True)
         print(f'\'{node}\': Connection established!')
         return client
         # return client.invoke_shell()

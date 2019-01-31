@@ -11,25 +11,32 @@ global_config = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestConfig.jso
 
 host_config = {
     'hostnames': [
-        'animals'
-        # 'tschad',
+        'animals',
+        'tschad'
         # 'spanien',
-        # 'osttimor'
-        # 'tiber',
+        # 'carpenters'
+        # 'rihanna',
+        # 'unheilig'
+        # 'styx',
+        # 'spliff',
+        # 'springsteen',
+        # 'ufo',
+        # 'roxette'
     ],
     # Python executable in conda environment with installed packages 'pandas' and 'pyrates'
-    'host_env': "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python",
+    'host_env_cpu': "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python",
+    'host_env_gpu': "",
     # Python script to call on the remote hosts
     'host_file': "/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker.py",
     # Directory on the host to copy host_file and host_env to, if no shared filesystem is available
     'host_dir': ""
 }
 
-params = {'J_e': np.arange(8., 16., 2.), 'J_i': np.arange(2., 12., 2.)}
+params = {'J_e': np.arange(8., 18., 2.), 'J_i': np.arange(2., 22., 2.)}
 
 # param_grid = linearize_grid(params, permute=True)
 
-param_grid = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestDir/Grids/CGSTestGrid.csv"
+# param_grid = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestDir/Grids/CGSTestGrid.csv"
 
 dir = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestDir"
 
