@@ -442,11 +442,17 @@ class ClusterGridSearch(object):
                 # Wait for remote computation to finish
                 stdout.channel.recv_exit_status()
 
-                elapsed_calc = time.time() - start_calc
-                print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {elapsed_calc:.3f} seconds')
                 # Print what has been sent to the channels stdout or stderr
                 # for line in iter(stdout.readline, ""):
                 #     print(f'[H]\'{thread_name}\': {line}', end="")
+
+                elapsed_calc = time.time() - start_calc
+                # elapsed_calc contains the execution time of the worker script, including:
+                #   - Network communication
+                #   - Module import inside the python the script
+                #   - grid_search()
+                #   - creation of individual result files
+                print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {elapsed_calc:.3f} seconds')
 
                 # Set result status for each computed index in param_grid
                 print(f'[T]\'{thread_name}\': Setting result status...')

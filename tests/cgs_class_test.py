@@ -12,7 +12,7 @@ global_config = "/data/hu_salomon/Documents/ClusterGridSearch/CGS_TestConfig.jso
 host_config = {
     'hostnames': [
         'animals',
-        'tschad'
+        # 'tschad'
         # 'spanien',
         # 'carpenters'
         # 'rihanna',

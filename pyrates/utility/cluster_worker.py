@@ -134,7 +134,7 @@ def main(_):
         # idx is the index label, e.g. 4,5,6,7 not the absolute index (0,1,2,3)
         res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
         params = param_grid_arg.iloc[param_grid_arg.index.get_loc(idx), :]
-        # Find corresponding result for parameter combination in param_grid
+        # Find corresponding result in results for each parameter combination in param_grid
         result = results.loc[:, (params[0], params[1:])]
         result.index = results.index
         result.to_csv(res_file, index=True)
