@@ -377,7 +377,7 @@ class ClusterGridSearch(object):
         return t
 
     def __scheduler(self, client, grid: pd.DataFrame, grid_name: str, grid_res_dir: str,
-                    num_params=25, gpu=False):
+                    num_params=10, gpu=False):
 
         thread_name = currentThread().getName()
 
