@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 # connectivity
 k = 2.5
 v = 10.0
-C = loadmat("/home/rgast/PycharmProjects/PyRates/tests/resources/SC.mat")['SC']
-D = loadmat("/home/rgast/PycharmProjects/PyRates/tests/resources/D.mat")['D']
+C = loadmat("/data/hu_salomon/PycharmProjects/PyRates/tests/resources/SC.mat")['SC']
+D = loadmat("/data/hu_salomon/PycharmProjects/PyRates/tests/resources/D.mat")['D']
 C *= k
 D /= v * 1e3
 nodes = [f'circuit_{i}' for i in range(C.shape[0])]
@@ -34,7 +34,7 @@ net_config = CircuitIR.from_circuits('net', circuits=circuits, connectivity={'we
 net = ComputeGraph(net_config=net_config, dt=dt, vectorization='nodes')
 
 # define input and run simulation
-T = 10.
+T = 1.
 inp = 0.5 + np.random.randn(int(T/dt), C.shape[0]) * 1.0
 results = net.run(simulation_time=T, inputs={('PC', 'Op_e.0', 'inp'): inp}, outputs={'r': ('PC', 'Op_e.0', 'r')})
 

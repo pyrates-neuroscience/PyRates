@@ -38,6 +38,8 @@ import getpass
 from pathlib import Path
 from datetime import datetime
 from threading import Thread, currentThread, RLock
+# from multiprocessing.dummy import Pool
+# from concurrent.futures import ThreadPoolExecutor
 
 # external imports
 import pandas as pd
@@ -289,7 +291,7 @@ class ClusterGridSearch(object):
             # Open global config file and read the config dictionary
             param_dict = json.load(config)
             try:
-                # Try to read parameter map from the parameter dictionary
+                # Read parameter map from the parameter dictionary
                 param_map = param_dict['param_map']
             except KeyError as err:
                 # Config_file does not contain a key 'param_map'
@@ -332,7 +334,7 @@ class ClusterGridSearch(object):
 
         if not self.clients:
             print("No cluster created")
-            print("Please call ClusterGridSearch.create_cluster() first!")
+            print("Please call create_cluster() first!")
             print("Returning")
             # Stop computation
             return
@@ -365,7 +367,7 @@ class ClusterGridSearch(object):
         print(grid)
         print(f'Find results in: {grid_res_dir}/')
         grid.to_csv(f'{os.path.dirname(param_grid_path)}/{grid_name}_ResultStatus', index=True)
-        return grid_res_dir
+        return grid_res_dir, grid_name
 
     def __spawn_thread(self, client, grid, grid_name, grid_res_dir):
         t = Thread(

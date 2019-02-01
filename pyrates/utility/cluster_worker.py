@@ -130,6 +130,11 @@ def main(_):
 
     # Columns in results are unsorted
     # Access parameter combinations in param_grid and their corresponding index
+    # TODO: Write all results in the same hdf5-file?
+    #   Create temp.hfd5. Master assembles all temp files to one big resultfile?
+    # TODO: If async computation is implemented, send unsorted results back to master and let it assemble a big result
+    #  file after the next compuation was finished?
+
     for idx, row in param_grid_arg.iterrows():
         # idx is the index label, e.g. 4,5,6,7 not the absolute index (0,1,2,3)
         res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
