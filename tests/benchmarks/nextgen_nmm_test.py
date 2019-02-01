@@ -25,8 +25,6 @@ param_map = {'J_e': {'var': [('Op_e.0', 'J_e'), ('Op_i.0', 'J_e')],
                      'nodes': ['PC.0', 'IIN.0']}
              }
 
-
-
 # perform simulation
 start = time.time()
 results = grid_search(circuit_template="pyrates.examples.simple_nextgen_NMM.Net5",

@@ -428,7 +428,6 @@ class ClusterGridSearch(object):
 
                     local_config_idx += 1
 
-
                     elapsed_calc = time.time() - start_calc
                     print("Elapsed time: {0:.3f} seconds".format(elapsed_calc))
 

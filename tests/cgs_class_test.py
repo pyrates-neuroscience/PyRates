@@ -31,9 +31,9 @@ create_cgs_config(fp=global_config, circuit_template="pyrates.examples.simple_ne
 host_config = {
     'hostnames': [
         'animals',
-        # 'tschad'
         # 'spanien',
         'carpenters'
+        # 'tschad'
         # 'rihanna',
         # 'unheilig'
         # 'styx',
