@@ -112,7 +112,7 @@ class ClusterGridSearch(object):
         #############################################################
         print("")
         print("***CREATE WORKING DIRECTORY***")
-        start_dir = time.time()
+        # start_dir = time.time()
 
         # Unique id of current ClusterGridSearch instance.
         self.compute_id = datetime.now().strftime("%d%m%y-%H%M%S")
@@ -160,8 +160,8 @@ class ClusterGridSearch(object):
         sys.stdout = StreamTee(sys.stdout, self.global_logfile)
         sys.stderr = StreamTee(sys.stderr, self.global_logfile)
 
-        elapsed_dir = time.time() - start_dir
-        print("Directories created. Elapsed time: {0:.3f} seconds".format(elapsed_dir))
+        # elapsed_dir = time.time() - start_dir
+        # print("Directories created. Elapsed time: {0:.3f} seconds".format(elapsed_dir))
 
         print(f'Compute ID: {self.compute_id}')
         print(f'Compute directory: {self.compute_dir}')
@@ -187,7 +187,6 @@ class ClusterGridSearch(object):
         print("***CREATING CLUSTER***")
         start_cluster = time.time()
 
-        # Get password to connect to cluster nodes.
         username = getpass.getuser()
         # Password request if authentication via Kerberos is not available in your cluster
         # password = getpass.getpass(prompt='Enter password: ', stream=sys.stderr)
@@ -198,15 +197,16 @@ class ClusterGridSearch(object):
             if client is not None:
                 local_config_dir = f'{self.config_dir}/{node}'
                 os.makedirs(local_config_dir, exist_ok=True)
+                hw = get_hardware_spec(client)
                 self.clients.append({
                     "paramiko_client": client,
                     "node_name": node,
-                    "config_dir": local_config_dir})
-
-        # TODO: Print/save hardware specifications of each node
+                    "config_dir": local_config_dir,
+                    "hardware_spec": hw})
+            print("")
 
         elapsed_cluster = time.time() - start_cluster
-        print("Cluster created. Elapsed time: {0:.3f} seconds".format(elapsed_cluster))
+        print("Done! Elapsed time: {0:.3f} seconds".format(elapsed_cluster))
 
         return self.clients
 
@@ -609,3 +609,35 @@ def check_key_consistency(param_grid, param_map):
     grid_key_lst = list(param_grid.keys())
     map_key_lst = list(param_map.keys())
     return all((map_key in grid_key_lst for map_key in map_key_lst))
+
+
+def get_hardware_spec(client):
+    stdin, stdout, stderr = client.exec_command("lscpu | grep 'Model name'")
+    cpu = stdout.readline().split()
+    cpu = ' '.join(map(str, cpu[2:]))
+    print(f'CPU: {cpu}')
+
+    stdin, stdout, stderr = client.exec_command("lscpu | grep 'CPU(s)'")
+    num_cpu_cores = int(stdout.readline().split(":")[1])
+    print(f'Cores: {num_cpu_cores}')
+
+    stdin, stdout, stderr = client.exec_command("lscpu | grep 'min MHz'")
+    cpu_min = float(stdout.readline().split(":")[1])
+    print(f'CPU min: {cpu_min} MHz')
+
+    stdin, stdout, stderr = client.exec_command("lscpu | grep 'max MHz'")
+    cpu_max = float(stdout.readline().split(":")[1])
+    print(f'CPU max: {cpu_max} MHz')
+
+    stdin, stdout, stderr = client.exec_command("free -m | grep 'Mem'")
+    total_mem = int(stdout.readline().split()[1])
+    print(f'Total memory: {total_mem} MByte')
+
+    hw = {
+        'cpu': cpu,
+        'num_cpu_cores': num_cpu_cores,
+        'cpu_min_MHz': cpu_min,
+        'cpu_max_MHz': cpu_max,
+        'total_mem_MB': total_mem
+    }
+    return hw
