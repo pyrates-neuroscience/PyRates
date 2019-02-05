@@ -14,10 +14,10 @@ import os
 print("Start!")
 # parameters
 dt = 1e-4
-T = 20.
+T = 2.
 inp = 2. + np.random.randn(int(T/dt), 1) * 1.0
 
-params = {'J_e': np.arange(8., 28., 2.), 'J_i': np.arange(2., 12., 2.)}
+params = {'J_e': np.arange(8., 16., 2.), 'J_i': np.arange(2., 10., 2.)}
 # params = {'J_e': np.arange(8., 12., 2.), 'J_i': np.arange(2., 12., 2.)}
 param_map = {'J_e': {'var': [('Op_e.0', 'J_e'), ('Op_i.0', 'J_e')],
                      'nodes': ['PC.0', 'IIN.0']},

@@ -27,14 +27,14 @@ class Logger(object):
 
 
 def main(_):
+    hostname = socket.gethostname()
+
     ##################################################
     # Load command line arguments and create logfile #
     ##################################################
     print("")
     print("***LOADING COMMAND LINE ARGUMENTS***")
-    start_arg = time.time()
-
-    hostname = socket.gethostname()
+    # start_arg = time.time()
 
     global_config = FLAGS.global_config
     local_config = FLAGS.local_config
@@ -51,8 +51,8 @@ def main(_):
     sys.stdout = Logger(logfile)
     sys.stderr = Logger(logfile)
 
-    elapsed_arg = time.time() - start_arg
-    print("Command line evaluated. Elapsed time: {0:.3f} seconds".format(elapsed_arg))
+    # elapsed_arg = time.time() - start_arg
+    # print("Done! Elapsed time: {0:.3f} seconds".format(elapsed_arg))
 
     ###########################
     # Load global config file #
@@ -131,9 +131,9 @@ def main(_):
     # Columns in results are unsorted
     # Access parameter combinations in param_grid and their corresponding index
     # TODO: Write all results in the same hdf5-file?
-    #   Create temp.hfd5. Master assembles all temp files to one big resultfile?
+    #   Create temp.hfd5. Master assembles all temp files to one big result file?
     # TODO: If async computation is implemented, send unsorted results back to master and let it assemble a big result
-    #  file after the next compuation was finished?
+    #  file after the next computation was finished?
 
     for idx, row in param_grid_arg.iterrows():
         # idx is the index label, e.g. 4,5,6,7 not the absolute index (0,1,2,3)
