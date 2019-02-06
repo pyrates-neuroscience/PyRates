@@ -2,10 +2,13 @@ from pyrates.utility import plot_timeseries, grid_search, plot_psd, plot_connect
 import numpy as np
 import matplotlib.pyplot as plt
 from seaborn import cubehelix_palette
+import time
 
 __author__ = "Richard Gast"
 __status__ = "Development"
 
+start = time.time()
+print("Start!")
 
 # parameters
 dt = 1e-4
@@ -40,12 +43,17 @@ for idx, C in enumerate(Cs):
                  'k_ie': {'var': [(None, 'weight')],
                           'edges': [('IIN.0', 'PC.0', 0)]}
                  }
+    start_calc = time.time()
+    print("Starting grid search")
 
     # perform simulation
     results = grid_search(circuit_template="EI_circuit.Net",
                           param_grid=params, param_map=param_map,
                           inputs={("PC", "Op_e.0", "i_in"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
                           dt=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
+
+    elapsed_calc = time.time() - start_calc
+    print("Grid search finished: {0:.3f} seconds".format(elapsed_calc))
 
     # plotting
     cut_off = 1.
@@ -76,5 +84,10 @@ for idx, C in enumerate(Cs):
 
 plt.suptitle('EI-circuit sensitivity to population Coupling strengths (pcs)')
 plt.tight_layout(pad=2.5, rect=(0.01, 0.01, 0.99, 0.96))
-fig.savefig("/home/rgast/Documents/Studium/PhD_Leipzig/Figures/BGTCS/eic_coupling", format="svg")
+# fig.savefig("/home/rgast/Documents/Studium/PhD_Leipzig/Figures/BGTCS/eic_coupling", format="svg")
 plt.show()
+fig.savefig("/data/hu_salomon/Pictures/EIC_Coupling.svg", format="svg")
+
+
+elapsed = time.time() - start
+print("Overall elapsed time: {0:.3f} seconds".format(elapsed))

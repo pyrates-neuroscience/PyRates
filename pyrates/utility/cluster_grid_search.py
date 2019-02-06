@@ -194,6 +194,7 @@ class ClusterGridSearch(object):
 
     def __del__(self):
         # Make sure to close all clients when CGS instance is destroyed
+        print("Closing clients")
         for client in self.clients:
             client["paramiko_client"].close()
 
@@ -245,6 +246,8 @@ class ClusterGridSearch(object):
         for node in self.nodes['hostnames']:
             client = ssh_connect(node, username=username)
             if client is not None:
+                # self.__activate_env(client, "PyRates")
+                # self.__activate_env(client, "PyRates")
                 local_config_dir = f'{self.config_dir}/{node}'
                 os.makedirs(local_config_dir, exist_ok=True)
                 hw = get_hardware_spec(client)
@@ -253,6 +256,7 @@ class ClusterGridSearch(object):
                     "node_name": node,
                     "config_dir": local_config_dir,
                     "hardware": hw})
+
             print("")
 
         elapsed_cluster = time.time() - start_cluster
@@ -260,7 +264,7 @@ class ClusterGridSearch(object):
 
         return self.clients
 
-    def compute_grid(self, param_grid_arg, permute=True):
+    def compute_grid(self, param_grid_arg, num_params=1, permute=True):
         """Compute the circuit utilizing a compute cluster for each parameter combination in the parameter grid
 
         Can only run when a compute-cluster for the CGS instance has been created before.
@@ -283,6 +287,8 @@ class ClusterGridSearch(object):
         ----------
         param_grid_arg
             dict, DataFrame or csv-file with all parameter combinations to run the circuit with
+        num_params
+            amount of parameter combinations, that is executed at once by one worker
         permute
             If param_grid is a dict with lists, create a grid with all permutations of the list entries
 
@@ -438,7 +444,7 @@ class ClusterGridSearch(object):
 
         # TODO: Implement asynchronous computation instead of multithreading
 
-        threads = [self.__spawn_thread(client, grid, grid_name, grid_res_dir) for client in self.clients]
+        threads = [self.__spawn_thread(client, grid, grid_name, grid_res_dir, num_params) for client in self.clients]
 
         # Wait for all threads to finish
         for t in threads:
@@ -456,7 +462,7 @@ class ClusterGridSearch(object):
         # grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_ResultStatus.csv', index=True)
         return grid_res_dir, grid_file
 
-    def __spawn_thread(self, client: dict, grid: pd.DataFrame, grid_name: str, grid_res_dir: str):
+    def __spawn_thread(self, client: dict, grid: pd.DataFrame, grid_name: str, grid_res_dir: str, num_params):
         """Spawn a thread to control a remote cluster worker
 
         Parameters
@@ -475,13 +481,13 @@ class ClusterGridSearch(object):
         t = Thread(
             name=client["node_name"],
             target=self.__scheduler,
-            args=(client["paramiko_client"], grid, grid_name, grid_res_dir)
+            args=(client["paramiko_client"], grid, grid_name, grid_res_dir, num_params)
         )
         t.start()
         return t
 
     def __scheduler(self, client, grid: pd.DataFrame, grid_name: str, grid_res_dir: str,
-                    num_params=10, gpu=False):
+                    num_params, gpu=False):
 
         thread_name = currentThread().getName()
 
@@ -497,10 +503,6 @@ class ClusterGridSearch(object):
             print(f'[T]\'{thread_name}\': "No \'status\' column in param_grid')
             print(f'[T]\'{thread_name}\': Returning!')
         else:
-            # TODO: if no shared directory is available:
-            #   Copy environment, remote script and configs to a local directory on the host
-            #   Copy results from the remote host to a local directory on the master
-
             # TODO: Call exec_command only once and send global config file.
             #  Send node specific config to stdin inside the while loop
 
@@ -582,7 +584,7 @@ class ClusterGridSearch(object):
                 # elapsed_check = time.time() - start_check
                 # print(f'[T]\'{thread_name}\': Elapsed time: {elapsed_check:.3f} seconds')
 
-            # When no more inidices can be fetched
+            # When no more indices can be fetched
             print(f'[T]\'{thread_name}\': No more parameter combinations available!')
 
 

@@ -13,17 +13,30 @@ import pandas as pd
 from pyrates.utility import grid_search
 
 
-class Logger(object):
-    def __init__(self, logfile):
-        self.terminal = sys.stdout
-        self.log = open(logfile, "a")
+class StreamTee(object):
+    """Copy all stdout to a specified file"""
+    # Based on https://gist.github.com/327585 by Anand Kunal
+    def __init__(self, stream1, stream2fp):
+        stream2 = open(stream2fp, "a")
+        self.stream1 = stream1
+        self.stream2 = stream2
+        self.__missing_method_name = None  # Hack!
 
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
+    def __getattribute__(self, name):
+        return object.__getattribute__(self, name)
 
-    def flush(self):
-        pass
+    def __getattr__(self, name):
+        self.__missing_method_name = name  # Could also be a property
+        return getattr(self, '__methodmissing__')
+
+    def __methodmissing__(self, *args, **kwargs):
+        # Emit method call to the log copy
+        callable2 = getattr(self.stream2, self.__missing_method_name)
+        callable2(*args, **kwargs)
+
+        # Emit method call to stdout (stream 1)
+        callable1 = getattr(self.stream1, self.__missing_method_name)
+        return callable1(*args, **kwargs)
 
 
 def main(_):
@@ -48,8 +61,8 @@ def main(_):
     os.makedirs(os.path.dirname(logfile), exist_ok=True)
 
     # Copy all stdout and stderr to logfile
-    sys.stdout = Logger(logfile)
-    sys.stderr = Logger(logfile)
+    sys.stdout = StreamTee(sys.stdout, logfile)
+    sys.stderr = StreamTee(sys.stderr, logfile)
 
     # elapsed_arg = time.time() - start_arg
     # print("Done! Elapsed time: {0:.3f} seconds".format(elapsed_arg))
@@ -132,8 +145,8 @@ def main(_):
     # Access parameter combinations in param_grid and their corresponding index
     # TODO: Write all results in the same hdf5-file?
     #   Create temp.hfd5. Master assembles all temp files to one big result file?
-    # TODO: If async computation is implemented, send unsorted results back to master and let it assemble a big result
-    #  file after the next computation was finished?
+
+    # TODO: Implement possibility for customized postprocessing of the result data
 
     for idx, row in param_grid_arg.iterrows():
         # idx is the index label, e.g. 4,5,6,7 not the absolute index (0,1,2,3)
