@@ -117,8 +117,6 @@ class ClusterGridSearch(object):
             the unique compute ID of the CGS instance
         kwargs:
         """
-        print("Starting cluster grid search!")
-
         self.global_config = global_config
 
         # self members changed outside the __init__
@@ -126,8 +124,6 @@ class ClusterGridSearch(object):
         self.clients = []
         self.lock = None
         self.param_grid_count = 0
-
-        # TODO: Copy config file to Configs/ folder?
 
         #############################################################
         # Create main compute directory, subdirectories and logfile #
@@ -187,8 +183,9 @@ class ClusterGridSearch(object):
         print(f'Compute directory: {self.compute_dir}')
         print(f'Config file: {self.global_config}')
         print(f'Global logfile: {self.global_logfile}')
-
         print("")
+
+        # Copy global config file to config folder
         print(f'Copying config file to compute directory...')
         copy2(global_config, self.config_dir)
 
@@ -264,7 +261,7 @@ class ClusterGridSearch(object):
 
         return self.clients
 
-    def compute_grid(self, param_grid_arg, num_params=1, permute=True):
+    def compute_grid(self, param_grid_arg, num_params_arg=1, permute=True):
         """Compute the circuit utilizing a compute cluster for each parameter combination in the parameter grid
 
         Can only run when a compute-cluster for the CGS instance has been created before.
@@ -307,68 +304,16 @@ class ClusterGridSearch(object):
         print("***PREPARING PARAMETER GRID***")
         start_grid = time.time()
 
-        # param_grid can either be *.csv, dict or DataFrame
-        if isinstance(param_grid_arg, str):
-            # If parameter grid is a string
-            try:
-                # Open grid file
-                grid = pd.read_csv(param_grid_arg)
-                if 'status' not in grid.columns:
-                    # Add status-column
-                    grid['status'] = 'unsolved'
-                else:
-                    # Set rows with status 'failed' to 'unsolved' to compute them again
-                    unsolved_idx = grid.index[grid['status'] == "failed"]
-                    grid.at[unsolved_idx, 'status'] = 'unsolved'
-                # Check directory of grid file
-                if os.path.dirname(param_grid_arg) != self.grid_dir:
-                    # Copy parameter grid to CGS instances' grid directory
-                    grid_file = f'{self.grid_dir}/{os.path.basename(param_grid_arg)}'
-                    grid.to_csv(grid_file, index=False)
-                else:
-                    grid_file = param_grid_arg
-            except FileNotFoundError as err:
-                print(err)
-                print("Returning!")
-                # Stop computation
-                return
-        elif isinstance(param_grid_arg, dict):
-            # Create default parameter grid csv-file
-            grid_file = f'{self.grid_dir}/DefaultGrid{self.param_grid_count}.csv'
-            # Create DataFrame from dict
-            grid = linearize_grid(param_grid_arg, permute=permute)
-            if 'status' not in grid.columns:
-                grid['status'] = 'unsolved'
-            else:
-                # Set rows with status 'failed' to 'unsolved' to compute them again
-                unsolved_idx = grid.index[grid['status'] == "failed"]
-                grid.at[unsolved_idx, 'status'] = 'unsolved'
-            grid.to_csv(grid_file, index=True)
-            # Set counter to create different default grids if compute_grid() is called multiple times
-            self.param_grid_count += 1
-        elif isinstance(param_grid_arg, pd.DataFrame):
-            # Create default parameter grid csv-file from Dataframe
-            grid_file = f'{self.grid_dir}/DefaultGrid{self.param_grid_count}.csv'
-            grid = param_grid_arg
-            if 'status' not in grid.columns:
-                grid['status'] = 'unsolved'
-            else:
-                # Set rows with status 'failed' to 'unsolved' to compute them again
-                unsolved_idx = grid.index[grid['status'] == "failed"]
-                grid.at[unsolved_idx, 'status'] = 'unsolved'
-            grid.to_csv(grid_file, index=True)
-            # To create different default grids if compute_grid() is called more than once during a computation
-            self.param_grid_count += 1
-        else:
-            print("Parameter grid unsupported format")
+        grid, grid_file = self.__prepare_grid(param_grid_arg, permute)
+        if not grid:
+            print("Unable to post process parameter grid!")
             print("Returning!")
-            # Stop computation
             return
 
         grid_name = Path(grid_file).stem
 
         elapsed_grid = time.time() - start_grid
-        print("Grid created. Elapsed time: {0:.3f} seconds".format(elapsed_grid))
+        print(f'Grid created. Elapsed time: {elapsed_grid:.3f} seconds')
         print(f'Parameter grid: {grid_file}')
         print(grid)
 
@@ -379,6 +324,7 @@ class ClusterGridSearch(object):
         print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
         start_check = time.time()
 
+        # Check parameter map and parameter grid for consistency
         with open(self.global_config) as config:
             # Open global config file and read the config dictionary
             param_dict = json.load(config)
@@ -413,6 +359,24 @@ class ClusterGridSearch(object):
         elapsed_check = time.time() - start_check
         print("Consistency check complete. Elapsed time: {0:.3f} seconds".format(elapsed_check))
 
+        ###################################
+        # Set grid chunks for each worker #
+        ###################################
+
+        if isinstance(num_params_arg, int):
+            pass
+        elif isinstance(num_params_arg, str):
+            pass
+
+        num_params = num_params_arg
+
+        # TODO: Implement methods to find a number of params to fetch at once for each worker
+        #   Method can be selected by num_params_arg as int or string
+        # If num_params_arg is int, just fetch the given amount of parameter combinations for each worker
+        # 'dist_equal': Distribute all parameter combinations equally between all workers. Rest is loaded on the first
+        #    given node
+        # 'fit_hw':
+
         #############################
         # Begin cluster computation #
         #############################
@@ -420,6 +384,7 @@ class ClusterGridSearch(object):
         print("***BEGINNING CLUSTER COMPUTATION***")
         start_comp = time.time()
 
+        # Check if cluster was created
         if not self.clients:
             print("No cluster created")
             print("Please call create_cluster() first!")
@@ -440,10 +405,9 @@ class ClusterGridSearch(object):
         # Create lock to control thread scheduling
         self.lock = RLock()
 
-        # TODO: Dynamically find the best number of params to fetch at once for each worker
-
         # TODO: Implement asynchronous computation instead of multithreading
 
+        # Spawn a thread for each client to control its execution
         threads = [self.__spawn_thread(client, grid, grid_name, grid_res_dir, num_params) for client in self.clients]
 
         # Wait for all threads to finish
@@ -461,6 +425,100 @@ class ClusterGridSearch(object):
         print(f'Find results in: {grid_res_dir}/')
         # grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_ResultStatus.csv', index=True)
         return grid_res_dir, grid_file
+
+    def __prepare_grid(self, param_grid_arg, permute=False):
+        """Create a pandas.DataFrame and a default .csv file from a given set of parameter combinations
+
+        Parameters
+        ---------
+        param_grid_arg
+            Can be either a path to a csv-file, a pandas DataFrame or a dictionary
+            If a csv-file is given, a DataFrame is created and the csv-file is copied to the project folder
+            If a DataFrame is given, a default csv-file is created in the project folder. Existing default grid files
+                in the project folder are NOT overwritten. Each default file gets an index so no name conflicts occur
+            If a dictionary is given, a DataFrame and a csv-file are created
+        permute
+            Only relevant when param_grid_arg is a dictionary.
+            If true, a DataFrame is created containing all permutations of the parameters given in the dictionary as
+                lists
+
+        Returns
+        -------
+        grid
+            Pandas DataFrame containing all parameter combinations to be computed in the cluster
+        grid_file
+            path to a csv.file, containing all parameter combinations of the DataFrame
+
+        """
+        # param_grid can either be *.csv, dict or DataFrame
+        if isinstance(param_grid_arg, str):
+            # If parameter grid is a string
+            try:
+                # Open grid file
+                grid = pd.read_csv(param_grid_arg)
+                if 'status' not in grid.columns:
+                    # Add status-column
+                    grid['status'] = 'unsolved'
+                else:
+                    # Set rows with status 'failed' to 'unsolved' to compute them again
+                    unsolved_idx = grid.index[grid['status'] == "failed"]
+                    grid.at[unsolved_idx, 'status'] = 'unsolved'
+                # Check directory of grid file
+                if os.path.dirname(param_grid_arg) != self.grid_dir:
+                    # Copy parameter grid to CGS instances' grid directory
+                    copy2(param_grid_arg, self.grid_dir)
+                    grid_file = f'{self.grid_dir}/{os.path.basename(param_grid_arg)}'
+                    return grid, grid_file
+                else:
+                    grid_file = param_grid_arg
+                    return grid, grid_file
+            except FileNotFoundError as err:
+                print(err)
+                print("Returning!")
+                # Stop computation
+                return None
+
+        elif isinstance(param_grid_arg, dict):
+            # Create DataFrame from dict
+            grid = linearize_grid(param_grid_arg, permute=permute)
+            if 'status' not in grid.columns:
+                grid['status'] = 'unsolved'
+            else:
+                # Set rows with status 'failed' to 'unsolved' to compute them again
+                unsolved_idx = grid.index[grid['status'] == "failed"]
+                grid.at[unsolved_idx, 'status'] = 'unsolved'
+            # Create default parameter grid csv-file
+            grid_idx = 0
+            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            # If grid_file already exist
+            while os.path.exists(grid_file):
+                grid_idx += 1
+                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            grid.to_csv(grid_file, index=True)
+            return grid, grid_file
+
+        elif isinstance(param_grid_arg, pd.DataFrame):
+            grid = param_grid_arg
+            if 'status' not in grid.columns:
+                grid['status'] = 'unsolved'
+            else:
+                # Set rows with status 'failed' to 'unsolved' to compute them again
+                unsolved_idx = grid.index[grid['status'] == "failed"]
+                grid.at[unsolved_idx, 'status'] = 'unsolved'
+            # Create default parameter grid csv-file from DataFrame
+            grid_idx = 0
+            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            # If grid_file already exist
+            while os.path.exists(grid_file):
+                grid_idx += 1
+                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            grid.to_csv(grid_file, index=True)
+            return grid, grid_file
+
+        else:
+            print("Parameter grid unsupported format")
+            # Stop computation
+            return None
 
     def __spawn_thread(self, client: dict, grid: pd.DataFrame, grid_name: str, grid_res_dir: str, num_params):
         """Spawn a thread to control a remote cluster worker
@@ -569,15 +627,10 @@ class ClusterGridSearch(object):
                     try:
                         if os.path.getsize(res_file) > 0:
                             grid.at[idx, 'status'] = 'done'
-                            # print(f'[T]\'{thread_name}\': Computing index [{idx}]: done!')
                         else:
                             grid.at[idx, 'status'] = 'failed'
-                            # print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
-                            # print(f'[T]\'{thread_name}\': Resultfile {res_file} is empty')
                     except OSError as e:
                         grid.at[idx, 'status'] = 'failed'
-                        # print(f'[T]\'{thread_name}\': Computing index [{idx}]: failed!')
-                        # print(f'[T]\'{thread_name}\': Resultfile {res_file} not created')
 
                 local_config_idx += 1
 
@@ -673,8 +726,7 @@ def fetch_param_idx(param_grid, lock=None, num_params=1, set_status=True):
     param_grid
         Linearized parameter grid of type pandas.DataFrame.
     lock
-        A given lock makes sure, that all of the code inside the function is executed without a switch of threads in
-        between
+        A given lock makes sure, that all of the code inside the function is executed without switching between threads
     num_params
         Number of indices to fetch from param_grid. Is 1 by default.
     set_status
@@ -688,7 +740,6 @@ def fetch_param_idx(param_grid, lock=None, num_params=1, set_status=True):
         Is empty if there are no row indices to be fetched.
         Is np.nan if param_grid has no key named 'status'.
         Contains all remaining indices if num_params is higher than row indices left.
-
 
     """
     if lock:
@@ -751,5 +802,4 @@ def get_hardware_spec(client):
 
 
 def assemble_results(res_dir):
-
     pass

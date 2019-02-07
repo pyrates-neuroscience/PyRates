@@ -1,18 +1,17 @@
 from pyrates.utility.cluster_grid_search import *
 from pyrates.utility import plot_timeseries, grid_search
 
-
 home_dir = str(Path.home())
 
 # Optional: Directory to use as compute directory for current CGS instance.
-# If none is specified, default directory is created
-compute_dir = f'{home_dir}/Documents/ClusterGridSearch/CGS_nextgen_nmm_test'
+# If none is specified, default directory is created where the config_file resides
+compute_dir = f'/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_nmm_test2'
 
 ############################
 # Global config parameters #
 ############################
-config_name = "simple_nextgen_NMM_test1"
-config_file = f'{home_dir}/Documents/ClusterGridSearch/{config_name}.json'
+config_name = "simple_nextgen_NMM_1"
+config_file = f'/nobackup/spanien1/salomon/ClusterGridSearch{config_name}.json'
 
 circuit_template = "pyrates.examples.simple_nextgen_NMM.Net5"
 
@@ -52,7 +51,7 @@ host_config = {
         ],
     'host_env_cpu': "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python",
     'host_env_gpu': "",
-    'host_file': "/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker.py",
+    'host_file': "/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/__pycache__/cluster_worker.cpython-36.pyc",
     'host_dir': ""
 }
 
@@ -68,32 +67,32 @@ start_cgs = time.time()
 cgs = ClusterGridSearch(config_file, compute_dir=compute_dir)
 
 # Create compute cluster
-cgs.create_cluster(host_config)
+clients = cgs.create_cluster(host_config)
 
 # Compute grid inside the cluster
-res_dir, grid_file = cgs.compute_grid(param_grid, num_params=10)
+res_dir, grid_file = cgs.compute_grid(param_grid, num_params_arg=10)
 
 elapsed_cgs = time.time() - start_cgs
 print("Cluster grid search elapsed time: {0:.3f} seconds".format(elapsed_cgs))
 
 
-###############
-# GRID SEARCH #
-###############
-
-print("Starting grid search!")
-start_gs = time.time()
-
-results = grid_search(circuit_template=circuit_template,
-                      param_grid=param_grid, param_map=param_map,
-                      inputs=inputs, outputs=outputs,
-                      dt=dt, simulation_time=T, permute_grid=True)
-
-# Create result file
-results.to_csv(f'{compute_dir}/grid_search_nextgen_nmm_result.csv', index=True)
-
-elapsed_gs = time.time() - start_gs
-print("Cluster grid search elapsed time: {0:.3f} seconds".format(elapsed_gs))
+# ###############
+# # GRID SEARCH #
+# ###############
+#
+# print("Starting grid search!")
+# start_gs = time.time()
+#
+# results = grid_search(circuit_template=circuit_template,
+#                       param_grid=param_grid, param_map=param_map,
+#                       inputs=inputs, outputs=outputs,
+#                       dt=dt, simulation_time=T, permute_grid=True)
+#
+# # Create result file
+# results.to_csv(f'{compute_dir}/grid_search_nextgen_nmm_result.csv', index=True)
+#
+# elapsed_gs = time.time() - start_gs
+# print("Cluster grid search elapsed time: {0:.3f} seconds".format(elapsed_gs))
 
 
 ########
