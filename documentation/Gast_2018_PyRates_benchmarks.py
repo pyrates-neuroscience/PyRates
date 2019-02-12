@@ -1,38 +1,26 @@
 # pyrates imports
 from pyrates.ir.circuit import CircuitIR
-from pyrates.backend import ComputeGraph
-from pyrates.utility import plot_connectivity, create_cmap
 from pyrates.frontend import CircuitTemplate
 
 # additional imports
 import numpy as np
 from pandas import DataFrame
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-plt.style.reload_library()
-plt.style.use('ggplot')
-mpl.rcParams['lines.linewidth'] = 2
-mpl.rcParams['axes.titlesize'] = 24
-mpl.rcParams['axes.titleweight'] = 'bold'
-mpl.rcParams['axes.labelsize'] = 24
-mpl.rcParams['axes.labelcolor'] = 'black'
-mpl.rcParams['axes.labelweight'] = 'bold'
-mpl.rcParams['xtick.labelsize'] = 20
-mpl.rcParams['ytick.labelsize'] = 20
-mpl.rcParams['xtick.color'] = 'black'
-mpl.rcParams['ytick.color'] = 'black'
-mpl.rcParams['legend.fontsize'] = 20
 from copy import deepcopy
+import os
+import gc
+import tracemalloc
 
 # define parameters and functions
-dt = 1e-3                                       # integration step-size of the forward euler solver in s
-T = 1.0                                         # simulation time in s
-c = 20.                                         # global connection strength scaling
-N =[1, 10, 100][::-1]                           # network sizes, each of which will be run a benchmark for
-p = [0.81, 0.27, 0.09, 0.03, 0.01][::-1]        # global coupling probabilities, each of which will be run a benchmark for
+dt = 1e-4                                       # integration step-size of the forward euler solver in s
+T = 10.0                                        # simulation time in s
+c = 1.                                          # global connection strength scaling
+N = np.round(2**np.arange(12))[::-1]            # network sizes, each of which will be run a benchmark for
+p = np.linspace(0.0, 1.0, 5)                    # global coupling probabilities to run benchmarks for
+use_gpu = False                                 # if false, benchmarks will be run on CPU
+n_reps = 1                                      # number of trials per benchmark
 
 
-def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
+def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
     """Function that will run a benchmark simulation for each combination of N and P.
     Each benchmark simulation simulates the behavior of a neural population network, where the Jansen-Rit model is used for each of the N nodes and
     connections are drawn randomly, such that on overall coupling density of P is established.
@@ -51,6 +39,8 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
         Additional key-word arguments for the model initialization.
     run_kwargs
         Additional key-word arguments for running the simulation.
+    disable_gpu
+        If true, GPU devices will be disabled, so the benchmark will be run on the CPU only.
 
     Returns
     -------
@@ -58,6 +48,12 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
         Simulation times, peak memory consumptions
 
     """
+
+    if disable_gpu:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    else:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    from pyrates.backend import ComputeGraph
 
     times = np.zeros((len(Ns), len(Ps)))
     peak_mem = np.zeros_like(times)
@@ -71,6 +67,10 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
             # define inter-JRC connectivity
             C = np.random.uniform(size=(n, n))
             C[C > p] = 0.
+            c_sum = np.sum(C, axis=1)
+            for k in range(C.shape[0]):
+                if c_sum[k] != 0.:
+                    C[k, :] /= c_sum[k]
             conns = DataFrame(C, columns=[f'jrc_{idx}/PC.0/PRO.0/m_out' for idx in range(n)])
             conns.index = [f'jrc_{idx}/PC.0/RPO_e_pc.0/m_in' for idx in range(n)]
 
@@ -78,7 +78,7 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
             inp = 220 + np.random.randn(int(T / dt), n) * 22.
 
             # set up template
-            template = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC")
+            template = CircuitTemplate.from_yaml("../model_templates/jansen_rit/simple_jansenrit.JRC")
 
             # set up intermediate representation
             circuits = {}
@@ -92,59 +92,42 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
             print("Starting the benchmark simulation...")
 
             # run simulations
-            _, t, m = net.run(T, inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, outputs={'V': ('PC', 'PRO.0', 'PSP')},
+            if i == 0 and j == 0:
+                net.run(T, inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, outputs={'V': ('PC', 'PRO.0', 'PSP')},
+                        verbose=False, sampling_step_size=1e-3)
+            tracemalloc.start()
+            m_start = tracemalloc.get_traced_memory()[1]
+            _, t, _ = net.run(T, inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, outputs={'V': ('PC', 'PRO.0', 'PSP')},
                               verbose=False, **run_kwargs)
+            m_stop = tracemalloc.get_traced_memory()[1]
+            m = (m_stop - m_start) / 1e6
+            tracemalloc.stop()
+            net.clear()
+            gc.collect()
             times[i, j] = t
             peak_mem[i, j] = m
 
             print("Finished!")
+            print(f'simulation time: {t} s.')
+            print(f'peak memory: {m} MB.')
 
     return times, peak_mem
 
 
 # simulate benchmarks
-results = np.zeros((len(N), len(p), 3))                       # array in which results will be stored
+results = np.zeros((len(N), len(p), 2, n_reps))                                # array in which results will be stored
+for i in range(n_reps):
+    print(f'Starting benchmark simulation run # {i}...')
+    t, m = benchmark(N, p, T, dt,
+                     init_kwargs={'vectorization': 'full',
+                                  'use_device': 'gpu' if use_gpu else 'cpu'},
+                     run_kwargs={'profile': 't',
+                                 'sampling_step_size': 1e-3},
+                     disable_gpu=False if use_gpu else True)                   # benchmarks simulation times and memory
+    results[:, :, 0, i] = t
+    results[:, :, 1, i] = m
+    print(f'Finished benchmark simulation run # {i}!')
 
-t, m = benchmark(N, p, T, dt,
-                 init_kwargs={'vectorization': 'full'},
-                 run_kwargs={'profile': 'mt'})                # runs benchmark function on GPU
-results[:, :, 0] = t
-results[:, :, 1] = m
-
-t, _ = benchmark(N, p, T, dt,                                 # runs benchmark function on CPU
-                 init_kwargs={'vectorization': 'full'},
-                 run_kwargs={'profile': 't'})
-results[:, :, 3] = t
-
-# create colormaps
-n_colors = 16
-cm_red = create_cmap('pyrates_red', as_cmap=True, n=n_colors)
-cm_green = create_cmap('pyrates_green', as_cmap=True, n=n_colors)
-cm_div = create_cmap('pyrates_blue/pyrates_yellow', as_cmap=True, n=n_colors, reverse=True)
-
-# plot results
-fig, axes = plt.subplots(ncols=3, figsize=(20, 7))
-
-# plot simulation times of benchmarks run on the GPU
-plot_connectivity(results[:, :, 0], ax=axes[0], yticklabels=N, xticklabels=p, cmap=cm_red)
-axes[0].set_yticklabels(axes[0].get_yticklabels(), rotation='horizontal')
-axes[0].set_ylabel('number of JRCs', labelpad=15.)
-axes[0].set_xlabel('coupling density', labelpad=15.)
-axes[0].set_title('Simulation time T in s', pad=20.)
-
-# plot memory consumption of benchmarks run on the GPU
-plot_connectivity(results[:, :, 1], ax=axes[1], yticklabels=N, xticklabels=p, cmap=cm_green)
-axes[1].set_yticklabels(axes[1].get_yticklabels(), rotation='horizontal')
-axes[1].set_ylabel('number of JRCs', labelpad=15.)
-axes[1].set_xlabel('coupling density', labelpad=15.)
-axes[1].set_title('Peak memory in MB', pad=20.)
-
-# plot simulation time differene between GPU and CPU
-plot_connectivity(results[:, :, 2] - results[:, :, 0], ax=axes[2], yticklabels=N, xticklabels=p, cmap=cm_div)
-axes[2].set_yticklabels(axes[2].get_yticklabels(), rotation='horizontal')
-axes[2].set_ylabel('number of JRCs', labelppad=15.)
-axes[2].set_xlabel('coupling density', labelpad=15.)
-axes[2].set_title(r'$\mathbf{T_{CPU}} - \mathbf{T_{CPU}}$', pad=20.)
-
-plt.tight_layout()
-#plt.savefig('/img/Gast_2018_PyRates_benchmarks.svg', format='svg')
+np.save(f"{'gpu' if use_gpu else 'cpu'}_benchmarks", results)
+np.save('n_jrcs', N)
+np.save('conn_prob', p)

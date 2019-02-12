@@ -66,6 +66,8 @@ class ComputeGraph(object):
     build_in_place
         If False, a copy of the `net_config``will be made before compute graph creation. Should be used, if the
         `net_config` will be re-used for multiple compute graphs.
+    use_device
+        Can be either `cpu` or `gpu`. Device placement will be soft.
 
     """
 
@@ -74,7 +76,9 @@ class ComputeGraph(object):
                  dt: float = 1e-3,
                  vectorization: str = 'nodes',
                  name: Optional[str] = None,
-                 build_in_place: bool = True):
+                 build_in_place: bool = True,
+                 use_device: str = 'cpu'
+                 ) -> None:
         """Instantiates operator.
         """
 
@@ -85,8 +89,8 @@ class ComputeGraph(object):
         self.name = name if name else 'net.0'
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
-        # instantiate the backend
-        self.backend = TensorflowBackend()
+        # instantiate the backend and set the backend default_device
+        self.backend = TensorflowBackend(use_device=use_device)
 
         # pre-process the network configuration
         self.dt = dt
@@ -594,6 +598,11 @@ class ComputeGraph(object):
                 var_col[key] = self.backend.add_op('squeeze', var, idx, **kwargs)
 
         return var_col
+
+    def clear(self):
+        """Clears the backend graph from all operations and variables.
+        """
+        self.backend.clear()
 
     def _add_ops(self, ops: List[str], node_name: str, updates: Optional[dict] = None, primary_ops: bool = False
                  ) -> dict:

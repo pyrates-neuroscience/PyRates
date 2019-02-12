@@ -63,17 +63,27 @@ class TensorflowBackend(tf.Graph):
         Additional operations this backend instance can perform, defined as key-value pairs.
     dtypes
         Additional data-types this backend instance can use, defined as key-value pairs.
+    use_device
+        Default default_device on which to place variables and operations.
 
     """
 
     def __init__(self,
                  ops: Optional[Dict[str, Callable]] = None,
-                 dtypes: Optional[Dict[str, object]] = None
+                 dtypes: Optional[Dict[str, object]] = None,
+                 use_device: str = 'cpu'
                  ) -> None:
         """Instantiates tensorflow backend, i.e. a tensorflow graph.
         """
 
         super().__init__()
+        if use_device == 'cpu':
+            device = '/cpu:0'
+        elif use_device == 'gpu':
+            device = '/gpu:0'
+        else:
+            device = use_device
+        self.default_device = device
 
         # define operations and datatypes of the backend
         ################################################
@@ -216,17 +226,17 @@ class TensorflowBackend(tf.Graph):
         # initialize profiler
         if profile is None:
             profile = ''
-        if 't' in profile:
-            t0 = t.time()
         if 'm' in profile:
             meta = tf.RunMetadata()
             time_and_memory = tf.profiler.ProfileOptionBuilder.time_and_memory()
+        if 't' in profile:
+            t0 = t.time()
 
         # graph execution
         #################
 
         # start session
-        with tf.Session(graph=self) as sess:
+        with tf.Session(graph=self, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
             # initialize variables on graph
             sess.run(tf.global_variables_initializer())
@@ -265,13 +275,14 @@ class TensorflowBackend(tf.Graph):
                 sim_time = 0.
             if 'm' in profile:
                 peak_memory = tf.profiler.profile(graph=self, run_meta=meta, cmd='op', options=time_and_memory
-                                                       ).total_peak_bytes / 1e6
+                                                  ).total_peak_bytes / 1e6
             else:
                 peak_memory = 0.
 
-            # close session log
+            # close session stuff
             if out_dir:
                 writer.close()
+            sess.close()
 
         if profile:
             return outputs, sim_time, peak_memory
@@ -321,6 +332,9 @@ class TensorflowBackend(tf.Graph):
         # extract graph dependencies
         dependencies = kwargs.pop('dependencies', None)
 
+        # set the default_device
+        device = kwargs.pop('device', self.default_device)
+
         # check whether necessary arguments were provided
         if all([arg is None for arg in [shape, value, dtype]]):
             raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
@@ -336,20 +350,21 @@ class TensorflowBackend(tf.Graph):
         # create variable
         #################
 
-        with self.as_default():
-            with scope as sc:
-                with tf.control_dependencies(dependencies):
+        with tf.device(device):
+            with self.as_default():
+                with scope as sc:
+                    with tf.control_dependencies(dependencies):
 
-                    if reuse:
+                        if reuse:
 
-                        # create variable under existing scope
-                        with tf.name_scope(sc.original_name_scope):
+                            # create variable under existing scope
+                            with tf.name_scope(sc.original_name_scope):
+                                return self._create_var(vtype, name, value, shape, dtype, **kwargs)
+
+                        else:
+
+                            # create variable under new scope
                             return self._create_var(vtype, name, value, shape, dtype, **kwargs)
-
-                    else:
-
-                        # create variable under new scope
-                        return self._create_var(vtype, name, value, shape, dtype, **kwargs)
 
     def add_op(self,
                op: str,
@@ -383,26 +398,30 @@ class TensorflowBackend(tf.Graph):
         # extract graph dependencies
         dependencies = kwargs.pop('dependencies', None)
 
+        # set the default_device
+        device = kwargs.pop('device', self.default_device)
+
         # extract additional infos
         assign_to_var = kwargs.pop('assign_to_var', False)
 
         # create operation
         ##################
 
-        with self.as_default():
-            with scope as sc:
-                with tf.control_dependencies(dependencies):
+        with tf.device(device):
+            with self.as_default():
+                with scope as sc:
+                    with tf.control_dependencies(dependencies):
 
-                    if reuse:
+                        if reuse:
 
-                        # create operation under existing scope
-                        with tf.name_scope(sc.original_name_scope):
+                            # create operation under existing scope
+                            with tf.name_scope(sc.original_name_scope):
+                                return self._create_op(op, assign_to_var, *args, **kwargs)
+
+                        else:
+
+                            # create operation under new scope
                             return self._create_op(op, assign_to_var, *args, **kwargs)
-
-                    else:
-
-                        # create operation under new scope
-                        return self._create_op(op, assign_to_var, *args, **kwargs)
 
     def add_layer(self,
                   ops: List[tf.Operation],
@@ -433,18 +452,25 @@ class TensorflowBackend(tf.Graph):
 
         dependencies = kwargs.pop('dependencies', None)
         scope, reuse = self._get_scope(kwargs.pop('scope', None))
+        device = kwargs.pop('device', self.default_device)
 
         # create layer
         ##############
-        
-        with self.as_default():
-            with scope as sc:
-                with tf.control_dependencies(dependencies):
-                    if reuse:
-                        with tf.name_scope(sc.original_name_scope):
+
+        with tf.device(device):
+            with self.as_default():
+                with scope as sc:
+                    with tf.control_dependencies(dependencies):
+                        if reuse:
+                            with tf.name_scope(sc.original_name_scope):
+                                return tf.tuple(ops, *args, **kwargs)
+                        else:
                             return tf.tuple(ops, *args, **kwargs)
-                    else:
-                        return tf.tuple(ops, *args, **kwargs)
+
+    def clear(self):
+        """Resets all tensorflow operations on the graph.
+        """
+        tf.reset_default_graph()
 
     def _create_op(self, op: str, assign_to_var: bool, *args, **kwargs) -> Union[tf.Operation, tf.Variable]:
         """
