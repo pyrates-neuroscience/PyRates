@@ -23,4 +23,4 @@ cgs_result = pd.read_csv(f'{cgs_results}/CGS_result_DefaultGrid0_idx_{idx}.csv',
 
 diff = gs_result.subtract(cgs_result)
 print(diff)
-    # result.indcsv(res_file, index=True)
+

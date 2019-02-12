@@ -1,4 +1,5 @@
 # system imports
+import os
 import sys
 import ast
 import json
@@ -13,6 +14,9 @@ from pyrates.utility import grid_search
 
 
 def main(_):
+    # disable TF-gpu warnings
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
     ##################################################
     # Load command line arguments and create logfile #
     ##################################################
@@ -38,8 +42,9 @@ def main(_):
     with open(global_config) as g_conf:
         global_config_dict = json.load(g_conf)
 
-        # Recreate tuple from string/list to use as key/values in inputs/outputs since pure tuples cannot be saved in
-        # json formatted files
+        # Recreate tuple from string/list to use as key/values in inputs/outputs since pure tuples cannot be saved as
+        # json formatted string
+
         inputs = {ast.literal_eval(*global_config_dict['inputs'].keys()):
                   list(*global_config_dict['inputs'].values())}
         outputs = {str(*global_config_dict['outputs'].keys()):
@@ -63,8 +68,9 @@ def main(_):
     # Load subgrid into DataFrame
     param_grid = pd.read_csv(subgrid, index_col=0)
 
-    # Exclude 'status'-key from param_grid since grid_search() can't handle the additional keyword
+    # Exclude 'status'- and 'worker'-keys from param_grid since grid_search() can't handle the additional keywords
     param_grid = param_grid.loc[:, param_grid.columns != "status"]
+    param_grid = param_grid.loc[:, param_grid.columns != "worker"]
 
     elapsed_grid = time.time() - start_grid
     print("Parameter grid loaded. Elapsed time: {0:.3f} seconds".format(elapsed_grid))
@@ -116,8 +122,21 @@ def main(_):
 
 
 def postprocessing(data):
-    # TODO: Implement possibility for customized postprocessing of the result data
-    # Read data for each column in results, process data and write it back to the column
+    # type(data) = <class 'pandas.core.frame.DataFrame'>
+    # Can be processed like a slice received via (e.g.): data = results[J_e][J_i]
+
+    # Postprocessing example (see EIC_coupling.py):
+    # cut_off = 1.
+    # max_freq = np.zeros((len(ei_ratio), len(io_ratio)))
+    # freq_pow = np.zeros_like(max_freq)
+    # if not data.isnull().any().any():
+    #     _ = plot_psd(data, tmin=cut_off, show=False)
+    #     pow = plt.gca().get_lines()[-1].get_ydata()
+    #     freqs = plt.gca().get_lines()[-1].get_xdata()
+    #     r, c = np.argmin(np.abs(ei_ratio - k1/k2)), np.argmin(np.abs(io_ratio - j_i/k2))
+    #     max_freq[r, c] = freqs[np.argmax(pow)]
+    #     freq_pow[r, c] = np.max(pow)
+    #     plt.close(plt.gcf())
     return data
 
 

@@ -28,7 +28,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """Functions for performing parameter grid simulations in a compute cluster with pyrates models.
 """
-
+# TODO: Why does it take so long to start the master/worker script? PyRates?
 # system imports
 import os
 import sys
@@ -47,7 +47,7 @@ import numpy as np
 import paramiko
 
 # pyrates internal imports
-from pyrates.utility.grid_search import linearize_grid
+# from pyrates.utility.grid_search import linearize_grid
 
 
 # meta infos
@@ -56,6 +56,8 @@ __status__ = "development"
 
 
 class StreamTee(object):
+    # TODO: Stop stream tee after CGS computation has finished
+
     """Copy all stdout to a specified file"""
     def __init__(self, stream1, stream2fp):
         stream2 = open(stream2fp, "a")
@@ -86,9 +88,10 @@ class ClusterGridSearch(object):
 
         Each ClusterGridSearch instance has its own unique compute ID, which is assigned when a new CGS instance is
             created.
-        When a new CGS instance is invoked, all necessary directories to start a new cluster computation are created,
-            based on the global_config filename.
-        Initializes all necessary members and copies future stdout to a global logfile inside the compute directory.
+        When a new CGS instance is invoked, a folder with all necessary directories is created in the directory of the
+            global config file if not specified otherwise
+        The global config file is copied to the instances compute directory
+        All prints to stdout and stderr are copied to a global logfile, that is created during the initialization
 
         Parameters
         ----------
@@ -97,14 +100,14 @@ class ClusterGridSearch(object):
             parameter grid, which is passed later
         compute_dir:
             If given, all necessary subfolders for the computation are created inside the specified directory. If no
-            compute directory is given, a default directory is created based on the name of the global config file and
-            the unique compute ID of the CGS instance
+            compute directory is given, a default directory is created based on the location of the global config file
+            and the unique compute ID of the CGS instance
         kwargs:
         """
         self.global_config = global_config
 
         # self members changed outside the __init__
-        self.nodes = []
+        self.node_config = None
         self.clients = []
         self.lock = None
 
@@ -124,12 +127,11 @@ class ClusterGridSearch(object):
         if compute_dir:
             # Use given directory as main compute directory
             self.compute_dir = compute_dir
-            print(f'Using existent directory: {self.compute_dir}')
+            os.makedirs(self.compute_dir, exist_ok=True)
         else:
             # Create default compute directory as subdir of global_config location
             self.compute_dir = f'{os.path.dirname(self.global_config)}/{self.compute_name}'
             os.makedirs(self.compute_dir, exist_ok=True)
-            print(f'New working directory created: {self.compute_dir}')
 
         # Create log directory '/Logs' as subdir of compute directory
         self.log_dir = f'{self.compute_dir}/Logs/{self.compute_id}'
@@ -139,8 +141,8 @@ class ClusterGridSearch(object):
         self.grid_dir = f'{self.compute_dir}/Grids'
         os.makedirs(self.grid_dir, exist_ok=True)
 
-        # Create config directory '/Configs' as subdir of compute directory
-        self.config_dir = f'{self.compute_dir}/Configs'
+        # Create config directory '/Config' as subdir of compute directory
+        self.config_dir = f'{self.compute_dir}/Config'
         os.makedirs(self.config_dir, exist_ok=True)
 
         # Create result directory '/Results' as subdir of compute directory
@@ -154,6 +156,8 @@ class ClusterGridSearch(object):
         # Copy all stdout and stderr to logfile
         sys.stdout = StreamTee(sys.stdout, self.global_logfile)
         sys.stderr = StreamTee(sys.stderr, self.global_logfile)
+        self.stdout = sys.stdout
+        self.stderr = sys.stderr
 
         # elapsed_dir = time.time() - start_dir
         # print("Directories created. Elapsed time: {0:.3f} seconds".format(elapsed_dir))
@@ -170,11 +174,10 @@ class ClusterGridSearch(object):
 
     def __del__(self):
         # Make sure to close all clients when CGS instance is destroyed
-        print("Closing clients")
         for client in self.clients:
             client["paramiko_client"].close()
 
-    def create_cluster(self, nodes: dict):
+    def create_cluster(self, node_config: dict):
         """Create a new compute cluster for the CGS instance
 
         Connects to all hosts given in the nodes dictionary using ssh_connect() and adds the corresponding client to
@@ -188,7 +191,7 @@ class ClusterGridSearch(object):
 
         Parameters
         ----------
-        nodes
+        node_config
             Dictionary containing the following entries:
             - 'hostnames': List of computer names in the local network to connect to via SSH
             - 'host_env_cpu': Path to a python executable that runs the remote worker python script
@@ -206,7 +209,8 @@ class ClusterGridSearch(object):
             client["paramiko_client"].close()
         self.clients.clear()
 
-        self.nodes = nodes
+        # self.nodes = nodes
+        self.node_config = node_config
 
         ##################
         # Create cluster #
@@ -219,16 +223,13 @@ class ClusterGridSearch(object):
         # Password request if authentication via Kerberos is not available in your cluster
         # password = getpass.getpass(prompt='Enter password: ', stream=sys.stderr)
 
-        for node in self.nodes['hostnames']:
+        for node in self.node_config['hostnames']:
             client = self.__ssh_connect(node, username=username)
             if client is not None:
-                local_config_dir = f'{self.config_dir}/{node}'
-                os.makedirs(local_config_dir, exist_ok=True)
                 hw = self.__get_hardware_spec(client)
                 self.clients.append({
                     "paramiko_client": client,
                     "node_name": node,
-                    "config_dir": local_config_dir,
                     "hardware": hw})
 
             print("")
@@ -290,16 +291,14 @@ class ClusterGridSearch(object):
 
         grid, grid_file = self.__prepare_grid(param_grid_arg, permute)
         if grid is None:
-            print("Unable to post process parameter grid!")
+            print("Unable to pre process parameter grid!")
             print("Returning!")
             return
 
         grid_name = Path(grid_file).stem
 
         elapsed_grid = time.time() - start_grid
-        print(f'Parameter grid: {grid_file}')
-        print(grid)
-        print(f'Grid created. Elapsed time: {elapsed_grid:.3f} seconds')
+        print(f'Done. Elapsed time: {elapsed_grid:.3f} seconds')
 
         ##########################################################
         # Check parameter map and parameter grid for consistency #
@@ -415,15 +414,18 @@ class ClusterGridSearch(object):
             t.join()
 
         elapsed_comp = time.time() - start_comp
+        print("")
         print("Computation finished. Elapsed time: {0:.3f} seconds".format(elapsed_comp))
         print("")
 
-        print("***PARAMETER GRID STATUS***")
-        print(grid)
-        print("")
+        # print("***PARAMETER GRID STATUS***")
+        # print(grid)
+        # print("")
 
         print(f'Find results in: {grid_res_dir}/')
-        # grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_ResultStatus.csv', index=True)
+        print("")
+        grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
+
         return grid_res_dir, grid_file
 
     def __prepare_grid(self, param_grid_arg, permute=False):
@@ -471,6 +473,8 @@ class ClusterGridSearch(object):
                     # Set rows with status 'failed' to 'unsolved' to compute them again
                     unsolved_idx = grid.index[grid['status'] == "failed"]
                     grid.at[unsolved_idx, 'status'] = 'unsolved'
+                # Add/reset worker-column
+                grid['worker'] = ""
                 return grid, grid_file
             except FileNotFoundError as err:
                 print(err)
@@ -496,6 +500,8 @@ class ClusterGridSearch(object):
                 # Set rows with status 'failed' to 'unsolved' to compute them again
                 unsolved_idx = grid.index[grid['status'] == "failed"]
                 grid.at[unsolved_idx, 'status'] = 'unsolved'
+            # Add/reset worker-column
+            grid['worker'] = ""
             return grid, grid_file
 
         elif isinstance(param_grid_arg, pd.DataFrame):
@@ -515,6 +521,8 @@ class ClusterGridSearch(object):
                 # Set rows with status 'failed' to 'unsolved' to compute them again
                 unsolved_idx = grid.index[grid['status'] == "failed"]
                 grid.at[unsolved_idx, 'status'] = 'unsolved'
+            # Add/reset worker-column
+            grid['worker'] = ""
             return grid, grid_file
 
         else:
@@ -551,7 +559,7 @@ class ClusterGridSearch(object):
 
         thread_name = currentThread().getName()
 
-        # Create togfile to redirect all stdout and stderr of the worker to
+        # Create logfile to redirect all stdout and stderr of the worker
         logfile = f'{self.log_dir}/Local_log_{Path(self.global_config).stem}_{thread_name}.log'
         os.makedirs(os.path.dirname(logfile), exist_ok=True)
 
@@ -562,9 +570,9 @@ class ClusterGridSearch(object):
 
         # Get python executable and path to worker script
         if gpu:
-            command = f'{self.nodes["host_env_gpu"]} {self.nodes["host_file"]}'
+            command = f'{self.node_config["host_env_gpu"]} {self.node_config["host_file"]}'
         else:
-            command = f'{self.nodes["host_env_cpu"]} {self.nodes["host_file"]}'
+            command = f'{self.node_config["host_env_cpu"]} {self.node_config["host_file"]}'
 
         while not self.__fetch_param_idx(grid, lock=self.lock, set_status=False).empty:
             # Ensure that the following code is executed without switching threads
@@ -589,7 +597,7 @@ class ClusterGridSearch(object):
                                                             f' --subgrid={subgrid}'
                                                             f' --res_dir={grid_res_dir}'
                                                             f' --grid_name={grid_name}'
-                                                            f' &> {logfile}',
+                                                            f' &>> {logfile}',
                                                             get_pty=True)
 
             # Lock released. Wait for remote computation to finish
@@ -597,17 +605,18 @@ class ClusterGridSearch(object):
 
             # Print what stdout and stderr of the channel as soon as it appears
             # Not possible if stdout and stderr are redirected via '&> logfile.log'
-            for line in iter(stdout.readline, ""):
-                print(f'[H]\'{thread_name}\': {line}', end="")
+            # for line in iter(stdout.readline, ""):
+            #     print(f'[H]\'{thread_name}\': {line}', end="")
 
             elapsed_calc = time.time() - start_calc
             print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {elapsed_calc:.3f} seconds')
 
             # Set result status for each index to 'done', if a corresponding result file exists and is not empty
-            # eOtherwise set result status to 'failed'
+            # otherwise set result status to 'failed'
             print(f'[T]\'{thread_name}\': Updating grid status')
             for idx in param_idx:
                 res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
+                grid.at[idx, 'worker'] = thread_name
                 try:
                     if os.path.getsize(res_file) > 0:
                         grid.at[idx, 'status'] = 'done'
@@ -674,8 +683,8 @@ class ClusterGridSearch(object):
 
         try:
             # Using Kerberos authentication to connect to remote machines
-            # If Kerberos is not available in you cluster you need to implement an (unechoed) password request (e.g. using
-            # getpass)
+            # If Kerberos is not available in you cluster you need to implement an (unechoed) password request
+            # (e.g. using getpass)
             client.connect(node, username=username, gss_auth=True, gss_kex=True)
             print(f'\'{node}\': Connection established!')
             return client
@@ -759,19 +768,21 @@ def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inpu
     -------
 
     """
-    config_dict = {
-        "circuit_template": circuit_template,
-        "param_map": param_map,
-        "dt": dt,
-        "simulation_time": simulation_time,
-        "inputs": {str(*inputs.keys()): list(*inputs.values())},
-        "outputs": outputs,
-        "sampling_step_size": sampling_step_size,
-        "kwargs": kwargs
-    }
-
-    with open(fp, "w") as f:
-        json.dump(config_dict, f, indent=2)
+    if not os.path.exists(fp):
+        config_dict = {
+            "circuit_template": circuit_template,
+            "param_map": param_map,
+            "dt": dt,
+            "simulation_time": simulation_time,
+            "inputs": {str(*inputs.keys()): list(*inputs.values())},
+            "outputs": outputs,
+            "sampling_step_size": sampling_step_size,
+            "kwargs": kwargs
+        }
+        with open(fp, "w") as f:
+            json.dump(config_dict, f, indent=2)
+    else:
+        print(f'Configfile: {fp} already exists.')
 
 
 def check_key_consistency(param_grid, param_map):
@@ -780,14 +791,45 @@ def check_key_consistency(param_grid, param_map):
     return all((map_key in grid_key_lst for map_key in map_key_lst))
 
 
-def gather_cgs_results(res_dir, header_params=3):
-    # TODO: Add restriction to read only specified data, depending on the values of their parameters
-    header = list(range(header_params))
+def gather_cgs_results(res_dir, num_header_params, filter_grid=None):
+    header = list(range(num_header_params))
     files = glob.glob(res_dir + "/*.csv")
+
+    if filter_grid:
+        filter_grid = filter_grid.values.tolist()
 
     list_ = []
     for file_ in files:
         df = pd.read_csv(file_, index_col=0, header=header)
-        list_.append(df)
+        if filter_grid:
+            idx = list(df.columns.tolist()[0][:-1])
+            idx = list(map(float, idx))
+            if idx in filter_grid:
+                list_.append(df)
+        else:
+            list_.append(df)
 
     return pd.concat(list_, axis=1)
+
+
+def linearize_grid(grid: dict, permute=False):
+    """
+    Parameters
+    ----------
+    grid
+    permute
+    Returns
+    -------
+    """
+
+    arg_lengths = [len(arg) for arg in grid.values()]
+
+    if len(list(set(arg_lengths))) == 1 and not permute:
+        return pd.DataFrame(grid)
+    else:
+        vals, keys = [], []
+        for key, val in grid.items():
+            vals.append(val)
+            keys.append(key)
+        new_grid = np.stack(np.meshgrid(*tuple(vals)), -1).reshape(-1, len(grid))
+        return pd.DataFrame(new_grid, columns=keys)
