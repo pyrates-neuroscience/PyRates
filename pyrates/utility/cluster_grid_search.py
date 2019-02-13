@@ -109,7 +109,7 @@ class ClusterGridSearch(object):
         # self members changed outside the __init__
         self.node_config = None
         self.clients = []
-        self.lock = None
+        self.lock = RLock()
 
         #############################################################
         # Create main compute directory, subdirectories and logfile #
@@ -402,7 +402,7 @@ class ClusterGridSearch(object):
         print("***STARTING THREAD POOL***")
 
         # Create lock to control thread scheduling
-        self.lock = RLock()
+        # self.lock = RLock()
 
         # TODO: Implement asynchronous computation instead of multithreading?
 
