@@ -10,8 +10,6 @@ import argparse
 import pandas as pd
 from pyrates.utility import grid_search
 
-# TODO: Add additional prints for more detailed logfile
-
 
 def main(_):
     # disable TF-gpu warnings
@@ -24,7 +22,7 @@ def main(_):
     print("***LOADING COMMAND LINE ARGUMENTS***")
     start_arg = time.time()
 
-    global_config = FLAGS.global_config
+    config_file = FLAGS.config_file
     subgrid = FLAGS.subgrid
     res_dir = FLAGS.res_dir
     grid_name = FLAGS.grid_name
@@ -39,7 +37,7 @@ def main(_):
     print("***LOADING GLOBAL CONFIG FILE***")
     start_gconf = time.time()
 
-    with open(global_config) as g_conf:
+    with open(config_file) as g_conf:
         global_config_dict = json.load(g_conf)
 
         # Recreate tuple from string/list to use as key/values in inputs/outputs since pure tuples cannot be saved as
@@ -101,20 +99,19 @@ def main(_):
     print("***POSTPROCESSING AND CREATING RESULT FILES***")
     start_res = time.time()
 
-    for idx, row in param_grid.iterrows():
-        # idx is the absolute index label, e.g. 4,5,6,7 not the relative index of the current DataFrame (0,1,2,3)
-        res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
-
-        # Get parameter combination of the current index and the corresponding result data
-        params = param_grid.iloc[param_grid.index.get_loc(idx), :]
-        result = results.loc[:, (params[0], params[1:])]
+    for col in range(len(results.columns)):
+        result = results.iloc[:, col]
+        idx_label = result.name[:-1]
+        idx = param_grid[(param_grid.values == idx_label).all(1)].index
+        result = result.to_frame()
+        result.columns.names = results.columns.names
 
         ##################
         # POSTPROCESSING #
         ##################
         result = postprocessing(result)
 
-        result.index = results.index
+        res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.csv'
         result.to_csv(res_file, index=True)
 
     elapsed_res = time.time() - start_res
@@ -145,7 +142,7 @@ if __name__ == "__main__":
     # parser.register("type", "bool", lambda v: v.lower() == "true")
 
     parser.add_argument(
-        "--global_config",
+        "--config_file",
         type=str,
         default="",
         help="Config file with all necessary data to start grid_search() except for parameter grid"

@@ -56,7 +56,7 @@ __status__ = "development"
 
 
 class StreamTee(object):
-    # TODO: Stop stream tee after CGS computation has finished
+    # TODO: Stop stream tee after cluster_examples computation has finished
 
     """Copy all stdout to a specified file"""
     def __init__(self, stream1, stream2fp):
@@ -86,9 +86,9 @@ class ClusterGridSearch(object):
     def __init__(self, global_config, compute_dir=None, **kwargs):
         """Create new ClusterGridSearch instance
 
-        Each ClusterGridSearch instance has its own unique compute ID, which is assigned when a new CGS instance is
+        Each ClusterGridSearch instance has its own unique compute ID, which is assigned when a new cluster_examples instance is
             created.
-        When a new CGS instance is invoked, a folder with all necessary directories is created in the directory of the
+        When a new cluster_examples instance is invoked, a folder with all necessary directories is created in the directory of the
             global config file if not specified otherwise
         The global config file is copied to the instances compute directory
         All prints to stdout and stderr are copied to a global logfile, that is created during the initialization
@@ -101,7 +101,7 @@ class ClusterGridSearch(object):
         compute_dir:
             If given, all necessary subfolders for the computation are created inside the specified directory. If no
             compute directory is given, a default directory is created based on the location of the global config file
-            and the unique compute ID of the CGS instance
+            and the unique compute ID of the cluster_examples instance
         kwargs:
         """
         self.global_config = global_config
@@ -173,15 +173,15 @@ class ClusterGridSearch(object):
         copy2(global_config, self.config_dir)
 
     def __del__(self):
-        # Make sure to close all clients when CGS instance is destroyed
+        # Make sure to close all clients when cluster_examples instance is destroyed
         for client in self.clients:
             client["paramiko_client"].close()
 
     def create_cluster(self, node_config: dict):
-        """Create a new compute cluster for the CGS instance
+        """Create a new compute cluster for the cluster_examples instance
 
         Connects to all hosts given in the nodes dictionary using ssh_connect() and adds the corresponding client to
-            the CGS internal clients list.
+            the cluster_examples internal clients list.
         Each client can be used to execute command-line commands on the connected remote machine.
         The internal client list holds a dictionary for each client, containing:
             - the paramiko client to execute commands
@@ -242,20 +242,20 @@ class ClusterGridSearch(object):
     def compute_grid(self, param_grid_arg, num_params="dist_equal_add_mod", permute=False):
         """Compute the circuit for each parameter combination in the parameter grid utilizing a compute cluster
 
-        Can only run when a compute-cluster for the CGS instance has been created before.
-        If the parameter grid is given as a csv-file, the file is copied to folder '/Grids/' inside the CGS instance's
+        Can only run when a compute-cluster for the cluster_examples instance has been created before.
+        If the parameter grid is given as a csv-file, the file is copied to folder '/Grids/' inside the cluster_examples instance's
             working directory.
         If the parameter grid is given as a pandas.DataFrame or a dictionary, a csv-file with a default name is created
-            in the CGS instance's '/Grids/' folder.
-        For each call of compute_grid within the same CGS instance, a different default grid is created.
-        Checks the parameter map of the CGS instance and the parameter grid for consistency. Each key in the parameter
+            in the cluster_examples instance's '/Grids/' folder.
+        For each call of compute_grid within the same cluster_examples instance, a different default grid is created.
+        Checks the parameter map of the cluster_examples instance and the parameter grid for consistency. Each key in the parameter
             map has to be declared in the parameter grid
         Creates a single result file for each parameter combination in the parameter grid.
         All results files are saved to '/CGSWorkingDirectory/Results/name_of_grid/'
         Each result file contains the name of the parameter grid it belongs to and the respective index of the parameter
             combination which was used to compute the the results.
             e.g. /CGS_WorkingDir/Results/DefaultGrid0/CGS_result_DefaultGrid_0_idx_4.csv
-        The config file of the CGS instance can be found in /CGS_WorkingDir/Configs/
+        The config file of the cluster_examples instance can be found in /CGS_WorkingDir/Configs/
 
         Parameters
         ----------
@@ -359,6 +359,8 @@ class ClusterGridSearch(object):
                 for client in self.clients:
                     # Add remaining parameters to the first node
                     if mod != 0:
+
+
                         client['num_params'] = num_params_arg + mod
                         mod = 0
                     else:
@@ -399,7 +401,7 @@ class ClusterGridSearch(object):
         # Start thread pool #
         #####################
         print("")
-        print("***STARTING THREAD POOL***")
+
 
         # Create lock to control thread scheduling
         # self.lock = RLock()
@@ -460,7 +462,7 @@ class ClusterGridSearch(object):
                 grid = pd.read_csv(param_grid_arg)
                 # Check directory of grid file
                 if os.path.dirname(param_grid_arg) != self.grid_dir:
-                    # Copy parameter grid to CGS instances' grid directory
+                    # Copy parameter grid to cluster_examples instances' grid directory
                     copy2(param_grid_arg, self.grid_dir)
                     grid_file = f'{self.grid_dir}/{os.path.basename(param_grid_arg)}'
                 else:
@@ -795,21 +797,24 @@ def gather_cgs_results(res_dir, num_header_params, filter_grid=None):
     header = list(range(num_header_params))
     files = glob.glob(res_dir + "/*.csv")
 
-    if filter_grid:
-        filter_grid = filter_grid.values.tolist()
+    # if filter_grid:
+    #     filter_grid = filter_grid.values.tolist()
 
     list_ = []
     for file_ in files:
-        df = pd.read_csv(file_, index_col=0, header=header)
-        if filter_grid:
-            idx = list(df.columns.tolist()[0][:-1])
-            idx = list(map(float, idx))
-            if idx in filter_grid:
-                list_.append(df)
-        else:
-            list_.append(df)
-
-    return pd.concat(list_, axis=1)
+        print(file_)
+    return
+    #     df = pd.read_csv(file_, index_col=0, header=header)
+    #     list_.append(df)
+    #     # if filter_grid:
+    #     #     idx = list(df.columns.tolist()[0][:-1])
+    #     #     idx = list(map(float, idx))
+    #     #     if idx in filter_grid:
+    #     #         list_.append(df)
+    #     # else:
+    #     #     list_.append(df)
+    #
+    # return pd.concat(list_, axis=1)
 
 
 def linearize_grid(grid: dict, permute=False):

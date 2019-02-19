@@ -1,4 +1,5 @@
 from pyrates.utility import plot_timeseries, grid_search, plot_psd, plot_connectivity
+from pyrates.utility.grid_search import linearize_grid
 import numpy as np
 import matplotlib.pyplot as plt
 from seaborn import cubehelix_palette
@@ -12,9 +13,10 @@ print("Start!")
 
 # parameters
 dt = 1e-4
-T = 5.
+T = 2.
 inp = 3. + np.random.randn(int(T/dt), 1) * 1.0
 Cs = [1., 2., 4.]
+# Cs = [1.]
 ei_ratio = np.arange(0.1, 3., 0.1)[::-1]
 io_ratio = np.arange(0.1, 2., 0.1)
 J_e = np.zeros((int(len(ei_ratio) * len(io_ratio))))
@@ -51,6 +53,13 @@ for idx, C in enumerate(Cs):
                           param_grid=params, param_map=param_map,
                           inputs={("PC", "Op_e.0", "i_in"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
                           dt=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
+    # results.to_csv(
+    #     "/nobackup/spanien1/salomon/ClusterGridSearch/EIC_coupling_test_data/EIC_Coupling_test_result.csv",
+    #     header=True)
+    # param_grid = linearize_grid(params, permute=False)
+    # param_grid.to_csv(
+    #     "/nobackup/spanien1/salomon/ClusterGridSearch/EIC_coupling_test_data/EIC_Coupling_test_param_grid.csv",
+    #     header=True)
 
     elapsed_calc = time.time() - start_calc
     print("Grid search finished: {0:.3f} seconds".format(elapsed_calc))

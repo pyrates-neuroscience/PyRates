@@ -28,7 +28,6 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """Functions for performing computations in a compute cluster with pyrates models.
 """
-# TODO: Why does it take so long to start the master/worker script? PyRates?
 # system imports
 import os
 import sys
@@ -46,17 +45,13 @@ import pandas as pd
 import numpy as np
 import paramiko
 
-# pyrates internal imports
-# from pyrates.utility.grid_search import linearize_grid
-
-
 # meta infos
 __author__ = "Christoph Salomon"
 __status__ = "development"
 
 
 class StreamTee(object):
-    # TODO: Stop stream tee after CGS computation has finished
+    # TODO: Stop stream tee after cluster_examples computation has finished
 
     """Copy all stdout to a specified file"""
     def __init__(self, stream1, stream2fp):
@@ -156,75 +151,15 @@ class ClusterCompute(object):
         self.cluster_connect(nodes)
         print(f'Nodes connected. Elapsed time: {t.time()-t0:.3f} seconds')
 
-    def run(self, **kwargs):
-        """Start a thread for each connected client. Each thread executes the __thread_master() function
-
-        Each thread and therefor each instance of the __thread_master() function is responsible for the communication
-        with one node in the cluster. All kwargs arguments are passed as a dict to the __thread_master() function via
-        kwargs_. Additional kwargs can be passed to the thread_master via **kwargs.
-        Stops execution of the outside script until all threads have finished.
-        Can be called multiple times from the same ClusterCompute instance
-
-        !!! Can be overwritten in by inherited classed to fit the needs of the user !!!
-
-        Params
-        ------
-        kwargs
-
-        Returns
-        -------
-
-        """
-
-        t0 = t.time()
-
-        threads = [self.spawn_thread(client) for client in self.clients]
-        for t_ in threads:
-            t_.join()
-
-        print("")
-        print(f'Cluster computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
-
-    def spawn_thread(self, client, **kwargs):
-        t_ = Thread(
-            name=client["node_name"],
-            target=self.thread_master,
-            args=(client, kwargs)
-        )
-        t_.start()
-        return t_
-
-    def thread_master(self, client, kwargs_: dict):
-        """Function that is executed by every thread. Every instance of thread_master is bound to a different client
-
-        The __thread_master() function can be arbitrarily changed to fit the needs of the user.
-        Commands on the node can be executed using client["paramiko_client"].exec_command()
-        self.lock can be used to ensure a piece of code is executed without threads being switched
-        e.g.
-            with self.lock:
-                some code that is executed without switching to another thread
-        Since __thread_master() is called by __spawn_threads(), which again is called by run(), **kwargs of
-        spawn_threads() have to be parsed as dict to thread_master(). kwargs of run() are NOT automatically passed to
-        spawn_threads() or thread_master()
-
-        Params
-        ------
-        client
-            dict containing the paramiko client, the name of the connected node, some hardware specifications and the
-            logfile
-        kwargs_
-            dict containing **kwargs of spawn_threads() as key/value pairs
-
-        Returns
-        -------
-
-        """
-        pass
+    def __del__(self):
+        # Make sure to close all clients when cluster_examples instance is destroyed
+        for client in self.clients:
+            client["paramiko_client"].close()
 
     def cluster_connect(self, nodes):
         """Connect to all nodes via SSH
 
-        Connect to all nodes in the given list via SSH, using __ssh_connect()
+        Connect to all nodes in the given list via SSH, using ssh_connect()
         Adds a dictionary for each node to the class internal 'clients' list
         Each dictionary contains:
             - ["paramiko_client"]: A paramiko client that can be used to execute commands on the node
@@ -259,8 +194,90 @@ class ClusterCompute(object):
                     "logfile": local_logfile})
             print("")
 
+    def run(self, **kwargs):
+        """Start a thread for each connected client. Each thread executes the thread_master() function
+
+        Each thread and therefor each instance of the thread_master() function is responsible for the communication
+        with one node in the cluster. All kwargs arguments are passed as a dict to the thread_master() function via
+        kwargs_. Additional kwargs can be passed to the thread_master via **kwargs.
+        Stops execution of the outside script until all threads have finished.
+        Can be called multiple times from the same ClusterCompute instance
+
+        Params
+        ------
+        kwargs
+
+        Returns
+        -------
+
+        """
+
+        t0 = t.time()
+
+        # ! Insert preprocessing of input data can here !
+
+        # **kwargs of spawn_thread() will be parsed as dict to thread_master()
+        threads = [self.spawn_thread(client) for client in self.clients]
+        for t_ in threads:
+            t_.join()
+
+        print("")
+        print(f'Cluster computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
+
+    def spawn_thread(self, client, **kwargs):
+        t_ = Thread(
+            name=client["node_name"],
+            target=self.thread_master,
+            args=(client, kwargs)
+        )
+        t_.start()
+        return t_
+
+    def thread_master(self, client, kwargs_: dict):
+        """Function that is executed by every thread. Every instance of thread_master is bound to a different client
+
+        The thread_master() function can be arbitrarily changed to fit the needs of the user.
+        Commandline commands on the remote node can be executed using client["paramiko_client"].exec_command("")
+        self.lock can be used to ensure that a code snippet is executed without threads being switched in between
+        e.g.
+            with self.lock:
+                some code that is executed without switching to another thread
+        Since thread_master() is called by spawn_threads(), which again is called by run(), **kwargs of
+        spawn_threads() are parsed as a single dict to thread_master(). **kwargs of run() are NOT automatically passed
+        to spawn_threads() or thread_master().
+
+        Params
+        ------
+        client
+            dict containing the paramiko client, the name of the connected node, dict with hardware specifications and
+            the logfile of a connected client
+        kwargs_
+            dict containing **kwargs of spawn_threads() as key/value pairs
+
+        Returns
+        -------
+
+        """
+
+        # Add funcionality here
+
+        pass
+
     @staticmethod
     def get_hardware_spec(pm_client):
+        """Print CPU model, number of CPU cores, min CPU freq, max CPU freq and working memory of a paramiko client
+
+        Parameters
+        ----------
+        pm_client
+            Paramiko client
+
+        Returns
+        -------
+            dict containing the above mentioned hardware specifications as key/value pairs
+
+        """
+
         stdin, stdout, stderr = pm_client.exec_command("lscpu | grep 'Model name'")
         cpu = stdout.readline().split()
         cpu = ' '.join(map(str, cpu[2:]))
@@ -334,42 +351,11 @@ class ClusterCompute(object):
             return None
 
 
-class ClusterComputeTest(ClusterCompute):
-    def run(self, **kwargs):
-        t0 = t.time()
-
-        # Insert arbitrary prepocessing here
-        command = kwargs["command"]
-
-        threads = [self.spawn_thread(client, command=command) for client in self.clients]
-        for t_ in threads:
-            t_.join()
-
-        print("")
-        print(f'Cluster computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
-
-    def thread_master(self, client, kwargs_: dict):
-        thread_name = currentThread().getName()
-        pm_client = client["paramiko_client"]
-        logfile = client["logfile"]
-
-        command = kwargs_["command"]
-
-        # Execute 'command' on the remote worker
-        with self.lock:
-            stdin, stdout, stderr = pm_client.exec_command(command +
-                                                           f' &>> {logfile}',
-                                                           get_pty=True)
-        # Wait for remote execution to finish
-        stdout.channel.recv_exit_status()
-
-
 class ClusterGridSearch(ClusterCompute):
     def __init__(self, nodes, compute_dir=None):
         super().__init__(nodes, compute_dir)
 
         # Add additional subfolders to the compute directory
-
         # Grid directory
         self.grid_dir = f'{self.compute_dir}/Grids'
         os.makedirs(self.grid_dir, exist_ok=True)
@@ -383,35 +369,422 @@ class ClusterGridSearch(ClusterCompute):
         os.makedirs(self.res_dir, exist_ok=True)
 
     def run(self, **kwargs):
-        # TODO: Implement ClusterGridSearch run functionality
+        t_total = t.time()
+
+        # Unzip kwargs
+        config_file = kwargs["config_file"]
+        param_grid_temp = kwargs["param_grid"]
+        permute = kwargs["permute"]
+        chunk_size = kwargs["chunk_size"]
+        worker_env = kwargs["worker_env"]
+        worker_file = kwargs["worker_file"]
+
+        print("")
+
+        print("***PREPARING PARAMETER GRID***")
         t0 = t.time()
+        param_grid, grid_file, grid_name = self.prepare_grid(param_grid_temp, permute)
+        print(f'Done. Elapsed time: {t.time()-t0:.3f} seconds')
 
-        # Insert arbitrary prepocessing here
-        command = kwargs["command"]
+        print("")
 
+        print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
+        t0 = t.time()
+        # Check parameter map and parameter grid for consistency. If both fit,
+        with open(config_file) as config:
+            # Open global config file and read the config dictionary
+            param_dict = json.load(config)
+            try:
+                # Read parameter map from the parameter dictionary
+                param_map = param_dict['param_map']
+            except KeyError as err:
+                # Config_file does not contain a key 'param_map'
+                print("KeyError:", err)
+                print("Returning!")
+                # Stop computation
+                return
+
+            if not self.check_key_consistency(param_grid, param_map):
+                # Not all keys of parameter map can be found in parameter grid
+                print("Not all parameter map keys found in parameter grid")
+                print("Parameter map keys:")
+                print(*list(param_map.keys()))
+                print("Parameter grid keys:")
+                print(*list(param_grid.keys()))
+                print("Returning!")
+                # Stop computation
+                return
+            else:
+                # Parameter grid and parameter map match
+                print("All parameter map keys found in parameter grid")
+                # Continuing with computation
+        # Create parameter grid specific result directory
+        grid_res_dir = f'{self.res_dir}/{grid_name}'
+        os.makedirs(grid_res_dir, exist_ok=True)
+        print(f'Elapsed time: {t.time()-t0:.3f} seconds')
+
+        print("")
+
+        print("***PREPARING CHUNK SIZES***")
+        t0 = t.time()
+        self.prepare_chunks(chunk_size, len(param_grid))
+        print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
+
+        print("")
+
+        print("***STARTING THREAD POOL***")
         threads = [self.spawn_thread(client,
-                                     command=command) for client in self.clients]
+                                     config_file=config_file,
+                                     param_grid=param_grid,
+                                     grid_name=grid_name,
+                                     grid_res_dir=grid_res_dir,
+                                     worker_env=worker_env,
+                                     worker_file=worker_file) for client in self.clients]
         for t_ in threads:
             t_.join()
 
         print("")
-        print(f'Cluster computation finished. Elapsed time: {t.time() - t0:.3f} seconds')
+        print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
+        print(f'Find results in: {grid_res_dir}/')
+        print("")
+        param_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
+        return grid_res_dir, grid_file
 
     def thread_master(self, client, kwargs_: dict):
-        # TODO: Implement ClusterGridSearch thread_master
         thread_name = currentThread().getName()
+
+        # Get client information
         pm_client = client["paramiko_client"]
         logfile = client["logfile"]
+        num_params = client["num_params"]
 
-        command = kwargs_["command"]
+        # Get kwargs
+        config_file = kwargs_["config_file"]
+        param_grid = kwargs_["param_grid"]
+        grid_name = kwargs_["grid_name"]
+        grid_res_dir = kwargs_["grid_res_dir"]
+        worker_env = kwargs_["worker_env"]
+        worker_file = kwargs_["worker_file"]
 
-        # Execute 'command' on the remote worker
-        with self.lock:
-            stdin, stdout, stderr = pm_client.exec_command(command +
-                                                           f' &>> {logfile}',
-                                                           get_pty=True)
-        # Wait for remote execution to finish
-        stdout.channel.recv_exit_status()
+        command = f'{worker_env} {worker_file}'
+
+        # Create folder to save local subgrids to
+        subgrid_dir = f'{self.grid_dir}/Subgrids/{thread_name}'
+        os.makedirs(subgrid_dir, exist_ok=True)
+        subgrid_idx = 0
+
+        # Run while not all parameter combinations have been computed
+        while not self.fetch_param_idx(param_grid, lock=self.lock, set_status=False).empty:
+            # Ensure that the following code snippte is executed without switching threads
+            with self.lock:
+                # Fetch grid indices
+                param_idx = self.fetch_param_idx(param_grid, num_params=num_params)
+                print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
+                print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
+
+                # Create parameter sub-grid from fetched indices to pass to the remote host
+                subgrid_fp = f'{subgrid_dir}/{thread_name}_{grid_name}_Subgrid_{subgrid_idx}.csv'
+                subgrid_frame = param_grid.iloc[param_idx]
+                subgrid_frame.to_csv(subgrid_fp, index=True)
+                subgrid_idx += 1
+
+                # Execute worker script on the remote host
+                print(f'[T]\'{thread_name}\': Starting remote computation...')
+                t0 = t.time()
+
+                stdin, stdout, stderr = pm_client.exec_command(command +
+                                                            f' --config_file={config_file}'
+                                                            f' --subgrid={subgrid_fp}'
+                                                            f' --res_dir={grid_res_dir}'
+                                                            f' --grid_name={grid_name}'
+                                                            f' &>> {logfile}',
+                                                            get_pty=True)
+
+            # Lock released. Wait for remote computation to finish
+            stdout.channel.recv_exit_status()
+
+            print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
+
+            # Set result status for each index to 'done', if a corresponding result file exists and is not empty
+            # otherwise set result status to 'failed'
+            print(f'[T]\'{thread_name}\': Updating grid status')
+            for idx in param_idx:
+                res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
+                param_grid.at[idx, 'worker'] = thread_name
+                try:
+                    if os.path.getsize(res_file) > 0:
+                        param_grid.at[idx, 'status'] = 'done'
+                    else:
+                        param_grid.at[idx, 'status'] = 'failed'
+                except OSError as e:
+                    param_grid.at[idx, 'status'] = 'failed'
+
+        # End of while loop
+        print(f'[T]\'{thread_name}\': No more parameter combinations available!')
+
+    # Helper functions, cluster_examples only
+    def prepare_grid(self, param_grid_arg, permute=False):
+        """Create a pandas.DataFrame and a default .csv file from a given set of parameter combinations
+
+        Parameters
+        ---------
+        param_grid_arg
+            Can be either a path to a csv-file, a pandas DataFrame or a dictionary
+            If a csv-file is given, a DataFrame is created and the csv-file is copied to the project folder
+            If a DataFrame is given, a default csv-file is created in the project folder. Existing default grid files
+                in the project folder are NOT overwritten. Each default file gets an index so no name conflicts occur
+            If a dictionary is given, a DataFrame and a csv-file are created
+        permute
+            Only relevant when param_grid_arg is a dictionary.
+            If true, a DataFrame is created containing all permutations of the parameters given in the dictionary as
+                lists
+
+        Returns
+        -------
+        grid
+            Pandas DataFrame containing all parameter combinations to be computed in the cluster
+        grid_file
+            path to a csv.file, containing all parameter combinations of the DataFrame
+
+        """
+        # param_grid can either be *.csv, dict or DataFrame
+        if isinstance(param_grid_arg, str):
+            # If parameter grid is a string
+            try:
+                # Open grid file
+                grid = pd.read_csv(param_grid_arg)
+                # Check directory of grid file
+                if os.path.dirname(param_grid_arg) != self.grid_dir:
+                    # Copy parameter grid to cluster_examples instances' grid directory
+                    copy2(param_grid_arg, self.grid_dir)
+                    grid_file = f'{self.grid_dir}/{os.path.basename(param_grid_arg)}'
+                else:
+                    grid_file = param_grid_arg
+                # Add status column
+                if 'status' not in grid.columns:
+                    # Add status-column
+                    grid['status'] = 'unsolved'
+                else:
+                    # Set rows with status 'failed' to 'unsolved' to compute them again
+                    unsolved_idx = grid.index[grid['status'] == "failed"]
+                    grid.at[unsolved_idx, 'status'] = 'unsolved'
+                # Add/reset worker-column
+                grid['worker'] = ""
+                return grid, grid_file
+            except FileNotFoundError as err:
+                print(err)
+                print("Returning!")
+                # Stop computation
+                return None
+
+        elif isinstance(param_grid_arg, dict):
+            # Create DataFrame from dict
+            grid_frame = linearize_grid(param_grid_arg, permute=permute)
+            # Create default parameter grid csv-file
+            grid_idx = 0
+            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            # If grid_file already exist
+            while os.path.exists(grid_file):
+                grid_idx += 1
+                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            grid_frame.to_csv(grid_file, index=True, float_format='%g')
+            # Add status columns to grid
+            if 'status' not in grid_frame.columns:
+                grid_frame['status'] = 'unsolved'
+            else:
+                # Set rows with status 'failed' to 'unsolved' to compute them again
+                unsolved_idx = grid_frame.index[grid_frame['status'] == "failed"]
+                grid_frame.at[unsolved_idx, 'status'] = 'unsolved'
+            # Add/reset worker-column
+            grid_frame['worker'] = ""
+            grid_name = Path(grid_file).stem
+            return grid_frame, grid_file, grid_name
+
+        elif isinstance(param_grid_arg, pd.DataFrame):
+            grid_frame = param_grid_arg
+            # Create default parameter grid csv-file from DataFrame
+            grid_idx = 0
+            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            # If grid_file already exist
+            while os.path.exists(grid_file):
+                grid_idx += 1
+                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            grid_frame.to_csv(grid_file, index=True)
+            # Add status columns to grid
+            if 'status' not in grid_frame.columns:
+                grid_frame['status'] = 'unsolved'
+            else:
+                # Set rows with status 'failed' to 'unsolved' to compute them again
+                unsolved_idx = grid_frame.index[grid_frame['status'] == "failed"]
+                grid_frame.at[unsolved_idx, 'status'] = 'unsolved'
+            # Add/reset worker-column
+            grid_frame['worker'] = ""
+            grid_name = Path(grid_file).stem
+            return grid_frame, grid_file, grid_name
+
+        else:
+            print("Parameter grid unsupported format")
+            # Stop computation
+            return None
+
+    def prepare_chunks(self, chunk_size, grid_len):
+        """Calculate the number of parameter combinations that should be computed during one call on the remote worker
+
+        Adds a field "num_params" to each client in self.clients
+
+        Parameters
+        ----------
+        chunk_size
+            int or str containing either a fixed chunk size for each worker or a mode to compute the chunk size
+            dynamically. Mode can be one out of:
+            'dist_equal': The number of parameters is equally distributed among the workers.
+                The first node to finish it's computation starts another one to compute the remaining parameters
+                (modulo)
+            'dist_equal_add_mod': The number of parameters is equally distributed among the workers.
+                The remaining amount of parameters (modulo) is added to the chunk size of the first node in the
+                node list.
+            'fit_hardware': Not implemented yet
+        grid_len
+            Number of parameter combinations to be computed in total
+
+        Returns
+        ------
+
+        """
+
+        if isinstance(chunk_size, int):
+            num_params = chunk_size
+            for client in self.clients:
+                client['num_params'] = num_params
+        elif isinstance(chunk_size, str):
+            if chunk_size == "dist_equal_add_mod":
+                # grid_len = len(grid_frame)
+                num_clients = len(self.clients)
+                num_params = int(grid_len/num_clients)
+                mod = grid_len % num_clients
+                # Distribute all parameters equally among all nodes
+                for client in self.clients:
+                    # Add remaining parameters to the first node
+                    if mod != 0:
+                        client['num_params'] = num_params + mod
+                        mod = 0
+                    else:
+                        client['num_params'] = num_params
+            elif chunk_size == "dist_equal":
+                num_clients = len(self.clients)
+                num_params = int(grid_len/num_clients)
+                # Distribute all parameters equally among all nodes
+                for client in self.clients:
+                    client['num_params'] = num_params
+            elif chunk_size == "fit_hardware":
+                pass
+        else:
+            print("num_params: Unsupported command. Returning")
+            return None
+
+    @staticmethod
+    def check_key_consistency(param_grid, param_map):
+        grid_key_lst = list(param_grid.keys())
+        map_key_lst = list(param_map.keys())
+        return all((map_key in grid_key_lst for map_key in map_key_lst))
+
+    @staticmethod
+    def fetch_param_idx(param_grid, lock=None, num_params=1, set_status=True):
+        """Fetch indices of the first num_params rows of param_grid that's status-column equals 'unsolved'
+
+        Parameters
+        ----------
+        param_grid
+            Linearized parameter grid of type pandas.DataFrame.
+        lock
+            A given lock makes sure, that all of the code inside the function is executed without switching between threads
+        num_params
+            Number of indices to fetch from param_grid. Is 1 by default.
+        set_status
+            If True, sets 'status' key of the fetched rows to 'pending', to exclude them from future calls.
+            Can be used to check param_grid for fetchable or existent keys without changing their 'status' key.
+            Is True by default.
+
+        Returns
+        -------
+        pandas.Index([index_list])
+            Is empty if there are no row indices to be fetched.
+            Is np.nan if param_grid has no key named 'status'.
+            Contains all remaining indices if num_params is higher than row indices left.
+
+        """
+        if lock:
+            with lock:
+                try:
+                    # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
+                    param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
+                except KeyError:
+                    return pd.Index([np.nan])
+                if set_status:
+                    param_grid.at[param_idx, 'status'] = 'pending'
+                return param_idx
+        else:
+            try:
+                # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
+                param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
+            except KeyError:
+                return pd.Index([np.nan])
+            if set_status:
+                param_grid.at[param_idx, 'status'] = 'pending'
+            return param_idx
+
+
+# Utility functions
+def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inputs,
+                      outputs, sampling_step_size=None, **kwargs):
+    """Creates a configfile.json containing a config_dict{} with input parameters as key-value pairs
+
+    Parameters
+    ----------
+    fp
+    circuit_template
+    param_map
+    dt
+    simulation_time
+    inputs
+    outputs
+    sampling_step_size
+    kwargs
+
+    Returns
+    -------
+
+    """
+    if not os.path.exists(fp):
+        config_dict = {
+            "circuit_template": circuit_template,
+            "param_map": param_map,
+            "dt": dt,
+            "simulation_time": simulation_time,
+            "inputs": {str(*inputs.keys()): list(*inputs.values())},
+            "outputs": outputs,
+            "sampling_step_size": sampling_step_size,
+            "kwargs": kwargs
+        }
+        with open(fp, "w") as f:
+            json.dump(config_dict, f, indent=2)
+    else:
+        print(f'Configfile: {fp} already exists.')
+
+
+def gather_cgs_results(res_dir, num_header_params, filter_grid=None):
+    header = list(range(num_header_params))
+    files = glob.glob(res_dir + "/*.csv")
+
+    # if filter_grid:
+    #     filter_grid = filter_grid.values.tolist()
+
+    list_ = []
+    for file_ in files:
+        df = pd.read_csv(file_, index_col=0, header=header)
+        list_.append(df)
+
+    return pd.concat(list_, axis=1)
 
 
 def linearize_grid(grid: dict, permute=False):
