@@ -51,7 +51,7 @@ __status__ = "development"
 
 
 class StreamTee(object):
-    # TODO: Stop stream tee after cluster_examples computation has finished
+    # TODO: Stop stream tee after cluster computation has finished
 
     """Copy all stdout to a specified file"""
     def __init__(self, stream1, stream2fp):
@@ -83,9 +83,9 @@ class ClusterCompute(object):
 
         Creates a compute directory for the ClusterCompute instance, either in the specified path or as a default
         folder in the current working directory of the executing script.
-        Creates a logfile in ComputeDirectory/Logs and tees all future stdout and stderr to this file
-        Connects to all nodes via SSH and saves the corresponding paramiko client that can be used to execute commands
-        on the remote machines
+        Creates a logfile in ComputeDirectory/Logs and tees all future stdout and stderr of the executing script
+        to this file
+        Connects to all nodes via SSH and saves the corresponding paramiko client
 
         Parameters
         ----------
@@ -165,7 +165,8 @@ class ClusterCompute(object):
             - ["paramiko_client"]: A paramiko client that can be used to execute commands on the node
             - ["node_name"]: The name of the connected node
             - ["hardware"]: A dictionary with certain hardware information of the node
-            - ["logfile"]: A local logfile where all stdout and stderr of the node will be redirected to
+            - ["logfile"]: Path to a logfile inside the instance's working directory,
+                           where all stdout and stderr of the node will be redirected to
 
         Parameters
         ----------
@@ -198,8 +199,7 @@ class ClusterCompute(object):
         """Start a thread for each connected client. Each thread executes the thread_master() function
 
         Each thread and therefor each instance of the thread_master() function is responsible for the communication
-        with one node in the cluster. All kwargs arguments are passed as a dict to the thread_master() function via
-        kwargs_. Additional kwargs can be passed to the thread_master via **kwargs.
+        with one worker node in the cluster.
         Stops execution of the outside script until all threads have finished.
         Can be called multiple times from the same ClusterCompute instance
 
@@ -243,14 +243,14 @@ class ClusterCompute(object):
             with self.lock:
                 some code that is executed without switching to another thread
         Since thread_master() is called by spawn_threads(), which again is called by run(), **kwargs of
-        spawn_threads() are parsed as a single dict to thread_master(). **kwargs of run() are NOT automatically passed
+        spawn_threads() are parsed as a single dict to thread_master(). **kwargs of run() are NOT automatically parsed
         to spawn_threads() or thread_master().
 
         Params
         ------
         client
-            dict containing the paramiko client, the name of the connected node, dict with hardware specifications and
-            the logfile of a connected client
+            dict containing a paramiko client, name of the connected node, dict with hardware specifications and
+            a path to a logfile.
         kwargs_
             dict containing **kwargs of spawn_threads() as key/value pairs
 
@@ -266,6 +266,7 @@ class ClusterCompute(object):
     @staticmethod
     def get_hardware_spec(pm_client):
         """Print CPU model, number of CPU cores, min CPU freq, max CPU freq and working memory of a paramiko client
+        connected to a remote worker node
 
         Parameters
         ----------
@@ -310,7 +311,7 @@ class ClusterCompute(object):
 
     @staticmethod
     def ssh_connect(node, username, password=None):
-        """Connect to a host via SSH
+        """Connect to a host via SSH an return a respective paramiko.SSHClient
 
         Parameters
         ----------
@@ -369,6 +370,11 @@ class ClusterGridSearch(ClusterCompute):
         os.makedirs(self.res_dir, exist_ok=True)
 
     def run(self, **kwargs):
+        """
+
+        :param kwargs:
+        :return:
+        """
         t_total = t.time()
 
         # Unzip kwargs
@@ -451,6 +457,12 @@ class ClusterGridSearch(ClusterCompute):
         return grid_res_dir, grid_file
 
     def thread_master(self, client, kwargs_: dict):
+        """
+
+        :param client:
+        :param kwargs_:
+        :return:
+        """
         thread_name = currentThread().getName()
 
         # Get client information
@@ -522,17 +534,17 @@ class ClusterGridSearch(ClusterCompute):
         # End of while loop
         print(f'[T]\'{thread_name}\': No more parameter combinations available!')
 
-    # Helper functions, cluster_examples only
+    # Helper functions, ClusterGridSearch only
     def prepare_grid(self, param_grid_arg, permute=False):
-        """Create a pandas.DataFrame and a default .csv file from a given set of parameter combinations
+        """Create a DataFrame and a DefaultGrid.csv from a *.csv/DataFrame/dict containing all parameter combinations
 
         Parameters
         ---------
         param_grid_arg
-            Can be either a path to a csv-file, a pandas DataFrame or a dictionary
+            Can be either a csv-file, a pandas DataFrame or a dictionary
             If a csv-file is given, a DataFrame is created and the csv-file is copied to the project folder
             If a DataFrame is given, a default csv-file is created in the project folder. Existing default grid files
-                in the project folder are NOT overwritten. Each default file gets an index so no name conflicts occur
+                in the project folder are NOT overwritten. Each grid file gets it's own index
             If a dictionary is given, a DataFrame and a csv-file are created
         permute
             Only relevant when param_grid_arg is a dictionary.
@@ -628,9 +640,9 @@ class ClusterGridSearch(ClusterCompute):
             return None
 
     def prepare_chunks(self, chunk_size, grid_len):
-        """Calculate the number of parameter combinations that should be computed during one call on the remote worker
+        """Set the amount of parameter combinations that are computed at once by each worker
 
-        Adds a field "num_params" to each client in self.clients
+        Adds a key "num_params" to each client dict in self.clients
 
         Parameters
         ----------
@@ -639,13 +651,12 @@ class ClusterGridSearch(ClusterCompute):
             dynamically. Mode can be one out of:
             'dist_equal': The number of parameters is equally distributed among the workers.
                 The first node to finish it's computation starts another one to compute the remaining parameters
-                (modulo)
             'dist_equal_add_mod': The number of parameters is equally distributed among the workers.
                 The remaining amount of parameters (modulo) is added to the chunk size of the first node in the
                 node list.
             'fit_hardware': Not implemented yet
         grid_len
-            Number of parameter combinations to be computed in total
+            Total number of parameter combinations computed by all workers together
 
         Returns
         ------
@@ -684,6 +695,16 @@ class ClusterGridSearch(ClusterCompute):
 
     @staticmethod
     def check_key_consistency(param_grid, param_map):
+        """
+        Parameters
+        ----------
+        param_grid:
+        param_map:
+
+        Returns
+        -------
+
+        """
         grid_key_lst = list(param_grid.keys())
         map_key_lst = list(param_map.keys())
         return all((map_key in grid_key_lst for map_key in map_key_lst))
@@ -697,12 +718,12 @@ class ClusterGridSearch(ClusterCompute):
         param_grid
             Linearized parameter grid of type pandas.DataFrame.
         lock
-            A given lock makes sure, that all of the code inside the function is executed without switching between threads
+            RLock to make sure threads are not switched during the execution of this function
         num_params
             Number of indices to fetch from param_grid. Is 1 by default.
         set_status
             If True, sets 'status' key of the fetched rows to 'pending', to exclude them from future calls.
-            Can be used to check param_grid for fetchable or existent keys without changing their 'status' key.
+            Can be used to check param_grid for fetchable or existent keys without changing their 'status' key if False.
             Is True by default.
 
         Returns
@@ -737,7 +758,7 @@ class ClusterGridSearch(ClusterCompute):
 # Utility functions
 def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inputs,
                       outputs, sampling_step_size=None, **kwargs):
-    """Creates a configfile.json containing a config_dict{} with input parameters as key-value pairs
+    """Creates a configfile.json containing a config_dict{} with all input parameters as key-value pairs
 
     Parameters
     ----------
@@ -773,6 +794,23 @@ def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inpu
 
 
 def gather_cgs_results(res_dir, num_header_params, filter_grid=None):
+    """ Collect data from all csv-files in the res_dir inside on DataFrame
+
+    Parameters
+    ----------
+    res_dir
+        Directory with csv-files
+    num_header_params
+        Number of keys in the parameter grid
+    filter_grid
+        Not implemented yet
+
+    Returns
+    -------
+    DataFrame
+
+    """
+
     header = list(range(num_header_params))
     files = glob.glob(res_dir + "/*.csv")
 

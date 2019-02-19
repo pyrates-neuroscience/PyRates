@@ -79,6 +79,8 @@ result = gather_cgs_results(res_dir, num_header_params=3)
 # print("Starting grid search!")
 # start_gs = time.time()
 #
+# # Load grid_search input data from config file
+#
 # results = grid_search(circuit_template=circuit_template,
 #                       param_grid=param_grid, param_map=param_map,
 #                       inputs=inputs, outputs=outputs,
