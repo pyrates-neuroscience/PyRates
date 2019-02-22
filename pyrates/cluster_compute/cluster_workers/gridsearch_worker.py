@@ -8,7 +8,7 @@ import argparse
 
 # external imports
 import pandas as pd
-from pyrates.utility import grid_search
+from pyrates.utility.grid_search import grid_search_2
 
 
 def main(_):
@@ -20,29 +20,24 @@ def main(_):
     ##################################################
     print("")
     print("***LOADING COMMAND LINE ARGUMENTS***")
-    start_arg = time.time()
+    t0 = time.time()
 
     config_file = FLAGS.config_file
     subgrid = FLAGS.subgrid
     res_dir = FLAGS.res_dir
     grid_name = FLAGS.grid_name
 
-    elapsed_arg = time.time() - start_arg
-    print("Done! Elapsed time: {0:.3f} seconds".format(elapsed_arg))
+    print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     ###########################
     # Load global config file #
     ###########################
     print("")
     print("***LOADING GLOBAL CONFIG FILE***")
-    start_gconf = time.time()
+    t0 = time.time()
 
     with open(config_file) as g_conf:
         global_config_dict = json.load(g_conf)
-
-        # Recreate tuple from string/list to use as key/values in inputs/outputs since pure tuples cannot be saved as
-        # json formatted string
-
         inputs = {ast.literal_eval(*global_config_dict['inputs'].keys()):
                   list(*global_config_dict['inputs'].values())}
         outputs = {str(*global_config_dict['outputs'].keys()):
@@ -53,44 +48,44 @@ def main(_):
         dt = global_config_dict['dt']
         simulation_time = global_config_dict['simulation_time']
 
-    elapsed_gconf = time.time() - start_gconf
-    print("Global config loaded. Elapsed time: {0:.3f} seconds".format(elapsed_gconf))
+    print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     #########################
     # LOAD PARAMETER GRID #
     #########################
     print("")
     print("***LOADING PARAMETER GRID***")
-    start_grid = time.time()
+    t0 = time.time()
 
     # Load subgrid into DataFrame
-    param_grid = pd.read_csv(subgrid, index_col=0)
+    param_grid = pd.read_hdf(subgrid, key='Data')
 
     # Exclude 'status'- and 'worker'-keys from param_grid since grid_search() can't handle the additional keywords
     param_grid = param_grid.loc[:, param_grid.columns != "status"]
     param_grid = param_grid.loc[:, param_grid.columns != "worker"]
 
-    elapsed_grid = time.time() - start_grid
-    print("Parameter grid loaded. Elapsed time: {0:.3f} seconds".format(elapsed_grid))
+    print(f'Total parameter grid computation time: {time.time()-t0:.3f} seconds')
 
     ##########################
     # COMPUTE PARAMETER GRID #
     ##########################
     print("")
     print("***COMPUTING PARAMETER GRID***")
-    start_comp = time.time()
+    t0 = time.time()
 
-    results = grid_search(circuit_template=circuit_template,
-                          param_grid=param_grid,
-                          param_map=param_map,
-                          inputs=inputs,
-                          outputs=outputs,
-                          sampling_step_size=sampling_step_size,
-                          dt=dt,
-                          simulation_time=simulation_time)
+    results, t, _ = grid_search_2(circuit_template=circuit_template,
+                                  param_grid=param_grid,
+                                  param_map=param_map,
+                                  inputs=inputs,
+                                  outputs=outputs,
+                                  sampling_step_size=sampling_step_size,
+                                  dt=dt,
+                                  simulation_time=simulation_time,
+                                  profile='t',
+                                  timestamps=False)
 
-    elapsed_comp = time.time() - start_comp
-    print("Parameter grid computed. Elapsed time: {0:.3f} seconds".format(elapsed_comp))
+    print(f'Total parameter grid computation time: {time.time()-t0:.3f} seconds')
+    # print(f'Peak memory usage: {m} MB')
 
     ############################################
     # POSTPROCESS DATA AND CREATE RESULT FILES #
@@ -111,8 +106,10 @@ def main(_):
         ##################
         result = postprocessing(result)
 
-        res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.csv'
-        result.to_csv(res_file, index=True)
+        # res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.csv'
+        # result.to_csv(res_file, index=True)
+        res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.h5'
+        result.to_hdf(res_file, key='Data', mode='a')
 
     elapsed_res = time.time() - start_res
     print("Result files created. Elapsed time: {0:.3f} seconds".format(elapsed_res))

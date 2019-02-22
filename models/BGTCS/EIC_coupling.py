@@ -15,8 +15,8 @@ print("Start!")
 dt = 1e-4
 T = 2.
 inp = 3. + np.random.randn(int(T/dt), 1) * 1.0
-Cs = [1., 2., 4.]
-# Cs = [1.]
+# Cs = [1., 2., 4.]
+Cs = [1.]
 ei_ratio = np.arange(0.1, 3., 0.1)[::-1]
 io_ratio = np.arange(0.1, 2., 0.1)
 J_e = np.zeros((int(len(ei_ratio) * len(io_ratio))))
@@ -53,50 +53,43 @@ for idx, C in enumerate(Cs):
                           param_grid=params, param_map=param_map,
                           inputs={("PC", "Op_e.0", "i_in"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
                           dt=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
-    # results.to_csv(
-    #     "/nobackup/spanien1/salomon/ClusterGridSearch/EIC_coupling_test_data/EIC_Coupling_test_result.csv",
-    #     header=True)
-    # param_grid = linearize_grid(params, permute=False)
-    # param_grid.to_csv(
-    #     "/nobackup/spanien1/salomon/ClusterGridSearch/EIC_coupling_test_data/EIC_Coupling_test_param_grid.csv",
-    #     header=True)
 
     elapsed_calc = time.time() - start_calc
     print("Grid search finished: {0:.3f} seconds".format(elapsed_calc))
 
-    # plotting
-    cut_off = 1.
-    max_freq = np.zeros((len(ei_ratio), len(io_ratio)))
-    freq_pow = np.zeros_like(max_freq)
-    for j_e, j_i, k1, k2 in zip(params['J_e'], params['J_i'], params['k_ei'], params['k_ie']):
-        if not results[j_e][j_i][k1][k2].isnull().any().any():
-            _ = plot_psd(results[j_e][j_i][k1][k2], tmin=cut_off, show=False)
-            pow = plt.gca().get_lines()[-1].get_ydata()
-            freqs = plt.gca().get_lines()[-1].get_xdata()
-            r, c = np.argmin(np.abs(ei_ratio - k1/k2)), np.argmin(np.abs(io_ratio - j_i/k2))
-            max_freq[r, c] = freqs[np.argmax(pow)]
-            freq_pow[r, c] = np.max(pow)
-            plt.close(plt.gcf())
-
-    cm1 = cubehelix_palette(n_colors=int(len(ei_ratio)*len(io_ratio)), as_cmap=True, start=2.5, rot=-0.1)
-    cm2 = cubehelix_palette(n_colors=int(len(ei_ratio)*len(io_ratio)), as_cmap=True, start=-2.0, rot=-0.1)
-    cax1 = plot_connectivity(max_freq, ax=ax[0, idx], yticklabels=list(np.round(ei_ratio, decimals=2)),
-                             xticklabels=list(np.round(io_ratio, decimals=2)), cmap=cm1)
-    cax1.set_xlabel('intra/inter pcs')
-    cax1.set_ylabel('exc/inh pcs')
-    cax1.set_title(f'max freq (C = {C})')
-    cax2 = plot_connectivity(freq_pow, ax=ax[1, idx], yticklabels=list(np.round(ei_ratio, decimals=2)),
-                             xticklabels=list(np.round(io_ratio, decimals=2)), cmap=cm2)
-    cax2.set_xlabel('intra/inter pcs')
-    cax2.set_ylabel('exc/inh pcs')
-    cax2.set_title(f'freq power (C = {C})')
-
-plt.suptitle('EI-circuit sensitivity to population Coupling strengths (pcs)')
-plt.tight_layout(pad=2.5, rect=(0.01, 0.01, 0.99, 0.96))
-# fig.savefig("/home/rgast/Documents/Studium/PhD_Leipzig/Figures/BGTCS/eic_coupling", format="svg")
-plt.show()
-fig.savefig("/data/hu_salomon/Pictures/EIC_Coupling.svg", format="svg")
-
-
-elapsed = time.time() - start
-print("Overall elapsed time: {0:.3f} seconds".format(elapsed))
+#     # plotting
+#     cut_off = 1.
+#     max_freq = np.zeros((len(ei_ratio), len(io_ratio)))
+#     freq_pow = np.zeros_like(max_freq)
+#     for j_e, j_i, k1, k2 in zip(params['J_e'], params['J_i'], params['k_ei'], params['k_ie']):
+#         if not results[j_e][j_i][k1][k2].isnull().any().any():
+#             _ = plot_psd(results[j_e][j_i][k1][k2], tmin=cut_off, show=False)
+#             pow = plt.gca().get_lines()[-1].get_ydata()
+#             freqs = plt.gca().get_lines()[-1].get_xdata()
+#             r, c = np.argmin(np.abs(ei_ratio - k1/k2)), np.argmin(np.abs(io_ratio - j_i/k2))
+#             max_freq[r, c] = freqs[np.argmax(pow)]
+#             freq_pow[r, c] = np.max(pow)
+#             plt.close(plt.gcf())
+#
+#     cm1 = cubehelix_palette(n_colors=int(len(ei_ratio)*len(io_ratio)), as_cmap=True, start=2.5, rot=-0.1)
+#     cm2 = cubehelix_palette(n_colors=int(len(ei_ratio)*len(io_ratio)), as_cmap=True, start=-2.0, rot=-0.1)
+#     cax1 = plot_connectivity(max_freq, ax=ax[0, idx], yticklabels=list(np.round(ei_ratio, decimals=2)),
+#                              xticklabels=list(np.round(io_ratio, decimals=2)), cmap=cm1)
+#     cax1.set_xlabel('intra/inter pcs')
+#     cax1.set_ylabel('exc/inh pcs')
+#     cax1.set_title(f'max freq (C = {C})')
+#     cax2 = plot_connectivity(freq_pow, ax=ax[1, idx], yticklabels=list(np.round(ei_ratio, decimals=2)),
+#                              xticklabels=list(np.round(io_ratio, decimals=2)), cmap=cm2)
+#     cax2.set_xlabel('intra/inter pcs')
+#     cax2.set_ylabel('exc/inh pcs')
+#     cax2.set_title(f'freq power (C = {C})')
+#
+# plt.suptitle('EI-circuit sensitivity to population Coupling strengths (pcs)')
+# plt.tight_layout(pad=2.5, rect=(0.01, 0.01, 0.99, 0.96))
+# # fig.savefig("/home/rgast/Documents/Studium/PhD_Leipzig/Figures/BGTCS/eic_coupling", format="svg")
+# plt.show()
+# fig.savefig("/data/hu_salomon/Pictures/EIC_Coupling.svg", format="svg")
+#
+#
+# elapsed = time.time() - start
+# print("Overall elapsed time: {0:.3f} seconds".format(elapsed))

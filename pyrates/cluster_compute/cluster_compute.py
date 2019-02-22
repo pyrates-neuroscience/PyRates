@@ -195,7 +195,7 @@ class ClusterCompute(object):
                     "logfile": local_logfile})
             print("")
 
-    def run(self, **kwargs):
+    def run(self, thread_kwargs: dict, **kwargs):
         """Start a thread for each connected client. Each thread executes the thread_master() function
 
         Each thread and therefor each instance of the thread_master() function is responsible for the communication
@@ -217,23 +217,23 @@ class ClusterCompute(object):
         # ! Insert preprocessing of input data can here !
 
         # **kwargs of spawn_thread() will be parsed as dict to thread_master()
-        threads = [self.spawn_thread(client) for client in self.clients]
+        threads = [self.spawn_thread(client, thread_kwargs) for client in self.clients]
         for t_ in threads:
             t_.join()
 
         print("")
         print(f'Cluster computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
 
-    def spawn_thread(self, client, **kwargs):
+    def spawn_thread(self, client, thread_kwargs):
         t_ = Thread(
             name=client["node_name"],
             target=self.thread_master,
-            args=(client, kwargs)
+            args=(client, thread_kwargs)
         )
         t_.start()
         return t_
 
-    def thread_master(self, client, kwargs_: dict):
+    def thread_master(self, client, thread_kwargs_: dict):
         """Function that is executed by every thread. Every instance of thread_master is bound to a different client
 
         The thread_master() function can be arbitrarily changed to fit the needs of the user.
@@ -369,9 +369,10 @@ class ClusterGridSearch(ClusterCompute):
         self.res_dir = f'{self.compute_dir}/Results'
         os.makedirs(self.res_dir, exist_ok=True)
 
-    def run(self, **kwargs):
+    def run(self, thread_kwargs: dict, **kwargs):
         """
 
+        :param thread_kwargs:
         :param kwargs:
         :return:
         """
@@ -382,8 +383,6 @@ class ClusterGridSearch(ClusterCompute):
         param_grid_temp = kwargs["param_grid"]
         permute = kwargs["permute"]
         chunk_size = kwargs["chunk_size"]
-        worker_env = kwargs["worker_env"]
-        worker_file = kwargs["worker_file"]
 
         print("")
 
@@ -424,6 +423,7 @@ class ClusterGridSearch(ClusterCompute):
                 # Parameter grid and parameter map match
                 print("All parameter map keys found in parameter grid")
                 # Continuing with computation
+
         # Create parameter grid specific result directory
         grid_res_dir = f'{self.res_dir}/{grid_name}'
         os.makedirs(grid_res_dir, exist_ok=True)
@@ -438,16 +438,19 @@ class ClusterGridSearch(ClusterCompute):
 
         print("")
 
+        # Update thread keywords dictionary
+        thread_kwargs["param_grid"] = param_grid
+        thread_kwargs["grid_name"] = grid_name
+        thread_kwargs["grid_res_dir"] = grid_res_dir
+        thread_kwargs["config_file"] = config_file
+
         print("***STARTING THREAD POOL***")
-        threads = [self.spawn_thread(client,
-                                     config_file=config_file,
-                                     param_grid=param_grid,
-                                     grid_name=grid_name,
-                                     grid_res_dir=grid_res_dir,
-                                     worker_env=worker_env,
-                                     worker_file=worker_file) for client in self.clients]
+        threads = [self.spawn_thread(client, thread_kwargs) for client in self.clients]
         for t_ in threads:
             t_.join()
+
+        # TODO: Create one hdf5-file from all result files with respective index as key (maybe save column values,
+        #  index and postprocessed data/computed values in a seperate field?)
 
         print("")
         print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
@@ -456,13 +459,7 @@ class ClusterGridSearch(ClusterCompute):
         param_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
         return grid_res_dir, grid_file
 
-    def thread_master(self, client, kwargs_: dict):
-        """
-
-        :param client:
-        :param kwargs_:
-        :return:
-        """
+    def thread_master(self, client, thread_kwargs: dict):
         thread_name = currentThread().getName()
 
         # Get client information
@@ -471,12 +468,12 @@ class ClusterGridSearch(ClusterCompute):
         num_params = client["num_params"]
 
         # Get kwargs
-        config_file = kwargs_["config_file"]
-        param_grid = kwargs_["param_grid"]
-        grid_name = kwargs_["grid_name"]
-        grid_res_dir = kwargs_["grid_res_dir"]
-        worker_env = kwargs_["worker_env"]
-        worker_file = kwargs_["worker_file"]
+        config_file = thread_kwargs["config_file"]
+        param_grid = thread_kwargs["param_grid"]
+        grid_name = thread_kwargs["grid_name"]
+        grid_res_dir = thread_kwargs["grid_res_dir"]
+        worker_env = thread_kwargs["worker_env"]
+        worker_file = thread_kwargs["worker_file"]
 
         command = f'{worker_env} {worker_file}'
 
@@ -487,7 +484,7 @@ class ClusterGridSearch(ClusterCompute):
 
         # Run while not all parameter combinations have been computed
         while not self.fetch_param_idx(param_grid, lock=self.lock, set_status=False).empty:
-            # Ensure that the following code snippte is executed without switching threads
+            # Ensure that the following code snippet is executed without threads being switched in between
             with self.lock:
                 # Fetch grid indices
                 param_idx = self.fetch_param_idx(param_grid, num_params=num_params)
@@ -495,9 +492,10 @@ class ClusterGridSearch(ClusterCompute):
                 print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
 
                 # Create parameter sub-grid from fetched indices to pass to the remote host
-                subgrid_fp = f'{subgrid_dir}/{thread_name}_{grid_name}_Subgrid_{subgrid_idx}.csv'
-                subgrid_frame = param_grid.iloc[param_idx]
-                subgrid_frame.to_csv(subgrid_fp, index=True)
+                subgrid_fp = f'{subgrid_dir}/{thread_name}_{grid_name}_Subgrid_{subgrid_idx}.h5'
+                subgrid_df = param_grid.iloc[param_idx]
+                # subgrid_df.to_csv(subgrid_fp, index=True)
+                subgrid_df.to_hdf(subgrid_fp, key='Data')
                 subgrid_idx += 1
 
                 # Execute worker script on the remote host
@@ -505,23 +503,23 @@ class ClusterGridSearch(ClusterCompute):
                 t0 = t.time()
 
                 stdin, stdout, stderr = pm_client.exec_command(command +
-                                                            f' --config_file={config_file}'
-                                                            f' --subgrid={subgrid_fp}'
-                                                            f' --res_dir={grid_res_dir}'
-                                                            f' --grid_name={grid_name}'
-                                                            f' &>> {logfile}',
-                                                            get_pty=True)
+                                                               f' --config_file={config_file}'
+                                                               f' --subgrid={subgrid_fp}'
+                                                               f' --res_dir={grid_res_dir}'
+                                                               f' --grid_name={grid_name}'
+                                                               f' &>> {logfile}',
+                                                               get_pty=True)
 
             # Lock released. Wait for remote computation to finish
             stdout.channel.recv_exit_status()
 
             print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
 
-            # Set result status for each index to 'done', if a corresponding result file exists and is not empty
-            # otherwise set result status to 'failed'
+            # Set result status for each index to 'done', if a corresponding result file exists and is not empty.
+            # Otherwise set result status to 'failed'
             print(f'[T]\'{thread_name}\': Updating grid status')
             for idx in param_idx:
-                res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.csv'
+                res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.h5'
                 param_grid.at[idx, 'worker'] = thread_name
                 try:
                     if os.path.getsize(res_file) > 0:
@@ -594,12 +592,15 @@ class ClusterGridSearch(ClusterCompute):
             grid_frame = linearize_grid(param_grid_arg, permute=permute)
             # Create default parameter grid csv-file
             grid_idx = 0
-            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            # grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.h5'
             # If grid_file already exist
             while os.path.exists(grid_file):
                 grid_idx += 1
-                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
-            grid_frame.to_csv(grid_file, index=True, float_format='%g')
+                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.h5'
+            # grid_frame.to_csv(grid_file, index=True, float_format='%g')
+            # grid_frame.to_csv(grid_file, index=True)
+            grid_frame.to_hdf(grid_file, key='Data')
             # Add status columns to grid
             if 'status' not in grid_frame.columns:
                 grid_frame['status'] = 'unsolved'
@@ -755,6 +756,10 @@ class ClusterGridSearch(ClusterCompute):
             return param_idx
 
 
+class ClusterBenchmark(ClusterCompute):
+    pass
+
+
 # Utility functions
 def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inputs,
                       outputs, sampling_step_size=None, **kwargs):
@@ -793,15 +798,13 @@ def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inpu
         print(f'Configfile: {fp} already exists.')
 
 
-def gather_cgs_results(res_dir, num_header_params, filter_grid=None):
+def gather_cgs_results(res_dir, filter_grid=None):
     """ Collect data from all csv-files in the res_dir inside on DataFrame
 
     Parameters
     ----------
     res_dir
         Directory with csv-files
-    num_header_params
-        Number of keys in the parameter grid
     filter_grid
         Not implemented yet
 
@@ -810,16 +813,15 @@ def gather_cgs_results(res_dir, num_header_params, filter_grid=None):
     DataFrame
 
     """
-
-    header = list(range(num_header_params))
-    files = glob.glob(res_dir + "/*.csv")
+    # files = glob.glob(res_dir + "/*.csv")
+    files = glob.glob(res_dir + "/*.h5")
 
     # if filter_grid:
     #     filter_grid = filter_grid.values.tolist()
 
     list_ = []
     for file_ in files:
-        df = pd.read_csv(file_, index_col=0, header=header)
+        df = pd.read_hdf(file_, key='Data')
         list_.append(df)
 
     return pd.concat(list_, axis=1)
