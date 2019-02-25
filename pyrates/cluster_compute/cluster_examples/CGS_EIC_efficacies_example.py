@@ -1,8 +1,8 @@
 from pyrates.utility import plot_timeseries, grid_search, plot_psd, plot_connectivity
-import numpy as np
 import matplotlib.pyplot as plt
 from seaborn import cubehelix_palette
-import time as t
+
+from pyrates.cluster_compute.cluster_compute import *
 
 __author__ = "Richard Gast"
 __status__ = "Development"

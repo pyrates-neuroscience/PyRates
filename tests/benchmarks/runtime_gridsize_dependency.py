@@ -36,16 +36,18 @@ for n, T_ in enumerate(T):
 
         params = {'J_e': np.linspace(8., 12., size), 'J_i': np.linspace(2., 12., size)}
 
-        _, t_dict, t_, _ = grid_search_2(
+        _, t_dict, t_, m = grid_search_2(
             circuit_template="pyrates.examples.simple_nextgen_NMM.Net5",
             param_grid=params, param_map=param_map,
             inputs={("PC", "Op_e.0", "inp"): inp},
             outputs={"r": ("PC", "Op_e.0", "r")},
             dt=dt, simulation_time=T_, permute_grid=False,
-            profile="t", timestamps=True)
+            profile="tm", timestamps=True)
 
         t_list.append(t_dict)
+        print(f'Total peak memory: {m} MByte')
 
+    print(t_list)
     times.append(pd.DataFrame(t_list))
     t_list = []
 

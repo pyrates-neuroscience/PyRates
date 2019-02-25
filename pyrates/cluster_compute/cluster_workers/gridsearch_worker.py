@@ -1,3 +1,31 @@
+# -*- coding: utf-8 -*-
+#
+#
+# PyRates software framework for flexible implementation of neural
+# network models and simulations. See also:
+# https://github.com/pyrates-neuroscience/PyRates
+#
+# Copyright (C) 2017-2018 the original authors (Richard Gast and
+# Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain
+# Sciences ("MPI CBS") and contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# CITATION:
+#
+# Richard Gast and Daniel Rose et. al. in preparation
+
 # system imports
 import os
 import sys
@@ -99,40 +127,46 @@ def main(_):
         idx_label = result.name[:-1]
         idx = param_grid[(param_grid.values == idx_label).all(1)].index
         result = result.to_frame()
-        result.columns.names = results.columns.names
 
         ##################
         # POSTPROCESSING #
         ##################
         result = postprocessing(result)
+        # spec = postprocessing(result)
 
-        # res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.csv'
-        # result.to_csv(res_file, index=True)
+        ############
+        # Indexing #
+        ############
+        result.columns.names = results.columns.names
+        # spec.columns.names = results.columns.names
+
         res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.h5'
         result.to_hdf(res_file, key='Data', mode='a')
+        # spec.to_hdf(res_file, key='Spec', mode='a')
 
     elapsed_res = time.time() - start_res
     print("Result files created. Elapsed time: {0:.3f} seconds".format(elapsed_res))
 
 
 def postprocessing(data):
-    # type(data) = <class 'pandas.core.frame.DataFrame'>
-    # Can be processed like a slice received via (e.g.): data = results[J_e][J_i]
+    # Example
+    from pyrates.utility import plot_psd
+    import matplotlib.pyplot as plt
 
-    # Postprocessing example (see EIC_coupling.py):
-    # cut_off = 1.
-    # max_freq = np.zeros((len(ei_ratio), len(io_ratio)))
-    # freq_pow = np.zeros_like(max_freq)
-    # if not data.isnull().any().any():
-    #     _ = plot_psd(data, tmin=cut_off, show=False)
-    #     pow = plt.gca().get_lines()[-1].get_ydata()
-    #     freqs = plt.gca().get_lines()[-1].get_xdata()
-    #     r, c = np.argmin(np.abs(ei_ratio - k1/k2)), np.argmin(np.abs(io_ratio - j_i/k2))
-    #     max_freq[r, c] = freqs[np.argmax(pow)]
-    #     freq_pow[r, c] = np.max(pow)
-    #     plt.close(plt.gcf())
-    return data
+    cols = data.columns
 
+    # Plot_psd expects only the out_var as column value
+    # -> Index dummy is created to use plot_psd, will be reverted after psd is computed
+    index_dummy = pd.Index([cols.values[-1][-1]])
+    data.columns = index_dummy
+
+    cut_off = 1.0
+    _ = plot_psd(data, tmin=cut_off, show=False)
+    pow = plt.gca().get_lines()[-1].get_ydata()
+    freqs = plt.gca().get_lines()[-1].get_xdata()
+    plt.close()
+
+    return pd.DataFrame(pow, index=freqs, columns=cols)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

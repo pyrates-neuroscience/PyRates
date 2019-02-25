@@ -450,7 +450,7 @@ class ClusterGridSearch(ClusterCompute):
             t_.join()
 
         # TODO: Create one hdf5-file from all result files with respective index as key (maybe save column values,
-        #  index and postprocessed data/computed values in a seperate field?)
+        #  index and postprocessed data/computed values in a separate field?)
 
         print("")
         print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
@@ -798,7 +798,7 @@ def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inpu
         print(f'Configfile: {fp} already exists.')
 
 
-def gather_cgs_results(res_dir, filter_grid=None):
+def read_cgs_results(res_dir, key='Data'):
     """ Collect data from all csv-files in the res_dir inside on DataFrame
 
     Parameters
@@ -821,7 +821,7 @@ def gather_cgs_results(res_dir, filter_grid=None):
 
     list_ = []
     for file_ in files:
-        df = pd.read_hdf(file_, key='Data')
+        df = pd.read_hdf(file_, key=key)
         list_.append(df)
 
     return pd.concat(list_, axis=1)
@@ -848,3 +848,26 @@ def linearize_grid(grid: dict, permute=False):
             keys.append(key)
         new_grid = np.stack(np.meshgrid(*tuple(vals)), -1).reshape(-1, len(grid))
         return pd.DataFrame(new_grid, columns=keys)
+
+
+def create_resultfile(fp_res, fp_h5, delete_temp=False):
+    """Create one hdf5-file from multiple hdf5-files"""
+    files = glob.glob(fp_res + "/*.h5")
+    with pd.HDFStore(fp_h5, "w") as store:
+        for i, file_ in enumerate(files):
+            df = pd.read_hdf(file_, key='Data')
+            idx = Path(file_).stem.rsplit('_',1)[-1]
+            store.put(key=f'/Data/Idx_{idx}/', value=df)
+            if delete_temp:
+                os.remove(file_)
+
+#     files = glob.glob(fp_res + "/*.h5")
+#     with h5py.File(fp_h5, "w") as f:
+#         for i, file_ in enumerate(files):
+#             df = pd.read_hdf(file_, key='Data')
+#             f.create_dataset(name=f'/Data/Idx_{i}/Values/', data=df.values)
+#             f.create_dataset(name=f'/Data/Idx_{i}/Columns/', data=df.columns.to_frame())
+#             if i == 0:
+#                 f.create_dataset(name=f'Index', data=df.index)
+#             if delete_temp:
+#                 os.remove(file_)
