@@ -7,7 +7,6 @@ import h5py
 # PyRates internal imports
 from pyrates.cluster_compute.cluster_compute import *
 
-
 # def create_resultfile(fp_res, fp_h5, delete_temp=False):
 #     files = glob.glob(fp_res + "/*.h5")
 #     with h5py.File(fp_h5, "w") as f:
@@ -21,30 +20,159 @@ from pyrates.cluster_compute.cluster_compute import *
 #                 os.remove(file_)
 
 
-def post(data):
+def post(data_):
     cut_off = 1.
-    _ = plot_psd(data, tmin=cut_off, show=False)
+    _ = plot_psd(data_, tmin=cut_off, show=False)
     pow = plt.gca().get_lines()[-1].get_ydata()
     freqs = plt.gca().get_lines()[-1].get_xdata()
     plt.close('all')
     spec = pd.DataFrame(pow, index=freqs)
-    spec.columns.names = data.columns.names
+    spec.columns.names = data_.columns.names
     return spec
 
 
 if __name__ == "__main__":
-    res_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_Spec/Results/DefaultGrid_0/"
-    h5file = f'{res_dir}/CGS_result_DefaultGrid_0.h5'
+    res_file = '/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_test/Results/DefaultGrid_23/CGS_result_DefaultGrid_23.h5'
+    list_ = []
+    with(h5py.File(res_file, 'r')) as file_:
+        keys = list(file_['GridIndex'].keys())
 
+    for i, index_key in enumerate(keys):
+        df = pd.read_hdf(res_file, key=f'/GridIndex/{index_key}/Data/')
+        list_.append(df)
+    results = pd.concat(list_, axis=1)
+    print(results)
+
+
+
+    #
+    # fp_res = '/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_test/Results/DefaultGrid_14'
+    # # fp_s1 = '/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_test/Results/DefaultGrid_14/CGS_result_DefaultGrid_14_idx_50-99.h5'
+    # # fp_s2 = '/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_test/Results/DefaultGrid_14/CGS_result_DefaultGrid_14_idx_0-49.h5'
+    # fp_d =  '/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_test/Results/DefaultGrid_14/CGS_result_DefaultGrid_14.h5'
+    # with h5py.File(fp_d, 'w') as fd:
+    #
+    #     for file in glob.glob(fp_res + "/*.h5"):
+    #         if 'GridIndex/' not in fd.keys():
+    #             group = fd.create_group(f'GridIndex/')
+    #         else:
+    #             group = fd['GridIndex']
+    #         if file != fp_d:
+    #             fs = h5py.File(file, 'r')
+    #             for key in list(fs['GridIndex'].keys()):
+    #                 fs.copy(f'GridIndex/{key}', group)
+    #             fs.close()
+
+        # with h5py.File(fp_s1, 'r') as fs:
+        #     for key in list(fs['GridIndex'].keys()):
+        #         group = fd.create_group(f'GridIndex/{key}')
+        #         fs.copy(f'GridIndex/{key}/Data', group)
+        # with h5py.File(fp_s2, 'r') as fs:
+        #     for key in list(fs['GridIndex'].keys()):
+        #         group = fd.create_group(f'GridIndex/{key}')
+        #         fs.copy(f'GridIndex/{key}/Data', group)
+        # with h5py.File(fp_s2, 'r') as fs:
+        #     fs.copy('GridIndex', fd)
+
+            # data = fs['GridIndex/60/Data/block0_values']
+            # print(data)
+            # for key in list(group.keys()):
+            #     data = fs[f'/GridIndex/{key}']
+            #     fd.create_dataset(name=f'GridIndex/{key}', data=data)
+            # print(group.keys())
+            # fd.
+        # print(list(f.keys()))
+
+
+
+
+    # res_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_New/Results/DefaultGrid_12/"
+    # h5file = f'{res_dir}/CGS_result_DefaultGrid_0.h5'
+    #
+    # res_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_EIC_coupling_example_2/Results/DefaultGrid_0/"
+    # spec = read_cgs_results(res_dir, key='Spec')
+    #
+    # cm = cubehelix_palette(n_colors=int(spec.size), as_cmap=True, start=-2.0, rot=-0.1)
+    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(20, 15), gridspec_kw={})
+    # spec.index = np.round(spec.index, decimals=2)
+    # cax = plot_connectivity(spec, ax=ax, yticklabels=10,
+    #                         xticklabels=False, cmap=cm)
+    # plt.yticks(fontsize=15, rotation='horizontal')
+    # # for tick in cax.yaxis.get_major_ticks():
+    # #     tick.label.set_fontsize(15)
+    # #     tick.label.set_rotation('horizontal')
+    # cax.set_xlabel('test', size=20)
+    # cax.set_ylabel('test', size=20)
+    # cax.set_title('test', size=20)
+
+    # time_results = read_cgs_results(res_dir, key='Data')
+    # spec_results = read_cgs_results(res_dir, key='Spec')
+    #
+    # x = 10
+    # t = pd.DataFrame([x])
+    # f = t.values
+    # print(f)
+
+    # t = pd.DataFrame(data=x)
+    # print(t)
+
+    # time_results = read_cgs_results(res_dir, key='Data')
+    # spec_results = read_cgs_results(res_dir, key='Spec')
+
+    # cm2 = cubehelix_palette(n_colors=int(spec_results.size), as_cmap=True, start=2.5, rot=-0.1)
+    #
+    # fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1)
+    # ax1.imshow(time_results.values)
+    # ax2.imshow(spec_results.values, cmap=cm2)
+    #
+    # fig, ax = plt.subplots(ncols=1, nrows=2, figsize=(20, 15), gridspec_kw={})
+    # cax1 = plot_connectivity(time_results.values, ax=ax[0], yticklabels=list(time_results.index),
+    #                          xticklabels=np.arange(len(time_results.columns.values)), cmap=cm1)
+    # # cax2 = plot_connectivity(spec_results.values, ax=ax[1], yticklabels=list(spec_results.index),
+    # #                          xticklabels=np.arange(len(spec_results.columns.values)), cmap=cm1)
+    # plt.show()
+
+
+
+
+    #
 
     # t0 = t.time()
     # create_resultfile(res_dir, h5file)
     # print(f'{t.time()-t0:.3f} seconds')
 
-    results = read_cgs_results(res_dir)
+    # results = read_cgs_results(res_dir, key='Spec')
+    # data = results.values
+    #
+    # print(type(results.values))
+    # print(results.columns)
+    # print(len(results.columns.values))
+
+
+    #
+    # res = results.values
+    # # print(res)
+    #
+    # fig, ax = plt.subplots()
+    # cm1 = cubehelix_palette(n_colors=int(results.size), as_cmap=True, start=-2.0, rot=-0.1)
+    # plt.imshow(results.values, cmap=cm1)
+    # plt.show()
+    #
+    #
+    # np.arrange()
+    # cm1 = cubehelix_palette(n_colors=int(results.size), as_cmap=True, start=2.5, rot=-0.1)
+    # ax.hist2d(x=len(results.index), y=len(results.columns.values), results.values)
+    # plt.show()
+    # cax1 = plot_connectivity(res, ax=ax, cmap=cm1)
+    # cax1.set_xlabel('intra/inter pcs')
+    # cax1.set_ylabel('exc/inh pcs')
+    # cax1.set_title(f'max freq')
+
+
+
     # data = results.iloc[:,0]
     # print(data.name[-1])
-    print(results)
+    # print(results)
     # print(results.columns.values[-1][-1])
     # data = results.iloc[:, 0].to_frame()
     # cols = data.columns

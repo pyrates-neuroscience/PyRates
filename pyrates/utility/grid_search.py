@@ -158,7 +158,7 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
 
 
 def grid_search_2(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
-                  sampling_step_size=None, permute_grid=False, profile=None, timestamps=False, **kwargs):
+                  sampling_step_size=None, permute_grid=False, profile=None, timestamps=False, prec=7, **kwargs):
     """
     Parameters
     ----------
@@ -172,11 +172,13 @@ def grid_search_2(circuit_template, param_grid, param_map, dt, simulation_time, 
     sampling_step_size
     permute_grid
     profile
+    timestamps
+    prec
     kwargs
     Returns
     -------
     """
-    times = {}
+    t_dict = {}
 
     if timestamps:
         t_total_0 = t.time()
@@ -208,7 +210,7 @@ def grid_search_2(circuit_template, param_grid, param_map, dt, simulation_time, 
     net = ComputeGraph(circuit, dt=dt, **kwargs)
 
     if timestamps:
-        times['graph'] = t.time()-t_graph_0
+        t_dict['graph'] = np.round(t.time()-t_graph_0, decimals=prec)
 
     # adjust input of simulation to combined network
     for inp_key, inp in inputs.items():
@@ -259,6 +261,7 @@ def grid_search_2(circuit_template, param_grid, param_map, dt, simulation_time, 
                           outputs=outputs,
                           sampling_step_size=sampling_step_size
                           )
+    # !!! Memory test prolongs the execution time significantly
     else:
         results, t_, memory = net.run(simulation_time=simulation_time,
                                       inputs=inputs,
@@ -267,7 +270,7 @@ def grid_search_2(circuit_template, param_grid, param_map, dt, simulation_time, 
                                       profile=profile
                                       )
     if timestamps:
-        times['run'] = t.time() - t_run_0
+        t_dict['run'] = np.round(t.time() - t_run_0, decimals=prec)
 
         # transform results into long-form dataframe with changed parameters as columns
     multi_idx = [param_grid[key].values for key in param_grid.keys()]
@@ -293,14 +296,14 @@ def grid_search_2(circuit_template, param_grid, param_map, dt, simulation_time, 
         results_final.loc[:, tuple(indices)] = results[col].values
 
     if timestamps:
-        times['total'] = t.time()-t_total_0
+        t_dict['total'] = np.round(t.time()-t_total_0, decimals=prec)
 
     if profile:
         if timestamps:
-            return results_final, times, t_, memory
+            return results_final, t_dict, t_, memory
         return results_final, t_, memory
     if timestamps:
-        return results_final, times
+        return results_final, t_dict
     return results_final
 
 

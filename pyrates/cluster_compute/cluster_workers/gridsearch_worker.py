@@ -35,6 +35,7 @@ import time
 import argparse
 
 # external imports
+import numpy as np
 import pandas as pd
 from pyrates.utility.grid_search import grid_search_2
 
@@ -42,6 +43,7 @@ from pyrates.utility.grid_search import grid_search_2
 def main(_):
     # disable TF-gpu warnings
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    t_total = time.time()
 
     ##################################################
     # Load command line arguments and create logfile #
@@ -52,8 +54,7 @@ def main(_):
 
     config_file = FLAGS.config_file
     subgrid = FLAGS.subgrid
-    res_dir = FLAGS.res_dir
-    grid_name = FLAGS.grid_name
+    res_file = FLAGS.res_file
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
@@ -101,16 +102,16 @@ def main(_):
     print("***COMPUTING PARAMETER GRID***")
     t0 = time.time()
 
-    results, t, _ = grid_search_2(circuit_template=circuit_template,
-                                  param_grid=param_grid,
-                                  param_map=param_map,
-                                  inputs=inputs,
-                                  outputs=outputs,
-                                  sampling_step_size=sampling_step_size,
-                                  dt=dt,
-                                  simulation_time=simulation_time,
-                                  profile='t',
-                                  timestamps=False)
+    results, t, = grid_search_2(circuit_template=circuit_template,
+                                param_grid=param_grid,
+                                param_map=param_map,
+                                inputs=inputs,
+                                outputs=outputs,
+                                sampling_step_size=sampling_step_size,
+                                dt=dt,
+                                simulation_time=simulation_time,
+                                timestamps=True,
+                                prec=3)
 
     print(f'Total parameter grid computation time: {time.time()-t0:.3f} seconds')
     # print(f'Peak memory usage: {m} MB')
@@ -120,53 +121,58 @@ def main(_):
     ############################################
     print("")
     print("***POSTPROCESSING AND CREATING RESULT FILES***")
-    start_res = time.time()
+    t0 = time.time()
 
-    for col in range(len(results.columns)):
-        result = results.iloc[:, col]
-        idx_label = result.name[:-1]
-        idx = param_grid[(param_grid.values == idx_label).all(1)].index
-        result = result.to_frame()
+    with pd.HDFStore(res_file, "a") as store:
+        for col in range(len(results.columns)):
+            result = results.iloc[:, col]
+            idx_label = result.name[:-1]
+            idx = param_grid[(param_grid.values == idx_label).all(1)].index
+            result = result.to_frame()
+            result.columns.names = results.columns.names
 
-        ##################
-        # POSTPROCESSING #
-        ##################
-        result = postprocessing(result)
-        # spec = postprocessing(result)
+            # Create single result file for each result
+            # res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.h5'
 
-        ############
-        # Indexing #
-        ############
-        result.columns.names = results.columns.names
-        # spec.columns.names = results.columns.names
+            # POSTPROCESSING
+            ################
+            # spec = postprocessing(result)
 
-        res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.h5'
-        result.to_hdf(res_file, key='Data', mode='a')
-        # spec.to_hdf(res_file, key='Spec', mode='a')
+            # SAVE DATA
+            ###########
+            store.put(key=f'GridIndex/Idx_{idx[0]}/Data', value=result)
+            # store.put(key=f'GridIndex/Idx_{idx[0]}/Spec', value=spec)
 
-    elapsed_res = time.time() - start_res
-    print("Result files created. Elapsed time: {0:.3f} seconds".format(elapsed_res))
+    print("")
+    print(f'Result files created. Elapsed time: {time.time()-t0:.3f} seconds')
+    print("")
+    print(f'Total elapsed time: {time.time()-t_total:.3f} seconds')
 
 
 def postprocessing(data):
-    # Example
+    # Example: Compute PSD from results
     from pyrates.utility import plot_psd
     import matplotlib.pyplot as plt
 
+    # Store columns for later reconstruction
     cols = data.columns
 
     # Plot_psd expects only the out_var as column value
-    # -> Index dummy is created to use plot_psd, will be reverted after psd is computed
     index_dummy = pd.Index([cols.values[-1][-1]])
     data.columns = index_dummy
+    if not any(np.isnan(data.values)):
+        _ = plot_psd(data, tmin=1.0, show=False)
+        pow_ = plt.gca().get_lines()[-1].get_ydata()
+        freqs = plt.gca().get_lines()[-1].get_xdata()
+        plt.close()
+        psd = pd.DataFrame(pow_, index=freqs, columns=cols)
+        data.columns = cols
+        return psd
 
-    cut_off = 1.0
-    _ = plot_psd(data, tmin=cut_off, show=False)
-    pow = plt.gca().get_lines()[-1].get_ydata()
-    freqs = plt.gca().get_lines()[-1].get_xdata()
-    plt.close()
+    # Reconstruct columns
+    data.columns = cols
+    return pd.DataFrame(columns=cols)
 
-    return pd.DataFrame(pow, index=freqs, columns=cols)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -187,17 +193,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--res_dir",
+        "--res_file",
         type=str,
         default="",
-        help="Directory to save result files to"
-    )
-
-    parser.add_argument(
-        "--grid_name",
-        type=str,
-        default="",
-        help="Name of the parameter grid currently being computed"
+        help="File to save results to"
     )
 
     FLAGS = parser.parse_args()

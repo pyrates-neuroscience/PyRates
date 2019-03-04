@@ -26,6 +26,9 @@ results = grid_search(circuit_template="EI_circuit.Net",
                       inputs={("PC", "Op_e.0", "i_in"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
                       dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3)
 print(f'Elapsed time: {t.time()-t0:.3f} seconds')
+
+
+
 # plotting
 cut_off = 1.
 max_freq = np.zeros((len(params['H_e']), len(params['H_i'])))

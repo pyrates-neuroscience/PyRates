@@ -36,18 +36,19 @@ from pyrates.utility import plot_timeseries, plot_psd, plot_connectivity
 
 # np.set_printoptions(precision=3)
 # pd.set_option('precision', 3)
-
+t0 = t.time()
 #####################################
 # Create ClusterGridSearch instance #
 #####################################
 nodes = [
-        # 'animals',
+        'animals',
         'spanien',
-        'carpenters',
-        'osttimor'
+        # 'carpenters',
+        # 'osttimor',
+        # 'tschad'
         ]
 
-compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_EIC_coupling_example_3"
+compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_EIC_coupling_example_2"
 
 cgs = ClusterGridSearch(nodes, compute_dir=compute_dir)
 
@@ -84,6 +85,9 @@ create_cgs_config(fp=config_file, circuit_template=circuit_template,
 worker_env = "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python"
 worker_file = "/data/hu_salomon/PycharmProjects/PyRates/pyrates/cluster_compute/cluster_workers/gridsearch_worker.py"
 
+print(f'Config time: {t.time()-t0} seconds')
+
+t0 = t.time()
 # Parameter grid #
 ##################
 Cs = [1., 2., 4.]
@@ -108,7 +112,6 @@ for idx, C in enumerate(Cs):
     params = {'J_e': J_e, 'J_i': J_i, 'k_ei': k_ei, 'k_ie': k_ie}
 
     print("Starting cluster grid search!")
-    t0 = t.time()
     res_dir, grid_file = cgs.run(thread_kwargs={
                                     "worker_env": worker_env,
                                     "worker_file": worker_file
@@ -120,21 +123,21 @@ for idx, C in enumerate(Cs):
                                  permute=False)
     print(f'Cluster grid search elapsed time: {t.time() - t0:.3f} seconds')
 
-    results = read_cgs_results(res_dir)
+    # time_results = read_cgs_results(res_dir, key='Data')
+    spec_results = read_cgs_results(res_dir, key='Spec')
+
+    freqs = list(spec_results.index)
 
     # plotting
     cut_off = 1.
     max_freq = np.zeros((len(ei_ratio), len(io_ratio)))
     freq_pow = np.zeros_like(max_freq)
     for j_e, j_i, k1, k2 in zip(params['J_e'], params['J_i'], params['k_ei'], params['k_ie']):
-        if not results[j_e][j_i][k1][k2].isnull().any().any():
-            _ = plot_psd(results[j_e][j_i][k1][k2], tmin=cut_off, show=False)
-            pow = plt.gca().get_lines()[-1].get_ydata()
-            freqs = plt.gca().get_lines()[-1].get_xdata()
-            r, c = np.argmin(np.abs(ei_ratio - k1/k2)), np.argmin(np.abs(io_ratio - j_i/k2))
-            max_freq[r, c] = freqs[np.argmax(pow)]
-            freq_pow[r, c] = np.max(pow)
-            plt.close(plt.gcf())
+        if not spec_results[j_e][j_i][k1][k2].isnull().any().any():
+            r, c = np.argmin(np.abs(ei_ratio - k1 / k2)), np.argmin(np.abs(io_ratio - j_i / k2))
+            pow_ = spec_results[j_e][j_i][k1][k2].values
+            max_freq[r, c] = freqs[np.argmax(pow_)]
+            freq_pow[r, c] = np.max(pow_)
 
     cm1 = cubehelix_palette(n_colors=int(len(ei_ratio)*len(io_ratio)), as_cmap=True, start=2.5, rot=-0.1)
     cm2 = cubehelix_palette(n_colors=int(len(ei_ratio)*len(io_ratio)), as_cmap=True, start=-2.0, rot=-0.1)
@@ -151,6 +154,7 @@ for idx, C in enumerate(Cs):
 
 plt.suptitle('EI-circuit sensitivity to population Coupling strengths (pcs)')
 plt.tight_layout(pad=2.5, rect=(0.01, 0.01, 0.99, 0.96))
-# fig.savefig("/home/rgast/Documents/Studium/PhD_Leipzig/Figures/BGTCS/eic_coupling", format="svg")
+print(f'Computation time: {t.time()-t0:.3f} seconds')
 plt.show()
+# fig.savefig("/home/rgast/Documents/Studium/PhD_Leipzig/Figures/BGTCS/eic_coupling", format="svg")
 # fig.savefig("/data/hu_salomon/Pictures/EIC_Coupling", format="svg")
