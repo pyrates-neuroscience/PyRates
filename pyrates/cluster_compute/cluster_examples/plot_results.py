@@ -3,8 +3,10 @@ from pyrates.utility import plot_timeseries, grid_search, plot_psd, plot_connect
 import matplotlib.pyplot as plt
 from seaborn import cubehelix_palette
 import h5py
-
+import scipy.signal as sp
+import seaborn as sb
 # PyRates internal imports
+from seaborn import set
 from pyrates.cluster_compute.cluster_compute import *
 
 # def create_resultfile(fp_res, fp_h5, delete_temp=False):
@@ -32,18 +34,119 @@ def post(data_):
 
 
 if __name__ == "__main__":
-    res_file = '/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_test/Results/DefaultGrid_23/CGS_result_DefaultGrid_23.h5'
-    list_ = []
-    with(h5py.File(res_file, 'r')) as file_:
-        keys = list(file_['GridIndex'].keys())
-
-    for i, index_key in enumerate(keys):
-        df = pd.read_hdf(res_file, key=f'/GridIndex/{index_key}/Data/')
-        list_.append(df)
-    results = pd.concat(list_, axis=1)
-    print(results)
+    test_file = '/data/hu_salomon/Documents/test.h5'
+    file = '/nobackup/spanien1/salomon/ClusterGridSearch/EIC_Montbrio/Computation_1/Results/DefaultGrid_0/CGS_result_DefaultGrid_0.h5'
+    data = read_cgs_results(file, key='Data')
+    print(data)
 
 
+
+    # res_file = '/nobackup/spanien1/salomon/ClusterGridSearch/CGS_EIC_spike_rate/Results/DefaultGrid_0/CGS_result_DefaultGrid_0.h5'
+    # # results = read_cgs_results(res_file, key='Data/Idx_5712/Data')
+    # results = pd.read_hdf(res_file, key='GridIndex/Idx_5712/Data')
+    # data = results.iloc[0:int((1/1e-3)), :]
+    # cm = cubehelix_palette(n_colors=1, as_cmap=False, start=6, rot=-0.1)
+    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(20, 15), gridspec_kw={})
+    # plot_timeseries(data, ax=ax, cmap=cm)
+    # plt.tick_params(labelsize=20)
+    # axis_font = {'fontname': 'Arial', 'size': '25'}
+    # ax.set_xlabel('t in s', fontdict=axis_font)
+    # ax.set_title('k_e = 21.2, k_i = 21.2', fontdict=axis_font)
+    # fig.savefig("/data/hu_salomon/Documents/MA/Graphics/Plots/EIC_spike_Helmut", format="svg")
+    # plt.show()
+
+
+    # params = {'J_e': np.linspace(10., 30., 101), 'J_i': np.linspace(10., 30., 101)}
+    # num_peaks = np.zeros([len(params['J_e']), len(params['J_i'])])
+    # T = 4.0
+    # for m, j_e in enumerate(params['J_e']):
+    #     for n, j_i in enumerate(params['J_i']):
+    #         num_peaks[m, n] = np.array(results[j_e][j_i])
+    #         # data = np.array(results[j_e][j_i])
+    #         # peaks = sp.argrelextrema(data, np.greater)
+    #         # num_peaks[m, n] = int(len(peaks[0]) / T)
+    #         # plot_timeseries(results[j_e][j_i])
+    # # num_peaks_temp = read_cgs_results(res_file, key='Num_Peaks')
+    # # num_peaks = num_peaks_temp.values.reshape(len(params['J_e']), len(params['J_i']))
+    #
+    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(20, 15), gridspec_kw={})
+    # plot_connectivity(num_peaks, ax=ax, xticklabels=list(params['J_e']), yticklabels=list(params['J_i']))
+    # for n, label in enumerate(ax.xaxis.get_ticklabels()):
+    #     if n % 25 != 0:
+    #         label.set_visible(False)
+    # for n, label in enumerate(ax.yaxis.get_ticklabels()):
+    #     label.font_size = 20
+    #     if n % 25 != 0:
+    #         label.set_visible(False)
+    # plt.tick_params(labelsize=20)
+    # axis_font = {'fontname': 'Arial', 'size': '25'}
+    # ax.set_xlabel('k_e', fontdict=axis_font)
+    # ax.set_ylabel('k_i', fontdict=axis_font)
+    # ax.set_title('Average spikes per second', fontdict=axis_font)
+    #
+    # fig.savefig("/nobackup/spanien1/salomon/EIC_spike_detection/CGS_EIC_spike_detection", format="svg")
+    #
+    # plt.show()
+
+    # num_peaks = np.zeros([len(params['J_e']), len(params['J_i'])])
+    # T = 4.0
+    # for m, j_e in enumerate(params['J_e']):
+    #     for n, j_i in enumerate(params['J_i']):
+    #         data = np.array(results[j_e][j_i])
+    #         peaks = sp.argrelextrema(data, np.greater)
+    #         num_peaks[m, n] = int(len(peaks[0]) / T)
+    #         # plot_timeseries(results[j_e][j_i])
+    #
+    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(20, 15), gridspec_kw={})
+    # h = plot_connectivity(num_peaks, ax=ax, xticklabels=list(params['J_e']), yticklabels=list(params['J_i']))
+    # for n, label in enumerate(ax.xaxis.get_ticklabels()):
+    #     if n % 5 != 0:
+    #         label.set_visible(False)
+    # for n, label in enumerate(ax.yaxis.get_ticklabels()):
+    #     if n % 5 != 0:
+    #         label.set_visible(False)
+    # ax.set_xlabel('k_e')
+    # ax.set_ylabel('k_i')
+    # ax.set_title('Average number of spikes per second')
+    # sb.set(font_scale=4)
+    # # fig.savefig("/data/hu_salomon/Documents/EIC_spike_detection/EIC_spike_detection", format="svg")
+    # plt.show()
+
+    #
+    #
+    #
+    #
+    # spec_results = read_cgs_results(res_file, key='Spec')
+    # data_temp = spec_results.loc['max_freq', :].to_frame()
+    # vals = data_temp.values.reshape(len(params['J_e']), len(params['J_i']))
+    # # print(data_temp.values)
+    # data = pd.DataFrame(vals, index=data_temp.index.levels[0], columns=data_temp.index.levels[1])
+    # print(data)
+    # result_map.index = params['J_e']
+    # result_map.columns.values = params['J_i']
+    # print(result_map)
+    #
+    # plot_connectivity(data)
+    # #
+    # # print(f'Data loaded. Elapsed time: {t.time() - t0} seconds')
+    # #
+    # plt.show()
+
+    # list_ = []
+    # with(h5py.File(res_file, 'r')) as file_:
+    #     keys = list(file_['GridIndex'].keys())
+    #
+    #
+    #
+    # with pd.HDFStore(res_file, "r") as store:
+    #     for i, index_key in enumerate(keys):
+    #         df = store.get(key=f'/GridIndex/{index_key}/Data/')
+    #         list_.append(df)
+    #
+    # results = pd.concat(list_, axis=1)
+    # # print(results)
+    #
+    # print(f'Elapsed time: {t.time()-t0:.3f} seconds')
 
     #
     # fp_res = '/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_test/Results/DefaultGrid_14'

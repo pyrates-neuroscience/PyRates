@@ -67,15 +67,30 @@ def main(_):
 
     with open(config_file) as g_conf:
         global_config_dict = json.load(g_conf)
-        inputs = {ast.literal_eval(*global_config_dict['inputs'].keys()):
-                  list(*global_config_dict['inputs'].values())}
-        outputs = {str(*global_config_dict['outputs'].keys()):
-                   tuple(*global_config_dict['outputs'].values())}
+
         circuit_template = global_config_dict['circuit_template']
         param_map = global_config_dict['param_map']
         sampling_step_size = global_config_dict['sampling_step_size']
         dt = global_config_dict['dt']
         simulation_time = global_config_dict['simulation_time']
+        try:
+            inputs_temp = global_config_dict['inputs']
+            if inputs_temp:
+                inputs = {ast.literal_eval(*global_config_dict['inputs'].keys()):
+                          list(*global_config_dict['inputs'].values())}
+            else:
+                inputs = {}
+        except KeyError:
+            inputs = {}
+        try:
+            outputs_temp = global_config_dict['outputs']
+            if outputs_temp:
+                outputs = {str(*global_config_dict['outputs'].keys()):
+                           tuple(*global_config_dict['outputs'].values())}
+            else:
+                outputs = {}
+        except KeyError:
+            outputs = {}
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
@@ -131,17 +146,16 @@ def main(_):
             result = result.to_frame()
             result.columns.names = results.columns.names
 
-            # Create single result file for each result
-            # res_file = f'{res_dir}/CGS_result_{grid_name}_idx_{idx[0]}.h5'
-
             # POSTPROCESSING
             ################
-            # spec = postprocessing(result)
+            # spec = postprocessing_1(result)
+            num_peaks = postprocessing_2(result, simulation_time=simulation_time)
 
             # SAVE DATA
             ###########
             store.put(key=f'GridIndex/Idx_{idx[0]}/Data', value=result)
             # store.put(key=f'GridIndex/Idx_{idx[0]}/Spec', value=spec)
+            store.put(key=f'GridIndex/Idx_{idx[0]}/Num_Peaks', value=num_peaks)
 
     print("")
     print(f'Result files created. Elapsed time: {time.time()-t0:.3f} seconds')
@@ -149,8 +163,8 @@ def main(_):
     print(f'Total elapsed time: {time.time()-t_total:.3f} seconds')
 
 
-def postprocessing(data):
-    # Example: Compute PSD from results
+def postprocessing_1(data):
+    # Compute PSD
     from pyrates.utility import plot_psd
     import matplotlib.pyplot as plt
 
@@ -165,13 +179,30 @@ def postprocessing(data):
         pow_ = plt.gca().get_lines()[-1].get_ydata()
         freqs = plt.gca().get_lines()[-1].get_xdata()
         plt.close()
-        psd = pd.DataFrame(pow_, index=freqs, columns=cols)
+        max_freq = freqs[np.argmax(pow_)]
+        freq_pow = np.max(pow_)
+        temp = [max_freq, freq_pow]
+        psd = pd.DataFrame(temp, index=['max_freq', 'freq_pow'], columns=cols)
         data.columns = cols
         return psd
 
-    # Reconstruct columns
     data.columns = cols
+    # Return empty DataFrame
     return pd.DataFrame(columns=cols)
+
+
+def postprocessing_2(data, simulation_time):
+    # Calculate average spikes per second from time signal
+    import scipy.signal as sp
+
+    cols = data.columns
+
+    np_data = np.array(data.values)
+
+    peaks = sp.argrelextrema(np_data, np.greater)
+    num_peaks_temp = int(len(peaks[0]) / simulation_time)
+
+    return pd.DataFrame(num_peaks_temp, index=['num_peaks'], columns=cols)
 
 
 if __name__ == "__main__":

@@ -37,6 +37,7 @@ from pyrates.cluster_compute.cluster_compute import *
 class ClusterComputeExample(ClusterCompute):
     # Overwrite thread_master function
     def thread_master(self, client, thread_kwargs: dict):
+        # Paramiko clients are parsed during the thread master call inside the cluster compute class
         pm_client = client["paramiko_client"]
         logfile = client["logfile"]
 
@@ -54,12 +55,12 @@ class ClusterComputeExample(ClusterCompute):
 if __name__ == "__main__":
         nodes = [
                 'animals',
-                # 'spanien',
+                'spanien',
                 'carpenters',
                 'osttimor'
                 ]
 
-        compute_dir = "/nobackup/spanien1/salomon/ClusterCompute/CC_simple_example"
+        compute_dir = "/nobackup/spanien1/salomon/ClusterCompute_example/"
 
         cce = ClusterComputeExample(nodes, compute_dir=compute_dir)
 

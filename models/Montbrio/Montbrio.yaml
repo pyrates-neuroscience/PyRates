@@ -1,0 +1,81 @@
+%YAML 1.2
+---
+
+Op_e:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
+    - "d/dt * v = (v**2 + eta + inp) / tau + k_ee * r_e - k_ei * r_i - tau*(PI*r)**2"
+    - "r_e = r"
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    r_e:
+      default: input
+    r_i:
+      default: input
+    tau:
+      default: 0.02
+    delta:
+      default: 2.0
+    eta:
+      default: -1.0
+    k_ee:
+      default: 21.2132
+    k_ei:
+      default: 21.2132
+    inp:
+      default: input
+
+Op_i:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
+    - "d/dt * v = (v**2 + eta + inp) / tau - k_ii * r_i + k_ie * r_e - tau*(PI*r)**2"
+    - "r_i = r"
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    r_e:
+      default: input
+    r_i:
+      default: input
+    tau:
+      default: 0.02
+    delta:
+      default: 2.0
+    eta:
+      default: -5.5
+    k_ie:
+      default: 21.2132
+    k_ii:
+      default: 21.2132
+    inp:
+      default: input
+
+Pop_e:
+  base: NodeTemplate
+  operators:
+    - Op_e
+
+Pop_i:
+  base: NodeTemplate
+  operators:
+    - Op_i
+
+DummyEdge:
+  base: EdgeTemplate
+  operators: []
+
+EI_Circuit:
+  base: CircuitTemplate
+  nodes:
+    E: Pop_e
+    I: Pop_i
+  edges:
+    - [E/Op_e/r, I/Op_i/r_e, DummyEdge, {weight: 1.0}]
+    - [I/Op_i/r, E/Op_e/r_i, DummyEdge, {weight: 1.0}]

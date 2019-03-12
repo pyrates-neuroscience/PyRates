@@ -43,25 +43,19 @@ grid_size = [1,    2,    3,    4,    5,    6,    7,    8,    9,
              1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000,
              10000]
 
-# grid_size = [5]
-
 num_nodes = [5]
 
-
-time_res_dir = f'/data/hu_salomon/Documents/CGS_eval'
-
-
 node_lst = [
-        'tschad',
         'animals',
         'spanien',
+        'tschad',
         'carpenters',
         'osttimor',
         'lech',
-        'tiber'
+        'tiber',
+        'uganda',
+        'main'
         ]
-
-global_compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_runtime_eval"
 
 circuit_template = "pyrates.examples.simple_nextgen_NMM.Net5"
 
@@ -85,6 +79,8 @@ worker_file = "/data/hu_salomon/PycharmProjects/PyRates/pyrates/cluster_compute/
 runtime_total = {}
 runtime_cgs = {}
 runtime_files = {}
+time_res_dir = f'/data/hu_salomon/Documents/CGS_eval/animals_chunk_400'
+global_compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_runtime_eval/animals_chunk_400"
 
 for n in num_nodes:
     nodes = node_lst[:n]
@@ -117,14 +113,13 @@ for n in num_nodes:
                                         "worker_file": worker_file
                                         },
                                       config_file=config_file,
-                                      # chunk_size="dist_equal_add_mod",
-                                      chunk_size=500,
+                                      chunk_size=400,
                                       param_grid=params,
                                       permute=False)
         t_cgs = t.time() - t0_cgs
 
-        # Read resultfiles
-        ##################
+        # Read result files
+        ###################
         t0_files = t.time()
         results = read_cgs_results(res_file, key='Data')
         t_files = t.time() - t0_files
@@ -144,13 +139,13 @@ for n in num_nodes:
     ##############################
     # Create Dict and save files #
     ##############################
-    cols = list(np.arange(n).astype(str))
+    rows = list(np.arange(n).astype(str))
 
     dir_ = f'{time_res_dir}/nodes_{n}'
     os.makedirs(dir_, exist_ok=True)
 
     df_runtime_total = pd.DataFrame.from_dict(runtime_total)
-    df_runtime_total.to_csv(f'{dir_}/runtime_total_.csv', index=True)
+    df_runtime_total.to_csv(f'{dir_}/runtime_total.csv', index=True)
 
     df_runtime_cgs = pd.DataFrame.from_dict(runtime_cgs)
     df_runtime_cgs.to_csv(f'{dir_}/runtime_cgs.csv', index=True)
@@ -158,3 +153,81 @@ for n in num_nodes:
     df_runtime_files = pd.DataFrame.from_dict(runtime_files)
     df_runtime_files.to_csv(f'{dir_}/runtime_files.csv', index=True)
 
+#######################################################################################################################
+
+# runtime_total = {}
+# runtime_cgs = {}
+# runtime_files = {}
+# time_res_dir = f'/data/hu_salomon/Documents/CGS_eval/animals_chunk_500'
+# global_compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_runtime_eval/animals_chunk_500"
+#
+# for n in num_nodes:
+#     nodes = node_lst[:n]
+#
+#     # Create compute directory and connect to nodes
+#     compute_dir = f'{global_compute_dir}/nodes_{n}'
+#     cgs = ClusterGridSearch(nodes, compute_dir=compute_dir)
+#     config_file = f'{compute_dir}/Config/simple_nextgen_NMM.json'
+#     create_cgs_config(fp=config_file, circuit_template=circuit_template,
+#                       param_map=param_map, dt=dt, simulation_time=T, inputs=inputs,
+#                       outputs=outputs, sampling_step_size=1e-3)
+#
+#     time_total = []
+#     time_cgs = []
+#     time_files = []
+#     for i, size in enumerate(grid_size):
+#
+#         params = {'J_e': np.linspace(8., 12., size), 'J_i': np.linspace(2., 12., size)}
+#
+#         print("")
+#         print(f'Simulation time: {2.0} seconds')
+#         print(f'Timestep: {dt} seconds')
+#         print(f'Grid size: {size}')
+#         print(f'Nodes: {nodes}')
+#
+#         t0_total = t.time()
+#         t0_cgs = t.time()
+#         res_file, grid_file = cgs.run(thread_kwargs={
+#                                         "worker_env": worker_env,
+#                                         "worker_file": worker_file
+#                                         },
+#                                       config_file=config_file,
+#                                       chunk_size='dist_equal_add_mod',
+#                                       param_grid=params,
+#                                       permute=False)
+#         t_cgs = t.time() - t0_cgs
+#
+#         # Read result files
+#         ###################
+#         t0_files = t.time()
+#         results = read_cgs_results(res_file, key='Data')
+#         t_files = t.time() - t0_files
+#
+#         t_total = t.time() - t0_total
+#
+#         print(f'Total elapsed time: {t_total} seconds')
+#
+#         time_total.append(t_total)
+#         time_cgs.append(t_cgs)
+#         time_files.append(t_files)
+#
+#     runtime_total[f'{n}'] = time_total
+#     runtime_cgs[f'{n}'] = time_cgs
+#     runtime_files[f'{n}'] = time_files
+#
+#     ##############################
+#     # Create Dict and save files #
+#     ##############################
+#     rows = list(np.arange(n).astype(str))
+#
+#     dir_ = f'{time_res_dir}/nodes_{n}'
+#     os.makedirs(dir_, exist_ok=True)
+#
+#     df_runtime_total = pd.DataFrame.from_dict(runtime_total)
+#     df_runtime_total.to_csv(f'{dir_}/runtime_total.csv', index=True)
+#
+#     df_runtime_cgs = pd.DataFrame.from_dict(runtime_cgs)
+#     df_runtime_cgs.to_csv(f'{dir_}/runtime_cgs.csv', index=True)
+#
+#     df_runtime_files = pd.DataFrame.from_dict(runtime_files)
+#     df_runtime_files.to_csv(f'{dir_}/runtime_files.csv', index=True)

@@ -86,7 +86,7 @@ class ClusterCompute(object):
         folder in the current working directory of the executing script.
         Creates a logfile in ComputeDirectory/Logs and tees all future stdout and stderr of the executing script
         to this file
-        Connects to all nodes via SSH and saves the corresponding paramiko client
+        Connects to all nodes via SSH and saves the corresponding paramiko client in self.clients
 
         Parameters
         ----------
@@ -180,7 +180,6 @@ class ClusterCompute(object):
         """
         username = getpass.getuser()
         # password = getpass.getpass(prompt='Enter password: ', stream=sys.stderr)
-
         for node in nodes:
             client = self.ssh_connect(node, username=username)
             if client is not None:
@@ -195,13 +194,12 @@ class ClusterCompute(object):
                     "node_name": node,
                     "hardware": hw,
                     "logfile": local_logfile})
-            print("")
 
     def run(self, thread_kwargs: dict, **kwargs):
         """Start a thread for each connected client. Each thread executes the thread_master() function
 
         Each thread and therefor each instance of the thread_master() function is responsible for the communication
-        with one worker node in the cluster.
+        with one worker node in the cluster, respectively.
         Stops execution of the outside script until all threads have finished.
         Can be called multiple times from the same ClusterCompute instance
 
@@ -216,7 +214,7 @@ class ClusterCompute(object):
 
         t0 = t.time()
 
-        # ! Insert preprocessing of input data can here !
+        # ! Insert preprocessing of input data here !
 
         # **kwargs of spawn_thread() will be parsed as dict to thread_master()
         threads = [self.spawn_thread(client, thread_kwargs) for client in self.clients]
@@ -301,6 +299,7 @@ class ClusterCompute(object):
         stdin, stdout, stderr = pm_client.exec_command("free -m | grep 'Mem'")
         total_mem = int(stdout.readline().split()[1])
         print(f'Total memory: {total_mem} MByte')
+        print("")
 
         hw = {
             'cpu': cpu,
@@ -330,16 +329,11 @@ class ClusterCompute(object):
 
         """
         client = paramiko.SSHClient()
-        # client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
         try:
-            # Using Kerberos authentication to connect to remote machines
-            # If Kerberos is not available in you cluster you need to implement an (unechoed) password request
-            # (e.g. using getpass)
+            # Using kerberos authentication
             client.connect(node, username=username, gss_auth=True, gss_kex=True)
             print(f'\'{node}\': Connection established!')
             return client
-            # return client.invoke_shell()
         except paramiko.ssh_exception.NoValidConnectionsError as err:
             print(f'\'{node}\': ', err)
             return None
@@ -380,23 +374,22 @@ class ClusterGridSearch(ClusterCompute):
         """
         t_total = t.time()
 
-        # Unzip kwargs
-        config_file = kwargs["config_file"]
-        param_grid_temp = kwargs["param_grid"]
-        permute = kwargs["permute"]
-        chunk_size = kwargs["chunk_size"]
+        # Pop kwargs
+        config_file = kwargs.pop("config_file")
+        param_grid_temp = kwargs.pop("param_grid")
+        chunk_size = kwargs.pop("chunk_size")
 
         print("")
 
+        # Convert parameter dict to DataFrame if necessary
         print("***PREPARING PARAMETER GRID***")
         t0 = t.time()
-        param_grid, grid_file, grid_name = self.prepare_grid(param_grid_temp, permute)
+        param_grid, grid_file, grid_name = self.prepare_grid(param_grid_temp)
         print(f'Done. Elapsed time: {t.time()-t0:.3f} seconds')
 
         print("")
 
         print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
-        t0 = t.time()
         # Check parameter map and parameter grid for consistency
         with open(config_file) as config:
             # Open global config file and read the config dictionary
@@ -410,7 +403,6 @@ class ClusterGridSearch(ClusterCompute):
                 print("Returning!")
                 # Stop computation
                 return
-
             if not self.check_key_consistency(param_grid, param_map):
                 # Not all keys of parameter map can be found in parameter grid
                 print("Not all parameter map keys found in parameter grid")
@@ -426,7 +418,9 @@ class ClusterGridSearch(ClusterCompute):
                 print("All parameter map keys found in parameter grid")
                 # Continuing with computation
 
-        # Create parameter grid specific result directory and result file
+        # Create result directory and result file for current parameter grid
+        # TODO: Create and prepare resultfile
+        # TODO: Write grid parameters to result file
         grid_res_dir = f'{self.res_dir}/{grid_name}'
         os.makedirs(grid_res_dir, exist_ok=True)
         grid_res_file = f'{grid_res_dir}/CGS_result_{grid_name}.h5'
@@ -437,7 +431,7 @@ class ClusterGridSearch(ClusterCompute):
         print("***PREPARING CHUNK SIZES***")
         t0 = t.time()
         # Prepare the chunk sizes
-        self.prepare_chunks(chunk_size, len(param_grid))
+        self.prepare_chunks(grid_len=len(param_grid), chunk_size=chunk_size)
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
@@ -487,76 +481,79 @@ class ClusterGridSearch(ClusterCompute):
         os.makedirs(subgrid_dir, exist_ok=True)
         subgrid_idx = 0
 
-        while not self.fetch_param_idx(param_grid, lock=self.lock, set_status=False).empty:
+        while True:
+            param_idx = self.fetch_param_idx(param_grid, lock=True, num_params=num_params)
+            if param_idx.empty:
+                print(f'[T]\'{thread_name}\': No more parameter combinations available!')
+                break
+            else:
+                with self.lock:
+                    # Fetch grid indices
+                    ####################
 
-            with self.lock:
-                # Fetch grid indices
-                ####################
-                param_idx = self.fetch_param_idx(param_grid, num_params=num_params)
-                print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
-                print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
+                    print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
+                    print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
 
-                # Create parameter sub-grid
-                ###########################
-                subgrid_fp = f'{subgrid_dir}/{thread_name}_{grid_name}_Subgrid_{subgrid_idx}.h5'
-                subgrid_df = param_grid.iloc[param_idx]
-                subgrid_df.to_hdf(subgrid_fp, key='Data')
-                subgrid_idx += 1
+                    # Create parameter sub-grid
+                    ###########################
+                    subgrid_fp = f'{subgrid_dir}/{thread_name}_{grid_name}_Subgrid_{subgrid_idx}.h5'
+                    subgrid_df = param_grid.iloc[param_idx]
+                    subgrid_df.to_hdf(subgrid_fp, key='Data')
+                    subgrid_idx += 1
 
-                # Create temporary result file for current subgrid
-                ##################################################
-                idx_min = np.amin(param_idx.values)
-                idx_max = np.amax(param_idx.values)
-                res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx_min}-{idx_max}_temp.h5'
+                    # Create temporary result file for current subgrid
+                    ##################################################
+                    idx_min = np.amin(param_idx.values)
+                    idx_max = np.amax(param_idx.values)
+                    res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx_min}-{idx_max}_temp.h5'
 
-                # Execute worker script on the remote host
-                ##########################################
+                    # Execute worker script on the remote host
+                    ##########################################
+                    t0 = t.time()
+                    print(f'[T]\'{thread_name}\': Starting remote computation...')
+
+                    stdin, stdout, stderr = pm_client.exec_command(command +
+                                                                   f' --config_file={config_file}'
+                                                                   f' --subgrid={subgrid_fp}'
+                                                                   f' --res_file={res_file}'
+                                                                   f' &>> {logfile}',
+                                                                   get_pty=True)
+
+                # Wait for remote computation to finish
+                #######################################
+                stdout.channel.recv_exit_status()
+                print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
+
+                # Write results from temp to global result file
+                ###############################################
                 t0 = t.time()
-                print(f'[T]\'{thread_name}\': Starting remote computation...')
+                with self.lock:
+                    with h5py.File(global_res_file, 'a') as fd:
+                        if 'GridIndex/' not in fd.keys():
+                            group = fd.create_group(f'GridIndex/')
+                        else:
+                            group = fd['GridIndex']
+                        with h5py.File(res_file, 'r') as fs:
+                            for index_key in list(fs['GridIndex'].keys()):
+                                fs.copy(f'GridIndex/{index_key}/', group)
+                        os.remove(res_file)
 
-                stdin, stdout, stderr = pm_client.exec_command(command +
-                                                               f' --config_file={config_file}'
-                                                               f' --subgrid={subgrid_fp}'
-                                                               f' --res_file={res_file}'
-                                                               f' &>> {logfile}',
-                                                               get_pty=True)
+                print(f'[T]\'{thread_name}\': Result file created. Elapsed time: {t.time()-t0:.3f} seconds')
 
-            # Wait for remote computation to finish
-            #######################################
-            stdout.channel.recv_exit_status()
-            print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
-
-            # Write results from temp to global result file
-            ###############################################
-            t0 = t.time()
-            with self.lock:
-                with h5py.File(global_res_file, 'a') as fd:
-                    if 'GridIndex/' not in fd.keys():
-                        group = fd.create_group(f'GridIndex/')
-                    else:
-                        group = fd['GridIndex']
-                    with h5py.File(res_file, 'r') as fs:
-                        for index_key in list(fs['GridIndex'].keys()):
-                            fs.copy(f'GridIndex/{index_key}/', group)
-                    os.remove(res_file)
-            print(f'[T]\'{thread_name}\': Result file created. Elapsed time: {t.time()-t0:.3f} seconds')
-
-            # Update parameter grid status flags
-            ####################################
-            print(f'[T]\'{thread_name}\': Updating grid status')
-            for idx in param_idx:
-                res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.h5'
-                param_grid.at[idx, 'worker'] = thread_name
-                try:
-                    if os.path.getsize(res_file) > 0:
-                        param_grid.at[idx, 'status'] = 'done'
-                    else:
+                # Update parameter grid status flags
+                ####################################
+                print(f'[T]\'{thread_name}\': Updating grid status')
+                for idx in param_idx:
+                    res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.h5'
+                    param_grid.at[idx, 'worker'] = thread_name
+                    try:
+                        if os.path.getsize(res_file) > 0:
+                            param_grid.at[idx, 'status'] = 'done'
+                        else:
+                            param_grid.at[idx, 'status'] = 'failed'
+                    except OSError as e:
                         param_grid.at[idx, 'status'] = 'failed'
-                except OSError as e:
-                    param_grid.at[idx, 'status'] = 'failed'
 
-        # End of while loop
-        print(f'[T]\'{thread_name}\': No more parameter combinations available!')
 
     # Helper functions, ClusterGridSearch only
     def prepare_grid(self, param_grid_arg, permute=False):
@@ -623,10 +620,10 @@ class ClusterGridSearch(ClusterCompute):
             # If grid_file already exist
             while os.path.exists(grid_file):
                 grid_idx += 1
-                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.h5'
+                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
             # grid_frame.to_csv(grid_file, index=True, float_format='%g')
             # grid_frame.to_csv(grid_file, index=True)
-            grid_frame.to_hdf(grid_file, key='Data')
+            grid_frame.to_csv(grid_file, index=True)
             # Add status columns to grid
             if 'status' not in grid_frame.columns:
                 grid_frame['status'] = 'unsolved'
@@ -666,7 +663,7 @@ class ClusterGridSearch(ClusterCompute):
             # Stop computation
             return None
 
-    def prepare_chunks(self, chunk_size, grid_len):
+    def prepare_chunks(self, grid_len, chunk_size="dist_equal"):
         """Set the amount of parameter combinations that are computed at once by each worker
 
         Adds a key "num_params" to each client dict in self.clients
@@ -716,28 +713,8 @@ class ClusterGridSearch(ClusterCompute):
                     client['num_params'] = num_params
             elif chunk_size == "fit_hardware":
                 pass
-        else:
-            print("num_params: Unsupported command. Returning")
-            return None
 
-    @staticmethod
-    def check_key_consistency(param_grid, param_map):
-        """
-        Parameters
-        ----------
-        param_grid:
-        param_map:
-
-        Returns
-        -------
-
-        """
-        grid_key_lst = list(param_grid.keys())
-        map_key_lst = list(param_map.keys())
-        return all((map_key in grid_key_lst for map_key in map_key_lst))
-
-    @staticmethod
-    def fetch_param_idx(param_grid, lock=None, num_params=1, set_status=True):
+    def fetch_param_idx(self, param_grid, lock=False, num_params=1, set_status=True):
         """Fetch indices of the first num_params rows of param_grid that's status-column equals 'unsolved'
 
         Parameters
@@ -762,7 +739,7 @@ class ClusterGridSearch(ClusterCompute):
 
         """
         if lock:
-            with lock:
+            with self.lock:
                 try:
                     # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
                     param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
@@ -781,9 +758,21 @@ class ClusterGridSearch(ClusterCompute):
                 param_grid.at[param_idx, 'status'] = 'pending'
             return param_idx
 
+    @staticmethod
+    def check_key_consistency(param_grid, param_map):
+        """
+        Parameters
+        ----------
+        param_grid:
+        param_map:
 
-class ClusterBenchmark(ClusterCompute):
-    pass
+        Returns
+        -------
+
+        """
+        grid_key_lst = list(param_grid.keys())
+        map_key_lst = list(param_map.keys())
+        return all((map_key in grid_key_lst for map_key in map_key_lst))
 
 
 # Utility functions
@@ -813,25 +802,27 @@ def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inpu
             "param_map": param_map,
             "dt": dt,
             "simulation_time": simulation_time,
-            "inputs": {str(*inputs.keys()): list(*inputs.values())},
             "outputs": outputs,
             "sampling_step_size": sampling_step_size,
             "kwargs": kwargs
         }
+        if inputs:
+            config_dict["inputs"] = {str(*inputs.keys()): list(*inputs.values())}
+
         with open(fp, "w") as f:
             json.dump(config_dict, f, indent=2)
     else:
         print(f'Configfile: {fp} already exists.')
 
 
-def read_cgs_results(res_file, key='Data', filter_grid=None):
+def read_cgs_results(fp, key='Data', index=[]):
     """ Collect data from all csv-files in the res_dir inside on DataFrame
 
     Parameters
     ----------
-    res_file
+    fp
         Directory with csv-files
-    data_key
+    key
     filter_grid
         Not implemented yet
 
@@ -841,12 +832,14 @@ def read_cgs_results(res_file, key='Data', filter_grid=None):
 
     """
     list_ = []
-    with(h5py.File(res_file, 'r')) as file_:
+    with(h5py.File(fp, 'r')) as file_:
         keys = list(file_['GridIndex'].keys())
 
-    for i, index_key in enumerate(keys):
-        df = pd.read_hdf(res_file, key=f'/GridIndex/{index_key}/{key}/')
-        list_.append(df)
+    with pd.HDFStore(fp, "r") as store:
+        for i, index_key in enumerate(keys):
+            # df = store.get(key=f'/GridIndex/{index_key}/{key}/')
+            df = store.get(key=f'/GridIndex/Idx_{i}/{key}/')
+            list_.append(df)
 
     return pd.concat(list_, axis=1)
 
@@ -872,35 +865,6 @@ def linearize_grid(grid: dict, permute=False):
             keys.append(key)
         new_grid = np.stack(np.meshgrid(*tuple(vals)), -1).reshape(-1, len(grid))
         return pd.DataFrame(new_grid, columns=keys)
-
-
-def create_resultfile(fp_res, fp_h5, delete_old=False):
-    """
-
-    :param fp_res:
-    :param fp_h5:
-    :param delete_old:
-    :return:
-    """
-    """Create one hdf5-file from multiple hdf5-files"""
-    files = glob.glob(fp_res + "/*.h5")
-    with pd.HDFStore(fp_h5, "w") as store:
-        for i, file_ in enumerate(files):
-            df = pd.read_hdf(file_, key='Data')
-            idx = Path(file_).stem.rsplit('_', 1)[-1]
-            store.put(key=f'/Data/Idx_{idx}/', value=df)
-            if delete_old:
-                os.remove(file_)
-#     files = glob.glob(fp_res + "/*.h5")
-#     with h5py.File(fp_h5, "w") as f:
-#         for i, file_ in enumerate(files):
-#             df = pd.read_hdf(file_, key='Data')
-#             f.create_dataset(name=f'/Data/Idx_{i}/Values/', data=df.values)
-#             f.create_dataset(name=f'/Data/Idx_{i}/Columns/', data=df.columns.to_frame())
-#             if i == 0:
-#                 f.create_dataset(name=f'Index', data=df.index)
-#             if delete_temp:
-#                 os.remove(file_)
 
 
 def plot_frame(data):

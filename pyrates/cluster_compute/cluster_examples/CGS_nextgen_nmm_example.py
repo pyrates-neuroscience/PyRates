@@ -43,7 +43,7 @@ nodes = [
         'osttimor'
         ]
 
-compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example_test"
+compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/CGS_nextgen_NMM_example"
 
 # Create compute directory and connect to nodes
 cgs = ClusterGridSearch(nodes, compute_dir=compute_dir)
@@ -57,7 +57,7 @@ circuit_template = "pyrates.examples.simple_nextgen_NMM.Net5"
 
 dt = 1e-4
 T = 2.0
-inp = 2. + np.random.randn(int(T/dt), 1) * 1.0
+inp = 2. + np.random.randn(10, 1) * 1.0
 
 param_map = {'J_e': {'var': [('Op_e.0', 'J_e'), ('Op_i.0', 'J_e')],
                      'nodes': ['PC.0', 'IIN.0']},
@@ -81,9 +81,10 @@ worker_file = "/data/hu_salomon/PycharmProjects/PyRates/pyrates/cluster_compute/
 # Parameter grid
 ################
 # params = {'J_e': np.arange(8., 12., 2.), 'J_i': np.arange(2., 12., 2.)}
-params = {'J_e': np.linspace(8., 10., 10), 'J_i': np.linspace(2., 10., 100)}
+params = {'J_e': np.linspace(8., 10., 10), 'J_i': np.linspace(2., 10., 10)}
 
 print("Starting cluster grid search!")
+t0_total = t.time()
 t0 = t.time()
 res_file, grid_file = cgs.run(thread_kwargs={
                                 "worker_env": worker_env,
@@ -103,5 +104,7 @@ t0 = t.time()
 time_results = read_cgs_results(res_file, key='Data')
 # spec_results = read_cgs_results(res_dir, key='Spec')
 print(f'Data loaded. Elapsed time: {t.time()-t0} seconds')
+print(f'Overall elapsed time: {t.time()-t0_total:.3} seconds')
 
-print(time_results)
+# plot_frame(time_results)
+# print(time_results)
