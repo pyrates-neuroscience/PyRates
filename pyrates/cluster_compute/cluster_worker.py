@@ -54,7 +54,7 @@ def main(_):
 
     config_file = FLAGS.config_file
     subgrid = FLAGS.subgrid
-    res_file = FLAGS.local_res_file
+    local_res_file = FLAGS.local_res_file
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
@@ -103,7 +103,7 @@ def main(_):
     param_grid = pd.read_hdf(subgrid, key='Data')
 
     # Exclude 'status' key from param_grid since grid_search() can't handle the additional keywords
-    param_grid = param_grid.iloc[:, :-1]
+    param_grid = param_grid.drop('status', axis=1)
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     # COMPUTE PARAMETER GRID #
@@ -141,8 +141,8 @@ def main(_):
     # spec_lst_df = []
 
     # Loop through parameter grid and identify corresponding result column
-    for idx in range(param_grid.shape[0]):
-        idx_label = param_grid.iloc[idx].values.tolist()
+    for i, idx in enumerate(param_grid.index):
+        idx_label = param_grid.iloc[i].values.tolist()
         idx_label.append(out_var)
         result = results.loc[:, tuple(idx_label)].to_frame()
         result.columns.names = results.columns.names
@@ -164,12 +164,12 @@ def main(_):
     # SAVE DATA
     ###########
     # DataFrames
-    with pd.HDFStore(res_file, "a") as store:
+    with pd.HDFStore(local_res_file, "w") as store:
         store.put(key='Data', value=results)
         # store.put(key=f'PSD', value=spec)
 
     # Other
-    # with h5py.File(res_file, "a") as file:
+    # with h5py.File(local_res_file, "a") as file:
         # file.create_dataset("Other/num_peaks", data=peak_lst)
 
     print(f'Result files created. Elapsed time: {time.time()-t0:.3f} seconds')

@@ -508,7 +508,6 @@ class ClusterGridSearch(ClusterCompute):
         res_lst = []
         for i in range(self.res_file_idx):
             res_lst.append(self.res_collection.pop(i))
-
         df = pd.concat(res_lst, axis=1)
 
         print(f'Writing data to global result file...', end="")
@@ -563,7 +562,7 @@ class ClusterGridSearch(ClusterCompute):
 
                 # Fetch grid indices
                 ####################
-                param_idx = self.fetch_param_idx(param_grid, lock=True, num_params=num_params)
+                param_idx = self.fetch_param_idx(param_grid, num_params=num_params)
                 if param_idx.empty:
                     print(f'[T]\'{thread_name}\': No more parameter combinations available!')
                     break
@@ -583,7 +582,8 @@ class ClusterGridSearch(ClusterCompute):
                     tmp_res_idx = self.res_file_idx
                     idx_min = np.amin(param_idx.values)
                     idx_max = np.amax(param_idx.values)
-                    local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx_min}-{idx_max}_temp_{tmp_res_idx}.h5'
+                    local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx_min}-{idx_max}_temp.h5'
+                    # TODO: Write indices to local_res_file
                     self.res_file_idx += 1
 
                     # Execute worker script on the remote host
@@ -611,6 +611,8 @@ class ClusterGridSearch(ClusterCompute):
             print(f'[T]\'{thread_name}\': Updating grid status')
 
             with self.lock:
+                # for idx in param_idx:
+                #     pass
                 try:
                     # TODO: Read results from Port (Socket) ?
                     local_results = pd.read_hdf(local_res_file, key='Data')
@@ -624,13 +626,13 @@ class ClusterGridSearch(ClusterCompute):
                     #         param_grid.at[idx, 'status'] = 'done'
                     # param_grid.at[param_grid['status'] == 'pending', 'status'] = 'unsolved'
                     param_grid.at[param_idx, 'status'] = 'done'
-                    self.res_collection[tmp_res_idx] = local_results
+                    # self.res_collection[tmp_res_idx] = local_results
                 except KeyError:
                     param_grid.at[param_idx, 'status'] = 'unsolved'
-                    os.remove(local_res_file)
+                    # os.remove(local_res_file)
                 except FileNotFoundError:
                     param_grid.at[param_idx, 'status'] = 'unsolved'
-                    # TODO: What happens, if results are not added to res_collection, but the res_idx is still counted up?
+                # TODO: What happens, if results are not added to res_collection, but the res_idx is still counted up?
 
             # Lock released, thread switching enabled
         # End of while loop

@@ -27,10 +27,6 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 
 # PyRates internal imports
-import matplotlib.pyplot as plt
-from seaborn import cubehelix_palette
-from seaborn import set
-from pyrates.utility import plot_connectivity, grid_search
 from pyrates.cluster_compute.cluster_compute import *
 
 # meta infos
@@ -42,6 +38,7 @@ if __name__ == "__main__":
 
     # Create CGS instance
     #####################
+    # Directory, where the CGS project with all its files is stored
     compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio/EIC/Test"
 
     nodes = [
@@ -79,7 +76,6 @@ if __name__ == "__main__":
     # Create parameter grid
     #######################
     params = {'k_e': np.linspace(20., 30., 11), 'k_i': np.linspace(10., 20., 11)}
-    # param_grid = linearize_grid(params, permute=True)
 
     # Run cluster grid search
     #########################
