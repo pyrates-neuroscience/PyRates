@@ -39,6 +39,7 @@ import h5py
 from shutil import copy2
 from pathlib import Path
 from datetime import datetime
+from collections import OrderedDict
 from threading import Thread, currentThread, RLock
 
 # external imports
@@ -352,6 +353,9 @@ class ClusterGridSearch(ClusterCompute):
     def __init__(self, nodes, compute_dir=None):
         super().__init__(nodes, compute_dir)
 
+        self.res_file_idx = 0
+        self.res_collection = {}
+
         # Add additional subfolders to the compute directory
         # Grid directory
         self.grid_dir = f'{self.compute_dir}/Grids'
@@ -374,22 +378,40 @@ class ClusterGridSearch(ClusterCompute):
         """
         t_total = t.time()
 
-        # Pop kwargs
+        # Reset results organizer
+        #########################
+        # Index to iterate over all temporary result files to create a single result file from the res_collection
+        self.res_file_idx = 0
+        self.res_collection = {}
+
+        # Retrieve keyword arguments
+        ############################
         config_file = kwargs.pop("config_file")
-        param_grid_temp = kwargs.pop("param_grid")
+        params = kwargs.pop("param_grid")
+        permute = kwargs.pop("permute")
         chunk_size = kwargs.pop("chunk_size")
 
         print("")
 
-        # Convert parameter dict to DataFrame if necessary
+        # Prepare parameter grid
+        ########################
         print("***PREPARING PARAMETER GRID***")
         t0 = t.time()
-        param_grid, grid_file, grid_name = self.prepare_grid(param_grid_temp)
+
+        # Convert parameter from dict to DataFrame. Permute if necessary
+        param_grid_raw = linearize_grid(params, permute=permute)
+
+        # Add 'status' and 'worker' column to parameter grid
+        param_grid, grid_file, grid_name = self.prepare_grid(param_grid_raw)
+
         print(f'Done. Elapsed time: {t.time()-t0:.3f} seconds')
 
         print("")
 
+        # Check key consistency
+        #######################
         print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
+
         # Check parameter map and parameter grid for consistency
         with open(config_file) as config:
             # Open global config file and read the config dictionary
@@ -418,44 +440,95 @@ class ClusterGridSearch(ClusterCompute):
                 print("All parameter map keys found in parameter grid")
                 # Continuing with computation
 
+        print("")
+
+        # Prepare result file
+        #####################
+        print("***PREPARING RESULT FILE***")
+        t0 = t.time()
+
         # Create result directory and result file for current parameter grid
-        # TODO: Create and prepare resultfile
-        # TODO: Write grid parameters to result file
         grid_res_dir = f'{self.res_dir}/{grid_name}'
         os.makedirs(grid_res_dir, exist_ok=True)
-        grid_res_file = f'{grid_res_dir}/CGS_result_{grid_name}.h5'
-        print(f'Elapsed time: {t.time()-t0:.3f} seconds')
+        global_res_file = f'{grid_res_dir}/CGS_result_{grid_name}.h5'
+
+        # Write grid and config information to result file
+        with h5py.File(global_res_file, 'w') as file:
+            file.create_dataset(f'/ParameterGrid/Grid', data=param_grid_raw.values)
+            for key, value in params.items():
+                file.create_dataset(f'/ParameterGrid/Keys/{key}', data=value)
+            file.create_dataset(f'/Config/circuit_template', data=param_dict['circuit_template'])
+            file.create_dataset(f'/Config/simulation_time', data=param_dict['simulation_time'])
+            file.create_dataset(f'/Config/dt', data=param_dict['dt'])
+
+        print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
 
+        # Prepare chunk sizes
+        #####################
         print("***PREPARING CHUNK SIZES***")
         t0 = t.time()
+
         # Prepare the chunk sizes
         self.prepare_chunks(grid_len=len(param_grid), chunk_size=chunk_size)
+
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
 
         # Update thread keywords dictionary
+        ###################################
         thread_kwargs["param_grid"] = param_grid
         thread_kwargs["grid_name"] = grid_name
         thread_kwargs["grid_res_dir"] = grid_res_dir
         thread_kwargs["config_file"] = config_file
-        thread_kwargs["global_res_file"] = grid_res_file
+        thread_kwargs["global_res_file"] = global_res_file
 
-        print("***STARTING THREAD POOL***")
-        # Spawn threads to control the node connections
+        # Begin cluster computation
+        ###########################
+        print("***STARTING CLUSTER COMPUTATION***")
+
+        # Spawn threads to control each node connections and start computation
         threads = [self.spawn_thread(client, thread_kwargs) for client in self.clients]
         for t_ in threads:
             t_.join()
 
         print("")
+
         print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
-        print(f'Find results in: {grid_res_dir}/')
+
         print("")
+
+        # Creating global result file
+        ###############################
+        print(f'***CREATING GLOBAL RESULT FILE***')
+        t0 = t.time()
+
+        res_lst = []
+        for i in range(self.res_file_idx):
+            res_lst.append(self.res_collection.pop(i))
+
+        df = pd.concat(res_lst, axis=1)
+
+        print(f'Writing data to global result file...', end="")
+        with pd.HDFStore(global_res_file, "a") as store:
+            store.put(key='/Results/SpikingRate_df', value=df)
+        print("done")
+
+        print(f'Deleting temporary result files...',end="")
+        for temp_file in glob.glob(f'{grid_res_dir}/*_temp_*.h5'):
+            os.remove(temp_file)
+        print("done")
+
+        print(f'Elapsed time: {t.time()-t0:.3f} seconds')
+        print(f'Find results in: {grid_res_dir}/')
+
+        print("")
+
         param_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
 
-        return grid_res_file, grid_file
+        return global_res_file, grid_file
 
     def thread_master(self, client, thread_kwargs: dict):
         thread_name = currentThread().getName()
@@ -465,15 +538,15 @@ class ClusterGridSearch(ClusterCompute):
         logfile = client["logfile"]
         num_params = client["num_params"]
 
-        # Get kwargs
+        # Get keyword arguments
         config_file = thread_kwargs["config_file"]
         param_grid = thread_kwargs["param_grid"]
         grid_name = thread_kwargs["grid_name"]
         grid_res_dir = thread_kwargs["grid_res_dir"]
         worker_env = thread_kwargs["worker_env"]
         worker_file = thread_kwargs["worker_file"]
-        global_res_file = thread_kwargs["global_res_file"]
 
+        # Prepare worker command
         command = f'{worker_env} {worker_file}'
 
         # Create folder to save local subgrids to
@@ -481,16 +554,20 @@ class ClusterGridSearch(ClusterCompute):
         os.makedirs(subgrid_dir, exist_ok=True)
         subgrid_idx = 0
 
+        # Start scheduler
+        #################
         while True:
-            param_idx = self.fetch_param_idx(param_grid, lock=True, num_params=num_params)
-            if param_idx.empty:
-                print(f'[T]\'{thread_name}\': No more parameter combinations available!')
-                break
-            else:
-                with self.lock:
-                    # Fetch grid indices
-                    ####################
 
+            # Temporarily disable thread switching
+            with self.lock:
+
+                # Fetch grid indices
+                ####################
+                param_idx = self.fetch_param_idx(param_grid, lock=True, num_params=num_params)
+                if param_idx.empty:
+                    print(f'[T]\'{thread_name}\': No more parameter combinations available!')
+                    break
+                else:
                     print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
                     print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
 
@@ -503,9 +580,11 @@ class ClusterGridSearch(ClusterCompute):
 
                     # Create temporary result file for current subgrid
                     ##################################################
+                    tmp_res_idx = self.res_file_idx
                     idx_min = np.amin(param_idx.values)
                     idx_max = np.amax(param_idx.values)
-                    res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx_min}-{idx_max}_temp.h5'
+                    local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx_min}-{idx_max}_temp_{tmp_res_idx}.h5'
+                    self.res_file_idx += 1
 
                     # Execute worker script on the remote host
                     ##########################################
@@ -515,47 +594,51 @@ class ClusterGridSearch(ClusterCompute):
                     stdin, stdout, stderr = pm_client.exec_command(command +
                                                                    f' --config_file={config_file}'
                                                                    f' --subgrid={subgrid_fp}'
-                                                                   f' --res_file={res_file}'
+                                                                   f' --local_res_file={local_res_file}'
+                                                                   # redirect and append stdout and stderr to logfile:
                                                                    f' &>> {logfile}',
                                                                    get_pty=True)
+            # Lock released, thread switching enabled
 
-                # Wait for remote computation to finish
-                #######################################
-                stdout.channel.recv_exit_status()
-                print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
+            # Wait for remote computation to finish
+            #######################################
+            stdout.channel.recv_exit_status()
+            print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
 
-                # Write results from temp to global result file
-                ###############################################
-                t0 = t.time()
-                with self.lock:
-                    with h5py.File(global_res_file, 'a') as fd:
-                        if 'GridIndex/' not in fd.keys():
-                            group = fd.create_group(f'GridIndex/')
-                        else:
-                            group = fd['GridIndex']
-                        with h5py.File(res_file, 'r') as fs:
-                            for index_key in list(fs['GridIndex'].keys()):
-                                fs.copy(f'GridIndex/{index_key}/', group)
-                        os.remove(res_file)
+            # Load results from result file to working memory
+            #################################################
+            # t0 = t.time()
+            print(f'[T]\'{thread_name}\': Updating grid status')
 
-                print(f'[T]\'{thread_name}\': Result file created. Elapsed time: {t.time()-t0:.3f} seconds')
+            with self.lock:
+                try:
+                    # TODO: Read results from Port (Socket) ?
+                    local_results = pd.read_hdf(local_res_file, key='Data')
+                    # for col in range(local_results.shape[1]):
+                    #     local_result = local_results.iloc[:, col]
+                    #     idx_label = local_result.name[:-1]
+                    #     idx = param_grid[(param_grid_raw.values == idx_label).all(1)].index
+                    #     if any(pd.isnull(local_result)):
+                    #         param_grid.at[idx, 'status'] = 'unsolved'
+                    #     else:
+                    #         param_grid.at[idx, 'status'] = 'done'
+                    # param_grid.at[param_grid['status'] == 'pending', 'status'] = 'unsolved'
+                    param_grid.at[param_idx, 'status'] = 'done'
+                    self.res_collection[tmp_res_idx] = local_results
+                except KeyError:
+                    param_grid.at[param_idx, 'status'] = 'unsolved'
+                    os.remove(local_res_file)
+                except FileNotFoundError:
+                    param_grid.at[param_idx, 'status'] = 'unsolved'
+                    # TODO: What happens, if results are not added to res_collection, but the res_idx is still counted up?
 
-                # Update parameter grid status flags
-                ####################################
-                print(f'[T]\'{thread_name}\': Updating grid status')
-                for idx in param_idx:
-                    res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx}.h5'
-                    param_grid.at[idx, 'worker'] = thread_name
-                    try:
-                        if os.path.getsize(res_file) > 0:
-                            param_grid.at[idx, 'status'] = 'done'
-                        else:
-                            param_grid.at[idx, 'status'] = 'failed'
-                    except OSError as e:
-                        param_grid.at[idx, 'status'] = 'failed'
+            # Lock released, thread switching enabled
+        # End of while loop
+    # End of Thread master
 
+    # Helper functions
+    ##################
 
-    # Helper functions, ClusterGridSearch only
     def prepare_grid(self, param_grid_arg, permute=False):
         """Create a DataFrame and a DefaultGrid.csv from a *.csv/DataFrame/dict containing all parameter combinations
 
@@ -601,8 +684,6 @@ class ClusterGridSearch(ClusterCompute):
                     # Set rows with status 'failed' to 'unsolved' to compute them again
                     unsolved_idx = grid.index[grid['status'] == "failed"]
                     grid.at[unsolved_idx, 'status'] = 'unsolved'
-                # Add/reset worker-column
-                grid['worker'] = ""
                 return grid, grid_file
             except FileNotFoundError as err:
                 print(err)
@@ -616,7 +697,7 @@ class ClusterGridSearch(ClusterCompute):
             # Create default parameter grid csv-file
             grid_idx = 0
             # grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
-            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.h5'
+            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
             # If grid_file already exist
             while os.path.exists(grid_file):
                 grid_idx += 1
@@ -632,12 +713,11 @@ class ClusterGridSearch(ClusterCompute):
                 unsolved_idx = grid_frame.index[grid_frame['status'] == "failed"]
                 grid_frame.at[unsolved_idx, 'status'] = 'unsolved'
             # Add/reset worker-column
-            grid_frame['worker'] = ""
             grid_name = Path(grid_file).stem
             return grid_frame, grid_file, grid_name
 
         elif isinstance(param_grid_arg, pd.DataFrame):
-            grid_frame = param_grid_arg
+            grid_frame = param_grid_arg.copy(deep=True)
             # Create default parameter grid csv-file from DataFrame
             grid_idx = 0
             grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
@@ -654,7 +734,6 @@ class ClusterGridSearch(ClusterCompute):
                 unsolved_idx = grid_frame.index[grid_frame['status'] == "failed"]
                 grid_frame.at[unsolved_idx, 'status'] = 'unsolved'
             # Add/reset worker-column
-            grid_frame['worker'] = ""
             grid_name = Path(grid_file).stem
             return grid_frame, grid_file, grid_name
 

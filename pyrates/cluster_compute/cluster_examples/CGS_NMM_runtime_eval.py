@@ -73,7 +73,7 @@ inputs = {("PC", "Op_e.0", "inp"): inp.tolist()}
 outputs = {"r": ("PC", "Op_e.0", "r")}
 
 worker_env = "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python3"
-worker_file = "/data/hu_salomon/PycharmProjects/PyRates/pyrates/cluster_compute/cluster_workers/gridsearch_worker.py"
+worker_file = "/data/hu_salomon/PycharmProjects/PyRates/pyrates/cluster_compute/cluster_workers/cluster_worker.py"
 
 
 runtime_total = {}

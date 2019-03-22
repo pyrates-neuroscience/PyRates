@@ -3,6 +3,8 @@ from pyrates import __version__
 
 PYRATES_TEAM = "Richard Gast, Daniel Rose"
 
+# numpy 1.16 incompatible with python-tables (used for hdf5)
+# python-gassapi needed to use kerberos for ssh authentication
 INSTALL_REQUIREMENTS = ['numpy',
                         'matplotlib',
                         'networkx',
@@ -14,7 +16,8 @@ INSTALL_REQUIREMENTS = ['numpy',
                         'seaborn',
                         'mne',
                         'pydot',
-                        'paramiko']
+                        'paramiko',
+                        'python-gssapi']
 
 CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Programming Language :: Python :: 3.6",

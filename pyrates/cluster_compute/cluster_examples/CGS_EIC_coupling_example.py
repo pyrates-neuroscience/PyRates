@@ -83,7 +83,7 @@ create_cgs_config(fp=config_file, circuit_template=circuit_template,
 # Run ClusterGridSearch #
 #########################
 worker_env = "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python"
-worker_file = "/data/hu_salomon/PycharmProjects/PyRates/pyrates/cluster_compute/cluster_workers/gridsearch_worker.py"
+worker_file = "/data/hu_salomon/PycharmProjects/PyRates/pyrates/cluster_compute/cluster_workers/cluster_worker.py"
 
 print(f'Config time: {t.time()-t0} seconds')
 

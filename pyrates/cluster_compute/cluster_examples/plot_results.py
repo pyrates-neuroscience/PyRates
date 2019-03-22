@@ -1,6 +1,11 @@
 # internal imports
+from collections import OrderedDict
+import time
+import pandas as pd
 from pyrates.utility import plot_timeseries, grid_search, plot_psd, plot_connectivity
-import matplotlib.pyplot as plt
+from pyrates.utility.grid_search import linearize_grid
+from pyrates.cluster_compute.cluster_compute import read_cgs_results
+
 from seaborn import cubehelix_palette
 import h5py
 import scipy.signal as sp
@@ -34,10 +39,154 @@ def post(data_):
 
 
 if __name__ == "__main__":
-    test_file = '/data/hu_salomon/Documents/test.h5'
-    file = '/nobackup/spanien1/salomon/ClusterGridSearch/EIC_Montbrio/Computation_1/Results/DefaultGrid_0/CGS_result_DefaultGrid_0.h5'
-    data = read_cgs_results(file, key='Data')
-    print(data)
+    import glob
+
+    fp = "/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_result.h5"
+    data = pd.read_hdf(fp, key='Data')
+    print(data.iloc[:,40])
+    # with h5py.File(fp, "r") as file:
+    #     test = file["invalid_key"]
+    # test = pd.read_hdf(fp, key="invalid_key")
+
+    # for file in glob.glob(f'{fp}/*_temp_*.h5'):
+    #     print(file)
+
+
+
+    # # results = pd.read_hdf('/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio/EIC/Test/Results/DefaultGrid_3/CGS_result_DefaultGrid_3_idx_0-40_temp.h5')
+    # # print(results)
+    #
+    # params = OrderedDict()
+    # params['k_e'] = np.linspace(20., 30., 101)
+    # params['k_i'] = np.linspace(10., 20., 101)
+    #
+    # param_grid = linearize_grid(params, permute=True)
+    # results = pd.read_hdf('/data/hu_salomon/Documents/test.h5')
+    #
+    # print(results.columns.values[0][-1])
+    #
+    # temp = []
+    # for i in range(5):
+    #     idx_label = param_grid.iloc[i].values.tolist()
+    #     idx_label.append('r_E.0')
+    #
+    #     result = results.loc[:, tuple(idx_label)].to_frame()
+    #     result.columns.names = results.columns.names
+    #     temp.append(result)
+    # frame = pd.concat(temp, axis=1)
+    # print(frame)
+
+    # slice_ = results.columns.get_loc((20, 10))
+    # print(results.columns.levels[slice])
+    # slice_ = results.get_loc(tuple(idx_label))
+    # mi = pd.MultiIndex.from_list(idx_label)
+    # mi.levels()
+
+    # result.columns = tuple(idx_label)
+
+    # result.columns.values = pd.Index(list(idx_label))
+    # print(result)
+    #
+    # slice_ = results.get_loc((20, 10))
+    # print(results[slice_])
+    #
+    #
+    #
+    # temp = []
+    # for i in range(5):
+    #     idx_label = tuple(param_grid.iloc[i].values)
+    #
+    #     result = results.loc[:, idx_label]
+    #     res_idx =
+    #     temp = results[(results.columns.names[:-1] in idx_label).all(1)]
+    #     print(temp)
+    #     temp.append(results.loc[:, idx_label])
+    # frame = pd.concat(temp, axis=1)
+    # print(frame)
+
+
+    # list_ = [results.iloc[:,0] * 5]
+    # temp = results.copy(deep=True)
+    #
+    # print(results)
+    #
+    # for col in range(5):
+    #     result = results.iloc[:, col]
+    #     idx_label = result.name[:-1]
+    #     idx = param_grid[(param_grid.values == idx_label).all(1)].index
+    #     temp.iloc[:,idx+1] = result.to_frame()
+    #
+    # print(temp)
+    # frame = pd.concat(list_, axis=1)
+
+    # print(type(results[params['k_e'][0]][params['k_i'][0]]))
+    # list_ = []
+    # print(results.columns.values[:][:-1])
+    #
+    # for i in range(5):
+    #     idx = param_grid.iloc[i,:]
+    #     # temp = results[(results.columns.names[:-1] == idx.values).all(1)]
+    #     temp = results.loc[:,idx.all(1)]
+    #     print(temp)
+    #
+    # for i in range(5):
+    #     temp = results.iloc[:, i]
+    #     list_.append(temp)
+    # frame = pd.concat(list_, axis=1)
+    # frame.columns.names = results.columns.names
+    # print(frame)
+    # print(type(frame))
+
+    #
+    #
+    #
+    #
+    # pass
+    # params = {'k_e': np.linspace(20., 30., 101), 'k_i': np.linspace(10., 20., 101)}
+    # param_grid = linearize_grid(params, permute=True)
+    # for i, pair in enumerate(param_grid.values):
+    #     print(pair[0], pair[1])
+
+    # fp = "/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio_EIC/Computation_1/Results/DefaultGrid_0/CGS_result_DefaultGrid_0.h5"
+    # results = read_cgs_results(fp, key='Num_Peaks')
+    #
+    # # print((np.array(results[29.0][14.0]).astype('float')))
+    # print(results[29.0][14.0].values.item())
+    #
+    # #
+    # params = {'k_e': np.linspace(20., 30., 101), 'k_i': np.linspace(10., 20., 101)}
+    # param_grid = linearize_grid(params, permute=True)
+    # print(len(param_grid.index))
+    # print(type(param_grid.values))
+    # T = 2.0
+    #
+    # param_map = {'k_e': {'var': [('Op_e.0', 'k_ee'), ('Op_i.0', 'k_ie')],
+    #                      'nodes': ['E.0', 'I.0']},
+    #              'k_i': {'var': [('Op_e.0', 'k_ei'), ('Op_i.0', 'k_ii')],
+    #                      'nodes': ['E.0', 'I.0']}
+    #              }
+    # params = {'k_e': np.linspace(15., 20., 11), 'k_i': np.linspace(15., 20., 11)}
+    # circuit_template = "/data/hu_salomon/PycharmProjects/PyRates/models/Montbrio/Montbrio.EI_Circuit",
+    # dt = 1e-5,
+    # inputs = {},
+    # outputs = {"r": ("E", "Op_e.0", "r")},
+    # sampling_step_size = 1e-3
+    #
+    # param_grid = linearize_grid(params, permute=True)
+    # test_file = '/data/hu_salomon/Documents/test.h5'
+    #
+    # # print(param_grid.values)
+    #
+    # with h5py.File(test_file, 'w') as file:
+    #     for key, value in params.items():
+    #         file.create_dataset(f'ParameterGrid/{key}', data=value)
+    #     file.create_dataset(f'ParameterGrid/Grid', data=param_grid.values)
+
+
+
+    # file = '/nobackup/spanien1/salomon/ClusterGridSearch/EIC_Montbrio/Computation_1/Results/DefaultGrid_0/CGS_result_DefaultGrid_0.h5'
+    # data = read_cgs_results(file, key='Data')
+    # print(data)
 
 
 
