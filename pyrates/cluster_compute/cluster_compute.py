@@ -454,12 +454,13 @@ class ClusterGridSearch(ClusterCompute):
 
         # Write grid and config information to result file
         with h5py.File(global_res_file, 'w') as file:
-            file.create_dataset(f'/ParameterGrid/Grid', data=param_grid_raw.values)
+            # file.create_dataset(f'/ParameterGrid/Grid', data=param_grid_raw.values)
             for key, value in params.items():
                 file.create_dataset(f'/ParameterGrid/Keys/{key}', data=value)
             file.create_dataset(f'/Config/circuit_template', data=param_dict['circuit_template'])
             file.create_dataset(f'/Config/simulation_time', data=param_dict['simulation_time'])
             file.create_dataset(f'/Config/dt', data=param_dict['dt'])
+        param_grid_raw.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
 
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
@@ -512,11 +513,11 @@ class ClusterGridSearch(ClusterCompute):
 
         print(f'Writing data to global result file...', end="")
         with pd.HDFStore(global_res_file, "a") as store:
-            store.put(key='/Results/SpikingRate_df', value=df)
+            store.put(key='/Results/r_E0_df', value=df)
         print("done")
 
         print(f'Deleting temporary result files...',end="")
-        for temp_file in glob.glob(f'{grid_res_dir}/*_temp_*.h5'):
+        for temp_file in glob.glob(f'{grid_res_dir}/*_temp*.h5'):
             os.remove(temp_file)
         print("done")
 
@@ -556,7 +557,6 @@ class ClusterGridSearch(ClusterCompute):
         # Start scheduler
         #################
         while True:
-
             # Temporarily disable thread switching
             with self.lock:
 
@@ -565,6 +565,7 @@ class ClusterGridSearch(ClusterCompute):
                 param_idx = self.fetch_param_idx(param_grid, num_params=num_params)
                 if param_idx.empty:
                     print(f'[T]\'{thread_name}\': No more parameter combinations available!')
+                    # Exit while loop
                     break
                 else:
                     print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
@@ -572,7 +573,7 @@ class ClusterGridSearch(ClusterCompute):
 
                     # Create parameter sub-grid
                     ###########################
-                    subgrid_fp = f'{subgrid_dir}/{thread_name}_{grid_name}_Subgrid_{subgrid_idx}.h5'
+                    subgrid_fp = f'{subgrid_dir}/{grid_name}/{thread_name}_Subgrid_{subgrid_idx}.h5'
                     subgrid_df = param_grid.iloc[param_idx]
                     subgrid_df.to_hdf(subgrid_fp, key='Data')
                     subgrid_idx += 1
@@ -626,8 +627,9 @@ class ClusterGridSearch(ClusterCompute):
                     #         param_grid.at[idx, 'status'] = 'done'
                     # param_grid.at[param_grid['status'] == 'pending', 'status'] = 'unsolved'
                     param_grid.at[param_idx, 'status'] = 'done'
-                    # self.res_collection[tmp_res_idx] = local_results
+                    self.res_collection[tmp_res_idx] = local_results
                 except KeyError:
+                    # TODO: Add counter to parameter grid to restart computation only twice before setting status to failed
                     param_grid.at[param_idx, 'status'] = 'unsolved'
                     # os.remove(local_res_file)
                 except FileNotFoundError:
@@ -638,8 +640,9 @@ class ClusterGridSearch(ClusterCompute):
         # End of while loop
     # End of Thread master
 
-    # Helper functions
-    ##################
+    ########################
+    # CGS Helper functions #
+    ########################
 
     def prepare_grid(self, param_grid_arg, permute=False):
         """Create a DataFrame and a DefaultGrid.csv from a *.csv/DataFrame/dict containing all parameter combinations
@@ -856,7 +859,9 @@ class ClusterGridSearch(ClusterCompute):
         return all((map_key in grid_key_lst for map_key in map_key_lst))
 
 
-# Utility functions
+#####################
+# Utility functions #
+#####################
 def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inputs,
                       outputs, sampling_step_size=None, **kwargs):
     """Creates a configfile.json containing a config_dict{} with all input parameters as key-value pairs
@@ -877,25 +882,24 @@ def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inpu
     -------
 
     """
-    if not os.path.exists(fp):
-        config_dict = {
-            "circuit_template": circuit_template,
-            "param_map": param_map,
-            "dt": dt,
-            "simulation_time": simulation_time,
-            "outputs": outputs,
-            "sampling_step_size": sampling_step_size,
-            "kwargs": kwargs
-        }
-        if inputs:
-            config_dict["inputs"] = {str(*inputs.keys()): list(*inputs.values())}
+    # if not os.path.exists(fp):
+    config_dict = {
+        "circuit_template": circuit_template,
+        "param_map": param_map,
+        "dt": dt,
+        "simulation_time": simulation_time,
+        "outputs": outputs,
+        "sampling_step_size": sampling_step_size,
+        "kwargs": kwargs
+    }
+    if inputs:
+        config_dict["inputs"] = {str(*inputs.keys()): list(*inputs.values())}
 
-        with open(fp, "w") as f:
-            json.dump(config_dict, f, indent=2)
-    else:
-        print(f'Configfile: {fp} already exists.')
+    with open(fp, "w") as f:
+        json.dump(config_dict, f, indent=2)
 
 
+# Deprecated
 def read_cgs_results(fp, key='Data', index=[]):
     """ Collect data from all csv-files in the res_dir inside on DataFrame
 

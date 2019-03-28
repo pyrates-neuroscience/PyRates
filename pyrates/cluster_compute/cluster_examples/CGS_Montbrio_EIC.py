@@ -27,6 +27,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 
 # PyRates internal imports
+from pyrates.cluster_compute.montbrio_eval_funcs import *
 from pyrates.cluster_compute.cluster_compute import *
 
 # meta infos
@@ -39,13 +40,13 @@ if __name__ == "__main__":
     # Create CGS instance
     #####################
     # Directory, where the CGS project with all its files is stored
-    compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio/EIC/Test"
+    compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio/EIC/T10s_dt10us"
 
     nodes = [
-        # 'animals',
-        # 'spanien',
+        'animals',
+        'spanien',
         'tschad',
-        'carpenters',
+        # 'carpenters',
         'osttimor'
         # 'lech',
         # 'tiber',
@@ -67,7 +68,7 @@ if __name__ == "__main__":
     create_cgs_config(fp=config_file,
                       circuit_template="/data/hu_salomon/PycharmProjects/PyRates/models/Montbrio/Montbrio.EI_Circuit",
                       param_map=param_map,
-                      simulation_time=1.,
+                      simulation_time=10.,
                       dt=1e-5,
                       inputs={},
                       outputs={"r": ("E", "Op_e.0", "r")},
@@ -75,28 +76,24 @@ if __name__ == "__main__":
 
     # Create parameter grid
     #######################
-    params = {'k_e': np.linspace(20., 30., 11), 'k_i': np.linspace(10., 20., 11)}
+    params = {'k_e': np.linspace(10., 30., 101), 'k_i': np.linspace(10., 30., 101)}
 
     # Run cluster grid search
     #########################
     res_file, grid_file = cgs.run(config_file=config_file,
                                   param_grid=params,
                                   permute=True,
-                                  chunk_size=20,
+                                  chunk_size=1000,
                                   thread_kwargs={
                                       "worker_env": "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python3",
                                       "worker_file": "/data/hu_salomon/PycharmProjects/PyRates/"
                                                      "pyrates/cluster_compute/cluster_worker.py"
                                   })
 
-    results = pd.read_hdf(res_file, key="/Results/SpikingRate_df")
-    print(results)
+    # results = pd.read_hdf(res_file, key="/Results/r_E0_df")
+    # print(results)
 
     # Create plots
     ##############
-    # Worker saved the number of peaks for each parameter combination in the result file under the key 'Num_Peaks'
-    # params = {'k_e': np.linspace(20., 30., 101), 'k_i': np.linspace(10., 20., 101)}
-    # res_file = "/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio_EIC/Computation_2/Results/DefaultGrid_0/CGS_result_DefaultGrid_0.h5"
-    # filepath = os.path.dirname(res_file)
-    # peaks = read_cgs_results(res_file, key='Num_Peaks')
-    # plot_peaks_per_second(peaks, parameters=params, tick_size=1, fp=filepath)
+    # plot_avrg_peak_dist(results, parameters=param_map, tick_size=1)
+    # plot_time_series(results)

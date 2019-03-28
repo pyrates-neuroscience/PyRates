@@ -75,8 +75,9 @@ def main(_):
         try:
             inputs_temp = global_config_dict['inputs']
             if inputs_temp:
-                inputs = {ast.literal_eval(*global_config_dict['inputs'].keys()):
-                          list(*global_config_dict['inputs'].values())}
+                inputs = {}
+                for key, value in inputs_temp.items():
+                    inputs[ast.literal_eval(key)] = list(value)
             else:
                 inputs = {}
         except KeyError:
@@ -84,13 +85,15 @@ def main(_):
         try:
             outputs_temp = global_config_dict['outputs']
             if outputs_temp:
-                outputs = {str(*global_config_dict['outputs'].keys()):
-                           tuple(*global_config_dict['outputs'].values())}
+                outputs = {}
+                for key, value in outputs_temp.items():
+                    outputs[str(key)] = tuple(value)
             else:
                 outputs = {}
         except KeyError:
             outputs = {}
 
+    print(outputs)
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     # LOAD PARAMETER GRID
@@ -136,7 +139,7 @@ def main(_):
 
     # Order results and post processing
     ###################################
-    res_lst_df = []
+    res_lst = []
     # peak_lst = []
     # spec_lst_df = []
 
@@ -146,7 +149,7 @@ def main(_):
         idx_label.append(out_var)
         result = results.loc[:, tuple(idx_label)].to_frame()
         result.columns.names = results.columns.names
-        res_lst_df.append(result)
+        res_lst.append(result)
 
         # POSTPROCESSING
         ################
@@ -158,7 +161,7 @@ def main(_):
         # peak_lst.append(peaks)
 
     # Ordered DataFrames with respect to param_grid
-    results = pd.concat(res_lst_df, axis=1)
+    results = pd.concat(res_lst, axis=1)
     # spec = pd.concat(spec_lst_df, axis=1)
 
     # SAVE DATA

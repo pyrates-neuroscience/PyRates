@@ -1,10 +1,14 @@
 # System imports
 
 # External imports
-from pyrates.utility import plot_connectivity
+import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.signal as sp
+import matplotlib.pyplot as plt
+from seaborn import cubehelix_palette
+
+# PyRates imports
+from pyrates.utility import plot_connectivity, plot_timeseries
 
 
 def plot_avrg_peaks_per_second(results, parameters, simulation_time, tick_size=5, fp=None):
@@ -44,16 +48,17 @@ def plot_avrg_peaks_per_second(results, parameters, simulation_time, tick_size=5
     return num_peaks
 
 
-def plot_avrg_peak_dist(results, parameters, dt, tick_size=5, fp=None):
+def plot_avrg_peak_dist(results, parameters, tick_size=5, fp=None):
+    dt = results.index[1] - results.index[0]
     peak_dist = np.zeros([len(parameters['k_e']), len(parameters['k_i'])])
     for m, k_e in enumerate(parameters['k_e']):
         for n, k_i in enumerate(parameters['k_i']):
             data = np.array(results[k_e][k_i])
             peaks = sp.argrelextrema(data, np.greater)
             diff = np.diff(peaks[0])
-            diff = np.mean(diff)*dt
-            # peak_dist[m, n] = simulation_time / (diff*dt)
-            peak_dist[m, n] = 1 / diff
+            if diff.any():
+                diff = np.mean(diff)*dt
+                peak_dist[m, n] = 1 / diff
 
     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(20, 15), gridspec_kw={})
     plot_connectivity(peak_dist, ax=ax, xticklabels=list(parameters['k_i']), yticklabels=list(parameters['k_e']))
@@ -75,8 +80,10 @@ def plot_avrg_peak_dist(results, parameters, dt, tick_size=5, fp=None):
     axis_font = {'fontname': 'Arial', 'size': '25'}
     ax.set_xlabel('k_i', fontdict=axis_font)
     ax.set_ylabel('k_e', fontdict=axis_font)
+    ax.set_facecolor((0.0, 0.0, 0.0))
 
-    ax.set_title('Average time between peaks', fontdict=axis_font)
+    # ax.set_title('Average time between peaks', fontdict=axis_font)
+    ax.set_title('EIC - r_E peak frequency', fontdict=axis_font)
 
     if fp:
         fig.savefig(f'{fp}/average_peak_dist', format="svg")
@@ -85,5 +92,21 @@ def plot_avrg_peak_dist(results, parameters, dt, tick_size=5, fp=None):
     return peak_dist
 
 
+def plot_time_series(results, col=0):
+    data = results.iloc[:, col].to_frame()
+    cm = cubehelix_palette(n_colors=1, as_cmap=False, start=0, rot=-0.1)
+    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(20, 15), gridspec_kw={})
+    plot_timeseries(data, ax=ax, cmap=cm)
+    plt.tick_params(labelsize=20)
+    axis_font = {'fontname': 'Arial', 'size': '25'}
+    ax.set_xlabel('t in s', fontdict=axis_font)
+    ax.set_ylabel('value', fontdict=axis_font)
+    # ax.set_title('k_e = 21.2, k_i = 21.2', fontdict=axis_font)
+    # fig.savefig("/data/hu_salomon/Documents/MA/Graphics/Plots/EIC_spike_Helmut", format="svg")
+    plt.show()
+
+
 if __name__ == "__main__":
     pass
+    # results_ = pd.read_hdf('/data/hu_salomon/Documents/test.h5', key='Data')
+    # plot_time_series(results_)

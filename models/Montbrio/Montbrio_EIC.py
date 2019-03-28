@@ -20,7 +20,8 @@ if __name__ == "__main__":
     # params = {'k_e': np.linspace(10., 30., 3), 'k_i': np.linspace(10., 30., 3)}
     # params = {'k_e': np.linspace(10., 15., 11), 'k_i': np.linspace(25., 30., 11)}
     # params = {'k_e': np.linspace(15., 20., 21), 'k_i': np.linspace(15., 20., 21)}
-    params = {'k_e': np.linspace(25., 30., 3), 'k_i': np.linspace(10., 25., 3)}
+    # params = {'k_e': np.linspace(25., 30., 3), 'k_i': np.linspace(10., 25., 3)}
+    params = {'k_e': np.linspace(20., 30., 11), 'k_i': np.linspace(10., 20., 11)}
 
     T = 2.0
 
@@ -35,9 +36,10 @@ if __name__ == "__main__":
                           dt=1e-5,
                           simulation_time=T,
                           inputs={},
-                          outputs={"r": ("E", "Op_e.0", "r")},
+                          outputs={"r": ("E", "Op_e.0", "r"),
+                                   "v": ("E", "Op_e.0", "v")},
                           sampling_step_size=1e-3,
-                          permute_grid=False)
+                          permute_grid=True)
 
     t_run = t.time()-t0_run
     print(f'Grid search elapsed time: {t_run} seconds')

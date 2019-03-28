@@ -5,7 +5,7 @@ import pandas as pd
 from pyrates.utility import plot_timeseries, grid_search, plot_psd, plot_connectivity
 from pyrates.utility.grid_search import linearize_grid
 from pyrates.cluster_compute.cluster_compute import read_cgs_results
-
+import ast
 from seaborn import cubehelix_palette
 import h5py
 import scipy.signal as sp
@@ -39,11 +39,44 @@ def post(data_):
 
 
 if __name__ == "__main__":
-    import glob
+    config_file = "/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio/EIC/Temp/Config/Montbrio_EIC_config.json"
 
-    fp = "/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_result.h5"
-    data = pd.read_hdf(fp, key='Data')
-    print(data.iloc[:,40])
+    with open(config_file) as g_conf:
+        global_config_dict = json.load(g_conf)
+
+        circuit_template = global_config_dict['circuit_template']
+        param_map = global_config_dict['param_map']
+        sampling_step_size = global_config_dict['sampling_step_size']
+        dt = global_config_dict['dt']
+        simulation_time = global_config_dict['simulation_time']
+        try:
+            inputs_temp = global_config_dict['inputs']
+            if inputs_temp:
+                inputs = {ast.literal_eval(*global_config_dict['inputs'].keys()):
+                              list(*global_config_dict['inputs'].values())}
+            else:
+                inputs = {}
+        except KeyError:
+            inputs = {}
+        try:
+            outputs_temp = global_config_dict['outputs']
+            if outputs_temp:
+                outputs = {}
+                for key, value in outputs_temp.items():
+                    outputs[str(key)] = tuple(value)
+                    # {str(*global_config_dict['outputs'].keys()):
+                    #                tuple(*global_config_dict['outputs'].values())}
+            else:
+                outputs = {}
+        except KeyError:
+            outputs = {}
+
+    print(outputs)
+
+
+    # fp = "/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_result.h5"
+    # data = pd.read_hdf(fp, key='Data')
+    # print(data.iloc[:,40])
     # with h5py.File(fp, "r") as file:
     #     test = file["invalid_key"]
     # test = pd.read_hdf(fp, key="invalid_key")
