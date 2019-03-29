@@ -17,7 +17,7 @@ c = 1.                                          # global connection strength sca
 N = np.round(2**np.arange(12))[::-1]            # network sizes, each of which will be run a benchmark for
 p = np.linspace(0.0, 1.0, 5)                    # global coupling probabilities to run benchmarks for
 use_gpu = False                                 # if false, benchmarks will be run on CPU
-n_reps = 1                                      # number of trials per benchmark
+n_reps = 5                                      # number of trials per benchmark
 
 
 def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
