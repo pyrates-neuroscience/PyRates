@@ -76,11 +76,11 @@ if __name__ == "__main__":
 
     # Create parameter grid
     #######################
-    params = {'k_e': np.linspace(10., 30., 101), 'k_i': np.linspace(10., 30., 101)}
+    params = {'k_e': np.linspace(1., 100., 100), 'k_i': np.linspace(1., 100., 100)}
 
     # Run cluster grid search
     #########################
-    res_file, grid_file = cgs.run(config_file=config_file,
+    res_file, _ = cgs.run(config_file=config_file,
                                   param_grid=params,
                                   permute=True,
                                   chunk_size=1000,

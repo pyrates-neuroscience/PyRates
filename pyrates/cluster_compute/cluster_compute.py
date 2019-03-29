@@ -516,7 +516,7 @@ class ClusterGridSearch(ClusterCompute):
             store.put(key='/Results/r_E0_df', value=df)
         print("done")
 
-        print(f'Deleting temporary result files...',end="")
+        print(f'Deleting temporary result files...', end="")
         for temp_file in glob.glob(f'{grid_res_dir}/*_temp*.h5'):
             os.remove(temp_file)
         print("done")
@@ -550,7 +550,7 @@ class ClusterGridSearch(ClusterCompute):
         command = f'{worker_env} {worker_file}'
 
         # Create folder to save local subgrids to
-        subgrid_dir = f'{self.grid_dir}/Subgrids/{thread_name}'
+        subgrid_dir = f'{self.grid_dir}/Subgrids/{grid_name}/{thread_name}'
         os.makedirs(subgrid_dir, exist_ok=True)
         subgrid_idx = 0
 
@@ -573,7 +573,7 @@ class ClusterGridSearch(ClusterCompute):
 
                     # Create parameter sub-grid
                     ###########################
-                    subgrid_fp = f'{subgrid_dir}/{grid_name}/{thread_name}_Subgrid_{subgrid_idx}.h5'
+                    subgrid_fp = f'{subgrid_dir}/{thread_name}_Subgrid_{subgrid_idx}.h5'
                     subgrid_df = param_grid.iloc[param_idx]
                     subgrid_df.to_hdf(subgrid_fp, key='Data')
                     subgrid_idx += 1
@@ -612,8 +612,6 @@ class ClusterGridSearch(ClusterCompute):
             print(f'[T]\'{thread_name}\': Updating grid status')
 
             with self.lock:
-                # for idx in param_idx:
-                #     pass
                 try:
                     # TODO: Read results from Port (Socket) ?
                     local_results = pd.read_hdf(local_res_file, key='Data')

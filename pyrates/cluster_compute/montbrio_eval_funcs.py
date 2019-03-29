@@ -63,17 +63,18 @@ def plot_avrg_peak_dist(results, parameters, tick_size=5, fp=None):
     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(20, 15), gridspec_kw={})
     plot_connectivity(peak_dist, ax=ax, xticklabels=list(parameters['k_i']), yticklabels=list(parameters['k_e']))
 
-    # Show only every tick_size tick on the axis
+    # Only show the first tick and ticks that are a multiple of tick_size
     step_size_x = parameters['k_e'][1] - parameters['k_e'][0]
     step_size_y = parameters['k_i'][1] - parameters['k_i'][0]
     step_tick_x = np.round(tick_size/step_size_x)
     step_tick_y = np.round(tick_size/step_size_y)
-    for n, label in enumerate(ax.xaxis.get_ticklabels()):
-        if n % step_tick_x != 0:
+    start_idx = 1 if len(ax.xaxis.get_ticklabels()) % 2 == 0 else 0
+    for n, label in enumerate(ax.xaxis.get_ticklabels(), start=start_idx):
+        if n % step_tick_x != 0 and n != start_idx:
             label.set_visible(False)
-    for n, label in enumerate(ax.yaxis.get_ticklabels()):
+    for n, label in enumerate(ax.yaxis.get_ticklabels(), start=start_idx):
         label.font_size = 20
-        if n % step_tick_y != 0:
+        if n % step_tick_y != 0 and n != start_idx:
             label.set_visible(False)
 
     plt.tick_params(labelsize=20)
