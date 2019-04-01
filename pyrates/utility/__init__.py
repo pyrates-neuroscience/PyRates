@@ -35,7 +35,7 @@ __status__ = "Development"
 
 from .visualization import *
 from .data_analysis import *
-from .grid_search import grid_search
+from .grid_search import grid_search, adapt_circuit
 from .helper_functions import set_instance
 from .helper_functions import update_param
 from .helper_functions import interpolate_array

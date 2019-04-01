@@ -110,26 +110,25 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
 
     # adjust output of simulation to combined network
     nodes = list(CircuitTemplate.from_yaml(circuit_template).apply().nodes)
-    out_names = list(outputs.keys())
+    out_names = []
     for out_key, out in outputs.copy().items():
         outputs.pop(out_key)
+        out_names_tmp = []
         if out[0] in nodes:
             for i, name in enumerate(param_info):
                 out_tmp = list(out)
                 out_tmp[0] = f'{circuit_names[i]}/{out_tmp[0]}'
-                outputs[f'{name}{param_split}out_var{val_split}{out_key}'] = tuple(out_tmp)
+                outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{out[0]}'] = tuple(out_tmp)
+                out_names_tmp.append(f'{out_key}{comb}{out[0]}')
         elif out[0] == 'all':
-            out_names = []
             for node in nodes:
                 for i, name in enumerate(param_info):
                     out_tmp = list(out)
                     out_tmp[0] = f'{circuit_names[i]}/{node}'
                     outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = tuple(out_tmp)
-                    out_names.append(f'{out_key}{comb}{node}')
-            out_names = list(set(out_names))
+                    out_names_tmp.append(f'{out_key}{comb}{node}')
         else:
             node_found = False
-            out_names = []
             for node in nodes:
                 if out[0] in node:
                     node_found = True
@@ -137,11 +136,11 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
                         out_tmp = list(out)
                         out_tmp[0] = f'{circuit_names[i]}/{node}'
                         outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = tuple(out_tmp)
-                        out_names.append(f'{out_key}{comb}{node}')
-            out_names = list(set(out_names))
+                        out_names_tmp.append(f'{out_key}{comb}{node}')
             if not node_found:
                 raise ValueError(f'Invalid output identifier in output: {out_key}. '
                                  f'Node {out[0]} is not part of this network')
+        out_names += list(set(out_names_tmp))
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
@@ -157,8 +156,8 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
         outs += [out_name] * n_iters
     multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
     multi_idx.append(outs)
-    index = pd.MultiIndex.from_arrays(multi_idx, names=list(param_grid.keys()) + ['out_var'])
-    index = pd.MultiIndex.from_tuples(list(set(index)), names=list(param_grid.keys()) + ['out_var'])
+    index = pd.MultiIndex.from_arrays(multi_idx, names=list(param_grid.keys()) + ["out_var"])
+    index = pd.MultiIndex.from_tuples(list(set(index)), names=list(param_grid.keys()) + ["out_var"])
     results_final = pd.DataFrame(columns=index, data=np.zeros_like(results.values), index=results.index)
     for col in results.keys():
         params = col[0].split(param_split)

@@ -1,10 +1,10 @@
 %YAML 1.2
 ---
 aliases:
-  - &JRExcitatorySynapse model_templates.jansen_rit.synapse.templates.JansenRitExcitatorySynapseRCO
-  - &JRInhibitorySynapse model_templates.jansen_rit.synapse.templates.JansenRitInhibitorySynapseRCO
+  - &JRExcitatorySynapse synapse.templates.JansenRitExcitatorySynapseRCO
+  - &JRInhibitorySynapse synapse.templates.JansenRitInhibitorySynapseRCO
 
-  - &LC model_templates.jansen_rit.edges.LCEdge
+  - &LC edges.LCEdge
   - &c LinearCouplingOperator/c
 
 JansenRitCircuit:
@@ -19,9 +19,9 @@ JansenRitCircuit:
   base: pyrates.frontend.template.circuit.circuit.BaseCircuit
   label: JRcircuit
   nodes:
-    JR_PC: model_templates.jansen_rit.population.templates.JansenRitPC
-    JR_IIN: model_templates.jansen_rit.population.templates.JansenRitIN
-    JR_EIN: model_templates.jansen_rit.population.templates.JansenRitIN
+    JR_PC: population.templates.JansenRitPC
+    JR_IIN: population.templates.JansenRitIN
+    JR_EIN: population.templates.JansenRitIN
 
   #    LC: pyrates.coupling.templates.LinearCoupling
   # single coupling operator. needs rework for multiple coupling operators in single circuit.

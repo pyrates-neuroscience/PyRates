@@ -78,7 +78,7 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs):
             inp = 220 + np.random.randn(int(T / dt), n) * 22.
 
             # set up template
-            template = CircuitTemplate.from_yaml("pyrates.examples.jansen_rit.simple_jr.JRC")
+            template = CircuitTemplate.from_yaml("/home/rgast/PycharmProjects/PyRates/model_templates/jansen_rit/simple_jansenrit.JRC")
 
             # set up intermediate representation
             circuits = {}

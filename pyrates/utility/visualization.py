@@ -31,10 +31,10 @@
 
 # external imports
 import seaborn as sb
-import networkx.drawing.nx_pydot as pydot
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from typing import Union, Optional
 
 # pyrates internal imports
@@ -82,7 +82,7 @@ def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True
         cmap = dark_palette((70, 95, 65), as_cmap=as_cmap, input='husl', **kwargs)
     elif name == 'pyrates_purple':
         cmap = dark_palette((270, 50, 55), as_cmap=as_cmap, input='husl', **kwargs)
-    elif '/' in name:
+    elif name and '/' in name:
         name1, name2 = name.split('/')
         vmin = kwargs.pop('vmin', 0.)
         vmax = kwargs.pop('vmax', 1.)
@@ -239,7 +239,7 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
     return ax
 
 
-def plot_connectivity(fc: np.ndarray, threshold: Optional[float] = None, plot_style: str = 'heatmap',
+def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[float] = None, plot_style: str = 'heatmap',
                       bg_style: str = 'whitegrid', node_order: Optional[list] = None, auto_cluster: bool = False,
                       **kwargs) -> plt.Axes:
     """Plot functional connectivity between nodes in backend.
@@ -274,7 +274,7 @@ def plot_connectivity(fc: np.ndarray, threshold: Optional[float] = None, plot_st
     if type(fc) is np.ndarray:
         rows = kwargs.pop('yticklabels') if 'yticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
         cols = kwargs.pop('xticklabels') if 'xticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
-        fc = pd.DataFrame(fc, index=rows, columns=cols)
+        fc = pd.DataFrame(fc, index=[str(r) for r in rows], columns=[str(c) for c in cols])
 
     # apply threshold
     if threshold:
@@ -449,9 +449,40 @@ def plot_psd(data: pd.DataFrame, fmin: float = 0., fmax: float = 100., tmin: flo
     from pyrates.utility import mne_from_dataframe
     from mne.viz import plot_raw_psd
 
-    raw = mne_from_dataframe(data)
+    if type(data) is pd.DataFrame and 'out_var' in data.columns.names and len(data.columns.names) > 1:
 
-    return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs).axes
+        # create heatmap
+        ################
+
+        # calculate psd's for each condition
+        psd_keys = ['n_fft', 'picks', 'n_overlap', 'dB', 'estimate', 'average', 'n_jobs']
+        psd_kwargs = {}
+        for k in kwargs.copy():
+            if k in psd_keys:
+                psd_kwargs[k] = kwargs.pop(k)
+        data_col = []
+        col_names = []
+        for col in data.columns.values:
+            _ = plot_psd(data[col[:-1]], show=False, fmin=fmin, fmax=fmax, tmin=tmin, **psd_kwargs)
+            pow = list(plt.gca().get_lines()[-1].get_ydata())
+            freqs = list(plt.gca().get_lines()[-1].get_xdata())
+            data_col.append(pow)
+            col_names.append(col[:-1])
+            plt.close(plt.gcf())
+        df = pd.DataFrame(data=np.asarray(data_col).T, columns=col_names, index=np.round(freqs, decimals=1))
+
+        # plot the data
+        ax = plot_connectivity(df.values[::-1, :], xticklabels=df.columns.values,
+                               yticklabels=df.index[::-1], plot_style='heatmap', **kwargs)
+        return ax
+
+    else:
+
+        # create line plot
+        ##################
+
+        raw = mne_from_dataframe(data)
+        return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs).axes
 
 
 def plot_tfr(data: np.ndarray, freqs: list, nodes: Optional[list] = None, separate_nodes: bool = True, **kwargs

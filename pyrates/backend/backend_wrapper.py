@@ -102,6 +102,7 @@ class TensorflowBackend(tf.Graph):
                     "sin": tf.sin,
                     "cos": tf.cos,
                     "tan": tf.tan,
+                    "atan": tf.atan,
                     "abs": tf.abs,
                     "sqrt": tf.sqrt,
                     "sq": tf.square,
@@ -113,6 +114,7 @@ class TensorflowBackend(tf.Graph):
                     "round": tf.round,
                     "roundto": lambda x, y: tf.round(x * 10**y) / 10**y,
                     "sum": tf.reduce_sum,
+                    "mean": tf.reduce_mean,
                     "concat": tf.concat,
                     "reshape": tf.reshape,
                     "shape": tf.shape,
@@ -265,7 +267,7 @@ class TensorflowBackend(tf.Graph):
                 sim_time = 0.
             if 'm' in profile:
                 peak_memory = tf.profiler.profile(graph=self, run_meta=meta, cmd='op', options=time_and_memory
-                                                       ).total_peak_bytes / 1e6
+                                                  ).total_peak_bytes / 1e6
             else:
                 peak_memory = 0.
 
@@ -554,188 +556,192 @@ class TensorflowBackend(tf.Graph):
             return tf.variable_scope(scope, reuse=tf.AUTO_REUSE), self.existing_scopes[scope]
 
 
-# class KerasExpressionParser(tf.keras.models.Model):
-#     """Expression parser that transforms expression into keras operations on a tensorflow graph.
-#
-#     Parameters
-#     ----------
-#     expr_str
-#         See docstring of `ExpressionParser`.
-#     args
-#         See docstring of `ExpressionParser`. Each variable in args needs to be a dictionary with key-value pairs for:
-#             - `var`: contains the tensorflow variable.
-#             - `dependency`: Boolean. If True, the expression needs to wait for this variable to be calculated/updated
-#                before being evaluated.
-#     lhs
-#         See docstring of `ExpressionParser`.
-#     tf_graph
-#         Instance of `tensorflow.Graph`. Mathematical expression will be parsed into this graph.
-#
-#     Attributes
-#     ----------
-#     tf_graph
-#         Instance of `tensorflow.Graph` containing a graph-representation of `expr_str`.
-#     ops
-#         Dictionary containing all mathematical operations available for this parser and their syntax. These include:
-#             - addition: `+`
-#             - subtraction: `-`
-#             - multiplication: `*`
-#             - division: `/`
-#             - modulo: `%`
-#             - exponentiation: `^`
-#             - matrix multiplication: `@`
-#             - matrix transposition: `.T`
-#             - matrix inversion: `.I`
-#             - logical greater than: `>`
-#             - logical less than: `<`
-#             - logical equal: `==`
-#             - logical unequal: `!=`
-#             - logical greater or equal: `>=`
-#             - logical smaller or equal: `<=`
-#     funcs
-#         Dicionary containing all additional functions available for this parser and their syntax. These include:
-#             - sinus: `sin()`.
-#             - cosinus: `cos()`.
-#             - tangens: `tan()`.
-#             - absolute: `abs()`.
-#             - maximum: `max()`
-#             - minimum: `min()`
-#             - index of maximum: `argmax()`
-#             - index of minimum: `argmin()`
-#             - round to next integer: `round()`. Tensorflow name: `tensorflow.to_int32()`.
-#             - round to certain decimal point: `roundto()`. Custom function using `tensorflow.round()`. Defined in
-#               `pyrates.parser.parser.py`.
-#             - sum over dimension(s): `sum()`. Tensorflow name: `reduce_sum()`.
-#             - Concatenate multiples of tensor over certain dimension: `tile()`.
-#             - Reshape tensor: `reshape()`.
-#             - Cut away dimensions of size 1: `squeeze()`.
-#             - Cast variable to data-type: `cast()`.
-#             - draw random variable from standard normal distribution: `randn()`.
-#               Tensorflow name: `tensorflow.random_normal`.
-#             - Create array filled with ones: `ones()`.
-#             - Create array filled with zeros: `zeros()`.
-#             - Apply softmax function to variable: `softmax()`. Tensorflow name: `tensorflow.nn.softmax()`.
-#             - Apply boolean mask to array: `boolean_mask()`.
-#             - Create new array with non-zero entries at certain indices: `scatter()`.
-#               Tensorflow name: `tensorflow.scatter_nd`
-#             - Add values to certain entries of tensor: 'scatter_add()'. Tensorflow name: `tensorflow.scatter_nd_add`.
-#             - Update values of certain tensor entries: `scatter_update()`.
-#               Tensorflow name: `tensorflow.scatter_nd_update`.
-#             - Apply tensor as index to other tensor: `array_idx()`. Tensorflow name: `tensorflow.gather_nd`.
-#             - Get variable from tensorflow graph or create new variable: `new_var()`:
-#               Tensorflow name: `tensorflow.get_variable`.
-#         For a detailed documentation of how to use these functions, see the tensorflow Python API.
-#     dtypes
-#         Dictionary containing all data-types available for this parser. These include:
-#             - float16, float32, float64
-#             - int16, int32, int64
-#             - uint16, uint32, uint64
-#             - complex64, complex128,
-#             - bool
-#         All of those data-types can be used inside a mathematical expression instead of using `cast()`
-#         (e.g. `int32(3.631)`.
-#     For all other attributes, see docstring of `ExpressionParser`.
-#
-#     Methods
-#     -------
-#     See docstrings of `ExpressionParser` methods.
-#
-#     Examples
-#     --------
-#
-#     References
-#     ----------
-#
-#     """
-#
-#     def __init__(self, expr_str: str, args: dict, backend: tf.keras.layers.Layer, lhs: bool = False) -> None:
-#         """Instantiates keras expression parser.
-#         """
-#
-#         # call super init
-#         #################
-#
-#         super().__init__(expr_str=expr_str, args=args, backend=backend, lhs=lhs)
-#
-#         # define operations and functions
-#         #################################
-#
-#         # base math operations
-#         ops = {"+": tf.keras.layers.Lambda(lambda x: x[0] + x[1]),
-#                "-": tf.keras.layers.Lambda(lambda x: x[0] - x[1]),
-#                "*": tf.keras.layers.Lambda(lambda x: x[0] * x[1]),
-#                "/": tf.keras.layers.Lambda(lambda x: x[0] / x[1]),
-#                "%": tf.keras.layers.Lambda(lambda x: x[0] % x[1]),
-#                "^": tf.keras.layers.Lambda(lambda x: tf.keras.backend.pow(x[0], x[1])),
-#                "@": tf.keras.layers.Lambda(lambda x: tf.keras.backend.dot(x[0], x[1])),
-#                ".T": tf.keras.layers.Lambda(lambda x: tf.keras.backend.transpose(x)),
-#                ".I": tf.keras.layers.Lambda(lambda x: tf.matrix_inverse(x)),
-#                ">": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater(x[0], x[1])),
-#                "<": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less(x[0], x[1])),
-#                "==": tf.keras.layers.Lambda(lambda x: tf.keras.backend.equal(x[0], x[1])),
-#                "!=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.not_equal(x[0], x[1])),
-#                ">=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater_equal(x[0], x[1])),
-#                "<=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less_equal(x[0], x[1])),
-#                "=": tf.keras.backend.update
-#                }
-#         self.ops.update(ops)
-#
-#         # additional functions
-#         funcs = {"sin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sin(x)),
-#                  "cos": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cos(x)),
-#                  "tanh": tf.keras.layers.Lambda(lambda x: tf.keras.backend.tanh(x)),
-#                  "abs": tf.keras.layers.Lambda(lambda x: tf.keras.backend.abs(x)),
-#                  "sqrt": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sqrt(x)),
-#                  "sq": tf.keras.layers.Lambda(lambda x: tf.keras.backend.square(x)),
-#                  "exp": tf.keras.layers.Lambda(lambda x: tf.keras.backend.exp(x)),
-#                  "max": tf.keras.layers.Lambda(lambda x: tf.keras.backend.max(x)),
-#                  "min": tf.keras.layers.Lambda(lambda x: tf.keras.backend.min(x)),
-#                  "argmax": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmax(x)),
-#                  "argmin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmin(x)),
-#                  "round": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x)),
-#                  "roundto": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x[0] * 10**x[1]) / 10**x[1]),
-#                  "sum": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sum(x[0], *x[1])
-#                                                if type(x) is list else tf.keras.backend.sum(x)),
-#                  "concat": tf.keras.layers.Lambda(lambda x: tf.keras.backend.concatenate(x[0], *x[1])
-#                                                   if type(x[0]) is list else tf.keras.backend.concatenate(x)),
-#                  "reshape": tf.keras.layers.Lambda(lambda x: tf.keras.backend.reshape(x[0], x[1])
-#                                                    if type(x) is list else tf.keras.backend.reshape(x)),
-#                  "shape": tf.keras.backend.shape,
-#                  "dtype": tf.keras.backend.dtype,
-#                  'squeeze': tf.keras.layers.Lambda(lambda x: tf.keras.backend.squeeze(x[0], x[1])
-#                                                    if type(x) is list else tf.keras.backend.squeeze(x[0], -1)),
-#                  "cast": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cast(x[0], x[1])),
-#                  "randn": tf.keras.layers.Lambda(lambda x: tf.keras.backend.random_normal(x[0], *x[1])
-#                                                  if "Tensor" in str(type(x[0]))
-#                                                  else tf.keras.backend.random_normal(x)),
-#                  "ones": tf.keras.layers.Lambda(lambda x: tf.keras.backend.ones(x[0], x[1])
-#                                                 if "Tensor" in str(type(x[0]))
-#                                                 else tf.keras.backend.ones(x)),
-#                  "zeros": tf.keras.layers.Lambda(lambda x: tf.keras.backend.zeros(x[0], x[1])
-#                                                  if "Tensor" in str(type(x[0]))
-#                                                  else tf.keras.backend.zeros(x)),
-#                  "softmax": tf.keras.layers.Lambda(lambda x: tf.keras.activations.softmax(x[0], *x[1])
-#                                                    if type(x[0]) is list else tf.keras.activations.softmax(x)),
-#                  "gather": tf.keras.layers.Lambda(lambda x: tf.gather_nd(x[0], x[1])),
-#                  "mask": tf.keras.layers.Masking,
-#                  "lambda": tf.keras.layers.Lambda
-#                  }
-#         self.funcs.update(funcs)
-#
-#         dtypes = {"float16": tf.float16,
-#                   "float32": tf.float32,
-#                   "float64": tf.float64,
-#                   "int16": tf.int16,
-#                   "int32": tf.int32,
-#                   "int64": tf.int64,
-#                   "uint16": tf.uint16,
-#                   "uint32": tf.uint32,
-#                   "uint64": tf.uint64,
-#                   "complex64": tf.complex64,
-#                   "complex128": tf.complex128,
-#                   "bool": tf.bool
-#                   }
-#         self.dtypes.update(dtypes)
+class KerasBackend(tf.keras.models.Model):
+    """Expression parser that transforms expression into keras operations on a tensorflow graph.
+
+    Parameters
+    ----------
+    expr_str
+        See docstring of `ExpressionParser`.
+    args
+        See docstring of `ExpressionParser`. Each variable in args needs to be a dictionary with key-value pairs for:
+            - `var`: contains the tensorflow variable.
+            - `dependency`: Boolean. If True, the expression needs to wait for this variable to be calculated/updated
+               before being evaluated.
+    lhs
+        See docstring of `ExpressionParser`.
+    tf_graph
+        Instance of `tensorflow.Graph`. Mathematical expression will be parsed into this graph.
+
+    Attributes
+    ----------
+    tf_graph
+        Instance of `tensorflow.Graph` containing a graph-representation of `expr_str`.
+    ops
+        Dictionary containing all mathematical operations available for this parser and their syntax. These include:
+            - addition: `+`
+            - subtraction: `-`
+            - multiplication: `*`
+            - division: `/`
+            - modulo: `%`
+            - exponentiation: `^`
+            - matrix multiplication: `@`
+            - matrix transposition: `.T`
+            - matrix inversion: `.I`
+            - logical greater than: `>`
+            - logical less than: `<`
+            - logical equal: `==`
+            - logical unequal: `!=`
+            - logical greater or equal: `>=`
+            - logical smaller or equal: `<=`
+    funcs
+        Dicionary containing all additional functions available for this parser and their syntax. These include:
+            - sinus: `sin()`.
+            - cosinus: `cos()`.
+            - tangens: `tan()`.
+            - absolute: `abs()`.
+            - maximum: `max()`
+            - minimum: `min()`
+            - index of maximum: `argmax()`
+            - index of minimum: `argmin()`
+            - round to next integer: `round()`. Tensorflow name: `tensorflow.to_int32()`.
+            - round to certain decimal point: `roundto()`. Custom function using `tensorflow.round()`. Defined in
+              `pyrates.parser.parser.py`.
+            - sum over dimension(s): `sum()`. Tensorflow name: `reduce_sum()`.
+            - Concatenate multiples of tensor over certain dimension: `tile()`.
+            - Reshape tensor: `reshape()`.
+            - Cut away dimensions of size 1: `squeeze()`.
+            - Cast variable to data-type: `cast()`.
+            - draw random variable from standard normal distribution: `randn()`.
+              Tensorflow name: `tensorflow.random_normal`.
+            - Create array filled with ones: `ones()`.
+            - Create array filled with zeros: `zeros()`.
+            - Apply softmax function to variable: `softmax()`. Tensorflow name: `tensorflow.nn.softmax()`.
+            - Apply boolean mask to array: `boolean_mask()`.
+            - Create new array with non-zero entries at certain indices: `scatter()`.
+              Tensorflow name: `tensorflow.scatter_nd`
+            - Add values to certain entries of tensor: 'scatter_add()'. Tensorflow name: `tensorflow.scatter_nd_add`.
+            - Update values of certain tensor entries: `scatter_update()`.
+              Tensorflow name: `tensorflow.scatter_nd_update`.
+            - Apply tensor as index to other tensor: `array_idx()`. Tensorflow name: `tensorflow.gather_nd`.
+            - Get variable from tensorflow graph or create new variable: `new_var()`:
+              Tensorflow name: `tensorflow.get_variable`.
+        For a detailed documentation of how to use these functions, see the tensorflow Python API.
+    dtypes
+        Dictionary containing all data-types available for this parser. These include:
+            - float16, float32, float64
+            - int16, int32, int64
+            - uint16, uint32, uint64
+            - complex64, complex128,
+            - bool
+        All of those data-types can be used inside a mathematical expression instead of using `cast()`
+        (e.g. `int32(3.631)`.
+    For all other attributes, see docstring of `ExpressionParser`.
+
+    Methods
+    -------
+    See docstrings of `ExpressionParser` methods.
+
+    Examples
+    --------
+
+    References
+    ----------
+
+    """
+
+    def __init__(self, expr_str: str, args: dict, backend: tf.keras.layers.Layer, lhs: bool = False) -> None:
+        """Instantiates keras expression parser.
+        """
+
+        # call super init
+        #################
+
+        super().__init__(expr_str=expr_str, args=args, backend=backend, lhs=lhs)
+
+        # define operations and functions
+        #################################
+
+        # base math operations
+        ops = {"+": tf.keras.layers.Lambda(lambda x: x[0] + x[1]),
+               "-": tf.keras.layers.Lambda(lambda x: x[0] - x[1]),
+               "*": tf.keras.layers.Lambda(lambda x: x[0] * x[1]),
+               "/": tf.keras.layers.Lambda(lambda x: x[0] / x[1]),
+               "%": tf.keras.layers.Lambda(lambda x: x[0] % x[1]),
+               "^": tf.keras.layers.Lambda(lambda x: tf.keras.backend.pow(x[0], x[1])),
+               "@": tf.keras.layers.Lambda(lambda x: tf.keras.backend.dot(x[0], x[1])),
+               ".T": tf.keras.layers.Lambda(lambda x: tf.keras.backend.transpose(x)),
+               ".I": tf.keras.layers.Lambda(lambda x: tf.matrix_inverse(x)),
+               ">": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater(x[0], x[1])),
+               "<": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less(x[0], x[1])),
+               "==": tf.keras.layers.Lambda(lambda x: tf.keras.backend.equal(x[0], x[1])),
+               "!=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.not_equal(x[0], x[1])),
+               ">=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater_equal(x[0], x[1])),
+               "<=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less_equal(x[0], x[1])),
+               "=": tf.keras.backend.update
+               }
+        self.ops.update(ops)
+
+        # additional functions
+        funcs = {"sin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sin(x)),
+                 "cos": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cos(x)),
+                 "tanh": tf.keras.layers.Lambda(lambda x: tf.keras.backend.tanh(x)),
+                 "abs": tf.keras.layers.Lambda(lambda x: tf.keras.backend.abs(x)),
+                 "sqrt": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sqrt(x)),
+                 "sq": tf.keras.layers.Lambda(lambda x: tf.keras.backend.square(x)),
+                 "exp": tf.keras.layers.Lambda(lambda x: tf.keras.backend.exp(x)),
+                 "max": tf.keras.layers.Lambda(lambda x: tf.keras.backend.max(x)),
+                 "min": tf.keras.layers.Lambda(lambda x: tf.keras.backend.min(x)),
+                 "argmax": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmax(x)),
+                 "argmin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmin(x)),
+                 "round": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x)),
+                 "roundto": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x[0] * 10**x[1]) / 10**x[1]),
+                 "sum": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sum(x[0], *x[1])
+                                               if type(x) is list else tf.keras.backend.sum(x)),
+                 "concat": tf.keras.layers.Lambda(lambda x: tf.keras.backend.concatenate(x[0], *x[1])
+                                                  if type(x[0]) is list else tf.keras.backend.concatenate(x)),
+                 "reshape": tf.keras.layers.Lambda(lambda x: tf.keras.backend.reshape(x[0], x[1])
+                                                   if type(x) is list else tf.keras.backend.reshape(x)),
+                 "shape": tf.keras.backend.shape,
+                 "dtype": tf.keras.backend.dtype,
+                 'squeeze': tf.keras.layers.Lambda(lambda x: tf.keras.backend.squeeze(x[0], x[1])
+                                                   if type(x) is list else tf.keras.backend.squeeze(x[0], -1)),
+                 "cast": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cast(x[0], x[1])),
+                 "randn": tf.keras.layers.Lambda(lambda x: tf.keras.backend.random_normal(x[0], *x[1])
+                                                 if "Tensor" in str(type(x[0]))
+                                                 else tf.keras.backend.random_normal(x)),
+                 "ones": tf.keras.layers.Lambda(lambda x: tf.keras.backend.ones(x[0], x[1])
+                                                if "Tensor" in str(type(x[0]))
+                                                else tf.keras.backend.ones(x)),
+                 "zeros": tf.keras.layers.Lambda(lambda x: tf.keras.backend.zeros(x[0], x[1])
+                                                 if "Tensor" in str(type(x[0]))
+                                                 else tf.keras.backend.zeros(x)),
+                 "softmax": tf.keras.layers.Lambda(lambda x: tf.keras.activations.softmax(x[0], *x[1])
+                                                   if type(x[0]) is list else tf.keras.activations.softmax(x)),
+                 "gather": tf.keras.layers.Lambda(lambda x: tf.gather_nd(x[0], x[1])),
+                 "mask": tf.keras.layers.Masking,
+                 "lambda": tf.keras.layers.Lambda
+                 }
+        self.funcs.update(funcs)
+
+        dtypes = {"float16": tf.float16,
+                  "float32": tf.float32,
+                  "float64": tf.float64,
+                  "int16": tf.int16,
+                  "int32": tf.int32,
+                  "int64": tf.int64,
+                  "uint16": tf.uint16,
+                  "uint32": tf.uint32,
+                  "uint64": tf.uint64,
+                  "complex64": tf.complex64,
+                  "complex128": tf.complex128,
+                  "bool": tf.bool
+                  }
+        self.dtypes.update(dtypes)
+
+    def add_variable(self, name, shape, dtype=None, initializer=None,
+                   regularizer=None, trainable=True, constraint=None):
+        pass
 
 def no_op(*args, **kwargs):
     pass

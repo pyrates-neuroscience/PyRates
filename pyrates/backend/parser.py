@@ -719,6 +719,12 @@ class ExpressionParser(ParserElement):
             except ValueError:
                 idx, update = self._process_idx(idx, op.shape, locals(), update=update, **kwargs)
                 update = self.backend.add_op('scatter', idx, update, op.shape, **kwargs)
+            except TypeError:
+                if locals()[idx].dtype.is_bool:
+                    op = self.broadcast('*', op, locals()[idx], **kwargs)
+                else:
+                    raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
+                                    f'the tensor to be indexed.')
             try:
                 op_new = self.broadcast(self.assign, op, update, **kwargs)
                 self.args.pop('idx')
