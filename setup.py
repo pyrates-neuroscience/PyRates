@@ -41,5 +41,5 @@ setup(name='pyrates',
       python_requires='>=3.6',
       install_requires=INSTALL_REQUIREMENTS,
       classifiers=CLASSIFIERS,
-      include_package_data=True
+      include_package_data=True  # include additional non-python files specified in MANIFEST.in
       )
