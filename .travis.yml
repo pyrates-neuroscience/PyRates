@@ -4,8 +4,10 @@ python:
 
 # install dependencies
 install:
-  - pip install pytest
-  - pip install -r requirements.txt
+  - python setup.py install
+  #- pip install -e /home/travis/build/pyrates-neuroscience/PyRates
+  - pip install --ignore-installed pytest
+  - pip install --ignore-installed -r requirements.txt
 
 # run tests
 script:
