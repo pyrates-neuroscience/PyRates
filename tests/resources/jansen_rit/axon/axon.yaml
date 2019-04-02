@@ -1,0 +1,28 @@
+%YAML 1.2
+---
+PotentialToRateOperator:
+  base: OperatorTemplate
+  equations: "L_PRO * m_out = r * V"
+  variables:
+    L_PRO:
+      description: Generic linear differential operator
+      unit: null
+      default: 1
+    m_out:
+      name: outgoing_firing_rate
+      description: Mean outgoing firing rate at axonal hillock
+      unit: 1/s
+      default: output
+    r:
+      description: Generic scaling constant that transforms voltage to firing rate.
+      unit: 1/(s*V)
+      default: 1.
+    V:
+      name: membrane_potential
+      description: Mean somatic membrane potential
+      unit: V
+      default: input
+  description: "Generic potential-to-rate operator (PRO) to be replaced
+    with a meaningful function. The PRO encodes the transformation of
+    mean somatic membrane potential to an outgoing firing rate at the
+    axonal hillocks of a neural population."

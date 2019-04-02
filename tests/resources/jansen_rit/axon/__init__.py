@@ -29,8 +29,5 @@
 """
 """
 
-__author__ = "Richard Gast"
+__author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
-
-from .observer import CircuitObserver, ExternalObserver
-from .templates import fMRIObserver, EEGMEGObserver

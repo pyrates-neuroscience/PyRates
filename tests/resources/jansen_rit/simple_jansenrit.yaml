@@ -1,0 +1,105 @@
+%YAML 1.2
+---
+
+PRO:
+  base: OperatorTemplate
+  equations: "m_out = m_max / (1. + exp(r*(V_thr - PSP)))"
+  variables:
+    m_out:
+      default: output
+    PSP:
+      default: input
+    m_max:
+      default: 5.
+    r:
+      default: 560.
+    V_thr:
+      default: 6e-3
+
+RPO_e_pc:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * (m_in + u) - (1./tau)^2. * PSP - 2. * 1./tau * PSP_t'
+  variables:
+    h:
+      default: 3.25e-3
+    tau:
+      default: 10e-3
+    u:
+      default: placeholder
+    m_in:
+      default: input
+    PSP:
+      default: output
+    PSP_t:
+      default: variable
+
+RPO_e:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2. * PSP - 2. * 1./tau * PSP_t'
+  variables:
+    h:
+      default: 3.25e-3
+    tau:
+      default: 10e-3
+    m_in:
+      default: input
+    PSP:
+      default: output
+    PSP_t:
+      default: variable
+
+RPO_i:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * m_in - (1./tau)^2. * PSP - 2. * 1./tau * PSP_t'
+  variables:
+    h:
+      default: -22e-3
+    tau:
+      default: 20e-3
+    m_in:
+      default: input
+    PSP:
+      default: output
+    PSP_t:
+      default: variable
+
+PC:
+  base: NodeTemplate
+  operators:
+    - RPO_e_pc
+    - RPO_i
+    - PRO
+
+IIN:
+  base: NodeTemplate
+  operators:
+    - RPO_e
+    - PRO
+
+EIN:
+  base: NodeTemplate
+  operators:
+    - RPO_e
+    - PRO
+
+DummyEdge:
+  base: EdgeTemplate
+  operators: []
+
+JRC:
+  base: CircuitTemplate
+  nodes:
+    EIN: EIN
+    IIN: IIN
+    PC: PC
+  edges:
+    - [PC/PRO/m_out, IIN/RPO_e/m_in, DummyEdge, {weight: 33.75}]
+    - [PC/PRO/m_out, EIN/RPO_e/m_in, DummyEdge, {weight: 135.}]
+    - [EIN/PRO/m_out, PC/RPO_e_pc/m_in, DummyEdge, {weight: 108.}]
+    - [IIN/PRO/m_out, PC/RPO_i/m_in, DummyEdge, {weight: 33.75}]

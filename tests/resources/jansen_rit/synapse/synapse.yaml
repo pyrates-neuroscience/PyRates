@@ -1,0 +1,66 @@
+%YAML 1.2
+---
+RateToCurrentOperator:
+  description: "Generic rate-to-current operator (RCO) to be replaced
+    with a meaningful implementation. The CPO encodes the activation of
+    synapses across the neural population due to pre-synaptic incoming
+    firing rates. Activation leads to an electric mean electric current
+    that contributes to the total membrane voltage change."
+  base: OperatorTemplate
+  equations:
+    "L_syn * I = h * m_in"
+  variables:
+    L_syn:
+      description: Generic linear differential operator
+      unit: None
+      default: 1
+    I:
+      name: synaptic_current
+      description: >
+        Electric current across synaptic membrane reflecting synaptic
+        activation due to a pre-synaptic firing rate.
+      unit: A
+      default: output
+    h:
+      name: efficacy
+      description: Synaptic efficacy. Scales the synaptic activation.
+      unit: A*s
+      default: 1.
+    m_in:
+      name: incoming_firing_rate
+      description: Mean incoming firing rate at a specific synapse type
+      unit: 1/s
+      default: input
+
+
+RateToConductanceOperator:
+  description: "Generic rate-to-conductance operator (RCO) to be replaced
+    with a meaningful implementation. The RCO encodes the activation of
+    synapses across the neural population due to pre-synaptic incoming
+    firing rates. Activation leads to an electric mean electric current
+    that contributes to the total membrane voltage change."
+  base: OperatorTemplate
+  equations:
+    "L_syn * g = h * m_in"
+  variables:
+    L_syn:
+      description: Generic linear differential operator
+      unit: None
+      default: 1
+    g:
+      name: synaptic_conductance
+      description: >
+        Conductance of synaptic membrane reflecting synaptic
+        activation due to a pre-synaptic firing rate.
+      unit: S
+      default: output
+    h:
+      name: efficacy
+      description: Synaptic efficacy. Scales the synaptic activation.
+      unit: A*s
+      default: 1.
+    m_in:
+      name: incoming_firing_rate
+      description: Mean incoming firing rate at a specific synapse type
+      unit: 1/s
+      default: input
