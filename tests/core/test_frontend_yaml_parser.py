@@ -168,7 +168,7 @@ def test_full_jansen_rit_circuit_template_load():
             assert isinstance(op, OperatorTemplate)
 
     # test, whether coupling operator has been loaded correctly
-    coupling_path = "pyrates.examples.jansen_rit.edges.LinearCouplingOperator"
+    coupling_path = "model_templates.jansen_rit.edges.LinearCouplingOperator"
     edge_temp = template.edges[0][2]
     assert isinstance(edge_temp, EdgeTemplate)
     assert list(edge_temp.operators)[0] is TemplateLoader.cache[coupling_path]
@@ -265,8 +265,8 @@ def test_yaml_dump():
     from pyrates.frontend.template.circuit import CircuitTemplate
     circuit = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit").apply()
     from pyrates.frontend.yaml import from_circuit
-    from_circuit(circuit, "../output/yaml_dump.yaml", "DumpedCircuit")
+    from_circuit(circuit, "../output/yaml_dump", "DumpedCircuit")
 
     # reload saved circuit
-    saved_circuit = CircuitTemplate.from_yaml("../output/yaml_dump.yaml.DumpedCircuit").apply()
+    saved_circuit = CircuitTemplate.from_yaml("../output/yaml_dump/DumpedCircuit").apply()
     assert saved_circuit

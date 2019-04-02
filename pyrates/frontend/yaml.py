@@ -68,8 +68,6 @@ def to_template_dict(path: str):
 
     yaml = YAML(typ="safe", pure=True)
 
-    filepath = os.path.join(directory, filename)
-
     with open(filepath, "r") as file:
         file_dict = yaml.load(file)
 
