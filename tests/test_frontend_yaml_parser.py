@@ -265,7 +265,7 @@ def test_yaml_dump():
     from pyrates.frontend.template.circuit import CircuitTemplate
     circuit = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit").apply()
     from pyrates.frontend.yaml import from_circuit
-    from_circuit(circuit, "../output/yaml_dump.yaml", "DumpedCircuit")
+    from_circuit(circuit, "output/yaml_dump.yaml", "DumpedCircuit")
 
     # reload saved circuit
     saved_circuit = CircuitTemplate.from_yaml("../output/yaml_dump/DumpedCircuit").apply()
