@@ -1,11 +1,11 @@
+virtualenv:
+  system_site_packages: true
+before_install:
+- sudo apt-get install -qq python-numpy python-scipy python-nose python3-nose python-coverage python-matplotlib
+
 language: python
 python:
-  - "3.6"
+    - "3.6"
 
-# install dependencies
-install:
-  - pip install -r requirements.txt
-
-# run tests
-script:
-  - pytest tests/core/
+install: "pip install pytest; pip install -r requirements.txt"
+script: "pytest tests/core"
