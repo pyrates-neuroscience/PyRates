@@ -3,7 +3,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
+# network model_templates and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
 # 
 # Copyright (C) 2017-2018 the original authors (Richard Gast and 
@@ -26,16 +26,18 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
+
 # external imports
 import pandas as pd
 import numpy as np
+from typing import List
 
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def functional_connectivity(data, metric='cov', **kwargs):
+def functional_connectivity(data: pd.DataFrame, metric: str = 'cov', **kwargs) -> np.ndarray:
     """Calculate functional connectivity of node timeseries in data.
 
     Parameters
@@ -110,7 +112,7 @@ def functional_connectivity(data, metric='cov', **kwargs):
     return fc
 
 
-def analytic_signal(data, fmin, fmax, nodes=None, **kwargs):
+def analytic_signal(data: pd.DataFrame, fmin: float, fmax: float, nodes: List[str] = None, **kwargs) -> pd.DataFrame:
     """Calculates analytic signal from simulation results, using the hilbert transform.
 
     Parameters
@@ -179,7 +181,8 @@ def analytic_signal(data, fmin, fmax, nodes=None, **kwargs):
     return data
 
 
-def time_frequency(data, freqs, method='morlet', output='avg_power', **kwargs):
+def time_frequency(data: pd.DataFrame, freqs: List[float], method: str = 'morlet', output: str = 'avg_power', **kwargs
+                   ) -> np.ndarray:
     """Calculates time-frequency representation for each node.
 
     Parameters

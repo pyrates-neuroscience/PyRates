@@ -1,0 +1,80 @@
+%YAML 1.2
+---
+SigmoidPRO:
+  description: >
+    Basic symmetric sigmoid function transforming potential to firing rate.
+
+    References:
+
+    [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+    generation in a mathematical model of coupled cortical columns."
+    Biological Cybernetics, vol. 73(4), pp. 357-366, 1995."
+
+  base: model_templates.jansen_rit.axon.axon.PotentialToRateOperator
+
+  equations:
+    replace:
+      r * V: "m_max / (1. + exp(s*(V_thr - V)))"
+    remove: ["L_PRO * "]
+
+  #  options:
+  #    normalize:
+  #      description: "If true, firing rate will be
+  #        normalized to be zero at firing threshold."
+  #      default: False
+  #      values:
+  #        True:
+  #          append: "- m_max/(1 + e^(s * V_thr))"
+    # not the most elegant solution, but does the job
+
+  variables:
+    m_max:
+      name: max_firing_rate
+      description: Determines maximum firing rate of axon.
+      unit: 1/s
+      default: constant(float)
+      # no explicit default value specified.
+      # this will thus be a required variable later on.
+      allowed_range: ">= 0"
+      # this can be set as explicit condition
+      # will raise "ValueError" with the range in the
+      # error message
+    s:
+      name: slope
+      description: "Determines slope of the sigmoidal transfer
+        function at the firing threshold."
+      default: constant(float)
+      # unit not specified --> unit: None
+    V_thr:
+      name: firing_threshold
+      description: "Determines membrane potential for which
+        output firing rate is half the maximum firing rate."
+      default: constant(float)
+      unit: V
+
+
+JansenRitPRO:
+  description: |
+    Potential-to-rate operator with default parameters based on
+    the Jansen-Rit neural mass model [1].
+
+    References:
+    ___________
+    [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+    generation in a mathematical model of coupled cortical columns."
+    Biological Cybernetics, vol. 73(4), pp. 357-366, 1995."
+  base: SigmoidPRO
+  variables:
+    m_max:
+      default: 5.
+    s:
+      default: 560.
+    V_thr:  # synonym for V_thr
+      default: 6e-3
+
+
+
+
+
+
+

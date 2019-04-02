@@ -28,6 +28,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 PyRates backend module including the following sub-modules:
+
 a) parser
     Used to parse string-based equations into symbolic backend representations.
 b) computegraph
@@ -37,3 +38,5 @@ c) backend_wrapper
 """
 
 from .computegraph import ComputeGraph
+from .backend_wrapper import TensorflowBackend
+from .parser import ExpressionParser, parse_dict, parse_equation_list

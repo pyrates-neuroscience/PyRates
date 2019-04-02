@@ -1,0 +1,63 @@
+%YAML 1.2
+---
+InstantaneousCPO:
+  description: >
+    Implementation of a current-to-potential operator (CPO) that sums all synaptic
+    (current) contributions and instantaneously, i.e. without temporal derivative,
+    transforms those currents into a mean somatic membrane potential.
+  base: model_templates.jansen_rit.population.population.CurrentToPotentialOperator
+  equations:
+    remove: "L_m * "
+
+JansenRitCPO:
+  description: >
+    Implementation and parametrization of a CPO based on the Jansen-Rit
+    neural mass model [1]_.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+       generation in a mathematical model of coupled cortical columns."
+       Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: InstantaneousCPO
+
+JansenRitIN:
+  base: model_templates.jansen_rit.population.population.NeuralMass
+  description: >
+    Implementation and parametrization of an (excitatory or inhibitory) interneuron
+    following the Jansen-Rit neural mass model [1]_.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+       generation in a mathematical model of coupled cortical columns."
+       Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  operators:
+    - model_templates.jansen_rit.synapse.templates.JansenRitExcitatorySynapseRCO
+    - JansenRitCPO
+    - model_templates.jansen_rit.axon.templates.JansenRitPRO
+  label: JR_IN
+
+JansenRitPC:
+  base: model_templates.jansen_rit.population.population.NeuralMass
+  description: >
+    Implementation and parametrization of projection neuron with inhibitory
+    and excitatory synaptic input following the Jansen-Rit neural mass model [1]_.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+       generation in a mathematical model of coupled cortical columns."
+       Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  operators:
+    model_templates.jansen_rit.synapse.templates.JansenRitExcitatorySynapseRCO:
+        u: 220.
+    model_templates.jansen_rit.synapse.templates.JansenRitInhibitorySynapseRCO: null
+    JansenRitCPO: null
+    model_templates.jansen_rit.axon.templates.JansenRitPRO: null
+  label: JR_PC
+
+
+
+
+

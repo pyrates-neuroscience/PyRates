@@ -3,7 +3,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural 
-# network model_templates and simulations. See also:
+# network models and simulations. See also: 
 # https://github.com/pyrates-neuroscience/PyRates
 # 
 # Copyright (C) 2017-2018 the original authors (Richard Gast and 
@@ -28,31 +28,28 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from typing import Iterator
-
-from pyrates.ir.abc import AbstractBaseIR
-from pyrates.ir.operator_graph import OperatorGraph
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-class NodeIR(AbstractBaseIR):
+def test_move_edge_ops_to_nodes():
+    """Test, if apply() functions all work properly"""
 
-    def __init__(self, operators: dict=None, template: str=None):
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    from pyrates.frontend.template.circuit import CircuitTemplate
+    from pyrates.ir.circuit import CircuitIR
 
-        super().__init__(template)
-        self.op_graph = OperatorGraph(operators)
+    template = CircuitTemplate.from_yaml(path)
 
-    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
-        """Alias for self.op_graph.getitem_from_iterator"""
+    circuit = template.apply()  # type: CircuitIR
+    circuit2 = circuit.move_edge_operators_to_nodes()
 
-        return self.op_graph.getitem_from_iterator(key, key_iter)
+    for source, target, data in circuit2.edges(data=True):
+        # check that no operators are left in the edges of the rearranged circuit
+        assert len(data["edge_ir"].op_graph) == 0
 
-    def __iter__(self):
-        """Return an iterator containing all operator labels in the operator graph."""
-        return iter(self.op_graph)
-
-    @property
-    def operators(self):
-        return self.op_graph.operators
+        # check that operator from previous edges is indeed in target nodes
+        # original_edge = circuit.edges[(source, target, 0)]["edge_ir"]
+        # original_op = list(original_edge.op_graph.nodes)[0]
+        # assert f"{original_op}.0" in circuit2[target]

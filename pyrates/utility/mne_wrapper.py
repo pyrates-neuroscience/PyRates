@@ -3,7 +3,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
+# network model_templates and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
 # 
 # Copyright (C) 2017-2018 the original authors (Richard Gast and 
@@ -105,6 +105,9 @@ def mne_from_dataframe(sim_results: DataFrame,
         ch_names = list(sim_results.keys())
     if type(ch_types) is str:
         ch_types = [ch_types for _ in range(len(ch_names))]
+    ch_names_str = []
+    for name in ch_names:
+        ch_names_str.append(str(name))
 
     # epoch/event information
     if not epoch_start:
@@ -116,7 +119,7 @@ def mne_from_dataframe(sim_results: DataFrame,
     #######################
 
     # create mne info object
-    info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=1/dt)
+    info = mne.create_info(ch_names=ch_names_str, ch_types=ch_types, sfreq=1/dt)
 
     # create raw object from info and circuit data
     raw = mne.io.RawArray(data=sim_results[ch_names].values.T, info=info)

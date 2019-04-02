@@ -1,0 +1,57 @@
+%YAML 1.2
+---
+CurrentToPotentialOperator:
+  description: "Generic current-to-potential operator (CPO) to be replaced
+    with a meaningful function. The CPO collect contributions from synapses
+    to a mean membrane current which leads to a change in mean somatic
+    membrane voltage in the neural population."
+  base: OperatorTemplate
+  equations:
+    "L_m * V = k * I"
+  variables:
+    L_m:
+      description: Generic linear differential operator
+      unit: None
+      default: 1
+    k:
+      name: synaptic_weight
+      description: >
+        Generic scaling constant that transforms current to voltage.
+        Depending on the model, this scaling may be interpreted as
+        a conductivity of the somatic membrane.
+        Note: This may be scalar or vector form.
+      unit: V/A
+      default: 1.
+    V:
+      name: membrane_potential
+      description: Mean somatic membrane potential
+      unit: V
+      default: output
+    I:
+      name: synaptic_current
+      description: >
+        Electric current across synaptic membrane reflecting synaptic
+        activation due to a pre-synaptic firing rate.
+      unit: A
+      default: input
+
+
+NeuralMass:
+  description: Basic template for a neural mass.
+  base: NodeTemplate
+  operators:
+    model_templates.jansen_rit.synapse.synapse.RateToCurrentOperator:
+      defaults: null
+      options: null
+    CurrentToPotentialOperator:
+      defaults: null
+      options: null
+    model_templates.jansen_rit.axon.axon.PotentialToRateOperator:
+      defaults: null
+      options: null
+
+
+
+
+
+

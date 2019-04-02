@@ -47,26 +47,36 @@ def to_template_dict(path: str):
     """
     from pyrates.frontend.file import parse_path
 
-    name, filename, directory = parse_path(path)
-    from ruamel.yaml import YAML
+    template_name, filename, directory = parse_path(path)
+
+    # test if file can be found (and potentially add extension)
     import os
 
+    if "." in filename:
+        filepath = os.path.join(directory, filename)
+    else:
+        # this is actually the default case for the internal interface
+        for ext in ["yaml", "yml"]:
+            filepath = os.path.join(directory, ".".join((filename, ext)))
+            if os.path.exists(filepath):
+                break
+        else:
+            raise FileNotFoundError(f"Could not identify file with name {filename} in directory {directory}.")
+
+    # load as yaml file
+    from ruamel.yaml import YAML
+
     yaml = YAML(typ="safe", pure=True)
-
-    if not filename.endswith(".yaml"):
-        filename = f"{filename}.yaml"
-
-    filepath = os.path.join(directory, filename)
 
     with open(filepath, "r") as file:
         file_dict = yaml.load(file)
 
-    if name in file_dict:
-        template_dict = file_dict[name]
+    if template_name in file_dict:
+        template_dict = file_dict[template_name]
         template_dict["path"] = path
-        template_dict["name"] = name
+        template_dict["name"] = template_name
     else:
-        raise AttributeError(f"Could not find {name} in {filepath}.")
+        raise AttributeError(f"Could not find {template_name} in {filepath}.")
 
     return template_dict
 

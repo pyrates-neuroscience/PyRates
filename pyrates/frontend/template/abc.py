@@ -54,7 +54,12 @@ class AbstractBaseTemplate:
         # ToDo: rename to something more meaningful like _prepend_parent_path or _check_path_prepend_parent
 
         if "." not in path:
-            path = ".".join((*self.path.split('.')[:-1], path))
+            if "/" in self.path or "\\" in self.path:
+                import os
+                basedir, _ = os.path.split(self.path)
+                path = os.path.normpath(os.path.join(basedir, path))
+            else:
+                path = ".".join((*self.path.split('.')[:-1], path))
         return path
 
     @classmethod

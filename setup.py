@@ -7,12 +7,12 @@ INSTALL_REQUIREMENTS = ['numpy',
                         'matplotlib',
                         'networkx',
                         'pandas',
-                        'tensorflow==1.12',
                         'pyparsing',
                         'ruamel.yaml',
                         'scipy',
                         'seaborn',
                         'mne',
+                        'tensorflow >=1.12, <=1.13',
                         'pydot']
 
 CLASSIFIERS = ["Programming Language :: Python :: 3",
@@ -40,5 +40,6 @@ setup(name='pyrates',
       zip_safe=False,
       python_requires='>=3.6',
       install_requires=INSTALL_REQUIREMENTS,
-      classifiers=CLASSIFIERS
+      classifiers=CLASSIFIERS,
+      include_package_data=True  # include additional non-python files specified in MANIFEST.in
       )
