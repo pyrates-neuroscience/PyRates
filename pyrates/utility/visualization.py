@@ -31,6 +31,7 @@
 
 # external imports
 import seaborn as sb
+import networkx.drawing.nx_pydot as pydot
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -69,35 +70,53 @@ def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True
         color_palette, crayon_palette, xkcd_palette, mpl_palette
     import matplotlib.colors as mcolors
 
-    # pyrates internal color maps
-    #############################
+    if '/' in name:
 
-    if name == 'pyrates_red':
-        cmap = cubehelix_palette(as_cmap=as_cmap, start=-2.0, rot=-0.1, **kwargs)
-    elif name == 'pyrates_green':
-        cmap = cubehelix_palette(as_cmap=as_cmap, start=2.5, rot=-0.1, **kwargs)
-    elif name == 'pyrates_blue':
-        cmap = dark_palette((210, 90, 60), as_cmap=as_cmap, input='husl', **kwargs)
-    elif name == 'pyrates_yellow':
-        cmap = dark_palette((70, 95, 65), as_cmap=as_cmap, input='husl', **kwargs)
-    elif name == 'pyrates_purple':
-        cmap = dark_palette((270, 50, 55), as_cmap=as_cmap, input='husl', **kwargs)
-    elif name and '/' in name:
+        # create diverging colormap
         name1, name2 = name.split('/')
         vmin = kwargs.pop('vmin', 0.)
         vmax = kwargs.pop('vmax', 1.)
+        if type(vmin) is float:
+            vmin = (vmin, vmin)
+        if type(vmax) is float:
+            vmax = (vmax, vmax)
         kwargs1 = kwargs.pop(name1, kwargs)
         kwargs2 = kwargs.pop(name2, kwargs)
         cmap1 = create_cmap(name1, **kwargs1, as_cmap=True)
         cmap2 = create_cmap(name2, **kwargs2, as_cmap=True)
-        n = kwargs.pop('n', 10)
-        colors = np.vstack((cmap1(np.linspace(vmin, vmax, n)), cmap2(np.linspace(vmin, vmax, n)[::-1])))
-        cmap = mcolors.LinearSegmentedColormap.from_list('cmap_diverging', colors)
+        n = kwargs.pop('n_colors', 10)
+        if type(n) is int:
+            n = (n, n)
+        colors = np.vstack((cmap1(np.linspace(vmin[0], vmax[0], n[0])),
+                            cmap2(np.linspace(vmin[1], vmax[1], n[1])[::-1])))
+        return mcolors.LinearSegmentedColormap.from_list('cmap_diverging', colors)
+
+    # extract colorrange
+    if as_cmap:
+        vmin = kwargs.pop('vmin', 0.)
+        vmax = kwargs.pop('vmax', 1.)
+        n = kwargs.pop('n_colors', 10)
+        crange = np.linspace(vmin, vmax, n) if vmax-vmin < 1. else None
+    else:
+        crange = None
+
+    if 'pyrates' in name:
+
+        # create pyrates colormap
+        if name == 'pyrates_red':
+            cmap = cubehelix_palette(as_cmap=as_cmap, start=-2.0, rot=-0.1, **kwargs)
+        elif name == 'pyrates_green':
+            cmap = cubehelix_palette(as_cmap=as_cmap, start=2.5, rot=-0.1, **kwargs)
+        elif name == 'pyrates_blue':
+            cmap = dark_palette((210, 90, 60), as_cmap=as_cmap, input='husl', **kwargs)
+        elif name == 'pyrates_yellow':
+            cmap = dark_palette((70, 95, 65), as_cmap=as_cmap, input='husl', **kwargs)
+        elif name == 'pyrates_purple':
+            cmap = dark_palette((270, 50, 55), as_cmap=as_cmap, input='husl', **kwargs)
+
     else:
 
-        # seaborn colormaps
-        ###################
-
+        # create seaborn colormap
         if palette_type == 'cubehelix':
             cmap = cubehelix_palette(as_cmap=as_cmap, **kwargs)
         elif palette_type == 'dark':
@@ -118,6 +137,10 @@ def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True
             cmap = mpl_palette(name, **kwargs)
         else:
             cmap = color_palette(name, **kwargs)
+
+    # apply colorrange
+    if crange is not None:
+        cmap = mcolors.LinearSegmentedColormap.from_list(name, cmap(crange))
 
     return cmap
 
