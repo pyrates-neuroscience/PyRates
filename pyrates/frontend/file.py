@@ -40,32 +40,32 @@ file_loader_mapping = {"yaml": _yaml.to_template_dict,
                        "yml": _yaml.to_template_dict}
 
 
-def to_template(filepath: str, template_name: str):
-    file, abspath = parse_path(filepath)
-    filename, extension = file.split(".")
-    try:
-        loader = file_loader_mapping[extension]
-    except KeyError:
-        raise PyRatesException(f"Could not find loader for file extension {extension}.")
+# def to_template(filepath: str, template_name: str):
+#     """Draft for generic template interface. Currently not in use."""
+#     name, file, abspath = parse_path(filepath)
+#     filename, extension = file.split(".")
+#     try:
+#         loader = file_loader_mapping[extension]
+#     except KeyError:
+#         raise PyRatesException(f"Could not find loader for file extension {extension}.")
+#
+#     return loader(filepath, template_name)
 
-    return loader(filepath, template_name)
 
-
-def parse_path(path: str):
+def parse_path(path: str, parent_path: str = None):
     """Parse a path of form path.to.template, returning a tuple of (name, file, abspath)."""
     # ToDo: Add parent path as required argument, to better locate errors in YAML templates.
 
     if "/" in path:
-        *dirs, file = path.split("/")
-        dirs = "/".join(dirs)
-        *file, name = file.split(".")
-        file = ".".join(file)
+        # relative or absolute path of form:
+        # path/to/file/TemplateName
+        *dirs, file, template_name = path.split("/")
         import os
         abspath = os.path.abspath(dirs)
     else:
         if "." in path:
             parts = path.split(".")
-            name = parts[-1]
+            template_name = parts[-1]
 
             if parts[0] == "pyrates":
                 # look for pyrates library and return absolute path
@@ -92,4 +92,4 @@ def parse_path(path: str):
             raise NotImplementedError(f"Was base specified in template '{path}', but left empty?")
             # this should only happen, if "base" is specified, but empty
 
-    return name, file, abspath
+    return template_name, file, abspath
