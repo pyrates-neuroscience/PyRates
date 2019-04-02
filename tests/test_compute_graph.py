@@ -65,7 +65,7 @@ def test_2_1_operator():
     #########################################################################################
 
     # create net config from YAML file
-    net_config0 = CircuitTemplate.from_yaml("resources/test_compute_graph/net0").apply()
+    net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net0").apply()
 
     # instantiate compute graph from net config
     dt = 1e-1
@@ -92,7 +92,7 @@ def test_2_1_operator():
     ######################################################################################################
 
     # set up operator in pyrates
-    net_config1 = CircuitTemplate.from_yaml("resources/test_compute_graph/net1").apply()
+    net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net1").apply()
     net1 = ComputeGraph(net_config=net_config1, name='net1', vectorization='none', dt=dt)
 
     # define input
@@ -113,7 +113,7 @@ def test_2_1_operator():
     # test correct numerical evaluation of operator with two coupled equations (1 ODE, 1 linear eq.)
     ################################################################################################
 
-    net_config2 = CircuitTemplate.from_yaml("resources/test_compute_graph/net2").apply()
+    net_config2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net2").apply()
     net2 = ComputeGraph(net_config=net_config2, name='net2', vectorization='none', dt=dt)
     results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op2.0', 'a')})
 
@@ -130,7 +130,7 @@ def test_2_1_operator():
     # test correct numerical evaluation of operator with a two coupled DEs
     ######################################################################
 
-    net_config3 = CircuitTemplate.from_yaml("resources/test_compute_graph/net3").apply()
+    net_config3 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net3").apply()
     net3 = ComputeGraph(net_config=net_config3, name='net3', vectorization='none', dt=dt)
     results3 = net3.run(sim_time,
                         outputs={'b': ('pop0.0', 'op3.0', 'b'),
@@ -165,7 +165,7 @@ def test_2_2_node():
     dt = 1e-1
     sim_time = 10.
     sim_steps = int(sim_time/dt)
-    net_config0 = CircuitTemplate.from_yaml("resources/test_compute_graph/net4").apply()
+    net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net4").apply()
     net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt)
 
     # simulate node behavior
@@ -185,7 +185,7 @@ def test_2_2_node():
     # test correct numerical evaluation of node with 2 independent operators
     ########################################################################
 
-    net_config1 = CircuitTemplate.from_yaml("resources/test_compute_graph/net5").apply()
+    net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net5").apply()
     net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorization='none', dt=dt)
 
     # simulate node behavior
@@ -203,7 +203,7 @@ def test_2_2_node():
     # test correct numerical evaluation of node with 2 independent operators projecting to the same target operator
     ###############################################################################################################
 
-    net_config2 = CircuitTemplate.from_yaml("resources/test_compute_graph/net6").apply()
+    net_config2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net6").apply()
     net2 = ComputeGraph(net_config=net_config2, name='net.2', vectorization='none', dt=dt)
     results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
 
@@ -221,7 +221,7 @@ def test_2_2_node():
     # test correct numerical evaluation of node with 1 source operator projecting to 2 independent targets
     ######################################################################################################
 
-    net_config3 = CircuitTemplate.from_yaml("resources/test_compute_graph/net7").apply()
+    net_config3 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net7").apply()
     net3 = ComputeGraph(net_config=net_config3, name='net.3', vectorization='none', dt=dt)
     results3 = net3.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
                                            'b': ('pop0.0', 'op3.0', 'b')})
@@ -257,7 +257,7 @@ def test_2_3_edge():
     dt = 1e-1
     sim_time = 10.
     sim_steps = int(sim_time / dt)
-    net_config0 = CircuitTemplate.from_yaml("resources/test_compute_graph/net8").apply()
+    net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net8").apply()
     net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt)
 
     # simulate edge behavior
@@ -285,7 +285,7 @@ def test_2_3_edge():
     # define input
     inp = np.zeros((sim_steps, 1)) + 0.5
 
-    net_config1 = CircuitTemplate.from_yaml("resources/test_compute_graph/net9").apply()
+    net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
     net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorization='none', dt=dt)
     results1 = net1.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
                                            'b': ('pop1.0', 'op7.0', 'a')},
@@ -305,7 +305,7 @@ def test_2_3_edge():
     # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes
     #######################################################################################
 
-    net_config2 = CircuitTemplate.from_yaml("resources/test_compute_graph/net10").apply()
+    net_config2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net10").apply()
     net2 = ComputeGraph(net_config=net_config2, name='net.2', vectorization='none', dt=dt)
     results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op8.0', 'a'),
                                            'b': ('pop1.0', 'op8.0', 'a')})
@@ -331,7 +331,7 @@ def test_2_3_edge():
     # define input
     inp = np.zeros((sim_steps, 1)) + 0.5
 
-    net_config3 = CircuitTemplate.from_yaml("resources/test_compute_graph/net9").apply()
+    net_config3 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
     net3 = ComputeGraph(net_config=net_config3, name='net.3', vectorization='none', dt=dt)
     results3 = net3.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
                                            'b': ('pop1.0', 'op7.0', 'a')},
@@ -367,7 +367,7 @@ def test_2_4_vectorization():
     inp = np.zeros((sim_steps, 2)) + 0.5
 
     # set up networks
-    net_config0 = CircuitTemplate.from_yaml("resources/test_compute_graph/net12").apply()
+    net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net12").apply()
     net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt, build_in_place=False)
     net1 = ComputeGraph(net_config=net_config0, name='net.1', vectorization='nodes', dt=dt, build_in_place=False)
     net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorization='full', dt=dt, build_in_place=False)

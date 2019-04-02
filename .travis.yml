@@ -10,4 +10,4 @@ install:
 
 # run tests
 script:
-  - pytest tests/core/
+  - pytest tests/
