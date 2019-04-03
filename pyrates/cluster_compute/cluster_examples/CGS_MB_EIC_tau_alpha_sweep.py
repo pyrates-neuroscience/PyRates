@@ -93,6 +93,7 @@ Cs = 20.0
 ei_ratio = [1.0, 2.4, 3.6]
 io_ratio = [1.2, 1.7, 2.2]
 
+
 for idx, (ei, io) in enumerate(zip(ei_ratio, io_ratio)):
     k_ee = [Cs]*(tau_temp.size*alpha_temp.size)
     k_ei = [Cs / (ei * io)]*(tau_temp.size*alpha_temp.size)
