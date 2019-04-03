@@ -93,7 +93,6 @@ def main(_):
         except KeyError:
             outputs = {}
 
-    print(outputs)
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     # LOAD PARAMETER GRID

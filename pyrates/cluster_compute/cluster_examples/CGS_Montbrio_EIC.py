@@ -34,66 +34,65 @@ from pyrates.cluster_compute.cluster_compute import *
 __author__ = "Christoph Salomon"
 __status__ = "development"
 
+# Create CGS instance
+#####################
+# Directory, where the CGS project with all its files is stored
+compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio/EIC/T10s_dt10us"
 
-if __name__ == "__main__":
+nodes = [
+    'animals',
+    'spanien',
+    'tschad',
+    'carpenters',
+    'osttimor'
+    'lech',
+    'tiber',
+    'uganda',
+    'main'
+]
 
-    # Create CGS instance
-    #####################
-    # Directory, where the CGS project with all its files is stored
-    compute_dir = "/nobackup/spanien1/salomon/ClusterGridSearch/Montbrio/EIC/T10s_dt10us"
+cgs = ClusterGridSearch(nodes, compute_dir=compute_dir)
 
-    nodes = [
-        'animals',
-        'spanien',
-        'tschad',
-        # 'carpenters',
-        'osttimor'
-        # 'lech',
-        # 'tiber',
-        # 'uganda',
-        # 'main'
-    ]
+# Create configuration file
+###########################
+param_map = {'k_e': {'var': [('Op_e.0', 'k_ee'), ('Op_i.0', 'k_ie')],
+                     'nodes': ['E.0', 'I.0']},
+             'k_i': {'var': [('Op_e.0', 'k_ei'), ('Op_i.0', 'k_ii')],
+                     'nodes': ['E.0', 'I.0']}
+             }
 
-    cgs = ClusterGridSearch(nodes, compute_dir=compute_dir)
+dts = 1e-3
 
-    # Create configuration file
-    ###########################
-    param_map = {'k_e': {'var': [('Op_e.0', 'k_ee'), ('Op_i.0', 'k_ie')],
-                         'nodes': ['E.0', 'I.0']},
-                 'k_i': {'var': [('Op_e.0', 'k_ei'), ('Op_i.0', 'k_ii')],
-                         'nodes': ['E.0', 'I.0']}
-                 }
+config_file = f'{compute_dir}/Config/Montbrio_EIC_config.json'
 
-    config_file = f'{compute_dir}/Config/Montbrio_EIC_config.json'
-    create_cgs_config(fp=config_file,
-                      circuit_template="/data/hu_salomon/PycharmProjects/PyRates/models/Montbrio/Montbrio.EI_Circuit",
-                      param_map=param_map,
-                      simulation_time=10.,
-                      dt=1e-5,
-                      inputs={},
-                      outputs={"r": ("E", "Op_e.0", "r")},
-                      sampling_step_size=1e-3)
+create_cgs_config(fp=config_file,
+                  circuit_template="/data/hu_salomon/PycharmProjects/PyRates/models/Montbrio/Montbrio.EI_Circuit",
+                  param_map=param_map,
+                  simulation_time=10.,
+                  dt=5e-4,
+                  inputs={},
+                  outputs={"r": ("E", "Op_e.0", "r")},
+                  sampling_step_size=dts)
 
-    # Create parameter grid
-    #######################
-    params = {'k_e': np.linspace(1., 100., 100), 'k_i': np.linspace(1., 100., 100)}
+# Create parameter grid
+#######################
+params = {'k_e': np.linspace(1., 100., 100), 'k_i': np.linspace(1., 100., 100)}
 
-    # Run cluster grid search
-    #########################
-    res_file, _ = cgs.run(config_file=config_file,
-                                  param_grid=params,
-                                  permute=True,
-                                  chunk_size=1000,
-                                  thread_kwargs={
-                                      "worker_env": "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python3",
-                                      "worker_file": "/data/hu_salomon/PycharmProjects/PyRates/"
-                                                     "pyrates/cluster_compute/cluster_worker.py"
-                                  })
+# Run cluster grid search
+#########################
+res_file, _ = cgs.run(config_file=config_file,
+                      param_grid=params,
+                      permute=True,
+                      chunk_size=1000,
+                      thread_kwargs={
+                          "worker_env": "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python3",
+                          "worker_file": "/data/hu_salomon/PycharmProjects/PyRates/"
+                                         "pyrates/cluster_compute/cluster_worker.py"
+                      })
 
-    # results = pd.read_hdf(res_file, key="/Results/r_E0_df")
-    # print(results)
+results = pd.read_hdf(res_file, key="/Results/r_E0_df")
 
-    # Create plots
-    ##############
-    # plot_avrg_peak_dist(results, parameters=param_map, tick_size=1)
-    # plot_time_series(results)
+# Create plots
+##############
+# plot_avrg_peak_dist(results, parameters=param_map, tick_size=1)
+# plot_time_series(results)

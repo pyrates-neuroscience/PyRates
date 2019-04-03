@@ -460,6 +460,7 @@ class ClusterGridSearch(ClusterCompute):
             file.create_dataset(f'/Config/circuit_template', data=param_dict['circuit_template'])
             file.create_dataset(f'/Config/simulation_time', data=param_dict['simulation_time'])
             file.create_dataset(f'/Config/dt', data=param_dict['dt'])
+            file.create_dataset(f'/Config/sampling_step_size', data=param_dict['sampling_step_size'])
         param_grid_raw.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
 
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
@@ -627,7 +628,7 @@ class ClusterGridSearch(ClusterCompute):
                     param_grid.at[param_idx, 'status'] = 'done'
                     self.res_collection[tmp_res_idx] = local_results
                 except KeyError:
-                    # TODO: Add counter to parameter grid to restart computation only twice before setting status to failed
+                    # TODO: restart computation only twice before setting status to 'failed'
                     param_grid.at[param_idx, 'status'] = 'unsolved'
                     # os.remove(local_res_file)
                 except FileNotFoundError:
