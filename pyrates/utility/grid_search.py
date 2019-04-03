@@ -714,7 +714,11 @@ class ClusterGridSearch(ClusterCompute):
             # Wait for remote computation to finish
             #######################################
             status = stdout.channel.recv_exit_status()
-            print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
+            if status == 0:
+                print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
+            else:
+                print(f'[T]\'{thread_name}\': Remote computation failed with exit status {status}. '
+                      f'Elapsed time: {t.time() - t0:.3f} seconds')
 
             # Load results from result file to working memory
             #################################################
