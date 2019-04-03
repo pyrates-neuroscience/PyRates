@@ -4,8 +4,10 @@ python:
 
 # install dependencies
 install:
+  - python setup.py sdist
   - pip install -r requirements.txt
+  - python setup.py install
 
 # run tests
 script:
-  - pytest tests/core/
+  - pytest tests/

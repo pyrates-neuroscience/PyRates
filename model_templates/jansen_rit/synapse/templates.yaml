@@ -1,0 +1,129 @@
+%YAML 1.2
+---
+
+
+# current-based synapse models
+##############################
+
+ExponentialSynapseRCO:
+  description: >
+    Basic implementation of a synaptic rate-to-current operator (RCO)
+    with 2nd-order linear differential operator. Corresponds to a convolution
+    of the incoming firing rate with an exponential kernel. This follows the
+    definition in [1]_ .
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
+  base: model_templates.jansen_rit.synapse.synapse.RateToCurrentOperator
+
+  equations:
+    - 'd/dt * I = I_t'
+    - 'd/dt * I_t =  h/tau * m_in - (1./tau)^2 * I - 2. * 1./tau * I_t'
+
+  # solution for external input: backend as separate connection --> additional vector entry on synapse
+  # TODO: implement external input operator
+  variables:
+    tau:
+      description: Synaptic time constant. Determining the lag/shape of the
+        exponential convolution kernel.
+      unit: s
+      default: constant(float)
+    h:
+      unit: A
+      default: constant(float)
+    I_t:
+      description: integration variable
+      default: variable
+
+JansenRitExcitatorySynapseRCO:
+  description: >
+    Implementation and parametrization of an excitatory synapse RCO based on
+    the Jansen-Rit neural mass model [1]_.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: ExponentialSynapseRCO
+  variables:
+    h:
+      default: 3.25e-3
+    tau:
+      default: 10e-3
+    u:
+      default: 0.
+  equations:
+    replace:
+      m_in: (m_in + u)
+
+JansenRitInhibitorySynapseRCO:
+  description: >
+    Implementation and parametrization of an inhibitory synapse RCO based on
+    the Jansen-Rit neural mass model [1]_.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: ExponentialSynapseRCO
+
+  variables:
+    h:
+      default: -22e-3
+    tau:
+      default: 20e-3
+
+# conductance-based synapse models
+##################################
+
+ExponentialSynapseRateToConductance:
+  description: >
+    Basic implementation of a synaptic rate-to-conductance operator (RCO)
+    with 2nd-order linear differential operator. Corresponds to a convolution
+    of the incoming firing rate with an exponential kernel. This follows the
+    definition in [1]_ .
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential generation in a mathematical model
+       of coupled cortical columns." Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+
+  base: model_templates.jansen_rit.synapse.synapse.RateToCurrentOperator
+
+  equations:
+    replace:
+      L_syn: "(d/dt * 1./tau + 1.)^2"
+      h: "h/pi"
+
+  # solution for external input: backend as separate connection --> additional vector entry on synapse
+  # TODO: implement external input operator
+  variables:
+    tau:
+      description: Synaptic time constant. Determining the lag/shape of the
+        exponential convolution kernel.
+      unit: s
+      default: constant(float)
+    h:
+      unit: A
+      default: constant(float)
+
+
+CoombesByrneExcitatorySynapse:
+  description: >
+    Implementation and parametrization of an excitatory synapse RCO based on
+    the Coombes-Byrne neural mass model [1]_.
+
+    References
+    ----------
+    .. [1] S. Coombes & A. Byrne, "Next generation neural mass models." Nonlinear dynamics in computational
+           neuroscience, pp. 1-16, 2015.
+  base: ExponentialSynapseRateToConductance
+
+  variables:
+    h:
+      default: 1.
+    tau:
+      default: 0.95

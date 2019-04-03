@@ -1,0 +1,143 @@
+%YAML 1.2
+---
+
+Op_e:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * r = delta/(PI * tau**2) + 2.*r*v/tau'
+    - 'd/dt * g_e = x_e'
+    - 'd/dt * x_e =  H_e/tau_e * (r_in_e + J * r) - g_e/tau_e^2. - 2.*x_e/tau_e'
+    - 'd/dt * g_i = x_i'
+    - 'd/dt * x_i =  H_i/tau_i * r_in_i - g_i/tau_i^2. - 2.*x_i/tau_i'
+    - 'd/dt * eta = (r_th - r)/tau_r'
+    - 'd/dt * v = (v**2 + eta + i_in + g_e*(v_th_e - v) + g_i*(v_th_i - v)) / tau - tau*(PI*r)**2'
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    g_e:
+      default: variable
+    g_i:
+      default: variable
+    x_e:
+      default: variable
+    x_i:
+      default: variable
+    tau:
+      default: 0.02
+    tau_e:
+      default: 0.01
+    tau_i:
+      default: 0.02
+    H_e:
+      default: 0.3
+    H_i:
+      default: 0.3
+    J:
+      default: 0.25
+    delta:
+      default: 1.0
+    eta:
+      default: variable
+    v_th_e:
+      default: 65.
+    v_th_i:
+      default: -10.
+    r_th:
+      default: 10.
+    tau_r:
+      default: 0.1
+    r_in_e:
+      default: input
+    r_in_i:
+      default: input
+    i_in:
+      default: input
+
+Op_i:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * r = delta/(PI * tau**2) + 2.*r*v/tau'
+    - 'd/dt * g_e = x_e'
+    - 'd/dt * x_e =  H_e/tau_e * r_in_e - g_e/tau_e^2. - 2.*x_e/tau_e'
+    - 'd/dt * g_i = x_i'
+    - 'd/dt * x_i =  H_i/tau_i * (r_in_i + J*r) - g_i/tau_i^2. - 2.*x_i/tau_i'
+    - 'd/dt * eta = (r_th - r)/tau_r'
+    - 'd/dt * v = (v**2 + eta + i_in + g_e*(v_th_e - v) + g_i*(v_th_i - v)) / tau - tau*(PI*r)**2'
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    g_e:
+      default: variable
+    g_i:
+      default: variable
+    x_e:
+      default: variable
+    x_i:
+      default: variable
+    tau:
+      default: 0.02
+    tau_e:
+      default: 0.01
+    tau_i:
+      default: 0.02
+    H_e:
+      default: 0.3
+    H_i:
+      default: 0.3
+    J:
+      default: 0.5
+    delta:
+      default: 1.0
+    eta:
+      default: variable
+    v_th_e:
+      default: 65.
+    v_th_i:
+      default: -10.
+    r_th:
+      default: 20.
+    tau_r:
+      default: 0.1
+    r_in_e:
+      default: input
+    r_in_i:
+      default: input
+    i_in:
+      default: input
+
+Pop_e:
+  base: NodeTemplate
+  operators:
+    - Op_e
+
+Pop_i:
+  base: NodeTemplate
+  operators:
+    - Op_i
+
+DummyEdge:
+  base: EdgeTemplate
+  operators: []
+
+Net:
+  base: CircuitTemplate
+  nodes:
+    PC: Pop_e
+    IIN: Pop_i
+  edges:
+    - [PC/Op_e/r, IIN/Op_i/r_in_e, DummyEdge, {weight: 0.5}]
+    - [IIN/Op_i/r, PC/Op_e/r_in_i, DummyEdge, {weight: 1.0}]
+
+CMC:
+  base: CircuitTemplate
+  circuits:
+    L3: Net
+    L5: Net
+  edges:
+    - [L3/PC/Op_e/r, L5/IIN/Op_i/r_in_e, DummyEdge, {weight: 0.1}]
+    - [L3/PC/Op_e/r, L5/PC/Op_e/r_in_e, DummyEdge, {weight: 0.1}]
+    - [L5/PC/Op_e/r, L3/IIN/Op_i/r_in_e, DummyEdge, {weight: 0.1}]

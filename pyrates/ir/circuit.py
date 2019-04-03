@@ -3,7 +3,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
+# network model_templates and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
 # 
 # Copyright (C) 2017-2018 the original authors (Richard Gast and 
@@ -500,6 +500,8 @@ class CircuitIR(AbstractBaseIR):
 
         # add circuit reference to sub_circuits set. Needs to be done before adding edges
         self.sub_circuits.add(label)
+        for sc in circuit.sub_circuits:
+            self.sub_circuits.add(f"{label}/{sc}")
 
         # add sub circuit label map items to local label map
         for old, new in circuit.label_map.items():

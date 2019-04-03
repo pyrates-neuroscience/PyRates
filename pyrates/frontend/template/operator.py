@@ -192,6 +192,7 @@ class OperatorTemplate(AbstractBaseTemplate):
             dtype = "float32"
             # restriction to 32bit float for consistency. May not be reasonable at all times.
         else:
+            # set vtype
             if expr.startswith("input"):
                 vtype = "input"
             elif expr.startswith("output"):
@@ -212,6 +213,7 @@ class OperatorTemplate(AbstractBaseTemplate):
                 except ValueError:
                     raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
 
+            # set dtype and value
             if expr.endswith("(float)"):
                 dtype = "float32"  # why float32 and not float64?
             elif expr.endswith("(int)"):

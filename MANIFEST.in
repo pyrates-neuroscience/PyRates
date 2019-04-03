@@ -1,0 +1,2 @@
+recursive-include model_templates *
+recursive-include pyrates *

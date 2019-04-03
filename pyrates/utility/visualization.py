@@ -3,7 +3,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
+# network model_templates and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
 # 
 # Copyright (C) 2017-2018 the original authors (Richard Gast and 
@@ -35,6 +35,8 @@ import networkx.drawing.nx_pydot as pydot
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from typing import Union, Optional
 
 # pyrates internal imports
 
@@ -43,13 +45,114 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="darkgrid", **kwargs):
-    """Plot timeseries
+def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True, **kwargs) -> Union[list, plt.Axes]:
+    """Create a colormap or color palette object.
+
+    Parameters
+    ----------
+    name
+        Name of the pyrates colormap. If specified, palette_type will be ignored.
+    palette_type
+        Type of the seaborn color palette to use. Only necessary if no name is specified.
+    as_cmap
+        If true, a matplotlib colormap object will be returned. Else a seaborn color palette (list).
+    kwargs
+        Keyword arguments for the wrapped seaborn functions.
+
+    Returns
+    -------
+    Union[list, plt.Axes]
+        cmap or seaborn color palette.
+
+    """
+
+    from seaborn import cubehelix_palette, dark_palette, light_palette, diverging_palette, hls_palette, husl_palette, \
+        color_palette, crayon_palette, xkcd_palette, mpl_palette
+    import matplotlib.colors as mcolors
+
+    if '/' in name:
+
+        # create diverging colormap
+        name1, name2 = name.split('/')
+        vmin = kwargs.pop('vmin', 0.)
+        vmax = kwargs.pop('vmax', 1.)
+        if type(vmin) is float:
+            vmin = (vmin, vmin)
+        if type(vmax) is float:
+            vmax = (vmax, vmax)
+        kwargs1 = kwargs.pop(name1, kwargs)
+        kwargs2 = kwargs.pop(name2, kwargs)
+        cmap1 = create_cmap(name1, **kwargs1, as_cmap=True)
+        cmap2 = create_cmap(name2, **kwargs2, as_cmap=True)
+        n = kwargs.pop('n_colors', 10)
+        if type(n) is int:
+            n = (n, n)
+        colors = np.vstack((cmap1(np.linspace(vmin[0], vmax[0], n[0])),
+                            cmap2(np.linspace(vmin[1], vmax[1], n[1])[::-1])))
+        return mcolors.LinearSegmentedColormap.from_list('cmap_diverging', colors)
+
+    # extract colorrange
+    if as_cmap:
+        vmin = kwargs.pop('vmin', 0.)
+        vmax = kwargs.pop('vmax', 1.)
+        n = kwargs.pop('n_colors', 10)
+        crange = np.linspace(vmin, vmax, n) if vmax-vmin < 1. else None
+    else:
+        crange = None
+
+    if 'pyrates' in name:
+
+        # create pyrates colormap
+        if name == 'pyrates_red':
+            cmap = cubehelix_palette(as_cmap=as_cmap, start=-2.0, rot=-0.1, **kwargs)
+        elif name == 'pyrates_green':
+            cmap = cubehelix_palette(as_cmap=as_cmap, start=2.5, rot=-0.1, **kwargs)
+        elif name == 'pyrates_blue':
+            cmap = dark_palette((210, 90, 60), as_cmap=as_cmap, input='husl', **kwargs)
+        elif name == 'pyrates_yellow':
+            cmap = dark_palette((70, 95, 65), as_cmap=as_cmap, input='husl', **kwargs)
+        elif name == 'pyrates_purple':
+            cmap = dark_palette((270, 50, 55), as_cmap=as_cmap, input='husl', **kwargs)
+
+    else:
+
+        # create seaborn colormap
+        if palette_type == 'cubehelix':
+            cmap = cubehelix_palette(as_cmap=as_cmap, **kwargs)
+        elif palette_type == 'dark':
+            cmap = dark_palette(as_cmap=as_cmap, **kwargs)
+        elif palette_type == 'light':
+            cmap = light_palette(as_cmap=as_cmap, **kwargs)
+        elif palette_type == 'hls':
+            cmap = hls_palette(**kwargs)
+        elif palette_type == 'husl':
+            cmap = husl_palette(**kwargs)
+        elif palette_type == 'diverging':
+            cmap = diverging_palette(as_cmap=as_cmap, **kwargs)
+        elif palette_type == 'crayon':
+            cmap = crayon_palette(**kwargs)
+        elif palette_type == 'xkcd':
+            cmap = xkcd_palette(**kwargs)
+        elif palette_type == 'mpl':
+            cmap = mpl_palette(name, **kwargs)
+        else:
+            cmap = color_palette(name, **kwargs)
+
+    # apply colorrange
+    if crange is not None:
+        cmap = mcolors.LinearSegmentedColormap.from_list(name, cmap(crange))
+
+    return cmap
+
+
+def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str = 'line_plot',
+                    bg_style: str = 'darkgrid', **kwargs) -> plt.Axes:
+    """Plot timeseries from a data frame.
 
     Parameters
     ----------
     data
-        Pandas dataframe containing the results of a pyrates simulation.
+        Results of a pyrates simulation.
     variable
         Name of the variable to be plotted
     plot_style
@@ -62,8 +165,8 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
 
     Returns
     -------
-    ax
-        Figure handle of the plot.
+    plt.Axes
+        Handle of the figure axes the time-series were plotted into.
 
     """
 
@@ -159,8 +262,9 @@ def plot_timeseries(data, variable='value', plot_style='line_plot', bg_style="da
     return ax
 
 
-def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whitegrid', node_order=None,
-                      auto_cluster=False, **kwargs):
+def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[float] = None, plot_style: str = 'heatmap',
+                      bg_style: str = 'whitegrid', node_order: Optional[list] = None, auto_cluster: bool = False,
+                      **kwargs) -> plt.Axes:
     """Plot functional connectivity between nodes in backend.
 
     Parameters
@@ -184,15 +288,16 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
 
     Returns
     -------
-    ax
+    plt.Axes
         Handle of the axis the plot was created in.
+
     """
 
     # turn fc into dataframe if necessary
     if type(fc) is np.ndarray:
         rows = kwargs.pop('yticklabels') if 'yticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
         cols = kwargs.pop('xticklabels') if 'xticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
-        fc = pd.DataFrame(fc, index=rows, columns=cols)
+        fc = pd.DataFrame(fc, index=[str(r) for r in rows], columns=[str(c) for c in cols])
 
     # apply threshold
     if threshold:
@@ -287,7 +392,7 @@ def plot_connectivity(fc, threshold=None, plot_style='heatmap', bg_style='whiteg
     return ax
 
 
-def plot_phase(data, bg_style='whitegrid', **kwargs):
+def plot_phase(data: pd.DataFrame, bg_style: str = 'whitegrid', **kwargs) -> sb.FacetGrid:
     """Plot phase of populations in a polar plot.
 
     Parameters
@@ -301,7 +406,7 @@ def plot_phase(data, bg_style='whitegrid', **kwargs):
 
     Returns
     -------
-    ax
+    sb.FacetGrid
         Axis handle of the created plot.
 
     """
@@ -341,7 +446,7 @@ def plot_phase(data, bg_style='whitegrid', **kwargs):
     return ax
 
 
-def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
+def plot_psd(data: pd.DataFrame, fmin: float = 0., fmax: float = 100., tmin: float = 0.0, **kwargs) -> plt.Axes:
     """Plots the power-spectral density for each column in data.
 
     Parameters
@@ -359,7 +464,7 @@ def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
 
     Returns
     -------
-    ax
+    plt.Axes
         Handle of the created plot.
 
     """
@@ -367,12 +472,44 @@ def plot_psd(data, fmin=0, fmax=100, tmin=0.0, **kwargs):
     from pyrates.utility import mne_from_dataframe
     from mne.viz import plot_raw_psd
 
-    raw = mne_from_dataframe(data)
+    if type(data) is pd.DataFrame and 'out_var' in data.columns.names and len(data.columns.names) > 1:
 
-    return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs).axes
+        # create heatmap
+        ################
+
+        # calculate psd's for each condition
+        psd_keys = ['n_fft', 'picks', 'n_overlap', 'dB', 'estimate', 'average', 'n_jobs']
+        psd_kwargs = {}
+        for k in kwargs.copy():
+            if k in psd_keys:
+                psd_kwargs[k] = kwargs.pop(k)
+        data_col = []
+        col_names = []
+        for col in data.columns.values:
+            _ = plot_psd(data[col[:-1]], show=False, fmin=fmin, fmax=fmax, tmin=tmin, **psd_kwargs)
+            pow = list(plt.gca().get_lines()[-1].get_ydata())
+            freqs = list(plt.gca().get_lines()[-1].get_xdata())
+            data_col.append(pow)
+            col_names.append(col[:-1])
+            plt.close(plt.gcf())
+        df = pd.DataFrame(data=np.asarray(data_col).T, columns=col_names, index=np.round(freqs, decimals=1))
+
+        # plot the data
+        ax = plot_connectivity(df.values[::-1, :], xticklabels=df.columns.values,
+                               yticklabels=df.index[::-1], plot_style='heatmap', **kwargs)
+        return ax
+
+    else:
+
+        # create line plot
+        ##################
+
+        raw = mne_from_dataframe(data)
+        return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs).axes
 
 
-def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
+def plot_tfr(data: np.ndarray, freqs: list, nodes: Optional[list] = None, separate_nodes: bool = True, **kwargs
+             ) -> plt.Axes:
     """
 
     Parameters
@@ -380,6 +517,10 @@ def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
     data
         Numpy array (n x f x t) containing the instantaneous power estimates for each node (n), each frequency (f) at
         every timestep (t).
+    freqs
+        Frequencies of interest.
+    nodes
+        Nodes of interest in order of interest.
     separate_nodes
         If true, create a separate figure for each node.
     kwargs
@@ -387,7 +528,7 @@ def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
 
     Returns
     -------
-    ax
+    plt.Axes
         Handle of the created plot.
 
     """
@@ -424,23 +565,182 @@ def plot_tfr(data, freqs, nodes=None, separate_nodes=True, **kwargs):
         ax = sb.FacetGrid(data, col='nodes', **kwargs_tmp)
 
         # map heatmaps to grid
-        ax.map_dataframe(draw_heatmap, 'time', 'freqs', 'values', cbar=False, square=True, **kwargs)
+        ax.map_dataframe(_draw_heatmap, 'time', 'freqs', 'values', cbar=False, square=True, **kwargs)
 
     return ax
 
 
-def write_graph(net, out_file='png'):
-    """Draw graph from backend config.
+def simple_plot(circuit, _format: str = "png", path: str = None, prog="dot", **pydot_args):
+    """Simple straight plot using graphviz via pydot.
+
+    Parameters
+    ----------
+    circuit
+        `CircuitIR` instance to plot graph from
+    _format
+        output format
+    path
+        path to print image to. If `None` is given, will try to plot using matplotlib/IPython
+    prog
+        graphviz layout algorithm name. Defaults to "dot". Another recommendation is "circo". Other valid options:
+        "fdp", "neato", "osage", "patchwork", "twopi", "pydot_args". See graphviz documentation for more info.
+
+    Returns
+    -------
+
     """
 
-    pydot_graph = pydot.to_pydot(net)
+    import networkx as nx
+    # import pydot
 
-    file_format = out_file.split('.')[1]
-    if file_format == 'png':
-        pydot_graph.write_png(out_file)
+    # copy plain node names and plain edges, to avoid conflicts with graphviz
+    graph = nx.MultiDiGraph()
+    nodes = (node for node in circuit.graph.nodes)
+    graph.add_nodes_from(nodes)
+    edges = (edge for edge in circuit.graph.edges)
+    graph.add_edges_from(edges)
+
+    # pass graph to pydot
+    dot_graph = nx.drawing.nx_pydot.to_pydot(graph)
+
+    # check and format given path
+    if path:
+        return write_graph(path, dot_graph, prog, **pydot_args)
+
+    else:
+        return show_graph(dot_graph, _format, prog, **pydot_args)
 
 
-def draw_heatmap(*args, **kwargs):
+def plot_graph_with_subgraphs(circuit, _format: str = "png", path: str = None, prog="dot",
+                              node_style="solid", cluster_style="rounded", **pydot_args):
+    """Simple straight plot using graphviz via pydot.
+
+    Parameters
+    ----------
+    circuit
+        `CircuitIR` instance to plot graph from
+    _format
+        output format
+    path
+        path to print image to. If `None` is given, will try to plot using matplotlib/IPython
+    prog
+        graphviz layout algorithm name. Defaults to "dot". Another recommendation is "circo". Other valid options:
+        "fdp", "neato", "osage", "patchwork", "twopi", "pydot_args". See graphviz documentation for more info.
+
+    Returns
+    -------
+
+    """
+
+    import pydot
+
+    # copy plain node names and plain edges, to avoid conflicts with graphviz
+    graph = pydot.Dot(graph_type='digraph', fontname="Verdana")
+    clusters = {}
+    for subcircuit in circuit.sub_circuits:
+        clusters[subcircuit] = pydot.Cluster(subcircuit, label=subcircuit)
+
+    for label, data in circuit.nodes(data=True):
+        # node = data["node"]
+        *subcircuit, node = label.split("/")
+        node = pydot.Node(label, label=node.split(".")[0])
+        node.set_style(node_style)
+
+        if subcircuit:
+            subcircuit = "/".join(subcircuit)
+            cluster = clusters[subcircuit]
+            cluster.add_node(node)
+        else:
+            graph.add_node(node)
+
+    for cluster in clusters.values():
+        cluster.set_style(cluster_style)
+        graph.add_subgraph(cluster)
+
+    for source, target, _ in circuit.edges:
+        graph.add_edge(pydot.Edge(source, target))
+
+    #
+    # # pass graph to pydot
+    # dot_graph = nx.drawing.nx_pydot.to_pydot(graph)
+    #
+    # # check and format given path
+    if path:
+        return write_graph(path, graph, prog, **pydot_args)
+
+    else:
+        return show_graph(graph, _format, prog, **pydot_args)
+
+
+def write_graph(path, dot_graph, prog, **pydot_args):
+    """Write DOT graph to file.
+
+    Parameters
+    ----------
+    path
+    dot_graph
+    prog
+    pydot_args
+
+    Returns
+    -------
+
+    """
+    import os
+    path = os.path.normpath(path)
+
+    # draw graph and write to file, given the format
+    return dot_graph.write(path, format=format, prog=prog, **pydot_args)
+
+
+def show_graph(dot_graph, _format, prog, **pydot_args):
+    """Show DOT graph using matplotlib or IPython.display
+
+    Parameters
+    ----------
+    dot_graph
+    _format
+    prog
+    pydot_args
+
+    Returns
+    -------
+
+    """
+
+    import matplotlib.pyplot as plt
+    import matplotlib.image as mpimg
+
+    if _format == "png":
+        # draw graph and write out postscript string
+        image_bytes = dot_graph.create_png(prog=prog, **pydot_args)
+
+        # check interactive session
+        try:
+            import sys
+            _ = sys.ps1
+        except AttributeError:
+            # treat the dot output bytes as an image file
+            from io import BytesIO
+            bio = BytesIO()
+            bio.write(image_bytes)
+            bio.seek(0)
+            img = mpimg.imread(bio)
+
+            # plot the image
+            imgplot = plt.imshow(img, aspect='equal')
+            plt.show(block=False)
+            return imgplot
+        else:
+            from IPython.display import Image, display
+
+            return Image(data=image_bytes)
+
+    else:
+        raise NotImplementedError(f"No plotting option implemented for format '{_format}'")
+
+
+def _draw_heatmap(*args, **kwargs):
     """Wraps seaborn.heatmap to work with long, tidy format dataframes.
     """
     data = kwargs.pop('data')

@@ -3,7 +3,7 @@
 #
 #
 # PyRates software framework for flexible implementation of neural 
-# network models and simulations. See also: 
+# network model_templates and simulations. See also:
 # https://github.com/pyrates-neuroscience/PyRates
 # 
 # Copyright (C) 2017-2018 the original authors (Richard Gast and 
@@ -26,12 +26,13 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-"""Functions for performing parameter grid simulations with pyrates models.
+"""Functions for performing parameter grid simulations with pyrates model_templates.
 """
 
 # external imports
 import pandas as pd
 import numpy as np
+from typing import Optional
 
 # pyrates internal imports
 from pyrates.backend import ComputeGraph
@@ -43,25 +44,40 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, inputs, outputs,
-                sampling_step_size=None, permute_grid=False, **kwargs):
-    """
+def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: float, simulation_time: float,
+                inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None,
+                permute_grid: bool = False, **kwargs) -> pd.DataFrame:
+    """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
     Parameters
     ----------
     circuit_template
+        Path to the circuit template.
     param_grid
+        Key-value pairs for each circuit parameter that should be altered over different circuit parametrizations.
     param_map
+        Key-value pairs that map the keys of param_grid to concrete circuit variables.
     dt
+        Simulation step-size in s.
     simulation_time
+        Simulation time in s.
     inputs
+        Inputs as provided to the `run` method of `:class:ComputeGraph`.
     outputs
+        Outputs as provided to the `run` method of `:class:ComputeGraph`.
     sampling_step_size
+        Sampling step-size as provided to the `run` method of `:class:ComputeGraph`.
     permute_grid
+        If true, all combinations of the provided param_grid values will be realized. If false, the param_grid values
+        will be traversed pairwise.
     kwargs
+        Additional keyword arguments passed to the `:class:ComputeGraph` initialization.
 
     Returns
     -------
+    pd.DataFrame
+        Simulation results stored in a multi-index data frame where each index level refers to one of the parameters of
+        param_grid.
 
     """
 
@@ -94,26 +110,25 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
 
     # adjust output of simulation to combined network
     nodes = list(CircuitTemplate.from_yaml(circuit_template).apply().nodes)
-    out_names = list(outputs.keys())
+    out_names = []
     for out_key, out in outputs.copy().items():
         outputs.pop(out_key)
+        out_names_tmp = []
         if out[0] in nodes:
             for i, name in enumerate(param_info):
                 out_tmp = list(out)
                 out_tmp[0] = f'{circuit_names[i]}/{out_tmp[0]}'
-                outputs[f'{name}{param_split}out_var{val_split}{out_key}'] = tuple(out_tmp)
+                outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{out[0]}'] = tuple(out_tmp)
+                out_names_tmp.append(f'{out_key}{comb}{out[0]}')
         elif out[0] == 'all':
-            out_names = []
             for node in nodes:
                 for i, name in enumerate(param_info):
                     out_tmp = list(out)
                     out_tmp[0] = f'{circuit_names[i]}/{node}'
                     outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = tuple(out_tmp)
-                    out_names.append(f'{out_key}{comb}{node}')
-            out_names = list(set(out_names))
+                    out_names_tmp.append(f'{out_key}{comb}{node}')
         else:
             node_found = False
-            out_names = []
             for node in nodes:
                 if out[0] in node:
                     node_found = True
@@ -121,17 +136,17 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
                         out_tmp = list(out)
                         out_tmp[0] = f'{circuit_names[i]}/{node}'
                         outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = tuple(out_tmp)
-                        out_names.append(f'{out_key}{comb}{node}')
-            out_names = list(set(out_names))
+                        out_names_tmp.append(f'{out_key}{comb}{node}')
             if not node_found:
                 raise ValueError(f'Invalid output identifier in output: {out_key}. '
                                  f'Node {out[0]} is not part of this network')
+        out_names += list(set(out_names_tmp))
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
                       inputs=inputs,
                       outputs=outputs,
-                      sampling_step_size=sampling_step_size)
+                      sampling_step_size=sampling_step_size)    # type: pd.DataFrame
 
     # transform results into long-form dataframe with changed parameters as columns
     multi_idx = [param_grid[key].values for key in param_grid.keys()]
@@ -141,8 +156,8 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
         outs += [out_name] * n_iters
     multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
     multi_idx.append(outs)
-    index = pd.MultiIndex.from_arrays(multi_idx, names=list(param_grid.keys()) + ['out_var'])
-    index = pd.MultiIndex.from_tuples(list(set(index)), names=list(param_grid.keys()) + ['out_var'])
+    index = pd.MultiIndex.from_arrays(multi_idx, names=list(param_grid.keys()) + ["out_var"])
+    index = pd.MultiIndex.from_tuples(list(set(index)), names=list(param_grid.keys()) + ["out_var"])
     results_final = pd.DataFrame(columns=index, data=np.zeros_like(results.values), index=results.index)
     for col in results.keys():
         params = col[0].split(param_split)
@@ -159,16 +174,20 @@ def grid_search(circuit_template, param_grid, param_map, dt, simulation_time, in
     return results_final
 
 
-def linearize_grid(grid: dict, permute=False):
-    """
+def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
+    """Turns the grid into a grid that can be traversed linearly, i.e. pairwise.
 
     Parameters
     ----------
     grid
+        Parameter grid.
     permute
+        If true, all combinations of the parameter values in grid will be created.
 
     Returns
     -------
+    pd.DataFrame
+        Resulting linear grid in form of a data frame.
 
     """
 
@@ -185,17 +204,22 @@ def linearize_grid(grid: dict, permute=False):
         return pd.DataFrame(new_grid, columns=keys)
 
 
-def adapt_circuit(circuit, params, param_map):
-    """
+def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitIR:
+    """Changes the parametrization of a circuit.
 
     Parameters
     ----------
     circuit
+        Circuit instance.
     params
+        Key-value pairs of the parameters that should be changed.
     param_map
+        Map between the keys in params and the circuit variables.
 
     Returns
     -------
+    CircuitIR
+        Updated circuit instance.
 
     """
 

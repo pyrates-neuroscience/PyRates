@@ -1,9 +1,0 @@
-{
-    "class": {
-        "__module__": "pyrates.circuit.templates",
-        "__name__": "JansenRitCircuit"
-    },
-    "args": [
-        0.0009765625
-    ]
-}

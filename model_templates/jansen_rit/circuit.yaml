@@ -1,0 +1,55 @@
+%YAML 1.2
+---
+aliases:
+  - &JRExcitatorySynapse model_templates.jansen_rit.synapse.templates.JansenRitExcitatorySynapseRCO
+  - &JRInhibitorySynapse model_templates.jansen_rit.synapse.templates.JansenRitInhibitorySynapseRCO
+
+  - &LC model_templates.jansen_rit.edges.LCEdge
+  - &c LinearCouplingOperator/c
+
+JansenRitCircuit:
+  description: |
+    Implementation of a neural mass model of 3 neural masses following Jansen and Rit [1]_
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+       generation in a mathematical model of coupled cortical columns."
+       Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: pyrates.frontend.template.circuit.circuit.BaseCircuit
+  label: JRcircuit
+  nodes:
+    JR_PC: model_templates.jansen_rit.population.templates.JansenRitPC
+    JR_IIN: model_templates.jansen_rit.population.templates.JansenRitIN
+    JR_EIN: model_templates.jansen_rit.population.templates.JansenRitIN
+
+  #    LC: pyrates.coupling.templates.LinearCoupling
+  # single coupling operator. needs rework for multiple coupling operators in single circuit.
+  # alternative: use YAML tags for proper references
+
+  edges:
+    # [source, target, type, target_operator, weight (, delay)]
+    - [JR_PC/JansenRitPRO/m_out, JR_IIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 33.75}]
+    - [JR_PC/JansenRitPRO/m_out, JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 135.}]
+    - [JR_EIN/JansenRitPRO/m_out, JR_PC/JansenRitExcitatorySynapseRCO/m_in, *LC, {*c : 108.}]
+    - [JR_IIN/JansenRitPRO/m_out, JR_PC/JansenRitInhibitorySynapseRCO/m_in, *LC, {*c : 33.75}]
+
+MultiJansenRitCircuit:
+  description: |
+    Implementation of a network of multiple Jansen-Rit ([1]_) type circuits.
+
+    References
+    ----------
+    .. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
+       generation in a mathematical model of coupled cortical columns."
+       Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+  base: pyrates.frontend.template.circuit.circuit.BaseCircuit
+  label: MultiJRC
+  circuits:
+    JRC0: JansenRitCircuit
+    JRC1: JansenRitCircuit
+    JRC2: JansenRitCircuit
+  edges:
+    - [JRC0/JR_PC/JansenRitPRO/m_out, JRC1/JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1.}]
+    - [JRC1/JR_PC/JansenRitPRO/m_out, JRC2/JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1.}]
+    - [JRC2/JR_PC/JansenRitPRO/m_out, JRC0/JR_EIN/JansenRitExcitatorySynapseRCO/m_in, *LC, {weight: 1.}]
