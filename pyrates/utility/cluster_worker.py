@@ -102,10 +102,13 @@ def main(_):
     t0 = time.time()
 
     # Load subgrid into DataFrame
-    param_grid = pd.read_hdf(subgrid, key='Data')
+    param_grid = pd.read_hdf(subgrid, key="subgrid")
 
-    # Exclude 'status' key from param_grid since grid_search() can't handle the additional keywords
+    # Exclude 'status', 'chunk_idx' and 'err_count' keys from param_grid
+    # since grid_search() can't handle the additional columns
     param_grid = param_grid.drop('status', axis=1)
+    param_grid = param_grid.drop('chunk_idx', axis=1)
+    param_grid = param_grid.drop('err_count', axis=1)
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     # COMPUTE PARAMETER GRID #
@@ -142,9 +145,9 @@ def main(_):
 
     # Loop through parameter grid and identify corresponding result column
     for i, idx in enumerate(param_grid.index):
-        idx_label = param_grid.iloc[i].values.tolist()
-        idx_label.append(out_var)
-        result = results.loc[:, tuple(idx_label)].to_frame()
+        idx_list = param_grid.iloc[i].values.tolist()
+        idx_list.append(out_var)
+        result = results.loc[:, tuple(idx_list)].to_frame()
         result.columns.names = results.columns.names
         res_lst.append(result)
 
@@ -157,7 +160,7 @@ def main(_):
         # peaks = postprocessing_2(result, simulation_time=simulation_time)
         # peak_lst.append(peaks)
 
-    # Ordered DataFrames with respect to param_grid
+    # Ordered DataFrames with respect to param_grid entries
     results = pd.concat(res_lst, axis=1)
     # spec = pd.concat(spec_lst_df, axis=1)
 

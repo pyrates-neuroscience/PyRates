@@ -87,6 +87,8 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
     kwargs
         Additional keyword arguments passed to the `:class:ComputeGraph` initialization.
 
+
+
     Returns
     -------
     pd.DataFrame
@@ -189,7 +191,7 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
 
 
 class ClusterCompute(object):
-    def __init__(self, nodes, compute_dir=None):
+    def __init__(self, nodes: list, compute_dir=None):
         """Create new ClusterCompute instance object with unique compute ID
 
         Creates a compute directory for the ClusterCompute instance, either in the specified path or as a default
@@ -267,11 +269,11 @@ class ClusterCompute(object):
         for client in self.clients:
             client["paramiko_client"].close()
 
-    def cluster_connect(self, nodes):
-        """Connect to all nodes via SSH
+    def cluster_connect(self, nodes: list):
+        """Create SSH connections to all nodes in the list, respectively
 
-        Connect to all nodes in the given list via SSH, using ssh_connect()
-        Adds a dictionary for each node to the class internal 'clients' list
+        Connect to all nodes in the given list via SSH, using ssh_connect(). Adds a dictionary for each node to the
+        class internal 'clients' list
         Each dictionary contains:
             - ["paramiko_client"]: A paramiko client that can be used to execute commands on the node
             - ["node_name"]: The name of the connected node
@@ -305,36 +307,18 @@ class ClusterCompute(object):
                     "hardware": hw,
                     "logfile": local_logfile})
 
-    def run(self, thread_kwargs: dict, **kwargs):
-        """Start a thread for each connected client. Each thread executes the thread_master() function
+    def spawn_thread(self, client, thread_kwargs):
+        """
 
-        Each thread and therefor each instance of the thread_master() function is responsible for the communication
-        with one worker node in the cluster, respectively.
-        Stops execution of the outside script until all threads have finished.
-        Can be called multiple times from the same ClusterCompute instance
-
-        Params
-        ------
-        kwargs
+        Parameters
+        ----------
+        client
+        thread_kwargs
 
         Returns
         -------
 
         """
-
-        t0 = t.time()
-
-        # ! Insert preprocessing of input data here !
-
-        # **kwargs of spawn_thread() will be parsed as dict to thread_master()
-        threads = [self.spawn_thread(client, thread_kwargs) for client in self.clients]
-        for t_ in threads:
-            t_.join()
-
-        print("")
-        print(f'Cluster computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
-
-    def spawn_thread(self, client, thread_kwargs):
         t_ = Thread(
             name=client["node_name"],
             target=self.thread_master,
@@ -368,14 +352,13 @@ class ClusterCompute(object):
         -------
 
         """
-
-        # Add funcionality here
-
         pass
 
     @staticmethod
     def get_hardware_spec(pm_client):
-        """Print CPU model, number of CPU cores, min CPU freq, max CPU freq and working memory of a paramiko client
+        """Print hardware specifications of the workstation tied to the paramiko client
+
+        Prints CPU model, number of CPU cores, min CPU freq, max CPU freq and working memory of a paramiko client
         connected to a remote worker node
 
         Parameters
@@ -385,7 +368,8 @@ class ClusterCompute(object):
 
         Returns
         -------
-            dict containing the above mentioned hardware specifications as key/value pairs
+        dict
+
 
         """
 
@@ -465,7 +449,7 @@ class ClusterGridSearch(ClusterCompute):
         self.res_file_idx = 0
         self.res_collection = {}
 
-        # Add additional subfolders to the compute directory
+        # Adding additional subfolders to the compute directory
         # Grid directory
         self.grid_dir = f'{self.compute_dir}/Grids'
         os.makedirs(self.grid_dir, exist_ok=True)
@@ -478,27 +462,31 @@ class ClusterGridSearch(ClusterCompute):
         self.res_dir = f'{self.compute_dir}/Results'
         os.makedirs(self.res_dir, exist_ok=True)
 
-    def run(self, thread_kwargs: dict, **kwargs):
-        """
+    def run(self, config_file: str, params: dict, permute: bool, chunk_size: int,
+            worker_env: str, worker_file: str) -> str:
+        """Run multiple instances of worker_file simultaneously on different workstations in the compute cluster
 
-        :param thread_kwargs:
-        :param kwargs:
-        :return:
+        Parameters
+        ----------
+        config_file:
+            JSON file containing all necessary information to call grid_search (see create_cgs_config())
+        params:
+            Dictionary containing lists of parameters to create the parameter_grid from
+        permute:
+            If true, all combinations of the parameter values in params will be created.
+        chunk_size:
+            Size of parameter sub grids computed by each worker
+        worker_env:
+            Python executable inside an environment in which the remote worker file should be called
+        worker_file:
+            Python script that will be executed by each remote worker
+
+        Returns
+        -------
+        str
+            Path of the global result file
         """
         t_total = t.time()
-
-        # Reset results organizer
-        #########################
-        # Index to iterate over all temporary result files to create a single result file from the res_collection
-        self.res_file_idx = 0
-        self.res_collection = {}
-
-        # Retrieve keyword arguments
-        ############################
-        config_file = kwargs.pop("config_file")
-        params = kwargs.pop("param_grid")
-        permute = kwargs.pop("permute")
-        chunk_size = kwargs.pop("chunk_size")
 
         print("")
 
@@ -507,150 +495,140 @@ class ClusterGridSearch(ClusterCompute):
         print("***PREPARING PARAMETER GRID***")
         t0 = t.time()
 
-        # Convert parameter from dict to DataFrame. Permute if necessary
-        param_grid_raw = linearize_grid(params, permute=permute)
+        # Create DataFrame from param dictionary
+        param_grid = linearize_grid(params, permute=permute)
 
-        # Add 'status' and 'worker' column to parameter grid
-        param_grid, grid_file, grid_name = self.prepare_grid(param_grid_raw)
+        # Create default parameter grid csv-file
+        grid_idx = 0
+        grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+        while os.path.exists(grid_file):
+            grid_idx += 1
+            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+        grid_name = Path(grid_file).stem
+        param_grid.to_csv(grid_file, index=True)
 
-        print(f'Done. Elapsed time: {t.time()-t0:.3f} seconds')
+        # Assign chunk indices to parameter grid
+        chunked_grid = self.chunk_grid(grid=param_grid, chunk_size=chunk_size)
+        print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
 
         # Check key consistency
         #######################
         print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
-
-        # Check parameter map and parameter grid for consistency
-        with open(config_file) as config:
-            # Open global config file and read the config dictionary
-            param_dict = json.load(config)
-            try:
-                # Read parameter map from the parameter dictionary
-                param_map = param_dict['param_map']
-            except KeyError as err:
-                # Config_file does not contain a key 'param_map'
-                print("KeyError:", err)
-                print("Returning!")
-                # Stop computation
-                return
-            if not self.check_key_consistency(param_grid, param_map):
-                # Not all keys of parameter map can be found in parameter grid
-                print("Not all parameter map keys found in parameter grid")
-                print("Parameter map keys:")
-                print(*list(param_map.keys()))
-                print("Parameter grid keys:")
-                print(*list(param_grid.keys()))
-                print("Returning!")
-                # Stop computation
-                return
-            else:
-                # Parameter grid and parameter map match
-                print("All parameter map keys found in parameter grid")
-                # Continuing with computation
+        t0 = t.time()
+        param_dict = self.check_key_consistency(param_grid, config_file)
+        if not param_dict:
+            print("Terminating execution!")
+            return ""
+        print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
 
-        # Prepare result file
-        #####################
-        print("***PREPARING RESULT FILE***")
+        # Create global result file
+        ############################
+        print("***CREATING GLOBAL RESULT FILE***")
         t0 = t.time()
-
         # Create result directory and result file for current parameter grid
         grid_res_dir = f'{self.res_dir}/{grid_name}'
         os.makedirs(grid_res_dir, exist_ok=True)
         global_res_file = f'{grid_res_dir}/CGS_result_{grid_name}.h5'
 
-        # Write grid and config information to result file
+        # Write grid and config information to global result file
         with h5py.File(global_res_file, 'w') as file:
-            # file.create_dataset(f'/ParameterGrid/Grid', data=param_grid_raw.values)
             for key, value in params.items():
                 file.create_dataset(f'/ParameterGrid/Keys/{key}', data=value)
             file.create_dataset(f'/Config/circuit_template', data=param_dict['circuit_template'])
             file.create_dataset(f'/Config/simulation_time', data=param_dict['simulation_time'])
             file.create_dataset(f'/Config/dt', data=param_dict['dt'])
             file.create_dataset(f'/Config/sampling_step_size', data=param_dict['sampling_step_size'])
-        param_grid_raw.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
-
+        param_grid.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
 
-        # Prepare chunk sizes
-        #####################
-        print("***PREPARING CHUNK SIZES***")
-        t0 = t.time()
+        # Create keyword dictionary for threads
+        #######################################
+        thread_kwargs = {
+            "worker_env": worker_env,
+            "worker_file": worker_file,
+            "chunked_grid": chunked_grid,
+            "grid_name": grid_name,
+            "grid_res_dir": grid_res_dir,
+            "config_file": config_file,
+            "global_res_file": global_res_file
+        }
 
-        # Prepare the chunk sizes
-        self.prepare_chunks(grid_len=len(param_grid), chunk_size=chunk_size)
-
-        print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
-
-        print("")
-
-        # Update thread keywords dictionary
-        ###################################
-        thread_kwargs["param_grid"] = param_grid
-        thread_kwargs["grid_name"] = grid_name
-        thread_kwargs["grid_res_dir"] = grid_res_dir
-        thread_kwargs["config_file"] = config_file
-        thread_kwargs["global_res_file"] = global_res_file
-
-        # Begin cluster computation
+        # Start cluster computation
         ###########################
         print("***STARTING CLUSTER COMPUTATION***")
-
-        # Spawn threads to control each node connections and start computation
+        # Spawn threads to control each node connection and start computation
         threads = [self.spawn_thread(client, thread_kwargs) for client in self.clients]
+        # Wait for all threads to finish
         for t_ in threads:
             t_.join()
 
         print("")
-
         print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
 
+        # Check parameter combinations that failed multiple times to compute
+        remaining_params = chunked_grid.loc[chunked_grid["status"] == "failed"].index
+        if len(remaining_params) > 0:
+            print("WARNING: The following parameter indices could not be computed: ")
+            print(remaining_params)
         print("")
 
-        # Creating global result file
-        ###############################
+        # Write local results to global result file
+        ###########################################
         print(f'***CREATING GLOBAL RESULT FILE***')
         t0 = t.time()
 
         res_lst = []
-        for i in range(self.res_file_idx):
-            res_lst.append(self.res_collection.pop(i))
-        df = pd.concat(res_lst, axis=1)
-
-        print(f'Writing data to global result file...', end="")
-        with pd.HDFStore(global_res_file, "a") as store:
-            store.put(key='/Results/r_E0_df', value=df)
-        print("done")
-
-        print(f'Deleting temporary result files...', end="")
-        for temp_file in glob.glob(f'{grid_res_dir}/*_temp*.h5'):
-            os.remove(temp_file)
-        print("done")
+        res_files = glob.glob(f'{grid_res_dir}/*_temp*')
+        res_files.sort()
+        for file in res_files:
+            try:
+                # TODO: Iterate through all keys in the temp result files
+                res_lst.append(pd.read_hdf(file, key="Data"))
+            except (IndexError, KeyError) as e:
+                print(e)
+        if len(res_lst) > 0:
+            df = pd.concat(res_lst, axis=1)
+            with pd.HDFStore(global_res_file, "a") as store:
+                store.put(key='/Results/r_E0_df', value=df)
+            for file in res_files:
+                os.remove(file)
 
         print(f'Elapsed time: {t.time()-t0:.3f} seconds')
-        print(f'Find results in: {grid_res_dir}/')
+        print(f'Find results in: {grid_res_dir}')
 
-        print("")
+        chunked_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
 
-        param_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
+        return global_res_file
 
-        return global_res_file, grid_file
+    def thread_master(self, client: dict, thread_kwargs: dict):
+        """Function that is executed by each thread to schedule computations on the respective worker
 
-    def thread_master(self, client, thread_kwargs: dict):
+        Parameters
+        ----------
+        client
+            Dictionary containing all information about the remote worker that is tied to the current thread
+        thread_kwargs
+            Dictionary containing all kwargs that are passed to the thread function
+
+        Returns
+        -------
+
+        """
         thread_name = currentThread().getName()
 
         # Get client information
         pm_client = client["paramiko_client"]
         logfile = client["logfile"]
-        num_params = client["num_params"]
 
         # Get keyword arguments
         config_file = thread_kwargs["config_file"]
-        param_grid = thread_kwargs["param_grid"]
+        chunked_grid = thread_kwargs["chunked_grid"]
         grid_name = thread_kwargs["grid_name"]
         grid_res_dir = thread_kwargs["grid_res_dir"]
         worker_env = thread_kwargs["worker_env"]
@@ -670,32 +648,33 @@ class ClusterGridSearch(ClusterCompute):
             # Temporarily disable thread switching
             with self.lock:
 
-                # Fetch grid indices
+                # Fetch grid chunks
                 ####################
-                param_idx = self.fetch_param_idx(param_grid, num_params=num_params)
-                if param_idx.empty:
+                remaining_params = chunked_grid.loc[chunked_grid["status"] == "unsolved"]
+                if remaining_params.empty:
                     print(f'[T]\'{thread_name}\': No more parameter combinations available!')
-                    # Exit while loop
                     break
                 else:
+                    # Find chunk index of first value in remaining params and fetch all parameter combinations with the
+                    # same chunk index
+                    chunk_idx = remaining_params.iloc[0]["chunk_idx"]
+                    param_idx = remaining_params.loc[remaining_params["chunk_idx"] == chunk_idx].index
+                    chunked_grid.at[param_idx, "status"] = "pending"
+
                     print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
                     print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
 
                     # Create parameter sub-grid
                     ###########################
                     subgrid_fp = f'{subgrid_dir}/{thread_name}_Subgrid_{subgrid_idx}.h5'
-                    subgrid_df = param_grid.iloc[param_idx]
-                    subgrid_df.to_hdf(subgrid_fp, key='Data')
+                    subgrid_df = chunked_grid.iloc[param_idx]
+                    subgrid_df.to_hdf(subgrid_fp, key="subgrid")
                     subgrid_idx += 1
 
-                    # Create temporary result file for current subgrid
-                    ##################################################
-                    tmp_res_idx = self.res_file_idx
-                    idx_min = np.amin(param_idx.values)
-                    idx_max = np.amax(param_idx.values)
-                    local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_idx_{idx_min}-{idx_max}_temp.h5'
-                    # TODO: Write indices to local_res_file
-                    self.res_file_idx += 1
+                    # Temporary result file for current subgrid
+                    ###########################################
+                    local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_' \
+                        f'chunk_{chunk_idx}_idx_{param_idx[0]}-{param_idx[-1]}_temp.h5'
 
                     # Execute worker script on the remote host
                     ##########################################
@@ -714,268 +693,114 @@ class ClusterGridSearch(ClusterCompute):
             # Wait for remote computation to finish
             #######################################
             status = stdout.channel.recv_exit_status()
-            if status == 0:
-                print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
-            else:
-                print(f'[T]\'{thread_name}\': Remote computation failed with exit status {status}. '
-                      f'Elapsed time: {t.time() - t0:.3f} seconds')
-
-            # Load results from result file to working memory
-            #################################################
-            # t0 = t.time()
-            print(f'[T]\'{thread_name}\': Updating grid status')
 
             with self.lock:
-                try:
-                    # TODO: Read results from Port (Socket) ?
-                    local_results = pd.read_hdf(local_res_file, key='Data')
-                    # for col in range(local_results.shape[1]):
-                    #     local_result = local_results.iloc[:, col]
-                    #     idx_label = local_result.name[:-1]
-                    #     idx = param_grid[(param_grid_raw.values == idx_label).all(1)].index
-                    #     if any(pd.isnull(local_result)):
-                    #         param_grid.at[idx, 'status'] = 'unsolved'
-                    #     else:
-                    #         param_grid.at[idx, 'status'] = 'done'
-                    # param_grid.at[param_grid['status'] == 'pending', 'status'] = 'unsolved'
-                    param_grid.at[param_idx, 'status'] = 'done'
-                    self.res_collection[tmp_res_idx] = local_results
-                except KeyError:
-                    # TODO: restart computation only twice before setting status to 'failed'
-                    param_grid.at[param_idx, 'status'] = 'unsolved'
-                    # os.remove(local_res_file)
-                except FileNotFoundError:
-                    param_grid.at[param_idx, 'status'] = 'unsolved'
-                # TODO: What happens, if results are not added to res_collection, but the res_idx is still counted up?
+                if status == 0:
+                    print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
+                    print(f'[T]\'{thread_name}\': Updating grid status')
+                    try:
+                        # TODO: Read results from Port (Socket) ?
+                        # TODO: Check all keys in the result file
+                        pd.read_hdf(local_res_file, key='Data')
+                        chunked_grid.at[param_idx, 'status'] = 'done'
+                    except (KeyError, FileNotFoundError):
+                        for row in param_idx:
+                            if chunked_grid.loc[row]["err_count"] < 2:
+                                chunked_grid.at[row, "status"] = "unsolved"
+                                chunked_grid.at[row, "err_count"] = chunked_grid.iloc[row]["err_count"] + 1
+                            else:
+                                chunked_grid.at[row, "status"] = "failed"
+                else:
+                    print(f'[T]\'{thread_name}\': Remote computation failed with exit status {status}')
+                    print(f'[T]\'{thread_name}\': Updating grid status')
+                    for row in param_idx:
+                        if chunked_grid.loc[row]["err_count"] < 2:
+                            chunked_grid.at[row, "status"] = "unsolved"
+                            chunked_grid.at[row, "err_count"] = chunked_grid.iloc[row]["err_count"] + 1
+                        else:
+                            chunked_grid.at[row, "status"] = "failed"
 
             # Lock released, thread switching enabled
         # End of while loop
     # End of Thread master
 
-    ########################
-    # CGS Helper functions #
-    ########################
-
-    def prepare_grid(self, param_grid_arg, permute=False):
-        """Create a DataFrame and a DefaultGrid.csv from a *.csv/DataFrame/dict containing all parameter combinations
+    #################################
+    # CGS internal helper functions #
+    #################################
+    @staticmethod
+    def chunk_grid(grid: pd.DataFrame, chunk_size: int):
+        """Create a pd.DataFrame from the params dict and assign a chunk index to each parameter combination
 
         Parameters
-        ---------
-        param_grid_arg
-            Can be either a csv-file, a pandas DataFrame or a dictionary
-            If a csv-file is given, a DataFrame is created and the csv-file is copied to the project folder
-            If a DataFrame is given, a default csv-file is created in the project folder. Existing default grid files
-                in the project folder are NOT overwritten. Each grid file gets it's own index
-            If a dictionary is given, a DataFrame and a csv-file are created
-        permute
-            Only relevant when param_grid_arg is a dictionary.
-            If true, a DataFrame is created containing all permutations of the parameters given in the dictionary as
-                lists
-
-        Returns
-        -------
+        ----------
         grid
-            Pandas DataFrame containing all parameter combinations to be computed in the cluster
-        grid_file
-            path to a csv.file, containing all parameter combinations of the DataFrame
-
-        """
-        # param_grid can either be *.csv, dict or DataFrame
-        if isinstance(param_grid_arg, str):
-            # If parameter grid is a string
-            try:
-                # Open grid file
-                grid = pd.read_csv(param_grid_arg)
-                # Check directory of grid file
-                if os.path.dirname(param_grid_arg) != self.grid_dir:
-                    # Copy parameter grid to cluster_examples instances' grid directory
-                    copy2(param_grid_arg, self.grid_dir)
-                    grid_file = f'{self.grid_dir}/{os.path.basename(param_grid_arg)}'
-                else:
-                    grid_file = param_grid_arg
-                # Add status column
-                if 'status' not in grid.columns:
-                    # Add status-column
-                    grid['status'] = 'unsolved'
-                else:
-                    # Set rows with status 'failed' to 'unsolved' to compute them again
-                    unsolved_idx = grid.index[grid['status'] == "failed"]
-                    grid.at[unsolved_idx, 'status'] = 'unsolved'
-                return grid, grid_file
-            except FileNotFoundError as err:
-                print(err)
-                print("Returning!")
-                # Stop computation
-                return None
-
-        elif isinstance(param_grid_arg, dict):
-            # Create DataFrame from dict
-            grid_frame = linearize_grid(param_grid_arg, permute=permute)
-            # Create default parameter grid csv-file
-            grid_idx = 0
-            # grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
-            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
-            # If grid_file already exist
-            while os.path.exists(grid_file):
-                grid_idx += 1
-                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
-            # grid_frame.to_csv(grid_file, index=True, float_format='%g')
-            # grid_frame.to_csv(grid_file, index=True)
-            grid_frame.to_csv(grid_file, index=True)
-            # Add status columns to grid
-            if 'status' not in grid_frame.columns:
-                grid_frame['status'] = 'unsolved'
-            else:
-                # Set rows with status 'failed' to 'unsolved' to compute them again
-                unsolved_idx = grid_frame.index[grid_frame['status'] == "failed"]
-                grid_frame.at[unsolved_idx, 'status'] = 'unsolved'
-            # Add/reset worker-column
-            grid_name = Path(grid_file).stem
-            return grid_frame, grid_file, grid_name
-
-        elif isinstance(param_grid_arg, pd.DataFrame):
-            grid_frame = param_grid_arg.copy(deep=True)
-            # Create default parameter grid csv-file from DataFrame
-            grid_idx = 0
-            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
-            # If grid_file already exist
-            while os.path.exists(grid_file):
-                grid_idx += 1
-                grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
-            grid_frame.to_csv(grid_file, index=True)
-            # Add status columns to grid
-            if 'status' not in grid_frame.columns:
-                grid_frame['status'] = 'unsolved'
-            else:
-                # Set rows with status 'failed' to 'unsolved' to compute them again
-                unsolved_idx = grid_frame.index[grid_frame['status'] == "failed"]
-                grid_frame.at[unsolved_idx, 'status'] = 'unsolved'
-            # Add/reset worker-column
-            grid_name = Path(grid_file).stem
-            return grid_frame, grid_file, grid_name
-
-        else:
-            print("Parameter grid unsupported format")
-            # Stop computation
-            return None
-
-    def prepare_chunks(self, grid_len, chunk_size="dist_equal"):
-        """Set the amount of parameter combinations that are computed at once by each worker
-
-        Adds a key "num_params" to each client dict in self.clients
-
-        Parameters
-        ----------
+            pd.DataFrame with all parameter combinations that can be traversed linearly
         chunk_size
-            int or str containing either a fixed chunk size for each worker or a mode to compute the chunk size
-            dynamically. Mode can be one out of:
-            'dist_equal': The number of parameters is equally distributed among the workers.
-                The first node to finish it's computation starts another one to compute the remaining parameters
-            'dist_equal_add_mod': The number of parameters is equally distributed among the workers.
-                The remaining amount of parameters (modulo) is added to the chunk size of the first node in the
-                node list.
-            'fit_hardware': Not implemented yet
-        grid_len
-            Total number of parameter combinations computed by all workers together
-
-        Returns
-        ------
-
-        """
-
-        if isinstance(chunk_size, int):
-            num_params = chunk_size
-            for client in self.clients:
-                client['num_params'] = num_params
-        elif isinstance(chunk_size, str):
-            if chunk_size == "dist_equal_add_mod":
-                # grid_len = len(grid_frame)
-                num_clients = len(self.clients)
-                num_params = int(grid_len/num_clients)
-                mod = grid_len % num_clients
-                # Distribute all parameters equally among all nodes
-                for client in self.clients:
-                    # Add remaining parameters to the first node
-                    if mod != 0:
-                        client['num_params'] = num_params + mod
-                        mod = 0
-                    else:
-                        client['num_params'] = num_params
-            elif chunk_size == "dist_equal":
-                num_clients = len(self.clients)
-                num_params = int(grid_len/num_clients)
-                # Distribute all parameters equally among all nodes
-                for client in self.clients:
-                    client['num_params'] = num_params
-            elif chunk_size == "fit_hardware":
-                pass
-
-    def fetch_param_idx(self, param_grid, lock=False, num_params=1, set_status=True):
-        """Fetch indices of the first num_params rows of param_grid that's status-column equals 'unsolved'
-
-        Parameters
-        ----------
-        param_grid
-            Linearized parameter grid of type pandas.DataFrame.
-        lock
-            RLock to make sure threads are not switched during the execution of this function
-        num_params
-            Number of indices to fetch from param_grid. Is 1 by default.
-        set_status
-            If True, sets 'status' key of the fetched rows to 'pending', to exclude them from future calls.
-            Can be used to check param_grid for fetchable or existent keys without changing their 'status' key if False.
-            Is True by default.
+            Number of parameter combinations to be computed simultaneously on one worker
 
         Returns
         -------
-        pandas.Index([index_list])
-            Is empty if there are no row indices to be fetched.
-            Is np.nan if param_grid has no key named 'status'.
-            Contains all remaining indices if num_params is higher than row indices left.
 
         """
-        if lock:
-            with self.lock:
-                try:
-                    # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
-                    param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
-                except KeyError:
-                    return pd.Index([np.nan])
-                if set_status:
-                    param_grid.at[param_idx, 'status'] = 'pending'
-                return param_idx
-        else:
-            try:
-                # Get the first num_params row indices of lin_grid who's 'status' keys equal 'unsolved'
-                param_idx = param_grid.loc[param_grid['status'] == 'unsolved'].index[:num_params]
-            except KeyError:
-                return pd.Index([np.nan])
-            if set_status:
-                param_grid.at[param_idx, 'status'] = 'pending'
-            return param_idx
+        # Add status columns to grid
+        chunked_grid = grid.copy()
+        chunked_grid["status"] = 'unsolved'
+        chunked_grid["chunk_idx"] = -1
+        chunked_grid["err_count"] = 0
+
+        # Assign a chunk index to each parameter combination
+        chunk_count = 0
+        while True:
+            param_idx = chunked_grid.loc[chunked_grid["status"] == "unsolved"].index[:chunk_size]
+            if param_idx.empty:
+                break
+            else:
+                chunked_grid.at[param_idx, 'chunk_idx'] = chunk_count
+                chunked_grid.at[param_idx, 'status'] = "chunked"
+                chunk_count += 1
+        chunked_grid["status"] = 'unsolved'
+
+        return chunked_grid
 
     @staticmethod
-    def check_key_consistency(param_grid, param_map):
+    def check_key_consistency(param_grid, config_file):
         """
         Parameters
         ----------
         param_grid:
-        param_map:
+        config_file:
 
         Returns
         -------
 
         """
         grid_key_lst = list(param_grid.keys())
-        map_key_lst = list(param_map.keys())
-        return all((map_key in grid_key_lst for map_key in map_key_lst))
+
+        with open(config_file) as config:
+            param_dict = json.load(config)
+            try:
+                param_map = param_dict['param_map']
+                map_key_lst = list(param_map.keys())
+                if not all((map_key in grid_key_lst for map_key in map_key_lst)):
+                    # Not all keys of parameter map can be found in parameter grid
+                    print("Not all parameter map keys found in parameter grid")
+                    print("Parameter map keys:")
+                    print(*list(param_map.keys()))
+                    print("Parameter grid keys:")
+                    print(*list(param_grid.keys()))
+                    return False
+                # Parameter grid and parameter map match
+                print("All parameter map keys found in parameter grid")
+                return param_dict
+            except KeyError as err:
+                # Config_file does not contain a key 'param_map'
+                print("KeyError:", err)
+                return False
 
 
 #####################
 # Utility functions #
 #####################
-
-
 def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
     """Turns the grid into a grid that can be traversed linearly, i.e. pairwise.
 
@@ -1043,8 +868,7 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
 
 
 class StreamTee(object):
-
-    """Copy all stdout to a specified file"""
+    """Tee all stdout to a specified logfile"""
     def __init__(self, stream1, stream2fp):
         stream2 = open(stream2fp, "a")
         self.stream1 = stream1
@@ -1068,9 +892,9 @@ class StreamTee(object):
         return callable1(*args, **kwargs)
 
 
-def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inputs,
-                      outputs, sampling_step_size=None, **kwargs):
-    """Creates a configfile.json containing a config_dict{} with all input parameters as key-value pairs
+def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float, inputs: dict,
+                      outputs: dict, sampling_step_size: float, **kwargs):
+    """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
 
     Parameters
     ----------
@@ -1100,6 +924,9 @@ def create_cgs_config(fp, circuit_template, param_map, dt, simulation_time, inpu
     }
     if inputs:
         config_dict["inputs"] = {str(*inputs.keys()): list(*inputs.values())}
+
+    for key, value in kwargs.items():
+        config_dict[key] = value
 
     with open(fp, "w") as f:
         json.dump(config_dict, f, indent=2)
