@@ -32,7 +32,6 @@ import sys
 import ast
 import json
 import time
-import h5py
 import argparse
 
 # external imports
@@ -140,8 +139,6 @@ def main(_):
     # Order results and post processing
     ###################################
     res_lst = []
-    # peak_lst = []
-    # spec_lst_df = []
 
     # Loop through parameter grid and identify corresponding result column
     for i, idx in enumerate(param_grid.index):
@@ -151,29 +148,16 @@ def main(_):
         result.columns.names = results.columns.names
         res_lst.append(result)
 
-        # POSTPROCESSING
-        ################
-        # spec = postprocessing_1(result)
-        # spec.columns.names = results.columns.names
-        # spec_lst_df.append(postprocessing_1(result))
-
-        # peaks = postprocessing_2(result, simulation_time=simulation_time)
-        # peak_lst.append(peaks)
+        # TODO: Add postprocessing
 
     # Ordered DataFrames with respect to param_grid entries
     results = pd.concat(res_lst, axis=1)
-    # spec = pd.concat(spec_lst_df, axis=1)
 
     # SAVE DATA
     ###########
     # DataFrames
     with pd.HDFStore(local_res_file, "w") as store:
         store.put(key='Data', value=results)
-        # store.put(key=f'PSD', value=spec)
-
-    # Other
-    # with h5py.File(local_res_file, "a") as file:
-        # file.create_dataset("Other/num_peaks", data=peak_lst)
 
     print(f'Result files created. Elapsed time: {time.time()-t0:.3f} seconds')
 

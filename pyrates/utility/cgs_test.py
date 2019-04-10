@@ -60,34 +60,26 @@ param_map = {'k_e': {'var': [('Op_e.0', 'k_ee'), ('Op_i.0', 'k_ie')],
                      'nodes': ['E.0', 'I.0']}
              }
 
-dts = 1e-3
-
-config_file = f'{compute_dir}/Config/Montbrio_EIC_config.json'
-
-create_cgs_config(fp=config_file,
-                  circuit_template="/data/hu_salomon/PycharmProjects/MasterThesis/Montbrio/Montbrio/EI_Circuit",
-                  param_map=param_map,
-                  simulation_time=5.,
-                  dt=5e-4,
-                  inputs={},
-                  outputs={"r": ("E", "Op_e.0", "r")},
-                  sampling_step_size=dts)
-
-# Create parameter grid
-#######################
-params = {'k_e': np.linspace(1., 100., 101), 'k_i': np.linspace(1., 100., 101)}
+params = {'k_e': np.linspace(1., 100., 11), 'k_i': np.linspace(1., 100., 11)}
 
 # Run cluster grid search
 #########################
-res_file = cgs.run(config_file=config_file,
+res_file = cgs.run(circuit_template="/data/hu_salomon/PycharmProjects/MasterThesis/Montbrio/Montbrio/EI_Circuit",
                    params=params,
+                   param_map=param_map,
+                   simulation_time=1.,
+                   dt=5e-4,
+                   inputs={},
+                   outputs={"r": ("E", "Op_e.0", "r")},
+                   sampling_step_size=1e-3,
                    permute=True,
-                   chunk_size=1000,
+                   chunk_size=50,
                    worker_env="/data/u_salomon_software/anaconda3/envs/PyRates/bin/python3",
                    worker_file="/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/cluster_worker.py"
                    )
 
 try:
     results = pd.read_hdf(res_file, key="/Results/r_E0_df")
+    print(results)
 except (KeyError, FileNotFoundError) as e:
     print(e)

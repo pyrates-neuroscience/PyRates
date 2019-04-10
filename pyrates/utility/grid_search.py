@@ -462,30 +462,47 @@ class ClusterGridSearch(ClusterCompute):
         self.res_dir = f'{self.compute_dir}/Results'
         os.makedirs(self.res_dir, exist_ok=True)
 
-    def run(self, config_file: str, params: dict, permute: bool, chunk_size: int,
-            worker_env: str, worker_file: str) -> str:
-        """Run multiple instances of worker_file simultaneously on different workstations in the compute cluster
+    def run(self, circuit_template: str, params: dict, param_map: dict, dt: float, simulation_time: float,
+            inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: int,
+            worker_env: str, worker_file: str, permute: bool = False, **config_kwargs) -> str:
+        """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
         Parameters
         ----------
-        config_file:
-            JSON file containing all necessary information to call grid_search (see create_cgs_config())
-        params:
-            Dictionary containing lists of parameters to create the parameter_grid from
-        permute:
+        circuit_template
+            Path to the circuit template.
+        params
+            Dictionary containing lists of parameters to create the parameter_grid from.
+        param_map
+            Key-value pairs that map the keys of param_grid to concrete circuit variables.
+        dt
+            Simulation step-size in s.
+        simulation_time
+            Simulation time in s.
+        inputs
+            inputs as provided to the `run` method of `:class:ComputeGraph`.
+        outputs
+            Outputs as provided to the `run` method of `:class:ComputeGraph`.
+        sampling_step_size
+            Sampling step-size as provided to the `run` method of `:class:ComputeGraph`.
+        permute
             If true, all combinations of the parameter values in params will be created.
-        chunk_size:
-            Size of parameter sub grids computed by each worker
-        worker_env:
-            Python executable inside an environment in which the remote worker file should be called
-        worker_file:
-            Python script that will be executed by each remote worker
+        chunk_size
+            Size of parameter sub grids computed by each worker.
+        worker_env
+            Python executable inside an environment in which the remote worker script is called.
+        worker_file
+            Python script that will be executed by each remote worker.
+        config_kwargs
+            Additional keywords to write to the config file.
 
         Returns
         -------
         str
-            Path of the global result file
+            .hdf5 file containing the computation results as DataFrame in dataset '/Results/r_E0_df'
+            Results can be accessed using pandas.read_hdf(file, key=/Results/'r_E0_df').
         """
+
         t_total = t.time()
 
         print("")
@@ -500,10 +517,9 @@ class ClusterGridSearch(ClusterCompute):
 
         # Create default parameter grid csv-file
         grid_idx = 0
-        grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
-        while os.path.exists(grid_file):
+        while os.path.exists(f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'):
             grid_idx += 1
-            grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
+        grid_file = f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'
         grid_name = Path(grid_file).stem
         param_grid.to_csv(grid_file, index=True)
 
@@ -517,10 +533,30 @@ class ClusterGridSearch(ClusterCompute):
         #######################
         print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
         t0 = t.time()
-        param_dict = self.check_key_consistency(param_grid, config_file)
-        if not param_dict:
+        if not self.check_key_consistency(params, param_map):
             print("Terminating execution!")
             return ""
+        print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
+
+        print("")
+
+        # Create config file
+        #####################
+        print("***CREATING CONFIG FILE***")
+        t0 = t.time()
+        config_idx = 0
+        while os.path.exists(f'{self.config_dir}/DefaultConfig_{config_idx}.json'):
+            config_idx += 1
+        config_file = f'{self.config_dir}/DefaultConfig_{config_idx}.json'
+        self.create_cgs_config(fp=config_file,
+                               circuit_template=circuit_template,
+                               param_map=param_map,
+                               dt=dt,
+                               simulation_time=simulation_time,
+                               inputs=inputs,
+                               outputs=outputs,
+                               sampling_step_size=sampling_step_size,
+                               **config_kwargs)
         print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
@@ -538,10 +574,11 @@ class ClusterGridSearch(ClusterCompute):
         with h5py.File(global_res_file, 'w') as file:
             for key, value in params.items():
                 file.create_dataset(f'/ParameterGrid/Keys/{key}', data=value)
-            file.create_dataset(f'/Config/circuit_template', data=param_dict['circuit_template'])
-            file.create_dataset(f'/Config/simulation_time', data=param_dict['simulation_time'])
-            file.create_dataset(f'/Config/dt', data=param_dict['dt'])
-            file.create_dataset(f'/Config/sampling_step_size', data=param_dict['sampling_step_size'])
+            file.create_dataset(f'/Config/config_file', data=config_file)
+            file.create_dataset(f'/Config/circuit_template', data=circuit_template)
+            file.create_dataset(f'/Config/simulation_time', data=simulation_time)
+            file.create_dataset(f'/Config/dt', data=dt)
+            file.create_dataset(f'/Config/sampling_step_size', data=sampling_step_size)
         param_grid.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
@@ -595,6 +632,7 @@ class ClusterGridSearch(ClusterCompute):
         if len(res_lst) > 0:
             df = pd.concat(res_lst, axis=1)
             with pd.HDFStore(global_res_file, "a") as store:
+                # TODO: Change key depending on the defined output
                 store.put(key='/Results/r_E0_df', value=df)
             for file in res_files:
                 os.remove(file)
@@ -699,7 +737,6 @@ class ClusterGridSearch(ClusterCompute):
                     print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
                     print(f'[T]\'{thread_name}\': Updating grid status')
                     try:
-                        # TODO: Read results from Port (Socket) ?
                         # TODO: Check all keys in the result file
                         pd.read_hdf(local_res_file, key='Data')
                         chunked_grid.at[param_idx, 'status'] = 'done'
@@ -763,39 +800,68 @@ class ClusterGridSearch(ClusterCompute):
         return chunked_grid
 
     @staticmethod
-    def check_key_consistency(param_grid, config_file):
-        """
+    def check_key_consistency(param_grid: dict, param_map: dict):
+        """Check if keys in param_grid and param_map match
+
         Parameters
         ----------
-        param_grid:
-        config_file:
+        param_grid
+        param_map
 
         Returns
         -------
+        bool
 
         """
         grid_key_lst = list(param_grid.keys())
+        map_key_lst = list(param_map.keys())
+        if not all((map_key in grid_key_lst for map_key in map_key_lst)):
+            # Not all keys of parameter map can be found in parameter grid
+            print("Not all parameter map keys found in parameter grid")
+            print("Parameter map keys:")
+            print(*list(param_map.keys()))
+            print("Parameter grid keys:")
+            print(*list(param_grid.keys()))
+            return False
+        # Parameter grid and parameter map match
+        else:
+            print("All parameter map keys found in parameter grid")
+            return True
 
-        with open(config_file) as config:
-            param_dict = json.load(config)
-            try:
-                param_map = param_dict['param_map']
-                map_key_lst = list(param_map.keys())
-                if not all((map_key in grid_key_lst for map_key in map_key_lst)):
-                    # Not all keys of parameter map can be found in parameter grid
-                    print("Not all parameter map keys found in parameter grid")
-                    print("Parameter map keys:")
-                    print(*list(param_map.keys()))
-                    print("Parameter grid keys:")
-                    print(*list(param_grid.keys()))
-                    return False
-                # Parameter grid and parameter map match
-                print("All parameter map keys found in parameter grid")
-                return param_dict
-            except KeyError as err:
-                # Config_file does not contain a key 'param_map'
-                print("KeyError:", err)
-                return False
+    @staticmethod
+    def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float,
+                          inputs: dict, outputs: dict, sampling_step_size: float, **kwargs):
+        """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
+        Parameters
+        ----------
+        fp
+        circuit_template
+        param_map
+        dt
+        simulation_time
+        inputs
+        outputs
+        sampling_step_size
+        kwargs
+
+        Returns
+        -------
+        """
+        config_dict = {
+            "circuit_template": circuit_template,
+            "param_map": param_map,
+            "dt": dt,
+            "simulation_time": simulation_time,
+            "outputs": outputs,
+            "sampling_step_size": sampling_step_size,
+            "kwargs": kwargs
+        }
+        if inputs:
+            config_dict["inputs"] = {str(*inputs.keys()): list(*inputs.values())}
+        for key, value in kwargs.items():
+            config_dict[key] = value
+        with open(fp, "w") as f:
+            json.dump(config_dict, f, indent=2)
 
 
 #####################
@@ -890,43 +956,3 @@ class StreamTee(object):
         # Emit method call to stdout (stream 1)
         callable1 = getattr(self.stream1, self.__missing_method_name)
         return callable1(*args, **kwargs)
-
-
-def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float, inputs: dict,
-                      outputs: dict, sampling_step_size: float, **kwargs):
-    """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
-
-    Parameters
-    ----------
-    fp
-    circuit_template
-    param_map
-    dt
-    simulation_time
-    inputs
-    outputs
-    sampling_step_size
-    kwargs
-
-    Returns
-    -------
-
-    """
-    # if not os.path.exists(fp):
-    config_dict = {
-        "circuit_template": circuit_template,
-        "param_map": param_map,
-        "dt": dt,
-        "simulation_time": simulation_time,
-        "outputs": outputs,
-        "sampling_step_size": sampling_step_size,
-        "kwargs": kwargs
-    }
-    if inputs:
-        config_dict["inputs"] = {str(*inputs.keys()): list(*inputs.values())}
-
-    for key, value in kwargs.items():
-        config_dict[key] = value
-
-    with open(fp, "w") as f:
-        json.dump(config_dict, f, indent=2)
