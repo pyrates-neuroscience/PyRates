@@ -79,7 +79,7 @@ res_file = cgs.run(circuit_template="/data/hu_salomon/PycharmProjects/MasterThes
                    )
 
 try:
-    results = pd.read_hdf(res_file, key="/Results/r_E0_df")
+    results = pd.read_hdf(res_file, key="/Results/circuit_output")
     print(results)
 except (KeyError, FileNotFoundError) as e:
     print(e)

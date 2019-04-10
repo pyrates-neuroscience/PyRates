@@ -488,7 +488,7 @@ class ClusterGridSearch(ClusterCompute):
         permute
             If true, all combinations of the parameter values in params will be created.
         chunk_size
-            Size of parameter sub grids computed by each worker.
+            Number of parameter combinations computed simultaneously on one worker
         worker_env
             Python executable inside an environment in which the remote worker script is called.
         worker_file
@@ -499,8 +499,8 @@ class ClusterGridSearch(ClusterCompute):
         Returns
         -------
         str
-            .hdf5 file containing the computation results as DataFrame in dataset '/Results/r_E0_df'
-            Results can be accessed using pandas.read_hdf(file, key=/Results/'r_E0_df').
+            .hdf5 file containing the computation results as DataFrame in dataset '/Results/circuit_output'
+            Results can be accessed using pandas.read_hdf(file, key=/Results/circuit_output').
         """
 
         t_total = t.time()
@@ -632,8 +632,7 @@ class ClusterGridSearch(ClusterCompute):
         if len(res_lst) > 0:
             df = pd.concat(res_lst, axis=1)
             with pd.HDFStore(global_res_file, "a") as store:
-                # TODO: Change key depending on the defined output
-                store.put(key='/Results/r_E0_df', value=df)
+                store.put(key='/Results/circuit_output', value=df)
             for file in res_files:
                 os.remove(file)
 
