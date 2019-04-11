@@ -464,7 +464,8 @@ class ClusterGridSearch(ClusterCompute):
 
     def run(self, circuit_template: str, params: dict, param_map: dict, dt: float, simulation_time: float,
             inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: int,
-            worker_env: str, worker_file: str, permute: bool = False, **config_kwargs) -> str:
+            worker_env: str, worker_file: str, result_kwargs: dict = {}, config_kwargs: dict = {},
+            permute: bool = False, **kwargs) -> str:
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
         Parameters
@@ -493,6 +494,8 @@ class ClusterGridSearch(ClusterCompute):
             Python executable inside an environment in which the remote worker script is called.
         worker_file
             Python script that will be executed by each remote worker.
+        result_kwargs
+            Additional keywords to write to the result file
         config_kwargs
             Additional keywords to write to the config file.
 
@@ -556,7 +559,7 @@ class ClusterGridSearch(ClusterCompute):
                                inputs=inputs,
                                outputs=outputs,
                                sampling_step_size=sampling_step_size,
-                               **config_kwargs)
+                               add_kwargs=config_kwargs)
         print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
@@ -574,6 +577,8 @@ class ClusterGridSearch(ClusterCompute):
         with h5py.File(global_res_file, 'w') as file:
             for key, value in params.items():
                 file.create_dataset(f'/ParameterGrid/Keys/{key}', data=value)
+            for key, value in result_kwargs.items():
+                file.create_dataset(f'/AdditionalData/{key}', data=value)
             file.create_dataset(f'/Config/config_file', data=config_file)
             file.create_dataset(f'/Config/circuit_template', data=circuit_template)
             file.create_dataset(f'/Config/simulation_time', data=simulation_time)
@@ -622,6 +627,9 @@ class ClusterGridSearch(ClusterCompute):
 
         res_lst = []
         res_files = glob.glob(f'{grid_res_dir}/*_temp*')
+
+        # TODO: Sorting
+
         res_files.sort()
         for file in res_files:
             try:
@@ -711,7 +719,7 @@ class ClusterGridSearch(ClusterCompute):
                     # Temporary result file for current subgrid
                     ###########################################
                     local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_' \
-                        f'chunk_{chunk_idx}_idx_{param_idx[0]}-{param_idx[-1]}_temp.h5'
+                        f'chunk_{chunk_idx:02}_idx_{param_idx[0]}-{param_idx[-1]}_temp.h5'
 
                     # Execute worker script on the remote host
                     ##########################################
@@ -829,7 +837,7 @@ class ClusterGridSearch(ClusterCompute):
 
     @staticmethod
     def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float,
-                          inputs: dict, outputs: dict, sampling_step_size: float, **kwargs):
+                          inputs: dict, outputs: dict, sampling_step_size: float, add_kwargs: dict):
         """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
         Parameters
         ----------
@@ -841,7 +849,7 @@ class ClusterGridSearch(ClusterCompute):
         inputs
         outputs
         sampling_step_size
-        kwargs
+        add_kwargs
 
         Returns
         -------
@@ -853,11 +861,10 @@ class ClusterGridSearch(ClusterCompute):
             "simulation_time": simulation_time,
             "outputs": outputs,
             "sampling_step_size": sampling_step_size,
-            "kwargs": kwargs
         }
         if inputs:
             config_dict["inputs"] = {str(*inputs.keys()): list(*inputs.values())}
-        for key, value in kwargs.items():
+        for key, value in add_kwargs.items():
             config_dict[key] = value
         with open(fp, "w") as f:
             json.dump(config_dict, f, indent=2)
