@@ -406,7 +406,7 @@ class ClusterCompute(object):
 
     @staticmethod
     def ssh_connect(node, username, password=None):
-        """Connect to a host via SSH an return a respective paramiko.SSHClient
+        """Connect to a host via SSH and return a respective paramiko.SSHClient
 
         Parameters
         ----------
@@ -495,9 +495,9 @@ class ClusterGridSearch(ClusterCompute):
         worker_file
             Python script that will be executed by each remote worker.
         result_kwargs
-            Additional keywords to write to the result file
+            Keywords that are added to the result file
         config_kwargs
-            Additional keywords to write to the config file.
+            Keywords that are added to the config file.
 
         Returns
         -------
@@ -622,27 +622,35 @@ class ClusterGridSearch(ClusterCompute):
 
         # Write local results to global result file
         ###########################################
-        print(f'***CREATING GLOBAL RESULT FILE***')
+        print(f'***WRITING RESULTS TO GLOBAL RESULT FILE***')
         t0 = t.time()
 
-        res_lst = []
+        # Get ordered list of temporary result files to iterate through
         res_files = glob.glob(f'{grid_res_dir}/*_temp*')
-
-        # TODO: Sorting
-
         res_files.sort()
+
+        # Read number of different outputs and prepare lists to concatenate results
+        res_dict = {}
+        with pd.HDFStore(res_files[0], "r") as store:
+            for key in store.keys():
+                res_dict[key] = []
+
+        # Concatenate results from each temp file for each output variable
         for file in res_files:
-            try:
-                # TODO: Iterate through all keys in the temp result files
-                res_lst.append(pd.read_hdf(file, key="Data"))
-            except (IndexError, KeyError) as e:
-                print(e)
-        if len(res_lst) > 0:
-            df = pd.concat(res_lst, axis=1)
-            with pd.HDFStore(global_res_file, "a") as store:
-                store.put(key='/Results/circuit_output', value=df)
-            for file in res_files:
-                os.remove(file)
+            with pd.HDFStore(file, "r") as store:
+                for idx, key in enumerate(store.keys()):
+                    res_dict[key].append(store[key])
+
+        # Add DataFrames to global result file for each result variable
+        with pd.HDFStore(global_res_file, "a") as store:
+            for key, value in res_dict.items():
+                if len(value) > 0:
+                    df = pd.concat(value, axis=1)
+                    store.put(key=f'/Results/{key}', value=df)
+
+        # Delete temp result files
+        for file in res_files:
+            os.remove(file)
 
         print(f'Elapsed time: {t.time()-t0:.3f} seconds')
         print(f'Find results in: {grid_res_dir}')
@@ -744,8 +752,12 @@ class ClusterGridSearch(ClusterCompute):
                     print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
                     print(f'[T]\'{thread_name}\': Updating grid status')
                     try:
-                        # TODO: Check all keys in the result file
-                        pd.read_hdf(local_res_file, key='Data')
+                        with pd.HDFStore(local_res_file, "r") as store:
+                            if len(store.keys()) == 0:
+                                raise KeyError
+                            for key in store.keys():
+                                if len(store[key].index) == 0:
+                                    raise KeyError
                         chunked_grid.at[param_idx, 'status'] = 'done'
                     except (KeyError, FileNotFoundError):
                         for row in param_idx:

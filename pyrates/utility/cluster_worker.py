@@ -103,8 +103,8 @@ def main(_):
     # Load subgrid into DataFrame
     param_grid = pd.read_hdf(subgrid, key="subgrid")
 
-    # Exclude 'status', 'chunk_idx' and 'err_count' keys from param_grid
-    # since grid_search() can't handle the additional columns
+    # Exclude 'status', 'chunk_idx' and 'err_count' columns from param_grid
+    # since grid_search() can't handle the additional keys
     param_grid = param_grid.drop('status', axis=1)
     param_grid = param_grid.drop('chunk_idx', axis=1)
     param_grid = param_grid.drop('err_count', axis=1)
@@ -125,7 +125,7 @@ def main(_):
                           dt=dt,
                           simulation_time=simulation_time)
 
-    out_var = results.columns.values[0][-1]
+    out_vars = results.columns.levels[-1]
 
     print(f'Total parameter grid computation time: {time.time()-t0:.3f} seconds')
     # print(f'Peak memory usage: {m} MB')
@@ -138,26 +138,41 @@ def main(_):
 
     # Order results and post processing
     ###################################
-    res_lst = []
-
-    # Loop through parameter grid and identify corresponding result column
-    for i, idx in enumerate(param_grid.index):
-        idx_list = param_grid.iloc[i].values.tolist()
-        idx_list.append(out_var)
-        result = results.loc[:, tuple(idx_list)].to_frame()
-        result.columns.names = results.columns.names
-        res_lst.append(result)
-
-        # TODO: Add postprocessing
-
-    # Ordered DataFrames with respect to param_grid entries
-    results = pd.concat(res_lst, axis=1)
-
-    # SAVE DATA
-    ###########
-    # DataFrames
     with pd.HDFStore(local_res_file, "w") as store:
-        store.put(key='Data', value=results)
+        for out_var in out_vars:
+            key = out_var.replace(".", "")
+            res_lst = []
+
+            # Loop through parameter grid and identify corresponding result column
+            for i, idx in enumerate(param_grid.index):
+                idx_list = param_grid.iloc[i].values.tolist()
+                idx_list.append(out_var)
+
+                result = results.loc[:, tuple(idx_list)].to_frame()
+                result.columns.names = results.columns.names
+                res_lst.append(result)
+
+                # POSTPROCESSING
+                ################
+
+            # Ordered DataFrames with respect to param_grid entries
+            result_ordered = pd.concat(res_lst, axis=1)
+
+            # SAVE DATA
+            ###########
+            store.put(key=key, value=result_ordered)
+            # results.to_hdf(local_res_file, key=key)
+
+            # SAVE DATA
+            ###########
+            # DataFrames
+            # with pd.HDFStore(local_res_file, "w") as store:
+            #     store.put(key='Data', value=results)
+                # store.put(key=f'PSD', value=spec)
+
+            # Other
+            # with h5py.File(local_res_file, "a") as file:
+                # file.create_dataset("Other/num_peaks", data=peak_lst)
 
     print(f'Result files created. Elapsed time: {time.time()-t0:.3f} seconds')
 
@@ -172,21 +187,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_config.json",
+        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_2/Test_config.json",
         help="Config file with all necessary data to start grid_search() except for parameter grid"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_subgrid.h5",
+        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_2/Test_subgrid.h5",
         help="Path to csv-file with sub grid to compute on the remote machine"
     )
 
     parser.add_argument(
         "--local_res_file",
         type=str,
-        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_result.h5",
+        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_2/Test_result.h5",
         help="File to save results to"
     )
 
