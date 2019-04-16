@@ -734,13 +734,20 @@ class ClusterGridSearch(ClusterCompute):
                     t0 = t.time()
                     print(f'[T]\'{thread_name}\': Starting remote computation...')
 
-                    stdin, stdout, stderr = pm_client.exec_command(command +
-                                                                   f' --config_file={config_file}'
-                                                                   f' --subgrid={subgrid_fp}'
-                                                                   f' --local_res_file={local_res_file}'
-                                                                   # redirect and append stdout and stderr to logfile:
-                                                                   f' &>> {logfile}',
-                                                                   get_pty=True)
+                    try:
+                        stdin, stdout, stderr = pm_client.exec_command(command +
+                                                                       f' --config_file={config_file}'
+                                                                       f' --subgrid={subgrid_fp}'
+                                                                       f' --local_res_file={local_res_file}'
+                                                                       # redirect and append stdout and stderr to logfile:
+                                                                       f' &>> {logfile}',
+                                                                       get_pty=True)
+                    except paramiko.ssh_exception.SSHException as e:
+                        # SSH connection has been lost
+                        print(e)
+                        chunked_grid.at[param_idx, "status"] = "unsolved"
+                        return
+
             # Lock released, thread switching enabled
 
             # Wait for remote computation to finish
@@ -834,7 +841,7 @@ class ClusterGridSearch(ClusterCompute):
         """
         grid_key_lst = list(param_grid.keys())
         map_key_lst = list(param_map.keys())
-        if not all((map_key in grid_key_lst for map_key in map_key_lst)):
+        if not all((grid_key in map_key_lst for grid_key in grid_key_lst)):
             # Not all keys of parameter map can be found in parameter grid
             print("Not all parameter map keys found in parameter grid")
             print("Parameter map keys:")
