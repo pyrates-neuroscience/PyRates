@@ -405,7 +405,7 @@ class ClusterCompute(object):
         return hw
 
     @staticmethod
-    def ssh_connect(node, username, password=None):
+    def ssh_connect(node, username, password=None, print_status=True):
         """Connect to a host via SSH and return a respective paramiko.SSHClient
 
         Parameters
@@ -426,19 +426,24 @@ class ClusterCompute(object):
         try:
             # Using kerberos authentication
             client.connect(node, username=username, gss_auth=True, gss_kex=True)
-            print(f'\'{node}\': Connection established!')
+            if print_status:
+                print(f'\'{node}\': Connection established!')
             return client
         except paramiko.ssh_exception.NoValidConnectionsError as err:
-            print(f'\'{node}\': ', err)
+            if print_status:
+                print(f'\'{node}\': ', err)
             return None
         except paramiko.ssh_exception.AuthenticationException as err:
-            print(f'\'{node}\': ', err)
+            if print_status:
+                print(f'\'{node}\': ', err)
             return None
         except paramiko.ssh_exception.SSHException as err:
-            print(f'\'{node}\': ', err)
+            if print_status:
+                print(f'\'{node}\': ', err)
             return None
         except IOError as err:
-            print(f'\'{node}\': ', err)
+            if print_status:
+                print(f'\'{node}\': ', err)
             return None
 
 
@@ -674,6 +679,7 @@ class ClusterGridSearch(ClusterCompute):
 
         """
         thread_name = currentThread().getName()
+        connection_lost = False
 
         # Get client information
         pm_client = client["paramiko_client"]
@@ -697,6 +703,7 @@ class ClusterGridSearch(ClusterCompute):
 
         # Start scheduler
         #################
+        # Scheduler loop
         while True:
             # Temporarily disable thread switching
             with self.lock:
@@ -732,9 +739,9 @@ class ClusterGridSearch(ClusterCompute):
                     # Execute worker script on the remote host
                     ##########################################
                     t0 = t.time()
-                    print(f'[T]\'{thread_name}\': Starting remote computation...')
 
                     try:
+                        print(f'[T]\'{thread_name}\': Starting remote computation...')
                         stdin, stdout, stderr = pm_client.exec_command(command +
                                                                        f' --config_file={config_file}'
                                                                        f' --subgrid={subgrid_fp}'
@@ -743,17 +750,39 @@ class ClusterGridSearch(ClusterCompute):
                                                                        f' &>> {logfile}',
                                                                        get_pty=True)
                     except paramiko.ssh_exception.SSHException as e:
-                        # SSH connection has been lost
-                        print(e)
+                        # SSH connection has been lost (remote machine shut down)
+                        print(f'[T]\'{thread_name}\': ERROR: {e}')
                         chunked_grid.at[param_idx, "status"] = "unsolved"
-                        return
+                        connection_lost = True
 
             # Lock released, thread switching enabled
+
+            # Try to reconnect to host if connection has been lost
+            ######################################################
+            if connection_lost:
+                # Reconnection loop
+                while True:
+                    # Try to reconnect while there are still parameter chunks to fetch
+                    if chunked_grid.loc[chunked_grid["status"] == "unsolved"].empty:
+                        # Stop thread execution if no more parameters are available
+                        return
+                    else:
+                        t.sleep(30)
+                        pm_client = self.ssh_connect(thread_name, username=getpass.getuser(), print_status=False)
+                        if pm_client:
+                            print(f'[T]\'{thread_name}\': Reconnected!')
+                            connection_lost = False
+                            # Escape reconnection loop
+                            break
+                # Jump to the beginning of scheduler loop
+                continue
 
             # Wait for remote computation to finish
             #######################################
             status = stdout.channel.recv_exit_status()
 
+            # Update grid status
+            ####################
             with self.lock:
                 if status == 0:
                     print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
@@ -775,7 +804,6 @@ class ClusterGridSearch(ClusterCompute):
                                 chunked_grid.at[row, "status"] = "failed"
                 else:
                     print(f'[T]\'{thread_name}\': Remote computation failed with exit status {status}')
-                    print(f'[T]\'{thread_name}\': Updating grid status')
                     for row in param_idx:
                         if chunked_grid.loc[row]["err_count"] < 2:
                             chunked_grid.at[row, "status"] = "unsolved"
