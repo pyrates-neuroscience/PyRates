@@ -3,16 +3,16 @@ import matplotlib as mpl
 plt.style.reload_library()
 plt.style.use('ggplot')
 mpl.rcParams['lines.linewidth'] = 2
-mpl.rcParams['axes.titlesize'] = 24
+mpl.rcParams['axes.titlesize'] = 12
 mpl.rcParams['axes.titleweight'] = 'bold'
-mpl.rcParams['axes.labelsize'] = 24
+mpl.rcParams['axes.labelsize'] = 12
 mpl.rcParams['axes.labelcolor'] = 'black'
 mpl.rcParams['axes.labelweight'] = 'bold'
-mpl.rcParams['xtick.labelsize'] = 20
-mpl.rcParams['ytick.labelsize'] = 20
+mpl.rcParams['xtick.labelsize'] = 12
+mpl.rcParams['ytick.labelsize'] = 12
 mpl.rcParams['xtick.color'] = 'black'
 mpl.rcParams['ytick.color'] = 'black'
-mpl.rcParams['legend.fontsize'] = 20
+mpl.rcParams['legend.fontsize'] = 12
 
 from pyrates.utility import plot_connectivity, create_cmap
 import numpy as np
@@ -34,7 +34,8 @@ cm_div = create_cmap('pyrates_red/pyrates_blue', as_cmap=True, n_colors=(n_blue,
                      pyrates_blue={'reverse': True}, pyrates_red={'reverse': False}, vmin=(0., 0.), vmax=(1.0, 1.0))
 
 # plot results
-fig, axes = plt.subplots(ncols=3, figsize=(20, 7))
+dpi = 400
+fig, axes = plt.subplots(ncols=3, figsize=(int(5000/dpi), int(2000/dpi)), dpi=400)
 
 # plot simulation times of benchmarks run on the GPU
 plot_connectivity(gpu_results[:, :, 0], ax=axes[0], yticklabels=N, xticklabels=p, cmap=cm_red,
