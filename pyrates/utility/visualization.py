@@ -751,7 +751,7 @@ def _draw_heatmap(*args, **kwargs):
     return sb.heatmap(d, **kwargs)
 
 
-class Interactive2DParamPlot(object):
+class Interactive2DParamPlotTemplate(object):
     def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array, **kwargs):
         """
 
@@ -828,16 +828,19 @@ class Interactive2DParamPlot(object):
         plt.show()
 
     def get_data(self, x_value, y_value):
-        """Access data in data_series
+        """Virtual method
 
-        Adapt this function based on the structure of data_series.
-        Additional keywords are accessible using self.kwargs[]
+        Derive a child class from Interactive2DParamPlotTemplate and rewrite this function to access data using
+        x_value, y_value und kwargs (accessible using self.kwargs[])
 
-        :param x_value:
-        :param y_value:
-        :return:
+        Example:
+            class Interactive2DParamPlot(Interactive2DParamPlotTemplate):
+
+                def get_data(self, x_value, y_value):
+                    return self.data[y_value][x_value][self.kwargs["param_1"]][self.kwargs["param_2"]]
+
         """
-        return self.data[y_value][x_value][self.kwargs["tau_e"]][self.kwargs["tau_i"]]
+
 
     def set_map_xlabel(self, label):
         self.ax[0].set_xlabel(label)
