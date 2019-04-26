@@ -405,7 +405,7 @@ class ClusterCompute(object):
         return hw
 
     @staticmethod
-    def ssh_connect(node, username, password=None):
+    def ssh_connect(node, username, password=None, print_status=True):
         """Connect to a host via SSH and return a respective paramiko.SSHClient
 
         Parameters
@@ -426,19 +426,24 @@ class ClusterCompute(object):
         try:
             # Using kerberos authentication
             client.connect(node, username=username, gss_auth=True, gss_kex=True)
-            print(f'\'{node}\': Connection established!')
+            if print_status:
+                print(f'\'{node}\': Connection established!')
             return client
         except paramiko.ssh_exception.NoValidConnectionsError as err:
-            print(f'\'{node}\': ', err)
+            if print_status:
+                print(f'\'{node}\': ', err)
             return None
         except paramiko.ssh_exception.AuthenticationException as err:
-            print(f'\'{node}\': ', err)
+            if print_status:
+                print(f'\'{node}\': ', err)
             return None
         except paramiko.ssh_exception.SSHException as err:
-            print(f'\'{node}\': ', err)
+            if print_status:
+                print(f'\'{node}\': ', err)
             return None
         except IOError as err:
-            print(f'\'{node}\': ', err)
+            if print_status:
+                print(f'\'{node}\': ', err)
             return None
 
 
@@ -468,6 +473,13 @@ class ClusterGridSearch(ClusterCompute):
             permute: bool = False, **kwargs) -> str:
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
+        ClusterGridSearch requires all necessary data (worker script, worker environment, compute directory)
+        to be stored on a server. After a connection is established, all data on the remote workers has to be accessible
+        in the same way as it would be on the master worker (same root directory, same filepaths, etc.)
+        Paths inside the run function have to be adjusted respectively.
+
+        FTP implementation is planned in future versions for direct file transfer between the master and the workers.
+
         Parameters
         ----------
         circuit_template
@@ -495,15 +507,14 @@ class ClusterGridSearch(ClusterCompute):
         worker_file
             Python script that will be executed by each remote worker.
         result_kwargs
-            Keywords that are added to the result file
+            Key-value pairs that will be added to the result file's 'AdditionalData' dataset
         config_kwargs
-            Keywords that are added to the config file.
+            Key-value pairs that will be added to the config file.
 
         Returns
         -------
         str
-            .hdf5 file containing the computation results as DataFrame in dataset '/Results/circuit_output'
-            Results can be accessed using pandas.read_hdf(file, key=/Results/circuit_output').
+            .hdf5 file containing the computation results as DataFrame in dataset '/Results/...'
         """
 
         t_total = t.time()
@@ -629,26 +640,26 @@ class ClusterGridSearch(ClusterCompute):
         res_files = glob.glob(f'{grid_res_dir}/*_temp*')
         res_files.sort()
 
-        # Read number of different outputs and prepare lists to concatenate results
+        # Read number of different circuit outputs and prepare lists to concatenate results
         res_dict = {}
         with pd.HDFStore(res_files[0], "r") as store:
             for key in store.keys():
                 res_dict[key] = []
 
-        # Concatenate results from each temp file for each output variable
+        # Concatenate results from each temp file and output variable
         for file in res_files:
             with pd.HDFStore(file, "r") as store:
                 for idx, key in enumerate(store.keys()):
                     res_dict[key].append(store[key])
 
-        # Add DataFrames to global result file for each result variable
+        # Create DataFrames for each output variable and write to global result file
         with pd.HDFStore(global_res_file, "a") as store:
             for key, value in res_dict.items():
                 if len(value) > 0:
                     df = pd.concat(value, axis=1)
                     store.put(key=f'/Results/{key}', value=df)
 
-        # Delete temp result files
+        # Delete temporary local result files
         for file in res_files:
             os.remove(file)
 
@@ -674,6 +685,7 @@ class ClusterGridSearch(ClusterCompute):
 
         """
         thread_name = currentThread().getName()
+        connection_lost = False
 
         # Get client information
         pm_client = client["paramiko_client"]
@@ -697,6 +709,7 @@ class ClusterGridSearch(ClusterCompute):
 
         # Start scheduler
         #################
+        # Scheduler loop
         while True:
             # Temporarily disable thread switching
             with self.lock:
@@ -732,21 +745,50 @@ class ClusterGridSearch(ClusterCompute):
                     # Execute worker script on the remote host
                     ##########################################
                     t0 = t.time()
-                    print(f'[T]\'{thread_name}\': Starting remote computation...')
 
-                    stdin, stdout, stderr = pm_client.exec_command(command +
-                                                                   f' --config_file={config_file}'
-                                                                   f' --subgrid={subgrid_fp}'
-                                                                   f' --local_res_file={local_res_file}'
-                                                                   # redirect and append stdout and stderr to logfile:
-                                                                   f' &>> {logfile}',
-                                                                   get_pty=True)
+                    try:
+                        print(f'[T]\'{thread_name}\': Starting remote computation...')
+                        stdin, stdout, stderr = pm_client.exec_command(command +
+                                                                       f' --config_file={config_file}'
+                                                                       f' --subgrid={subgrid_fp}'
+                                                                       f' --local_res_file={local_res_file}'
+                                                                       # redirect and append stdout and stderr to logfile:
+                                                                       f' &>> {logfile}',
+                                                                       get_pty=True)
+                    except paramiko.ssh_exception.SSHException as e:
+                        # SSH connection has been lost (remote machine shut down)
+                        print(f'[T]\'{thread_name}\': ERROR: {e}')
+                        chunked_grid.at[param_idx, "status"] = "unsolved"
+                        connection_lost = True
+
             # Lock released, thread switching enabled
+
+            # Try to reconnect to host if connection has been lost
+            ######################################################
+            if connection_lost:
+                # Reconnection loop
+                while True:
+                    # Try to reconnect while there are still parameter chunks to fetch
+                    if chunked_grid.loc[chunked_grid["status"] == "unsolved"].empty:
+                        # Stop thread execution if no more parameters are available
+                        return
+                    else:
+                        t.sleep(30)
+                        pm_client = self.ssh_connect(thread_name, username=getpass.getuser(), print_status=False)
+                        if pm_client:
+                            print(f'[T]\'{thread_name}\': Reconnected!')
+                            connection_lost = False
+                            # Escape reconnection loop
+                            break
+                # Jump to the beginning of scheduler loop
+                continue
 
             # Wait for remote computation to finish
             #######################################
             status = stdout.channel.recv_exit_status()
 
+            # Update grid status
+            ####################
             with self.lock:
                 if status == 0:
                     print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
@@ -768,7 +810,6 @@ class ClusterGridSearch(ClusterCompute):
                                 chunked_grid.at[row, "status"] = "failed"
                 else:
                     print(f'[T]\'{thread_name}\': Remote computation failed with exit status {status}')
-                    print(f'[T]\'{thread_name}\': Updating grid status')
                     for row in param_idx:
                         if chunked_grid.loc[row]["err_count"] < 2:
                             chunked_grid.at[row, "status"] = "unsolved"
@@ -834,7 +875,7 @@ class ClusterGridSearch(ClusterCompute):
         """
         grid_key_lst = list(param_grid.keys())
         map_key_lst = list(param_map.keys())
-        if not all((map_key in grid_key_lst for map_key in map_key_lst)):
+        if not all((grid_key in map_key_lst for grid_key in grid_key_lst)):
             # Not all keys of parameter map can be found in parameter grid
             print("Not all parameter map keys found in parameter grid")
             print("Parameter map keys:")
