@@ -856,7 +856,7 @@ class Interactive2DParamPlot(object):
 
 
 def save_fig_as_pickle(fp, fig):
-    """
+    """Save a figure object in pickle format.
 
     Parameters
     ----------
