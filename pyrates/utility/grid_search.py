@@ -266,7 +266,10 @@ class ClusterCompute(object):
     def __del__(self):
         # Make sure to close all clients when cluster_examples instance is destroyed
         for client in self.clients:
-            client["paramiko_client"].close()
+            try:
+                client["paramiko_client"].close()
+            except TypeError:
+                pass
 
     def cluster_connect(self, nodes: list):
         """Create SSH connections to all nodes in the list, respectively
