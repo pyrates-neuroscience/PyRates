@@ -216,7 +216,8 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
 
         # create facet grid
         grid_args = ['col_wrap', 'sharex', 'sharey', 'height', 'aspect', 'row_order', 'col_order',
-                     'dropna', 'legend_out', 'margin_titles', 'xlim', 'ylim', 'gridspec_kws', 'size']
+                     'dropna', 'legend_out', 'margin_titles', 'xlim', 'ylim', 'gridspec_kws', 'size',
+                     'subplot_kws']
         kwargs_tmp = {}
         for key in kwargs.copy().keys():
             if key in grid_args:

@@ -33,7 +33,6 @@
 import pandas as pd
 import numpy as np
 from typing import Optional
-import paramiko
 
 # system imports
 import os
@@ -422,6 +421,7 @@ class ClusterCompute(object):
             Is None if connection fails. For detailed information of the thrown exception see Paramiko documentation
 
         """
+        import paramiko
         client = paramiko.SSHClient()
         try:
             # Using kerberos authentication
