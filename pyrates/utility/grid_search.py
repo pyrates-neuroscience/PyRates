@@ -473,6 +473,13 @@ class ClusterGridSearch(ClusterCompute):
             permute: bool = False, **kwargs) -> str:
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
+        ClusterGridSearch requires all necessary data (worker script, worker environment, compute directory)
+        to be stored on a server. After a connection is established, all data on the remote workers has to be accessible
+        in the same way as it would be on the master worker (same root directory, same filepaths, etc.)
+        Paths inside the run function have to be adjusted respectively.
+
+        FTP implementation is planned in future versions for direct file transfer between the master and the workers.
+
         Parameters
         ----------
         circuit_template
@@ -500,15 +507,14 @@ class ClusterGridSearch(ClusterCompute):
         worker_file
             Python script that will be executed by each remote worker.
         result_kwargs
-            Keywords that are added to the result file
+            Key-value pairs that will be added to the result file's 'AdditionalData' dataset
         config_kwargs
-            Keywords that are added to the config file.
+            Key-value pairs that will be added to the config file.
 
         Returns
         -------
         str
-            .hdf5 file containing the computation results as DataFrame in dataset '/Results/circuit_output'
-            Results can be accessed using pandas.read_hdf(file, key=/Results/circuit_output').
+            .hdf5 file containing the computation results as DataFrame in dataset '/Results/...'
         """
 
         t_total = t.time()
@@ -634,26 +640,26 @@ class ClusterGridSearch(ClusterCompute):
         res_files = glob.glob(f'{grid_res_dir}/*_temp*')
         res_files.sort()
 
-        # Read number of different outputs and prepare lists to concatenate results
+        # Read number of different circuit outputs and prepare lists to concatenate results
         res_dict = {}
         with pd.HDFStore(res_files[0], "r") as store:
             for key in store.keys():
                 res_dict[key] = []
 
-        # Concatenate results from each temp file for each output variable
+        # Concatenate results from each temp file and output variable
         for file in res_files:
             with pd.HDFStore(file, "r") as store:
                 for idx, key in enumerate(store.keys()):
                     res_dict[key].append(store[key])
 
-        # Add DataFrames to global result file for each result variable
+        # Create DataFrames for each output variable and write to global result file
         with pd.HDFStore(global_res_file, "a") as store:
             for key, value in res_dict.items():
                 if len(value) > 0:
                     df = pd.concat(value, axis=1)
                     store.put(key=f'/Results/{key}', value=df)
 
-        # Delete temp result files
+        # Delete temporary local result files
         for file in res_files:
             os.remove(file)
 

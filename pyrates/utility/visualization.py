@@ -746,3 +746,178 @@ def _draw_heatmap(*args, **kwargs):
     data = kwargs.pop('data')
     d = data.pivot(index=args[1], columns=args[0], values=args[2])
     return sb.heatmap(d, **kwargs)
+
+
+class Interactive2DParamPlot(object):
+    def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array, **kwargs):
+        """
+
+        Parameters
+        ----------
+        data_map
+            2D ndarray containing a value based on each column data_series, respectively.
+        data_series
+            DataFrame containing all data series used to crate the data map
+        x_values
+            ndarray containing values used to access a column in data_series
+        y_values
+            ndarray containing values used to access a column in data_series
+        kwargs
+            Additional information to access a column in data_series if necessary
+
+        Returns
+        -------
+
+        """
+        self.data = data_series
+        self.x_values = x_values
+        self.y_values = y_values
+        self.kwargs = kwargs
+
+        # Create canvas
+        self.fig, self.ax = plt.subplots(ncols=2, nrows=1, figsize=(12, 6), gridspec_kw={})
+
+        # Initiate marker
+        self.marker = self.ax[0].plot(0, 0, 'x', color='white', markersize='10')
+
+        # Plot 2D data in left subplot
+        plot_connectivity(data_map, ax=self.ax[0], yticklabels=list(np.round(y_values, decimals=2)),
+                          xticklabels=list(np.round(x_values, decimals=2)), cmap='magma')
+        set_num_axis_ticks(ax=self.ax[0], num_x_ticks_old=data_map.shape[1], num_y_ticks_old=data_map.shape[0])
+
+        # Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot
+        self.fig.canvas.mpl_connect('button_press_event', self)
+
+    def __call__(self, event):
+        """Try to access a column in data_series using x and y values based on cursor position
+
+        Is called on mouse button press event. Converts the current cursor coordinates inside the plot into x and y
+        values based on the data in x_values and y_values. x and y values are used to access a column in data_series.
+        Access of data_series can be customized in self.get_data().
+
+        :param event:
+        :return:
+        """
+
+        # Only allow button press events in the (left) 2D overview plot
+        if event.inaxes != self.ax[0]:
+            return
+
+        # Reset axes
+        self.ax[1].clear()
+        self.marker[0].remove()
+
+        # Transform cursor coordinates in x and y values
+        x_sample = int(event.xdata)
+        y_sample = int(event.ydata)
+        x_value = self.x_values[x_sample]
+        y_value = self.y_values[y_sample]
+
+        # Add marker at event coordinates
+        self.marker = self.ax[0].plot(x_sample, y_sample, 'x', color='white', markersize='10')
+
+        time_series = self.get_data(x_value, y_value)
+
+        # Update serial plot
+        plot_timeseries(time_series, ax=self.ax[1])
+        self.ax[1].grid(visible=True, color="silver")
+        self.ax[1].set_title(f'x: {np.round(x_value, decimals=2)}, y: {np.round(y_value, decimals=2)}')
+        plt.show()
+
+    def get_data(self, x_value, y_value):
+        """Access data in data_series
+
+        Adapt this function based on the structure of data_series.
+        Additional keywords are accessible using self.kwargs[]
+
+        :param x_value:
+        :param y_value:
+        :return:
+        """
+        return self.data[y_value][x_value][self.kwargs["tau_e"]][self.kwargs["tau_i"]]
+
+    def set_map_xlabel(self, label):
+        self.ax[0].set_xlabel(label)
+
+    def set_map_ylabel(self, label):
+        self.ax[0].set_ylabel(label)
+
+    def set_map_title(self, title):
+        self.ax[0].set_title(title)
+
+    def set_series_xlabel(self, label):
+        self.ax[1].set_xlabel(label)
+
+    def set_series_ylabel(self, label):
+        self.ax[1].set_ylabel(label)
+
+    def set_series_xticklabels(self, labels):
+        pass
+
+
+def save_fig_as_pickle(fp, fig):
+    """
+
+    Parameters
+    ----------
+    fp
+        /desired_dir/desired_filename.pickle
+    fig
+        Figure object as returned by matplotlib.pyplot.subplots
+
+    Returns
+    -------
+
+    """
+    import pickle
+    pickle_out = open(fp, "wb")
+    pickle.dump(fig, pickle_out)
+    pickle_out.close()
+
+
+def load_fig_from_pickle():
+    """Opens a file dialog to select and load a *.pickle file.
+
+    If the pickle file contains a figure object it will automatically be plotted
+
+    Returns
+    -------
+
+    """
+    import pickle
+    from tkinter import Tk, filedialog
+
+    root = Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(filetypes=(("pickle files", "*.pickle"), ("all files", "*.*")))
+
+    try:
+        pickle_in = open(file_path, "rb")
+        pickle.load(pickle_in)
+        plt.show()
+    except (FileNotFoundError, TypeError, pickle.UnpicklingError):
+        pass
+
+
+def set_num_axis_ticks(ax, num_x_ticks_old, num_y_ticks_old, num_x_ticks_new=10, num_y_ticks_new=10):
+    """Set the number of x and y ticks of a plot axis
+
+    Parameters
+    ----------
+    ax
+    num_x_ticks_old
+    num_y_ticks_old
+    num_x_ticks_new
+    num_y_ticks_new
+
+    Returns
+    -------
+
+    """
+    step_tick_x, step_tick_y = int(num_x_ticks_old / num_x_ticks_new), int(num_y_ticks_old / num_y_ticks_new)
+    for n, tick in enumerate(ax.xaxis.iter_ticks()):
+        if n % step_tick_x != 0:
+            tick[0].set_visible(False)
+    for n, tick in enumerate(ax.yaxis.iter_ticks()):
+        if n % step_tick_y != 0:
+            tick[0].set_visible(False)
