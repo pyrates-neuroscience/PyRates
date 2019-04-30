@@ -6,7 +6,7 @@ CurrentToPotentialOperator:
     to a mean membrane current which leads to a change in mean somatic
     membrane voltage in the neural population."
   base: OperatorTemplate
-  equations:
+  equation:
     "L_m * V = k * I"
   variables:
     L_m:

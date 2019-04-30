@@ -2,7 +2,7 @@
 ---
 PotentialToRateOperator:
   base: OperatorTemplate
-  equations: "L_PRO * m_out = r * V"
+  equation: "L_PRO * m_out = r * V"
   variables:
     L_PRO:
       description: Generic linear differential operator
