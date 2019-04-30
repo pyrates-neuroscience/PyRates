@@ -35,9 +35,10 @@ __status__ = "Development"
 
 from .visualization import *
 from .data_analysis import *
-from .grid_search import grid_search, adapt_circuit
+from .grid_search import grid_search, adapt_circuit, ClusterCompute, ClusterGridSearch
 from .filestorage import get_simulation_data, save_simulation_data_to_file, read_simulation_data_from_file
 from .mne_wrapper import mne_from_csv, mne_from_dataframe
+from .annarchy_wrapper import pyrates_from_annarchy, grid_search_annarchy
 
 # from .construct import construct_circuit_from_file  # this one fails tests due to circular import
 

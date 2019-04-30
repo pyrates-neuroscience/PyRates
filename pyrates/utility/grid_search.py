@@ -32,7 +32,7 @@
 # external imports
 import pandas as pd
 import numpy as np
-from typing import Optional
+from typing import Optional, Any, Union
 
 # system imports
 import os
@@ -866,6 +866,8 @@ class ClusterGridSearch(ClusterCompute):
 #####################
 # Utility functions #
 #####################
+
+
 def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
     """Turns the grid into a grid that can be traversed linearly, i.e. pairwise.
 
