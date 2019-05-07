@@ -845,6 +845,7 @@ class Interactive2DParamPlotTemplate(object):
                     return self.data[y_value][x_value][self.kwargs["param_1"]][self.kwargs["param_2"]]
 
         """
+        raise NotImplementedError()
 
     def set_map_xlabel(self, label):
         self.ax[0].set_xlabel(label)
