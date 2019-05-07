@@ -32,7 +32,7 @@
 # external imports
 import pandas as pd
 import numpy as np
-from typing import Optional, Any, Union
+from typing import Optional
 
 # system imports
 import os

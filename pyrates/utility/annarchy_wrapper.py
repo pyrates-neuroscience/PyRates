@@ -70,15 +70,14 @@ def pyrates_from_annarchy(monitors: list, vars: List[str], pop_average: bool = F
     results = {}
     for v in vars:
         for m, m_name in zip(monitors, monitor_names):
-            pop = m.object.name
             val = m.get(v)
             if len(val.shape) > 1:
                 if pop_average:
-                    results.update({f'{m_name}{v}_{pop}': np.mean(val, axis=1)})
+                    results.update({f'{m_name}_avg': np.mean(val, axis=1)})
                 else:
-                    results.update({f'{m_name}{v}_{pop}_{i}': val[:, i] for i in range(val.shape[1])})
+                    results.update({f'{m_name}_n{i}': val[:, i] for i in range(val.shape[1])})
             else:
-                results.update({f'{m_name}{v}_{pop}': val})
+                results.update({f'{m_name}': val})
     return DataFrame.from_dict(results)
 
 

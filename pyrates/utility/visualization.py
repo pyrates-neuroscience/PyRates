@@ -145,7 +145,7 @@ def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True
     return cmap
 
 
-def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str = 'line_plot',
+def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value', plot_style: str = 'line_plot',
                     bg_style: str = 'darkgrid', **kwargs) -> plt.Axes:
     """Plot timeseries from a data frame.
 
@@ -181,6 +181,8 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
     title = kwargs.pop('title', '')
 
     # Convert the dataframe to long-form or "tidy" format if necessary
+    if type(data) is pd.Series:
+        data = pd.DataFrame(data=data.values, columns=[variable], index=data.index)
     data['time'] = data.index
     df = pd.melt(data,
                  id_vars='time',
