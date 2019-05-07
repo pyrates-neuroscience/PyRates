@@ -751,7 +751,9 @@ def _draw_heatmap(*args, **kwargs):
 
 class Interactive2DParamPlotTemplate(object):
     def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array, **kwargs):
-        """
+        """Creates an interactive 2D plot that allows visualization of time series using button press events
+
+        Derive child class and change get_data() respectively to utilize this plotting method
 
         Parameters
         ----------
@@ -785,6 +787,9 @@ class Interactive2DParamPlotTemplate(object):
         plot_connectivity(data_map, ax=self.ax[0], yticklabels=list(np.round(y_values, decimals=2)),
                           xticklabels=list(np.round(x_values, decimals=2)), cmap='magma')
         set_num_axis_ticks(ax=self.ax[0], num_x_ticks_old=data_map.shape[1], num_y_ticks_old=data_map.shape[0])
+        self.ax[0].invert_yaxis()
+
+        # self.ax[0].grid(visible=True, color="white")
 
         # Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot
         self.fig.canvas.mpl_connect('button_press_event', self)
@@ -839,7 +844,6 @@ class Interactive2DParamPlotTemplate(object):
 
         """
 
-
     def set_map_xlabel(self, label):
         self.ax[0].set_xlabel(label)
 
@@ -849,14 +853,15 @@ class Interactive2DParamPlotTemplate(object):
     def set_map_title(self, title):
         self.ax[0].set_title(title)
 
+    # def set_series_xticks(self, ticks):
+    #     self.ax[1].set_xticks(ticks)
+    #     self.ax[1].set_xticks(ticks)
+
     def set_series_xlabel(self, label):
         self.ax[1].set_xlabel(label)
 
     def set_series_ylabel(self, label):
         self.ax[1].set_ylabel(label)
-
-    def set_series_xticklabels(self, labels):
-        pass
 
 
 def save_fig_as_pickle(fp, fig):

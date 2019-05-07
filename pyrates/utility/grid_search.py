@@ -473,7 +473,7 @@ class ClusterGridSearch(ClusterCompute):
     def run(self, circuit_template: str, params: dict, param_map: dict, dt: float, simulation_time: float,
             inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: int,
             worker_env: str, worker_file: str, result_kwargs: dict = {}, config_kwargs: dict = {},
-            permute: bool = False, **kwargs) -> str:
+            add_template_info: bool = False, permute: bool = False, **kwargs) -> str:
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
         ClusterGridSearch requires all necessary data (worker script, worker environment, compute directory)
@@ -588,7 +588,7 @@ class ClusterGridSearch(ClusterCompute):
         global_res_file = f'{grid_res_dir}/CGS_result_{grid_name}.h5'
 
         # Write grid and config information to global result file
-        with h5py.File(global_res_file, 'w') as file:
+        with h5py.File(global_res_file, 'a') as file:
             for key, value in params.items():
                 file.create_dataset(f'/ParameterGrid/Keys/{key}', data=value)
             for key, value in result_kwargs.items():
@@ -598,8 +598,15 @@ class ClusterGridSearch(ClusterCompute):
             file.create_dataset(f'/Config/simulation_time', data=simulation_time)
             file.create_dataset(f'/Config/dt', data=dt)
             file.create_dataset(f'/Config/sampling_step_size', data=sampling_step_size)
+            if add_template_info:
+                template_file = f'{circuit_template.rsplit("/", 1)[0]}.yaml'
+                self.add_template_information(template_file, file)
+
         param_grid.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
+
+
+
 
         print("")
 
@@ -880,7 +887,7 @@ class ClusterGridSearch(ClusterCompute):
         map_key_lst = list(param_map.keys())
         if not all((grid_key in map_key_lst for grid_key in grid_key_lst)):
             # Not all keys of parameter map can be found in parameter grid
-            print("Not all parameter map keys found in parameter grid")
+            print("Not all parameter grid keys found in parameter map")
             print("Parameter map keys:")
             print(*list(param_map.keys()))
             print("Parameter grid keys:")
@@ -888,7 +895,7 @@ class ClusterGridSearch(ClusterCompute):
             return False
         # Parameter grid and parameter map match
         else:
-            print("All parameter map keys found in parameter grid")
+            print("All parameter grid keys found in parameter map")
             return True
 
     @staticmethod
@@ -924,6 +931,32 @@ class ClusterGridSearch(ClusterCompute):
             config_dict[key] = value
         with open(fp, "w") as f:
             json.dump(config_dict, f, indent=2)
+
+
+    @staticmethod
+    def add_template_information(yaml_fp, hdf5_file):
+        import yaml
+
+        with open(yaml_fp, 'r') as stream:
+            try:
+                yaml_dict = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
+        for operator_key, operator_value in yaml_dict.items():
+            if "Op" in operator_key:
+                for temp_key, temp_value in operator_value.items():
+                    if isinstance(temp_value, str):
+                        hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}', data=temp_value)
+                    if isinstance(temp_value, list):
+                        for idx, eq in enumerate(temp_value):
+                            hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/eq_{idx}', data=eq)
+                    elif isinstance(temp_value, dict):
+                        for key, value in temp_value.items():
+                            try:
+                                hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/{key}', data=value["default"])
+                            except:
+                                hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/{key}', data=value)
 
 
 #####################
