@@ -769,5 +769,544 @@ class KerasBackend(tf.keras.models.Model):
                    regularizer=None, trainable=True, constraint=None):
         pass
 
+
+class NumpyBackend(object):
+    """Wrapper to numpy.
+
+    Parameters
+    ----------
+    ops
+        Additional operations this backend instance can perform, defined as key-value pairs.
+    dtypes
+        Additional data-types this backend instance can use, defined as key-value pairs.
+
+    """
+
+    def __init__(self,
+                 ops: Optional[Dict[str, Callable]] = None,
+                 dtypes: Optional[Dict[str, object]] = None,
+                 ) -> None:
+        """Instantiates tensorflow backend, i.e. a tensorflow graph.
+        """
+
+        super().__init__()
+
+        # define operations and datatypes of the backend
+        ################################################
+
+        # base math operations
+        self.ops = {"+": lambda x, y: np.add(x(), y()),
+                    "-": lambda x, y: np.subtract(x(), y()),
+                    "*": lambda x, y: np.multiply(x(), y()),
+                    "/": lambda x, y: np.divide(x(), y()),
+                    "%": lambda x, y: np.mod(x(), y()),
+                    "^": lambda x, y: np.power(x(), y()),
+                    "**": lambda x, y: np.float_power(x(), y()),
+                    "@": lambda x, y: np.dot(x(), y()),
+                    ".T": lambda x: np.transpose(x()),
+                    ".I": lambda x: np.invert(x()),
+                    ">": lambda x, y: np.greater(x(), y()),
+                    "<": lambda x, y: np.less(x(), y()),
+                    "==": lambda x, y: np.equal(x(), y()),
+                    "!=": lambda x, y: np.not_equal(x(), y()),
+                    ">=": lambda x, y: np.greater_equal(x(), y()),
+                    "<=": lambda x, y: np.less_equal(x(), y()),
+                    "=": numpy_assign,
+                    "+=": numpy_assign_add,
+                    "neg": lambda x: neg_one() * x(),
+                    "sin": lambda x: np.sin(x()),
+                    "cos": lambda x: np.cos(x()),
+                    "tan": lambda x: np.tan(x()),
+                    "atan": lambda x: np.arctan(x()),
+                    "abs": lambda x: np.abs(x()),
+                    "sqrt": lambda x: np.sqrt(x()),
+                    "sq": lambda x: np.square(x()),
+                    "exp": lambda x: np.exp(x()),
+                    "max": lambda x: np.max(x()) if callable(x) else np.max(x[0](), *x[1:]),
+                    "min": lambda x: np.min(x()) if callable(x) else np.min(x[0](), *x[1:]),
+                    "argmax": lambda x: np.argmax(x()) if callable(x) else np.argmax(x[0](), *x[1:]),
+                    "argmin": lambda x: np.argmin(x()) if callable(x) else np.argmin(x[0](), *x[1:]),
+                    "round": lambda x: np.round(x()),
+                    "roundto": lambda x: np.round(x()) if callable(x) else np.round(x[0](), *x[1:]),
+                    "sum": lambda x: np.sum(x()) if callable(x) else np.sum(x[0](), *x[1:]),
+                    "mean": lambda x: np.mean(x()) if callable(x) else np.mean(x[0](), *x[1:]),
+                    "concat": lambda x: np.concatenate(x()) if callable(x) else np.concatenate(x[0](), *x[1:]),
+                    "reshape": lambda x: np.reshape(x()) if callable(x) else np.reshape(x[0](), *x[1:]),
+                    "shape": lambda x: np.shape(x()),
+                    "dtype": lambda x: np.dtype(x()),
+                    'squeeze': lambda x: np.squeeze(x()) if callable(x) else np.squeeze(x[0](), *x[1:]),
+                    "roll": lambda x: np.roll(x()) if callable(x) else np.roll(x[0](), *x[1:]),
+                    "cast": numpy_cast,
+                    "randn": lambda x: np.random.randn(x()) if callable(x) else np.random.randn(x[0](), *x[1:]),
+                    "ones": np.ones,
+                    "zeros": np.zeros,
+                    "range": np.arange,
+                    "softmax": lambda x: np.exp(x)/np.sum(np.exp(x)),
+                    "sigmoid": lambda x: 1/(1 + np.exp(x)),
+                    "tanh": np.tanh,
+                    "gather": lambda x: x,
+                    "gather_nd": lambda x: x,
+                    "scatter": lambda x: x,
+                    "scatter_update": lambda x: x,
+                    "scatter_add": lambda x: x,
+                    "mask": lambda x, y: x*(y > 0.),
+                    "stack": lambda x: x,
+                    "pstack": lambda x: x,
+                    "group": lambda x: x,
+                    "tuple": lambda x: x,
+                    "no_op": no_op,
+                    }
+        if ops:
+            self.ops.update(ops)
+
+        # base math operations for constant vars
+        self.constant_ops_1 = {"+": lambda x, y: np.add(x, y),
+                               "-": lambda x, y: np.subtract(x, y),
+                               "*": lambda x, y: np.multiply(x, y),
+                               "/": lambda x, y: np.divide(x, y),
+                               "%": lambda x, y: np.mod(x, y),
+                               "^": lambda x, y: np.power(x, y),
+                               "**": lambda x, y: np.float_power(x, y),
+                               "@": lambda x, y: np.dot(x, y),
+                               ".T": lambda x: np.transpose(x),
+                               ".I": lambda x: np.invert(x),
+                               ">": lambda x, y: np.greater(x, y),
+                               "<": lambda x, y: np.less(x, y),
+                               "==": lambda x, y: np.equal(x, y),
+                               "!=": lambda x, y: np.not_equal(x, y),
+                               ">=": lambda x, y: np.greater_equal(x, y),
+                               "<=": lambda x, y: np.less_equal(x, y),
+                               "=": numpy_assign,
+                               "+=": numpy_assign_add,
+                               "neg": lambda x: -x,
+                               "sin": lambda x: np.sin(x),
+                               "cos": lambda x: np.cos(x),
+                               "tan": lambda x: np.tan(x),
+                               "atan": lambda x: np.arctan(x),
+                               "abs": lambda x: np.abs(x),
+                               "sqrt": lambda x: np.sqrt(x),
+                               "sq": lambda x: np.square(x),
+                               "exp": lambda x: np.exp(x),
+                               "max": lambda x: np.max(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.max(x),
+                               "min": lambda x: np.min(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.min(x),
+                               "argmax": lambda x: np.argmax(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.argmax(x),
+                               "argmin": lambda x: np.argmin(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.max(x),
+                               "round": lambda x: np.round(x),
+                               "roundto": lambda x: np.round(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.round(x),
+                               "sum": lambda x: np.sum(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.sum(x),
+                               "mean": lambda x: np.mean(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.mean(x),
+                               "concat": lambda x: np.concatenate(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.concatenate(x),
+                               "reshape": lambda x: np.reshape(x()) if callable(x) else np.reshape(x[0](), *x[1:]),
+                               "shape": lambda x: np.shape(x()),
+                               "dtype": lambda x: np.dtype(x()),
+                               'squeeze': lambda x: np.squeeze(x()) if callable(x) else np.squeeze(x[0](), *x[1:]),
+                               "roll": lambda x: np.roll(x()) if callable(x) else np.roll(x[0](), *x[1:]),
+                               "cast": numpy_cast,
+                               "randn": lambda x: np.random.randn(x()) if callable(x) else np.random.randn(x[0](), *x[1:]),
+                               "ones": np.ones,
+                               "zeros": np.zeros,
+                               "range": np.arange,
+                               "softmax": lambda x: np.exp(x) / np.sum(np.exp(x)),
+                               "sigmoid": lambda x: 1 / (1 + np.exp(x)),
+                               "tanh": np.tanh,
+                               "gather": lambda x: x,
+                               "gather_nd": lambda x: x,
+                               "scatter": lambda x: x,
+                               "scatter_update": lambda x: x,
+                               "scatter_add": lambda x: x,
+                               "mask": lambda x, y: x * (y > 0.),
+                               "stack": lambda x: x,
+                               "pstack": lambda x: x,
+                               "group": lambda x: x,
+                               "tuple": lambda x: x,
+                               "no_op": no_op,
+                               }
+        # base math operations for constant vars
+        self.constant_ops_2 = {"+": lambda x, y: np.add(x(), y),
+                               "-": lambda x, y: np.subtract(x(), y),
+                               "*": lambda x, y: np.multiply(x(), y),
+                               "/": lambda x, y: np.divide(x(), y),
+                               "%": lambda x, y: np.mod(x(), y),
+                               "^": lambda x, y: np.power(x(), y),
+                               "**": lambda x, y: np.float_power(x(), y),
+                               "@": lambda x, y: np.dot(x(), y),
+                               ">": lambda x, y: np.greater(x(), y),
+                               "<": lambda x, y: np.less(x(), y),
+                               "==": lambda x, y: np.equal(x(), y),
+                               "!=": lambda x, y: np.not_equal(x(), y),
+                               ">=": lambda x, y: np.greater_equal(x(), y),
+                               "<=": lambda x, y: np.less_equal(x(), y),
+                               "=": numpy_assign,
+                               "+=": numpy_assign_add,
+                               "max": lambda x: np.max(x[0](), *x[1:]),
+                               "min": lambda x: np.min(x[0](), *x[1:]),
+                               "argmax": lambda x: np.argmax(x[0](), *x[1:]),
+                               "argmin": lambda x: np.argmin(x[0](), *x[1:]),
+                               "roundto": lambda x: np.round(x[0](), *x[1:]),
+                               "sum": lambda x: np.sum(x[0](), *x[1:]),
+                               "mean": lambda x: np.mean(x[0](), *x[1:]),
+                               "concat": lambda x: np.concatenate(x[0](), *x[1:]),
+                               "reshape": lambda x: np.reshape(x[0](), *x[1:]),
+                               'squeeze': lambda x: np.squeeze(x[0](), *x[1:]),
+                               "roll": lambda x: np.roll(x[0](), *x[1:]),
+                               "cast": numpy_cast,
+                               "randn": lambda x: np.random.randn(x[0](), *x[1:]),
+                               "ones": np.ones,
+                               "zeros": np.zeros,
+                               "range": np.arange,
+                               "softmax": lambda x: np.exp(x) / np.sum(np.exp(x)),
+                               "sigmoid": lambda x: 1 / (1 + np.exp(x)),
+                               "tanh": np.tanh,
+                               "gather": lambda x: x,
+                               "gather_nd": lambda x: x,
+                               "scatter": lambda x: x,
+                               "scatter_update": lambda x: x,
+                               "scatter_add": lambda x: x,
+                               "mask": lambda x, y: x * (y > 0.),
+                               "stack": lambda x: x,
+                               "pstack": lambda x: x,
+                               "group": lambda x: x,
+                               "tuple": lambda x: x,
+                               "no_op": no_op,
+                               }
+
+        # base math operations for constant vars
+        self.constant_ops_3 = {"+": lambda x, y: np.add(x, y()),
+                               "-": lambda x, y: np.subtract(x, y()),
+                               "*": lambda x, y: np.multiply(x, y()),
+                               "/": lambda x, y: np.divide(x, y()),
+                               "%": lambda x, y: np.mod(x, y()),
+                               "^": lambda x, y: np.power(x, y()),
+                               "**": lambda x, y: np.float_power(x, y()),
+                               "@": lambda x, y: np.dot(x, y()),
+                               ">": lambda x, y: np.greater(x, y()),
+                               "<": lambda x, y: np.less(x, y()),
+                               "==": lambda x, y: np.equal(x, y()),
+                               "!=": lambda x, y: np.not_equal(x, y()),
+                               ">=": lambda x, y: np.greater_equal(x, y()),
+                               "<=": lambda x, y: np.less_equal(x, y())
+                               }
+
+        self.dtypes = {"float16": np.float16,
+                       "float32": np.float32,
+                       "float64": np.float64,
+                       "int16": np.int16,
+                       "int32": np.int32,
+                       "int64": np.int64,
+                       "uint16": np.uint16,
+                       "uint32": np.uint32,
+                       "uint64": np.uint64,
+                       "complex64": np.complex64,
+                       "complex128": np.complex128,
+                       "bool": np.bool
+                       }
+        if dtypes:
+            self.dtypes.update(dtypes)
+
+        self.graph = {'vars': {}, 'var_updates': {}, 'layers': []}
+        self.var_counter = 0
+
+    def run(self,
+            steps: int,
+            ops: Union[tf.Operation, List[tf.Operation]],
+            inputs: List[dict],
+            outputs: Dict[str, tf.Variable],
+            sampling_steps: Optional[int] = None,
+            sampling_ops: Optional[Union[tf.Operation, List[tf.Operation]]] = None,
+            out_dir: Optional[str] = None,
+            profile: Optional[str] = None
+            ) -> Union[Dict[str, tf.Variable], Tuple[dict, float, float]]:
+        """Executes all operations in tensorflow graph for a given number of steps.
+
+        Parameters
+        ----------
+        steps
+            Number of graph evaluations.
+        ops
+            Graph operations to evaluate.
+        inputs
+            Inputs fed into the graph.
+        outputs
+            Variables in the graph to store the history from.
+        sampling_steps
+            Number of graph execution steps to combine into a single output step.
+        sampling_ops
+            Graph operations for output storage.
+        out_dir
+            Directory to write the session log into.
+        profile
+            Can be used to extract information about graph execution time and memory load. Can be:
+            - `t` for returning the total graph execution time.
+            - `m` for returning the peak memory consumption during graph excecution.
+            - `mt` or `tm` for both
+
+        Returns
+        -------
+        Union[Dict[str, tf.Variable], Tuple[dict, float, float]]
+            If `profile` was requested, a tuple is returned that contains
+                1) the results dictionary
+                2) the simulation time if `t` was requested, else None.
+                3) the peak memory consumption if `m` was requested, else None.
+            If not, only the results dictionary is returned which contains a numpy array with results for each
+            output key that was provided via `outputs`.
+
+        """
+
+        # initializations
+        #################
+
+        # initialize session log
+        if out_dir:
+            # TODO : implement log files
+            pass
+
+        # initialize profiler
+        if profile is None:
+            profile = ''
+        if 'm' in profile:
+            # TODO: implement memory tracker
+            time_and_memory = None
+        if 't' in profile:
+            t0 = t.time()
+
+        # graph execution
+        #################
+
+        # simulate backend behavior for each time-step
+        if 'm' in profile:
+
+            # in profiler-mode
+            for step in range(steps):
+                if step % sampling_steps == 0:
+
+                    sess.run(sampling_ops, inputs[step], run_metadata=meta,
+                             options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE))
+                else:
+                    sess.run(ops, inputs[step], run_metadata=meta,
+                             options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE))
+        else:
+
+            # in non-profiler mode
+            for step in range(steps):
+                if step % sampling_steps == 0:
+                    sess.run(sampling_ops, inputs[step])
+                else:
+                    sess.run(ops, inputs[step])
+
+        # output storage and clean-up
+        #############################
+
+        # store output variables in output dictionary
+        for key, var in outputs.items():
+            outputs[key] = var.eval(sess)
+
+        # store profiling results
+        if 't' in profile:
+            sim_time = t.time() - t0
+        else:
+            sim_time = 0.
+        if 'm' in profile:
+            peak_memory = tf.profiler.profile(graph=self, run_meta=meta, cmd='op', options=time_and_memory
+                                              ).total_peak_bytes / 1e6
+        else:
+            peak_memory = 0.
+
+        if profile:
+            return outputs, sim_time, peak_memory
+        return outputs
+
+    def add_var(self,
+                vtype: str,
+                name: str,
+                value: Optional[Any] = None,
+                shape: Optional[Union[tuple, list, np.shape]] = None,
+                dtype: Optional[Union[str, np.dtype]] = None,
+                **kwargs
+                ) -> Callable:
+        """Adds a variable to the backend.
+
+        Parameters
+        ----------
+        vtype
+            Variable type. Can be
+                - `state_var` for variables that can change over time.
+                - `constant` for non-changing variables.
+                - `placeholder` for variables with a value unknown during initialization.
+        name
+            Name of the variable.
+        value
+            Value of the variable. Not needed for placeholders.
+        shape
+            Shape of the variable.
+        dtype
+            Datatype of the variable.
+        kwargs
+            Additional keyword arguments passed to the tensorflow functions.
+
+        Returns
+        -------
+        Callable
+            Handle for the numpy variable.
+
+        """
+
+        # processs input arguments
+        ##########################
+
+        # extract variable scope
+        scope = kwargs.pop('scope', 'all')
+
+        # extract graph dependencies
+        dependencies = kwargs.pop('dependencies', None)
+
+        # check whether necessary arguments were provided
+        if all([arg is None for arg in [shape, value, dtype]]):
+            raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
+
+        # set shape, data-type and value
+        if shape is None:
+            shape = value.shape
+        if dtype is None:
+            dtype = value.dtype
+        if value is None:
+            value = np.zeros(shape, dtype=dtype)
+
+        # create variable
+        #################
+
+        if f'{scope}/{name}' in self.graph.keys():
+            name = f'{name}_{self.var_counter}'
+        self.graph['vars'][f'{scope}/{name}'] = np.zeros(shape, dtype, **kwargs) + value
+        if vtype == 'constant':
+            return self.graph['vars'][f'{scope}/{name}']
+        else:
+            return lambda: self.graph['vars'][f'{scope}/{name}']
+
+    def add_op(self,
+               op: str,
+               *args,
+               **kwargs
+               ) -> np.ndarray:
+        """Add operation to the backend.
+
+        Parameters
+        ----------
+        op
+            Key of the operation. Needs to be a key of `TensorflowGraph.ops`
+        args
+            Positional arguments to be passed to the operation.
+        kwargs
+            Keyword arguments to be passed to the operation.
+
+        Returns
+        -------
+        np.ndarray
+            Handle for the lambda-numpy function
+
+        """
+
+        # process input arguments
+        #########################
+
+        # extract scope
+        scope = kwargs.pop('scope', 'all')
+
+        # extract graph dependencies
+        dependencies = kwargs.pop('dependencies', None)
+
+        # extract additional infos
+        assign_to_var = kwargs.pop('assign_to_var', False)
+
+        # create operation
+        ##################
+
+        if len(args) == 1:
+            if callable(args[0]):
+                np_op = self._create_op(self.ops[op], *args, **kwargs)
+            else:
+                np_op = self._create_op(self.constant_ops_1[op], *args, **kwargs)
+        else:
+            if callable(args[0]) and callable(args[1]):
+                np_op = self._create_op(self.ops[op], *args, **kwargs)
+            elif callable(args[0]):
+                np_op = self._create_op(self.constant_ops_2[op], *args, **kwargs)
+            elif callable(args[1]):
+                np_op = self._create_op(self.constant_ops_3[op], *args, **kwargs)
+            else:
+                np_op = self._create_op(self.constant_ops_1[op], *args, **kwargs)
+
+        # either assign result to new variable and return that variable or return result
+        if assign_to_var:
+            var = self.add_var(vtype='state_var', name=f'tmp_{self.var_counter}',
+                               value=np.zeros(np_op.shape), dtype=np_op.dtype)
+            return self.ops['assign'](var, np_op)
+        else:
+            return np_op
+
+    def add_layer(self,
+                  ops: List[tf.Operation],
+                  *args,
+                  **kwargs
+                  ) -> List[tf.Operation]:
+        """Adds a layer of operations to the backend using `tensorflow.tuple`.
+
+        Parameters
+        ----------
+        ops
+            All tensorflow operations that should be part of this layer.
+        args
+            Additional positional arguments to be passed to `tensorflow.tuple`.
+        kwargs
+            Additional keyword arguments to be passed to `tensorflow.tuple`.
+
+        Returns
+        -------
+        List[tf.Operation]
+            List of tensorflow operations with dependencies added (layer operations will all be evaluated before
+            any layer operation can be used in successive layers.)
+
+        """
+
+        pass
+
+    def clear(self):
+        """Resets all tensorflow operations on the graph.
+        """
+        self.graph['vars'].clear()
+        self.graph['var_updates'].clear()
+        self.graph['vars'].clear()
+
+    @staticmethod
+    def _create_op(op, *args, **kwargs):
+        try:
+            np_op = op(*args, **kwargs)
+        except TypeError:
+            try:
+                np_op = op(list(args), **kwargs)
+            except TypeError:
+                # TODO: replace this with more generic way of handling args and kwargs
+                args = list(args)
+                arg_tmp = args.pop(-1)
+                np_op = op(args, arg_tmp, **kwargs)
+        return np_op
+
+
 def no_op(*args, **kwargs):
     pass
+
+
+def numpy_assign(y, x):
+    return x
+
+
+def numpy_assign_add(y, x):
+    y = y()
+    return y + x
+
+
+def numpy_cast(x, dtype):
+    return np.asarray(x, dtype=dtype)
+
+
+def neg_one():
+    return -1.0

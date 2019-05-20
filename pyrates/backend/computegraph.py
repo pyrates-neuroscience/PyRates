@@ -38,7 +38,7 @@ from copy import deepcopy
 
 # pyrates imports
 from pyrates.backend.parser import parse_equation_list, parse_dict
-from pyrates.backend.backend_wrapper import TensorflowBackend
+from pyrates.backend.backend_wrapper import TensorflowBackend, NumpyBackend
 from pyrates import PyRatesException
 from pyrates.ir.circuit import CircuitIR
 
@@ -77,7 +77,8 @@ class ComputeGraph(object):
                  vectorization: str = 'nodes',
                  name: Optional[str] = None,
                  build_in_place: bool = True,
-                 use_device: str = 'cpu'
+                 backend: str = 'tensorflow',
+                 **kwargs
                  ) -> None:
         """Instantiates operator.
         """
@@ -90,7 +91,13 @@ class ComputeGraph(object):
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend and set the backend default_device
-        self.backend = TensorflowBackend(use_device=use_device)
+        if backend == 'tensorflow':
+            backend = TensorflowBackend
+        elif backend == 'numpy':
+            backend = NumpyBackend
+        else:
+            raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
+        self.backend = backend(**kwargs)
 
         # pre-process the network configuration
         self.dt = dt

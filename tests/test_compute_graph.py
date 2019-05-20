@@ -69,7 +69,7 @@ def test_2_1_operator():
 
     # instantiate compute graph from net config
     dt = 1e-1
-    net0 = ComputeGraph(net_config=net_config0, name='net0', vectorization='none', dt=dt)
+    net0 = ComputeGraph(net_config=net_config0, name='net0', vectorization='none', dt=dt, backend='tensorflow')
 
     # simulate operator behavior
     sim_time = 10.0

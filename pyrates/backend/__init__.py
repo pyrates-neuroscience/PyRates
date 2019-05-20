@@ -38,5 +38,5 @@ c) backend_wrapper
 """
 
 from .computegraph import ComputeGraph
-from .backend_wrapper import TensorflowBackend
+from .backend_wrapper import TensorflowBackend, NumpyBackend
 from .parser import ExpressionParser, parse_dict, parse_equation_list

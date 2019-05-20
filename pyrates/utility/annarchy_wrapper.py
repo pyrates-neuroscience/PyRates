@@ -49,7 +49,7 @@ __status__ = 'Development'
 
 
 def pyrates_from_annarchy(monitors: list, vars: List[str], pop_average: bool = False,
-                          monitor_names: Optional[List[str]] = None) -> DataFrame:
+                          monitor_names: Optional[List[str]] = None, **kwargs) -> DataFrame:
     """
 
     Parameters
@@ -66,11 +66,17 @@ def pyrates_from_annarchy(monitors: list, vars: List[str], pop_average: bool = F
     """
 
     if not monitor_names:
-        monitor_names = [''] * len(monitors)
+        monitor_names = [str(i) for i in range(len(monitors))]
     results = {}
     for v in vars:
         for m, m_name in zip(monitors, monitor_names):
-            val = m.get(v)
+            if len(m_name) == 0:
+                m_name = v
+            if v == 'spike':
+                val = m.get(v)
+                val = m.smoothed_rate(val, **kwargs).T
+            else:
+                val = np.asarray(m.get(v))
             if len(val.shape) > 1:
                 if pop_average:
                     results.update({f'{m_name}_avg': np.mean(val, axis=1)})
@@ -125,7 +131,7 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
 
     """
 
-    from ANNarchy import Population, Projection, Network, TimedArray, Monitor
+    from ANNarchy import Population, Projection, Network, TimedArray, Monitor, ANNarchyException
 
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
@@ -145,36 +151,42 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
     for n in range(param_grid.shape[0]):
 
         # copy and re-parametrize populations
-        for p in circuit.get_populations():
-            name = f'net{n}/{p.name}'
-            p_new = Population(geometry=p.geometry, neuron=p.neuron_type, name=name,
-                               stop_condition=p.stop_condition, storage_order=p._storage_order,
-                               copied=False)
-            p_new = adapt_pop(p_new, param_grid.iloc[n, :], param_map)
-            populations[name] = p_new
+        try:
+            for p in circuit.get_populations():
+                name = f'net{n}/{p.name}'
+                p_new = Population(geometry=p.geometry, neuron=p.neuron_type, name=name,
+                                   stop_condition=p.stop_condition, storage_order=p._storage_order,
+                                   copied=False)
+                p_new = adapt_pop(p_new, param_grid.iloc[n, :], param_map)
+                populations[name] = p_new
 
-            # add input to population
-            for node, inp in inputs.items():
-                if node in name:
-                    inp_name = f'{name}_inp'
-                    inp = TimedArray(rates=inp, name=inp_name)
-                    proj = Projection(pre=inp, post=p_new, target='exc')
-                    proj.connect_one_to_one(1.0)
-                    populations[inp_name] = inp
-                    projections[inp_name] = proj
+                # add input to population
+                for node, inp in inputs.items():
+                    if node in name:
+                        inp_name = f'{name}_inp'
+                        inp = TimedArray(rates=inp, name=inp_name)
+                        proj = Projection(pre=inp, post=p_new, target='exc')
+                        proj.connect_one_to_one(1.0)
+                        populations[inp_name] = inp
+                        projections[inp_name] = proj
+        except ANNarchyException:
+            pass
 
         # copy and re-parametrize projections
-        for c in circuit.get_projections():
-            source = c.pre if type(c.pre) is str else c.pre.name
-            target = c.post if type(c.post) is str else c.post.name
-            source = f'net{n}/{source}'
-            target = f'net{n}/{target}'
-            name = f'{source}/{target}/{c.name}'
-            c_new = Projection(pre=source, post=target, target=c.target, synapse=c.synapse_type, name=name,
-                               copied=False)
-            c_new._store_connectivity(c._connection_method, c._connection_args, c._connection_delay, c._storage_format)
-            c_new = adapt_proj(c_new, param_grid.iloc[n, :], param_map)
-            projections[name] = c_new
+        try:
+            for c in circuit.get_projections():
+                source = c.pre if type(c.pre) is str else c.pre.name
+                target = c.post if type(c.post) is str else c.post.name
+                source = f'net{n}/{source}'
+                target = f'net{n}/{target}'
+                name = f'{source}/{target}/{c.name}'
+                c_new = Projection(pre=source, post=target, target=c.target, synapse=c.synapse_type, name=name,
+                                   copied=False)
+                c_new._store_connectivity(c._connection_method, c._connection_args, c._connection_delay, c._storage_format)
+                c_new = adapt_proj(c_new, param_grid.iloc[n, :], param_map)
+                projections[name] = c_new
+        except ANNarchyException:
+            pass
 
         # collect parameter and circuit name infos
         circuit_names.append(f'net{n}')
@@ -190,8 +202,7 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
 
     # adjust output of simulation to combined network
     nodes = [p.name for p in circuit.get_populations()]
-    out_names, var_names, out_lens = [], [], []
-    monitors = {}
+    out_names, var_names, out_lens, monitors, monitor_names = [], [], [], [], []
     for out_key, out in outputs.copy().items():
         out_names_tmp, out_lens_tmp = [], []
         if out[0] in nodes:
@@ -199,8 +210,9 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
                 out_tmp = list(out)
                 out_tmp[0] = f'{circuit_names[i]}/{out_tmp[0]}'
                 p = net.get_population(out_tmp[0])
-                monitors[f'{name}{param_split}out_var{val_split}{out_key}{comb}{out[0]}'] = \
-                    Monitor(p, variables=out_tmp[-1], period=sampling_step_size, start=True)
+                monitors.append(Monitor(p, variables=out_tmp[-1], period=sampling_step_size, start=True,
+                                        net_id=net.id))
+                monitor_names.append(f'{name}{param_split}out_var{val_split}{out_key}{comb}{out[0]}')
                 var_names.append(out_tmp[-1])
                 out_names_tmp.append(f'{out_key}{comb}{out[0]}')
                 out_lens_tmp.append(p.geometry[0])
@@ -210,8 +222,9 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
                     out_tmp = list(out)
                     out_tmp[0] = f'{circuit_names[i]}/{node}'
                     p = net.get_population(out_tmp[0])
-                    monitors[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = \
-                        Monitor(p, variables=out_tmp[-1], period=sampling_step_size, start=True)
+                    monitors.append(Monitor(p, variables=out_tmp[-1], period=sampling_step_size, start=True,
+                                            net_id=net.id))
+                    monitor_names.append(f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}')
                     var_names.append(out_tmp[-1])
                     out_names_tmp.append(f'{out_key}{comb}{node}')
                     out_lens_tmp.append(p.geometry[0])
@@ -224,8 +237,9 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
                         out_tmp = list(out)
                         out_tmp[0] = f'{circuit_names[i]}/{node}'
                         p = net.get_population(out_tmp[0])
-                        monitors[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = \
-                            Monitor(p, variables=out_tmp[-1], period=sampling_step_size, start=True)
+                        monitors.append(Monitor(p, variables=out_tmp[-1], period=sampling_step_size, start=True,
+                                                net_id=net.id))
+                        monitor_names.append(f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}')
                         var_names.append(out_tmp[-1])
                         out_names_tmp.append(f'{out_key}{comb}{node}')
                         out_lens_tmp.append(p.geometry[0])
@@ -234,15 +248,15 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
                                  f'Node {out[0]} is not part of this network')
         out_names += list(set(out_names_tmp))
         out_lens += list(set(out_lens_tmp))
-    net.add(list(monitors.values()))
+    #net.add(monitors)
 
     # simulate the circuits behavior
     net.compile()
     net.simulate(duration=simulation_time)
 
     # transform output into pyrates-compatible data format
-    results = pyrates_from_annarchy([net.get(monitors[m]) for m in monitors.keys()], vars=list(set(var_names)),
-                                    monitor_names=list(monitors.keys()), **kwargs)
+    results = pyrates_from_annarchy(monitors, vars=list(set(var_names)),
+                                    monitor_names=monitor_names, **kwargs)
 
     # transform results into long-form dataframe with changed parameters as columns
     multi_idx = [param_grid[key].values for key in param_grid.keys()]
@@ -305,6 +319,8 @@ def adapt_pop(pop, params: dict, param_map: dict):
                 if node in pop.name:
                     try:
                         pop.set({var: float(val)})
+                    except TypeError:
+                        pop.set({var: val})
                     except (KeyError, ValueError):
                         pass
 
@@ -338,6 +354,8 @@ def adapt_proj(proj, params: dict, param_map: dict):
                 if source in proj.name and target in proj.name and edge in proj.name:
                     try:
                         proj.set({var: float(val)})
+                    except TypeError:
+                        proj.set({var: val})
                     except [ValueError, KeyError]:
                         pass
 
