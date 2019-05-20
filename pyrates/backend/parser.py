@@ -122,6 +122,7 @@ class ExpressionParser(ParserElement):
         self.parser_kwargs = kwargs
         self.solve = solve
         self.assign = '+=' if assign_add else '='
+        self.constant_counter = 0
 
         # check whether the all important fields exist in args
         if 'updates' not in self.args.keys():
@@ -498,14 +499,15 @@ class ExpressionParser(ParserElement):
         elif "." in op:
 
             # return float
-            i = 0
-            while i < 1e7:
+            while self.constant_counter < 1e7:
                 try:
-                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{i}', value=float(op), shape=(),
-                                                   dtype=self.backend.dtypes['float32'], **self.parser_kwargs)
+                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{self.constant_counter}',
+                                                   value=float(op), shape=(), dtype=self.backend.dtypes['float32'],
+                                                   **self.parser_kwargs)
+                    self.constant_counter += 1
                     break
                 except (ValueError, KeyError) as e:
-                    i += 1
+                    self.constant_counter += 1
             else:
                 raise e
 
@@ -514,14 +516,14 @@ class ExpressionParser(ParserElement):
         elif op.isnumeric():
 
             # return integer
-            i = 0
-            while i < 1e7:
+            while self.constant_counter < 1e7:
                 try:
-                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{i}', value=int(op), shape=(),
-                                                   dtype=self.backend.dtypes['int32'], **self.parser_kwargs)
+                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{self.constant_counter}', value=int(op),
+                                                   shape=(), dtype=self.backend.dtypes['int32'], **self.parser_kwargs)
+                    self.constant_counter += 1
                     break
                 except (ValueError, KeyError) as e:
-                    i += 1
+                    self.constant_counter += 1
             else:
                 raise e
 
@@ -1018,6 +1020,40 @@ class ExpressionParser(ParserElement):
             return False
 
 
+class PyRatesVar(object):
+    def __init__(self, vtype: str, dtype: str, shape: tuple, value: tp.Any, name: str, backend: tp.Any) -> None:
+        """
+
+        Parameters
+        ----------
+        vtype
+        dtype
+        shape
+        value
+        name
+        backend
+        """
+
+        self.vtype = vtype
+        self.shape = tuple(shape)
+        self.value = value
+        self.name = name
+        self.backend = backend
+        if dtype in self.backend.dtypes:
+            self.dtype = backend.dtypes[dtype]
+        else:
+            for dtype_tmp in self.backend.dtypes:
+                if dtype_tmp in dtype:
+                    self.dtype = backend.dtypes[dtype_tmp]
+                    break
+            else:
+                raise ValueError(f'Invalid data type: {dtype}. Check documentation of the backend wrapper in use for '
+                                 'valid data types.')
+
+    def eval(self):
+        return self.backend.eval(self.name)
+
+
 def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
     """Parses a list of equations into the backend.
 
@@ -1059,10 +1095,24 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
         # see whether lhs variable is a state variable. If yes, add variable to argument dictionary (for old value)
         for key, var in equation_args['vars'].copy().items():
             if key == lhs_var and '_old' not in key:
-                var_dict = var.copy() if type(var) is dict else {'vtype': 'state_var',
-                                                                 'dtype': var.dtype.as_numpy_dtype,
-                                                                 'shape': var.shape,
-                                                                 'value': 0.}
+                if type(var) is dict:
+                    var_dict = var.copy()
+                elif callable(var):
+                    var_tmp = var()
+                    var_dict = {'vtype': 'state_var',
+                                'dtype': var_tmp.dtype,
+                                'shape': var_tmp.shape,
+                                'value': 0.}
+                else:
+                    dtype = None
+                    for data_type in backend.dtypes.keys():
+                        if data_type in str(var.dtype):
+                            dtype = data_type
+                            break
+                    var_dict = {'vtype': 'state_var',
+                                'dtype': dtype,
+                                'shape': var.shape,
+                                'value': 0.}
                 equation_args['vars'].update(parse_dict({f'{key}_old': var_dict}, backend=backend, **kwargs))
 
     # parse equations
@@ -1157,7 +1207,7 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
         if var['value'] is None:
             var['value'] = 0.
         init_val = var['value'] if hasattr(var['value'], 'shape') else np.zeros(()) + var['value']
-        dtype = getattr(tf, var['dtype']) if type(var['dtype']) is str else var['dtype']
+        dtype = backend.dtypes[var['dtype']] if type(var['dtype']) is str else var['dtype']
         shape = var['shape'] if 'shape' in var.keys() else init_val.shape
 
         # instantiate variable
