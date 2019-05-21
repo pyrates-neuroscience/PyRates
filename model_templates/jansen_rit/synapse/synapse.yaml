@@ -7,7 +7,7 @@ RateToCurrentOperator:
     firing rates. Activation leads to an electric mean electric current
     that contributes to the total membrane voltage change."
   base: OperatorTemplate
-  equation:
+  equations:
     "L_syn * I = h * m_in"
   variables:
     L_syn:
