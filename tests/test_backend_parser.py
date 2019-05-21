@@ -156,7 +156,7 @@ def test_1_3_expression_parser_math_ops():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={}, backend=b)
         p.parse_expr()
-        result = p.expr_op
+        result = p.expr_op.eval() if hasattr(p.expr_op, 'eval') else p.expr_op
         assert result == pytest.approx(target, rel=1e-6)
 
 
@@ -206,27 +206,29 @@ def test_1_4_expression_parser_logic_ops():
         sess.run(p.expr_op)
         assert not p.expr_op.eval()
 
-        # test expression parsers on expression results with numpy backend
-        ##################################################################
+    # test expression parsers on expression results with numpy backend
+    ##################################################################
 
-        # define backend
-        b = NumpyBackend()
+    # define backend
+    b = NumpyBackend()
 
-        # correct expressions
-        for expr in logic_expressions:
+    # correct expressions
+    for expr in logic_expressions:
 
-            # numpy-based parser
-            p = ExpressionParser(expr_str=expr, args={}, backend=b)
-            p.parse_expr()
-            assert p.expr_op
-
-        # false logical expression
-        expr = "5 >= 6"
-
-        # tensorflow-based parser
+        # numpy-based parser
         p = ExpressionParser(expr_str=expr, args={}, backend=b)
         p.parse_expr()
-        assert not p.expr_op
+        result = p.expr_op.eval() if hasattr(p.expr_op, 'eval') else p.expr_op
+        assert result
+
+    # false logical expression
+    expr = "5 >= 6"
+
+    # tensorflow-based parser
+    p = ExpressionParser(expr_str=expr, args={}, backend=b)
+    p.parse_expr()
+    result = p.expr_op.eval() if hasattr(p.expr_op, 'eval') else p.expr_op
+    assert not result
 
 
 def test_1_5_expression_parser_indexing():
@@ -328,7 +330,7 @@ def test_1_5_expression_parser_indexing():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
         p.parse_expr()
-        result = p.expr_op
+        result = p.expr_op.eval if hasattr(p.expr_op, 'eval') else p.expr_op
         assert result == pytest.approx(target, rel=1e-6)
 
     # define invalid test cases
@@ -417,7 +419,7 @@ def test_1_6_expression_parser_funcs():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
         p.parse_expr()
-        result = p.expr_op
+        result = p.expr_op.eval() if hasattr(p.expr_op, 'eval') else p.expr_op
         assert result == pytest.approx(target, rel=1e-6)
 
     # invalid cases
@@ -444,6 +446,9 @@ def test_1_7_equation_parsing():
     # define equation variables
     a = np.zeros(shape=(), dtype=np.float32)
 
+    # define equation results
+    results = [7., 0.7]
+
     # test equation solving of tensorflow-based parser
     ##################################################
 
@@ -452,9 +457,6 @@ def test_1_7_equation_parsing():
     args = {'a': {'vtype': 'state_var', 'value': a, 'shape': a.shape, 'dtype': a.dtype},
             'dt': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
     arguments = [parse_dict(args, backend=b), parse_dict(args, backend=b)]
-
-    # define equation results
-    results = [7., 0.7]
 
     # test equation parser on different test equations
     for eq, args, target in zip(equations, arguments, results):
@@ -475,12 +477,10 @@ def test_1_7_equation_parsing():
             'dt': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
     arguments = [parse_dict(args, backend=b), parse_dict(args, backend=b)]
 
-    # define equation results
-    results = [7., 0.7]
-
     # test equation parser on different test equations
     for eq, args, target in zip(equations, arguments, results):
         # tensorflow-based parsing
         args_new = parse_equation_list(equations=[eq], equation_args={'vars': args}, backend=b)
-        result = args_new['updates']['a']
+        result_tmp = args_new['updates']['a']
+        result = result_tmp.eval() if hasattr(result_tmp, 'eval') else result_tmp
         assert result == pytest.approx(target, rel=1e-6)

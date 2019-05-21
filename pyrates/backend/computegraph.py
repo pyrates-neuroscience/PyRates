@@ -189,11 +189,12 @@ class ComputeGraph(object):
                     source_vars_idx.append(source_vars.index(var_update))
 
         # get control dependencies on those output variables
-        self.node_updates = self.backend.add_layer(source_vars, name='node_updates', scope=f'{self.name}/')
+        self.node_updates, updated_vars = self.backend.add_layer(source_vars, name='node_updates',
+                                                                 scope=f'{self.name}/')
 
         # save control dependencies to network config
         for node_name, op_name, var_name, var_idx in zip(source_nodes, op_names, var_names, source_vars_idx):
-            var = self.node_updates[var_idx]
+            var = updated_vars[var_idx] if updated_vars else self.node_updates[var_idx]
             self._set_op_attr(node_name, op_name, var_name, var)
 
         # add layer that contains left-hand side equation updates
@@ -235,13 +236,13 @@ class ComputeGraph(object):
 
         # get control dependencies on those output variables
         if self.node_updates_2:
-            self.node_updates_2 = self.backend.add_layer(self.node_updates_2,
-                                                         name='node_updates_2',
-                                                         scope=f'{self.name}/')
+            self.node_updates_2, updated_vars = self.backend.add_layer(self.node_updates_2,
+                                                                       name='node_updates_2',
+                                                                       scope=f'{self.name}/')
 
         # save control dependencies to network config
         for node_name, op_name, var_name, var_idx in zip(node_names, op_names, var_names, var_indices):
-            var = self.node_updates_2[var_idx]
+            var = updated_vars[var_idx] if updated_vars else self.node_updates_2[var_idx]
             self._set_op_attr(node_name, op_name, var_name, var)
 
         # parse actual edges
@@ -391,12 +392,13 @@ class ComputeGraph(object):
         store_ops = []
 
         # create counting index for collector variables
-        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(), value=-1,
+        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=-1,
                                        scope="output_collection")
 
         # create increment operator for counting index
-        out_idx_add = self.backend.add_op('+=', out_idx, 1, scope="output_collection")
-
+        out_idx_add = self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
+        deps = self.edge_updates + self.node_updates_2 + [out_idx_add] if self.edge_updates \
+            else self.node_updates + self.node_updates_2 + [out_idx_add]
         # add collector variables to the graph
         for key, var in outputs_tmp.items():
             shape = [int(sim_steps / sampling_steps) + 1] + list(var.shape)
@@ -404,10 +406,9 @@ class ComputeGraph(object):
                                                    value=np.zeros(shape), scope="output_collection")
 
             # add collect operation to the graph
-            store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx_add, var,
+            store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx, var,
                                                  scope="output_collection",
-                                                 dependencies=self.edge_updates + self.node_updates_2
-                                                 if self.edge_updates else self.node_updates + self.node_updates_2))
+                                                 dependencies=deps))
 
         sampling_op = self.backend.add_op('group', store_ops, name='output_collection')
 
@@ -422,7 +423,7 @@ class ComputeGraph(object):
 
                         # fully vectorized case: add vectorized placeholder variable to input dictionary
                         var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=key[1], attr=key[2])
-                        inp_dict[var] = np.reshape(val[step], var.shape)
+                        inp_dict[var.name] = np.reshape(val[step], var.shape)
 
                     elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -434,14 +435,14 @@ class ComputeGraph(object):
                             for node in self.net_config.nodes:
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
                                 i_new = var.shape[0] if len(var.shape) > 0 else 1
-                                inp_dict[var] = np.reshape(val[step, i:i_new], var.shape)
+                                inp_dict[var.name] = np.reshape(val[step, i:i_new], var.shape)
                                 i += i_new
 
                         elif key[0] in self.net_config.nodes.keys():
 
                             # add placeholder variable of node(s) to input dictionary
                             var = self._get_node_attr(node=key[0], op=key[1], attr=key[2])
-                            inp_dict[var] = np.reshape(val[step], var.shape)
+                            inp_dict[var.name] = np.reshape(val[step], var.shape)
 
                         elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -450,7 +451,7 @@ class ComputeGraph(object):
                                 if key[0] in node:
                                     break
                             var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                            inp_dict[var] = np.reshape(val[step], var.shape)
+                            inp_dict[var.name] = np.reshape(val[step], var.shape)
 
                     else:
 
@@ -460,7 +461,7 @@ class ComputeGraph(object):
                             # go through all nodes, extract the variable and add it to input dict
                             for i, node in enumerate(self.net_config.nodes.keys()):
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                inp_dict[var] = np.reshape(val[step, i], var.shape)
+                                inp_dict[var.name] = np.reshape(val[step, i], var.shape)
 
                         elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -469,7 +470,7 @@ class ComputeGraph(object):
                             for node in self.net_config.nodes.keys():
                                 if key[0] in node:
                                     var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                    inp_dict[var] = np.reshape(val[step, i], var.shape)
+                                    inp_dict[var.name] = np.reshape(val[step, i], var.shape)
                                     i += 1
 
                 # add input dictionary to placeholder input liust
@@ -739,12 +740,14 @@ class ComputeGraph(object):
                 update_ops.append(var)
 
         # add layer structure to the update ops
-        update_ops = self.backend.add_layer(update_ops, scope=f"{self.name}/{node_name}")
+        update_ops, updated_vars = self.backend.add_layer(update_ops, scope=f"{self.name}/{node_name}")
 
         # save the layered update for subsequent layers to connect to the layered variables
-        for op, var, val in zip(op_names, var_names, update_ops):
-            self._set_op_attr(node_name, op, var, val)
-            updates[op][var] = val
+        if not updated_vars:
+            updated_vars = update_ops
+        for op_name, var, val, op in zip(op_names, var_names, updated_vars, update_ops):
+            self._set_op_attr(node_name, op_name, var, val)
+            updates[op_name][var] = op
 
         return updates
 
@@ -1531,7 +1534,9 @@ class ComputeGraph(object):
 
                     # check the shape of the variable
                     try:
-                        _ = var['shape']
+                        shape = var['shape']
+                        if len(shape) == 0:
+                            var['shape'] = (1,)
                     except KeyError:
                         var['shape'] = var_defs['shape']
 

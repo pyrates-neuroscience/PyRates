@@ -322,7 +322,8 @@ class ExpressionParser(ParserElement):
             op1 = self.parse(expr_stack)
 
             # combine elements via mathematical/boolean operator
-            self.expr_op = self.broadcast(op, op1, op2, **self.parser_kwargs)
+            op1, op2 = self.backend.broadcast(op1, op2, **self.parser_kwargs)
+            self.expr_op = self.backend.add_op(op, op1, op2, **self.parser_kwargs)
 
         elif ".T" == op or ".I" == op:
 
@@ -398,18 +399,17 @@ class ExpressionParser(ParserElement):
         elif op in self.args['inputs']:
 
             # extract input variable from args dict and move it to the vars collection
-            if f'{op}_old' in self.args['vars']:
-                self.args['vars'][op] = self.broadcast(self.assign,
-                                                       self.args['vars'][f'{op}_old'],
-                                                       self.args['inputs'].pop(op),
-                                                       **self.parser_kwargs)
-            elif op in self.args['vars']:
-                self.args['vars'][op] = self.broadcast(self.assign,
-                                                       self.args['vars'][op],
-                                                       self.args['inputs'].pop(op),
-                                                       **self.parser_kwargs)
-            else:
-                self.args['vars'][op] = self.args['inputs'].pop(op)
+            self.args['vars'][op] = self.args['inputs'].pop(op)
+            # if f'{op}_old' in self.args['vars']:
+            #     op1, op2 = self.backend.broadcast(self.args['vars'][f'{op}_old'], self.args['inputs'].pop(op),
+            #                                       **self.parser_kwargs)
+            #     self.args['vars'][op] = self.backend.add_op(self.assign, op1, op2, **self.parser_kwargs)
+            # elif op in self.args['vars']:
+            #     op1, op2 = self.backend.broadcast(self.args['vars'][op], self.args['inputs'].pop(op),
+            #                                       **self.parser_kwargs)
+            #     self.args['vars'][op] = self.backend.add_op(self.assign, op1, op2, **self.parser_kwargs)
+            # else:
+            #     self.args['vars'][op] = self.args['inputs'].pop(op)
 
             # return variable if right-hand side, else parse variable
             if self.lhs:
@@ -435,7 +435,8 @@ class ExpressionParser(ParserElement):
 
                     # calculate update of differential equation
                     var_update = self.update(old_var, self.args.pop('rhs'), dt, **self.parser_kwargs)
-                    self.args['updates'][op] = self.broadcast(self.assign, var, var_update, **self.parser_kwargs)
+                    var, var_update = self.backend.broadcast(var, var_update, **self.parser_kwargs)
+                    self.args['updates'][op] = self.backend.add_op(self.assign, var, var_update, **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
                     self.expr_op = self.args['updates'][op]
 
@@ -443,10 +444,8 @@ class ExpressionParser(ParserElement):
 
                     # update variable according to rhs
                     var = self.args['updates'][op] if op in self.args['updates'] else self.args['vars'][op]
-                    self.args['updates'][op] = self.broadcast(self.assign,
-                                                              var,
-                                                              self.args.pop('rhs'),
-                                                              **self.parser_kwargs)
+                    var, var_update = self.backend.broadcast(var, self.args.pop('rhs'), **self.parser_kwargs)
+                    self.args['updates'][op] = self.backend.add_op(self.assign, var, var_update, **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
                     self.expr_op = self.args['updates'][op]
 
@@ -501,9 +500,8 @@ class ExpressionParser(ParserElement):
             # return float
             while self.constant_counter < 1e7:
                 try:
-                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{self.constant_counter}',
-                                                   value=float(op), shape=(), dtype=self.backend.dtypes['float32'],
-                                                   **self.parser_kwargs)
+                    arg_tmp = self.backend.add_var(vtype='constant', name=f'const_{self.constant_counter}',
+                                                   value=float(op), shape=(), dtype='float32', **self.parser_kwargs)
                     self.constant_counter += 1
                     break
                 except (ValueError, KeyError) as e:
@@ -518,8 +516,8 @@ class ExpressionParser(ParserElement):
             # return integer
             while self.constant_counter < 1e7:
                 try:
-                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{self.constant_counter}', value=int(op),
-                                                   shape=(), dtype=self.backend.dtypes['int32'], **self.parser_kwargs)
+                    arg_tmp = self.backend.add_var(vtype='constant', name=f'const_{self.constant_counter}',
+                                                   value=int(op), shape=(), dtype='int32', **self.parser_kwargs)
                     self.constant_counter += 1
                     break
                 except (ValueError, KeyError) as e:
@@ -538,7 +536,8 @@ class ExpressionParser(ParserElement):
                 new_var = self.backend.add_var(vtype='state_var', name=op, value=0.,
                                                shape=rhs.shape, dtype=rhs.dtype, **self.parser_kwargs)
                 self.args['vars'][op] = new_var
-                self.args['updates'][op] = self.broadcast(self.assign, new_var, rhs, **self.parser_kwargs)
+                new_var, rhs = self.backend.broadcast(new_var, rhs, **self.parser_kwargs)
+                self.args['updates'][op] = self.backend.add_op(self.assign, new_var, rhs, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
                 self.expr_op = self.args['updates'][op]
 
@@ -553,81 +552,6 @@ class ExpressionParser(ParserElement):
                              f"interpreted by this parser.")
 
         return self.expr_op
-
-    def broadcast(self, op: str, op1: tp.Any, op2: tp.Any, return_ops: bool = False, **kwargs
-                  ) -> tp.Union[tuple, tp.Any]:
-        """Tries to match the shapes of op1 and op2 such that op can be applied. Then applies op to op1 and op2.
-
-        Parameters
-        ----------
-        op
-            Name/key of the backend operation.
-        op1
-            First argument to the operation.
-        op2
-            Second argument to the operation.
-        return_ops
-            If true, the adjusted arguments (op1 and op2) are returned.
-        kwargs
-            Additional keyword arguments to be passed to the backend.
-
-        Returns
-        -------
-        tp.Union[tuple, tp.Any]
-            Output of op applied to op1 and op2. If return_ops, op1 and op2 are also returned.
-
-        """
-
-        kwargs.update(self.parser_kwargs)
-
-        # get key and value of ops if they are dicts
-        if type(op1) is dict:
-            (op1_key, op1_val), = op1.items()
-        else:
-            op1_val = op1
-            op1_key = None
-        if type(op2) is dict:
-            (op2_key, op2_val), = op2.items()
-        else:
-            op2_val = op2
-            op2_key = None
-
-        if not self.compare_shapes(op1_val, op2_val):
-
-            # try removing singleton dimensions from op1/op2
-            op1_val_tmp, op2_val_tmp = self.match_shapes(op1_val, op2_val, adjust_second=True, assign=op == self.assign)
-            if not self.compare_shapes(op1_val_tmp, op2_val_tmp):
-                op1_val_tmp, op2_val_tmp = self.match_shapes(op1_val_tmp, op2_val_tmp, adjust_second=False,
-                                                             assign=op == self.assign)
-            if self.compare_shapes(op1_val_tmp, op2_val_tmp):
-                op1_val, op2_val = op1_val_tmp, op2_val_tmp
-
-        try:
-
-            # try applying the operation with matched shapes
-            new_op = self.apply_op(op, op1_val, op2_val, op1_key, op2_key, **kwargs)
-
-        except TypeError:
-
-            # try to re-cast the data-types of op1/op2
-            try:
-                op2_val_tmp = self.backend.add_op('cast', op2_val, op1_val.dtype, **self.parser_kwargs)
-                new_op = self.apply_op(op, op1_val, op2_val_tmp, op1_key, op2_key, **kwargs)
-            except TypeError:
-                op1_val_tmp = self.backend.add_op('cast', op1_val, op2_val.dtype, **self.parser_kwargs)
-                new_op = self.apply_op(op, op1_val_tmp, op2_val, op1_key, op2_key, **kwargs)
-
-        except ValueError:
-
-            # try to match additional keyword arguments to shape of op1
-            for key, var in kwargs.items():
-                if hasattr(var, 'shape'):
-                    _, kwargs[key] = self.match_shapes(op1_val, var, adjust_second=True, assign=op == self.assign)
-            new_op = self.apply_op(op, op1_val, op2_val, op1_key, op2_key, **kwargs)
-
-        if return_ops:
-            return new_op, op1_val, op2_val
-        return new_op
 
     def apply_op(self, op: str, x: tp.Any, y: tp.Any, x_key: tp.Optional[str] = None, y_key: tp.Optional[str] = None,
                  **kwargs) -> tp.Any:
@@ -668,7 +592,8 @@ class ExpressionParser(ParserElement):
 
         # check consistency for assign operations
         if op == '+=' and args and not hasattr(args[0], 'assign_add'):
-            args[1] = self.broadcast('+', *tuple(args), **kwargs)
+            args = self.backend.broadcast(*tuple(args), **kwargs)
+            args[1] = self.backend.add_op('+', *tuple(args), **kwargs)
             op = '='
             return self.apply_op(op, *tuple(args), **kwargs)
 
@@ -723,17 +648,20 @@ class ExpressionParser(ParserElement):
                 update = self.backend.add_op('scatter', idx, update, op.shape, **kwargs)
             except TypeError:
                 if locals()[idx].dtype.is_bool:
-                    op = self.broadcast('*', op, locals()[idx], **kwargs)
+                    op, mask = self.backend.broadcast(op, locals()[idx], **kwargs)
+                    op = self.backend.add_op('*', op, mask, **kwargs)
                 else:
                     raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
                                     f'the tensor to be indexed.')
             try:
-                op_new = self.broadcast(self.assign, op, update, **kwargs)
+                op, update = self.backend.broadcast(op, update, **kwargs)
+                op_new = self.backend.add_op(self.assign, op, update, **kwargs)
                 self.args.pop('idx')
                 return op_new
             except ValueError:
                 op_new = self.backend.add_var('state_var', 'var_storage', shape=op_shape, dtype=op.dtype, **kwargs)
-                op_new_fill = self.broadcast(self.assign, op_new, op_old, **kwargs)
+                op_new, op_old = self.backend.broadcast(op_new, op_old, **kwargs)
+                op_new_fill = self.backend.add_op(self.assign, op_new, op_old, **kwargs)
                 kwargs['dependencies'] = [op_new_fill]
                 self.args['rhs'] = update
                 return self.apply_idx(op_new, idx, **kwargs)
@@ -750,7 +678,8 @@ class ExpressionParser(ParserElement):
                     op_idx = self.backend.add_op('gather', op, idx, **kwargs)
             except TypeError:
                 if locals()[idx].dtype.is_bool:
-                    op_idx = self.broadcast('*', op, locals()[idx], **kwargs)
+                    op, mask = self.backend.broadcast(op, locals()[idx], **kwargs)
+                    op_idx = self.backend.add_op('*', op, mask, **kwargs)
                 else:
                     raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
                                     f'the tensor to be indexed.')
@@ -774,8 +703,10 @@ class ExpressionParser(ParserElement):
         """
 
         kwargs.update(self.parser_kwargs)
-        var_update = self.broadcast('*', var_delta, dt, **kwargs)
-        return self.broadcast('+', var_old, var_update, **kwargs)
+        var_delta, dt = self.backend.broadcast(var_delta, dt, **kwargs)
+        var_update = self.backend.add_op('*', var_delta, dt, **kwargs)
+        var_old, var_update = self.backend.broadcast(var_old, var_update, **kwargs)
+        return self.backend.add_op('+', var_old, var_update, **kwargs)
 
     def _process_idx(self, idx: tp.Any, shape: tuple, local_vars: dict, update: tp.Optional[tp.Any] = None, **kwargs
                      ) -> tuple:
@@ -889,170 +820,6 @@ class ExpressionParser(ParserElement):
             return idx
         return idx, update
 
-    def match_shapes(self, op1: tp.Any, op2: tp.Any, adjust_second: bool = True, assign: bool = False) -> tuple:
-        """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-        assign
-            If true, the re-shaped operators will be assigned to new variables. Else, the manipulation will be performed
-            in place.
-        adjust_second
-            If true, the second operator will be re-shaped according to the shape of the first operator. If false,
-            it will be done the other way around.
-
-        Returns
-        -------
-        tuple
-            The re-shaped operators.
-
-        """
-
-        if adjust_second:
-
-            if len(op2.shape) == 0 and len(op1.shape) > 0 and assign:
-
-                # create array of zeros and fill it with op2
-                op2 = self.backend.add_op('+', self.backend.add_op("zeros", op1.shape, op1.dtype), op2)
-
-            elif (len(op1.shape) > len(op2.shape)) and (1 in op1.shape) and (len(op2.shape) > 0):
-
-                # reshape op2 to match the shape of op1
-                target_shape = op1.shape
-                idx = list(target_shape).index(1)
-                if idx == 0:
-                    op2 = self.backend.add_op('reshape', op2, [1, op2.shape[0]], **self.parser_kwargs)
-                else:
-                    op2 = self.backend.add_op('reshape', op2, [op2.shape[0], 1], **self.parser_kwargs)
-
-            elif (len(op2.shape) > len(op1.shape) and 1 in op2.shape) or \
-                    (len(op1.shape) == 2 and len(op2.shape) == 2 and op1.shape[1] != op2.shape[0] and 1 in op2.shape):
-
-                # cut singleton dimension from op2
-                idx = list(op2.shape).index(1)
-                op2 = self.backend.add_op('squeeze', op2, idx, **self.parser_kwargs)
-
-        else:
-
-            if len(op1.shape) == 0 and len(op2.shape) > 0 and assign:
-
-                # create array of zeros and fill it with op2
-                op1 = self.backend.add_op('+', self.backend.add_op("zeros", op2.shape, op2.dtype, op1))
-
-            elif (len(op2.shape) > len(op1.shape)) and (1 in op2.shape) and (len(op1.shape) > 0):
-
-                # reshape op2 to match the shape of op1
-                target_shape = op2.shape
-                idx = list(target_shape).index(1)
-                if idx == 0:
-                    op1 = self.backend.add_op('reshape', op1, [1, op1.shape[0]], **self.parser_kwargs)
-                else:
-                    op1 = self.backend.add_op('reshape', op1, [op1.shape[0], 1], **self.parser_kwargs)
-
-            elif len(op1.shape) > len(op2.shape) and 1 in op1.shape or \
-                    (len(op1.shape) == 2 and len(op2.shape) == 2 and op1.shape[1] != op2.shape[0] and 1 in op1.shape):
-
-                # cut singleton dimension from op2
-                idx = list(op1.shape).index(1)
-                op1 = self.backend.add_op('squeeze', op1, idx, **self.parser_kwargs)
-
-        return op1, op2
-
-    @staticmethod
-    def compare_shapes(op1: tp.Any, op2: tp.Any) -> bool:
-        """Checks whether the shapes of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the shapes of op1 and op2 are compatible.
-
-        """
-
-        if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
-            if op1.shape == op2.shape:
-                return True
-            elif len(op1.shape) > 1 and len(op2.shape) > 1:
-                return True
-            else:
-                return False
-        else:
-            return True
-
-    @staticmethod
-    def compare_dtypes(op1: tp.Any, op2: tp.Any) -> bool:
-        """Checks whether the data types of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the data types of op1 and op2 are compatible.
-
-        """
-
-        if op1.dtype == op2.dtype:
-            return True
-        elif op1.dtype.name in op2.dtype.name:
-            return True
-        elif op2.dtype.name in op1.dtype.name:
-            return True
-        elif op1.dtype.base_dtype == op2.dtype.base_dtype:
-            return True
-        else:
-            return False
-
-
-class PyRatesVar(object):
-    def __init__(self, vtype: str, dtype: str, shape: tuple, value: tp.Any, name: str, backend: tp.Any) -> None:
-        """
-
-        Parameters
-        ----------
-        vtype
-        dtype
-        shape
-        value
-        name
-        backend
-        """
-
-        self.vtype = vtype
-        self.shape = tuple(shape)
-        self.value = value
-        self.name = name
-        self.backend = backend
-        if dtype in self.backend.dtypes:
-            self.dtype = backend.dtypes[dtype]
-        else:
-            for dtype_tmp in self.backend.dtypes:
-                if dtype_tmp in dtype:
-                    self.dtype = backend.dtypes[dtype_tmp]
-                    break
-            else:
-                raise ValueError(f'Invalid data type: {dtype}. Check documentation of the backend wrapper in use for '
-                                 'valid data types.')
-
-    def eval(self):
-        return self.backend.eval(self.name)
-
 
 def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
     """Parses a list of equations into the backend.
@@ -1104,13 +871,8 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
                                 'shape': var_tmp.shape,
                                 'value': 0.}
                 else:
-                    dtype = None
-                    for data_type in backend.dtypes.keys():
-                        if data_type in str(var.dtype):
-                            dtype = data_type
-                            break
                     var_dict = {'vtype': 'state_var',
-                                'dtype': dtype,
+                                'dtype': var.dtype,
                                 'shape': var.shape,
                                 'value': 0.}
                 equation_args['vars'].update(parse_dict({f'{key}_old': var_dict}, backend=backend, **kwargs))
@@ -1196,32 +958,21 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
 
     """
 
-    var_dict_tf = {}
+    var_dict_new = {}
 
     # go through dictionary items and instantiate variables
     #######################################################
 
     for var_name, var in var_dict.items():
 
-        # preprocess variable definition
-        if var['value'] is None:
-            var['value'] = 0.
-        init_val = var['value'] if hasattr(var['value'], 'shape') else np.zeros(()) + var['value']
-        dtype = backend.dtypes[var['dtype']] if type(var['dtype']) is str else var['dtype']
-        shape = var['shape'] if 'shape' in var.keys() else init_val.shape
-
         # instantiate variable
         if var['vtype'] == 'raw':
-            var_dict_tf[var_name] = var['value']
+            var_dict_new[var_name] = var['value']
         else:
-            var_dict_tf[var_name] = backend.add_var(vtype=var['vtype'],
-                                                    name=var_name,
-                                                    value=init_val,
-                                                    shape=shape,
-                                                    dtype=dtype,
-                                                    **kwargs)
+            var.update(kwargs)
+            var_dict_new[var_name] = backend.add_var(name=var_name, **var)
 
-    return var_dict_tf
+    return var_dict_new
 
 
 def preprocess_equations(eqs: list, solver: str) -> tuple:
