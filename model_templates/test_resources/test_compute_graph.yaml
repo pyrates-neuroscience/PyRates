@@ -39,7 +39,7 @@ op3:
   base: OperatorTemplate
   equations:
     - "d/dt * a = -10.0 * a + b**2 + u"
-    - "d/dt * b = 0.01 * a"
+    - "d/dt * b = 0.1 * a"
   variables:
     a:
       default: variable
