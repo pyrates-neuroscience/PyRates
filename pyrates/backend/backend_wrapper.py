@@ -164,11 +164,11 @@ class PyRatesOp:
         # process keyword arguments
         for key, val in self.kwargs.items():
             if hasattr(val, 'eval'):
-                code_gen.add_code_line(f"{key}=kwargs[{key}].eval(),")
+                code_gen.add_code_line(f"{key}=kwargs['{key}'].eval(),")
                 code_gen.add_linebreak()
                 n_vars += 1
             else:
-                code_gen.add_code_line(f"{key}=kwargs[{key}],")
+                code_gen.add_code_line(f"{key}=kwargs['{key}'],")
 
         # add function end
         code_gen.code[-1] = code_gen.code[-1][:-1]
@@ -179,9 +179,9 @@ class PyRatesOp:
             self.constant_op = True
 
         # generate op
-        ldict = {}
-        exec(code_gen.generate(), globals(), ldict)
-        self._func = ldict["pyrates_func"]
+        func_dict = {}
+        exec(code_gen.generate(), globals(), func_dict)
+        self._func = func_dict["pyrates_func"]
 
         # set shape and dtype of op according to result of eval
         args_tmp = deepcopy(self.args)
@@ -1700,13 +1700,12 @@ class NumpyBackend(object):
         else:
             return self.add_op('index', var, idx, **idx_dict)
 
-    def stack_vars(self, vars):
+    def stack_vars(self, *vars, **kwargs):
         shape = (len(vars),) + vars[0].shape
-        stack = self.add_var(vtype='state_var', name='stack', value=0., shape=shape, dtype=vars[0].dtype)
+        stack = self.add_var(vtype='state_var', name='stack', value=0., shape=shape, dtype=vars[0].dtype, **kwargs)
         updates = []
         for idx, var in enumerate(vars):
-            #idx_var = self.add_var(vtype='constant', name=f'{stack.name}_idx', value=idx, shape=(1,), dtype='int32')
-            updates.append(self.add_op('=', stack, idx, var, indexed=True))
+            updates.append(self.add_op('=', stack, var, idx, indexed=True))
         return stack, updates
 
     # @jit(nopython=True)
@@ -1900,20 +1899,21 @@ class CodeGen:
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_add(*args, **kwargs):
-    return np.add(*args, **kwargs)
+def numpy_add(x, y):
+    return np.add(x, y)
 
 
-#@jit(nopython=True, parallel=True)
+#@jit(nopython=False, parallel=True)
 def numpy_subtract(*args, **kwargs):
     return np.subtract(*args, **kwargs)
 
-#@jit(nopython=True, parallel=True)
+
+#@jit(nopython=False, parallel=True)
 def numpy_multiply(*args, **kwargs):
     return np.multiply(*args, **kwargs)
 
 
-#@jit(nopython=True, parallel=True)
+#@jit(nopython=False, parallel=True)
 def numpy_divide(*args, **kwargs):
     return np.divide(*args, **kwargs)
 
