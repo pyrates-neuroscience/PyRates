@@ -343,8 +343,8 @@ def test_2_3_edge():
         targets3[i + 1, 0] = update2(targets3[i, 0], targets3[i, 1] * 0.5)
         targets3[i + 1, 1] = update3(targets3[i, 1], targets3[i, 0] * 2.0, inp[i])
 
-    diff3 = np.mean(np.abs(results3['a'].values - targets3[:-1, 0])) + \
-            np.mean(np.abs(results3['b'].values - targets3[:-1, 1]))
+    diff3 = np.mean(np.abs(results3['a']['pop0.0'].values - targets3[:-1, 0])) + \
+            np.mean(np.abs(results3['b']['pop1.0'].values - targets3[:-1, 1]))
     assert diff3 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
@@ -367,9 +367,12 @@ def test_2_4_vectorization():
 
     # set up networks
     net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net12").apply()
-    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt, build_in_place=False)
-    net1 = ComputeGraph(net_config=net_config0, name='net.1', vectorization='nodes', dt=dt, build_in_place=False)
-    net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorization='full', dt=dt, build_in_place=False)
+    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt, build_in_place=False,
+                        backend='numpy')
+    net1 = ComputeGraph(net_config=net_config0, name='net.1', vectorization='nodes', dt=dt, build_in_place=False,
+                        backend='numpy')
+    net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorization='full', dt=dt, build_in_place=False,
+                        backend='numpy')
 
     # simulate network behaviors
     results0 = net0.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},

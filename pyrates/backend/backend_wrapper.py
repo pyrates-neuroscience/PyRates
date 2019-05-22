@@ -237,21 +237,20 @@ class PyRatesAssignOp(PyRatesOp):
         # create assign op
         ##################
 
-        # setup function head
-        code_gen.add_code_line(f"def pyrates_assign(*args, **kwargs):")
-        code_gen.add_linebreak()
-        code_gen.add_indent()
-
-        # add return line
+        # add function head and body
         if indexed:
-            code_gen.add_code_line(f"var, upd, idx = args[0:3]")
+            code_gen.add_code_line(f"def pyrates_assign(var, upd, idx):")
             code_gen.add_linebreak()
+            code_gen.add_indent()
             code_gen.add_code_line(f"var.value[idx{idx_eval}] {self.op} upd{update_eval}")
         else:
-            code_gen.add_code_line(f"var, upd = args[0:2]")
+            code_gen.add_code_line(f"def pyrates_assign(var, upd):")
             code_gen.add_linebreak()
+            code_gen.add_indent()
             code_gen.add_code_line(f"var.value[:] {self.op} upd{update_eval}")
         code_gen.add_linebreak()
+
+        # add return line
         code_gen.add_code_line(f"return var")
 
         # generate op
@@ -282,8 +281,67 @@ class PyRatesAssignOp(PyRatesOp):
                     if hasattr(a, 'value'):
                         a.value = a_tmp.value
 
-    def eval(self):
-        return self._func(*self.args, **self.kwargs)
+
+class PyRatesIndexOp(PyRatesOp):
+
+    def generate_op(self):
+
+        # preparation of vars
+        #####################
+
+        # setup code generator
+        code_gen = CodeGen()
+
+        # extract variable
+        var = self.args[0]
+        var_eval = f".eval()" if hasattr(var, 'eval') else ""
+
+        # extract index of variable
+        idx = self.args[1]
+        idx_str = f"idx.eval()" if hasattr(idx, 'eval') else idx
+
+        # create assign op
+        ##################
+
+        # setup function head
+        if hasattr(idx, 'eval'):
+            code_gen.add_code_line(f"def pyrates_index(var, idx):")
+        else:
+            code_gen.add_code_line(f"def pyrates_index(var):")
+            self.args = self.args[0:1]
+        code_gen.add_linebreak()
+        code_gen.add_indent()
+
+        # add return line
+        code_gen.add_code_line(f"return var{var_eval}[{idx_str}]")
+
+        # generate op
+        func_dict = {}
+        exec(code_gen.generate(), globals(), func_dict)
+        self._func = func_dict["pyrates_index"]
+
+        # set shape and dtype of op according to result of eval
+        args_tmp = deepcopy(self.args)
+        kwargs_tmp = deepcopy(self.kwargs)
+        op_tmp = self.eval()
+        self.shape = op_tmp.shape if hasattr(op_tmp, 'shape') else ()
+        self.dtype = op_tmp.dtype if hasattr(op_tmp, 'dtype') else type(op_tmp)
+
+        # reset initial values of args and kwargs
+        for arg_tmp, arg in zip(args_tmp, self.args):
+            if hasattr(arg, 'value'):
+                arg.value = arg_tmp.value
+            elif type(arg) is tuple or type(arg) is list:
+                for a_tmp, a in zip(arg_tmp, arg):
+                    if hasattr(a, 'value'):
+                        a.value = a_tmp.value
+        for kwarg_tmp, kwarg in zip(kwargs_tmp.values(), self.kwargs.values()):
+            if hasattr(kwarg, 'value'):
+                kwarg.value = kwarg_tmp.value
+            elif type(kwarg) is tuple or type(kwarg) is list:
+                for a_tmp, a in zip(kwarg_tmp, kwarg):
+                    if hasattr(a, 'value'):
+                        a.value = a_tmp.value
 
 
 ###########################
@@ -1518,6 +1576,8 @@ class NumpyBackend(object):
 
         if "=" in op:
             op = PyRatesAssignOp(self.ops[op], name, *args, **kwargs)
+        elif "index" == op:
+            op = PyRatesIndexOp(op, name, *args, **kwargs)
         else:
             op = PyRatesOp(self.ops[op], name, *args, **kwargs)
         op.generate_op()
@@ -1695,8 +1755,10 @@ class NumpyBackend(object):
         return op1_val, op2_val
 
     def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, idx_dict: Optional[dict] = None):
+        if idx in idx_dict:
+            idx = idx_dict.pop(idx)
         if update:
-            return self.add_op('=', var, idx, update, indexed=True, **idx_dict)
+            return self.add_op('=', var, update, idx, indexed=True, **idx_dict)
         else:
             return self.add_op('index', var, idx, **idx_dict)
 
@@ -1898,84 +1960,84 @@ class CodeGen:
 #####################
 
 
-#@jit(nopython=True, parallel=True)
+#@jit(nopython=True)
 def numpy_add(x, y):
     return np.add(x, y)
 
 
-#@jit(nopython=False, parallel=True)
-def numpy_subtract(*args, **kwargs):
-    return np.subtract(*args, **kwargs)
+#@jit(nopython=True)
+def numpy_subtract(x, y):
+    return np.subtract(x, y)
 
 
-#@jit(nopython=False, parallel=True)
-def numpy_multiply(*args, **kwargs):
-    return np.multiply(*args, **kwargs)
+#@jit(nopython=True)
+def numpy_multiply(x, y):
+    return np.multiply(x, y)
 
 
-#@jit(nopython=False, parallel=True)
-def numpy_divide(*args, **kwargs):
-    return np.divide(*args, **kwargs)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_modulo(*args, **kwargs):
-    return np.mod(*args, **kwargs)
+#@jit(nopython=True)
+def numpy_divide(x, y):
+    return np.divide(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_power(*args, **kwargs):
-    return np.power(*args, **kwargs)
+def numpy_modulo(x, y):
+    return np.mod(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_power_float(*args, **kwargs):
-    return np.float_power(*args, **kwargs)
+def numpy_power(x, y):
+    return np.power(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_dot(*args, **kwargs):
-    return np.dot(*args, **kwargs)
+def numpy_power_float(x, y):
+    return np.float_power(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_transpose(*args, **kwargs):
-    return np.transpose(*args, **kwargs)
+def numpy_dot(x, y):
+    return np.dot(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_invert(*args, **kwargs):
-    return np.invert(*args, **kwargs)
+def numpy_transpose(x):
+    return np.transpose(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_greater(*args, **kwargs):
-    return np.greater(*args, **kwargs)
+def numpy_invert(x):
+    return np.invert(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_less(*args, **kwargs):
-    return np.less(*args, **kwargs)
+def numpy_greater(x, y):
+    return np.greater(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_equal(*args, **kwargs):
-    return np.equal(*args, **kwargs)
+def numpy_less(x, y):
+    return np.less(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_not_equal(*args, **kwargs):
-    return np.not_equal(*args, **kwargs)
+def numpy_equal(x, y):
+    return np.equal(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_greater_equal(*args, **kwargs):
-    return np.greater_equal(*args, **kwargs)
+def numpy_not_equal(x, y):
+    return np.not_equal(x, y)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_less_equal(*args, **kwargs):
-    return np.less_equal(*args, **kwargs)
+def numpy_greater_equal(x, y):
+    return np.greater_equal(x ,y)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_less_equal(x, y):
+    return np.less_equal(x, y)
 
 
 #@jit(nopython=True, parallel=True)
@@ -2059,8 +2121,8 @@ def numpy_mean(*args, **kwargs):
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_concat(*args, **kwargs):
-    return np.concatenate(*args, **kwargs)
+def numpy_concat(x, y, axis):
+    return np.concatenate([x, y], axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
@@ -2128,11 +2190,6 @@ def numpy_cast(*args, **kwargs):
 # def numpy_scatter_update(x, idx, update):
 #     x.value[idx.eval()] = update.eval()
 #     return x
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_index(x, idx, **kwargs):
-    return x[idx]
 
 
 def no_op(*args, **kwargs):
