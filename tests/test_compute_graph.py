@@ -85,7 +85,7 @@ def test_2_1_operator():
         targets0[i+1, 1] = update0_1(targets0[i, 0])
 
     # compare results with target values
-    diff0 = results0['a'].values.T - targets0[1:, 1]
+    diff0 = results0['a'].values[:, 0] - targets0[:-1, 1]
     assert np.mean(np.abs(diff0)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of operator with a single differential equation and external input
@@ -124,8 +124,8 @@ def test_2_1_operator():
         targets2[i+1, 1] = update2(targets2[i, 0])
         targets2[i+1, 0] = update1(targets2[i, 0], targets2[i, 1])
 
-    diff2 = results2['a'].values.T - targets2[1:, 0]
-    #assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-6, abs=1e-6)
+    diff2 = results2['a'].values[:, 0] - targets2[1:, 0]
+    assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of operator with a two coupled DEs
     ######################################################################
@@ -133,8 +133,7 @@ def test_2_1_operator():
     net_config3 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net3").apply()
     net3 = ComputeGraph(net_config=net_config3, name='net3', vectorization='none', dt=dt, backend='numpy')
     results3 = net3.run(sim_time,
-                        outputs={'b': ('pop0.0', 'op3.0', 'b'),
-                                 'a': ('pop0.0', 'op3.0', 'a')},
+                        outputs={'b': ('pop0.0', 'op3.0', 'b')},
                         inputs={('pop0.0', 'op3.0', 'u'): inp},
                         out_dir="/tmp/log")
 
@@ -146,7 +145,7 @@ def test_2_1_operator():
         targets3[i+1, 0] = update3_0(targets3[i, 0], targets3[i, 1], inp[i])
         targets3[i+1, 1] = update3_1(targets3[i, 1], targets3[i, 0])
 
-    diff3 = results3['a'].values.T - targets3[:-1, 0]
+    diff3 = results3['b'].values[:, 0] - targets3[:-1, 1]
     assert np.mean(np.abs(diff3)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
@@ -166,7 +165,7 @@ def test_2_2_node():
     sim_time = 10.
     sim_steps = int(sim_time/dt)
     net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net4").apply()
-    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt)
+    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt, backend='numpy')
 
     # simulate node behavior
     results0 = net0.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
@@ -179,14 +178,14 @@ def test_2_2_node():
         targets0[i+1, 0] = update0(targets0[i, 0])
         targets0[i+1, 1] = update1(targets0[i, 1], targets0[i+1, 0])
 
-    diff0 = results0['a'].values.T - targets0[1:, 1]
+    diff0 = results0['a'].values[:, 0] - targets0[:-1, 1]
     assert np.mean(np.abs(diff0)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of node with 2 independent operators
     ########################################################################
 
     net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net5").apply()
-    net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorization='none', dt=dt)
+    net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorization='none', dt=dt, backend='numpy')
 
     # simulate node behavior
     results1 = net1.run(sim_time, outputs={'a': ('pop0.0', 'op5.0', 'a')})
@@ -197,14 +196,14 @@ def test_2_2_node():
         targets1[i+1, 0] = update0(targets1[i, 0])
         targets1[i+1, 1] = update1(targets1[i, 1], 0.)
 
-    diff1 = results1['a'].values.T - targets1[1:, 1]
+    diff1 = results1['a'].values[:, 0] - targets1[:-1, 1]
     assert np.mean(np.abs(diff1)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of node with 2 independent operators projecting to the same target operator
     ###############################################################################################################
 
     net_config2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net6").apply()
-    net2 = ComputeGraph(net_config=net_config2, name='net.2', vectorization='none', dt=dt)
+    net2 = ComputeGraph(net_config=net_config2, name='net.2', vectorization='none', dt=dt, backend='numpy')
     results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
 
     # calculate node behavior from hand
@@ -215,29 +214,29 @@ def test_2_2_node():
         targets2[i+1, 1] = update2(targets2[i, 1])
         targets2[i+1, 2] = update1(targets2[i, 2], targets2[i+1, 0] + targets2[i+1, 1])
 
-    diff2 = results2['a'].values.T - targets2[1:, 2]
+    diff2 = results2['a'].values[:, 0] - targets2[:-1, 2]
     assert np.mean(np.abs(diff2)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of node with 1 source operator projecting to 2 independent targets
     ######################################################################################################
 
     net_config3 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net7").apply()
-    net3 = ComputeGraph(net_config=net_config3, name='net.3', vectorization='none', dt=dt)
+    net3 = ComputeGraph(net_config=net_config3, name='net.3', vectorization='none', dt=dt, backend='numpy')
     results3 = net3.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
                                            'b': ('pop0.0', 'op3.0', 'b')})
 
     # calculate node behavior from hand
     targets3 = np.zeros((sim_steps + 1, 4), dtype=np.float32)
     update3 = lambda a, b, u: a + dt * (-10. * a + b**2 + u)
-    update4 = lambda x, y: x + dt*0.01*y
+    update4 = lambda x, y: x + dt*0.1*y
     for i in range(sim_steps):
         targets3[i+1, 0] = update0(targets2[i, 0])
         targets3[i+1, 1] = update1(targets3[i, 1], targets3[i+1, 0])
         targets3[i+1, 2] = update3(targets3[i, 2], targets3[i, 3], targets3[i+1, 0])
         targets3[i+1, 3] = update4(targets3[i, 3], targets3[i, 2])
 
-    diff3 = np.mean(np.abs(results3['a'].values.T - targets3[1:, 1])) + \
-            np.mean(np.abs(results3['b'].values.T - targets3[1:, 3]))
+    diff3 = np.mean(np.abs(results3['a'].values[:, 0] - targets3[:-1, 1])) + \
+            np.mean(np.abs(results3['b'].values[:, 0] - targets3[:-1, 3]))
     assert diff3 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
@@ -258,7 +257,7 @@ def test_2_3_edge():
     sim_time = 10.
     sim_steps = int(sim_time / dt)
     net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net8").apply()
-    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt)
+    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt, backend='numpy')
 
     # simulate edge behavior
     results0 = net0.run(sim_time, outputs={'a': ('pop1.0', 'op1.0', 'a'),
@@ -275,8 +274,8 @@ def test_2_3_edge():
         targets0[i+1, 2] = update2(targets0[i, 2], targets0[i, 0] * 2.0)
         targets0[i+1, 3] = update2(targets0[i, 3], targets0[i, 0] * 0.5)
 
-    diff0 = np.mean(np.abs(results0['a']['pop1.0'].values.T - targets0[1:, 2])) + \
-            np.mean(np.abs(results0['b']['pop2.0'].values.T - targets0[1:, 3]))
+    diff0 = np.mean(np.abs(results0['a']['pop1.0'].values - targets0[:-1, 2])) + \
+            np.mean(np.abs(results0['b']['pop2.0'].values - targets0[:-1, 3]))
     assert diff0 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
@@ -286,7 +285,7 @@ def test_2_3_edge():
     inp = np.zeros((sim_steps, 1)) + 0.5
 
     net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
-    net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorization='none', dt=dt)
+    net1 = ComputeGraph(net_config=net_config1, name='net.1', vectorization='none', dt=dt, backend='numpy')
     results1 = net1.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
                                            'b': ('pop1.0', 'op7.0', 'a')},
                         inputs={('pop1.0', 'op7.0', 'inp'): inp})
@@ -298,15 +297,15 @@ def test_2_3_edge():
         targets1[i + 1, 0] = update2(targets1[i, 0], targets1[i, 1] * 0.5)
         targets1[i + 1, 1] = update3(targets1[i, 1], targets1[i, 0] * 2.0, inp[i])
 
-    diff1 = np.mean(np.abs(results1['a']['pop0.0'].values.T - targets1[1:, 0])) + \
-            np.mean(np.abs(results1['b']['pop1.0'].values.T - targets1[1:, 1]))
+    diff1 = np.mean(np.abs(results1['a']['pop0.0'].values - targets1[:-1, 0])) + \
+            np.mean(np.abs(results1['b']['pop1.0'].values - targets1[:-1, 1]))
     assert diff1 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes
     #######################################################################################
 
     net_config2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net10").apply()
-    net2 = ComputeGraph(net_config=net_config2, name='net.2', vectorization='none', dt=dt)
+    net2 = ComputeGraph(net_config=net_config2, name='net.2', vectorization='none', dt=dt, backend='numpy')
     results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op8.0', 'a'),
                                            'b': ('pop1.0', 'op8.0', 'a')})
 
@@ -321,8 +320,8 @@ def test_2_3_edge():
         targets2[i + 1, 0] = update4(inp0 * 0.5)
         targets2[i + 1, 1] = update4(inp1 * 2.0)
 
-    diff2 = np.mean(np.abs(results2['a']['pop0.0'].values.T - targets2[1:, 0])) + \
-            np.mean(np.abs(results2['b']['pop1.0'].values.T - targets2[1:, 1]))
+    diff2 = np.mean(np.abs(results2['a']['pop0.0'].values - targets2[:-1, 0])) + \
+            np.mean(np.abs(results2['b']['pop1.0'].values - targets2[:-1, 1]))
     assert diff2 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
     # test correct numerical evaluation of graph with 2 unidirectionally, multi-delay-coupled nodes
@@ -332,7 +331,7 @@ def test_2_3_edge():
     inp = np.zeros((sim_steps, 1)) + 0.5
 
     net_config3 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
-    net3 = ComputeGraph(net_config=net_config3, name='net.3', vectorization='none', dt=dt)
+    net3 = ComputeGraph(net_config=net_config3, name='net.3', vectorization='none', dt=dt, backend='numpy')
     results3 = net3.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
                                            'b': ('pop1.0', 'op7.0', 'a')},
                         inputs={('pop1.0', 'op7.0', 'inp'): inp})
@@ -344,8 +343,8 @@ def test_2_3_edge():
         targets3[i + 1, 0] = update2(targets3[i, 0], targets3[i, 1] * 0.5)
         targets3[i + 1, 1] = update3(targets3[i, 1], targets3[i, 0] * 2.0, inp[i])
 
-    diff3 = np.mean(np.abs(results3['a'].values.T - targets3[1:, 0])) + \
-            np.mean(np.abs(results3['b'].values.T - targets3[1:, 1]))
+    diff3 = np.mean(np.abs(results3['a'].values - targets3[:-1, 0])) + \
+            np.mean(np.abs(results3['b'].values - targets3[:-1, 1]))
     assert diff3 == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 

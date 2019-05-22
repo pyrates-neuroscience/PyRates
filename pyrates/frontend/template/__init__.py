@@ -33,7 +33,7 @@ from .circuit import CircuitTemplate
 from pyrates.frontend._registry import register_interface
 
 
-# module-level functions for template conversion
+# module-lvl functions for template conversion
 # writing them out explicitly
 @register_interface
 def to_circuit(template: CircuitTemplate):

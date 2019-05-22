@@ -126,7 +126,7 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
     Returns
     -------
     DataFrame
-        Simulation results stored in a multi-index data frame where each index level refers to one of the parameters of
+        Simulation results stored in a multi-index data frame where each index lvl refers to one of the parameters of
         param_grid.
 
     """

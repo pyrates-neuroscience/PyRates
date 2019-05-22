@@ -340,10 +340,14 @@ class ExpressionParser(ParserElement):
                     if expr_stack[-1] == ":":
                         index.append(expr_stack.pop())
                     else:
-                        lhs = self.lhs
-                        self.lhs = False
-                        index.append(self.parse(expr_stack))
-                        self.lhs = lhs
+                        try:
+                            int(expr_stack[-1])
+                            index.append(expr_stack.pop())
+                        except ValueError:
+                            lhs = self.lhs
+                            self.lhs = False
+                            index.append(self.parse(expr_stack))
+                            self.lhs = lhs
                 indices.append(index[::-1])
                 if expr_stack[-1] == ",":
                     expr_stack.pop()
@@ -370,7 +374,7 @@ class ExpressionParser(ParserElement):
                 idx += ","
             idx = idx[0:-1]
 
-            # extract variable and apply index
+            # extract variable
             if self.lhs:
                 op = expr_stack[-1]
                 if op in self.args['updates']:
@@ -379,12 +383,14 @@ class ExpressionParser(ParserElement):
                     self.lhs = False
                     op_to_idx = self.parse([op])
                     self.lhs = True
-                self.args['updates'][op] = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
-                self.expr_op = self.args['updates'][op]
             else:
                 op_to_idx = self.parse(expr_stack)
-                self.expr_op = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
+
+            # apply index
+            op_idx = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
+            self.args['updates'][op] = op_idx
+            self.expr_op = op_idx
 
         elif op == "PI":
 
@@ -400,18 +406,6 @@ class ExpressionParser(ParserElement):
 
             # extract input variable from args dict and move it to the vars collection
             self.args['vars'][op] = self.args['inputs'].pop(op)
-            # if f'{op}_old' in self.args['vars']:
-            #     op1, op2 = self.backend.broadcast(self.args['vars'][f'{op}_old'], self.args['inputs'].pop(op),
-            #                                       **self.parser_kwargs)
-            #     self.args['vars'][op] = self.backend.add_op(self.assign, op1, op2, **self.parser_kwargs)
-            # elif op in self.args['vars']:
-            #     op1, op2 = self.backend.broadcast(self.args['vars'][op], self.args['inputs'].pop(op),
-            #                                       **self.parser_kwargs)
-            #     self.args['vars'][op] = self.backend.add_op(self.assign, op1, op2, **self.parser_kwargs)
-            # else:
-            #     self.args['vars'][op] = self.args['inputs'].pop(op)
-
-            # return variable if right-hand side, else parse variable
             if self.lhs:
                 self.parse([op])
             else:
@@ -498,34 +492,34 @@ class ExpressionParser(ParserElement):
         elif "." in op:
 
             # return float
-            while self.constant_counter < 1e7:
-                try:
-                    arg_tmp = self.backend.add_var(vtype='constant', name=f'const_{self.constant_counter}',
-                                                   value=float(op), shape=(), dtype='float32', **self.parser_kwargs)
-                    self.constant_counter += 1
-                    break
-                except (ValueError, KeyError) as e:
-                    self.constant_counter += 1
-            else:
-                raise e
+            # while self.constant_counter < 1e7:
+            #     try:
+            #         arg_tmp = self.backend.add_var(vtype='constant', name=f'const_{self.constant_counter}',
+            #                                        value=float(op), shape=(1,), dtype='float32', **self.parser_kwargs)
+            #         self.constant_counter += 1
+            #         break
+            #     except (ValueError, KeyError) as e:
+            #         self.constant_counter += 1
+            # else:
+            #     raise e
 
-            self.expr_op = arg_tmp
+            self.expr_op = float(op)
 
         elif op.isnumeric():
 
             # return integer
-            while self.constant_counter < 1e7:
-                try:
-                    arg_tmp = self.backend.add_var(vtype='constant', name=f'const_{self.constant_counter}',
-                                                   value=int(op), shape=(), dtype='int32', **self.parser_kwargs)
-                    self.constant_counter += 1
-                    break
-                except (ValueError, KeyError) as e:
-                    self.constant_counter += 1
-            else:
-                raise e
+            # while self.constant_counter < 1e7:
+            #     try:
+            #         arg_tmp = self.backend.add_var(vtype='constant', name=f'const_{self.constant_counter}',
+            #                                        value=int(op), shape=(1,), dtype='int32', **self.parser_kwargs)
+            #         self.constant_counter += 1
+            #         break
+            #     except (ValueError, KeyError) as e:
+            #         self.constant_counter += 1
+            # else:
+            #     raise e
 
-            self.expr_op = arg_tmp
+            self.expr_op = int(op)
 
         elif op[0].isalpha():
 
@@ -599,7 +593,7 @@ class ExpressionParser(ParserElement):
 
         return self.backend.add_op(op, *tuple(args), **kwargs)
 
-    def apply_idx(self, op: tp.Any, idx: tp.Any, **kwargs) -> tp.Any:
+    def apply_idx(self, op: tp.Any, idx: tp.Any, **kwargs) -> tuple:
         """Apply index idx to operation op.
 
         Parameters
@@ -625,67 +619,9 @@ class ExpressionParser(ParserElement):
             raise ValueError(f'Indexing of differential equations is currently not supported. Please consider '
                              f'changing equation {self.expr_str}.')
 
-        # extract variables from index if index has a string-based representation
-        if type(idx) is str:
-            idx_tmp = idx.split(',')
-            for i in idx_tmp:
-                idx_tmp2 = i.split(':')
-                for j in idx_tmp2:
-                    if j in self.args['idx'].keys():
-                        exec(f"{j} = self.args['idx']['{j}']")
-
         # apply idx
-        if self.lhs:
-
-            update = self.args.pop('rhs')
-            op_shape = op.shape
-            op_old = op
-
-            try:
-                op = eval(f'op[{idx}]')
-            except ValueError:
-                idx, update = self._process_idx(idx, op.shape, locals(), update=update, **kwargs)
-                update = self.backend.add_op('scatter', idx, update, op.shape, **kwargs)
-            except TypeError:
-                if locals()[idx].dtype.is_bool:
-                    op, mask = self.backend.broadcast(op, locals()[idx], **kwargs)
-                    op = self.backend.add_op('*', op, mask, **kwargs)
-                else:
-                    raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
-                                    f'the tensor to be indexed.')
-            try:
-                op, update = self.backend.broadcast(op, update, **kwargs)
-                op_new = self.backend.add_op(self.assign, op, update, **kwargs)
-                self.args.pop('idx')
-                return op_new
-            except ValueError:
-                op_new = self.backend.add_var('state_var', 'var_storage', shape=op_shape, dtype=op.dtype, **kwargs)
-                op_new, op_old = self.backend.broadcast(op_new, op_old, **kwargs)
-                op_new_fill = self.backend.add_op(self.assign, op_new, op_old, **kwargs)
-                kwargs['dependencies'] = [op_new_fill]
-                self.args['rhs'] = update
-                return self.apply_idx(op_new, idx, **kwargs)
-
-        else:
-
-            try:
-                op_idx = eval(f'op[{idx}]')
-            except ValueError:
-                idx = self._process_idx(idx, op.shape, locals(), **kwargs)
-                if len(idx.shape) > 1:
-                    op_idx = self.backend.add_op('gather_nd', op, idx, **kwargs)
-                else:
-                    op_idx = self.backend.add_op('gather', op, idx, **kwargs)
-            except TypeError:
-                if locals()[idx].dtype.is_bool:
-                    op, mask = self.backend.broadcast(op, locals()[idx], **kwargs)
-                    op_idx = self.backend.add_op('*', op, mask, **kwargs)
-                else:
-                    raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
-                                    f'the tensor to be indexed.')
-
-            self.args.pop('idx')
-            return op_idx
+        update = self.args.pop('rhs', None)
+        return self.backend.apply_idx(op, idx, update=update, idx_dict=self.args.pop('idx'))
 
     def update(self, var_old, var_delta, dt, **kwargs):
         """Solves single step of a differential equation.
