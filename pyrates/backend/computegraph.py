@@ -1334,11 +1334,11 @@ class ComputeGraph(object):
 
         # create buffer variable definitions
         if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-            buffer_shape = [buffer_length + 1]
-            buffer_shape_reset = [1]
+            buffer_shape = (buffer_length + 1,)
+            buffer_shape_reset = (1,)
         else:
-            buffer_shape = [target_shape[0], buffer_length + 1]
-            buffer_shape_reset = [target_shape[0], 1]
+            buffer_shape = (target_shape[0], buffer_length + 1)
+            buffer_shape_reset = (target_shape[0], 1)
         var_dict = {f'{var}_buffer_{idx}': {'vtype': 'state_var',
                                             'dtype': 'float32',
                                             'shape': buffer_shape,

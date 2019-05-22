@@ -491,33 +491,9 @@ class ExpressionParser(ParserElement):
 
         elif "." in op:
 
-            # return float
-            # while self.constant_counter < 1e7:
-            #     try:
-            #         arg_tmp = self.backend.add_var(vtype='constant', name=f'const_{self.constant_counter}',
-            #                                        value=float(op), shape=(1,), dtype='float32', **self.parser_kwargs)
-            #         self.constant_counter += 1
-            #         break
-            #     except (ValueError, KeyError) as e:
-            #         self.constant_counter += 1
-            # else:
-            #     raise e
-
             self.expr_op = float(op)
 
         elif op.isnumeric():
-
-            # return integer
-            # while self.constant_counter < 1e7:
-            #     try:
-            #         arg_tmp = self.backend.add_var(vtype='constant', name=f'const_{self.constant_counter}',
-            #                                        value=int(op), shape=(1,), dtype='int32', **self.parser_kwargs)
-            #         self.constant_counter += 1
-            #         break
-            #     except (ValueError, KeyError) as e:
-            #         self.constant_counter += 1
-            # else:
-            #     raise e
 
             self.expr_op = int(op)
 
@@ -527,8 +503,9 @@ class ExpressionParser(ParserElement):
 
                 # add new variable to arguments that represents rhs op
                 rhs = self.args.pop('rhs')
+                shape = rhs.shape if rhs.shape else (1,)
                 new_var = self.backend.add_var(vtype='state_var', name=op, value=0.,
-                                               shape=rhs.shape, dtype=rhs.dtype, **self.parser_kwargs)
+                                               shape=shape, dtype=rhs.dtype, **self.parser_kwargs)
                 self.args['vars'][op] = new_var
                 new_var, rhs = self.backend.broadcast(new_var, rhs, **self.parser_kwargs)
                 self.args['updates'][op] = self.backend.add_op(self.assign, new_var, rhs, **self.parser_kwargs)
@@ -788,7 +765,7 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
     # preprocess equations
     left_hand_sides, right_hand_sides, update_types = preprocess_equations(equations, solver='euler')
 
-    # go through pre-processed equations and add introduce new variables for old values of state variables
+    # go through pre-processed equations and add new variables for old values of state variables
     for lhs in left_hand_sides:
 
         # get key of lhs variable
