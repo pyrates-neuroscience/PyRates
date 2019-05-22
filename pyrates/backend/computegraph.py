@@ -189,13 +189,15 @@ class ComputeGraph(object):
                     source_vars_idx.append(source_vars.index(var_update))
 
         # get control dependencies on those output variables
-        self.node_updates, updated_vars = self.backend.add_layer(source_vars, name='node_updates',
-                                                                 scope=f'{self.name}/')
+        #self.node_updates, updated_vars = self.backend.add_layer(source_vars, name='node_updates',
+        #                                                         scope=f'{self.name}')
 
         # save control dependencies to network config
-        for node_name, op_name, var_name, var_idx in zip(source_nodes, op_names, var_names, source_vars_idx):
-            var = updated_vars[var_idx] if updated_vars else self.node_updates[var_idx]
-            self._set_op_attr(node_name, op_name, var_name, var)
+        #for node_name, op_name, var_name, var_idx in zip(source_nodes, op_names, var_names, source_vars_idx):
+        #    var = updated_vars[var_idx] if updated_vars else self.node_updates[var_idx]
+        #    self._set_op_attr(node_name, op_name, var_name, var)
+
+        self.node_updates = source_vars
 
         # add layer that contains left-hand side equation updates
         #########################################################
@@ -314,14 +316,12 @@ class ComputeGraph(object):
             self.edge_updates.append(edge['target_var'])
 
         if self.edge_updates:
-            self.step = self.backend.add_layer(self.edge_updates,
-                                               scope=f'{self.name}/', name='network_update')
+            self.step, _ = self.backend.add_layer(self.edge_updates,
+                                                  scope=f'{self.name}/', name='network_update')
             if self.node_updates_2:
-                self.step = self.backend.add_op('group', [self.edge_updates, self.node_updates_2],
-                                                scope=f'{self.name}/', name='network_update')
+                self.step = self.step + self.node_updates_2
         elif self.node_updates_2:
-            self.step = self.backend.add_op('group', [self.node_updates, self.node_updates_2],
-                                            scope=f'{self.name}/', name='network_update')
+            self.step = self.node_updates + self.node_updates_2,
         else:
             self.step = self.node_updates
 
@@ -392,7 +392,7 @@ class ComputeGraph(object):
         store_ops = []
 
         # create counting index for collector variables
-        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=-1,
+        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
                                        scope="output_collection")
 
         # create increment operator for counting index
@@ -401,16 +401,14 @@ class ComputeGraph(object):
             else self.node_updates + self.node_updates_2 + [out_idx_add]
         # add collector variables to the graph
         for key, var in outputs_tmp.items():
-            shape = [int(sim_steps / sampling_steps) + 1] + list(var.shape)
+            shape = [int(sim_steps / sampling_steps)] + list(var.shape)
             output_col[key] = self.backend.add_var(vtype='state_var', name=key, dtype='float32', shape=shape,
                                                    value=np.zeros(shape), scope="output_collection")
 
             # add collect operation to the graph
-            store_ops.append(self.backend.add_op('scatter_update', output_col[key], out_idx, var,
+            store_ops.append(self.backend.add_op('=', output_col[key], var, out_idx,
                                                  scope="output_collection",
-                                                 dependencies=deps))
-
-        sampling_op = self.backend.add_op('group', store_ops, name='output_collection')
+                                                 dependencies=deps, indexed=True))
 
         # linearize input dictionary
         if inputs:
@@ -487,11 +485,11 @@ class ComputeGraph(object):
         if profile is None:
             output_col = self.backend.run(steps=sim_steps, ops=self.step, inputs=inp,
                                           outputs=output_col, sampling_steps=sampling_steps,
-                                          sampling_ops=sampling_op, out_dir=out_dir, profile=profile)
+                                          sampling_ops=store_ops, out_dir=out_dir, profile=profile)
         else:
             output_col, time, memory = self.backend.run(steps=sim_steps, ops=self.step, inputs=inp,
                                                         outputs=output_col, sampling_steps=sampling_steps,
-                                                        sampling_ops=sampling_op, out_dir=out_dir, profile=profile)
+                                                        sampling_ops=store_ops, out_dir=out_dir, profile=profile)
 
         # store output variables in data frame
         ######################################
@@ -637,13 +635,14 @@ class ComputeGraph(object):
         # set up update operation collector variable
         if updates is None:
             updates = {}
+        updates_new = {}
 
-        # add operations of same hierarchical level to compute graph
+        # add operations of same hierarchical lvl to compute graph
         ############################################################
 
         for op_name in ops:
 
-            updates[op_name] = {}
+            updates_new[op_name] = {}
 
             # retrieve operator and operator args
             op_args = dict()
@@ -726,28 +725,30 @@ class ComputeGraph(object):
 
             # store update ops in node update collector
             for var in list(set(op_args['lhs_evals'])):
-                updates[op_name][var] = op_args['updates'][var]
+                updates_new[op_name][var] = op_args['updates'][var]
 
         # create layer structure for update operations over all operators (layers will be evaluated sequentially)
         #########################################################################################################
 
         # collect update operations
         op_names, var_names, update_ops = [], [], []
-        for op_name, op_vars in updates.items():
+        for op_name, op_vars in updates_new.items():
             for var_name, var in op_vars.items():
                 op_names.append(op_name)
                 var_names.append(var_name)
                 update_ops.append(var)
 
         # add layer structure to the update ops
-        update_ops, updated_vars = self.backend.add_layer(update_ops, scope=f"{self.name}/{node_name}")
+        update_ops, updated_vars = self.backend.add_layer(update_ops, scope=f"{self.name}/{node_name}",
+                                                          new_node=primary_ops)
 
         # save the layered update for subsequent layers to connect to the layered variables
         if not updated_vars:
             updated_vars = update_ops
         for op_name, var, val, op in zip(op_names, var_names, updated_vars, update_ops):
             self._set_op_attr(node_name, op_name, var, val)
-            updates[op_name][var] = op
+            updates_new[op_name][var] = op
+        updates.update(updates_new)
 
         return updates
 
@@ -805,12 +806,16 @@ class ComputeGraph(object):
 
         """
 
-        inp = self.backend.add_op('stack', inputs, **kwargs)
+        inp = self.backend.stack_vars(*tuple(inputs), **kwargs)
+        if hasattr(inp, 'eval'):
+            inp, updates = inp.eval()
+            self.backend.add_layer(updates, scope=f"{self.name}/input_stack")
         if reduce_dim:
-            return self.backend.add_op('sum', inp, axis=0, **kwargs)
+            inp_transform = self.backend.add_op('sum', inp, 0, **kwargs)
         else:
-            return self.backend.add_op('reshape', inp, shape=(inp.shape[0] * inp.shape[1],), **kwargs) \
+            inp_transform = self.backend.add_op('reshape', inp, (inp.shape[0] * inp.shape[1],), **kwargs) \
                 if len(inp.shape) > 1 else inp
+        return inp_transform
 
     def _get_node_attr(self, node: str, attr: str, op: Optional[str] = None) -> Any:
         """Extract attribute from node of the network.

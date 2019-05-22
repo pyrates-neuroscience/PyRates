@@ -1314,7 +1314,7 @@ class CircuitFromPopulations(Circuit):
 #####################################################
 
 class CircuitFromCircuit(Circuit):
-    """Circuit class that builds higher-level circuit from multiple lower-level circuits.
+    """Circuit class that builds higher-lvl circuit from multiple lower-lvl circuits.
 
         Parameters
         ----------

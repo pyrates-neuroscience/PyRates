@@ -32,7 +32,7 @@ from .edge import EdgeTemplate
 from .circuit import CircuitTemplate
 
 
-# module-level functions for template conversion
+# module-lvl functions for template conversion
 # writing them out explicitly
 def to_circuit(template: CircuitTemplate):
     """Takes a circuit template and returns a CircuitIR instance from it."""

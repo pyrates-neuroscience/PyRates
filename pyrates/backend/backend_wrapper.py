@@ -49,6 +49,7 @@ from typing import Optional, Dict, Callable, List, Union, Tuple, Any
 import numpy as np
 import tensorflow as tf
 from copy import deepcopy
+from numba import jit
 
 # meta infos
 __author__ = "Richard Gast"
@@ -115,7 +116,7 @@ class PyRatesVar:
 
 
 class PyRatesOp:
-    def __init__(self, op: Any, name: str, *args, **kwargs) -> None:
+    def __init__(self, op: Callable, name: str, *args, **kwargs) -> None:
         """
 
         Parameters
@@ -126,33 +127,163 @@ class PyRatesOp:
         kwargs
         """
 
-        try:
-            op_tmp = op(*args, **kwargs)
-        except TypeError:
-            try:
-                args = (list(args),)
-                op_tmp = op(*args, **kwargs)
-            except TypeError:
-                # TODO: replace this with more generic way of handling args and kwargs
-                args = list(args)
-                arg_tmp = args.pop(-1)
-                args = (args, arg_tmp)
-                try:
-                    op_tmp = op(*args, **kwargs)
-                except TypeError:
-                    raise TypeError(f'Invalid arguments to operator: {name}. Check the documentation of the backend in '
-                                    f'use for the valid argument structure to this operator.')
-
-        # set attributes
         self.op = op
         self.name = name
         self.args = args
         self.kwargs = kwargs
+        self.shape = ()
+        self.dtype = 'float32'
+        self._func = lambda x, y: None
+        self.constant_op = False
+
+    def generate_op(self):
+
+        # setup code generator
+        code_gen = CodeGen()
+
+        # create function
+        #################
+
+        # setup function head
+        code_gen.add_code_line(f"def pyrates_func(*args, **kwargs):")
+        code_gen.add_linebreak()
+        code_gen.add_indent()
+
+        # start return line
+        code_gen.add_code_line(f"return {self.op}(")
+
+        # process positional arguments
+        n_vars = 0
+        for idx, arg in enumerate(self.args):
+            if hasattr(arg, 'eval'):
+                code_gen.add_code_line(f"args[{idx}].eval(),")
+                n_vars += 1
+            else:
+                code_gen.add_code_line(f"args[{idx}],")
+
+        # process keyword arguments
+        for key, val in self.kwargs.items():
+            if hasattr(val, 'eval'):
+                code_gen.add_code_line(f"{key}=kwargs[{key}].eval(),")
+                code_gen.add_linebreak()
+                n_vars += 1
+            else:
+                code_gen.add_code_line(f"{key}=kwargs[{key}],")
+
+        # add function end
+        code_gen.code[-1] = code_gen.code[-1][:-1]
+        code_gen.add_code_line(")")
+
+        # check whether operation arguments contain merely constants
+        if n_vars == 0:
+            self.constant_op = True
+
+        # generate op
+        ldict = {}
+        exec(code_gen.generate(), globals(), ldict)
+        self._func = ldict["pyrates_func"]
+
+        # set shape and dtype of op according to result of eval
+        args_tmp = deepcopy(self.args)
+        kwargs_tmp = deepcopy(self.kwargs)
+        op_tmp = self.eval()
         self.shape = op_tmp.shape if hasattr(op_tmp, 'shape') else ()
         self.dtype = op_tmp.dtype if hasattr(op_tmp, 'dtype') else type(op_tmp)
 
+        # reset initial values of args and kwargs
+        for arg_tmp, arg in zip(args_tmp, self.args):
+            if hasattr(arg, 'value'):
+                arg.value = arg_tmp.value
+            elif type(arg) is tuple or type(arg) is list:
+                for a_tmp, a in zip(arg_tmp, arg):
+                    if hasattr(a, 'value'):
+                        a.value = a_tmp.value
+        for kwarg_tmp, kwarg in zip(kwargs_tmp.values(), self.kwargs.values()):
+            if hasattr(kwarg, 'value'):
+                kwarg.value = kwarg_tmp.value
+            elif type(kwarg) is tuple or type(kwarg) is list:
+                for a_tmp, a in zip(kwarg_tmp, kwarg):
+                    if hasattr(a, 'value'):
+                        a.value = a_tmp.value
+
     def eval(self):
-        return self.op(*self.args, **self.kwargs)
+        return self._func(*self.args, **self.kwargs)
+
+
+class PyRatesAssignOp(PyRatesOp):
+
+    def generate_op(self):
+
+        # preparation of vars
+        #####################
+
+        # setup code generator
+        code_gen = CodeGen()
+
+        # extract variable and update
+        var = self.args[0]
+        if hasattr(self.args[1], 'eval'):
+            update_eval = ".eval()[:]" if self.args[1].shape else ".eval()"
+        else:
+            update_eval = "[:]" if (hasattr(self.args[1], 'shape') and self.args[1].shape) else ""
+
+        # create index of variable
+        indexed = self.kwargs.pop('indexed', False)
+        if indexed:
+            idx_eval = f".eval()" if hasattr(self.args[2], 'eval') else ""
+        else:
+            idx_eval = ""
+
+        # create assign op
+        ##################
+
+        # setup function head
+        code_gen.add_code_line(f"def pyrates_assign(*args, **kwargs):")
+        code_gen.add_linebreak()
+        code_gen.add_indent()
+
+        # add return line
+        if indexed:
+            code_gen.add_code_line(f"var, upd, idx = args[0:3]")
+            code_gen.add_linebreak()
+            code_gen.add_code_line(f"var.value[idx{idx_eval}] {self.op} upd{update_eval}")
+        else:
+            code_gen.add_code_line(f"var, upd = args[0:2]")
+            code_gen.add_linebreak()
+            code_gen.add_code_line(f"var.value[:] {self.op} upd{update_eval}")
+        code_gen.add_linebreak()
+        code_gen.add_code_line(f"return var")
+
+        # generate op
+        func_dict = {}
+        exec(code_gen.generate(), globals(), func_dict)
+        self._func = func_dict["pyrates_assign"]
+
+        # set shape and dtype of op according to result of eval
+        args_tmp = deepcopy(self.args)
+        kwargs_tmp = deepcopy(self.kwargs)
+        op_tmp = self.eval()
+        self.shape = op_tmp.shape if hasattr(op_tmp, 'shape') else ()
+        self.dtype = op_tmp.dtype if hasattr(op_tmp, 'dtype') else type(op_tmp)
+
+        # reset initial values of args and kwargs
+        for arg_tmp, arg in zip(args_tmp, self.args):
+            if hasattr(arg, 'value'):
+                arg.value = arg_tmp.value
+            elif type(arg) is tuple or type(arg) is list:
+                for a_tmp, a in zip(arg_tmp, arg):
+                    if hasattr(a, 'value'):
+                        a.value = a_tmp.value
+        for kwarg_tmp, kwarg in zip(kwargs_tmp.values(), self.kwargs.values()):
+            if hasattr(kwarg, 'value'):
+                kwarg.value = kwarg_tmp.value
+            elif type(kwarg) is tuple or type(kwarg) is list:
+                for a_tmp, a in zip(kwarg_tmp, kwarg):
+                    if hasattr(a, 'value'):
+                        a.value = a_tmp.value
+
+    def eval(self):
+        return self._func(*self.args, **self.kwargs)
 
 
 ###########################
@@ -1103,195 +1234,64 @@ class NumpyBackend(object):
         ################################################
 
         # base math operations
-        self.ops = {"+": lambda x, y: np.add(x.eval(), y.eval()),
-                    "-": lambda x, y: np.subtract(x.eval(), y.eval()),
-                    "*": lambda x, y: np.multiply(x.eval(), y.eval()),
-                    "/": lambda x, y: np.divide(x.eval(), y.eval()),
-                    "%": lambda x, y: np.mod(x.eval(), y.eval()),
-                    "^": lambda x, y: np.power(x.eval(), y.eval()),
-                    "**": lambda x, y: np.float_power(x.eval(), y.eval()),
-                    "@": lambda x, y: np.dot(x.eval(), y.eval()),
-                    ".T": lambda x: np.transpose(x.eval()),
-                    ".I": lambda x: np.invert(x.eval()),
-                    ">": lambda x, y: np.greater(x.eval(), y.eval()),
-                    "<": lambda x, y: np.less(x.eval(), y.eval()),
-                    "==": lambda x, y: np.equal(x.eval(), y.eval()),
-                    "!=": lambda x, y: np.not_equal(x.eval(), y.eval()),
-                    ">=": lambda x, y: np.greater_equal(x.eval(), y.eval()),
-                    "<=": lambda x, y: np.less_equal(x.eval(), y.eval()),
-                    "=": numpy_assign,
-                    "+=": numpy_assign_add,
-                    "neg": lambda x: neg_one() * x.eval(),
-                    "sin": lambda x: np.sin(x.eval()),
-                    "cos": lambda x: np.cos(x.eval()),
-                    "tan": lambda x: np.tan(x.eval()),
-                    "atan": lambda x: np.arctan(x.eval()),
-                    "abs": lambda x: np.abs(x.eval()),
-                    "sqrt": lambda x: np.sqrt(x.eval()),
-                    "sq": lambda x: np.square(x.eval()),
-                    "exp": lambda x: np.exp(x.eval()),
-                    "max": lambda x: np.max(x.eval()) if hasattr(x, 'eval') else np.max(x[0].eval(), *x[1:]),
-                    "min": lambda x: np.min(x.eval()) if hasattr(x, 'eval') else np.min(x[0].eval(), *x[1:]),
-                    "argmax": lambda x: np.argmax(x.eval()) if hasattr(x, 'eval') else np.argmax(x[0].eval(), *x[1:]),
-                    "argmin": lambda x: np.argmin(x.eval()) if hasattr(x, 'eval') else np.argmin(x[0].eval(), *x[1:]),
-                    "round": lambda x: np.round(x.eval()),
-                    "roundto": lambda x: np.round(x.eval()) if hasattr(x, 'eval') else np.round(x[0].eval(), *x[1:]),
-                    "sum": lambda x: np.sum(x.eval()) if hasattr(x, 'eval') else np.sum(x[0].eval(), *x[1:]),
-                    "mean": lambda x: np.mean(x.eval()) if hasattr(x, 'eval') else np.mean(x[0].eval(), *x[1:]),
-                    "concat": lambda x: np.concatenate(x.eval()) if hasattr(x, 'eval') else np.concatenate(x[0].eval(), *x[1:]),
-                    "reshape": lambda x: np.reshape(x.eval()) if hasattr(x, 'eval') else np.reshape(x[0].eval(), *x[1:]),
-                    "shape": lambda x: np.shape(x.eval()),
-                    "dtype": lambda x: np.dtype(x.eval()),
-                    'squeeze': lambda x: np.squeeze(x.eval()) if hasattr(x, 'eval') else np.squeeze(x[0].eval(), *x[1:]),
-                    "roll": lambda x: np.roll(x.eval()) if hasattr(x, 'eval') else np.roll(x[0].eval(), *x[1:]),
-                    "cast": numpy_cast,
-                    "randn": lambda x: np.random.randn(x.eval()) if hasattr(x, 'eval') else np.random.randn(x[0].eval(), *x[1:]),
-                    "ones": np.ones,
-                    "zeros": np.zeros,
-                    "range": np.arange,
-                    "softmax": lambda x: np.exp(x)/np.sum(np.exp(x)),
-                    "sigmoid": numpy_sigmoid,
-                    "tanh": np.tanh,
-                    "gather": lambda x: x,
-                    "gather_nd": lambda x: x,
-                    "scatter": lambda x: x,
-                    "scatter_update": scatter_update_numpy,
-                    "scatter_add": lambda x: x,
-                    "mask": lambda x, y: x*(y > 0.),
-                    "stack": lambda x: x,
-                    "pstack": lambda x: x,
-                    "group": lambda x: x,
-                    "tuple": lambda x: x,
-                    "no_op": no_op,
+        self.ops = {"+": "numpy_add",
+                    "-": "numpy_subtract",
+                    "*": "numpy_multiply",
+                    "/": "numpy_divide",
+                    "%": "numpy_modulop",
+                    "^": "numpy_power",
+                    "**": "numpy_power_float",
+                    "@": "numpy_dot",
+                    ".T": "numpy_transpose",
+                    ".I": "numpy_invert",
+                    ">": "numpy_greater",
+                    "<": "numpy_less",
+                    "==": "numpy_equal",
+                    "!=": "numpy_not_equal",
+                    ">=": "numpy_greater_equal",
+                    "<=": "numpy_less_equal",
+                    "=": "=",
+                    "+=": "+=",
+                    "-=": "-=",
+                    "*=": "*=",
+                    "/=": "/=",
+                    "neg": "neg_one",
+                    "sin": "numpy_sin",
+                    "cos": "numpy_cos",
+                    "tan": "numpy_tan",
+                    "atan": "numpy_atan",
+                    "abs": "numpy_abs",
+                    "sqrt": "numpy_sqrt",
+                    "sq": "numpy_square",
+                    "exp": "numpy_exp",
+                    "max": "numpy_max",
+                    "min": "numpy_min",
+                    "argmax": "numpy_argmax",
+                    "argmin": "numpy_argmin",
+                    "round": "numpy_round",
+                    "sum": "numpy_sum",
+                    "mean": "numpy_mean",
+                    "concat": "numpy_concat",
+                    "reshape": "numpy_reshape",
+                    "shape": "numpy_shape",
+                    "dtype": "numpy_dtype",
+                    'squeeze': "numpy_squeeze",
+                    "roll": "numpy_roll",
+                    "cast": "numpy_cast",
+                    "randn": "numpy_randn",
+                    "ones": "numpy_ones",
+                    "zeros": "numpy_zeros",
+                    "range": "numpy_arange",
+                    "softmax": "numpy_softmax",
+                    "sigmoid": "numpy_sigmoid",
+                    "tanh": "numpy_tanh",
+                    "index": "numpy_index",
+                    "mask": "numpy_mask",
+                    "group": "numpy_group",
+                    "no_op": "no_op",
                     }
         if ops:
             self.ops.update(ops)
-
-        # base math operations for constant vars
-        self.constant_ops_1 = {"+": lambda x, y: np.add(x, y),
-                               "-": lambda x, y: np.subtract(x, y),
-                               "*": lambda x, y: np.multiply(x, y),
-                               "/": lambda x, y: np.divide(x, y),
-                               "%": lambda x, y: np.mod(x, y),
-                               "^": lambda x, y: np.power(x, y),
-                               "**": lambda x, y: np.float_power(x, y),
-                               "@": lambda x, y: np.dot(x, y),
-                               ".T": lambda x: np.transpose(x),
-                               ".I": lambda x: np.invert(x),
-                               ">": lambda x, y: np.greater(x, y),
-                               "<": lambda x, y: np.less(x, y),
-                               "==": lambda x, y: np.equal(x, y),
-                               "!=": lambda x, y: np.not_equal(x, y),
-                               ">=": lambda x, y: np.greater_equal(x, y),
-                               "<=": lambda x, y: np.less_equal(x, y),
-                               "neg": lambda x: -x,
-                               "sin": lambda x: np.sin(x),
-                               "cos": lambda x: np.cos(x),
-                               "tan": lambda x: np.tan(x),
-                               "atan": lambda x: np.arctan(x),
-                               "abs": lambda x: np.abs(x),
-                               "sqrt": lambda x: np.sqrt(x),
-                               "sq": lambda x: np.square(x),
-                               "exp": lambda x: np.exp(x),
-                               "max": lambda x: np.max(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.max(x),
-                               "min": lambda x: np.min(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.min(x),
-                               "argmax": lambda x: np.argmax(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.argmax(x),
-                               "argmin": lambda x: np.argmin(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.max(x),
-                               "round": lambda x: np.round(x),
-                               "roundto": lambda x: np.round(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.round(x),
-                               "sum": lambda x: np.sum(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.sum(x),
-                               "mean": lambda x: np.mean(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.mean(x),
-                               "concat": lambda x: np.concatenate(x[0], *x[1:]) if str(type(x)) in "tuplefloat" else np.concatenate(x),
-                               "reshape": lambda x: np.reshape(x.eval()) if hasattr(x, 'eval') else np.reshape(x[0].eval(), *x[1:]),
-                               "shape": lambda x: np.shape(x.eval()),
-                               "dtype": lambda x: np.dtype(x.eval()),
-                               'squeeze': lambda x: np.squeeze(x.eval()) if hasattr(x, 'eval') else np.squeeze(x[0].eval(), *x[1:]),
-                               "roll": lambda x: np.roll(x.eval()) if hasattr(x, 'eval') else np.roll(x[0].eval(), *x[1:]),
-                               "cast": numpy_cast,
-                               "randn": lambda x: np.random.randn(x.eval()) if hasattr(x, 'eval') else np.random.randn(x[0].eval(), *x[1:]),
-                               "ones": np.ones,
-                               "zeros": np.zeros,
-                               "range": np.arange,
-                               "softmax": lambda x: np.exp(x) / np.sum(np.exp(x)),
-                               "sigmoid": numpy_sigmoid_constant,
-                               "tanh": np.tanh,
-                               "gather": lambda x: x,
-                               "gather_nd": lambda x: x,
-                               "scatter": lambda x: x,
-                               "scatter_update": lambda x: x,
-                               "scatter_add": lambda x: x,
-                               "mask": lambda x, y: x * (y > 0.),
-                               "stack": lambda x: x,
-                               "pstack": lambda x: x,
-                               "group": lambda x: x,
-                               "tuple": lambda x: x,
-                               "no_op": no_op,
-                               }
-        # base math operations for constant vars
-        self.constant_ops_2 = {"+": lambda x, y: np.add(x.eval(), y),
-                               "-": lambda x, y: np.subtract(x.eval(), y),
-                               "*": lambda x, y: np.multiply(x.eval(), y),
-                               "/": lambda x, y: np.divide(x.eval(), y),
-                               "%": lambda x, y: np.mod(x.eval(), y),
-                               "^": lambda x, y: np.power(x.eval(), y),
-                               "**": lambda x, y: np.float_power(x.eval(), y),
-                               "@": lambda x, y: np.dot(x.eval(), y),
-                               ">": lambda x, y: np.greater(x.eval(), y),
-                               "<": lambda x, y: np.less(x.eval(), y),
-                               "==": lambda x, y: np.equal(x.eval(), y),
-                               "!=": lambda x, y: np.not_equal(x.eval(), y),
-                               ">=": lambda x, y: np.greater_equal(x.eval(), y),
-                               "<=": lambda x, y: np.less_equal(x.eval(), y),
-                               "=": numpy_assign_const,
-                               "+=": numpy_assign_add_const,
-                               "max": lambda x: np.max(x[0].eval(), *x[1:]),
-                               "min": lambda x: np.min(x[0].eval(), *x[1:]),
-                               "argmax": lambda x: np.argmax(x[0].eval(), *x[1:]),
-                               "argmin": lambda x: np.argmin(x[0].eval(), *x[1:]),
-                               "roundto": lambda x: np.round(x[0].eval(), *x[1:]),
-                               "sum": lambda x: np.sum(x[0].eval(), *x[1:]),
-                               "mean": lambda x: np.mean(x[0].eval(), *x[1:]),
-                               "concat": lambda x: np.concatenate(x[0].eval(), *x[1:]),
-                               "reshape": lambda x: np.reshape(x[0].eval(), *x[1:]),
-                               'squeeze': lambda x: np.squeeze(x[0].eval(), *x[1:]),
-                               "roll": lambda x: np.roll(x[0].eval(), *x[1:]),
-                               "cast": numpy_cast,
-                               "randn": lambda x: np.random.randn(x[0].eval(), *x[1:]),
-                               "ones": np.ones,
-                               "zeros": np.zeros,
-                               "range": np.arange,
-                               "softmax": lambda x: np.exp(x) / np.sum(np.exp(x)),
-                               "sigmoid": lambda x: 1 / (1 + np.exp(x)),
-                               "tanh": np.tanh,
-                               "gather": lambda x: x,
-                               "gather_nd": lambda x: x,
-                               "scatter": lambda x: x,
-                               "scatter_update": scatter_update_numpy_const,
-                               "scatter_add": lambda x: x,
-                               "mask": lambda x, y: x * (y > 0.),
-                               "stack": lambda x: x,
-                               "pstack": lambda x: x,
-                               "group": lambda x: x,
-                               "tuple": lambda x: x,
-                               "no_op": no_op,
-                               }
-
-        # base math operations for constant vars
-        self.constant_ops_3 = {"+": lambda x, y: np.add(x, y.eval()),
-                               "-": lambda x, y: np.subtract(x, y.eval()),
-                               "*": lambda x, y: np.multiply(x, y.eval()),
-                               "/": lambda x, y: np.divide(x, y.eval()),
-                               "%": lambda x, y: np.mod(x, y.eval()),
-                               "^": lambda x, y: np.power(x, y.eval()),
-                               "**": lambda x, y: np.float_power(x, y.eval()),
-                               "@": lambda x, y: np.dot(x, y.eval()),
-                               ">": lambda x, y: np.greater(x, y.eval()),
-                               "<": lambda x, y: np.less(x, y.eval()),
-                               "==": lambda x, y: np.equal(x, y.eval()),
-                               "!=": lambda x, y: np.not_equal(x, y.eval()),
-                               ">=": lambda x, y: np.greater_equal(x, y.eval()),
-                               "<=": lambda x, y: np.less_equal(x, y.eval())
-                               }
 
         self.dtypes = {"float16": np.float16,
                        "float32": np.float32,
@@ -1309,7 +1309,7 @@ class NumpyBackend(object):
         if dtypes:
             self.dtypes.update(dtypes)
 
-        self.graph = {'vars': {}, 'ops': {}, 'layers': []}
+        self.graph = {'vars': {}, 'ops': {}, 'layers': [], 'nodes': []}
         self.var_counter = {}
         self.op_counter = {}
 
@@ -1376,34 +1376,16 @@ class NumpyBackend(object):
         if 't' in profile:
             t0 = t.time()
 
-        self.compile()
-        n_layers = len(self.graph['layers'])
-
         # graph execution
         #################
 
+        self.compile()
+
         # simulate backend behavior for each time-step
-        if 'm' in profile:
-
-            pass
-
+        if any(inputs):
+            self._run_inp(sampling_ops, inputs, steps, sampling_steps)
         else:
-
-            # in non-profiler mode
-            if any(inputs):
-                for step, inp in zip(range(steps), inputs):
-                    if step % sampling_steps == 0:
-                        self.eval(sampling_ops)
-                    for key, val in inp.items():
-                        self.graph['vars'][key].value = val
-                    for l in range(n_layers):
-                        self.eval_layer(l)
-            else:
-                for step in range(steps):
-                    if step % sampling_steps == 0:
-                        self.eval(sampling_ops)
-                    for l in range(n_layers):
-                        self.eval_layer(l)
+            self._run_no_inp(sampling_ops, steps, sampling_steps)
 
         # output storage and clean-up
         #############################
@@ -1465,8 +1447,9 @@ class NumpyBackend(object):
         ##########################
 
         # extract variable scope
-        scope = kwargs.pop('scope', 'all')
-        name = f'{scope}/{name}'
+        scope = kwargs.pop('scope', None)
+        if scope:
+            name = f'{scope}/{name}'
         
         # create variable
         #################
@@ -1513,7 +1496,7 @@ class NumpyBackend(object):
         #########################
 
         # extract scope
-        scope = kwargs.pop('scope', 'all')
+        scope = kwargs.pop('scope', None)
 
         # extract graph dependencies
         dependencies = kwargs.pop('dependencies', [])
@@ -1521,46 +1504,29 @@ class NumpyBackend(object):
         # extract additional infos
         assign_to_var = kwargs.pop('assign_to_var', False)
 
-        kwargs.pop('name', None)
+        name = kwargs.pop('name', None)
+        if name and scope:
+            name = f'{scope}/{name}'
+        elif scope:
+            name = f'{scope}/{op}'
 
-        # add dependency layer
-        dep_layer = []
-        for dep in dependencies:
-            found = False
-            for l in self.graph['layers']:
-                if dep in l:
-                    found = True
-                    break
-            if not found:
-                dep_layer.append(dep)
-        if dep_layer:
-            self.graph['layers'].append(dep_layer)
+        if dependencies:
+            self.add_layer(dependencies, new_node=False)
 
         # create operation
         ##################
-        
-        constant_op = False
-        if len(args) == 1:
-            if hasattr(args[0], 'eval'):
-                op = PyRatesOp(self.ops[op], op, *args, **kwargs)
-            else:
-                op = PyRatesOp(self.constant_ops_1[op], op, *args, **kwargs)
-                constant_op = True
+
+        if "=" in op:
+            op = PyRatesAssignOp(self.ops[op], name, *args, **kwargs)
         else:
-            if hasattr(args[0], 'eval') and hasattr(args[1], 'eval'):
-                op = PyRatesOp(self.ops[op], op, *args, **kwargs)
-            elif hasattr(args[0], 'eval'):
-                op = PyRatesOp(self.constant_ops_2[op], op, *args, **kwargs)
-            elif hasattr(args[1], 'eval'):
-                op = PyRatesOp(self.constant_ops_3[op], op, *args, **kwargs)
-            else:
-                op = PyRatesOp(self.constant_ops_1[op], op, *args, **kwargs)
-                constant_op = True
+            op = PyRatesOp(self.ops[op], name, *args, **kwargs)
+        op.generate_op()
         
-        if constant_op:
+        if op.constant_op:
             new_var = op.eval()
             if hasattr(new_var, 'shape'):
-                return self.add_var(vtype='constant', name=f'{scope}/{op.name}_evaluated', value=new_var)
+                name = f'{name}_evaluated'
+                return self.add_var(vtype='constant', name=name, value=new_var)
             else:
                 return new_var
         else:
@@ -1594,11 +1560,37 @@ class NumpyBackend(object):
             any layer operation can be used in successive layers.)
 
         """
-        self.graph['layers'].append(ops)
+
+        new_node = kwargs.pop('new_node', False)
+        if new_node:
+            self._move_layers_to_node()
+
+        # select layer ops
+        layer = []
+        for op in ops:
+            found = False
+            if type(op) is PyRatesOp or type(op) is PyRatesAssignOp:
+                for l in self.get_layers():
+                    if op in l:
+                        found = True
+                        break
+            if not found:
+                layer.append(op)
+
+        # add layer if necessary
+        if layer:
+            self.graph['layers'].append(layer)
+
+        # extract variables of layer ops
         vars_tmp = deepcopy(self.graph['vars'])
-        updated_vars = [self.graph['vars'][op.eval().name] for op in ops]
+        ops_evaluated = [op.eval() for op in ops]
+        updated_vars = [self.get_var(op.name) if hasattr(op, 'name') else op for op in ops_evaluated]
+
+        # reset initial values of variables
         for var in updated_vars:
-            var.value = vars_tmp[var.name].value
+            if type(var) is PyRatesVar and type(vars_tmp[var.name]) is PyRatesVar:
+                var.value = vars_tmp[var.name].value
+
         return ops, updated_vars
 
     def clear(self):
@@ -1607,6 +1599,21 @@ class NumpyBackend(object):
         self.graph['vars'].clear()
         self.graph['var_updates'].clear()
         self.graph['vars'].clear()
+
+    def get_var(self, name, updated=True):
+        if updated:
+            return self.graph['vars'][name]
+        else:
+            try:
+                return self.graph['vars'][f'{name}_old']
+            except KeyError:
+                return self.graph['vars'][name]
+
+    def get_op(self, name):
+        return self.graph['ops'][name]
+
+    def get_layers(self):
+        return self.graph['layers']
 
     def eval_var(self, var):
         return self.graph['vars'][var].value
@@ -1619,13 +1626,23 @@ class NumpyBackend(object):
         return [op.eval() for op in self.graph['layers'][idx]]
 
     def compile(self):
+        self._move_layers_to_node()
         layers = []
-        while self.graph['layers']:
-            l1 = self.graph['layers'].pop(0)
-            if not any([l1 == l2 for l2 in layers]):
-                layers.append(l1)
+        while self.graph['nodes']:
+            node_layers = []
+            node_layers_old = self.graph['nodes'].pop(0)
+            while node_layers_old:
+                l1 = node_layers_old.pop(0)
+                if not any([l1 == l2 for l2 in node_layers]):
+                    node_layers.append(l1)
+            for idx, l in enumerate(node_layers):
+                if idx >= len(layers):
+                    layers.append(l)
+                else:
+                    layers[idx] += l
         self.graph['layers'] = layers
 
+    #@jit(nopython=True, parallel=True)
     def eval(self, ops):
         return [op.eval() for op in ops]
 
@@ -1676,6 +1693,50 @@ class NumpyBackend(object):
             op1_val, op2_val = self._match_dtypes(op1_val, op2_val)
 
         return op1_val, op2_val
+
+    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, idx_dict: Optional[dict] = None):
+        if update:
+            return self.add_op('=', var, idx, update, indexed=True, **idx_dict)
+        else:
+            return self.add_op('index', var, idx, **idx_dict)
+
+    def stack_vars(self, vars):
+        shape = (len(vars),) + vars[0].shape
+        stack = self.add_var(vtype='state_var', name='stack', value=0., shape=shape, dtype=vars[0].dtype)
+        updates = []
+        for idx, var in enumerate(vars):
+            #idx_var = self.add_var(vtype='constant', name=f'{stack.name}_idx', value=idx, shape=(1,), dtype='int32')
+            updates.append(self.add_op('=', stack, idx, var, indexed=True))
+        return stack, updates
+
+    # @jit(nopython=True)
+    def _run_no_inp(self, sampling_ops, steps, sampling_steps):
+        n_layers = len(self.graph['layers'])
+        for step in range(steps):
+            if step % sampling_steps == 0:
+                self.eval(sampling_ops)
+            for l in range(n_layers):
+                self.eval_layer(l)
+        if step+1 % sampling_steps == 0:
+            self.eval(sampling_ops)
+
+    # @jit(nopython=True)
+    def _run_inp(self, sampling_ops, inputs, steps, sampling_steps):
+        n_layers = len(self.graph['layers'])
+        for step, inp in zip(range(steps), inputs):
+            if step % sampling_steps == 0:
+                self.eval(sampling_ops)
+            for key, val in inp.items():
+                self.graph['vars'][key].value = val
+            for l in range(n_layers):
+                self.eval_layer(l)
+        if step+1 % sampling_steps == 0:
+            self.eval(sampling_ops)
+
+    def _move_layers_to_node(self):
+        self.graph['nodes'].append([])
+        while self.graph['layers']:
+            self.graph['nodes'][-1].append(self.graph['layers'].pop(0))
 
     def _match_shapes(self, op1: Any, op2: Any, adjust_second: bool = True, assign: bool = False) -> tuple:
         """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
@@ -1803,52 +1864,282 @@ class NumpyBackend(object):
         return True
 
 
+##############################################
+# code generator class for backend functions #
+##############################################
+
+class CodeGen:
+    """Generates code
+    """
+
+    def __init__(self):
+        self.code = []
+        self.lvl = 0
+
+    def generate(self):
+        return "".join(self.code)
+
+    def add_code_line(self, code_str):
+        self.code.append("    " * self.lvl + code_str)
+
+    def add_linebreak(self):
+        self.code.append("\n")
+
+    def add_indent(self):
+        self.lvl += 1
+
+    def remove_indent(self):
+        if self.lvl == 0:
+            raise(SyntaxError("internal error in code generator"))
+        self.lvl -= 1
+
+
+#####################
+# backend functions #
+#####################
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_add(*args, **kwargs):
+    return np.add(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_subtract(*args, **kwargs):
+    return np.subtract(*args, **kwargs)
+
+#@jit(nopython=True, parallel=True)
+def numpy_multiply(*args, **kwargs):
+    return np.multiply(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_divide(*args, **kwargs):
+    return np.divide(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_modulo(*args, **kwargs):
+    return np.mod(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_power(*args, **kwargs):
+    return np.power(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_power_float(*args, **kwargs):
+    return np.float_power(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_dot(*args, **kwargs):
+    return np.dot(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_transpose(*args, **kwargs):
+    return np.transpose(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_invert(*args, **kwargs):
+    return np.invert(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_greater(*args, **kwargs):
+    return np.greater(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_less(*args, **kwargs):
+    return np.less(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_equal(*args, **kwargs):
+    return np.equal(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_not_equal(*args, **kwargs):
+    return np.not_equal(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_greater_equal(*args, **kwargs):
+    return np.greater_equal(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_less_equal(*args, **kwargs):
+    return np.less_equal(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_sin(*args, **kwargs):
+    return np.sin(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_cos(*args, **kwargs):
+    return np.cos(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_tan(*args, **kwargs):
+    return np.tan(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_atan(*args, **kwargs):
+    return np.arctan(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_tanh(*args, **kwargs):
+    return np.tanh(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_abs(*args, **kwargs):
+    return np.abs(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_sqrt(*args, **kwargs):
+    return np.sqrt(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_sq(*args, **kwargs):
+    return np.square(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_exp(*args, **kwargs):
+    return np.exp(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_max(*args, **kwargs):
+    return np.max(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_min(*args, **kwargs):
+    return np.min(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_argmax(*args, **kwargs):
+    return np.argmax(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_argmin(*args, **kwargs):
+    return np.argmin(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_round(*args, **kwargs):
+    return np.round(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_sum(*args, **kwargs):
+    return np.sum(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_mean(*args, **kwargs):
+    return np.mean(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_concat(*args, **kwargs):
+    return np.concatenate(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_reshape(*args, **kwargs):
+    return np.reshape(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_shape(*args, **kwargs):
+    return np.shape(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_dtype(*args, **kwargs):
+    return np.dtype(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_squeeze(*args, **kwargs):
+    return np.squeeze(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_roll(*args, **kwargs):
+    return np.roll(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_randn(*args, **kwargs):
+    return np.randn(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_ones(*args, **kwargs):
+    return np.ones(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_zeros(*args, **kwargs):
+    return np.zeros(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_range(*args, **kwargs):
+    return np.arange(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_softmax(x, **kwargs):
+    e = np.exp(x)
+    return e/np.sum(e, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_sigmoid(x, **kwargs):
+    return 1./(1. + np.exp(-x, **kwargs))
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_cast(*args, **kwargs):
+    return np.cast(*args, **kwargs)
+
+
+#@jit(nopython=True, parallel=True)
+# def numpy_scatter_update(x, idx, update):
+#     x.value[idx.eval()] = update.eval()
+#     return x
+
+
+#@jit(nopython=True, parallel=True)
+def numpy_index(x, idx, **kwargs):
+    return x[idx]
+
+
 def no_op(*args, **kwargs):
     pass
 
 
-def numpy_assign(y, x):
-    y.value[:] = x.eval()[:]
-    return y
-
-
-def numpy_assign_const(y, x):
-    y.value[:] = x[:]
-    return y
-
-
-def numpy_assign_add(y, x):
-    y.value[:] += x.eval()[:]
-    return y
-
-
-def numpy_assign_add_const(y, x):
-    y.value[:] += x[:]
-    return y
-
-
-def numpy_cast(x, dtype):
-    return np.asarray(x, dtype=dtype)
-
-
-def scatter_update_numpy(x, idx, update):
-    x.value[idx.eval()] = update.eval()
-    return x
-
-
-def scatter_update_numpy_const(x, idx, update):
-    upd = update.eval() if hasattr(update, 'eval') else update
-    x.value[idx] = upd
-    return x
-
-
-def numpy_sigmoid(x):
-    return 1./(1. + np.exp(-x.eval()))
-
-
-def numpy_sigmoid_constant(x):
-    return 1./(1. + np.exp(-x))
-
-
-def neg_one():
-    return -1.0
+#@jit(nopython=True)
+def neg_one(*args, **kwargs):
+    args = (-1.,) + args
+    return np.multiply(*args, **kwargs)
