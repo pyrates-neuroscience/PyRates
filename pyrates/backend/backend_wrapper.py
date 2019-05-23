@@ -61,6 +61,45 @@ __status__ = "development"
 #############################################
 
 class PyRatesVar:
+
+    # def __new__(cls, vtype: str, dtype: str, shape: tuple, value: Any, name: str, backend: Any):
+    #
+    #     # check whether necessary arguments were provided
+    #     if all([arg is None for arg in [shape, value, dtype]]):
+    #         raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
+    #
+    #     # get shape
+    #     if not shape:
+    #         shape = value.shape if hasattr(value, 'shape') else ()
+    #
+    #     # get data type
+    #     if not dtype:
+    #         dtype = value.dtype if hasattr(value, 'dtype') else type(value)
+    #     dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
+    #     if dtype in backend.dtypes:
+    #         dtype = backend.dtypes[dtype]
+    #     else:
+    #         for dtype_tmp in backend.dtypes:
+    #             if dtype_tmp in dtype:
+    #                 dtype = backend.dtypes[dtype_tmp]
+    #                 break
+    #         else:
+    #             raise ValueError(f'Invalid data type: {dtype}. Check documentation of the backend wrapper in use for '
+    #                              'valid data types.')
+    #
+    #     # get value
+    #     if value is None:
+    #         value = np.zeros(shape=shape, dtype=dtype)
+    #     elif not hasattr(value, 'shape'):
+    #         value = np.zeros(shape=shape, dtype=dtype) + value
+    #
+    #     # initialize array
+    #     obj = np.asarray(value).view(cls)
+    #
+    #     # set additional attributes
+    #     obj.vtype = vtype
+    #     obj.name = name
+
     def __init__(self, vtype: str, dtype: str, shape: tuple, value: Any, name: str, backend: Any) -> None:
         """
 
@@ -1850,7 +1889,7 @@ class NumpyBackend(object):
 
             # cut singleton dimension from op_adjust
             idx = list(op_adjust.shape).index(1)
-            op_adjust = self.add_op('squeeze', op_adjust, idx)
+            op_adjust = self.add_op('squeeze', op_adjust, axis=idx)
 
         if adjust_second:
             return op_target, op_adjust
@@ -2041,18 +2080,18 @@ def numpy_less_equal(x, y):
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_sin(*args, **kwargs):
-    return np.sin(*args, **kwargs)
+def numpy_sin(x):
+    return np.sin(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_cos(*args, **kwargs):
-    return np.cos(*args, **kwargs)
+def numpy_cos(x):
+    return np.cos(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_tan(*args, **kwargs):
-    return np.tan(*args, **kwargs)
+def numpy_tan(x):
+    return np.tan(x)
 
 
 #@jit(nopython=True, parallel=True)
@@ -2061,63 +2100,63 @@ def numpy_atan(*args, **kwargs):
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_tanh(*args, **kwargs):
-    return np.tanh(*args, **kwargs)
+def numpy_tanh(x):
+    return np.tanh(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_abs(*args, **kwargs):
-    return np.abs(*args, **kwargs)
+def numpy_abs(x):
+    return np.abs(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_sqrt(*args, **kwargs):
-    return np.sqrt(*args, **kwargs)
+def numpy_sqrt(x):
+    return np.sqrt(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_sq(*args, **kwargs):
-    return np.square(*args, **kwargs)
+def numpy_sq(x):
+    return np.square(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_exp(*args, **kwargs):
-    return np.exp(*args, **kwargs)
+def numpy_exp(x, axis=None):
+    return np.exp(x, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_max(*args, **kwargs):
-    return np.max(*args, **kwargs)
+def numpy_max(x, axis=None):
+    return np.max(x, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_min(*args, **kwargs):
-    return np.min(*args, **kwargs)
+def numpy_min(x, axis=None):
+    return np.min(x, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_argmax(*args, **kwargs):
-    return np.argmax(*args, **kwargs)
+def numpy_argmax(x, axis=None):
+    return np.argmax(x, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_argmin(*args, **kwargs):
-    return np.argmin(*args, **kwargs)
+def numpy_argmin(x, axis=None):
+    return np.argmin(x, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_round(*args, **kwargs):
-    return np.round(*args, **kwargs)
+def numpy_round(x, precision=0):
+    return np.round(x, precision=precision)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_sum(*args, **kwargs):
-    return np.sum(*args, **kwargs)
+def numpy_sum(x, axis=0, keepdims=True):
+    return np.sum(x, axis=axis, keepdims=keepdims)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_mean(*args, **kwargs):
-    return np.mean(*args, **kwargs)
+def numpy_mean(x, axis=0, keepdims=True):
+    return np.mean(x, axis=0, keepdims=True)
 
 
 #@jit(nopython=True, parallel=True)
@@ -2126,43 +2165,43 @@ def numpy_concat(x, y, axis):
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_reshape(*args, **kwargs):
-    return np.reshape(*args, **kwargs)
+def numpy_reshape(x, shape):
+    return np.reshape(x, shape)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_shape(*args, **kwargs):
-    return np.shape(*args, **kwargs)
+def numpy_shape(x):
+    return np.shape(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_dtype(*args, **kwargs):
-    return np.dtype(*args, **kwargs)
+def numpy_dtype(x):
+    return np.dtype(x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_squeeze(*args, **kwargs):
-    return np.squeeze(*args, **kwargs)
+def numpy_squeeze(x, axis=None):
+    return np.squeeze(x, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_roll(*args, **kwargs):
-    return np.roll(*args, **kwargs)
+def numpy_roll(x, shift, axis=-1):
+    return np.roll(x, shift, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_randn(*args, **kwargs):
-    return np.randn(*args, **kwargs)
+def numpy_randn(*x):
+    return np.random.randn(*x)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_ones(*args, **kwargs):
-    return np.ones(*args, **kwargs)
+def numpy_ones(shape, dtype='float32'):
+    return np.ones(shape, dtype=dtype)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_zeros(*args, **kwargs):
-    return np.zeros(*args, **kwargs)
+def numpy_zeros(shape, dtype='float32'):
+    return np.zeros(shape, dtype=dtype)
 
 
 #@jit(nopython=True, parallel=True)
@@ -2171,19 +2210,19 @@ def numpy_range(*args, **kwargs):
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_softmax(x, **kwargs):
+def numpy_softmax(x, axis=None):
     e = np.exp(x)
-    return e/np.sum(e, **kwargs)
+    return e/np.sum(e, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_sigmoid(x, **kwargs):
-    return 1./(1. + np.exp(-x, **kwargs))
+def numpy_sigmoid(x):
+    return 1./(1. + np.exp(-x))
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_cast(*args, **kwargs):
-    return np.cast(*args, **kwargs)
+def numpy_cast(x, dtype):
+    return np.cast(x, dtype)
 
 
 #@jit(nopython=True, parallel=True)
@@ -2197,6 +2236,5 @@ def no_op(*args, **kwargs):
 
 
 #@jit(nopython=True)
-def neg_one(*args, **kwargs):
-    args = (-1.,) + args
-    return np.multiply(*args, **kwargs)
+def neg_one(x):
+    return np.multiply(-1, x)

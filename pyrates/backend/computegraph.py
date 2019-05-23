@@ -809,7 +809,7 @@ class ComputeGraph(object):
         inp, updates = self.backend.stack_vars(*tuple(inputs), **kwargs)
         self.backend.add_layer(updates, scope=f"{self.name}/input_stack")
         if reduce_dim:
-            inp_transform = self.backend.add_op('sum', inp, axis=0, **kwargs)
+            inp_transform = self.backend.add_op('sum', inp, axis=0, keepdims=True)
         else:
             inp_transform = self.backend.add_op('reshape', inp, (inp.shape[0] * inp.shape[1],), **kwargs) \
                 if len(inp.shape) > 1 else inp
