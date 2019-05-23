@@ -12,7 +12,7 @@ SigmoidPRO:
 
   base: model_templates.jansen_rit.axon.axon.PotentialToRateOperator
 
-  equation:
+  equations:
     replace:
       r * V: "m_max / (1. + exp(s*(V_thr - V)))"
     remove: ["L_PRO * "]

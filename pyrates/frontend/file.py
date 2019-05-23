@@ -36,8 +36,8 @@ from pyrates.frontend import yaml as _yaml
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
-file_loader_mapping = {"yaml": _yaml.to_template_dict,
-                       "yml": _yaml.to_template_dict}
+file_loader_mapping = {"yaml": _yaml.to_dict,
+                       "yml": _yaml.to_dict}
 
 
 # def to_template(filepath: str, template_name: str):
