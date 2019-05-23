@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -29,12 +28,14 @@
 """ Some utility functions for parsing YAML-based definitions of circuits and components.
 """
 from typing import Type
+from pyrates.frontend._registry import register_interface
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-def to_template_dict(path: str):
+@register_interface
+def to_dict(path: str):
     """Load a template from YAML and return the resulting dictionary.
 
     Parameters
@@ -101,7 +102,7 @@ class TemplateLoader:
         if path in cls.cache:
             template = cls.cache[path]
         else:
-            template_dict = to_template_dict(path)
+            template_dict = to_dict(path)
             try:
                 base_path = template_dict.pop("base")
             except KeyError:
@@ -134,8 +135,8 @@ class TemplateLoader:
         raise NotImplementedError
 
 
+@register_interface
 def from_circuit(circuit, path: str, name: str):
-
     from pyrates.frontend.dict import from_circuit
     dict_repr = {name: from_circuit(circuit)}
 
@@ -149,5 +150,6 @@ def from_circuit(circuit, path: str, name: str):
     yaml.dump(dict_repr, path)
 
 
+@register_interface
 def to_template(path: str, template_cls):
     return template_cls.from_yaml(path)

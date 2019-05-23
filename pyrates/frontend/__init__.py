@@ -31,6 +31,7 @@
 # Define shortcuts for different types of input that are defined as frontends to provide a common interface
 # to all implemented type conversions.
 # All functions are renamed explicitly
+# ToDo: import and rename automatically for easier maintenance
 #############################################################################################################
 
 # template-based interface
@@ -48,7 +49,7 @@ from .nxgraph import from_circuit as nxgraph_from_circuit
 # from .file import to_template as template_from_file
 
 # YAML-based interface
-from .yaml import to_template_dict as template_dict_from_yaml_file
+from .yaml import to_dict as template_dict_from_yaml_file
 from .yaml import from_circuit as yaml_from_circuit
 from .yaml import to_template as template_from_yaml_file
 
