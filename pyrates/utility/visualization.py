@@ -145,7 +145,7 @@ def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True
     return cmap
 
 
-def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value', plot_style: str = 'line_plot',
+def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str = 'line_plot',
                     bg_style: str = 'darkgrid', **kwargs) -> plt.Axes:
     """Plot timeseries from a data frame.
 
@@ -181,8 +181,6 @@ def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value
     title = kwargs.pop('title', '')
 
     # Convert the dataframe to long-form or "tidy" format if necessary
-    if type(data) is pd.Series:
-        data = pd.DataFrame(data=data.values, columns=[variable], index=data.index)
     data['time'] = data.index
     df = pd.melt(data,
                  id_vars='time',
@@ -832,7 +830,22 @@ class Interactive2DParamPlotTemplate(object):
         self.ax[1].set_title(f'x: {np.round(x_value, decimals=2)}, y: {np.round(y_value, decimals=2)}')
         plt.show()
 
-    def get_data(self, x_value, y_value):
+    def set_map_xlabel(self, label):
+        self.ax[0].set_xlabel(label)
+
+    def set_map_ylabel(self, label):
+        self.ax[0].set_ylabel(label)
+
+    def set_map_title(self, title):
+        self.ax[0].set_title(title)
+
+    def set_series_xlabel(self, label):
+        self.ax[1].set_xlabel(label)
+
+    def set_series_ylabel(self, label):
+        self.ax[1].set_ylabel(label)
+
+    def get_data(self, x_value, y_value, *argv, **kwargs):
         """Virtual method
 
         Derive a child class from Interactive2DParamPlotTemplate and rewrite this function to access data using
@@ -845,26 +858,7 @@ class Interactive2DParamPlotTemplate(object):
                     return self.data[y_value][x_value][self.kwargs["param_1"]][self.kwargs["param_2"]]
 
         """
-        raise NotImplementedError()
-
-    def set_map_xlabel(self, label):
-        self.ax[0].set_xlabel(label)
-
-    def set_map_ylabel(self, label):
-        self.ax[0].set_ylabel(label)
-
-    def set_map_title(self, title):
-        self.ax[0].set_title(title)
-
-    # def set_series_xticks(self, ticks):
-    #     self.ax[1].set_xticks(ticks)
-    #     self.ax[1].set_xticks(ticks)
-
-    def set_series_xlabel(self, label):
-        self.ax[1].set_xlabel(label)
-
-    def set_series_ylabel(self, label):
-        self.ax[1].set_ylabel(label)
+        raise NotImplementedError
 
 
 def save_fig_as_pickle(fp, fig):

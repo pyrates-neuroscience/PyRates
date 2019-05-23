@@ -611,6 +611,9 @@ class ClusterGridSearch(ClusterCompute):
         param_grid.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
+
+
+
         print("")
 
         # Create keyword dictionary for threads
@@ -949,6 +952,32 @@ class ClusterGridSearch(ClusterCompute):
     @staticmethod
     def add_template_information(yaml_fp, hdf5_file):
         """Add opearator information of the circuit template to the global result file"""
+        import yaml
+
+        with open(yaml_fp, 'r') as stream:
+            try:
+                yaml_dict = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
+        for operator_key, operator_value in yaml_dict.items():
+            if "Op" in operator_key:
+                for temp_key, temp_value in operator_value.items():
+                    if isinstance(temp_value, str):
+                        hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}', data=temp_value)
+                    if isinstance(temp_value, list):
+                        for idx, eq in enumerate(temp_value):
+                            hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/eq_{idx}', data=eq)
+                    elif isinstance(temp_value, dict):
+                        for key, value in temp_value.items():
+                            try:
+                                hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/{key}', data=value["default"])
+                            except:
+                                hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/{key}', data=value)
+
+
+    @staticmethod
+    def add_template_information(yaml_fp, hdf5_file):
         import yaml
 
         with open(yaml_fp, 'r') as stream:
