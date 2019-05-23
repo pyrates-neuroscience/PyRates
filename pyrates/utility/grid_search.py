@@ -42,6 +42,7 @@ import time as t
 import glob
 import getpass
 import h5py
+import paramiko
 from shutil import copy2
 from pathlib import Path
 from datetime import datetime
@@ -57,7 +58,7 @@ __author__ = "Christoph Salomon, Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: float, simulation_time: float,
+def grid_search(circuit_template: str, param_grid: (dict, pd.DataFrame), param_map: dict, dt: float, simulation_time: float,
                 inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None,
                 permute_grid: bool = False, **kwargs) -> pd.DataFrame:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
@@ -189,7 +190,7 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
     return results_final
 
 
-class ClusterCompute(object):
+class ClusterCompute:
     def __init__(self, nodes: list, compute_dir=None):
         """Create new ClusterCompute instance object with unique compute ID
 
@@ -220,7 +221,7 @@ class ClusterCompute(object):
         # Create main compute directory, subdirectories and logfile #
         #############################################################
 
-        # Unique compute ID
+        # Unique compute ID based on date and time
         self.compute_id = datetime.now().strftime("%d%m%y-%H%M%S")
 
         # Main compute directory
@@ -424,7 +425,6 @@ class ClusterCompute(object):
             Is None if connection fails. For detailed information of the thrown exception see Paramiko documentation
 
         """
-        import paramiko
         client = paramiko.SSHClient()
         try:
             # Using kerberos authentication
@@ -470,7 +470,7 @@ class ClusterGridSearch(ClusterCompute):
         self.res_dir = f'{self.compute_dir}/Results'
         os.makedirs(self.res_dir, exist_ok=True)
 
-    def run(self, circuit_template: str, params: dict, param_map: dict, dt: float, simulation_time: float,
+    def run(self, circuit_template: str, params: (dict, pd.DataFrame), param_map: dict, dt: float, simulation_time: float,
             inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: int,
             worker_env: str, worker_file: str, result_kwargs: dict = {}, config_kwargs: dict = {},
             add_template_info: bool = False, permute: bool = False, **kwargs) -> str:
@@ -513,6 +513,9 @@ class ClusterGridSearch(ClusterCompute):
             Key-value pairs that will be added to the result file's 'AdditionalData' dataset
         config_kwargs
             Key-value pairs that will be added to the config file.
+        add_template_info
+            If true, all operator templates and its variables are copied from the yaml file to a dedicated folder in the
+            result file
 
         Returns
         -------
@@ -530,7 +533,10 @@ class ClusterGridSearch(ClusterCompute):
         t0 = t.time()
 
         # Create DataFrame from param dictionary
-        param_grid = linearize_grid(params, permute=permute)
+        if isinstance(params, dict):
+            param_grid = linearize_grid(params, permute=permute)
+        else:
+            param_grid = params
 
         # Create default parameter grid csv-file
         grid_idx = 0
@@ -605,9 +611,6 @@ class ClusterGridSearch(ClusterCompute):
         param_grid.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
-
-
-
         print("")
 
         # Create keyword dictionary for threads
@@ -621,6 +624,8 @@ class ClusterGridSearch(ClusterCompute):
             "config_file": config_file,
             "global_res_file": global_res_file
         }
+
+        # TODO: Copy worker environment, worker file and configuration file to the worker, if necessary
 
         # Start cluster computation
         ###########################
@@ -646,23 +651,23 @@ class ClusterGridSearch(ClusterCompute):
         print(f'***WRITING RESULTS TO GLOBAL RESULT FILE***')
         t0 = t.time()
 
-        # Get ordered list of temporary result files to iterate through
-        res_files = glob.glob(f'{grid_res_dir}/*_temp*')
-        res_files.sort()
+        # Get sorted list of temporary result files to iterate through
+        temp_res_files = glob.glob(f'{grid_res_dir}/*_temp*')
+        temp_res_files.sort()
 
         # Read number of different circuit outputs and prepare lists to concatenate results
         res_dict = {}
-        with pd.HDFStore(res_files[0], "r") as store:
+        with pd.HDFStore(temp_res_files[0], "r") as store:
             for key in store.keys():
                 res_dict[key] = []
 
-        # Concatenate results from each temp file and output variable
-        for file in res_files:
+        # Concatenate results from each temporary result file
+        for file in temp_res_files:
             with pd.HDFStore(file, "r") as store:
                 for idx, key in enumerate(store.keys()):
                     res_dict[key].append(store[key])
 
-        # Create DataFrames for each output variable and write to global result file
+        # Create DataFrame for each output variable and write to global result file
         with pd.HDFStore(global_res_file, "a") as store:
             for key, value in res_dict.items():
                 if len(value) > 0:
@@ -670,11 +675,12 @@ class ClusterGridSearch(ClusterCompute):
                     store.put(key=f'/Results/{key}', value=df)
 
         # Delete temporary local result files
-        for file in res_files:
+        for file in temp_res_files:
             os.remove(file)
 
         print(f'Elapsed time: {t.time()-t0:.3f} seconds')
         print(f'Find results in: {grid_res_dir}')
+        print("")
 
         chunked_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
 
@@ -696,6 +702,7 @@ class ClusterGridSearch(ClusterCompute):
         """
         thread_name = currentThread().getName()
         connection_lost = False
+        connection_lost_counter = 0
 
         # Get client information
         pm_client = client["paramiko_client"]
@@ -719,7 +726,7 @@ class ClusterGridSearch(ClusterCompute):
 
         # Start scheduler
         #################
-        # Scheduler loop
+
         while True:
             # Temporarily disable thread switching
             with self.lock:
@@ -747,10 +754,13 @@ class ClusterGridSearch(ClusterCompute):
                     subgrid_df.to_hdf(subgrid_fp, key="subgrid")
                     subgrid_idx += 1
 
+                    # TODO: Copy subgrid to worker if necessary
+
                     # Temporary result file for current subgrid
                     ###########################################
                     local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_' \
                         f'chunk_{chunk_idx:02}_idx_{param_idx[0]}-{param_idx[-1]}_temp.h5'
+
 
                     # Execute worker script on the remote host
                     ##########################################
@@ -770,12 +780,13 @@ class ClusterGridSearch(ClusterCompute):
                         print(f'[T]\'{thread_name}\': ERROR: {e}')
                         chunked_grid.at[param_idx, "status"] = "unsolved"
                         connection_lost = True
+                        connection_lost_counter += 1
 
             # Lock released, thread switching enabled
 
             # Try to reconnect to host if connection has been lost
             ######################################################
-            if connection_lost:
+            if connection_lost and connection_lost_counter < 2:
                 # Reconnection loop
                 while True:
                     # Try to reconnect while there are still parameter chunks to fetch
@@ -790,17 +801,17 @@ class ClusterGridSearch(ClusterCompute):
                             connection_lost = False
                             # Escape reconnection loop
                             break
-                # Jump to the beginning of scheduler loop
+                # Jump to the beginning of scheduler loop if reconnection was succesfull
                 continue
 
             # Wait for remote computation to finish
             #######################################
-            status = stdout.channel.recv_exit_status()
+            exit_status = stdout.channel.recv_exit_status()
 
             # Update grid status
             ####################
             with self.lock:
-                if status == 0:
+                if exit_status == 0:
                     print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
                     print(f'[T]\'{thread_name}\': Updating grid status')
                     try:
@@ -819,7 +830,7 @@ class ClusterGridSearch(ClusterCompute):
                             else:
                                 chunked_grid.at[row, "status"] = "failed"
                 else:
-                    print(f'[T]\'{thread_name}\': Remote computation failed with exit status {status}')
+                    print(f'[T]\'{thread_name}\': Remote computation failed with exit status {exit_status}')
                     for row in param_idx:
                         if chunked_grid.loc[row]["err_count"] < 2:
                             chunked_grid.at[row, "status"] = "unsolved"
@@ -828,7 +839,7 @@ class ClusterGridSearch(ClusterCompute):
                             chunked_grid.at[row, "status"] = "failed"
 
             # Lock released, thread switching enabled
-        # End of while loop
+        # End of scheduler loop
     # End of Thread master
 
     #################################
@@ -847,6 +858,7 @@ class ClusterGridSearch(ClusterCompute):
 
         Returns
         -------
+            pd.DataFrame
 
         """
         # Add status columns to grid
@@ -902,6 +914,7 @@ class ClusterGridSearch(ClusterCompute):
     def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float,
                           inputs: dict, outputs: dict, sampling_step_size: float, add_kwargs: dict):
         """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
+
         Parameters
         ----------
         fp
@@ -916,6 +929,7 @@ class ClusterGridSearch(ClusterCompute):
 
         Returns
         -------
+
         """
         config_dict = {
             "circuit_template": circuit_template,
@@ -932,9 +946,9 @@ class ClusterGridSearch(ClusterCompute):
         with open(fp, "w") as f:
             json.dump(config_dict, f, indent=2)
 
-
     @staticmethod
     def add_template_information(yaml_fp, hdf5_file):
+        """Add opearator information of the circuit template to the global result file"""
         import yaml
 
         with open(yaml_fp, 'r') as stream:
@@ -962,7 +976,6 @@ class ClusterGridSearch(ClusterCompute):
 #####################
 # Utility functions #
 #####################
-
 
 def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
     """Turns the grid into a grid that can be traversed linearly, i.e. pairwise.

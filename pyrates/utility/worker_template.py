@@ -57,8 +57,8 @@ def main(_):
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
-    # Load global config file
-    #########################
+    # Load grid search configuration parameters from config file
+    ############################################################
     print("")
     print("***LOADING GLOBAL CONFIG FILE***")
     t0 = time.time()
@@ -71,6 +71,7 @@ def main(_):
         sampling_step_size = global_config_dict['sampling_step_size']
         dt = global_config_dict['dt']
         simulation_time = global_config_dict['simulation_time']
+        # 'inputs' and 'outputs' are optional parameters
         try:
             inputs_temp = global_config_dict['inputs']
             if inputs_temp:
@@ -94,24 +95,20 @@ def main(_):
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
-    # LOAD PARAMETER GRID
-    #####################
+    # Load parameter subgrid from subgrid file
+    ##########################################
     print("")
     print("***PREPARING PARAMETER GRID***")
     t0 = time.time()
 
-    # Load subgrid into DataFrame
     param_grid = pd.read_hdf(subgrid, key="subgrid")
 
-    # Exclude 'status', 'chunk_idx' and 'err_count' columns from param_grid
-    # since grid_search() can't handle the additional keys
-    param_grid = param_grid.drop('status', axis=1)
-    param_grid = param_grid.drop('chunk_idx', axis=1)
-    param_grid = param_grid.drop('err_count', axis=1)
+    # grid_search() can't handle additional columns in the parameter grid
+    param_grid = param_grid.drop(['status', 'chunk_idx', 'err_count'], axis=1)
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
-    # COMPUTE PARAMETER GRID #
-    ##########################
+    # Compute parameter subgrid using grid_search
+    #############################################
     print("")
     print("***COMPUTING PARAMETER GRID***")
     t0 = time.time()
@@ -128,22 +125,20 @@ def main(_):
     out_vars = results.columns.levels[-1]
 
     print(f'Total parameter grid computation time: {time.time()-t0:.3f} seconds')
-    # print(f'Peak memory usage: {m} MB')
 
-    # POST PROCESS DATA AND CREATE RESULT FILES
-    ###########################################
+    # Post process results and write data to local result file
+    ##########################################################
     print("")
     print("***POSTPROCESSING AND CREATING RESULT FILES***")
     t0 = time.time()
 
-    # Order results and post processing
-    ###################################
     with pd.HDFStore(local_res_file, "w") as store:
         for out_var in out_vars:
             key = out_var.replace(".", "")
             res_lst = []
 
-            # Loop through parameter grid and identify corresponding result column
+            # Order results according to rows in parameter grid
+            ###################################################
             for i, idx in enumerate(param_grid.index):
                 idx_list = param_grid.iloc[i].values.tolist()
                 idx_list.append(out_var)
@@ -152,32 +147,19 @@ def main(_):
                 result.columns.names = results.columns.names
                 res_lst.append(result)
 
-                # POSTPROCESSING
-                ################
-
-            # Ordered DataFrames with respect to param_grid entries
             result_ordered = pd.concat(res_lst, axis=1)
 
-            # SAVE DATA
-            ###########
+            # Postprocess ordered results (optional)
+            ########################################
+
+            # Write DataFrames to local result file
+            ######################################
             store.put(key=key, value=result_ordered)
-            # results.to_hdf(local_res_file, key=key)
 
-            # SAVE DATA
-            ###########
-            # DataFrames
-            # with pd.HDFStore(local_res_file, "w") as store:
-            #     store.put(key='Data', value=results)
-                # store.put(key=f'PSD', value=spec)
-
-            # Other
-            # with h5py.File(local_res_file, "a") as file:
-                # file.create_dataset("Other/num_peaks", data=peak_lst)
+    # TODO: Copy local result file back to master if needed
 
     print(f'Result files created. Elapsed time: {time.time()-t0:.3f} seconds')
-
     print("")
-
     print(f'Total elapsed time: {time.time()-t_total:.3f} seconds')
 
 
@@ -187,22 +169,22 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_2/Test_config.json",
+        default="~/worker_test/config_file.json",
         help="Config file with all necessary data to start grid_search() except for parameter grid"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_2/Test_subgrid.h5",
+        default="~/worker_test/subgrid.h5",
         help="Path to csv-file with sub grid to compute on the remote machine"
     )
 
     parser.add_argument(
         "--local_res_file",
         type=str,
-        default="/nobackup/spanien1/salomon/ClusterGridSearch/TestData/Test_2/Test_result.h5",
-        help="File to save results to"
+        default="~/worker_test/result.h5",
+        help="hdf5-file to save results to"
     )
 
     FLAGS = parser.parse_args()
@@ -211,12 +193,8 @@ if __name__ == "__main__":
 
 
 def postprocessing_1(data_):
-    """
-    Compute spike frequency based on frequency in PSD with the highest energy
+    """Compute spike frequency based on frequency in PSD with the highest energy"""
 
-    :param data_:
-    :return:
-    """
     from pyrates.utility import plot_psd
     import matplotlib.pyplot as plt
 
@@ -239,18 +217,14 @@ def postprocessing_1(data_):
         return psd
 
     data_.columns = cols
-    # Return empty DataFrame
+
+    # Return empty DataFrame if data contains NaN
     return pd.DataFrame(columns=cols)
 
 
 def postprocessing_2(data, simulation_time):
-    """
-    Compute spike frequency based on average number of spikes (local maxima) per second
+    """Compute spike frequency based on average number of spikes (local maxima) per second"""
 
-    :param data:
-    :param simulation_time:
-    :return:
-    """
     import scipy.signal as sp
 
     cols = data.columns
@@ -264,10 +238,8 @@ def postprocessing_2(data, simulation_time):
 
 
 def postprocessing_3(data, dt):
-    """
-    Compute spike frequency based on average time between spikes (local maxima)
-    :return:
-    """
+    """Compute spike frequency based on average time between spikes (local maxima)"""
+
     import scipy.signal as sp
 
     cols = data.columns
