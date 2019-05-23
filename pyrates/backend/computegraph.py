@@ -113,10 +113,11 @@ class ComputeGraph(object):
         # parse node operations
         #######################
 
-        self.node_updates = {}
+        self.node_updates = []
 
         for node_name, node in self.net_config.nodes.items():
 
+            self.backend.bottom_layer()
             op_graph = self._get_node_attr(node_name, 'op_graph')
 
             # check operators for cyclic relationships
@@ -133,7 +134,9 @@ class ComputeGraph(object):
             # first, parse operators that have no dependencies on other operators
             # noinspection PyTypeChecker
             primary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
+            self.node_updates.append(self.backend.layer)
             op_updates = self._add_ops(primary_ops, node_name=node_name, primary_ops=True)
+            self.backend.next_layer()
 
             # remove parsed operators from graph
             graph.remove_nodes_from(primary_ops)
@@ -144,66 +147,19 @@ class ComputeGraph(object):
                 # get all operators that have no dependencies on other operators
                 # noinspection PyTypeChecker
                 secondary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
+                self.node_updates.append(self.backend.layer)
                 op_updates = self._add_ops(secondary_ops, node_name=node_name, updates=op_updates, primary_ops=False)
+                self.backend.next_layer()
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(secondary_ops)
 
-            # move unconnected node-operator updates to node updates
-            if node_name not in self.node_updates:
-                self.node_updates[node_name] = {}
-            for op_name, op_vars in op_updates.items():
-                if op_name not in self.node_updates[node_name]:
-                    self.node_updates[node_name][op_name] = {}
-                for var_name, var_update in op_vars.items():
-                    self.node_updates[node_name][op_name][var_name] = var_update
-
-        # collect output variables
-        source_nodes, target_nodes, edge_indices = [], [], []
-        source_vars, source_vars_idx = [], []
-        op_names, var_names = [], []
-        for source_node, target_node, edge_idx in self.net_config.edges:
-            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
-            op, var = svar.split('/')
-            svar = self._get_op_attr(source_node, op, var)
-            if op in self.node_updates[source_node] and var in self.node_updates[source_node][op]:
-                self.node_updates[source_node][op].pop(var)
-            if svar not in source_vars:
-                source_vars.append(svar)
-            op_names.append(op)
-            var_names.append(var)
-            source_vars_idx.append(source_vars.index(svar))
-            source_nodes.append(source_node)
-            target_nodes.append(target_node)
-            edge_indices.append(edge_idx)
-
-        # add remaining node updates
-        for node_name, ops in self.node_updates.items():
-            for op_name, op_vars in ops.items():
-                for var_name, var_update in op_vars.items():
-                    if var_update not in source_vars:
-                        source_vars.append(var_update)
-                    op_names.append(op_name)
-                    var_names.append(var_name)
-                    source_nodes.append(node_name)
-                    source_vars_idx.append(source_vars.index(var_update))
-
-        # get control dependencies on those output variables
-        #self.node_updates, updated_vars = self.backend.add_layer(source_vars, name='node_updates',
-        #                                                         scope=f'{self.name}')
-
-        # save control dependencies to network config
-        #for node_name, op_name, var_name, var_idx in zip(source_nodes, op_names, var_names, source_vars_idx):
-        #    var = updated_vars[var_idx] if updated_vars else self.node_updates[var_idx]
-        #    self._set_op_attr(node_name, op_name, var_name, var)
-
-        self.node_updates = source_vars
-
         # add layer that contains left-hand side equation updates
-        #########################################################
+        ########################################################
 
-        self.node_updates_2 = []
-        node_names, op_names, var_names, var_indices = [], [], [], []
+        self.backend.top_layer()
+        self.backend.next_layer()
+        node_names, op_names, var_names, var_updates = [], [], [], []
 
         for node_name in self.net_config.nodes:
             op_graph = self._get_node_attr(node_name, 'op_graph')
@@ -227,30 +183,43 @@ class ComputeGraph(object):
 
                         args.pop('lhs_evals')
 
-                        # add update operation to edge updates
-                        self.node_updates_2.append(args['updates'][key_old])
-
                         # add info to lists
                         node_names.append(node_name)
                         op_names.append(op_name)
                         var_names.append(key_old)
-                        var_indices.append(len(self.node_updates_2) - 1)
+                        var_updates.append(args['vars'])
 
-        # get control dependencies on those output variables
-        if self.node_updates_2:
-            self.node_updates_2, updated_vars = self.backend.add_layer(self.node_updates_2,
-                                                                       name='node_updates_2',
-                                                                       scope=f'{self.name}/')
+        # add layer to node updates
+        self.node_updates.append(self.backend.layer)
 
         # save control dependencies to network config
-        for node_name, op_name, var_name, var_idx in zip(node_names, op_names, var_names, var_indices):
-            var = updated_vars[var_idx] if updated_vars else self.node_updates_2[var_idx]
+        for node_name, op_name, var_name, var in zip(node_names, op_names, var_names, var_updates):
             self._set_op_attr(node_name, op_name, var_name, var)
 
-        # parse actual edges
-        ####################
+        # parse edges
+        #############
 
-        self.edge_updates = []
+        self.backend.next_layer()
+
+        # collect output variables
+        source_nodes, target_nodes, edge_indices = [], [], []
+        source_vars, source_vars_idx = [], []
+        op_names, var_names = [], []
+        for source_node, target_node, edge_idx in self.net_config.edges:
+            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
+            op, var = svar.split('/')
+            svar = self._get_op_attr(source_node, op, var)
+            if op in self.node_updates[source_node] and var in self.node_updates[source_node][op]:
+                self.node_updates[source_node][op].pop(var)
+            if svar not in source_vars:
+                source_vars.append(svar)
+            op_names.append(op)
+            var_names.append(var)
+            source_vars_idx.append(source_vars.index(svar))
+            source_nodes.append(source_node)
+            target_nodes.append(target_node)
+            edge_indices.append(edge_idx)
+
         for source_node, target_node, edge_idx in zip(source_nodes, target_nodes, edge_indices):
 
             # extract edge information
@@ -299,8 +268,7 @@ class ComputeGraph(object):
 
             # parse mapping
             args = parse_equation_list([eq], args, backend=self.backend,
-                                       scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}",
-                                       dependencies=self.edge_updates)
+                                       scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}")
 
             args.pop('lhs_evals')
 
@@ -312,18 +280,7 @@ class ComputeGraph(object):
             edge.update(args['vars'])
             edge.update(args['updates'])
 
-            # add projection to edge updates
-            self.edge_updates.append(edge['target_var'])
-
-        if self.edge_updates:
-            self.step, _ = self.backend.add_layer(self.edge_updates,
-                                                  scope=f'{self.name}/', name='network_update')
-            if self.node_updates_2:
-                self.step = self.step + self.node_updates_2
-        elif self.node_updates_2:
-            self.step = self.node_updates + self.node_updates_2,
-        else:
-            self.step = self.node_updates
+        self.edge_updates = [self.backend.layer] if self.backend.layers[self.backend.layer] else []
 
     def run(self,
             simulation_time: Optional[float] = None,
@@ -390,15 +347,16 @@ class ComputeGraph(object):
         # add output collector variables to graph
         output_col = {}
         store_ops = []
+        self.backend.add_layer()
+        sampling_layer = self.backend.layer
 
         # create counting index for collector variables
-        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
+        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=-1,
                                        scope="output_collection")
 
         # create increment operator for counting index
-        out_idx_add = self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
-        deps = self.edge_updates + self.node_updates_2 + [out_idx_add] if self.edge_updates \
-            else self.node_updates + self.node_updates_2 + [out_idx_add]
+        self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
+
         # add collector variables to the graph
         for key, var in outputs_tmp.items():
             shape = [int(sim_steps / sampling_steps)] + list(var.shape)
@@ -406,9 +364,7 @@ class ComputeGraph(object):
                                                    value=np.zeros(shape), scope="output_collection")
 
             # add collect operation to the graph
-            store_ops.append(self.backend.add_op('=', output_col[key], var, out_idx,
-                                                 scope="output_collection",
-                                                 dependencies=deps, indexed=True))
+            store_ops.append(self.backend.add_op('=', output_col[key], var, out_idx, scope="output_collection"))
 
         # linearize input dictionary
         if inputs:
@@ -483,12 +439,12 @@ class ComputeGraph(object):
         ################
 
         if profile is None:
-            output_col = self.backend.run(steps=sim_steps, ops=self.step, inputs=inp,
+            output_col = self.backend.run(steps=sim_steps, layers=self.node_updates + self.edge_updates, inputs=inp,
                                           outputs=output_col, sampling_steps=sampling_steps,
-                                          sampling_ops=store_ops, out_dir=out_dir, profile=profile)
+                                          sampling_layer=sampling_layer, out_dir=out_dir, profile=profile)
         else:
-            output_col, time, memory = self.backend.run(steps=sim_steps, ops=self.step, inputs=inp,
-                                                        outputs=output_col, sampling_steps=sampling_steps,
+            output_col, time, memory = self.backend.run(steps=sim_steps, layers=self.node_updates + self.edge_updates,
+                                                        inputs=inp, outputs=output_col, sampling_layer=sampling_layer,
                                                         sampling_ops=store_ops, out_dir=out_dir, profile=profile)
 
         # store output variables in data frame
@@ -727,28 +683,21 @@ class ComputeGraph(object):
             for var in list(set(op_args['lhs_evals'])):
                 updates_new[op_name][var] = op_args['updates'][var]
 
-        # create layer structure for update operations over all operators (layers will be evaluated sequentially)
-        #########################################################################################################
+        # add new layer to backend graph
 
-        # collect update operations
-        op_names, var_names, update_ops = [], [], []
-        for op_name, op_vars in updates_new.items():
-            for var_name, var in op_vars.items():
-                op_names.append(op_name)
-                var_names.append(var_name)
-                update_ops.append(var)
-
-        # add layer structure to the update ops
-        update_ops, updated_vars = self.backend.add_layer(update_ops, scope=f"{self.name}/{node_name}",
-                                                          new_node=primary_ops)
-
-        # save the layered update for subsequent layers to connect to the layered variables
-        if not updated_vars:
-            updated_vars = update_ops
-        for op_name, var, val, op in zip(op_names, var_names, updated_vars, update_ops):
-            self._set_op_attr(node_name, op_name, var, val)
-            updates_new[op_name][var] = op
-        updates.update(updates_new)
+        # # collect update operations
+        # op_names, var_names, update_ops = [], [], []
+        # for op_name, op_vars in updates_new.items():
+        #     for var_name, var in op_vars.items():
+        #         op_names.append(op_name)
+        #         var_names.append(var_name)
+        #         update_ops.append(var)
+        #
+        # # save the operations of this layer for subsequent layers to connect to
+        # for op_name, var, op in zip(op_names, var_names, update_ops):
+        #     self._set_op_attr(node_name, op_name, var, op)
+        #     updates_new[op_name][var] = op
+        # updates.update(updates_new)
 
         return updates
 
