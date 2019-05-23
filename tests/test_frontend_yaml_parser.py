@@ -76,9 +76,9 @@ def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
     from pyrates.frontend.template.operator import OperatorTemplateLoader
     from pyrates.frontend.template.operator import OperatorTemplate
-    from pyrates.frontend import template_from_yaml_file
+    from pyrates.frontend import template_from_yaml
 
-    template = template_from_yaml_file(operator, OperatorTemplate)  # type: OperatorTemplate
+    template = template_from_yaml(operator, OperatorTemplate)  # type: OperatorTemplate
 
     assert template.path in OperatorTemplateLoader.cache
 
@@ -151,7 +151,7 @@ def test_full_jansen_rit_circuit_template_load():
     template = CircuitTemplate.from_yaml(path)
 
     # test, whether circuit is in loader cache
-    from pyrates.frontend.yaml import TemplateLoader
+    from pyrates.frontend.template.abc import TemplateLoader
     assert template is TemplateLoader.cache[path]
 
     # test, whether node templates have been loaded successfully

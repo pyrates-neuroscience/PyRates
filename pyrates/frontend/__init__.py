@@ -35,47 +35,46 @@
 #############################################################################################################
 
 # template-based interface
-from .template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
-from .template import to_circuit as circuit_from_template
-from .template import to_node as node_from_template
-from .template import to_edge as edge_from_template
-from .template import to_operator as operator_from_template
+from pyrates.frontend import template
+from pyrates.frontend import dict as dict_
+from pyrates.frontend import yaml
+from pyrates.frontend import nxgraph
+from pyrates.frontend.template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
 
-# (Legacy) conversion from networkx.MultiDiGraph to a circuit
-from .nxgraph import to_circuit as circuit_from_nxgraph
-from .nxgraph import from_circuit as nxgraph_from_circuit
+# By importing the above, all transformation functions (starting with `to_` or `from_`) are registered
+# Below these functions are collected and made available from pyrates.frontend following the naming convention
+# `{target}_from_{source}` with target and source being respective valid representations in the frontend
 
-# reading a template from file
-# from .file import to_template as template_from_file
+from pyrates.frontend._registry import REGISTERED_INTERFACES
+import sys
 
-# YAML-based interface
-from .yaml import to_dict as template_dict_from_yaml_file
-from .yaml import from_circuit as yaml_from_circuit
-from .yaml import to_template as template_from_yaml_file
+# add all registered functions to main frontend module
+this_module = sys.modules[__name__]
 
-# dict-based interface
-from .dict import from_circuit as dict_from_circuit
-from .dict import to_node as node_from_dict
-from .dict import to_operator as operator_from_dict
+for new_name, func in REGISTERED_INTERFACES.items():
+    # set new name on current module
+    setattr(this_module, new_name, func)
 
+
+# The following function are shorthands that bridge multiple interface steps
 
 def circuit_from_yaml(path: str):
     """Directly return CircuitIR instance from a yaml file."""
-    return template_from_yaml_file(path, CircuitTemplate).apply()
+    return yaml.to_template(path, CircuitTemplate).apply()
 
 
 def node_from_yaml(path: str):
     """Directly return NodeIR instance from a yaml file."""
-    return template_from_yaml_file(path, NodeTemplate).apply()
+    return yaml.to_template(path, NodeTemplate).apply()
 
 
 def edge_from_yaml(path: str):
     """Directly return EdgeIR instance from a yaml file."""
 
-    return template_from_yaml_file(path, EdgeTemplate).apply()
+    return yaml.to_template(path, EdgeTemplate).apply()
 
 
 def operator_from_yaml(path: str):
     """Directly return OperatorIR instance from a yaml file."""
 
-    return template_from_yaml_file(path, OperatorTemplate).apply()
+    return yaml.to_template(path, OperatorTemplate).apply()

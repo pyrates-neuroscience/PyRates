@@ -27,7 +27,6 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """ Some utility functions for parsing YAML-based definitions of circuits and components.
 """
-from typing import Type
 from pyrates.frontend._registry import register_interface
 
 __author__ = "Daniel Rose"
@@ -80,59 +79,6 @@ def to_dict(path: str):
         raise AttributeError(f"Could not find {template_name} in {filepath}.")
 
     return template_dict
-
-
-class TemplateLoader:
-    """Class that loads templates from YAML and returns an OperatorTemplate class instance"""
-
-    cache = {}  # dictionary that keeps track of already loaded templates
-
-    def __new__(cls, path: str, template_cls: type):
-        """Load template recursively and return OperatorTemplate class.
-
-        Parameters
-        ----------
-
-        path
-            string containing path of YAML template of the form path.to.template
-        template_cls
-            class that the loaded template will be instantiated with
-        """
-
-        if path in cls.cache:
-            template = cls.cache[path]
-        else:
-            template_dict = to_dict(path)
-            try:
-                base_path = template_dict.pop("base")
-            except KeyError:
-                raise KeyError(f"No 'base' defined for template {path}. Please define a "
-                               f"base to derive the template from.")
-            if base_path == template_cls.__name__:
-                # if base refers to the python representation, instantiate here
-                template = template_cls(**template_dict)
-            else:
-                # load base if needed
-                if "." in base_path:
-                    # reference to template in different file
-                    # noinspection PyCallingNonCallable
-                    template = cls(base_path)
-                else:
-                    # reference to template in same file
-                    base_path = ".".join((*path.split(".")[:-1], base_path))
-                    # noinspection PyCallingNonCallable
-                    template = cls(base_path)
-                template = cls.update_template(template, **template_dict)
-                # may fail if "base" is present but empty
-
-            cls.cache[path] = template
-
-        return template
-
-    @classmethod
-    def update_template(cls, *args, **kwargs):
-        """Updates the template with a given list of arguments."""
-        raise NotImplementedError
 
 
 @register_interface

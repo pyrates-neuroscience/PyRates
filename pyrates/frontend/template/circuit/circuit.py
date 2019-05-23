@@ -39,11 +39,10 @@ from typing import List, Union, Dict
 from copy import deepcopy
 
 # pyrates internal imports
-from pyrates.frontend.template.abc import AbstractBaseTemplate
+from pyrates.frontend.template.abc import AbstractBaseTemplate, TemplateLoader
 from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
 from pyrates import PyRatesException
-from pyrates.frontend.yaml import TemplateLoader
 
 # from pyrates.frontend.operator import OperatorTemplate
 
