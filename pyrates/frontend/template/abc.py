@@ -28,9 +28,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """ Abstract base classes
 """
-from importlib import import_module
 
-# from pyrates.ir.abc import AbstractBaseIR
 from pyrates.frontend.yaml import to_dict as dict_from_yaml
 
 __author__ = "Daniel Rose"
@@ -51,18 +49,18 @@ class AbstractBaseTemplate:
     def __repr__(self):
         return f"<{self.__class__.__name__} '{self.path}'>"
 
-    def _format_path(self, path):
+    @staticmethod
+    def _complete_template_path(target_path: str, source_path: str) -> str:
         """Check if path contains a folder structure and prepend own path, if it doesn't"""
-        # ToDo: rename to something more meaningful like _prepend_parent_path or _check_path_prepend_parent
 
-        if "." not in path:
-            if "/" in self.path or "\\" in self.path:
+        if "." not in target_path:
+            if "/" in source_path or "\\" in source_path:
                 import os
-                basedir, _ = os.path.split(self.path)
-                path = os.path.normpath(os.path.join(basedir, path))
+                basedir, _ = os.path.split(source_path)
+                target_path = os.path.normpath(os.path.join(basedir, target_path))
             else:
-                path = ".".join((*self.path.split('.')[:-1], path))
-        return path
+                target_path = ".".join((*source_path.split('.')[:-1], target_path))
+        return target_path
 
     @classmethod
     def from_yaml(cls, path):
@@ -89,12 +87,7 @@ class AbstractBaseTemplate:
                 template = cls(**template_dict)
             else:
                 # load base if needed
-                if "." in base_path:
-                    # reference to template in different file
-                    pass
-                else:
-                    # reference to template in same file
-                    base_path = ".".join((*path.split(".")[:-1], base_path))
+                base_path = cls._complete_template_path(base_path, path)
 
                 base_template = cls.from_yaml(base_path)
                 template = base_template.update_template(**template_dict)
@@ -109,6 +102,6 @@ class AbstractBaseTemplate:
         raise NotImplementedError
 
     def apply(self, *args, **kwargs):
-
+        """Converts the template into its corresponding intermediate representation class."""
         raise NotImplementedError
 

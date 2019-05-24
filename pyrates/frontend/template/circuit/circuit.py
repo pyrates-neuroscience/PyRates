@@ -65,14 +65,14 @@ class CircuitTemplate(AbstractBaseTemplate):
         if nodes:
             for key, path in nodes.items():
                 if isinstance(path, str):
-                    path = self._format_path(path)
+                    path = self._complete_template_path(path, self.path)
                     self.nodes[key] = NodeTemplate.from_yaml(path)
 
         self.circuits = {}
         if circuits:
             for key, path in circuits.items():
                 if isinstance(path, str):
-                    path = self._format_path(path)
+                    path = self._complete_template_path(path, self.path)
                     self.circuits[key] = CircuitTemplate.from_yaml(path)
 
         if edges:
@@ -158,7 +158,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             if isinstance(edge, dict):
                 edge = (edge["source"], edge["target"], edge["template"], edge["variables"])
             path = edge[2]
-            path = self._format_path(path)
+            path = self._complete_template_path(path, self.path)
             temp = EdgeTemplate.from_yaml(path)
             edges_with_templates.append((*edge[0:2], temp, *edge[3:]))
         return edges_with_templates

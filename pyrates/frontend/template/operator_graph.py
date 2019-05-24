@@ -67,7 +67,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
 
     def _load_operator_template(self, path: str) -> OperatorTemplate:
         """Load an operator template based on a path"""
-        path = self._format_path(path)
+        path = self._complete_template_path(path, self.path)
         return OperatorTemplate.from_yaml(path)
 
     def update_template(self, name: str, path: str, label: str,

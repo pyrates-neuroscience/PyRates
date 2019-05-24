@@ -48,7 +48,7 @@ def test_simple_example():
 
     # Step 1: Load Circuit template
     from pyrates.frontend.template.circuit import CircuitTemplate
-    path = "pyrates.examples.linear.ExampleCircuit"
+    path = "../model_templates/test_resources/linear/ExampleCircuit"
     tmp = CircuitTemplate.from_yaml(path)
 
     # Step 2: Instantiate template to create frontend IR
