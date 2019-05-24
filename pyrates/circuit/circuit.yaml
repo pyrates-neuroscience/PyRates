@@ -1,7 +1,0 @@
-%YAML 1.2
----
-BaseCircuit:
-  description: Base implementation of a circuit
-  base: CircuitTemplate
-  nodes: null
-  edges: null
