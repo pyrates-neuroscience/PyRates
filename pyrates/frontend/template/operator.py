@@ -32,7 +32,7 @@ from typing import Union
 
 # pyrates internal imports
 from pyrates import PyRatesException
-from pyrates.frontend.template.abc import AbstractBaseTemplate, TemplateLoader
+from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.utility import deep_freeze
 
 # meta infos

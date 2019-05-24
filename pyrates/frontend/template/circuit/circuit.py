@@ -39,7 +39,7 @@ from copy import deepcopy
 
 # pyrates internal imports
 from pyrates import PyRatesException
-from pyrates.frontend.template.abc import AbstractBaseTemplate, TemplateLoader
+from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
 
