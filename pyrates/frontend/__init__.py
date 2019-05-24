@@ -31,7 +31,6 @@
 # Define shortcuts for different types of input that are defined as frontends to provide a common interface
 # to all implemented type conversions.
 # All functions are renamed explicitly
-# ToDo: import and rename automatically for easier maintenance
 #############################################################################################################
 
 # template-based interface
@@ -60,21 +59,21 @@ for new_name, func in REGISTERED_INTERFACES.items():
 
 def circuit_from_yaml(path: str):
     """Directly return CircuitIR instance from a yaml file."""
-    return yaml.to_template(path, CircuitTemplate).apply()
+    return CircuitTemplate.from_yaml(path).apply()
 
 
 def node_from_yaml(path: str):
     """Directly return NodeIR instance from a yaml file."""
-    return yaml.to_template(path, NodeTemplate).apply()
+    return NodeTemplate.from_yaml(path).apply()
 
 
 def edge_from_yaml(path: str):
     """Directly return EdgeIR instance from a yaml file."""
 
-    return yaml.to_template(path, EdgeTemplate).apply()
+    return EdgeTemplate.from_yaml(path).apply()
 
 
 def operator_from_yaml(path: str):
     """Directly return OperatorIR instance from a yaml file."""
 
-    return yaml.to_template(path, OperatorTemplate).apply()
+    return OperatorTemplate.from_yaml(path).apply()

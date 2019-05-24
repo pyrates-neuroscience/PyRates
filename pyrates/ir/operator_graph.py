@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -40,7 +39,7 @@ __status__ = "Development"
 class OperatorGraph(DiGraph):
     """Intermediate representation for nodes and edges."""
 
-    def __init__(self, operators: dict=None):
+    def __init__(self, operators: dict = None, template: str = ""):
 
         super().__init__()
         if not operators:

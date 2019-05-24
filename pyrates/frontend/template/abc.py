@@ -78,6 +78,10 @@ class AbstractBaseTemplate:
         loader = getattr(module, f"{cls.__name__}Loader")
         return loader(path)
 
+    def update_template(self, *args, **kwargs):
+        """Updates the template with a given list of arguments and returns a new instance of the template class."""
+        raise NotImplementedError
+
     def apply(self, *args, **kwargs):
 
         raise NotImplementedError
@@ -117,22 +121,16 @@ class TemplateLoader:
                 if "." in base_path:
                     # reference to template in different file
                     # noinspection PyCallingNonCallable
-                    template = cls(base_path)
+                    base_template = cls(base_path)
                 else:
                     # reference to template in same file
                     base_path = ".".join((*path.split(".")[:-1], base_path))
                     # noinspection PyCallingNonCallable
-                    template = cls(base_path)
-                template = cls.update_template(template, **template_dict)
+                    base_template = cls(base_path)
+                template = base_template.update_template(**template_dict)
                 # may fail if "base" is present but empty
 
             cls.cache[path] = template
 
         return template
-
-    @classmethod
-    def update_template(cls, *args, **kwargs):
-        """Updates the template with a given list of arguments."""
-        raise NotImplementedError
-
 

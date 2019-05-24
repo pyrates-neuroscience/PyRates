@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -39,10 +38,10 @@ from typing import List, Union, Dict
 from copy import deepcopy
 
 # pyrates internal imports
+from pyrates import PyRatesException
 from pyrates.frontend.template.abc import AbstractBaseTemplate, TemplateLoader
 from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
-from pyrates import PyRatesException
 
 # from pyrates.frontend.operator import OperatorTemplate
 
@@ -82,6 +81,36 @@ class CircuitTemplate(AbstractBaseTemplate):
             self.edges = []
 
         self.label = label
+
+    def update_template(self, name: str, path: str, description: str = None,
+                        label: str = None, circuits: dict = None, nodes: dict = None,
+                        edges: List[tuple] = None):
+        """Update all entries of the circuit template in their respective ways."""
+
+        if not description:
+            description = self.__doc__
+
+        if not label:
+            label = self.label
+
+        if nodes:
+            nodes = update_dict(self.nodes, nodes)
+        else:
+            nodes = self.nodes
+
+        if circuits:
+            circuits = update_dict(self.circuits, circuits)
+        else:
+            circuits = self.circuits
+
+        if edges:
+            edges = update_edges(self.edges, edges)
+        else:
+            edges = self.edges
+
+        return self.__class__(name=name, path=path, description=description,
+                              label=label, circuits=circuits, nodes=nodes,
+                              edges=edges)
 
     def apply(self, label: str = None):
         """Create a Circuit graph instance based on the template"""
@@ -138,66 +167,32 @@ class CircuitTemplate(AbstractBaseTemplate):
 class CircuitTemplateLoader(TemplateLoader):
 
     def __new__(cls, path):
-
         return super().__new__(cls, path, CircuitTemplate)
 
-    @classmethod
-    def update_template(cls, base, name: str, path: str, description: str = None,
-                        label: str = None, circuits: dict = None, nodes: dict = None,
-                        edges: List[tuple] = None):
-        """Update all entries of the circuit template in their respective ways."""
 
-        if not description:
-            description = base.__doc__
+# def to_circuit(template):
+#     return template.apply()
+def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
+    """Add edges to list of edges. Removing or altering is currently not supported."""
 
-        if not label:
-            label = base.label
+    updated = deepcopy(base_edges)
+    for edge in updates:
+        if isinstance(edge, dict):
+            if "variables" in edge:
+                edge = [edge["source"], edge["target"], edge["template"], edge["variables"]]
+            else:
+                edge = [edge["source"], edge["target"], edge["template"]]
+        elif not 3 <= len(edge) <= 4:
+            raise PyRatesException("Wrong edge data type or not enough arguments")
+        updated.append(edge)
 
-        if nodes:
-            nodes = cls.update_dict(base.nodes, nodes)
-        else:
-            nodes = base.nodes
-
-        if circuits:
-            circuits = cls.update_dict(base.circuits, circuits)
-        else:
-            circuits = base.circuits
-
-        if edges:
-            edges = cls.update_edges(base.edges, edges)
-        else:
-            edges = base.edges
-
-        return CircuitTemplate(name=name, path=path, description=description,
-                               label=label, circuits=circuits, nodes=nodes,
-                               edges=edges)
-
-    @staticmethod
-    def update_dict(base_dict: dict, updates: dict):
-
-        updated = deepcopy(base_dict)
-
-        updated.update(updates)
-
-        return updated
-
-    @staticmethod
-    def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
-        """Add edges to list of edges. Removing or altering is currently not supported."""
-
-        updated = deepcopy(base_edges)
-        for edge in updates:
-            if isinstance(edge, dict):
-                if "variables" in edge:
-                    edge = [edge["source"], edge["target"], edge["template"], edge["variables"]]
-                else:
-                    edge = [edge["source"], edge["target"], edge["template"]]
-            elif not 3 <= len(edge) <= 4:
-                raise PyRatesException("Wrong edge data type or not enough arguments")
-            updated.append(edge)
-
-        return updated
+    return updated
 
 
-def to_circuit(template):
-    return template.apply()
+def update_dict(base_dict: dict, updates: dict):
+
+    updated = deepcopy(base_dict)
+
+    updated.update(updates)
+
+    return updated
