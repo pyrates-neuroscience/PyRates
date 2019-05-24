@@ -29,7 +29,7 @@
 from typing import Union, List, Type
 
 from pyrates import PyRatesException
-from pyrates.frontend.template.abc import AbstractBaseTemplate, TemplateLoader
+from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.ir.operator_graph import OperatorGraph
 from pyrates.frontend.template.operator import OperatorTemplate
 
@@ -162,13 +162,6 @@ def _update_operators(base_operators: dict, updates: Union[str, List[str], dict]
     # # Check somewhere, if child operators have same input/output as base operators?
     #
     return updated
-
-
-class OperatorGraphTemplateLoader(TemplateLoader):
-
-    def __new__(cls, path, template_class):
-
-        return super().__new__(cls, path, template_class)
 
 
 

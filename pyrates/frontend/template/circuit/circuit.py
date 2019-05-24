@@ -164,14 +164,10 @@ class CircuitTemplate(AbstractBaseTemplate):
         return edges_with_templates
 
 
-class CircuitTemplateLoader(TemplateLoader):
-
-    def __new__(cls, path):
-        return super().__new__(cls, path, CircuitTemplate)
-
-
 # def to_circuit(template):
 #     return template.apply()
+
+
 def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
     """Add edges to list of edges. Removing or altering is currently not supported."""
 
@@ -190,7 +186,6 @@ def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
 
 
 def update_dict(base_dict: dict, updates: dict):
-
     updated = deepcopy(base_dict)
 
     updated.update(updates)

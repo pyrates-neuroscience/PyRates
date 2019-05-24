@@ -75,8 +75,8 @@ class AbstractBaseTemplate:
         """
         # ToDo: add AbstractBaseTemplate._format_path functionality here
         module = import_module(cls.__module__)
-        loader = getattr(module, f"{cls.__name__}Loader")
-        return loader(path)
+
+        return TemplateLoader(path, cls)
 
     def update_template(self, *args, **kwargs):
         """Updates the template with a given list of arguments and returns a new instance of the template class."""
@@ -121,12 +121,12 @@ class TemplateLoader:
                 if "." in base_path:
                     # reference to template in different file
                     # noinspection PyCallingNonCallable
-                    base_template = cls(base_path)
+                    base_template = cls(base_path, template_cls)
                 else:
                     # reference to template in same file
                     base_path = ".".join((*path.split(".")[:-1], base_path))
                     # noinspection PyCallingNonCallable
-                    base_template = cls(base_path)
+                    base_template = cls(base_path, template_cls)
                 template = base_template.update_template(**template_dict)
                 # may fail if "base" is present but empty
 

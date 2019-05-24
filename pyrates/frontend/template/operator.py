@@ -277,13 +277,6 @@ class OperatorTemplate(AbstractBaseTemplate):
         return dict(vtype=vtype, dtype=dtype, value=value)
 
 
-class OperatorTemplateLoader(TemplateLoader):
-    """Template loader specific to an OperatorTemplate. """
-
-    def __new__(cls, path):
-        return super().__new__(cls, path, OperatorTemplate)
-
-
 def _update_variables(variables: dict, updates: dict):
     updated = deepcopy(variables)
 
