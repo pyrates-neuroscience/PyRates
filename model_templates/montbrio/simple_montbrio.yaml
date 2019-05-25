@@ -4,8 +4,8 @@
 Op_e:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - "d/dt * v = (v**2 + eta + inp) / tau + J_e * (r + r_e) - J_i * r_i - tau*(PI*r)**2"
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - J_i * r_i - tau*(PI*r)^2"
   variables:
     r:
       default: output
@@ -31,8 +31,8 @@ Op_e:
 Op_i:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - "d/dt * v = (v**2 + eta + inp) / tau - J_i* (r + r_i) + J_e * r_e - tau*(PI*r)**2"
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp) / tau - J_i* (r + r_i) + J_e * r_e - tau*(PI*r)^2"
   variables:
     r:
       default: output

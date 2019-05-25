@@ -49,7 +49,7 @@ from typing import Optional, Dict, Callable, List, Union, Tuple, Any
 import numpy as np
 import tensorflow as tf
 from copy import deepcopy
-from numba import jit
+from numba import jit, prange
 
 # meta infos
 __author__ = "Richard Gast"
@@ -149,8 +149,8 @@ class PyRatesOp:
         # setup function head
         #####################
 
-        #code_gen.add_code_line("@jit(nopython=True)")
-        #code_gen.add_linebreak()
+        code_gen.add_code_line("@jit(nopython=True)")
+        code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
         # process arguments
@@ -1582,6 +1582,9 @@ class NumpyBackend(object):
         # initializations
         #################
 
+        if not sampling_steps:
+            sampling_steps = 1
+
         # initialize session log
         if out_dir:
             # TODO : implement log files
@@ -1847,7 +1850,7 @@ class NumpyBackend(object):
     def eval_var(self, var):
         return self.vars[var].eval()
 
-    #@jit(nopython=True, parallel=True)
+    #@jit(nopython=False, parallel=True)
     def eval_layer(self, idx):
         return [op.eval() for op in self.layers[idx]]
 
