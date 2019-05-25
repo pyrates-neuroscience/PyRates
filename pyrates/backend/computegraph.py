@@ -77,7 +77,7 @@ class ComputeGraph(object):
                  vectorization: str = 'nodes',
                  name: Optional[str] = None,
                  build_in_place: bool = True,
-                 backend: str = 'tensorflow',
+                 backend: str = 'numpy',
                  **kwargs
                  ) -> None:
         """Instantiates operator.
@@ -158,7 +158,6 @@ class ComputeGraph(object):
         ########################################################
 
         self.backend.top_layer()
-        self.backend.next_layer()
         node_names, op_names, var_names, var_updates = [], [], [], []
 
         for node_name in self.net_config.nodes:
@@ -187,7 +186,7 @@ class ComputeGraph(object):
                         node_names.append(node_name)
                         op_names.append(op_name)
                         var_names.append(key_old)
-                        var_updates.append(args['vars'])
+                        var_updates.append(args['vars'][key_old])
 
         # add layer to node updates
         self.node_updates.append(self.backend.layer)
@@ -199,7 +198,7 @@ class ComputeGraph(object):
         # parse edges
         #############
 
-        self.backend.next_layer()
+        self.backend.top_layer()
 
         # collect output variables
         source_nodes, target_nodes, edge_indices = [], [], []
@@ -209,8 +208,6 @@ class ComputeGraph(object):
             svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
             op, var = svar.split('/')
             svar = self._get_op_attr(source_node, op, var)
-            if op in self.node_updates[source_node] and var in self.node_updates[source_node][op]:
-                self.node_updates[source_node][op].pop(var)
             if svar not in source_vars:
                 source_vars.append(svar)
             op_names.append(op)
@@ -341,7 +338,7 @@ class ComputeGraph(object):
         outputs_tmp = dict()
         if outputs:
             for key, val in outputs.items():
-                outputs_tmp.update(self.get_var(node=val[0], op=val[1], var=val[2], var_name=key,
+                outputs_tmp.update(self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col",
                                                 scope="output_collection"))
 
         # add output collector variables to graph
@@ -377,7 +374,7 @@ class ComputeGraph(object):
 
                         # fully vectorized case: add vectorized placeholder variable to input dictionary
                         var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=key[1], attr=key[2])
-                        inp_dict[var.name] = np.reshape(val[step], var.shape)
+                        inp_dict[var.unique_name] = np.reshape(val[step], var.shape)
 
                     elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -389,14 +386,14 @@ class ComputeGraph(object):
                             for node in self.net_config.nodes:
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
                                 i_new = var.shape[0] if len(var.shape) > 0 else 1
-                                inp_dict[var.name] = np.reshape(val[step, i:i_new], var.shape)
+                                inp_dict[var.unique_name] = np.reshape(val[step, i:i_new], var.shape)
                                 i += i_new
 
                         elif key[0] in self.net_config.nodes.keys():
 
                             # add placeholder variable of node(s) to input dictionary
                             var = self._get_node_attr(node=key[0], op=key[1], attr=key[2])
-                            inp_dict[var.name] = np.reshape(val[step], var.shape)
+                            inp_dict[var.unique_name] = np.reshape(val[step], var.shape)
 
                         elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -405,7 +402,7 @@ class ComputeGraph(object):
                                 if key[0] in node:
                                     break
                             var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                            inp_dict[var.name] = np.reshape(val[step], var.shape)
+                            inp_dict[var.unique_name] = np.reshape(val[step], var.shape)
 
                     else:
 
@@ -415,7 +412,7 @@ class ComputeGraph(object):
                             # go through all nodes, extract the variable and add it to input dict
                             for i, node in enumerate(self.net_config.nodes.keys()):
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                inp_dict[var.name] = np.reshape(val[step, i], var.shape)
+                                inp_dict[var.unique_name] = np.reshape(val[step, i], var.shape)
 
                         elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -424,7 +421,7 @@ class ComputeGraph(object):
                             for node in self.net_config.nodes.keys():
                                 if key[0] in node:
                                     var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                    inp_dict[var.name] = np.reshape(val[step, i], var.shape)
+                                    inp_dict[var.unique_name] = np.reshape(val[step, i], var.shape)
                                     i += 1
 
                 # add input dictionary to placeholder input liust
@@ -459,9 +456,10 @@ class ComputeGraph(object):
                 for i in range(var.shape[1]):
                     out_var_vals.append(var[:, i])
                     key_split = key.split('/')
-                    var_name = key_split[0]
+                    var_name = key_split[-1]
+                    var_name = var_name[:var_name.find('_col')]
                     node_name = ""
-                    for key_tmp in key_split[1:]:
+                    for key_tmp in key_split[:-1]:
                         node_name += key_tmp
                     out_var_names.append((var_name, f'{node_name}_{i}'))
             else:
@@ -469,9 +467,10 @@ class ComputeGraph(object):
                     var = np.squeeze(var)
                 out_var_vals.append(var)
                 key_split = key.split('/')
-                var_name = key_split[0]
+                var_name = key_split[-1]
+                var_name = var_name[:var_name.find('_col')]
                 node_name = ""
-                for key_tmp in key_split[1:]:
+                for key_tmp in key_split[:-1]:
                     node_name += key_tmp
                 out_var_names.append((var_name, node_name))
 
@@ -533,31 +532,25 @@ class ComputeGraph(object):
 
             # collect output variable from every node in backend
             for node in self.net_config.nodes.keys():
-                var_col[f'{var_name}/{node}'] = self._get_node_attr(node=node, op=op, attr=var)
+                var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
 
         elif node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
 
             # get output variable of specific backend node
-            var_col[f'{var_name}/{node}'] = self._get_node_attr(node=node, op=op, attr=var)
+            var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
 
         elif any([node in key for key in self.net_config.nodes.keys()]):
 
             # get output variable from backend nodes of a certain type
             for node_tmp in self.net_config.nodes.keys():
                 if node in node_tmp:
-                    var_col[f'{var_name}/{node}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
+                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
         else:
 
             # get output variable of specific, vectorized backend node
             for node_tmp in self._net_config_map.keys():
                 if node in node_tmp and '_all' in node_tmp:
-                    var_col[f'{var_name}/{node}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
-
-        # remove singleton dimensions from vars
-        for key, var in var_col.items():
-            if 1 in var.shape:
-                idx = list(var.shape).index(1)
-                var_col[key] = self.backend.add_op('squeeze', var, idx, **kwargs)
+                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
 
         return var_col
 
@@ -683,22 +676,6 @@ class ComputeGraph(object):
             for var in list(set(op_args['lhs_evals'])):
                 updates_new[op_name][var] = op_args['updates'][var]
 
-        # add new layer to backend graph
-
-        # # collect update operations
-        # op_names, var_names, update_ops = [], [], []
-        # for op_name, op_vars in updates_new.items():
-        #     for var_name, var in op_vars.items():
-        #         op_names.append(op_name)
-        #         var_names.append(var_name)
-        #         update_ops.append(var)
-        #
-        # # save the operations of this layer for subsequent layers to connect to
-        # for op_name, var, op in zip(op_names, var_names, update_ops):
-        #     self._set_op_attr(node_name, op_name, var, op)
-        #     updates_new[op_name][var] = op
-        # updates.update(updates_new)
-
         return updates
 
     def _get_op_input(self, node: str, op: str, in_op: str, primary_ops: bool = False
@@ -756,12 +733,13 @@ class ComputeGraph(object):
         """
 
         inp, updates = self.backend.stack_vars(*tuple(inputs), **kwargs)
-        self.backend.add_layer(updates, scope=f"{self.name}/input_stack")
+        self.backend.next_layer()
         if reduce_dim:
-            inp_transform = self.backend.add_op('sum', inp, axis=0, keepdims=True)
+            inp_transform = self.backend.add_op('sum', inp, 0, None, None, 1)
         else:
             inp_transform = self.backend.add_op('reshape', inp, (inp.shape[0] * inp.shape[1],), **kwargs) \
                 if len(inp.shape) > 1 else inp
+        self.node_updates.append(self.backend.layer)
         return inp_transform
 
     def _get_node_attr(self, node: str, attr: str, op: Optional[str] = None) -> Any:
@@ -1303,10 +1281,10 @@ class ComputeGraph(object):
         # create buffer equations
         if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
             eqs_op_read = [f"{var} = {var}_buffer_{idx}[0]"]
-            eqs_op_rotate = [f"{var}_buffer_{idx} = concat({var}_buffer_{idx}[1:], {var}_buffer_{idx}_reset, 0)"]
+            eqs_op_rotate = [f"{var}_buffer_{idx} = concat(({var}_buffer_{idx}[1:], {var}_buffer_{idx}_reset), 0)"]
         else:
             eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, 0]"]
-            eqs_op_rotate = [f"{var}_buffer_{idx} = concat({var}_buffer_{idx}[:, 1:], {var}_buffer_{idx}_reset, 1)"]
+            eqs_op_rotate = [f"{var}_buffer_{idx} = concat(({var}_buffer_{idx}[:, 1:], {var}_buffer_{idx}_reset), 1)"]
 
         # add buffer operators to operator graph
         op_graph.add_node(f'{op}_{var}_buffer_rotate_{idx}',

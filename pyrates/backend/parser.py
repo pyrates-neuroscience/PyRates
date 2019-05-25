@@ -117,7 +117,7 @@ class ExpressionParser(ParserElement):
 
         # input arguments
         self.lhs = lhs
-        self.args = args
+        self.args = args.copy()
         self.backend = backend
         self.parser_kwargs = kwargs
         self.solve = solve
@@ -160,7 +160,7 @@ class ExpressionParser(ParserElement):
 
             # parentheses
             par_l = Literal("(")
-            par_r = Literal(")")
+            par_r = Literal(")").setParseAction(self._push_last)
             idx_l = Literal("[")
             idx_r = Literal("]")
 
@@ -214,12 +214,17 @@ class ExpressionParser(ParserElement):
             arg_comb = comma.setParseAction(self._push_first)
 
             # basic computation unit
-            atom = (Optional("-") + (func_name + self.expr.suppress() + ZeroOrMore((arg_comb.suppress() +
-                                                                                    self.expr.suppress()))
+            atom = (Optional("-") + (func_name + Optional(par_l.suppress() + self.expr.suppress() +
+                                     ZeroOrMore((arg_comb.suppress() + self.expr.suppress() +
+                                                 Optional(arg_comb.suppress()))) + par_r.suppress() +
+                                                          Optional(arg_comb)) +
+                                     Optional(self.expr.suppress() + ZeroOrMore((arg_comb.suppress() +
+                                                                                 self.expr.suppress())))
                                      + par_r | name | pi | e | num_float | num_int
                                      ).setParseAction(self._push_first)
                     ).setParseAction(self._push_negone) | \
-                   (par_l.suppress() + self.expr.suppress() + par_r.suppress()).setParseAction(self._push_negone)
+                   (par_l.setParseAction(self._push_last) + self.expr.suppress() + par_r.suppress()
+                    ).setParseAction(self._push_negone)
 
             # apply indexing to atoms
             indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
@@ -365,10 +370,7 @@ class ExpressionParser(ParserElement):
                     elif isinstance(ind, Number):
                         idx += f"{ind}"
                     else:
-                        try:
-                            self.args['idx'][f'var_{i}'] = ind.__copy__()
-                        except AttributeError:
-                            self.args['idx'][f'var_{i}'] = copy(ind)
+                        self.args['idx'][f'var_{i}'] = ind
                         idx += f"var_{i}"
                     i += 1
                 idx += ","
@@ -464,6 +466,8 @@ class ExpressionParser(ParserElement):
 
         elif op[-1] == "(":
 
+            expr_stack.pop(-1)
+
             # parse arguments
             args = []
             while len(expr_stack) > 0:
@@ -483,6 +487,29 @@ class ExpressionParser(ParserElement):
                 raise KeyError(
                     f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
                     f"in arguments dictionary.")
+
+        elif op == ")":
+
+            # check whether expression in parenthesis is a group of arguments to a function
+            start_par = expr_stack.index("(")
+            if "," in expr_stack[start_par:]:
+
+                args = []
+                while True:
+                    args.append(self.parse(expr_stack))
+                    if expr_stack[-1] == ",":
+                        expr_stack.pop(-1)
+                    elif expr_stack[-1] == "(":
+                        expr_stack.pop(-1)
+                        break
+                    else:
+                        break
+                self.expr_op = args[::-1]
+
+            else:
+
+                self.expr_op = self.parse(expr_stack)
+                expr_stack.pop(-1)
 
         elif any([op == "True", op == "true", op == "False", op == "false"]):
 
@@ -777,6 +804,8 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
             if key == lhs_var and '_old' not in key:
                 if type(var) is dict:
                     var_dict = var.copy()
+                    if 'value' in var_dict and hasattr(var_dict['value'], 'shape'):
+                        var_dict['value'] = np.asarray(var_dict['value'].tolist())
                 elif callable(var):
                     var_tmp = var()
                     var_dict = {'vtype': 'state_var',
