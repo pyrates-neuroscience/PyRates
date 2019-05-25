@@ -94,11 +94,12 @@ class PyRatesVar(np.ndarray):
             value = np.zeros(shape=shape, dtype=dtype) + value
 
         # initialize array
-        obj = np.asarray(value).view(cls)
+        obj = np.array(value).view(cls)
 
         # set additional attributes
         obj.vtype = vtype
-        obj.name = name
+        obj.name = name.split('/')[-1]
+        obj.unique_name = name
 
         return obj
 
@@ -107,7 +108,10 @@ class PyRatesVar(np.ndarray):
 
 
 class PyRatesOp:
-    def __init__(self, op: str, name: str, *args, **kwargs) -> None:
+
+    n_consts = 0
+
+    def __init__(self, op: str, name: str, *args) -> None:
         """
 
         Parameters
@@ -115,54 +119,125 @@ class PyRatesOp:
         op
         backend
         args
-        kwargs
         """
 
         self.op = op
-        self.name = name
-        op_dict = self.generate_op(name.split('/')[-1], op, args, kwargs)
+        self.name = name.split('/')[-1]
+        self.unique_name = name
+        op_dict = self.generate_op(self.name, op, args)
         self.func = op_dict['func']
         self.call = op_dict['call']
         self.return_val = op_dict['return_val']
-        self.kwargs = op_dict['kwargs']
+        self.args = op_dict['args'].copy()
+        self.arg_names = op_dict['arg_names'].copy()
         self.shape = op_dict['shape']
         self.dtype = op_dict['dtype']
         self.constant = op_dict['constant']
         self.input_ops = op_dict['input_ops']
 
     @classmethod
-    def generate_op(cls, name, op, args, kwargs):
+    def generate_op(cls, name, op, args):
 
         # initialization
         code_gen = CodeGen()
-        results = {'func': None, 'kwargs': {}, 'constant': False, 'shape': (), 'dtype': 'float32', 'call': None,
-                   'return_val': None, 'input_ops': []}
+        results = {'func': None, 'args': [], 'arg_names': [], 'constant': False, 'shape': (), 'dtype': 'float32',
+                   'call': None, 'return_val': None, 'input_ops': []}
+
+        results_args = []
+        results_arg_names = []
 
         # setup function head
         #####################
 
-        #code_gen.add_code_line("@jit(nopython=True, parallel=True)")
+        #code_gen.add_code_line("@jit(nopython=True)")
         #code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
-        # process positional arguments
-        arg_counter = 0
+        # process arguments
         n_vars = 0
         for idx, arg in enumerate(args):
-            arg_name = f"v{arg_counter}"
-            code_gen.add_code_line(f"{arg_name},")
-            if type(arg) is PyRatesVar or type(arg) is PyRatesOp:
+            if type(arg) is PyRatesOp or type(arg) is PyRatesIndexOp:
+                results['input_ops'].append(arg.unique_name)
+                pop_indices = []
+                for arg_tmp in arg.arg_names:
+                    if arg_tmp in results['arg_names']:
+                        pop_indices.append(arg.arg_names.index(arg_tmp))
+                    else:
+                        code_gen.add_code_line(f"{arg_tmp},")
+                new_args = arg.args.copy()
+                new_arg_names = arg.arg_names.copy()
+                for i, pop_idx in enumerate(pop_indices):
+                    new_args.pop(pop_idx-i)
+                    new_arg_names.pop(pop_idx-i)
+                results_args.append({'args': new_args, 'call': arg.return_val,
+                                     'arg_names': new_arg_names})
+                results_arg_names.append(arg.name)
+                results['args'] += new_args
+                results['arg_names'] += new_arg_names
                 n_vars += 1
-            results['kwargs'][arg_name] = arg
-            arg_counter += 1
-
-        # process keyword arguments
-        for arg_name, arg in kwargs.items():
-            code_gen.add_code_line(f"{arg_name},")
-            if type(arg) is PyRatesVar or type(arg) is PyRatesOp:
+            elif type(arg) is PyRatesVar:
                 n_vars += 1
-            results['kwargs'][arg_name] = arg
-            arg_counter += 1
+                arg_name = arg.name
+                results_args.append(arg)
+                results_arg_names.append(arg_name)
+                results['args'].append(arg)
+                results['arg_names'].append(arg_name)
+                code_gen.add_code_line(f"{arg_name},")
+            elif type(arg) is tuple or type(arg) is list:
+                tuple_begin = '('
+                results_args.append(tuple_begin)
+                results_arg_names.append(tuple_begin)
+                results['args'].append(tuple_begin)
+                results['arg_names'].append(tuple_begin)
+                for arg_tmp in arg:
+                    if type(arg_tmp) is PyRatesOp or type(arg_tmp) is PyRatesIndexOp:
+                        results['input_ops'].append(arg_tmp.unique_name)
+                        pop_indices = []
+                        for arg_tmp2 in arg_tmp.arg_names:
+                            if arg_tmp2 in results['arg_names']:
+                                pop_indices.append(arg_tmp.arg_names.index(arg_tmp2))
+                            else:
+                                code_gen.add_code_line(f"{arg_tmp2},")
+                        new_args = arg_tmp.args.copy()
+                        new_arg_names = arg_tmp.arg_names.copy()
+                        for i, pop_idx in enumerate(pop_indices):
+                            new_args.pop(pop_idx - i)
+                            new_arg_names.pop(pop_idx - i)
+                        results_args.append({'args': new_args, 'call': arg_tmp.return_val,
+                                             'arg_names': new_arg_names})
+                        results_arg_names.append(arg_tmp.name)
+                        results['args'] += new_args
+                        results['arg_names'] += new_arg_names
+                        n_vars += 1
+                    elif type(arg_tmp) is PyRatesVar:
+                        n_vars += 1
+                        arg_name = arg_tmp.name
+                        results_args.append(arg_tmp)
+                        results_arg_names.append(arg_name)
+                        results['args'].append(arg_tmp)
+                        results['arg_names'].append(arg_name)
+                        code_gen.add_code_line(f"{arg_name},")
+                    else:
+                        cls.n_consts += 1
+                        arg_name = f"c_{cls.n_consts}"
+                        results_args.append(arg_tmp)
+                        results_arg_names.append(arg_name)
+                        results['args'].append(arg_tmp)
+                        results['arg_names'].append(arg_name)
+                        code_gen.add_code_line(f"{arg_name},")
+                tuple_end = ')'
+                results_args.append(tuple_end)
+                results_arg_names.append(tuple_end)
+                results['args'].append(tuple_end)
+                results['arg_names'].append(tuple_end)
+            else:
+                cls.n_consts += 1
+                arg_name = f"c_{cls.n_consts}"
+                results_args.append(arg)
+                results_arg_names.append(arg_name)
+                results['args'].append(arg)
+                results['arg_names'].append(arg_name)
+                code_gen.add_code_line(f"{arg_name},")
 
         # end function head
         code_gen.code[-1] = code_gen.code[-1][:-1]
@@ -178,18 +253,21 @@ class PyRatesOp:
         code_gen.add_code_line(f"return ")
         return_gen = CodeGen()
         return_gen.add_code_line(f"{op}(")
-        # add keyword arguments
-        for key, arg in results['kwargs'].copy().items():
-            if type(arg) is PyRatesOp:
-                return_gen.add_code_line(f"{arg.return_val},")
-                results['kwargs'].pop(key)
-                results['kwargs'].update(arg.kwargs)
-                results['input_ops'].append(arg.name)
-            elif type(arg) is str:
-                if "[" is arg:
+
+        # add arguments
+        for key, arg in zip(results_arg_names, results_args):
+            if type(arg) is str:
+                if arg is "[":
                     return_gen.code[-1] = code_gen.code[-1][:-1]
-                return_gen.add_code_line(f"{arg},")
-                results['kwargs'].pop(key)
+                if arg is "(":
+                    return_gen.add_code_line(f"{arg}")
+                else:
+                    return_gen.add_code_line(f"{arg},")
+                idx = results['args'].index(arg)
+                results['args'].pop(idx)
+                results['arg_names'].pop(idx)
+            elif type(arg) is dict:
+                return_gen.add_code_line(f"{arg['call']},")
             else:
                 return_gen.add_code_line(f"{key},")
 
@@ -209,74 +287,90 @@ class PyRatesOp:
         results['func'] = func_dict.pop(name)
 
         # set shape and dtype of op according to result of eval
-        args_tmp = deepcopy(args)
-        kwargs_tmp = deepcopy(kwargs)
-        op_tmp = results['func'](**results['kwargs'])
+        args_tmp = deepcopy(results['args'])
+        op_tmp = results['func'](*results['args'])
         results['shape'] = op_tmp.shape if hasattr(op_tmp, 'shape') else ()
         results['dtype'] = op_tmp.dtype if hasattr(op_tmp, 'dtype') else type(op_tmp)
 
         # reset initial values of args and kwargs
-        for arg_tmp, arg in zip(args_tmp, args):
-            if hasattr(arg, 'shape'):
+        for arg_tmp, arg in zip(args_tmp, results['args']):
+            if hasattr(arg, 'shape') and arg.shape and type(arg) is not PyRatesOp:
                 arg[:] = arg_tmp[:]
-            elif type(arg) is tuple or type(arg) is list:
+            elif type(arg) is tuple or type(arg) is list and type(arg) is not PyRatesOp:
                 for a_tmp, a in zip(arg_tmp, arg):
-                    if hasattr(a, 'shape'):
-                        a[:] = a_tmp[:]
-        for kwarg_tmp, kwarg in zip(kwargs_tmp.values(), kwargs.values()):
-            if hasattr(kwarg, 'shape'):
-                kwarg[:] = kwarg_tmp[:]
-            elif type(kwarg) is tuple or type(kwarg) is list:
-                for a_tmp, a in zip(kwarg_tmp, kwarg):
-                    if hasattr(a, 'shape'):
+                    if hasattr(a, 'shape') and arg.shape:
                         a[:] = a_tmp[:]
 
         return results
 
     def eval(self):
-        return self.func(**self.kwargs)
+        return self.func(*self.args)
 
 
 class PyRatesAssignOp(PyRatesOp):
 
     @classmethod
-    def generate_op(cls, name, op, args, kwargs):
+    def generate_op(cls, name, op, args):
 
         # initialization
         code_gen = CodeGen()
-        results = {'func': None, 'kwargs': {}, 'constant': False, 'shape': (), 'dtype': 'float32', 'call': None,
+        results = {'func': None, 'args': [], 'arg_names': [], 'constant': False, 'shape': (), 'dtype': 'float32', 'call': None,
                    'input_ops': [], 'return_val': None}
+        results_args = []
+        results_arg_names = []
 
         # extract variables
         var, upd = args[0:2]
         if len(args) > 2:
-            idx = "[idx]"
-            results['kwargs'].update({'idx': args[2]})
+            if hasattr(args[2], 'name'):
+                var_idx = f"[{args[2].name}]"
+                key = f"{args[2].name}"
+            else:
+                var_idx = "[idx]"
+                key = "idx"
+            results_args.append(args[2])
+            results_arg_names.append(key)
         elif var.shape:
-            idx = "[:]"
+            var_idx = "[:]"
         else:
-            idx = ""
+            var_idx = ""
         upd_idx = "[:]" if upd.shape else ""
 
-        results['kwargs'].update({'var': var})
-        results['kwargs'].update({'upd': upd})
-        for key, arg in results['kwargs'].copy().items():
-            if type(arg) is PyRatesOp:
-                results['input_ops'].append(arg.name)
-                results['kwargs'][key] = {'kwargs': arg.kwargs, 'call': arg.return_val}
+        var_key = var.name
+        results_args.append(var)
+        results_arg_names.append(var_key)
+        upd_key = upd.name if hasattr(upd, 'name') else "upd"
+        upd_pos = len(results_args)
+        results_args.append(upd)
+        results_arg_names.append(upd_key)
 
         # setup function head
         #####################
 
-        # code_gen.add_code_line("@jit(nopython=True, parallel=True)")
-        # code_gen.add_linebreak()
+        #code_gen.add_code_line("@jit(nopython=True, parallel=True)")
+        #code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
-        for key, arg in results['kwargs'].copy().items():
-            if type(arg) is dict:
-                for a in arg['kwargs'].keys():
-                    code_gen.add_code_line(f"{a},")
+        for idx, (key, arg) in enumerate(zip(results_arg_names, results_args)):
+            if type(arg) is PyRatesOp or type(arg) is PyRatesIndexOp:
+                pop_indices = []
+                for arg_tmp in arg.arg_names:
+                    if arg_tmp in results['arg_names']:
+                        pop_indices.append(arg.arg_names.index(arg_tmp))
+                    else:
+                        code_gen.add_code_line(f"{arg_tmp},")
+                new_args = arg.args.copy()
+                new_arg_names = arg.arg_names.copy()
+                for i, pop_idx in enumerate(pop_indices):
+                    new_args.pop(pop_idx - i)
+                    new_arg_names.pop(pop_idx - i)
+                results_args[idx] = {'args': new_args, 'call': arg.return_val, 'arg_names': new_arg_names}
+                results['input_ops'].append(arg.unique_name)
+                results['args'] += new_args
+                results['arg_names'] += new_arg_names
             else:
+                results['args'].append(arg)
+                results['arg_names'].append(key)
                 code_gen.add_code_line(f"{key},")
         code_gen.code[-1] = code_gen.code[-1][:-1]
         code_gen.add_code_line("):")
@@ -287,11 +381,11 @@ class PyRatesAssignOp(PyRatesOp):
         # assign update to variable and return variable
         ###############################################
 
-        upd_str = results['kwargs']['upd']['call'] if type(results['kwargs']['upd']) is dict else "upd"
-        code_gen.add_code_line(f"var{idx} {op} {upd_str}{upd_idx}")
+        upd_str = results_args[upd_pos]['call'] if type(results_args[upd_pos]) is dict else upd_key
+        code_gen.add_code_line(f"{var_key}{var_idx} {op} {upd_str}{upd_idx}")
         code_gen.add_linebreak()
-        code_gen.add_code_line(f"return var")
-        results['return_val'] = "var"
+        code_gen.add_code_line(f"return {var_key}")
+        results['return_val'] = var_key
 
         # generate op
         func_dict = {}
@@ -301,13 +395,112 @@ class PyRatesAssignOp(PyRatesOp):
         # set shape and dtype of op according to result of eval
         results['shape'] = var.shape
         results['dtype'] = var.dtype
-        for key, arg in results['kwargs'].copy().items():
-            if type(arg) is dict:
-                results['kwargs'].pop(key)
-                results['kwargs'].update(arg['kwargs'])
 
         return results
 
+
+class PyRatesIndexOp(PyRatesOp):
+
+    @classmethod
+    def generate_op(cls, name, op, args):
+
+        # initialization
+        code_gen = CodeGen()
+        results = {'func': None, 'args': [], 'arg_names': [], 'constant': False, 'shape': (), 'dtype': 'float32',
+                   'call': None, 'input_ops': [], 'return_val': None}
+
+        # extract variable and index
+        var_tmp, idx = args[0:2]
+        if type(var_tmp) is PyRatesOp or type(var_tmp) is PyRatesIndexOp:
+            var = var_tmp.return_val
+            pop_indices = []
+            for arg_tmp in var_tmp.arg_names:
+                if arg_tmp in results['arg_names']:
+                    pop_indices.append(var_tmp.arg_names.index(arg_tmp))
+            new_args = var_tmp.args.copy()
+            new_arg_names = var_tmp.arg_names.copy()
+            for i, pop_idx in enumerate(pop_indices):
+                new_args.pop(pop_idx - i)
+                new_arg_names.pop(pop_idx - i)
+            results['args'] += new_args
+            results['arg_names'] += new_arg_names
+        else:
+            var = var_tmp.name
+            results['args'].append(var_tmp)
+            results['arg_names'].append(var_tmp.name)
+
+        if type(idx) is PyRatesOp or type(idx) is PyRatesIndexOp:
+            var_idx = f"[{idx.return_val}]"
+            pop_indices = []
+            for arg_tmp in idx.arg_names:
+                if arg_tmp in results['arg_names']:
+                    pop_indices.append(idx.arg_names.index(arg_tmp))
+            new_args = idx.args.copy()
+            new_arg_names = idx.arg_names.copy()
+            for i, pop_idx in enumerate(pop_indices):
+                new_args.pop(pop_idx - i)
+                new_arg_names.pop(pop_idx - i)
+            results['args'] += new_args
+            results['arg_names'] += new_arg_names
+        elif type(idx) is PyRatesVar:
+            var_idx = f"[{idx.name}]"
+            key = f"{idx.name}"
+            results['args'].append(idx)
+            results['arg_names'].append(key)
+        elif type(idx) is str:
+            var_idx = f"[{idx}]"
+        elif hasattr(idx, 'shape'):
+            var_idx = "[idx]"
+            key = "idx"
+            results['args'].append(idx)
+            results['arg_names'].append(key)
+        else:
+            raise ValueError(f'Index type not understood: {idx}. Please consider a nother form of variable indexing.')
+
+        # setup function head
+        #####################
+
+        #code_gen.add_code_line("@jit(nopython=True, parallel=True)")
+        #code_gen.add_linebreak()
+        code_gen.add_code_line(f"def {name}(")
+
+        for arg in results['arg_names']:
+            code_gen.add_code_line(f"{arg},")
+
+        code_gen.code[-1] = code_gen.code[-1][:-1]
+        code_gen.add_code_line("):")
+        results['call'] = code_gen.generate()
+        code_gen.add_linebreak()
+        code_gen.add_indent()
+
+        # apply index to variable and return variable
+        #############################################
+
+        return_line = f"{var}{var_idx}"
+        code_gen.add_code_line(f"return {return_line}")
+        results['return_val'] = return_line
+
+        # generate op
+        func_dict = {}
+        exec(code_gen.generate(), globals(), func_dict)
+        results['func'] = func_dict.pop(name)
+
+        # set shape and dtype of op according to result of eval
+        args_tmp = deepcopy(results['args'])
+        op_tmp = results['func'](*results['args'])
+        results['shape'] = op_tmp.shape if hasattr(op_tmp, 'shape') else ()
+        results['dtype'] = op_tmp.dtype if hasattr(op_tmp, 'dtype') else type(op_tmp)
+
+        # reset initial values of args and kwargs
+        for arg_tmp, arg in zip(args_tmp, results['args']):
+            if hasattr(arg, 'shape') and arg.shape and type(arg) is not PyRatesOp:
+                arg[:] = arg_tmp[:]
+            elif type(arg) is tuple or type(arg) is list and type(arg) is not PyRatesOp:
+                for a_tmp, a in zip(arg_tmp, arg):
+                    if hasattr(a, 'shape') and arg.shape:
+                        a[:] = a_tmp[:]
+
+        return results
 
 ###########################
 # backend wrapper classes #
@@ -408,7 +601,7 @@ class TensorflowBackend(tf.Graph):
                     "pstack": tf.parallel_stack,
                     "group": tf.group,
                     "tuple": tf.tuple,
-                    "no_op": no_op,
+                    "identity": pr_identity,
                     }
         if ops:
             self.ops.update(ops)
@@ -1245,7 +1438,7 @@ class NumpyBackend(object):
     """
 
     def __init__(self,
-                 ops: Optional[Dict[str, Callable]] = None,
+                 ops: Optional[Dict[str, str]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
                  ) -> None:
         """Instantiates tensorflow backend, i.e. a tensorflow graph.
@@ -1257,61 +1450,61 @@ class NumpyBackend(object):
         ################################################
 
         # base math operations
-        self.ops = {"+": "numpy_add",
-                    "-": "numpy_subtract",
-                    "*": "numpy_multiply",
-                    "/": "numpy_divide",
-                    "%": "numpy_modulo",
-                    "^": "numpy_power",
-                    "**": "numpy_power_float",
-                    "@": "numpy_dot",
-                    ".T": "numpy_transpose",
-                    ".I": "numpy_invert",
-                    ">": "numpy_greater",
-                    "<": "numpy_less",
-                    "==": "numpy_equal",
-                    "!=": "numpy_not_equal",
-                    ">=": "numpy_greater_equal",
-                    "<=": "numpy_less_equal",
-                    "=": "=",
-                    "+=": "+=",
-                    "-=": "-=",
-                    "*=": "*=",
-                    "/=": "/=",
-                    "neg": "neg_one",
-                    "sin": "numpy_sin",
-                    "cos": "numpy_cos",
-                    "tan": "numpy_tan",
-                    "atan": "numpy_atan",
-                    "abs": "numpy_abs",
-                    "sqrt": "numpy_sqrt",
-                    "sq": "numpy_square",
-                    "exp": "numpy_exp",
-                    "max": "numpy_max",
-                    "min": "numpy_min",
-                    "argmax": "numpy_argmax",
-                    "argmin": "numpy_argmin",
-                    "round": "numpy_round",
-                    "sum": "numpy_sum",
-                    "mean": "numpy_mean",
-                    "concat": "numpy_concat",
-                    "reshape": "numpy_reshape",
-                    "shape": "numpy_shape",
-                    "dtype": "numpy_dtype",
-                    'squeeze': "numpy_squeeze",
-                    "roll": "numpy_roll",
-                    "cast": "numpy_cast",
-                    "randn": "numpy_randn",
-                    "ones": "numpy_ones",
-                    "zeros": "numpy_zeros",
-                    "range": "numpy_arange",
-                    "softmax": "numpy_softmax",
-                    "sigmoid": "numpy_sigmoid",
-                    "tanh": "numpy_tanh",
-                    "index": "numpy_index",
-                    "mask": "numpy_mask",
-                    "group": "numpy_group",
-                    "no_op": "no_op",
+        self.ops = {"+": {'name': "numpy_add", 'call': "np.add"},
+                    "-": {'name': "numpy_subtract", 'call': "np.subtract"},
+                    "*": {'name': "numpy_multiply", 'call': "np.multiply"},
+                    "/": {'name': "numpy_divide", 'call': "np.divide"},
+                    "%": {'name': "numpy_modulo", 'call': "np.mod"},
+                    "^": {'name': "numpy_power", 'call': "np.power"},
+                    "**": {'name': "numpy_power_float", 'call': "np.float_power"},
+                    "@": {'name': "numpy_dot", 'call': "np.dot"},
+                    ".T": {'name': "numpy_transpose", 'call': "np.transpose"},
+                    ".I": {'name': "numpy_invert", 'call': "np.invert"},
+                    ">": {'name': "numpy_greater", 'call': "np.greater"},
+                    "<": {'name': "numpy_less", 'call': "np.less"},
+                    "==": {'name': "numpy_equal", 'call': "np.equal"},
+                    "!=": {'name': "numpy_not_equal", 'call': "np.not_equal"},
+                    ">=": {'name': "numpy_greater_equal", 'call': "np.greater_equal"},
+                    "<=": {'name': "numpy_less_equal", 'call': "np.less_equal"},
+                    "=": {'name': "assign", 'call': "="},
+                    "+=": {'name': "assign_add", 'call': "+="},
+                    "-=": {'name': "assign_subtract", 'call': "-="},
+                    "*=": {'name': "assign_multiply", 'call': "*="},
+                    "/=": {'name': "assign_divide", 'call': "/="},
+                    "neg": {'name': "negative", 'call': "neg_one"},
+                    "sin": {'name': "numpy_sin", 'call': "np.sin"},
+                    "cos": {'name': "numpy_cos", 'call': "np.cos"},
+                    "tan": {'name': "numpy_tan", 'call': "np.tan"},
+                    "atan": {'name': "numpy_atan", 'call': "np.arctan"},
+                    "abs": {'name': "numpy_abs", 'call': "np.abs"},
+                    "sqrt": {'name': "numpy_sqrt", 'call': "np.sqrt"},
+                    "sq": {'name': "numpy_square", 'call': "np.square"},
+                    "exp": {'name': "numpy_exp", 'call': "np.exp"},
+                    "max": {'name': "numpy_max", 'call': "np.max"},
+                    "min": {'name': "numpy_min", 'call': "np.min"},
+                    "argmax": {'name': "numpy_transpose", 'call': "np.argmax"},
+                    "argmin": {'name': "numpy_argmin", 'call': "np.argmin"},
+                    "round": {'name': "numpy_round", 'call': "np.round"},
+                    "sum": {'name': "numpy_sum", 'call': "np.sum"},
+                    "mean": {'name': "numpy_mean", 'call': "np.mean"},
+                    "concat": {'name': "numpy_concatenate", 'call': "np.concatenate"},
+                    "reshape": {'name': "numpy_reshape", 'call': "np.reshape"},
+                    "shape": {'name': "numpy_shape", 'call': "np.shape"},
+                    "dtype": {'name': "numpy_dtype", 'call': "np.dtype"},
+                    'squeeze': {'name': "numpy_squeeze", 'call': "np.squeeze"},
+                    "roll": {'name': "numpy_roll", 'call': "np.roll"},
+                    "cast": {'name': "numpy_cast", 'call': "np.cast"},
+                    "randn": {'name': "numpy_randn", 'call': "np.randn"},
+                    "ones": {'name': "numpy_ones", 'call': "np.ones"},
+                    "zeros": {'name': "numpy_zeros", 'call': "np.zeros"},
+                    "range": {'name': "numpy_arange", 'call': "np.arange"},
+                    "softmax": {'name': "pyrates_softmax", 'call': "pr_softmax"},
+                    "sigmoid": {'name': "pyrates_sigmoid", 'call': "pr_sigmoid"},
+                    "tanh": {'name': "numpy_tanh", 'call': "np.tanh"},
+                    "index": {'name': "pyrates_index", 'call': "pyrates_index"},
+                    "mask": {'name': "pyrates_mask", 'call': "pr_mask"},
+                    "group": {'name': "pyrates_group", 'call': "pr_group"},
+                    "no_op": {'name': "pyrates_identity", 'call': "pr_identity"},
                     }
         if ops:
             self.ops.update(ops)
@@ -1407,12 +1600,22 @@ class NumpyBackend(object):
         if sampling_layer is None:
             sampling_layer = -1
         eval_layers = layers if layers else np.arange(len(self.layers)).tolist()
-        eval_layers.pop(sampling_layer)
+        if sampling_layer in eval_layers:
+            idx = eval_layers.index(sampling_layer)
+            eval_layers.pop(idx)
 
         # graph execution
         #################
 
-        self.compile(**kwargs)
+        # map layers that need to be executed to compiled network structure
+        eval_layers = list(set(eval_layers))
+        layer_mapping = self.compile()
+        for i, l in enumerate(eval_layers.copy()):
+            if layer_mapping[l] is None:
+                eval_layers.pop(eval_layers.index(l))
+            else:
+                eval_layers[i] = layer_mapping[l]
+        sampling_layer = layer_mapping[sampling_layer]
 
         # simulate backend behavior for each time-step
         if any(inputs):
@@ -1498,7 +1701,7 @@ class NumpyBackend(object):
             self.vars[name] = np.zeros(var.shape, dtype=var.dtype) + var
         else:
             self.vars[name] = var
-        return self.vars[name]
+        return var
 
     def add_op(self,
                op: str,
@@ -1536,7 +1739,7 @@ class NumpyBackend(object):
         if name and scope:
             name = f'{scope}/{name}'
         elif scope:
-            name = f'{scope}/assign' if '=' in op else f'{scope}/{self.ops[op]}'
+            name = f'{scope}/assign' if '=' in op else f"{scope}/{self.ops[op]['name']}"
         if name in self.op_counter:
             name_old = name
             name = f"{name}_{self.op_counter[name]}"
@@ -1557,15 +1760,18 @@ class NumpyBackend(object):
         ##################
 
         # generate op
+
         if "=" in op:
-            op = PyRatesAssignOp(self.ops[op], name, *args, **kwargs)
+            op = PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], *args)
+        elif op is "index":
+            op = PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], *args)
         else:
-            op = PyRatesOp(self.ops[op], name, *args, **kwargs)
+            op = PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], *args)
 
         # remove op inputs from layers (need not be evaluated anymore)
         for op_name in op.input_ops:
             idx = self.op_indices[op_name]
-            self.layers[idx[0]].pop(idx[1])
+            self.layers[idx[0]][idx[1]] = None
 
         # add op to the graph
         if op.constant:
@@ -1577,8 +1783,7 @@ class NumpyBackend(object):
                 return new_var
         else:
             self.layers[self.layer].append(op)
-            idx = self.layer if self.layer >= 0 else len(self.layers)+self.layer
-            self.op_indices[op.name] = (idx, len(self.layers[idx])-1)
+            self.op_indices[op.unique_name] = (self.layer, len(self.layers[self.layer])-1)
             return op
 
     def add_layer(self, to_beginning=False) -> None:
@@ -1597,23 +1802,23 @@ class NumpyBackend(object):
             self.layers = [[]] + self.layers
             self.layer = 0
         else:
+            self.layer = len(self.layers)
             self.layers.append([])
-            self.layer = -1
 
     def next_layer(self):
-        if self.layer == -1 or self.layer == len(self.layers)-1 and len(self.layers[-1]) > 0:
+        if self.layer == len(self.layers)-1:
             self.add_layer()
         else:
             self.layer += 1
 
     def previous_layers(self):
-        if self.layer == 0 or (self.layer < 0 and abs(self.layer) == len(self.layers)):
+        if self.layer == 0:
             self.add_layer(to_beginning=True)
         else:
             self.layer -= 1
 
     def top_layer(self):
-        self.layer = -1
+        self.layer = len(self.layers)-1
 
     def bottom_layer(self):
         self.layer = 0
@@ -1646,8 +1851,20 @@ class NumpyBackend(object):
     def eval_layer(self, idx):
         return [op.eval() for op in self.layers[idx]]
 
-    def compile(self, **kwargs):
-        pass
+    def compile(self):
+        layer_indices = {}
+        new_layer_idx = 0
+        for layer_idx, layer in enumerate(self.layers.copy()):
+            for op in layer.copy():
+                if op is None:
+                    layer.pop(layer.index(op))
+            if len(layer) == 0:
+                self.layers.pop(new_layer_idx)
+                layer_indices.update({layer_idx: None})
+            else:
+                layer_indices.update({layer_idx: new_layer_idx})
+                new_layer_idx += 1
+        return layer_indices
 
     #@jit(nopython=True, parallel=True)
     def eval(self, ops):
@@ -1705,9 +1922,9 @@ class NumpyBackend(object):
         if idx in idx_dict:
             idx = idx_dict.pop(idx)
         if update:
-            return self.add_op('=', var, update, idx, indexed=True, **idx_dict)
+            return self.add_op('=', var, update, idx)
         else:
-            return self.add_op('index', var, idx, **idx_dict)
+            return self.add_op('index', var, idx)
 
     def stack_vars(self, *vars, **kwargs):
         shape = (len(vars),) + vars[0].shape
@@ -1719,25 +1936,37 @@ class NumpyBackend(object):
 
     # @jit(nopython=True)
     def _run_no_inp(self, layers, sampling_layer, steps, sampling_steps):
-        for step in range(steps):
-            if step % sampling_steps == 0:
-                self.eval_layer(sampling_layer)
-            for l in layers:
-                self.eval_layer(l)
-        if step+1 % sampling_steps == 0:
-            self.eval(sampling_layer)
+        if sampling_layer is None:
+            for step in range(steps):
+                for l in layers:
+                    self.eval_layer(l)
+        else:
+            for step in range(steps):
+                if step % sampling_steps == 0:
+                    self.eval_layer(sampling_layer)
+                for l in layers:
+                    self.eval_layer(l)
+            if step+1 % sampling_steps == 0:
+                self.eval(sampling_layer)
 
     # @jit(nopython=True)
     def _run_inp(self, layers, sampling_layer, inputs, steps, sampling_steps):
-        for step, inp in zip(range(steps), inputs):
-            if step % sampling_steps == 0:
-                self.eval_layer(sampling_layer)
-            for key, val in inp.items():
-                self.vars[key] = val
-            for l in layers:
-                self.eval_layer(l)
-        if step+1 % sampling_steps == 0:
-            self.eval(sampling_layer)
+        if sampling_layer is None:
+            for step, inp in zip(range(steps), inputs):
+                for key, val in inp.items():
+                    self.vars[key][:] = val
+                for l in layers:
+                    self.eval_layer(l)
+        else:
+            for step, inp in zip(range(steps), inputs):
+                if step % sampling_steps == 0:
+                    self.eval_layer(sampling_layer)
+                for key, val in inp.items():
+                    self.vars[key][:] = val
+                for l in layers:
+                    self.eval_layer(l)
+            if step+1 % sampling_steps == 0:
+                self.eval(sampling_layer)
 
     def _match_shapes(self, op1: Any, op2: Any, adjust_second: bool = True, assign: bool = False) -> tuple:
         """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
@@ -1789,8 +2018,9 @@ class NumpyBackend(object):
                  and 1 in op_adjust.shape):
 
             # cut singleton dimension from op_adjust
-            idx = list(op_adjust.shape).index(1)
-            op_adjust = self.add_op('squeeze', op_adjust, axis=idx)
+            old_shape = list(op_adjust.shape)
+            idx = old_shape.index(1)
+            op_adjust = self.add_op('reshape', op_adjust, old_shape.pop(idx))
 
         if adjust_second:
             return op_target, op_adjust
@@ -2111,13 +2341,13 @@ def numpy_range(*args, **kwargs):
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_softmax(x, axis=None):
+def pr_softmax(x, axis=None):
     e = np.exp(x)
     return e/np.sum(e, axis=axis)
 
 
 #@jit(nopython=True, parallel=True)
-def numpy_sigmoid(x):
+def pr_sigmoid(x):
     return 1./(1. + np.exp(-x))
 
 
@@ -2126,14 +2356,8 @@ def numpy_cast(x, dtype):
     return np.cast(x, dtype)
 
 
-#@jit(nopython=True, parallel=True)
-# def numpy_scatter_update(x, idx, update):
-#     x.value[idx.eval()] = update.eval()
-#     return x
-
-
-def no_op(*args, **kwargs):
-    pass
+def pr_identity(x):
+    return x
 
 
 #@jit(nopython=True)
