@@ -442,7 +442,8 @@ class ComputeGraph(object):
         else:
             output_col, time, memory = self.backend.run(steps=sim_steps, layers=self.node_updates + self.edge_updates,
                                                         inputs=inp, outputs=output_col, sampling_layer=sampling_layer,
-                                                        sampling_ops=store_ops, out_dir=out_dir, profile=profile)
+                                                        sampling_ops=store_ops, out_dir=out_dir, profile=profile,
+                                                        sampling_steps=sampling_steps)
 
         # store output variables in data frame
         ######################################
