@@ -32,7 +32,6 @@ from pyrates import PyRatesException
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.ir.operator_graph import OperatorGraph
 from pyrates.frontend.template.operator import OperatorTemplate
-from pyrates.frontend.yaml import TemplateLoader
 
 
 class OperatorGraphTemplate(AbstractBaseTemplate):
@@ -68,8 +67,24 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
 
     def _load_operator_template(self, path: str) -> OperatorTemplate:
         """Load an operator template based on a path"""
-        path = self._format_path(path)
+        path = self._complete_template_path(path, self.path)
         return OperatorTemplate.from_yaml(path)
+
+    def update_template(self, name: str, path: str, label: str,
+                        operators: Union[str, List[str], dict] = None,
+                        description: str = None):
+        """Update all entries of a base edge template to a more specific template."""
+
+        if operators:
+            _update_operators(self.operators, operators)
+        else:
+            operators = self.operators
+
+        if not description:
+            description = self.__doc__  # or do we want to enforce documenting a template?
+
+        return self.__class__(name=name, path=path, label=label, operators=operators,
+                              description=description)
 
     def apply(self, values: dict = None):
         """ Apply template to gain a node or edge intermediate representation.
@@ -115,59 +130,39 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
         return self.target_ir(operators=operators, template=self.path)
 
 
-class OperatorGraphTemplateLoader(TemplateLoader):
+def _update_operators(base_operators: dict, updates: Union[str, List[str], dict]):
+    """Update operators of a given template. Note that currently, only the new information is
+    propagated into the operators dictionary. Comparing or replacing operators is not implemented.
 
-    def __new__(cls, path, template_class):
+    Parameters:
+    -----------
 
-        return super().__new__(cls, path, template_class)
+    base_operators:
+        Reference to one or more operators in the base class.
+    updates:
+        Reference to one ore more operators in the child class
+        - string refers to path or name of single operator
+        - list refers to multiple operators of the same class
+        - dict contains operator path or name as key
+    """
+    # updated = base_operators.copy()
+    updated = {}
+    if isinstance(updates, str):
+        updated[updates] = {}  # single operator path with no variations
+    elif isinstance(updates, list):
+        for path in updates:
+            updated[path] = {}  # multiple operator paths with no variations
+    elif isinstance(updates, dict):
+        for path, variations in updates.items():
+            updated[path] = variations
+        # dictionary with operator path as key and variations as sub-dictionary
+    else:
+        raise TypeError("Unable to interpret type of operator updates. Must be a single string,"
+                        "list of strings or dictionary.")
+    # # Check somewhere, if child operators have same input/output as base operators?
+    #
+    return updated
 
-    @classmethod
-    def update_template(cls, template_cls: Type[OperatorGraphTemplate], base, name: str, path: str, label: str,
-                        operators: Union[str, List[str], dict] = None,
-                        description: str = None):
-        """Update all entries of a base edge template to a more specific template."""
 
-        if operators:
-            cls.update_operators(base.operators, operators)
-        else:
-            operators = base.operators
 
-        if not description:
-            description = base.__doc__  # or do we want to enforce documenting a template?
 
-        return template_cls(name=name, path=path, label=label, operators=operators,
-                            description=description)
-
-    @staticmethod
-    def update_operators(base_operators: dict, updates: Union[str, List[str], dict]):
-        """Update operators of a given template. Note that currently, only the new information is
-        propagated into the operators dictionary. Comparing or replacing operators is not implemented.
-
-        Parameters:
-        -----------
-
-        base_operators:
-            Reference to one or more operators in the base class.
-        updates:
-            Reference to one ore more operators in the child class
-            - string refers to path or name of single operator
-            - list refers to multiple operators of the same class
-            - dict contains operator path or name as key
-        """
-        # updated = base_operators.copy()
-        updated = {}
-        if isinstance(updates, str):
-            updated[updates] = {}  # single operator path with no variations
-        elif isinstance(updates, list):
-            for path in updates:
-                updated[path] = {}  # multiple operator paths with no variations
-        elif isinstance(updates, dict):
-            for path, variations in updates.items():
-                updated[path] = variations
-            # dictionary with operator path as key and variations as sub-dictionary
-        else:
-            raise TypeError("Unable to interpret type of operator updates. Must be a single string,"
-                            "list of strings or dictionary.")
-        # # Check somewhere, if child operators have same input/output as base operators?
-        #
-        return updated

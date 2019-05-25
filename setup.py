@@ -26,7 +26,7 @@ CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Topic :: Scientific/Engineering",
                ]
 
-with open("README.md", "r") as fh:
+with open("README.md", "r", encoding="utf8") as fh:
     DESCRIPTION = fh.read()
 
 setup(name='pyrates',

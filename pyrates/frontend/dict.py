@@ -35,10 +35,13 @@ from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.operator import OperatorIR
 
+from pyrates.frontend._registry import register_interface
+
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
+@register_interface
 def to_node(node_dict: dict):
     operators = {}
     operator_args = node_dict["operator_args"]
@@ -54,10 +57,12 @@ def to_node(node_dict: dict):
     return NodeIR(operators=operators)
 
 
+@register_interface
 def to_operator(op_dict: dict):
     return OperatorIR(equations=op_dict["equations"], inputs=op_dict["inputs"], output=op_dict["output"])
 
 
+@register_interface
 def from_circuit(circuit: CircuitIR):
     """Reformat graph structure into a dictionary that can be saved as YAML template. The current implementation assumes
     that nodes and edges are given by as templates."""

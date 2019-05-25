@@ -37,12 +37,14 @@ from pyrates import PyRatesException
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.circuit import CircuitIR
 from pyrates.frontend.dict import to_node
+from pyrates.frontend._registry import register_interface
 
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
+@register_interface
 def to_circuit(graph: nx.MultiDiGraph, label="circuit",
                node_creator=to_node):
     """Create a CircuitIR instance out of a networkx.MultiDiGraph"""
