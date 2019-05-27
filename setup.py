@@ -12,7 +12,6 @@ INSTALL_REQUIREMENTS = ['numpy',
                         'scipy',
                         'seaborn',
                         'mne',
-                        'tensorflow >=1.12, <=1.13',
                         'pydot']
 
 CLASSIFIERS = ["Programming Language :: Python :: 3",

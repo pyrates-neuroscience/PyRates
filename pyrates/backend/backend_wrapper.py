@@ -50,6 +50,10 @@ import numpy as np
 import tensorflow as tf
 from copy import deepcopy
 from numba import jit, prange
+import os
+import sys
+from importlib import import_module
+import threading
 
 # meta infos
 __author__ = "Richard Gast"
@@ -60,7 +64,7 @@ __status__ = "development"
 # basic classes for operators and variables #
 #############################################
 
-class PyRatesVar(np.ndarray):
+class NumpyVar(np.ndarray):
 
     def __new__(cls, vtype: str, dtype: str, shape: tuple, value: Any, name: str, backend: Any):
 
@@ -96,13 +100,13 @@ class PyRatesVar(np.ndarray):
             else:
                 value = np.zeros(shape=shape, dtype=dtype) + value
 
-        # initialize array
-        obj = np.array(value).view(cls)
+        if vtype == 'constant':
+            return value
 
-        # set additional attributes
-        obj.vtype = vtype
-        obj.name = name.split('/')[-1]
-        obj.unique_name = name
+        # create variable
+        obj = np.array(value).view(cls)
+        obj.short_name = name.split('/')[-1]
+        obj.name = name
 
         return obj
 
@@ -110,11 +114,56 @@ class PyRatesVar(np.ndarray):
         return self[:]
 
 
+class TensorflowVar(tf.Variable):
+
+    def __new__(cls, vtype: str, dtype: str, shape: tuple, value: Any, name: str, backend: Any):
+
+        # check whether necessary arguments were provided
+        if all([arg is None for arg in [shape, value, dtype]]):
+            raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
+
+        # get shape
+        if not shape:
+            shape = value.shape if hasattr(value, 'shape') else ()
+
+        # get data type
+        if not dtype:
+            dtype = value.dtype if hasattr(value, 'dtype') else type(value)
+        dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
+        if dtype in backend.dtypes:
+            dtype = backend.dtypes[dtype]
+        else:
+            for dtype_tmp in backend.dtypes:
+                if dtype_tmp in dtype:
+                    dtype = backend.dtypes[dtype_tmp]
+                    break
+            else:
+                raise ValueError(f'Invalid data type: {dtype}. Check documentation of the backend wrapper in use for '
+                                 'valid data types.')
+
+        # get value
+        if value is None:
+            value = tf.zeros(shape=shape, dtype=dtype)
+        elif not hasattr(value, 'shape'):
+            if type(value) is list:
+                value = tf.zeros(shape=shape, dtype=dtype) + tf.constant(value).reshape(shape)
+            else:
+                value = tf.zeros(shape=shape, dtype=dtype) + value
+
+        if vtype == 'constant':
+            return value
+
+        # create variable object
+        obj = tf.Variable(value, name=name)
+        obj.short_name = name.split('/')[-1]
+        return obj
+
+
 class PyRatesOp:
 
     n_consts = 0
 
-    def __init__(self, op: str, name: str, *args) -> None:
+    def __init__(self, op: str, name: str, decorator: str, *args) -> None:
         """
 
         Parameters
@@ -124,11 +173,14 @@ class PyRatesOp:
         args
         """
 
+        if not decorator:
+            decorator = "@jit(nopython=True, fastmath=True)"
         self.op = op
-        self.name = name.split('/')[-1]
-        self.unique_name = name
-        op_dict = self.generate_op(self.name, op, args)
+        self.short_name = name.split('/')[-1]
+        self.name = name
+        op_dict = self.generate_op(self.short_name, op, args, decorator)
         self.func = op_dict['func']
+        self._callable = op_dict['callable']
         self.call = op_dict['call']
         self.return_val = op_dict['return_val']
         self.args = op_dict['args'].copy()
@@ -139,7 +191,7 @@ class PyRatesOp:
         self.input_ops = op_dict['input_ops']
 
     @classmethod
-    def generate_op(cls, name, op, args):
+    def generate_op(cls, name, op, args, decorator):
 
         # initialization
         code_gen = CodeGen()
@@ -152,15 +204,15 @@ class PyRatesOp:
         # setup function head
         #####################
 
-        #code_gen.add_code_line("@jit(nopython=True)")
-        #code_gen.add_linebreak()
+        code_gen.add_code_line(decorator)
+        code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
         # process arguments
         n_vars = 0
         for idx, arg in enumerate(args):
             if type(arg) is PyRatesOp or type(arg) is PyRatesIndexOp:
-                results['input_ops'].append(arg.unique_name)
+                results['input_ops'].append(arg.name)
                 pop_indices = []
                 for arg_tmp in arg.arg_names:
                     if arg_tmp in results['arg_names']:
@@ -174,13 +226,13 @@ class PyRatesOp:
                     new_arg_names.pop(pop_idx-i)
                 results_args.append({'args': new_args, 'call': arg.return_val,
                                      'arg_names': new_arg_names})
-                results_arg_names.append(arg.name)
+                results_arg_names.append(arg.short_name)
                 results['args'] += new_args
                 results['arg_names'] += new_arg_names
                 n_vars += 1
-            elif type(arg) is PyRatesVar:
+            elif type(arg) in (NumpyVar, TensorflowVar):
                 n_vars += 1
-                arg_name = arg.name
+                arg_name = arg.short_name
                 results_args.append(arg)
                 results_arg_names.append(arg_name)
                 results['args'].append(arg)
@@ -194,7 +246,7 @@ class PyRatesOp:
                 results['arg_names'].append(tuple_begin)
                 for arg_tmp in arg:
                     if type(arg_tmp) is PyRatesOp or type(arg_tmp) is PyRatesIndexOp:
-                        results['input_ops'].append(arg_tmp.unique_name)
+                        results['input_ops'].append(arg_tmp.name)
                         pop_indices = []
                         for arg_tmp2 in arg_tmp.arg_names:
                             if arg_tmp2 in results['arg_names']:
@@ -208,13 +260,13 @@ class PyRatesOp:
                             new_arg_names.pop(pop_idx - i)
                         results_args.append({'args': new_args, 'call': arg_tmp.return_val,
                                              'arg_names': new_arg_names})
-                        results_arg_names.append(arg_tmp.name)
+                        results_arg_names.append(arg_tmp.short_name)
                         results['args'] += new_args
                         results['arg_names'] += new_arg_names
                         n_vars += 1
-                    elif type(arg_tmp) is PyRatesVar:
+                    elif type(arg_tmp) in (NumpyVar, TensorflowVar):
                         n_vars += 1
-                        arg_name = arg_tmp.name
+                        arg_name = arg_tmp.short_name
                         results_args.append(arg_tmp)
                         results_arg_names.append(arg_name)
                         results['args'].append(arg_tmp)
@@ -285,13 +337,14 @@ class PyRatesOp:
             results['constant'] = True
 
         # generate op
+        results['func'] = code_gen.generate()
         func_dict = {}
-        exec(code_gen.generate(), globals(), func_dict)
-        results['func'] = func_dict.pop(name)
+        exec(results['func'], globals(), func_dict)
+        results['callable'] = func_dict.pop(name)
 
         # set shape and dtype of op according to result of eval
         args_tmp = deepcopy(results['args'])
-        op_tmp = results['func'](*results['args'])
+        op_tmp = results['callable'](*results['args'])
         results['shape'] = op_tmp.shape if hasattr(op_tmp, 'shape') else ()
         results['dtype'] = op_tmp.dtype if hasattr(op_tmp, 'dtype') else type(op_tmp)
 
@@ -307,13 +360,13 @@ class PyRatesOp:
         return results
 
     def eval(self):
-        return self.func(*self.args)
+        return self._callable(*self.args)
 
 
 class PyRatesAssignOp(PyRatesOp):
 
     @classmethod
-    def generate_op(cls, name, op, args):
+    def generate_op(cls, name, op, args, decorator):
 
         # initialization
         code_gen = CodeGen()
@@ -326,8 +379,8 @@ class PyRatesAssignOp(PyRatesOp):
         var, upd = args[0:2]
         if len(args) > 2:
             if hasattr(args[2], 'name'):
-                var_idx = f"[{args[2].name}]"
-                key = f"{args[2].name}"
+                var_idx = f"[{args[2].short_name}]"
+                key = f"{args[2].short_name}"
             else:
                 var_idx = "[idx]"
                 key = "idx"
@@ -339,10 +392,10 @@ class PyRatesAssignOp(PyRatesOp):
             var_idx = ""
         upd_idx = "[:]" if upd.shape else ""
 
-        var_key = var.name
+        var_key = var.short_name
         results_args.append(var)
         results_arg_names.append(var_key)
-        upd_key = upd.name if hasattr(upd, 'name') else "upd"
+        upd_key = upd.short_name if hasattr(upd, 'short_name') else "upd"
         upd_pos = len(results_args)
         results_args.append(upd)
         results_arg_names.append(upd_key)
@@ -350,8 +403,8 @@ class PyRatesAssignOp(PyRatesOp):
         # setup function head
         #####################
 
-        #code_gen.add_code_line("@jit(nopython=True, parallel=True)")
-        #code_gen.add_linebreak()
+        code_gen.add_code_line(decorator)
+        code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
         for idx, (key, arg) in enumerate(zip(results_arg_names, results_args)):
@@ -368,7 +421,7 @@ class PyRatesAssignOp(PyRatesOp):
                     new_args.pop(pop_idx - i)
                     new_arg_names.pop(pop_idx - i)
                 results_args[idx] = {'args': new_args, 'call': arg.return_val, 'arg_names': new_arg_names}
-                results['input_ops'].append(arg.unique_name)
+                results['input_ops'].append(arg.name)
                 results['args'] += new_args
                 results['arg_names'] += new_arg_names
             else:
@@ -392,8 +445,9 @@ class PyRatesAssignOp(PyRatesOp):
 
         # generate op
         func_dict = {}
-        exec(code_gen.generate(), globals(), func_dict)
-        results['func'] = func_dict.pop(name)
+        results['func'] = code_gen.generate()
+        exec(results['func'], globals(), func_dict)
+        results['callable'] = func_dict.pop(name)
 
         # set shape and dtype of op according to result of eval
         results['shape'] = var.shape
@@ -405,7 +459,7 @@ class PyRatesAssignOp(PyRatesOp):
 class PyRatesIndexOp(PyRatesOp):
 
     @classmethod
-    def generate_op(cls, name, op, args):
+    def generate_op(cls, name, op, args, decorator):
 
         # initialization
         code_gen = CodeGen()
@@ -428,9 +482,9 @@ class PyRatesIndexOp(PyRatesOp):
             results['args'] += new_args
             results['arg_names'] += new_arg_names
         else:
-            var = var_tmp.name
+            var = var_tmp.short_name
             results['args'].append(var_tmp)
-            results['arg_names'].append(var_tmp.name)
+            results['arg_names'].append(var_tmp.short_name)
 
         if type(idx) is PyRatesOp or type(idx) is PyRatesIndexOp:
             var_idx = f"[{idx.return_val}]"
@@ -445,8 +499,8 @@ class PyRatesIndexOp(PyRatesOp):
                 new_arg_names.pop(pop_idx - i)
             results['args'] += new_args
             results['arg_names'] += new_arg_names
-        elif type(idx) is PyRatesVar:
-            var_idx = f"[{idx.name}]"
+        elif type(idx) in (NumpyVar, TensorflowVar):
+            var_idx = f"[{idx.short_name}]"
             key = f"{idx.name}"
             results['args'].append(idx)
             results['arg_names'].append(key)
@@ -463,8 +517,8 @@ class PyRatesIndexOp(PyRatesOp):
         # setup function head
         #####################
 
-        #code_gen.add_code_line("@jit(nopython=True, parallel=True)")
-        #code_gen.add_linebreak()
+        code_gen.add_code_line(decorator)
+        code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
         for arg in results['arg_names']:
@@ -485,12 +539,13 @@ class PyRatesIndexOp(PyRatesOp):
 
         # generate op
         func_dict = {}
-        exec(code_gen.generate(), globals(), func_dict)
-        results['func'] = func_dict.pop(name)
+        results['func'] = code_gen.generate()
+        exec(results['func'], globals(), func_dict)
+        results['callable'] = func_dict.pop(name)
 
         # set shape and dtype of op according to result of eval
         args_tmp = deepcopy(results['args'])
-        op_tmp = results['func'](*results['args'])
+        op_tmp = results['callable'](*results['args'])
         results['shape'] = op_tmp.shape if hasattr(op_tmp, 'shape') else ()
         results['dtype'] = op_tmp.dtype if hasattr(op_tmp, 'dtype') else type(op_tmp)
 
@@ -505,927 +560,10 @@ class PyRatesIndexOp(PyRatesOp):
 
         return results
 
+
 ###########################
 # backend wrapper classes #
 ###########################
-
-class TensorflowBackend(tf.Graph):
-    """Wrapper to tensorflow.
-
-    Parameters
-    ----------
-    ops
-        Additional operations this backend instance can perform, defined as key-value pairs.
-    dtypes
-        Additional data-types this backend instance can use, defined as key-value pairs.
-    use_device
-        Default default_device on which to place variables and operations.
-
-    """
-
-    def __init__(self,
-                 ops: Optional[Dict[str, Callable]] = None,
-                 dtypes: Optional[Dict[str, object]] = None,
-                 use_device: str = 'cpu'
-                 ) -> None:
-        """Instantiates tensorflow backend, i.e. a tensorflow graph.
-        """
-
-        super().__init__()
-        if use_device == 'cpu':
-            device = '/cpu:0'
-        elif use_device == 'gpu':
-            device = '/gpu:0'
-        else:
-            device = use_device
-        self.default_device = device
-
-        # define operations and datatypes of the backend
-        ################################################
-
-        # base math operations
-        self.ops = {"+": tf.add,
-                    "-": tf.subtract,
-                    "*": tf.multiply,
-                    "/": tf.divide,
-                    "%": tf.mod,
-                    "^": tf.pow,
-                    "**": tf.pow,
-                    "@": tf.matmul,
-                    ".T": tf.transpose,
-                    ".I": tf.matrix_inverse,
-                    ">": tf.greater,
-                    "<": tf.less,
-                    "==": tf.equal,
-                    "!=": tf.not_equal,
-                    ">=": tf.greater_equal,
-                    "<=": tf.less_equal,
-                    "=": tf.assign,
-                    "+=": tf.assign_add,
-                    "cond": tf.cond,
-                    "neg": lambda x: -x,
-                    "sin": tf.sin,
-                    "cos": tf.cos,
-                    "tan": tf.tan,
-                    "atan": tf.atan,
-                    "abs": tf.abs,
-                    "sqrt": tf.sqrt,
-                    "sq": tf.square,
-                    "exp": tf.exp,
-                    "max": tf.maximum,
-                    "min": tf.minimum,
-                    "argmax": tf.arg_max,
-                    "argmin": tf.arg_min,
-                    "round": tf.round,
-                    "roundto": lambda x, y: tf.round(x * 10**y) / 10**y,
-                    "sum": tf.reduce_sum,
-                    "mean": tf.reduce_mean,
-                    "concat": tf.concat,
-                    "reshape": tf.reshape,
-                    "shape": tf.shape,
-                    "dtype": tf.keras.backend.dtype,
-                    'squeeze': tf.squeeze,
-                    "roll": tf.roll,
-                    "cast": tf.cast,
-                    "randn": tf.random_normal,
-                    "ones": tf.ones,
-                    "zeros": tf.zeros,
-                    "range": tf.range,
-                    "softmax": tf.nn.softmax,
-                    "sigmoid": tf.sigmoid,
-                    "tanh": tf.tanh,
-                    "gather": tf.gather,
-                    "gather_nd": tf.gather_nd,
-                    "scatter": tf.scatter_nd,
-                    "scatter_update": tf.scatter_update,
-                    "scatter_add": tf.scatter_nd_add,
-                    "mask": tf.boolean_mask,
-                    "stack": tf.stack,
-                    "pstack": tf.parallel_stack,
-                    "group": tf.group,
-                    "tuple": tf.tuple,
-                    "identity": pr_identity,
-                    }
-        if ops:
-            self.ops.update(ops)
-
-        self.dtypes = {"float16": tf.float16,
-                       "float32": tf.float32,
-                       "float64": tf.float64,
-                       "int16": tf.int16,
-                       "int32": tf.int32,
-                       "int64": tf.int64,
-                       "uint16": tf.uint16,
-                       "uint32": tf.uint32,
-                       "uint64": tf.uint64,
-                       "complex64": tf.complex64,
-                       "complex128": tf.complex128,
-                       "bool": tf.bool
-                       }
-        if dtypes:
-            self.dtypes.update(dtypes)
-
-        self.existing_scopes = {}
-
-    def run(self,
-            steps: int,
-            ops: Union[tf.Operation, List[tf.Operation]],
-            inputs: List[dict],
-            outputs: Dict[str, tf.Variable],
-            sampling_steps: Optional[int] = None,
-            sampling_ops: Optional[Union[tf.Operation, List[tf.Operation]]] = None,
-            out_dir: Optional[str] = None,
-            profile: Optional[str] = None
-            ) -> Union[Dict[str, tf.Variable], Tuple[dict, float, float]]:
-        """Executes all operations in tensorflow graph for a given number of steps.
-
-        Parameters
-        ----------
-        steps
-            Number of graph evaluations.
-        ops
-            Graph operations to evaluate.
-        inputs
-            Inputs fed into the graph.
-        outputs
-            Variables in the graph to store the history from.
-        sampling_steps
-            Number of graph execution steps to combine into a single output step.
-        sampling_ops
-            Graph operations for output storage.
-        out_dir
-            Directory to write the session log into.
-        profile
-            Can be used to extract information about graph execution time and memory load. Can be:
-            - `t` for returning the total graph execution time.
-            - `m` for returning the peak memory consumption during graph excecution.
-            - `mt` or `tm` for both
-
-        Returns
-        -------
-        Union[Dict[str, tf.Variable], Tuple[dict, float, float]]
-            If `profile` was requested, a tuple is returned that contains
-                1) the results dictionary
-                2) the simulation time if `t` was requested, else None.
-                3) the peak memory consumption if `m` was requested, else None.
-            If not, only the results dictionary is returned which contains a numpy array with results for each
-            output key that was provided via `outputs`.
-
-        """
-
-        # initializations
-        #################
-
-        # initialize session log
-        if out_dir:
-            writer = tf.summary.FileWriter(out_dir, graph=self)
-
-        # initialize profiler
-        if profile is None:
-            profile = ''
-        if 'm' in profile:
-            meta = tf.RunMetadata()
-            time_and_memory = tf.profiler.ProfileOptionBuilder.time_and_memory()
-        if 't' in profile:
-            t0 = t.time()
-
-        # graph execution
-        #################
-
-        # start session
-        with tf.Session(graph=self, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
-
-            # initialize variables on graph
-            sess.run(tf.global_variables_initializer())
-
-            # simulate backend behavior for each time-step
-            if 'm' in profile:
-
-                # in profiler-mode
-                for step in range(steps):
-                    if step % sampling_steps == 0:
-                        sess.run(sampling_ops, inputs[step], run_metadata=meta,
-                                 options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE))
-                    else:
-                        sess.run(ops, inputs[step], run_metadata=meta,
-                                 options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE))
-            else:
-
-                # in non-profiler mode
-                for step in range(steps):
-                    if step % sampling_steps == 0:
-                        sess.run(sampling_ops, inputs[step])
-                    else:
-                        sess.run(ops, inputs[step])
-
-            # output storage and clean-up
-            #############################
-
-            # store output variables in output dictionary
-            for key, var in outputs.items():
-                outputs[key] = var.eval(sess)
-
-            # store profiling results
-            if 't' in profile:
-                sim_time = t.time() - t0
-            else:
-                sim_time = 0.
-            if 'm' in profile:
-                peak_memory = tf.profiler.profile(graph=self, run_meta=meta, cmd='op', options=time_and_memory
-                                                  ).total_peak_bytes / 1e6
-            else:
-                peak_memory = 0.
-
-            # close session stuff
-            if out_dir:
-                writer.close()
-            sess.close()
-
-        if profile:
-            return outputs, sim_time, peak_memory
-        return outputs
-
-    def add_var(self,
-                vtype: str,
-                name: str,
-                value: Optional[Any] = None,
-                shape: Optional[Union[tuple, list, tf.TensorShape]] = None,
-                dtype: Optional[Union[str, tf.dtypes.DType]] = None,
-                **kwargs
-                ) -> Union[tf.Variable, tf.Tensor]:
-        """Adds a variable to the backend.
-
-        Parameters
-        ----------
-        vtype
-            Variable type. Can be
-                - `state_var` for variables that can change over time.
-                - `constant` for non-changing variables.
-                - `placeholder` for variables with a value unknown during initialization.
-        name
-            Name of the variable.
-        value
-            Value of the variable. Not needed for placeholders.
-        shape
-            Shape of the variable.
-        dtype
-            Datatype of the variable.
-        kwargs
-            Additional keyword arguments passed to the tensorflow functions.
-
-        Returns
-        -------
-        Union[tf.Variable, tf.Tensor]
-            Handle for the tensorflow variable.
-
-        """
-
-        # processs input arguments
-        ##########################
-
-        # extract variable scope
-        scope, reuse = self._get_scope(kwargs.pop('scope', None))
-
-        # extract graph dependencies
-        dependencies = kwargs.pop('dependencies', None)
-
-        # set the default_device
-        device = kwargs.pop('device', self.default_device)
-
-        # check whether necessary arguments were provided
-        if all([arg is None for arg in [shape, value, dtype]]):
-            raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
-
-        # set shape, data-type and value
-        if shape is None:
-            shape = value.shape
-        if dtype is None:
-            dtype = value.dtype
-        if value is None:
-            value = np.zeros(shape, dtype=dtype.as_numpy_dtype)
-
-        # create variable
-        #################
-
-        with tf.device(device):
-            with self.as_default():
-                with scope as sc:
-                    with tf.control_dependencies(dependencies):
-
-                        if reuse:
-
-                            # create variable under existing scope
-                            with tf.name_scope(sc.original_name_scope):
-                                return self._create_var(vtype, name, value, shape, dtype, **kwargs)
-
-                        else:
-
-                            # create variable under new scope
-                            return self._create_var(vtype, name, value, shape, dtype, **kwargs)
-
-    def add_op(self,
-               op: str,
-               *args,
-               **kwargs
-               ) -> tf.Operation:
-        """Add operation to the backend.
-
-        Parameters
-        ----------
-        op
-            Key of the operation. Needs to be a key of `TensorflowGraph.ops`
-        args
-            Positional arguments to be passed to the operation.
-        kwargs
-            Keyword arguments to be passed to the operation.
-
-        Returns
-        -------
-        tf.Operation
-            Handle for the tensorflow operation.
-
-        """
-
-        # process input arguments
-        #########################
-
-        # extract scope
-        scope, reuse = self._get_scope(kwargs.pop('scope', None))
-
-        # extract graph dependencies
-        dependencies = kwargs.pop('dependencies', None)
-
-        # set the default_device
-        device = kwargs.pop('device', self.default_device)
-
-        # extract additional infos
-        assign_to_var = kwargs.pop('assign_to_var', False)
-
-        # create operation
-        ##################
-
-        with tf.device(device):
-            with self.as_default():
-                with scope as sc:
-                    with tf.control_dependencies(dependencies):
-
-                        if reuse:
-
-                            # create operation under existing scope
-                            with tf.name_scope(sc.original_name_scope):
-                                return self._create_op(op, assign_to_var, *args, **kwargs)
-
-                        else:
-
-                            # create operation under new scope
-                            return self._create_op(op, assign_to_var, *args, **kwargs)
-
-    def add_layer(self,
-                  ops: List[tf.Operation],
-                  *args,
-                  **kwargs
-                  ) -> List[tf.Operation]:
-        """Adds a layer of operations to the backend using `tensorflow.tuple`.
-
-        Parameters
-        ----------
-        ops
-            All tensorflow operations that should be part of this layer.
-        args
-            Additional positional arguments to be passed to `tensorflow.tuple`.
-        kwargs
-            Additional keyword arguments to be passed to `tensorflow.tuple`.
-
-        Returns
-        -------
-        List[tf.Operation]
-            List of tensorflow operations with dependencies added (layer operations will all be evaluated before
-            any layer operation can be used in successive layers.)
-
-        """
-
-        # process input arguments
-        #########################
-
-        dependencies = kwargs.pop('dependencies', None)
-        scope, reuse = self._get_scope(kwargs.pop('scope', None))
-        device = kwargs.pop('device', self.default_device)
-
-        # create layer
-        ##############
-
-        with tf.device(device):
-            with self.as_default():
-                with scope as sc:
-                    with tf.control_dependencies(dependencies):
-                        if reuse:
-                            with tf.name_scope(sc.original_name_scope):
-                                return tf.tuple(ops, *args, **kwargs)
-                        else:
-                            return tf.tuple(ops, *args, **kwargs)
-
-    def clear(self):
-        """Resets all tensorflow operations on the graph.
-        """
-        tf.reset_default_graph()
-
-    def _create_op(self, op: str, assign_to_var: bool, *args, **kwargs) -> Union[tf.Operation, tf.Variable]:
-        """
-
-        Parameters
-        ----------
-        op
-            Key of the operation.
-        assign_to_var
-            If true, new variable will be created and result of op will be assigned to it.
-        args
-            Positional arguments to be passed to the tensorflow function.
-        kwargs
-            Keyword argumetns to be passed to the tensorflow function.
-
-        Returns
-        -------
-        Union[tf.Operation, tf.Variable]
-            Result of the tensorflow operation.
-
-        """
-
-        try:
-            tf_op = self.ops[op](*args, **kwargs)
-        except TypeError:
-            try:
-                tf_op = self.ops[op](list(args), **kwargs)
-            except TypeError:
-                # TODO: replace this with more generic way of handling args and kwargs
-                args = list(args)
-                arg_tmp = args.pop(-1)
-                tf_op = self.ops[op](args, arg_tmp, **kwargs)
-
-        # either assign result to new variable and return that variable or return result
-        if assign_to_var:
-            var = self.add_var(vtype='state_var', name=tf_op.name.split('/')[-1] + ['_tmp'],
-                               value=np.zeros(tf_op.shape, dtype=tf_op.dtype.as_numpy_dtype))
-            return var.assign(tf_op)
-        else:
-            return tf_op
-
-    @staticmethod
-    def _create_var(vtype: str,
-                    name: str,
-                    value: Optional[Any] = None,
-                    shape: Optional[Union[tuple, list, tf.TensorShape]] = None,
-                    dtype: Optional[Union[str, tf.dtypes.DType]] = None,
-                    **kwargs
-                    ) -> Union[tf.Variable, tf.Tensor]:
-        """Instantiates new variable in backend.
-
-        Parameters
-        ----------
-        vtype
-            Variable type. Can be
-                - `state_var` for variables that can change over time.
-                - `constant` for non-changing variables.
-                - `placeholder` for variables with a value unknown during initialization.
-        name
-            Name of the variable.
-        value
-            Value of the variable. Not needed for placeholders.
-        shape
-            Shape of the variable.
-        dtype
-            Datatype of the variable.
-        kwargs
-            Additional keyword arguments passed to the tensorflow functions.
-
-        Returns
-        -------
-        Union[tf.Variable, tf.Tensor]
-            Handle to the tensorflow variable.
-
-        """
-
-        if vtype == 'state_var':
-            return tf.get_variable(name, shape, dtype, initializer=tf.constant_initializer(value), **kwargs)
-        elif vtype == 'constant':
-            return tf.constant(value, dtype, shape, name, **kwargs)
-        elif vtype == 'placeholder':
-            return tf.placeholder(dtype, shape, name, **kwargs)
-        else:
-            raise ValueError(f'`Type` is {vtype} but needs to be set to `state_var`, `constant` or '
-                             f'`placeholder`.')
-
-    def _get_scope(self, scope: str):
-        """
-
-        Parameters
-        ----------
-        scope
-            Name of the name scope.
-
-        Returns
-        -------
-        str
-            Existing or new name scope.
-
-        """
-
-        with self.as_default():
-            if scope is None:
-                return tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE), True
-            if scope not in self.existing_scopes.keys():
-                self.existing_scopes[scope] = True
-            return tf.variable_scope(scope, reuse=tf.AUTO_REUSE), self.existing_scopes[scope]
-
-    def _broadcast(self, op: str, op1: Any, op2: Any, return_ops: bool = False, **kwargs
-                   ) -> Union[tuple, Any]:
-        """Tries to match the shapes of op1 and op2 such that op can be applied. Then applies op to op1 and op2.
-
-        Parameters
-        ----------
-        op
-            Name/key of the backend operation.
-        op1
-            First argument to the operation.
-        op2
-            Second argument to the operation.
-        return_ops
-            If true, the adjusted arguments (op1 and op2) are returned.
-        kwargs
-            Additional keyword arguments to be passed to the backend.
-
-        Returns
-        -------
-        tp.Union[tuple, tp.Any]
-            Output of op applied to op1 and op2. If return_ops, op1 and op2 are also returned.
-
-        """
-
-        # get key and value of ops if they are dicts
-        if type(op1) is dict:
-            (op1_key, op1_val), = op1.items()
-        else:
-            op1_val = op1
-            op1_key = None
-        if type(op2) is dict:
-            (op2_key, op2_val), = op2.items()
-        else:
-            op2_val = op2
-            op2_key = None
-
-        if not self.compare_shapes(op1_val, op2_val):
-
-            # try removing singleton dimensions from op1/op2
-            op1_val_tmp, op2_val_tmp = self.match_shapes(op1_val, op2_val, adjust_second=True, assign=op == self.assign)
-            if not self.compare_shapes(op1_val_tmp, op2_val_tmp):
-                op1_val_tmp, op2_val_tmp = self.match_shapes(op1_val_tmp, op2_val_tmp, adjust_second=False,
-                                                             assign=op == self.assign)
-            if self.compare_shapes(op1_val_tmp, op2_val_tmp):
-                op1_val, op2_val = op1_val_tmp, op2_val_tmp
-
-        try:
-
-            # try applying the operation with matched shapes
-            new_op = self.apply_op(op, op1_val, op2_val, op1_key, op2_key, **kwargs)
-
-        except TypeError:
-
-            # try to re-cast the data-types of op1/op2
-            try:
-                op2_val_tmp = self.backend.add_op('cast', op2_val, op1_val.dtype, **self.parser_kwargs)
-                new_op = self.apply_op(op, op1_val, op2_val_tmp, op1_key, op2_key, **kwargs)
-            except TypeError:
-                op1_val_tmp = self.backend.add_op('cast', op1_val, op2_val.dtype, **self.parser_kwargs)
-                new_op = self.apply_op(op, op1_val_tmp, op2_val, op1_key, op2_key, **kwargs)
-
-        except ValueError:
-
-            # try to match additional keyword arguments to shape of op1
-            for key, var in kwargs.items():
-                if hasattr(var, 'shape'):
-                    _, kwargs[key] = self.match_shapes(op1_val, var, adjust_second=True, assign=op == self.assign)
-            new_op = self.apply_op(op, op1_val, op2_val, op1_key, op2_key, **kwargs)
-
-        if return_ops:
-            return new_op, op1_val, op2_val
-        return new_op
-
-    def _match_shapes(self, op1: Any, op2: Any, adjust_second: bool = True, assign: bool = False) -> tuple:
-        """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-        assign
-            If true, the re-shaped operators will be assigned to new variables. Else, the manipulation will be performed
-            in place.
-        adjust_second
-            If true, the second operator will be re-shaped according to the shape of the first operator. If false,
-            it will be done the other way around.
-
-        Returns
-        -------
-        tuple
-            The re-shaped operators.
-
-        """
-
-        if adjust_second:
-
-            if len(op2.shape) == 0 and len(op1.shape) > 0 and assign:
-
-                # create array of zeros and fill it with op2
-                op2 = self.backend.add_op('+', self.backend.add_op("zeros", op1.shape, op1.dtype), op2)
-
-            elif (len(op1.shape) > len(op2.shape)) and (1 in op1.shape) and (len(op2.shape) > 0):
-
-                # reshape op2 to match the shape of op1
-                target_shape = op1.shape
-                idx = list(target_shape).index(1)
-                if idx == 0:
-                    op2 = self.backend.add_op('reshape', op2, [1, op2.shape[0]], **self.parser_kwargs)
-                else:
-                    op2 = self.backend.add_op('reshape', op2, [op2.shape[0], 1], **self.parser_kwargs)
-
-            elif (len(op2.shape) > len(op1.shape) and 1 in op2.shape) or \
-                    (len(op1.shape) == 2 and len(op2.shape) == 2 and op1.shape[1] != op2.shape[0] and 1 in op2.shape):
-
-                # cut singleton dimension from op2
-                idx = list(op2.shape).index(1)
-                op2 = self.backend.add_op('squeeze', op2, idx, **self.parser_kwargs)
-
-        else:
-
-            if len(op1.shape) == 0 and len(op2.shape) > 0 and assign:
-
-                # create array of zeros and fill it with op2
-                op1 = self.backend.add_op('+', self.backend.add_op("zeros", op2.shape, op2.dtype, op1))
-
-            elif (len(op2.shape) > len(op1.shape)) and (1 in op2.shape) and (len(op1.shape) > 0):
-
-                # reshape op2 to match the shape of op1
-                target_shape = op2.shape
-                idx = list(target_shape).index(1)
-                if idx == 0:
-                    op1 = self.backend.add_op('reshape', op1, [1, op1.shape[0]], **self.parser_kwargs)
-                else:
-                    op1 = self.backend.add_op('reshape', op1, [op1.shape[0], 1], **self.parser_kwargs)
-
-            elif len(op1.shape) > len(op2.shape) and 1 in op1.shape or \
-                    (len(op1.shape) == 2 and len(op2.shape) == 2 and op1.shape[1] != op2.shape[0] and 1 in op1.shape):
-
-                # cut singleton dimension from op2
-                idx = list(op1.shape).index(1)
-                op1 = self.backend.add_op('squeeze', op1, idx, **self.parser_kwargs)
-
-        return op1, op2
-
-    @staticmethod
-    def _compare_shapes(op1: Any, op2: Any) -> bool:
-        """Checks whether the shapes of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the shapes of op1 and op2 are compatible.
-
-        """
-
-        if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
-            if op1.shape == op2.shape:
-                return True
-            elif len(op1.shape) > 1 and len(op2.shape) > 1:
-                return True
-            else:
-                return False
-        else:
-            return True
-
-    @staticmethod
-    def _compare_dtypes(op1: Any, op2: Any) -> bool:
-        """Checks whether the data types of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the data types of op1 and op2 are compatible.
-
-        """
-
-        if op1.dtype == op2.dtype:
-            return True
-        elif op1.dtype.name in op2.dtype.name:
-            return True
-        elif op2.dtype.name in op1.dtype.name:
-            return True
-        elif op1.dtype.base_dtype == op2.dtype.base_dtype:
-            return True
-        else:
-            return False
-
-
-# # class KerasBackend(tf.keras.models.Model):
-# #     """Expression parser that transforms expression into keras operations on a tensorflow graph.
-# #
-# #     Parameters
-# #     ----------
-# #     expr_str
-# #         See docstring of `ExpressionParser`.
-# #     args
-# #         See docstring of `ExpressionParser`. Each variable in args needs to be a dictionary with key-value pairs for:
-# #             - `var`: contains the tensorflow variable.
-# #             - `dependency`: Boolean. If True, the expression needs to wait for this variable to be calculated/updated
-# #                before being evaluated.
-# #     lhs
-# #         See docstring of `ExpressionParser`.
-# #     tf_graph
-# #         Instance of `tensorflow.Graph`. Mathematical expression will be parsed into this graph.
-# #
-# #     Attributes
-# #     ----------
-# #     tf_graph
-# #         Instance of `tensorflow.Graph` containing a graph-representation of `expr_str`.
-# #     ops
-# #         Dictionary containing all mathematical operations available for this parser and their syntax. These include:
-# #             - addition: `+`
-# #             - subtraction: `-`
-# #             - multiplication: `*`
-# #             - division: `/`
-# #             - modulo: `%`
-# #             - exponentiation: `^`
-# #             - matrix multiplication: `@`
-# #             - matrix transposition: `.T`
-# #             - matrix inversion: `.I`
-# #             - logical greater than: `>`
-# #             - logical less than: `<`
-# #             - logical equal: `==`
-# #             - logical unequal: `!=`
-# #             - logical greater or equal: `>=`
-# #             - logical smaller or equal: `<=`
-# #     funcs
-# #         Dicionary containing all additional functions available for this parser and their syntax. These include:
-# #             - sinus: `sin()`.
-# #             - cosinus: `cos()`.
-# #             - tangens: `tan()`.
-# #             - absolute: `abs()`.
-# #             - maximum: `max()`
-# #             - minimum: `min()`
-# #             - index of maximum: `argmax()`
-# #             - index of minimum: `argmin()`
-# #             - round to next integer: `round()`. Tensorflow name: `tensorflow.to_int32()`.
-# #             - round to certain decimal point: `roundto()`. Custom function using `tensorflow.round()`. Defined in
-# #               `pyrates.parser.parser.py`.
-# #             - sum over dimension(s): `sum()`. Tensorflow name: `reduce_sum()`.
-# #             - Concatenate multiples of tensor over certain dimension: `tile()`.
-# #             - Reshape tensor: `reshape()`.
-# #             - Cut away dimensions of size 1: `squeeze()`.
-# #             - Cast variable to data-type: `cast()`.
-# #             - draw random variable from standard normal distribution: `randn()`.
-# #               Tensorflow name: `tensorflow.random_normal`.
-# #             - Create array filled with ones: `ones()`.
-# #             - Create array filled with zeros: `zeros()`.
-# #             - Apply softmax function to variable: `softmax()`. Tensorflow name: `tensorflow.nn.softmax()`.
-# #             - Apply boolean mask to array: `boolean_mask()`.
-# #             - Create new array with non-zero entries at certain indices: `scatter()`.
-# #               Tensorflow name: `tensorflow.scatter_nd`
-# #             - Add values to certain entries of tensor: 'scatter_add()'. Tensorflow name: `tensorflow.scatter_nd_add`.
-# #             - Update values of certain tensor entries: `scatter_update()`.
-# #               Tensorflow name: `tensorflow.scatter_nd_update`.
-# #             - Apply tensor as index to other tensor: `array_idx()`. Tensorflow name: `tensorflow.gather_nd`.
-# #             - Get variable from tensorflow graph or create new variable: `new_var()`:
-# #               Tensorflow name: `tensorflow.get_variable`.
-# #         For a detailed documentation of how to use these functions, see the tensorflow Python API.
-# #     dtypes
-# #         Dictionary containing all data-types available for this parser. These include:
-# #             - float16, float32, float64
-# #             - int16, int32, int64
-# #             - uint16, uint32, uint64
-# #             - complex64, complex128,
-# #             - bool
-# #         All of those data-types can be used inside a mathematical expression instead of using `cast()`
-# #         (e.g. `int32(3.631)`.
-# #     For all other attributes, see docstring of `ExpressionParser`.
-# #
-# #     Methods
-# #     -------
-# #     See docstrings of `ExpressionParser` methods.
-# #
-# #     Examples
-# #     --------
-# #
-# #     References
-# #     ----------
-# #
-# #     """
-# #
-# #     def __init__(self, expr_str: str, args: dict, backend: tf.keras.layers.Layer, lhs: bool = False) -> None:
-# #         """Instantiates keras expression parser.
-# #         """
-# #
-# #         # call super init
-# #         #################
-# #
-# #         super().__init__(expr_str=expr_str, args=args, backend=backend, lhs=lhs)
-# #
-# #         # define operations and functions
-# #         #################################
-# #
-# #         # base math operations
-# #         ops = {"+": tf.keras.layers.Lambda(lambda x: x[0] + x[1]),
-# #                "-": tf.keras.layers.Lambda(lambda x: x[0] - x[1]),
-# #                "*": tf.keras.layers.Lambda(lambda x: x[0] * x[1]),
-# #                "/": tf.keras.layers.Lambda(lambda x: x[0] / x[1]),
-# #                "%": tf.keras.layers.Lambda(lambda x: x[0] % x[1]),
-# #                "^": tf.keras.layers.Lambda(lambda x: tf.keras.backend.pow(x[0], x[1])),
-# #                "@": tf.keras.layers.Lambda(lambda x: tf.keras.backend.dot(x[0], x[1])),
-# #                ".T": tf.keras.layers.Lambda(lambda x: tf.keras.backend.transpose(x)),
-# #                ".I": tf.keras.layers.Lambda(lambda x: tf.matrix_inverse(x)),
-# #                ">": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater(x[0], x[1])),
-# #                "<": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less(x[0], x[1])),
-# #                "==": tf.keras.layers.Lambda(lambda x: tf.keras.backend.equal(x[0], x[1])),
-# #                "!=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.not_equal(x[0], x[1])),
-# #                ">=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.greater_equal(x[0], x[1])),
-# #                "<=": tf.keras.layers.Lambda(lambda x: tf.keras.backend.less_equal(x[0], x[1])),
-# #                "=": tf.keras.backend.update
-# #                }
-# #         self.ops.update(ops)
-# #
-# #         # additional functions
-# #         funcs = {"sin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sin(x)),
-# #                  "cos": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cos(x)),
-# #                  "tanh": tf.keras.layers.Lambda(lambda x: tf.keras.backend.tanh(x)),
-# #                  "abs": tf.keras.layers.Lambda(lambda x: tf.keras.backend.abs(x)),
-# #                  "sqrt": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sqrt(x)),
-# #                  "sq": tf.keras.layers.Lambda(lambda x: tf.keras.backend.square(x)),
-# #                  "exp": tf.keras.layers.Lambda(lambda x: tf.keras.backend.exp(x)),
-# #                  "max": tf.keras.layers.Lambda(lambda x: tf.keras.backend.max(x)),
-# #                  "min": tf.keras.layers.Lambda(lambda x: tf.keras.backend.min(x)),
-# #                  "argmax": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmax(x)),
-# #                  "argmin": tf.keras.layers.Lambda(lambda x: tf.keras.backend.argmin(x)),
-# #                  "round": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x)),
-# #                  "roundto": tf.keras.layers.Lambda(lambda x: tf.keras.backend.round(x[0] * 10**x[1]) / 10**x[1]),
-# #                  "sum": tf.keras.layers.Lambda(lambda x: tf.keras.backend.sum(x[0], *x[1])
-# #                                                if type(x) is list else tf.keras.backend.sum(x)),
-# #                  "concat": tf.keras.layers.Lambda(lambda x: tf.keras.backend.concatenate(x[0], *x[1])
-# #                                                   if type(x[0]) is list else tf.keras.backend.concatenate(x)),
-# #                  "reshape": tf.keras.layers.Lambda(lambda x: tf.keras.backend.reshape(x[0], x[1])
-# #                                                    if type(x) is list else tf.keras.backend.reshape(x)),
-# #                  "shape": tf.keras.backend.shape,
-# #                  "dtype": tf.keras.backend.dtype,
-# #                  'squeeze': tf.keras.layers.Lambda(lambda x: tf.keras.backend.squeeze(x[0], x[1])
-# #                                                    if type(x) is list else tf.keras.backend.squeeze(x[0], -1)),
-# #                  "cast": tf.keras.layers.Lambda(lambda x: tf.keras.backend.cast(x[0], x[1])),
-# #                  "randn": tf.keras.layers.Lambda(lambda x: tf.keras.backend.random_normal(x[0], *x[1])
-# #                                                  if "Tensor" in str(type(x[0]))
-# #                                                  else tf.keras.backend.random_normal(x)),
-# #                  "ones": tf.keras.layers.Lambda(lambda x: tf.keras.backend.ones(x[0], x[1])
-# #                                                 if "Tensor" in str(type(x[0]))
-# #                                                 else tf.keras.backend.ones(x)),
-# #                  "zeros": tf.keras.layers.Lambda(lambda x: tf.keras.backend.zeros(x[0], x[1])
-# #                                                  if "Tensor" in str(type(x[0]))
-# #                                                  else tf.keras.backend.zeros(x)),
-# #                  "softmax": tf.keras.layers.Lambda(lambda x: tf.keras.activations.softmax(x[0], *x[1])
-# #                                                    if type(x[0]) is list else tf.keras.activations.softmax(x)),
-# #                  "gather": tf.keras.layers.Lambda(lambda x: tf.gather_nd(x[0], x[1])),
-# #                  "mask": tf.keras.layers.Masking,
-# #                  "lambda": tf.keras.layers.Lambda
-# #                  }
-# #         self.funcs.update(funcs)
-# #
-# #         dtypes = {"float16": tf.float16,
-# #                   "float32": tf.float32,
-# #                   "float64": tf.float64,
-# #                   "int16": tf.int16,
-# #                   "int32": tf.int32,
-# #                   "int64": tf.int64,
-# #                   "uint16": tf.uint16,
-# #                   "uint32": tf.uint32,
-# #                   "uint64": tf.uint64,
-# #                   "complex64": tf.complex64,
-# #                   "complex128": tf.complex128,
-# #                   "bool": tf.bool
-# #                   }
-# #         self.dtypes.update(dtypes)
-# #
-# #     def add_variable(self, name, shape, dtype=None, initializer=None,
-# #                    regularizer=None, trainable=True, constraint=None):
-# #         pass
 
 
 class NumpyBackend(object):
@@ -1615,13 +753,13 @@ class NumpyBackend(object):
 
         # map layers that need to be executed to compiled network structure
         eval_layers = list(set(eval_layers))
-        layer_mapping = self.compile()
+        layer_run_funcs = self.compile()
         for i, l in enumerate(eval_layers.copy()):
-            if layer_mapping[l] is None:
+            if layer_run_funcs[l] is None:
                 eval_layers.pop(eval_layers.index(l))
             else:
-                eval_layers[i] = layer_mapping[l]
-        sampling_layer = layer_mapping[sampling_layer]
+                eval_layers[i] = layer_run_funcs[l]
+        sampling_layer = layer_run_funcs[sampling_layer]
 
         # simulate backend behavior for each time-step
         if any(inputs):
@@ -1657,7 +795,7 @@ class NumpyBackend(object):
                 shape: Optional[Union[tuple, list, np.shape]] = None,
                 dtype: Optional[Union[str, np.dtype]] = None,
                 **kwargs
-                ) -> PyRatesVar:
+                ) -> NumpyVar:
         """Adds a variable to the backend.
 
         Parameters
@@ -1702,18 +840,15 @@ class NumpyBackend(object):
         # create variable
         #################
 
-        var = PyRatesVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
-        if var.vtype == 'constant':
-            self.vars[name] = np.zeros(var.shape, dtype=var.dtype) + var
-        else:
-            self.vars[name] = var
+        var = self._create_var(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name)
+        self.vars[name] = var
         return var
 
     def add_op(self,
                op: str,
                *args,
                **kwargs
-               ) -> Union[PyRatesOp, PyRatesVar]:
+               ) -> Union[PyRatesOp, NumpyVar]:
         """Add operation to the backend.
 
         Parameters
@@ -1741,6 +876,9 @@ class NumpyBackend(object):
         # extract graph dependencies
         dependencies = kwargs.pop('dependencies', [])
 
+        # extract operator decorator
+        decorator = kwargs.pop('decorator', "")
+
         name = kwargs.pop('name', None)
         if name and scope:
             name = f'{scope}/{name}'
@@ -1766,18 +904,17 @@ class NumpyBackend(object):
         ##################
 
         # generate op
-
         if "=" in op:
-            op = PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], *args)
+            op = PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         elif op is "index":
-            op = PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], *args)
+            op = PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         else:
-            op = PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], *args)
+            op = PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
 
         # remove op inputs from layers (need not be evaluated anymore)
         for op_name in op.input_ops:
-            idx = self.op_indices[op_name]
-            self.layers[idx[0]][idx[1]] = None
+            idx_1, idx_2 = self.op_indices[op_name]
+            self.layers[idx_1][idx_2] = None
 
         # add op to the graph
         if op.constant:
@@ -1787,10 +924,10 @@ class NumpyBackend(object):
                 return self.add_var(vtype='constant', name=name, value=new_var)
             else:
                 return new_var
-        else:
-            self.layers[self.layer].append(op)
-            self.op_indices[op.unique_name] = (self.layer, len(self.layers[self.layer])-1)
-            return op
+
+        self.layers[self.layer].append(op)
+        self.op_indices[op.name] = (self.layer, len(self.layers[self.layer])-1)
+        return op
 
     def add_layer(self, to_beginning=False) -> None:
         """Adds a new layer to the backend and sets cursor to that layer.
@@ -1853,12 +990,13 @@ class NumpyBackend(object):
     def eval_var(self, var):
         return self.vars[var].eval()
 
-    #@jit(nopython=False, parallel=True)
-    def eval_layer(self, idx):
-        return [op.eval() for op in self.layers[idx]]
+    def eval_layer(self, layer):
+        return [func(*args) for func, args in layer]
 
-    def compile(self):
-        layer_indices = {}
+    def compile(self, build_dir=None):
+
+        # remove empty layers and operators
+        layer_mapping = {}
         new_layer_idx = 0
         for layer_idx, layer in enumerate(self.layers.copy()):
             for op in layer.copy():
@@ -1866,13 +1004,61 @@ class NumpyBackend(object):
                     layer.pop(layer.index(op))
             if len(layer) == 0:
                 self.layers.pop(new_layer_idx)
-                layer_indices.update({layer_idx: None})
+                layer_mapping.update({layer_idx: None})
             else:
-                layer_indices.update({layer_idx: new_layer_idx})
+                layer_mapping.update({layer_idx: new_layer_idx})
                 new_layer_idx += 1
-        return layer_indices
 
-    #@jit(nopython=True, parallel=True)
+        # create directory in which to store layer scripts
+        orig_path = os.getcwd()
+        if build_dir:
+            os.mkdir(build_dir)
+        dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
+        try:
+            os.mkdir(dir_name)
+        except FileExistsError:
+            pass
+        os.chdir(dir_name)
+        build_path = os.getcwd()
+
+        # write layer operations to files
+        for i, layer in enumerate(self.layers):
+            l_dir = f"layer_{i}"
+            try:
+                os.mkdir(l_dir)
+            except FileExistsError:
+                pass
+            os.chdir(l_dir)
+            with open(f"__init__.py", 'w') as f_init:
+                for j_tmp, op in enumerate(layer):
+                    f_init.write(f"from .op_{j_tmp} import *\n")
+                f_init.close()
+            for j, op in enumerate(layer):
+                if type(op) is not tuple:
+                    op_fname = f"op_{j}"
+                    with open(f"{op_fname}.py", 'w') as f:
+                        f.write("import numpy as np\n")
+                        f.write("from numba import jit\n")
+                        f.write(op.func)
+                        f.close()
+            os.chdir(build_path)
+
+        # replace layer ops with functions written to files
+        sys.path.insert(0, os.getcwd())
+        for i, layer in enumerate(self.layers):
+            for j, op in enumerate(layer):
+                if type(op) is not tuple:
+                    module = import_module(f".op_{j}", package=f"layer_{i}")
+                    func = getattr(module, op.name)
+                    self.layers[i][j] = (func, op.args)
+        os.chdir(orig_path)
+
+        # map new layers to old layer indices
+        for l_key in layer_mapping.keys():
+            layer_mapping[l_key] = self.layers[layer_mapping[l_key]]
+
+        return layer_mapping
+
     def eval(self, ops):
         return [op.eval() for op in ops]
 
@@ -1938,7 +1124,6 @@ class NumpyBackend(object):
             updates.append(self.add_op('=', stack, var, idx, indexed=True))
         return stack, updates
 
-    # @jit(nopython=True)
     def _run_no_inp(self, layers, sampling_layer, steps, sampling_steps):
         if sampling_layer is None:
             for step in range(steps):
@@ -1947,13 +1132,12 @@ class NumpyBackend(object):
         else:
             for step in range(steps):
                 if step % sampling_steps == 0:
-                    self.eval_layer(sampling_layer)
+                    self.layer_run(sampling_layer)
                 for l in layers:
                     self.eval_layer(l)
             if step+1 % sampling_steps == 0:
-                self.eval(sampling_layer)
+                self.eval_layer(sampling_layer)
 
-    # @jit(nopython=True)
     def _run_inp(self, layers, sampling_layer, inputs, steps, sampling_steps):
         if sampling_layer is None:
             for step, inp in zip(range(steps), inputs):
@@ -1964,13 +1148,13 @@ class NumpyBackend(object):
         else:
             for step, inp in zip(range(steps), inputs):
                 if step % sampling_steps == 0:
-                    self.eval_layer(sampling_layer)
+                    self.layer_run(sampling_layer)
                 for key, val in inp.items():
                     self.vars[key][:] = val
                 for l in layers:
                     self.eval_layer(l)
             if step+1 % sampling_steps == 0:
-                self.eval(sampling_layer)
+                self.eval_layer(sampling_layer)
 
     def _match_shapes(self, op1: Any, op2: Any, adjust_second: bool = True, assign: bool = False) -> tuple:
         """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
@@ -2029,6 +1213,17 @@ class NumpyBackend(object):
         if adjust_second:
             return op_target, op_adjust
         return op_adjust, op_target
+
+    def _create_var(self, vtype, dtype, shape, value, name):
+        return NumpyVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
+
+    @staticmethod
+    def layer_run(layer):
+        threads = [threading.Thread(target=op, args=args) for op, args in layer]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
     @staticmethod
     def _match_dtypes(op1: Any, op2: Any) -> tuple:
@@ -2099,6 +1294,122 @@ class NumpyBackend(object):
         return True
 
 
+class TensorflowBackend(NumpyBackend):
+    """Wrapper to tensorflow.
+
+    Parameters
+    ----------
+    ops
+        Additional operations this backend instance can perform, defined as key-value pairs.
+    dtypes
+        Additional data-types this backend instance can use, defined as key-value pairs.
+    use_device
+        Default default_device on which to place variables and operations.
+
+    """
+
+    def __init__(self,
+                 ops: Optional[Dict[str, Callable]] = None,
+                 dtypes: Optional[Dict[str, object]] = None,
+                 use_device: str = 'cpu'
+                 ) -> None:
+        """Instantiates tensorflow backend, i.e. a tensorflow graph.
+        """
+
+        if use_device == 'cpu':
+            device = '/cpu:0'
+        elif use_device == 'gpu':
+            device = '/gpu:0'
+        else:
+            device = use_device
+        self.default_device = device
+
+        super().__init__(ops, dtypes)
+
+        # define operations and datatypes of the backend
+        ################################################
+
+        # base math operations
+        self.ops.update({"+": {'name': "tensorflow_add", 'call': "tf.add"},
+                         "-": {'name': "tensorflow_subtract", 'call': "tf.subtract"},
+                         "*": {'name': "tensorflow_multiply", 'call': "tf.multiply"},
+                         "/": {'name': "tensorflow_divide", 'call': "tf.divide"},
+                         "%": {'name': "tensorflow_modulo", 'call': "tf.mod"},
+                         "^": {'name': "tensorflow_power", 'call': "tf.pow"},
+                         "**": {'name': "tensorflow_power", 'call': "tf.pow"},
+                         "@": {'name': "tensorflow_dot", 'call': "tf.dot"},
+                         ".T": {'name': "tensorflow_transpose", 'call': "tf.transpose"},
+                         ".I": {'name': "tensorflow_invert", 'call': "tf.invert"},
+                         ">": {'name': "tensorflow_greater", 'call': "tf.greater"},
+                         "<": {'name': "tensorflow_less", 'call': "tf.less"},
+                         "==": {'name': "tensorflow_equal", 'call': "tf.equal"},
+                         "!=": {'name': "tensorflow_not_equal", 'call': "tf.not_equal"},
+                         ">=": {'name': "tensorflow_greater_equal", 'call': "tf.greater_equal"},
+                         "<=": {'name': "tensorflow_less_equal", 'call': "tf.less_equal"},
+                         "=": {'name': "assign", 'call': "tf.assign"},
+                         "+=": {'name': "assign_add", 'call': "tf.assign_add"},
+                         "neg": {'name': "negative", 'call': "neg_one"},
+                         "sin": {'name': "tensorflow_sin", 'call': "tf.sin"},
+                         "cos": {'name': "tensorflow_cos", 'call': "tf.cos"},
+                         "tan": {'name': "tensorflow_tan", 'call': "tf.tan"},
+                         "atan": {'name': "tensorflow_atan", 'call': "tf.arctan"},
+                         "abs": {'name': "tensorflow_abs", 'call': "tf.abs"},
+                         "sqrt": {'name': "tensorflow_sqrt", 'call': "tf.sqrt"},
+                         "sq": {'name': "tensorflow_square", 'call': "tf.square"},
+                         "exp": {'name': "tensorflow_exp", 'call': "tf.exp"},
+                         "max": {'name': "tensorflow_max", 'call': "tf.max"},
+                         "min": {'name': "tensorflow_min", 'call': "tf.min"},
+                         "argmax": {'name': "tensorflow_transpose", 'call': "tf.argmax"},
+                         "argmin": {'name': "tensorflow_argmin", 'call': "tf.argmin"},
+                         "round": {'name': "tensorflow_round", 'call': "tf.round"},
+                         "sum": {'name': "tensorflow_sum", 'call': "tf.sum"},
+                         "mean": {'name': "tensorflow_mean", 'call': "tf.mean"},
+                         "concat": {'name': "tensorflow_concatenate", 'call': "tf.concatenate"},
+                         "reshape": {'name': "tensorflow_reshape", 'call': "tf.reshape"},
+                         "shape": {'name': "tensorflow_shape", 'call': "tf.shape"},
+                         "dtype": {'name': "tensorflow_dtype", 'call': "tf.dtype"},
+                         'squeeze': {'name': "tensorflow_squeeze", 'call': "tf.squeeze"},
+                         "roll": {'name': "tensorflow_roll", 'call': "tf.roll"},
+                         "cast": {'name': "tensorflow_cast", 'call': "tf.cast"},
+                         "randn": {'name': "tensorflow_randn", 'call': "tf.randn"},
+                         "ones": {'name': "tensorflow_ones", 'call': "tf.ones"},
+                         "zeros": {'name': "tensorflow_zeros", 'call': "tf.zeros"},
+                         "range": {'name': "tensorflow_arange", 'call': "tf.arange"},
+                         "softmax": {'name': "tensorflow_softmax", 'call': "tf.softmax"},
+                         "sigmoid": {'name': "tensorflow_sigmoid", 'call': "tf.sigmoid"},
+                         "tanh": {'name': "tensorflow_tanh", 'call': "tf.tanh"},
+                         "index": {'name': "pyrates_index", 'call': "pyrates_index"},
+                         "mask": {'name': "tensorflow_mask", 'call': "tf.mask"},
+                         "group": {'name': "tensorflow_group", 'call': "tf.group"},
+                         "no_op": {'name': "tensorflow_identity", 'call': "tf.identity"},
+                         })
+
+        self.dtypes = {"float16": tf.float16,
+                       "float32": tf.float32,
+                       "float64": tf.float64,
+                       "int16": tf.int16,
+                       "int32": tf.int32,
+                       "int64": tf.int64,
+                       "uint16": tf.uint16,
+                       "uint32": tf.uint32,
+                       "uint64": tf.uint64,
+                       "complex64": tf.complex64,
+                       "complex128": tf.complex128,
+                       "bool": tf.bool
+                       }
+
+    def add_op(self,
+               op: str,
+               *args,
+               **kwargs
+               ) -> Union[PyRatesOp, TensorflowVar]:
+        if 'decorator' not in kwargs:
+            kwargs['decorator'] = "@tf.function"
+        return super().add_op(op, *args, **kwargs)
+
+    def _create_var(self, vtype, dtype, shape, value, name):
+        return TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
+
 ##############################################
 # code generator class for backend functions #
 ##############################################
@@ -2127,243 +1438,3 @@ class CodeGen:
         if self.lvl == 0:
             raise(SyntaxError("internal error in code generator"))
         self.lvl -= 1
-
-
-#####################
-# backend functions #
-#####################
-
-
-#@jit(nopython=True)
-def numpy_add(x, y):
-    return np.add(x, y)
-
-
-#@jit(nopython=True)
-def numpy_subtract(x, y):
-    return np.subtract(x, y)
-
-
-#@jit(nopython=True)
-def numpy_multiply(x, y):
-    return np.multiply(x, y)
-
-
-#@jit(nopython=True)
-def numpy_divide(x, y):
-    return np.divide(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_modulo(x, y):
-    return np.mod(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_power(x, y):
-    return np.power(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_power_float(x, y):
-    return np.float_power(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_dot(x, y):
-    return np.dot(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_transpose(x):
-    return np.transpose(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_invert(x):
-    return np.invert(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_greater(x, y):
-    return np.greater(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_less(x, y):
-    return np.less(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_equal(x, y):
-    return np.equal(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_not_equal(x, y):
-    return np.not_equal(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_greater_equal(x, y):
-    return np.greater_equal(x ,y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_less_equal(x, y):
-    return np.less_equal(x, y)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_sin(x):
-    return np.sin(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_cos(x):
-    return np.cos(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_tan(x):
-    return np.tan(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_atan(*args, **kwargs):
-    return np.arctan(*args, **kwargs)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_tanh(x):
-    return np.tanh(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_abs(x):
-    return np.abs(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_sqrt(x):
-    return np.sqrt(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_sq(x):
-    return np.square(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_exp(x, axis=None):
-    return np.exp(x, axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_max(x, axis=None):
-    return np.max(x, axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_min(x, axis=None):
-    return np.min(x, axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_argmax(x, axis=None):
-    return np.argmax(x, axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_argmin(x, axis=None):
-    return np.argmin(x, axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_round(x, precision=0):
-    return np.round(x, precision=precision)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_sum(x, axis=0, keepdims=True):
-    return np.sum(x, axis=axis, keepdims=keepdims)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_mean(x, axis=0, keepdims=True):
-    return np.mean(x, axis=0, keepdims=True)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_concat(x, y, axis):
-    return np.concatenate([x, y], axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_reshape(x, shape):
-    return np.reshape(x, shape)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_shape(x):
-    return np.shape(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_dtype(x):
-    return np.dtype(x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_squeeze(x, axis=None):
-    return np.squeeze(x, axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_roll(x, shift, axis=-1):
-    return np.roll(x, shift, axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_randn(*x):
-    return np.random.randn(*x)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_ones(shape, dtype='float32'):
-    return np.ones(shape, dtype=dtype)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_zeros(shape, dtype='float32'):
-    return np.zeros(shape, dtype=dtype)
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_range(*args, **kwargs):
-    return np.arange(*args, **kwargs)
-
-
-#@jit(nopython=True, parallel=True)
-def pr_softmax(x, axis=None):
-    e = np.exp(x)
-    return e/np.sum(e, axis=axis)
-
-
-#@jit(nopython=True, parallel=True)
-def pr_sigmoid(x):
-    return 1./(1. + np.exp(-x))
-
-
-#@jit(nopython=True, parallel=True)
-def numpy_cast(x, dtype):
-    return np.cast(x, dtype)
-
-
-def pr_identity(x):
-    return x
-
-
-#@jit(nopython=True)
-def neg_one(x):
-    return np.multiply(-1, x)

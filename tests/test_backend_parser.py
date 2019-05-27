@@ -120,12 +120,12 @@ def test_1_3_expression_parser_math_ops():
                         ("4 - 5", -1.),               # simple subtraction
                         ("4. * 5.", 20.),             # simple multiplication
                         ("4. / 5.", 0.8),             # simple division
-                        ("4.^2", 16.),                # simple exponentiation
-                        ("4 + -5", -1.),              # negation of variable
-                        ("4. * -2", -8.),             # negation of variable in higher-order operation
+                        ("4.^2.", 16.),               # simple exponentiation
+                        ("4. + -5.", -1.),            # negation of variable
+                        ("4. * -2.", -8.),            # negation of variable in higher-order operation
                         ("4. + 5. * 2.", 14.),        # multiplication before addition
                         ("(4. + 5.) * 2.", 18.),      # parentheses before everything
-                        ("4. * 5.^2", 100.)           # exponentiation before multiplication
+                        ("4. * 5.^2.", 100.)          # exponentiation before multiplication
                         ]
 
     # test expression parser on expression results using tensorflow backend
@@ -140,9 +140,7 @@ def test_1_3_expression_parser_math_ops():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={}, backend=b)
         p.parse_expr()
-        with tf.Session(graph=b) as sess:
-            sess.run(p.expr_op)
-            result = p.expr_op.eval()
+        result = p.expr_op.numpy() if hasattr(p.expr_op, 'numpy') else p.expr_op
         assert result == pytest.approx(target, rel=1e-6)
 
     # test expression parser on expression results using numpy backend

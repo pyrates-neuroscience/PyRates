@@ -325,6 +325,9 @@ class ComputeGraph(object):
         # prepare simulation
         ####################
 
+        if verbose:
+            print("Preparing simulation...")
+
         # basic simulation parameters initialization
         if not simulation_time:
             simulation_time = self.dt
@@ -436,6 +439,9 @@ class ComputeGraph(object):
         # run simulation
         ################
 
+        if verbose:
+            print("Running simulation...")
+
         if profile is None:
             output_col = self.backend.run(steps=sim_steps, layers=self.node_updates + self.edge_updates, inputs=inp,
                                           outputs=output_col, sampling_steps=sampling_steps,
@@ -445,6 +451,13 @@ class ComputeGraph(object):
                                                         inputs=inp, outputs=output_col, sampling_layer=sampling_layer,
                                                         sampling_ops=store_ops, out_dir=out_dir, profile=profile,
                                                         sampling_steps=sampling_steps)
+
+        if verbose and profile:
+            if simulation_time:
+                print(f"{simulation_time}s of backend behavior were simulated in {time} s given a "
+                      f"simulation resolution of {self.dt} s.")
+            else:
+                print(f"ComputeGraph computations finished after {time} seconds.")
 
         # store output variables in data frame
         ######################################
@@ -492,12 +505,6 @@ class ComputeGraph(object):
         # return results
         ################
 
-        if verbose and profile:
-            if simulation_time:
-                print(f"{simulation_time}s of backend behavior were simulated in {time} s given a "
-                      f"simulation resolution of {self.dt} s.")
-            else:
-                print(f"ComputeGraph computations finished after {time} seconds.")
         if profile:
             return out_vars, time, memory
         return out_vars

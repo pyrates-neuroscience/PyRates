@@ -59,7 +59,7 @@ __status__ = "development"
 
 def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: float, simulation_time: float,
                 inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None,
-                permute_grid: bool = False, **kwargs) -> pd.DataFrame:
+                permute_grid: bool = False, init_kwargs: dict = None, **kwargs) -> pd.DataFrame:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
     Parameters
@@ -117,7 +117,9 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
         param_info.append(param_split.join(param_info_tmp))
 
     # create backend graph
-    net = ComputeGraph(circuit, dt=dt, **kwargs)
+    if not init_kwargs:
+        init_kwargs = {}
+    net = ComputeGraph(circuit, dt=dt, **init_kwargs)
 
     # adjust input of simulation to combined network
     for inp_key, inp in inputs.items():
@@ -161,7 +163,10 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
     results = net.run(simulation_time=simulation_time,
                       inputs=inputs,
                       outputs=outputs,
-                      sampling_step_size=sampling_step_size)    # type: pd.DataFrame
+                      sampling_step_size=sampling_step_size,
+                      **kwargs)    # type: pd.DataFrame
+    if 'profile' in kwargs:
+        results, duration, memory = results
 
     # transform results into long-form dataframe with changed parameters as columns
     multi_idx = [param_grid[key].values for key in param_grid.keys()]
@@ -186,6 +191,8 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
                 indices[idx] = val
         results_final.loc[:, tuple(indices)] = results[col].values
 
+    if 'profile' in kwargs:
+        return results_final, duration, memory
     return results_final
 
 
