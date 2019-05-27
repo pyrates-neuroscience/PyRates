@@ -160,7 +160,7 @@ class ExpressionParser(ParserElement):
 
             # parentheses
             par_l = Literal("(")
-            par_r = Literal(")").setParseAction(self._push_last)
+            par_r = Literal(")").setParseAction(self._push_first)
             idx_l = Literal("[")
             idx_r = Literal("]")
 
@@ -220,11 +220,11 @@ class ExpressionParser(ParserElement):
                                                           Optional(arg_comb)) +
                                      Optional(self.expr.suppress() + ZeroOrMore((arg_comb.suppress() +
                                                                                  self.expr.suppress())))
-                                     + par_r | name | pi | e | num_float | num_int
+                                     + par_r.suppress() | name | pi | e | num_float | num_int
                                      ).setParseAction(self._push_first)
                     ).setParseAction(self._push_negone) | \
-                   (par_l.setParseAction(self._push_last) + self.expr.suppress() + par_r.suppress()
-                    ).setParseAction(self._push_negone)
+                   (par_l.setParseAction(self._push_last) + self.expr.suppress() +
+                    par_r).setParseAction(self._push_negone)
 
             # apply indexing to atoms
             indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
@@ -318,7 +318,7 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            self.expr_op = self.backend.add_op('neg', self.parse(expr_stack), **self.parser_kwargs)
+            self.expr_op = self.backend.add_op('*', -1.0, self.parse(expr_stack), **self.parser_kwargs)
 
         elif op in "+-**/^@<=>=!==":
 
@@ -456,6 +456,8 @@ class ExpressionParser(ParserElement):
             self.expr_op = self.args['updates'][op]
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
+
+            expr_stack.pop(-1)
 
             # extract data type
             try:
