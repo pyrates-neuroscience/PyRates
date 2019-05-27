@@ -338,8 +338,9 @@ class ComputeGraph(object):
         outputs_tmp = dict()
         if outputs:
             for key, val in outputs.items():
-                outputs_tmp.update(self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col",
-                                                scope="output_collection"))
+                var_dict = self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col",
+                                        scope="output_collection")
+                outputs_tmp.update(var_dict)
 
         # add output collector variables to graph
         output_col = {}
@@ -355,9 +356,9 @@ class ComputeGraph(object):
         self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
 
         # add collector variables to the graph
-        for key, var in outputs_tmp.items():
+        for i, (key, var) in enumerate(outputs_tmp.items()):
             shape = [int(sim_steps / sampling_steps)] + list(var.shape)
-            output_col[key] = self.backend.add_var(vtype='state_var', name=key, dtype='float32', shape=shape,
+            output_col[key] = self.backend.add_var(vtype='state_var', name=f"out_col_{i}", dtype='float32', shape=shape,
                                                    value=np.zeros(shape), scope="output_collection")
 
             # add collect operation to the graph
@@ -736,7 +737,7 @@ class ComputeGraph(object):
         inp, updates = self.backend.stack_vars(*tuple(inputs), **kwargs)
         self.backend.next_layer()
         if reduce_dim:
-            inp_transform = self.backend.add_op('sum', inp, 0, None, None, 1)
+            inp_transform = self.backend.add_op('sum', inp, 0)
         else:
             inp_transform = self.backend.add_op('reshape', inp, (inp.shape[0] * inp.shape[1],), **kwargs) \
                 if len(inp.shape) > 1 else inp
@@ -891,7 +892,7 @@ class ComputeGraph(object):
 
         if node in self._net_config_map and op in self._net_config_map[node] and attr in self._net_config_map[node][op]:
             node, op, attr, attr_idx = self._net_config_map[node][op][attr]
-            return self._apply_idx(self._get_op_attr(node, op, attr), attr_idx)
+            return self.backend.apply_idx(self._get_op_attr(node, op, attr), attr_idx)
         elif node in self.net_config:
             op = self.net_config[node]['op_graph'].nodes[op]
         else:

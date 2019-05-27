@@ -625,7 +625,9 @@ class ExpressionParser(ParserElement):
 
         # apply idx
         update = self.args.pop('rhs', None)
-        return self.backend.apply_idx(op, idx, update=update, idx_dict=self.args.pop('idx'))
+        if idx in self.args['idx']:
+            idx = self.args['idx'].pop(idx)
+        return self.backend.apply_idx(op, idx, update=update)
 
     def update(self, var_old, var_delta, dt, **kwargs):
         """Solves single step of a differential equation.

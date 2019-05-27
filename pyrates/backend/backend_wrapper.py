@@ -91,7 +91,10 @@ class PyRatesVar(np.ndarray):
         if value is None:
             value = np.zeros(shape=shape, dtype=dtype)
         elif not hasattr(value, 'shape'):
-            value = np.zeros(shape=shape, dtype=dtype) + value
+            if type(value) is list:
+                value = np.zeros(shape=shape, dtype=dtype) + np.asarray(value).reshape(shape)
+            else:
+                value = np.zeros(shape=shape, dtype=dtype) + value
 
         # initialize array
         obj = np.array(value).view(cls)
@@ -149,8 +152,8 @@ class PyRatesOp:
         # setup function head
         #####################
 
-        code_gen.add_code_line("@jit(nopython=True)")
-        code_gen.add_linebreak()
+        #code_gen.add_code_line("@jit(nopython=True)")
+        #code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
         # process arguments
@@ -447,7 +450,7 @@ class PyRatesIndexOp(PyRatesOp):
             key = f"{idx.name}"
             results['args'].append(idx)
             results['arg_names'].append(key)
-        elif type(idx) is str:
+        elif type(idx) is str or "int" in str(type(idx)) or "float" in str(type(idx)):
             var_idx = f"[{idx}]"
         elif hasattr(idx, 'shape'):
             var_idx = "[idx]"
@@ -1921,9 +1924,7 @@ class NumpyBackend(object):
 
         return op1_val, op2_val
 
-    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, idx_dict: Optional[dict] = None):
-        if idx in idx_dict:
-            idx = idx_dict.pop(idx)
+    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None):
         if update:
             return self.add_op('=', var, update, idx)
         else:
