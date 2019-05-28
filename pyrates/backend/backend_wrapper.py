@@ -286,13 +286,16 @@ class PyRatesOp:
                 results['args'].append(tuple_end)
                 results['arg_names'].append(tuple_end)
             else:
-                cls.n_consts += 1
-                arg_name = f"c_{cls.n_consts}"
+                if type(arg) is str:
+                    arg_name = arg
+                else:
+                    cls.n_consts += 1
+                    arg_name = f"c_{cls.n_consts}"
+                    code_gen.add_code_line(f"{arg_name},")
                 results_args.append(arg)
                 results_arg_names.append(arg_name)
                 results['args'].append(arg)
                 results['arg_names'].append(arg_name)
-                code_gen.add_code_line(f"{arg_name},")
 
         # end function head
         code_gen.code[-1] = code_gen.code[-1][:-1]
@@ -350,7 +353,7 @@ class PyRatesOp:
 
         # reset initial values of args and kwargs
         for arg_tmp, arg in zip(args_tmp, results['args']):
-            if hasattr(arg, 'shape') and arg.shape and type(arg) is not PyRatesOp:
+            if hasattr(arg, 'shape') and len(arg.shape) > 0 and type(arg) is not PyRatesOp:
                 arg[:] = arg_tmp[:]
             elif type(arg) is tuple or type(arg) is list and type(arg) is not PyRatesOp:
                 for a_tmp, a in zip(arg_tmp, arg):
@@ -386,11 +389,11 @@ class PyRatesAssignOp(PyRatesOp):
                 key = "idx"
             results_args.append(args[2])
             results_arg_names.append(key)
-        elif var.shape:
+        elif hasattr(var, 'shape') and len(var.shape) > 0:
             var_idx = "[:]"
         else:
             var_idx = ""
-        upd_idx = "[:]" if upd.shape else ""
+        upd_idx = "[:]" if hasattr(upd, 'shape') and len(upd.shape) > 0 else ""
 
         var_key = var.short_name
         results_args.append(var)
@@ -438,7 +441,10 @@ class PyRatesAssignOp(PyRatesOp):
         ###############################################
 
         upd_str = results_args[upd_pos]['call'] if type(results_args[upd_pos]) is dict else upd_key
-        code_gen.add_code_line(f"{var_key}{var_idx} {op} {upd_str}{upd_idx}")
+        if op in ["=", "+=", "-=", "*=", "/="]:
+            code_gen.add_code_line(f"{var_key}{var_idx} {op} {upd_str}{upd_idx}")
+        else:
+            code_gen.add_code_line(f"{var_key}{var_idx}.{op}({upd_str}{upd_idx})")
         code_gen.add_linebreak()
         code_gen.add_code_line(f"return {var_key}")
         results['return_val'] = var_key
@@ -466,8 +472,8 @@ class PyRatesIndexOp(PyRatesOp):
         results = {'func': None, 'args': [], 'arg_names': [], 'constant': False, 'shape': (), 'dtype': 'float32',
                    'call': None, 'input_ops': [], 'return_val': None}
 
-        # extract variable and index
-        var_tmp, idx = args[0:2]
+        # extract variable
+        var_tmp = args[0]
         if type(var_tmp) is PyRatesOp or type(var_tmp) is PyRatesIndexOp:
             var = var_tmp.return_val
             pop_indices = []
@@ -481,11 +487,18 @@ class PyRatesIndexOp(PyRatesOp):
                 new_arg_names.pop(pop_idx - i)
             results['args'] += new_args
             results['arg_names'] += new_arg_names
-        else:
+        elif type(var_tmp) in (NumpyVar, TensorflowVar):
             var = var_tmp.short_name
             results['args'].append(var_tmp)
             results['arg_names'].append(var_tmp.short_name)
+        else:
+            var = f"c_{cls.n_consts}"
+            results['args'].append(var_tmp)
+            results['arg_names'].append(var)
+            cls.n_consts += 1
 
+        # extract idx
+        idx = args[1]
         if type(idx) is PyRatesOp or type(idx) is PyRatesIndexOp:
             var_idx = f"[{idx.return_val}]"
             pop_indices = []
@@ -517,13 +530,87 @@ class PyRatesIndexOp(PyRatesOp):
         # setup function head
         #####################
 
+        # beginning
         code_gen.add_code_line(decorator)
         code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
+        # variable and index
         for arg in results['arg_names']:
             code_gen.add_code_line(f"{arg},")
 
+        # remaining arguments
+        n_vars = 0
+        for idx, arg in enumerate(args[2:]):
+            if type(arg) is PyRatesOp or type(arg) is PyRatesIndexOp:
+                results['input_ops'].append(arg.name)
+                pop_indices = []
+                for arg_tmp in arg.arg_names:
+                    if arg_tmp in results['arg_names']:
+                        pop_indices.append(arg.arg_names.index(arg_tmp))
+                    else:
+                        code_gen.add_code_line(f"{arg_tmp},")
+                new_args = arg.args.copy()
+                new_arg_names = arg.arg_names.copy()
+                for i, pop_idx in enumerate(pop_indices):
+                    new_args.pop(pop_idx - i)
+                    new_arg_names.pop(pop_idx - i)
+                results['args'] += new_args
+                results['arg_names'] += new_arg_names
+                n_vars += 1
+            elif type(arg) in (NumpyVar, TensorflowVar) or hasattr(arg, 'numpy'):
+                n_vars += 1
+                arg_name = arg.short_name
+                results['args'].append(arg)
+                results['arg_names'].append(arg_name)
+                code_gen.add_code_line(f"{arg_name},")
+            elif type(arg) is tuple or type(arg) is list:
+                tuple_begin = '('
+                results['args'].append(tuple_begin)
+                results['arg_names'].append(tuple_begin)
+                for arg_tmp in arg:
+                    if type(arg_tmp) is PyRatesOp or type(arg_tmp) is PyRatesIndexOp:
+                        results['input_ops'].append(arg_tmp.name)
+                        pop_indices = []
+                        for arg_tmp2 in arg_tmp.arg_names:
+                            if arg_tmp2 in results['arg_names']:
+                                pop_indices.append(arg_tmp.arg_names.index(arg_tmp2))
+                            else:
+                                code_gen.add_code_line(f"{arg_tmp2},")
+                        new_args = arg_tmp.args.copy()
+                        new_arg_names = arg_tmp.arg_names.copy()
+                        for i, pop_idx in enumerate(pop_indices):
+                            new_args.pop(pop_idx - i)
+                            new_arg_names.pop(pop_idx - i)
+                        results['args'] += new_args
+                        results['arg_names'] += new_arg_names
+                        n_vars += 1
+                    elif type(arg_tmp) in (NumpyVar, TensorflowVar):
+                        n_vars += 1
+                        arg_name = arg_tmp.short_name
+                        results['args'].append(arg_tmp)
+                        results['arg_names'].append(arg_name)
+                        code_gen.add_code_line(f"{arg_name},")
+                    else:
+                        cls.n_consts += 1
+                        arg_name = f"c_{cls.n_consts}"
+                        results['args'].append(arg_tmp)
+                        results['arg_names'].append(arg_name)
+                        code_gen.add_code_line(f"{arg_name},")
+                tuple_end = ')'
+                results['args'].append(tuple_end)
+                results['arg_names'].append(tuple_end)
+            else:
+                if type(arg) is str:
+                    arg_name = arg
+                else:
+                    cls.n_consts += 1
+                    arg_name = f"c_{cls.n_consts}"
+                    code_gen.add_code_line(f"{arg_name},")
+                results['args'].append(arg)
+                results['arg_names'].append(arg_name)
+
+        # end of function head
         code_gen.code[-1] = code_gen.code[-1][:-1]
         code_gen.add_code_line("):")
         results['call'] = code_gen.generate()
@@ -551,12 +638,18 @@ class PyRatesIndexOp(PyRatesOp):
 
         # reset initial values of args and kwargs
         for arg_tmp, arg in zip(args_tmp, results['args']):
-            if hasattr(arg, 'shape') and arg.shape and type(arg) is not PyRatesOp:
-                arg[:] = arg_tmp[:]
+            if hasattr(arg, 'shape') and len(arg.shape) > 0 and type(arg) is not PyRatesOp:
+                try:
+                    arg[:] = arg_tmp[:]
+                except TypeError:
+                    pass
             elif type(arg) is tuple or type(arg) is list and type(arg) is not PyRatesOp:
                 for a_tmp, a in zip(arg_tmp, arg):
-                    if hasattr(a, 'shape') and arg.shape:
-                        a[:] = a_tmp[:]
+                    if hasattr(a, 'shape') and len(arg.shape) > 0:
+                        try:
+                            a[:] = a_tmp[:]
+                        except TypeError:
+                            pass
 
         return results
 
@@ -904,11 +997,18 @@ class NumpyBackend(object):
         ##################
 
         # generate op
-        if "=" in op:
+        if op in ["=", "+=", "-=", "*=", "/="]:
             op = PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         elif op is "index":
             op = PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         else:
+            if op is "cast":
+                args = list(args)
+                for dtype in self.dtypes:
+                    if dtype in str(args[1]):
+                        args[1] = self.dtypes[dtype]
+                        break
+                args = tuple(args)
             op = PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
 
         # remove op inputs from layers (need not be evaluated anymore)
@@ -1104,17 +1204,13 @@ class NumpyBackend(object):
             if self._compare_shapes(op1_val_tmp, op2_val_tmp):
                 op1_val, op2_val = op1_val_tmp, op2_val_tmp
 
-        # try to match data types
-        if not self._compare_dtypes(op1_val, op2_val):
-            op1_val, op2_val = self._match_dtypes(op1_val, op2_val)
-
         return op1_val, op2_val
 
-    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None):
+    def apply_idx(self, var: Any, idx: str, update, *args):
         if update:
-            return self.add_op('=', var, update, idx)
+            return self.add_op('=', var, update, idx, *args)
         else:
-            return self.add_op('index', var, idx)
+            return self.add_op('index', var, idx, *args)
 
     def stack_vars(self, *vars, **kwargs):
         shape = (len(vars),) + vars[0].shape
@@ -1226,24 +1322,6 @@ class NumpyBackend(object):
             thread.join()
 
     @staticmethod
-    def _match_dtypes(op1: Any, op2: Any) -> tuple:
-        """
-
-        Parameters
-        ----------
-        op1
-        op2
-
-        Returns
-        -------
-
-        """
-
-        op2.dtype = op1.dtype
-        op2.value = np.asarray(op2.value, dtype=op2.dtype)
-        return op1, op2
-
-    @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:
         """Checks whether the shapes of op1 and op2 are compatible with each other.
 
@@ -1272,26 +1350,6 @@ class NumpyBackend(object):
                 return False
         else:
             return True
-
-    @staticmethod
-    def _compare_dtypes(op1: Any, op2: Any) -> bool:
-        """Checks whether the data types of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the data types of op1 and op2 are compatible.
-
-        """
-
-        return True
 
 
 class TensorflowBackend(NumpyBackend):
@@ -1346,8 +1404,9 @@ class TensorflowBackend(NumpyBackend):
                          "!=": {'name': "tensorflow_not_equal", 'call': "tf.not_equal"},
                          ">=": {'name': "tensorflow_greater_equal", 'call': "tf.greater_equal"},
                          "<=": {'name': "tensorflow_less_equal", 'call': "tf.less_equal"},
-                         "=": {'name': "assign", 'call': "tf.assign"},
-                         "+=": {'name': "assign_add", 'call': "tf.assign_add"},
+                         "=": {'name': "assign", 'call': "assign"},
+                         "+=": {'name': "assign_add", 'call': "assign_add"},
+                         "-=": {'name': "assign_subtract", 'call': "assign_sub"},
                          "neg": {'name': "negative", 'call': "neg_one"},
                          "sin": {'name': "tensorflow_sin", 'call': "tf.sin"},
                          "cos": {'name': "tensorflow_cos", 'call': "tf.cos"},
@@ -1409,6 +1468,92 @@ class TensorflowBackend(NumpyBackend):
 
     def _create_var(self, vtype, dtype, shape, value, name):
         return TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
+
+    def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
+        """Tries to match the shapes of op1 and op2 such that op can be applied. Then applies op to op1 and op2.
+
+        Parameters
+        ----------
+        op1
+            First argument to the operation.
+        op2
+            Second argument to the operation.
+        return_ops
+            If true, the adjusted arguments (op1 and op2) are returned.
+        kwargs
+            Additional keyword arguments to be passed to the backend.
+
+        Returns
+        -------
+        tp.Union[tuple, tp.Any]
+            Output of op applied to op1 and op2. If return_ops, op1 and op2 are also returned.
+
+        """
+
+        # match shapes
+        op1, op2 = super().broadcast(op1, op2, **kwargs)
+
+        # match data types
+        if not self._compare_dtypes(op1, op2):
+            op1, op2 = self._match_dtypes(op1, op2)
+
+        return op1, op2
+
+    def _match_dtypes(self, op1: Any, op2: Any) -> tuple:
+        """
+
+        Parameters
+        ----------
+        op1
+        op2
+
+        Returns
+        -------
+
+        """
+
+        if type(op1) is TensorflowVar:
+            return op1, self.add_op('cast', op2, op1.dtype)
+        elif type(op2) is TensorflowVar:
+            return self.add_op('cast', op1, op2.dtype), op2
+        elif hasattr(op1, 'numpy') or type(op1) is np.ndarray:
+            return op1, self.add_op('cast', op2, op1.dtype)
+        elif hasattr(op2, 'numpy') or type(op2) is np.ndarray:
+            return self.add_op('cast', op1, op2.dtype), op2
+        else:
+            return op1, self.add_op('cast', op2, str(type(op1)).split('\'')[-2])
+
+    @staticmethod
+    def _compare_dtypes(op1: Any, op2: Any) -> bool:
+        """Checks whether the data types of op1 and op2 are compatible with each other.
+
+        Parameters
+        ----------
+        op1
+            First operator.
+        op2
+            Second operator.
+
+        Returns
+        -------
+        bool
+            If true, the data types of op1 and op2 are compatible.
+
+        """
+
+        if hasattr(op1, 'dtpye') and hasattr(op2, 'dtype'):
+            if op1.dtype != op2.dtype and op1.dtype.name != op2.dtype.name:
+                return False
+        elif hasattr(op1, 'dtype'):
+            if str(type(op2)) not in op1.dtype.name:
+                return False
+        elif hasattr(op2, 'dtype'):
+            if str(type(op1)) not in op2.dtype.name:
+                return False
+        else:
+            return type(op1) == type(op2)
+        return True
+
 
 ##############################################
 # code generator class for backend functions #

@@ -164,16 +164,6 @@ class ExpressionParser(ParserElement):
             idx_l = Literal("[")
             idx_r = Literal("]")
 
-            # numeric types
-            num_float = Combine(Word("+-" + nums, nums) +
-                                Optional(point + Optional(Word(nums))) +
-                                Optional(e + Word("+-" + nums, nums)))
-            num_int = Word("+-" + nums, nums)
-
-            # variables and functions
-            name = Word(alphas, alphas + nums + "_$")
-            func_name = Combine(name + par_l, adjacent=True)
-
             # basic mathematical operations
             plus = Literal("+")
             minus = Literal("-")
@@ -185,6 +175,16 @@ class ExpressionParser(ParserElement):
             exp_2 = Combine(mult + mult)
             transp = Combine(point + Literal("T"))
             inv = Combine(point + Literal("I"))
+
+            # numeric types
+            num_float = Combine(Word("-" + nums, nums) +
+                                Optional(point + Optional(Word(nums))) +
+                                Optional(e + Word("-" + nums, nums)))
+            num_int = Word("-" + nums, nums)
+
+            # variables and functions
+            name = Word(alphas, alphas + nums + "_$")
+            func_name = Combine(name + par_l, adjacent=True)
 
             # math operation groups
             op_add = plus | minus
@@ -214,15 +214,12 @@ class ExpressionParser(ParserElement):
             arg_comb = comma.setParseAction(self._push_first)
 
             # basic computation unit
-            atom = (Optional("-") + (func_name + Optional(par_l.suppress() + self.expr.suppress() +
-                                     ZeroOrMore((arg_comb.suppress() + self.expr.suppress() +
-                                                 Optional(arg_comb.suppress()))) + par_r.suppress() +
-                                                          Optional(arg_comb)) +
-                                     Optional(self.expr.suppress() + ZeroOrMore((arg_comb.suppress() +
-                                                                                 self.expr.suppress())))
-                                     + par_r.suppress() | name | pi | e | num_float | num_int
-                                     ).setParseAction(self._push_first)
-                    ).setParseAction(self._push_negone) | \
+            atom = (func_name + Optional(par_l.suppress() + self.expr.suppress() +
+                                         ZeroOrMore((arg_comb.suppress() + self.expr.suppress() +
+                                                     Optional(arg_comb.suppress()))) +
+                                         par_r.suppress() + Optional(arg_comb)) +
+                    Optional(self.expr.suppress() + ZeroOrMore((arg_comb.suppress() + self.expr.suppress())))
+                    + par_r.suppress() | name | pi | e | num_float | num_int).setParseAction(self._push_first) | \
                    (par_l.setParseAction(self._push_last) + self.expr.suppress() +
                     par_r).setParseAction(self._push_negone)
 
@@ -318,7 +315,8 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            self.expr_op = self.backend.add_op('*', -1.0, self.parse(expr_stack), **self.parser_kwargs)
+            op1, op2 = self.backend.broadcast(self.parse(expr_stack), -1, **self.parser_kwargs)
+            self.expr_op = self.backend.add_op('*', op1, op2, **self.parser_kwargs)
 
         elif op in "+-**/^@<=>=!==":
 
@@ -370,8 +368,8 @@ class ExpressionParser(ParserElement):
                     elif isinstance(ind, Number):
                         idx += f"{ind}"
                     else:
-                        self.args['idx'][f'var_{i}'] = ind
-                        idx += f"var_{i}"
+                        self.args['idx'][f'idx_var_{i}'] = ind
+                        idx += f"idx_var_{i}"
                     i += 1
                 idx += ","
             idx = idx[0:-1]
@@ -625,11 +623,35 @@ class ExpressionParser(ParserElement):
             raise ValueError(f'Indexing of differential equations is currently not supported. Please consider '
                              f'changing equation {self.expr_str}.')
 
-        # apply idx
+        # get update
         update = self.args.pop('rhs', None)
+
+        # get constants/variables that are part of the index
+        args = []
+        i = 0
         if idx in self.args['idx']:
             idx = self.args['idx'].pop(idx)
-        return self.backend.apply_idx(op, idx, update=update)
+        if type(idx) is str:
+            idx_old = idx
+            idx = []
+            for idx_tmp in idx_old.split(','):
+                for idx_tmp2 in idx_tmp.split(':'):
+                    idx.append(idx_tmp2)
+                    if idx_tmp2 in self.args['idx']:
+                        idx_var = self.args['idx'].pop(idx_tmp2)
+                        if not hasattr(idx_var, 'short_name'):
+                            idx_var.short_name = idx_tmp2
+                            i += 1
+                        else:
+                            idx[-1] = idx_var.short_name
+                        args.append(idx_var)
+                    idx.append(':')
+                idx.pop(-1)
+                idx.append(',')
+            idx.pop(-1)
+            idx = "".join(idx)
+
+        return self.backend.apply_idx(op, idx, update, *tuple(args))
 
     def update(self, var_old, var_delta, dt, **kwargs):
         """Solves single step of a differential equation.

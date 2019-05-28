@@ -186,13 +186,10 @@ def test_1_4_expression_parser_logic_ops():
 
     # correct expressions
     for expr in logic_expressions:
-
-        # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={}, backend=b)
         p.parse_expr()
-        with tf.Session(graph=b) as sess:
-            sess.run(p.expr_op)
-            assert p.expr_op.eval()
+        result = p.expr_op.numpy() if hasattr(p.expr_op, 'numpy') else p.expr_op
+        assert result
 
     # false logical expression
     expr = "5 >= 6"
@@ -200,9 +197,8 @@ def test_1_4_expression_parser_logic_ops():
     # tensorflow-based parser
     p = ExpressionParser(expr_str=expr, args={}, backend=b)
     p.parse_expr()
-    with tf.Session(graph=b) as sess:
-        sess.run(p.expr_op)
-        assert not p.expr_op.eval()
+    result = p.expr_op.numpy() if hasattr(p.expr_op, 'numpy') else p.expr_op
+    assert not result
 
     # test expression parsers on expression results with numpy backend
     ##################################################################
@@ -247,9 +243,10 @@ def test_1_5_expression_parser_indexing():
     # define variables
     A = np.array(np.random.randn(10, 10), dtype=np.float32)
     B = np.eye(10, dtype=np.float32) == 1
-    args = parse_dict({'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype},
-                       'B': {'vtype': 'constant', 'value': B, 'shape': B.shape, 'dtype': B.dtype}},
-                      backend=b)
+    arg_dict = {'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype},
+                'B': {'vtype': 'constant', 'value': B, 'shape': B.shape, 'dtype': B.dtype},
+                'c': {'vtype': 'state_var', 'value': 4, 'Shape': (), 'dtype': 'int32'}}
+    args = parse_dict(arg_dict, backend=b)
 
     # define valid test cases
     indexed_expressions = [("A[:]", A[:]),               # single-dim indexing I
@@ -259,11 +256,10 @@ def test_1_5_expression_parser_indexing():
                            ("A[-1:0:-1]", A[-1:0:-1]),   # single-dim slicing II
                            ("A[4,5]", A[4, 5]),          # two-dim indexing I
                            ("A[5,0:-2]", A[5, 0:-2]),    # two-dim indexing II
-                           ("A[A > 0.]", A * (A > 0.)),  # boolean indexing
-                           ("A[B]",                      # indexing with other array
-                            np.eye(A.shape[0]) * A[np.where(B)]),
-                           ("A[int32(2. * 2.):8 - 1]",   # using expressions as indices
-                            A[(2 * 2):8 - 1]),
+                           ("A[A > 0.]", A[A > 0.]),     # boolean indexing
+                           ("A[B]", A[B]),               # indexing with other array
+                           ("A[c:8 - 1]",                # using variables as indices
+                            A[4:8 - 1]),
                            ]
 
     # test expression parsers on expression results
@@ -272,10 +268,7 @@ def test_1_5_expression_parser_indexing():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
         p.parse_expr()
-
-        with tf.Session(graph=b) as sess:
-            sess.run(p.expr_op)
-            result = p.expr_op.eval()
+        result = p.expr_op.eval().numpy() if hasattr(p.expr_op, 'eval') else p.expr_op.numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # define invalid test cases
@@ -293,55 +286,23 @@ def test_1_5_expression_parser_indexing():
         with pytest.raises((IndexError, ValueError, SyntaxError, TypeError, BaseException)):
             p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
             p.parse_expr()
-            with tf.Session(graph=b) as sess:
-                sess.run(p.expr_op)
 
     # test indexing ability of numpy-based parser
     #############################################
 
     # define backend
     b = NumpyBackend()
-
-    # define variables
-    A = np.array(np.random.randn(10, 10), dtype=np.float32)
-    B = np.eye(10, dtype=np.float32) == 1
-    args = parse_dict({'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype},
-                       'B': {'vtype': 'constant', 'value': B, 'shape': B.shape, 'dtype': B.dtype}},
-                      backend=b)
-
-    # define valid test cases
-    indexed_expressions = [("A[:]", A[:]),  # single-dim indexing I
-                           ("A[0]", A[0]),  # single-dim indexing II
-                           ("A[-2]", A[-2]),  # single-dim indexing III
-                           ("A[0:5]", A[0:5]),  # single-dim slicing I
-                           ("A[-1:0:-1]", A[-1:0:-1]),  # single-dim slicing II
-                           ("A[4,5]", A[4, 5]),  # two-dim indexing I
-                           ("A[5,0:-2]", A[5, 0:-2]),  # two-dim indexing II
-                           ("A[A > 0.]", A[A > 0.]),  # boolean indexing
-                           ("A[B]",  A[B]),  # indexing with other array
-                           ("A[int32(2. * 2.):8 - 1]",  # using expressions as indices
-                            A[(2 * 2):8 - 1]),
-                           ]
+    args = parse_dict(arg_dict, backend=b)
 
     # test expression parsers on expression results
     for expr, target in indexed_expressions:
-        # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
         p.parse_expr()
-        result = p.expr_op.eval if hasattr(p.expr_op, 'eval') else p.expr_op
+        result = p.expr_op.eval() if hasattr(p.expr_op, 'eval') else p.expr_op
         assert result == pytest.approx(target, rel=1e-6)
-
-    # define invalid test cases
-    indexed_expressions_wrong = ["A[1.2]",  # indexing with float variables
-                                 "A[all]",  # indexing with undefined key words
-                                 "A[-11]",  # index out of bounds
-                                 "A[0:5:2:1]",  # too many arguments for slicing
-                                 "A[-1::0:-1]",  # wrong slicing syntax II
-                                 ]
 
     # test expression parsers on expression results
     for expr in indexed_expressions_wrong:
-        # tensorflow-based parser
         with pytest.raises((IndexError, ValueError, SyntaxError, TypeError, BaseException)):
             p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
             p.parse_expr()
@@ -389,10 +350,7 @@ def test_1_6_expression_parser_funcs():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
         p.parse_expr()
-
-        with tf.Session(graph=b) as sess:
-            sess.run(p.expr_op)
-            result = p.expr_op.eval()
+        result = p.expr_op.numpy() if hasattr(p.expr_op, 'numpy') else p.expr_op.eval().numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # invalid cases
@@ -461,9 +419,8 @@ def test_1_7_equation_parsing():
 
         # tensorflow-based parsing
         args_new = parse_equation_list(equations=[eq], equation_args={'vars': args}, backend=b)
-        with tf.Session(graph=b) as sess:
-            sess.run(tf.global_variables_initializer())
-            result = sess.run(args_new['updates']['a'])
+        result_tmp = args_new['updates']['a']
+        result = result_tmp.numpy() if hasattr(result_tmp, 'numpy') else result_tmp.eval().numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # test equation solving of numpy-based parser
