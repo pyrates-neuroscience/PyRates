@@ -78,6 +78,7 @@ class ComputeGraph(object):
                  name: Optional[str] = None,
                  build_in_place: bool = True,
                  backend: str = 'numpy',
+                 float_precision: str = 'float32',
                  **kwargs
                  ) -> None:
         """Instantiates operator.
@@ -88,6 +89,7 @@ class ComputeGraph(object):
 
         super().__init__()
         self.name = name if name else 'net.0'
+        self._float_precision = float_precision
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend and set the backend default_device
@@ -97,6 +99,8 @@ class ComputeGraph(object):
             backend = NumpyBackend
         else:
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
+        kwargs['name'] = self.name
+        kwargs['float_default_type'] = self._float_precision
         self.backend = backend(**kwargs)
 
         # pre-process the network configuration
@@ -107,7 +111,8 @@ class ComputeGraph(object):
         self._vectorize(vectorization_mode=vectorization)
 
         # set time constant of the network
-        self._dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': 'float32', 'shape': (), 'value': self.dt}},
+        self._dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': self._float_precision, 'shape': (),
+                                      'value': self.dt}},
                               backend=self.backend)['dt']
 
         # parse node operations
@@ -348,21 +353,23 @@ class ComputeGraph(object):
         # add output collector variables to graph
         output_col = {}
         store_ops = []
-        self.backend.add_layer()
-        sampling_layer = self.backend.layer
 
         # create counting index for collector variables
-        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=-1,
+        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
                                        scope="output_collection")
 
         # create increment operator for counting index
         self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
 
+        # add output storage layer to the graph
+        self.backend.add_layer()
+        sampling_layer = self.backend.layer
+
         # add collector variables to the graph
         for i, (key, var) in enumerate(outputs_tmp.items()):
             shape = [int(sim_steps / sampling_steps)] + list(var.shape)
-            output_col[key] = self.backend.add_var(vtype='state_var', name=f"out_col_{i}", dtype='float32', shape=shape,
-                                                   value=np.zeros(shape), scope="output_collection")
+            output_col[key] = self.backend.add_var(vtype='state_var', name=f"out_col_{i}", scope="output_collection",
+                                                   value=np.zeros(shape, dtype=self._float_precision))
 
             # add collect operation to the graph
             store_ops.append(self.backend.add_op('=', output_col[key], var, out_idx, scope="output_collection"))
@@ -378,7 +385,7 @@ class ComputeGraph(object):
 
                         # fully vectorized case: add vectorized placeholder variable to input dictionary
                         var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=key[1], attr=key[2])
-                        inp_dict[var.unique_name] = np.reshape(val[step], var.shape)
+                        inp_dict[var.name] = np.reshape(val[step], var.shape)
 
                     elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -390,14 +397,14 @@ class ComputeGraph(object):
                             for node in self.net_config.nodes:
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
                                 i_new = var.shape[0] if len(var.shape) > 0 else 1
-                                inp_dict[var.unique_name] = np.reshape(val[step, i:i_new], var.shape)
+                                inp_dict[var.name] = np.reshape(val[step, i:i_new], var.shape)
                                 i += i_new
 
                         elif key[0] in self.net_config.nodes.keys():
 
                             # add placeholder variable of node(s) to input dictionary
                             var = self._get_node_attr(node=key[0], op=key[1], attr=key[2])
-                            inp_dict[var.unique_name] = np.reshape(val[step], var.shape)
+                            inp_dict[var.name] = np.reshape(val[step], var.shape)
 
                         elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -406,7 +413,7 @@ class ComputeGraph(object):
                                 if key[0] in node:
                                     break
                             var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                            inp_dict[var.unique_name] = np.reshape(val[step], var.shape)
+                            inp_dict[var.name] = np.reshape(val[step], var.shape)
 
                     else:
 
@@ -416,7 +423,7 @@ class ComputeGraph(object):
                             # go through all nodes, extract the variable and add it to input dict
                             for i, node in enumerate(self.net_config.nodes.keys()):
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                inp_dict[var.unique_name] = np.reshape(val[step, i], var.shape)
+                                inp_dict[var.name] = np.reshape(val[step, i], var.shape)
 
                         elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
@@ -425,7 +432,7 @@ class ComputeGraph(object):
                             for node in self.net_config.nodes.keys():
                                 if key[0] in node:
                                     var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                    inp_dict[var.unique_name] = np.reshape(val[step, i], var.shape)
+                                    inp_dict[var.name] = np.reshape(val[step, i], var.shape)
                                     i += 1
 
                 # add input dictionary to placeholder input liust
@@ -1276,12 +1283,12 @@ class ComputeGraph(object):
             buffer_shape = (target_shape[0], buffer_length + 1)
             buffer_shape_reset = (target_shape[0], 1)
         var_dict = {f'{var}_buffer_{idx}': {'vtype': 'state_var',
-                                            'dtype': 'float32',
+                                            'dtype': self._float_precision,
                                             'shape': buffer_shape,
                                             'value': 0.
                                             },
                     f'{var}_buffer_{idx}_reset': {'vtype': 'constant',
-                                                  'dtype': 'float32',
+                                                  'dtype': self._float_precision,
                                                   'shape': buffer_shape_reset,
                                                   'value': 0.
                                                   }
@@ -1355,7 +1362,7 @@ class ComputeGraph(object):
 
         # create collector variable definition
         var_dict = {f'{var}_col_{idx}': {'vtype': 'state_var',
-                                         'dtype': 'float32',
+                                         'dtype': self._float_precision,
                                          'shape': target_shape,
                                          'value': 0.
                                          }}
@@ -1438,13 +1445,13 @@ class ComputeGraph(object):
 
                     # check definition of each variable
                     var_def = {'state_var': {'value': np.zeros((1,), dtype=np.float32),
-                                             'dtype': 'float32',
+                                             'dtype': self._float_precision,
                                              'shape': (1,),
                                              },
                                'constant': {'value': KeyError,
                                             'shape': (1,),
-                                            'dtype': 'float32'},
-                               'placeholder': {'dtype': 'float32',
+                                            'dtype': self._float_precision},
+                               'placeholder': {'dtype': self._float_precision,
                                                'shape': (1,),
                                                'value': None},
                                'raw': {'dtype': None,
@@ -1531,12 +1538,12 @@ class ComputeGraph(object):
             try:
                 weight = edge['weight']
                 if not hasattr(weight, 'shape') or not weight.shape:
-                    weight = np.ones((1,), dtype=np.float32) * weight
+                    weight = np.ones((1,), dtype=self._float_precision) * weight
                 elif 'float' not in str(weight.dtype):
-                    weight = np.asarray(weight, dtype=np.float32)
+                    weight = np.asarray(weight, dtype=self._float_precision)
                 edge['weight'] = weight
             except KeyError:
-                edge['weight'] = np.ones((1,), dtype=np.float32)
+                edge['weight'] = np.ones((1,), dtype=self._float_precision)
 
             # check delay of edge
             try:
@@ -2084,7 +2091,7 @@ class ComputeGraph(object):
                     try:
                         arg['value'] = np.reshape(arg['value'], arg['shape'])
                     except ValueError:
-                        arg['value'] = np.zeros(arg['shape']) + arg['value']
+                        arg['value'] = np.zeros(arg['shape'], dtype=self._float_precision) + arg['value']
 
                 # go through nodes and extract shape and value information for arg
                 if nodes:
@@ -2106,7 +2113,7 @@ class ComputeGraph(object):
 
                         # append value to argument dictionary
                         if len(dims) > 0 and type(val) is float:
-                            val = np.zeros(dims) + val
+                            val = np.zeros(dims, dtype=self._float_precision) + val
                         else:
                             val = np.reshape(np.array(val), dims)
                         if len(dims) == 0:
