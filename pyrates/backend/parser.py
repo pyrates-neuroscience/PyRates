@@ -35,9 +35,7 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 from numbers import Number
 import math
-import tensorflow as tf
 import typing as tp
-from copy import copy
 import numpy as np
 
 # meta infos
@@ -673,118 +671,6 @@ class ExpressionParser(ParserElement):
         var_update = self.backend.add_op('*', var_delta, dt, **kwargs)
         var_old, var_update = self.backend.broadcast(var_old, var_update, **kwargs)
         return self.backend.add_op('+', var_old, var_update, **kwargs)
-
-    def _process_idx(self, idx: tp.Any, shape: tuple, local_vars: dict, update: tp.Optional[tp.Any] = None, **kwargs
-                     ) -> tuple:
-        """Preprocesses the index and a variable update to match the variable shape.
-
-        Parameters
-        ----------
-        idx
-            Index object.
-        shape
-            Shape of the variable to be indexed.
-        local_vars
-            Dictionary containing all local variables from the environment this function was called from.
-        update
-            The update that should be assigned to the variable with shape at the indexed positions.
-
-        Returns
-        -------
-        tuple
-            Preprocessed index and re-shaped update.
-
-        """
-
-        # pre-process index
-        ###################
-
-        try:
-            idx = local_vars[idx]
-        except KeyError:
-            dims = idx.split(',')
-            indices = []
-            for i, dim in enumerate(dims):
-                try:
-                    indices.append([local_vars[dim]])
-                except KeyError:
-                    if dim == ':':
-                        indices.append([j for j in range(shape[i])])
-                    elif ':' in dim:
-                        dim_range_tmp = dim.split(':')
-                        dim_range = []
-                        for d in dim_range_tmp:
-                            try:
-                                d_tmp = local_vars[d]
-                            except KeyError:
-                                d_tmp = int(d)
-                            if (hasattr(d_tmp, 'name') and 'Neg' in d_tmp.name.split('/')[-1]) or \
-                                    (type(d_tmp) is int and d_tmp < 0):
-                                d_tmp = self.backend.add_op('+', d_tmp, shape[i], **kwargs)
-                            dim_range.append(d_tmp)
-                        if len(dim_range) == 3:
-                            indices.append(self.backend.add_op('range', dim_range[0], limit=dim_range[1],
-                                                               delta=dim_range[2], **kwargs))
-                        elif len(dim_range) == 2:
-                            indices.append(self.backend.add_op('range', dim_range[0], limit=dim_range[1], **kwargs))
-                        elif dim[0] == ':':
-                            indices.append(self.backend.add_op('range', limit=dim_range[0], **kwargs))
-                        else:
-                            indices.append(self.backend.add_op('range', dim_range[0], **kwargs))
-                    else:
-                        indices.append([int(dim)])
-            try:
-                idx = self.backend.add_var(vtype='constant', name='idx', value=np.array(indices, dtype=np.int32))
-            except ValueError:
-                idx = []
-                for idx0 in indices[0]:
-                    for idx1 in indices[1]:
-                        idx.append([idx0, idx1])
-
-        # match shape of index and update to shape
-        ##########################################
-
-        if update is not None and idx.shape[0] != update.shape[0]:
-            if update.shape[0] == 1 and len(update.shape) == 1:
-                idx = self.backend.add_op('reshape', idx, (1,) + tuple(idx.shape), **kwargs)
-            else:
-                raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
-                                 f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')
-
-        if len(idx.shape) < 2 and update is not None:
-            idx = self.backend.add_op('reshape', idx, list(idx.shape) + [1], **kwargs)
-
-        if len(idx.shape) > 1:
-
-            shape_diff = len(shape) - idx.shape[1]
-            if shape_diff < 0:
-                raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
-                                 f'length {idx.shape[1]}')
-            elif update is not None:
-
-                # manage shape of updates
-                update_dim = 0
-                if len(update.shape) > 1:
-                    update_dim = len(update.shape[1:])
-                    if update_dim > shape_diff:
-                        singleton = -1 if update.shape[-1] == 1 else list(update.shape).index(1)
-                        update = self.backend.add_op('squeeze', update, axis=singleton, **kwargs)
-                        if len(update.shape) > 1:
-                            update_dim = len(update.shape[1:])
-
-                # manage shape of idx
-                shape_diff = int(shape_diff) - update_dim
-                if shape_diff > 0:
-                    indices = []
-                    for i in range(shape_diff):
-                        indices.append(self.backend.add_op('zeros', (idx.shape[0], 1), dtype=idx.dtype, **kwargs))
-                    indices.append(self.backend.add_op('reshape', idx, indices[-1].shape, **kwargs))
-                    idx = self.backend.add_op('concat', indices, axis=1, **kwargs)
-
-                return idx, update
-        if update is None:
-            return idx
-        return idx, update
 
 
 def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
