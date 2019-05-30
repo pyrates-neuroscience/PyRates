@@ -313,8 +313,8 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            op1, op2 = self.backend.broadcast(self.parse(expr_stack), -1, **self.parser_kwargs)
-            self.expr_op = self.backend.add_op('*', op1, op2, **self.parser_kwargs)
+            #op1, op2 = self.backend.broadcast(self.parse(expr_stack), -1, **self.parser_kwargs)
+            self.expr_op = self.backend.add_op('*', self.parse(expr_stack), -1, **self.parser_kwargs)
 
         elif op in "+-**/^@<=>=!==":
 
@@ -323,7 +323,7 @@ class ExpressionParser(ParserElement):
             op1 = self.parse(expr_stack)
 
             # combine elements via mathematical/boolean operator
-            op1, op2 = self.backend.broadcast(op1, op2, **self.parser_kwargs)
+            #op1, op2 = self.backend.broadcast(op1, op2, **self.parser_kwargs)
             self.expr_op = self.backend.add_op(op, op1, op2, **self.parser_kwargs)
 
         elif ".T" == op or ".I" == op:
@@ -427,7 +427,7 @@ class ExpressionParser(ParserElement):
 
                     # calculate update of differential equation
                     var_update = self.update(old_var, self.args.pop('rhs'), dt, **self.parser_kwargs)
-                    var, var_update = self.backend.broadcast(var, var_update, **self.parser_kwargs)
+                    #var, var_update = self.backend.broadcast(var, var_update, **self.parser_kwargs)
                     self.args['updates'][op] = self.backend.add_op(self.assign, var, var_update, **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
                     self.expr_op = self.args['updates'][op]
@@ -436,8 +436,9 @@ class ExpressionParser(ParserElement):
 
                     # update variable according to rhs
                     var = self.args['updates'][op] if op in self.args['updates'] else self.args['vars'][op]
-                    var, var_update = self.backend.broadcast(var, self.args.pop('rhs'), **self.parser_kwargs)
-                    self.args['updates'][op] = self.backend.add_op(self.assign, var, var_update, **self.parser_kwargs)
+                    #var, var_update = self.backend.broadcast(var, self.args.pop('rhs'), **self.parser_kwargs)
+                    self.args['updates'][op] = self.backend.add_op(self.assign, var, self.args.pop('rhs'),
+                                                                   **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
                     self.expr_op = self.args['updates'][op]
 
@@ -532,7 +533,7 @@ class ExpressionParser(ParserElement):
                 new_var = self.backend.add_var(vtype='state_var', name=op, value=0.,
                                                shape=shape, dtype=rhs.dtype, **self.parser_kwargs)
                 self.args['vars'][op] = new_var
-                new_var, rhs = self.backend.broadcast(new_var, rhs, **self.parser_kwargs)
+                #new_var, rhs = self.backend.broadcast(new_var, rhs, **self.parser_kwargs)
                 self.args['updates'][op] = self.backend.add_op(self.assign, new_var, rhs, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
                 self.expr_op = self.args['updates'][op]
@@ -548,52 +549,6 @@ class ExpressionParser(ParserElement):
                              f"interpreted by this parser.")
 
         return self.expr_op
-
-    def apply_op(self, op: str, x: tp.Any, y: tp.Any, x_key: tp.Optional[str] = None, y_key: tp.Optional[str] = None,
-                 **kwargs) -> tp.Any:
-        """Applies a backend operation to variables x and y.
-
-        Parameters
-        ----------
-        op
-            Name/key of the backend operation.
-        x
-            First arguments to op.
-        y
-            Second argument to op.
-        x_key
-            If x is a keyword argument of op, pass the keyword here.
-        y_key
-            If y is a keyword argument of op, pass the keyword here.
-        kwargs
-            Additional keyword arguments to be passed to op.
-
-        Returns
-        -------
-        tp.Any
-            Result of applying op to x and y.
-
-        """
-
-        # collect arguments
-        args = []
-        if x_key:
-            kwargs[x_key] = x
-        else:
-            args.append(x)
-        if y_key:
-            kwargs[y_key] = y
-        else:
-            args.append(y)
-
-        # check consistency for assign operations
-        if op == '+=' and args and not hasattr(args[0], 'assign_add'):
-            args = self.backend.broadcast(*tuple(args), **kwargs)
-            args[1] = self.backend.add_op('+', *tuple(args), **kwargs)
-            op = '='
-            return self.apply_op(op, *tuple(args), **kwargs)
-
-        return self.backend.add_op(op, *tuple(args), **kwargs)
 
     def apply_idx(self, op: tp.Any, idx: tp.Any, **kwargs) -> tuple:
         """Apply index idx to operation op.
@@ -669,7 +624,7 @@ class ExpressionParser(ParserElement):
         kwargs.update(self.parser_kwargs)
         var_delta, dt = self.backend.broadcast(var_delta, dt, **kwargs)
         var_update = self.backend.add_op('*', var_delta, dt, **kwargs)
-        var_old, var_update = self.backend.broadcast(var_old, var_update, **kwargs)
+        #var_old, var_update = self.backend.broadcast(var_old, var_update, **kwargs)
         return self.backend.add_op('+', var_old, var_update, **kwargs)
 
 

@@ -88,7 +88,7 @@ def test_1_2_expression_parser_parsing_exceptions():
         args = parse_dict({'a': {'vtype': 'constant', 'value': np.ones((3, 3)), 'dtype': 'float32', 'shape': (3, 3)},
                            'b': {'vtype': 'constant', 'value': np.ones((3, 3)), 'dtype': 'float32', 'shape': (3, 3)}},
                           backend=b)
-        with pytest.raises(TypeError):
+        with pytest.raises(Exception):
             Parser("bool(a) + float32(b)", {'vars': args}, backend=b).parse_expr()()
 
         # undefined mathematical operator
@@ -306,6 +306,7 @@ def test_1_5_expression_parser_indexing():
         with pytest.raises((IndexError, ValueError, SyntaxError, TypeError, BaseException)):
             p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
             p.parse_expr()
+            p.expr_op.eval()
 
 
 def test_1_6_expression_parser_funcs():
