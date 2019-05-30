@@ -369,35 +369,38 @@ def test_2_4_vectorization():
     :method:`_vectorize`: Detailed documentation of vectorize method of `ComputeGraph` class.
     """
 
-    # test whether vectorized networks produce same output as non-vectorized backend
-    ################################################################################
+    backends = ['tensorflow', 'numpy']
+    for b in backends:
 
-    # define simulation params
-    dt = 1e-2
-    sim_time = 10.
-    sim_steps = int(sim_time / dt)
-    inp = np.zeros((sim_steps, 2)) + 0.5
+        # test whether vectorized networks produce same output as non-vectorized backend
+        ################################################################################
 
-    # set up networks
-    net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net12").apply()
-    net0 = ComputeGraph(net_config=net_config0, name='net.0', vectorization='none', dt=dt, build_in_place=False,
-                        backend='numpy')
-    net1 = ComputeGraph(net_config=net_config0, name='net.1', vectorization='nodes', dt=dt, build_in_place=False,
-                        backend='numpy')
-    #net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorization='full', dt=dt, build_in_place=False,
-    #                    backend='numpy')
+        # define simulation params
+        dt = 1e-2
+        sim_time = 10.
+        sim_steps = int(sim_time / dt)
+        inp = np.zeros((sim_steps, 2)) + 0.5
 
-    # simulate network behaviors
-    results0 = net0.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-                        inputs={('all', 'op7.0', 'inp'): inp})
-    results1 = net1.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-                        inputs={('all', 'op7.0', 'inp'): inp}, out_dir='/tmp/log')
-    #results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-    #                    inputs={('all', 'op7.0', 'inp'): inp})
+        # set up networks
+        net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net12").apply()
+        net0 = ComputeGraph(net_config=net_config0, name='net0', vectorization='none', dt=dt, build_in_place=False,
+                            backend=b)
+        net1 = ComputeGraph(net_config=net_config0, name='net1', vectorization='nodes', dt=dt, build_in_place=False,
+                            backend=b)
+        #net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorization='full', dt=dt, build_in_place=False,
+        #                    backend='numpy')
 
-    error1 = nmrse(results0.values, results1.values)
-    #error2 = nmrse(results0.values, results2.values)
+        # simulate network behaviors
+        results0 = net0.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
+                            inputs={('all', 'op7.0', 'inp'): inp})
+        results1 = net1.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
+                            inputs={('all', 'op7.0', 'inp'): inp}, out_dir='/tmp/log')
+        #results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
+        #                    inputs={('all', 'op7.0', 'inp'): inp})
 
-    assert np.sum(results1.values) > 0.
-    assert np.mean(error1) == pytest.approx(0., rel=1e-6)
-    #assert np.mean(error2) == pytest.approx(0., rel=1e-6)
+        error1 = nmrse(results0.values, results1.values)
+        #error2 = nmrse(results0.values, results2.values)
+
+        assert np.sum(results1.values) > 0.
+        assert np.mean(error1) == pytest.approx(0., rel=1e-6)
+        #assert np.mean(error2) == pytest.approx(0., rel=1e-6)
