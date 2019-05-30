@@ -136,7 +136,7 @@ class TensorflowVar(NumpyVar):
             return tf.zeros(shape=shape, dtype=dtype)
         elif not hasattr(value, 'shape'):
             if type(value) is list:
-                return tf.zeros(shape=shape, dtype=dtype) + tf.constant(value, dtype=dtype).reshape(shape)
+                return tf.zeros(shape=shape, dtype=dtype) + tf.reshape(tf.constant(value, dtype=dtype), shape=shape)
             else:
                 return tf.zeros(shape=shape, dtype=dtype) + value
         else:
@@ -352,11 +352,19 @@ class PyRatesAssignOp(PyRatesOp):
         # extract variables
         var, upd = args[0:2]
         if len(args) > 2:
-            if hasattr(args[2], 'short_name'):
-                if issubclass(type(args[2]), tf.Variable):
-                    var_idx = f"{args[2].short_name},"
-                elif type(args[2]) is PyRatesOp and type(args[2].shape) is tf.TensorShape:
-                    var_idx = f"{args[2].return_val},"
+            if "scatter" in op:
+                if hasattr(args[2], 'short_name'):
+                    if hasattr(args[2], 'return_val'):
+                        var_idx = f"{args[2].return_val},"
+                    else:
+                        var_idx = f"{args[2].short_name},"
+                    key = args[2].short_name
+                else:
+                    var_idx = "idx,"
+                    key = "idx"
+            elif hasattr(args[2], 'short_name'):
+                if hasattr(args[2], 'return_val'):
+                    var_idx = f"[{args[2].return_val}]"
                 else:
                     var_idx = f"[{args[2].short_name}]"
                 key = args[2].short_name
@@ -1221,7 +1229,7 @@ class NumpyBackend(object):
     def _create_op(self, op, *args, decorator=None):
         if op in ["=", "+=", "-=", "*=", "/="]:
             if not decorator:
-                decorator = "@jit(nopython=True, fastmath=True)"
+                decorator = "@jit(nopython=False, fastmath=True)"
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         elif op is "index":
             if not decorator:
@@ -1452,7 +1460,7 @@ class TensorflowBackend(NumpyBackend):
         if not decorator:
             decorator = "@tf.function"
         if op in ["=", "+=", "-=", "*=", "/="]:
-            if len(args) > 2 and issubclass(type(args[2]), tf.Variable):
+            if len(args) > 2 and hasattr(args[2], 'shape'):
                 if op == "=":
                     op = "update"
                 elif op == "+=":

@@ -75,7 +75,7 @@ class ComputeGraph(object):
                  net_config: CircuitIR,
                  dt: float = 1e-3,
                  vectorization: str = 'nodes',
-                 name: Optional[str] = None,
+                 name: Optional[str] = 'net0',
                  build_in_place: bool = True,
                  backend: str = 'numpy',
                  float_precision: str = 'float32',
@@ -88,7 +88,7 @@ class ComputeGraph(object):
         ######################
 
         super().__init__()
-        self.name = name if name else 'net.0'
+        self.name = name
         self._float_precision = float_precision
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
@@ -358,16 +358,16 @@ class ComputeGraph(object):
         out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
                                        scope="output_collection")
 
-        # create increment operator for counting index
-        self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
-
         # add output storage layer to the graph
         self.backend.add_layer()
         sampling_layer = self.backend.layer
 
+        # create increment operator for counting index
+        self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
+
         # add collector variables to the graph
         for i, (key, var) in enumerate(outputs_tmp.items()):
-            shape = [int(sim_steps / sampling_steps)] + list(var.shape)
+            shape = [int(sim_steps / sampling_steps) + 1] + list(var.shape)
             output_col[key] = self.backend.add_var(vtype='state_var', name=f"out_col_{i}", scope="output_collection",
                                                    value=np.zeros(shape, dtype=self._float_precision))
 
