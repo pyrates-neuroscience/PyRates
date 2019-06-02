@@ -7,8 +7,8 @@
 Op_exc:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - "d/dt * v = (v**2 + eta + inp) / tau + J_e * (r + r_e) - J_i * r_i - tau*(PI*r)**2"
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - J_i * r_i - tau*(PI*r)^2"
   variables:
     r:
       default: output
@@ -25,17 +25,17 @@ Op_exc:
     eta:
       default: -2.5
     J_e:
-      default: 12.0
+      default: 10.0
     J_i:
-      default: 2.0
+      default: 20.0
     inp:
       default: input
 
 Op_inh:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - "d/dt * v = (v**2 + eta + inp) / tau - J_i* (r + r_i) + J_e * r_e - tau*(PI*r)**2"
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp) / tau - J_i* (r + r_i) + J_e * r_e - tau*(PI*r)^2"
   variables:
     r:
       default: output
@@ -50,23 +50,23 @@ Op_inh:
     delta:
       default: 1.0
     eta:
-      default: -1.0
+      default: -1.5
     J_e:
-      default: 12.0
+      default: 10.0
     J_i:
-      default: 2.0
+      default: 0.0
     inp:
       default: input
 
 Op_exc_syns:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - "d/dt * v = (v**2 + eta + inp) / tau + J_e * I_e - J_i * I_i - tau*(PI*r)**2"
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * I_e - J_i * I_i - tau*(PI*r)^2"
     - "d/dt * I_e = x_e"
-    - "d/dt * x_e = H_e*(r + r_e)/tau_e - 2*x_e/tau_e - I_e/tau_e**2"
+    - "d/dt * x_e = H_e*(r + r_e)/tau_e - 2*x_e/tau_e - I_e/tau_e^2"
     - "d/dt * I_i = x_i"
-    - "d/dt * x_i = H_i*r_i/tau_i - 2*x_i/tau_i - I_i/tau_i**2"
+    - "d/dt * x_i = H_i*r_i/tau_i - 2*x_i/tau_i - I_i/tau_i^2"
   variables:
     r:
       default: output
@@ -91,13 +91,13 @@ Op_exc_syns:
     eta:
       default: -2.5
     J_e:
-      default: 12.0
+      default: 10.0
     J_i:
-      default: 2.0
+      default: 10.0
     H_e:
-      default: 1.0
+      default: 3.25
     H_i:
-      default: 1.0
+      default: 22.0
     tau_e:
       default: 1.0
     tau_i:
@@ -108,12 +108,12 @@ Op_exc_syns:
 Op_inh_syns:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau**2) + 2.*r*v/tau"
-    - "d/dt * v = (v**2 + eta + inp) / tau + J_e * I_e - J_i * I_i - tau*(PI*r)**2"
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * I_e - J_i * I_i - tau*(PI*r)^2"
     - "d/dt * I_e = x_e"
-    - "d/dt * x_e = H_e*(r + r_e)/tau_e - 2*x_e/tau_e - I_e/tau_e**2"
+    - "d/dt * x_e = H_e*r_e/tau_e - 2*x_e/tau_e - I_e/tau_e^2"
     - "d/dt * I_i = x_i"
-    - "d/dt * x_i = H_i*r_i/tau_i - 2*x_i/tau_i - I_i/tau_i**2"
+    - "d/dt * x_i = H_i*(r+r_i)/tau_i - 2*x_i/tau_i - I_i/tau_i^2"
   variables:
     r:
       default: output
@@ -138,13 +138,13 @@ Op_inh_syns:
     eta:
       default: -2.5
     J_e:
-      default: 12.0
+      default: 10.0
     J_i:
-      default: 2.0
+      default: 0.0
     H_e:
-      default: 1.0
+      default: 3.25
     H_i:
-      default: 1.0
+      default: 22.0
     tau_e:
       default: 1.0
     tau_i:
@@ -188,7 +188,7 @@ DummyEdge:
 EC:
   base: CircuitTemplate
   nodes:
-    E: Pop_e
+    E: Pop_exc
   edges:
 
 JRC_nosyns:
@@ -198,10 +198,10 @@ JRC_nosyns:
     EIN: Pop_exc
     IIN: Pop_inh
   edges:
-    - [PC/Op_exc/r, IIN/Op_inh/r_e, DummyEdge, {weight: 33.75}]
-    - [IIN/Op_inh/r, PC/Op_exc/r_i, DummyEdge, {weight: 33.75}]
-    - [PC/Op_exc/r, EIN/Op_exc/r_e, DummyEdge, {weight: 108.0}]
-    - [EIN/Op_exc/r, PC/Op_exc/r_e, DummyEdge, {weight: 135.0}]
+    - [PC/Op_exc/r, IIN/Op_inh/r_e, DummyEdge, {weight: 0.3375}]
+    - [IIN/Op_inh/r, PC/Op_exc/r_i, DummyEdge, {weight: 0.3375}]
+    - [PC/Op_exc/r, EIN/Op_exc/r_e, DummyEdge, {weight: 1.080}]
+    - [EIN/Op_exc/r, PC/Op_exc/r_e, DummyEdge, {weight: 1.350}]
 
 JRC:
   base: CircuitTemplate
@@ -210,7 +210,7 @@ JRC:
     EIN: Pop_exc_syns
     IIN: Pop_inh_syns
   edges:
-    - [PC/Op_exc_syns/r, IIN/Op_inh_syns/r_e, DummyEdge, {weight: 33.75}]
-    - [IIN/Op_inh_syns/r, PC/Op_exc_syns/r_i, DummyEdge, {weight: 33.75}]
-    - [PC/Op_exc_syns/r, EIN/Op_exc_syns/r_e, DummyEdge, {weight: 108.0}]
-    - [EIN/Op_exc_syns/r, PC/Op_exc_syns/r_e, DummyEdge, {weight: 135.0}]
+    - [PC/Op_exc_syns/r, IIN/Op_inh_syns/r_e, DummyEdge, {weight: 0.3375}]
+    - [IIN/Op_inh_syns/r, PC/Op_exc_syns/r_i, DummyEdge, {weight: 0.3375}]
+    - [PC/Op_exc_syns/r, EIN/Op_exc_syns/r_e, DummyEdge, {weight: 1.080}]
+    - [EIN/Op_exc_syns/r, PC/Op_exc_syns/r_e, DummyEdge, {weight: 1.350}]
