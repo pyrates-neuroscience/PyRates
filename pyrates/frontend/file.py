@@ -75,7 +75,8 @@ def parse_path(path: str):
             raise PyRatesException(f"Could not find Python (module) directory associated to path "
                                    f"`{parentdir}` of Template `{path}`.")
         try:
-            abspath = module.__path__[0]  # __path__ returns a list[str]
+            abspath = module.__path__  # __path__ returns a list[str] or _NamespacePath
+            abspath = abspath[0] if type(abspath) is list else abspath._path[0]
         except TypeError:
             raise PyRatesException(f"Something is wrong with the given YAML template path `{path}`.")
 
