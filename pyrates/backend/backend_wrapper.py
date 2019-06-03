@@ -52,7 +52,7 @@ from copy import deepcopy
 from numba import jit, prange
 import os
 import sys
-from importlib import import_module
+from importlib import import_module, reload
 from shutil import rmtree
 import warnings
 import timeit
@@ -388,8 +388,8 @@ class PyRatesAssignOp(PyRatesOp):
                     else:
                         var_idx = f"{key},"
                 else:
-                    var_idx = "idx,"
-                    key = "idx"
+                    key = cls._generate_unique_argnames(["idx"])[0]
+                    var_idx = f"{key},"
             elif hasattr(args[2], 'short_name'):
                 key = cls._generate_unique_argnames([args[2].short_name])[0]
                 if hasattr(args[2], 'return_val'):
@@ -419,8 +419,9 @@ class PyRatesAssignOp(PyRatesOp):
         #####################
 
         # begin
-        code_gen.add_code_line(decorator)
-        code_gen.add_linebreak()
+        if decorator:
+            code_gen.add_code_line(decorator)
+            code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
         # add arguments
@@ -532,20 +533,23 @@ class PyRatesIndexOp(PyRatesOp):
             results['arg_names'].append(key)
         elif type(idx) is str or "int" in str(type(idx)) or "float" in str(type(idx)):
             var_idx = f"[{idx}]"
+        elif type(idx) in (list, tuple):
+            var_idx = f"{list(idx)}"
         elif hasattr(idx, 'shape'):
             key = cls._generate_unique_argnames(["idx"])[0]
             var_idx = f"[{key}]"
             results['args'].append(idx)
             results['arg_names'].append(key)
         else:
-            raise ValueError(f'Index type not understood: {idx}. Please consider a nother form of variable indexing.')
+            raise ValueError(f'Index type not understood: {idx}. Please consider another form of variable indexing.')
 
         # setup function head
         #####################
 
         # beginning
-        code_gen.add_code_line(decorator)
-        code_gen.add_linebreak()
+        if decorator:
+            code_gen.add_code_line(decorator)
+            code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
         # variable and index
@@ -775,9 +779,9 @@ class NumpyBackend(object):
 
         # map layers that need to be executed to compiled network structure
         eval_layers = list(set(eval_layers))
-        imports = kwargs.pop('imports', ["import numpy as np", "from numba import jit",
+        imports = kwargs.pop('imports', ["import numpy as np", "from numba import jit, prange",
                                          "from pyrates.backend.funcs import *"])
-        decorator = kwargs.pop('decorator', "@jit(nopython=True, parallel=True)")
+        decorator = kwargs.pop('decorator', "")
         layer_run_funcs = self.compile(imports=imports, decorator=decorator)
 
         i_pop = 0
@@ -940,25 +944,27 @@ class NumpyBackend(object):
         try:
             op = self._create_op(op_name, *args, decorator=decorator)
             in_shape = []
-            expand_ops = ('@', 'index', 'concat', 'expand')
-            for arg in args:
-                if hasattr(arg, 'shape'):
-                    in_shape.append(sum(tuple(arg.shape)))
-                elif type(arg) in (tuple, list):
-                    in_shape.append(sum(arg))
-                else:
-                    in_shape.append(1)
-            if hasattr(op, 'shape') and (sum(tuple(op.shape)) > max(in_shape)) and (op_name not in expand_ops):
-                arg1, arg2 = self.broadcast(args[0], args[1])
-                op = self._create_op(op_name, arg1, arg2, *args[2:], decorator=decorator)
+            expand_ops = ('@', 'index', 'concat', 'expand', 'stack', 'group')
+            if op_name not in expand_ops:
+                for arg in args:
+                    if hasattr(arg, 'shape'):
+                        in_shape.append(sum(tuple(arg.shape)))
+                    elif type(arg) in (tuple, list):
+                        in_shape.append(sum(arg))
+                    else:
+                        in_shape.append(1)
+                if hasattr(op, 'shape') and (sum(tuple(op.shape)) > max(in_shape)):
+                    arg1, arg2 = self.broadcast(args[0], args[1])
+                    op = self._create_op(op_name, arg1, arg2, *args[2:], decorator=decorator)
         except (TypeError, ValueError):
             if type(args[0]) in (tuple, list):
                 args_tmp = self.broadcast(args[0][0], args[0][1])
-                arg1 = (args_tmp[0], args_tmp[1]) + tuple(args[0][2:])
-                arg2 = args[1]
+                args_tmp = (args_tmp[0], args_tmp[1]) + tuple(args[0][2:])
+                args_new = args_tmp + args[1:]
             else:
-                arg1, arg2 = self.broadcast(args[0], args[1])
-            op = self._create_op(op_name, arg1, arg2, *args[2:], decorator=decorator)
+                args_tmp = self.broadcast(args[0], args[1])
+                args_new = args_tmp + args[2:]
+            op = self._create_op(op_name, *args_new, decorator=decorator)
 
         # remove op inputs from layers (need not be evaluated anymore)
         for op_name_tmp in op.input_ops:
@@ -1081,12 +1087,8 @@ class NumpyBackend(object):
         os.chdir(self.name)
         net_dir = os.getcwd()
         self._build_dir = net_dir
-        with open(f"__init__.py", 'w') as f_init:
-            for l in range(len(self.layers)):
-                f_init.write(f"from .layer_{l} import *\n")
-            f_init.close()
 
-        # write layer operations to files
+        # write layer operations to files and import the respective functions from file
         for i, layer in enumerate(self.layers):
             l_dir = f"layer_{i}"
             try:
@@ -1106,23 +1108,32 @@ class NumpyBackend(object):
 
         # write layer run functions and import them for execution
         layer_runs = []
-        sys.path.insert(1, build_dir)
+        sys.path.insert(1, net_dir)
         for i, layer in enumerate(self.layers):
-            run_func, run_args = self._generate_layer_run(layer, decorator=decorator)
+            layer_ops = []
             os.chdir(f"layer_{i}")
+            sys.path.insert(2, os.getcwd())
+            with open(f"layer_{i}_run.py", 'w') as f_run:
+                f_run.close()
             with open(f"__init__.py", 'w') as f_init:
-                for j, op in enumerate(layer):
+                for j in range(len(layer)):
                     f_init.write(f"from .op_{j} import *\n")
                 f_init.write(f"from .layer_{i}_run import *\n")
                 f_init.close()
+            layer_module = import_module(f"layer_{i}_run", package=f"layer_{i}")
+            for j, op in enumerate(layer):
+                op_module = import_module(f".op_{j}", package=f"layer_{i}")
+                layer_ops.append(getattr(op_module, op.short_name))
+            run_func, run_args = self._generate_layer_run(layer, layer_ops, decorator=decorator, imports=imports)
             with open(f"layer_{i}_run.py", 'w') as f_run:
                 f_run.write(run_func)
                 f_run.close()
             os.chdir(net_dir)
-            module = import_module(f".layer_{i}_run", package=f"{self.name}.layer_{i}")
-            layer_runs.append((getattr(module, "layer_run"), run_args))
-        os.chdir(orig_path)
+            reload(layer_module)
+            layer_runs.append((getattr(layer_module, "layer_run"), run_args))
+            sys.path.pop(2)
         sys.path.pop(1)
+        os.chdir(orig_path)
 
         # map new layers to old layer indices
         for l_key in layer_mapping.copy().keys():
@@ -1169,7 +1180,7 @@ class NumpyBackend(object):
 
         return op1, op2
 
-    def apply_idx(self, var: Any, idx: str, update, *args):
+    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, *args):
         if update:
             return self.add_op('=', var, update, idx, *args)
         else:
@@ -1181,7 +1192,7 @@ class NumpyBackend(object):
         updates = []
         for idx, var in enumerate(vars):
             updates.append(self.add_op('=', stack, var, idx, indexed=True))
-        return stack, updates
+        return stack
 
     @staticmethod
     def eval_layer(layer):
@@ -1273,12 +1284,12 @@ class NumpyBackend(object):
         return NumpyVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
 
     def _create_op(self, op, *args, decorator=None):
-        if decorator is None:
-            decorator = self._optimize_decorator(op, args) if self._rt_optimization else ""
         if op in ["=", "+=", "-=", "*=", "/="]:
+            if decorator is None and self._rt_optimization:
+                decorator = self._optimize_decorator(op, args)
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         elif op is "index":
-            return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
+            return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], "", *args)
         else:
             if op is "cast":
                 args = list(args)
@@ -1287,7 +1298,7 @@ class NumpyBackend(object):
                         args[1] = self.dtypes[dtype]
                         break
                 args = tuple(args)
-            return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
+            return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], "", *args)
 
     def _optimize_decorator(self, op, args):
         decorators = ["", "@jit", "@jit(fastmath=True)" , "@jit(nogil=True)",
@@ -1311,31 +1322,30 @@ class NumpyBackend(object):
 
         return decorators[np.argmin(decorator_times)]
 
-    def _generate_layer_run(self, layer, decorator):
+    def _generate_layer_run(self, layer, func_calls, decorator, imports):
 
         # set up file head (imports)
         code_gen = CodeGen()
-        for i, op in enumerate(layer):
-            code_gen.add_code_line(f"from .op_{i} import *")
+        for imp in imports:
+            code_gen.add_code_line(imp)
             code_gen.add_linebreak()
         code_gen.add_code_line(f"n_ops = {len(layer)}")
         code_gen.add_linebreak()
-        code_gen.add_code_line(f"calls = (")
-        for op in layer:
-            code_gen.add_code_line(f"{op.short_name},")
-        code_gen.add_code_line(")")
-        code_gen.add_linebreak()
 
         # set up function head
-        code_gen.add_code_line(decorator)
-        code_gen.add_linebreak()
+        if decorator:
+            code_gen.add_code_line(decorator)
+            code_gen.add_linebreak()
         code_gen.add_code_line(f"def layer_run(")
-        op_args_str, op_args = [], []
-        for i, op in enumerate(layer):
+        op_args_str, op_args, op_names = [], [], []
+        for i, (op, func) in enumerate(zip(layer, func_calls)):
+            code_gen.add_code_line(f"{op.short_name},")
             arg_str = op.call.split('(')[-1]
             arg_str = arg_str.split(')')[0]
             code_gen.add_code_line(f"{arg_str},")
+            op_names.append(op.short_name)
             op_args_str.append(arg_str)
+            op_args.append(func)
             op_args += op.args
         code_gen.code[-1] = code_gen.code[-1][:-1]
         code_gen.add_code_line('):')
@@ -1343,21 +1353,35 @@ class NumpyBackend(object):
         code_gen.add_indent()
 
         # set up function body
-        code_gen = self._generate_layer_run_body(code_gen, op_args_str)
+        code_gen = self._generate_layer_run_body(code_gen, op_names, op_args_str)
 
         return code_gen.generate(), tuple(op_args)
 
     @staticmethod
-    def _generate_layer_run_body(code_gen, op_args):
-        code_gen.add_code_line("for i in prange(n_ops):")
-        code_gen.add_indent()
-        for i, op in enumerate(op_args):
-            code_gen.add_code_line(f"calls[idx]({op_args[i]})")
+    def _generate_layer_run_body(code_gen, ops: List[str], op_args: List[str]):
+        # code_gen.add_code_line("func_calls = (")
+        # for op in ops:
+        #     code_gen.add_code_line(f"{op},")
+        # code_gen.add_code_line(")")
+        # code_gen.add_linebreak()
+        # code_gen.add_code_line("func_args = (")
+        # for args in op_args:
+        #     code_gen.add_code_line(f"({args}),")
+        # code_gen.add_code_line(")")
+        # code_gen.add_linebreak()
+        # code_gen.add_code_line("for i in prange(n_ops):")
+        # code_gen.add_linebreak()
+        # code_gen.add_indent()
+        # for i in range(len(ops)):
+        #     code_gen.add_code_line("func_calls[i](*func_args[i])")
+        #     code_gen.add_linebreak()
+        for op, args in zip(ops, op_args):
+            code_gen.add_code_line(f"{op}({args})")
             code_gen.add_linebreak()
         return code_gen
 
     @staticmethod
-    def _compare_shapes(op1: Any, op2: Any) -> bool:
+    def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:
         """Checks whether the shapes of op1 and op2 are compatible with each other.
 
         Parameters
@@ -1479,6 +1503,7 @@ class TensorflowBackend(NumpyBackend):
                          "sigmoid": {'name': "tensorflow_sigmoid", 'call': "tf.sigmoid"},
                          "tanh": {'name': "tensorflow_tanh", 'call': "tf.tanh"},
                          "index": {'name': "pyrates_index", 'call': "pyrates_index"},
+                         "gather": {'name': "tensorflow_gather", 'call': "tf.gather_nd"},
                          "mask": {'name': "tensorflow_mask", 'call': "tf.mask"},
                          "group": {'name': "tensorflow_group", 'call': "tf.group"},
                          "stack": {'name': "tensorflow_stack", 'call': "tf.stack"},
@@ -1551,7 +1576,7 @@ class TensorflowBackend(NumpyBackend):
                     var.short_name += f'_{var_count[var.short_name]}'
                 else:
                     var_count[var.short_name] = 0
-        return self.add_op('stack', vars), None
+        return self.add_op('stack', vars)
 
     def _create_var(self, vtype, dtype, shape, value, name):
         return TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
@@ -1570,6 +1595,9 @@ class TensorflowBackend(NumpyBackend):
                 args = self._process_update_args(*args)
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         if op is "index":
+            if hasattr(args[1], 'shape') or type(args[1]) in (list, tuple):
+                args = self._process_idx_args(*args)
+                return PyRatesOp(self.ops['gather']['call'], self.ops['gather']['name'], decorator, *args)
             return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         if op is "cast":
             args = list(args)
@@ -1614,21 +1642,19 @@ class TensorflowBackend(NumpyBackend):
         if len(idx.shape) < 2:
             idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
 
-        if len(idx.shape) > 1:
-
-            shape_diff = len(shape) - idx.shape[1]
-            if shape_diff < 0:
-                raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
-                                 f'length {idx.shape[1]}')
-            # manage shape of updates
-            update_dim = 0
-            if len(update.shape) > 1:
-                update_dim = len(update.shape[1:])
-                if update_dim > shape_diff:
-                    singleton = -1 if update.shape[-1] == 1 else list(update.shape).index(1)
-                    update = self.add_op('squeeze', update, singleton)
-                    if len(update.shape) > 1:
-                        update_dim = len(update.shape[1:])
+        shape_diff = len(shape) - idx.shape[1]
+        if shape_diff < 0:
+            raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
+                             f'length {idx.shape[1]}')
+        # manage shape of updates
+        update_dim = 0
+        if len(update.shape) > 1:
+            update_dim = len(update.shape[1:])
+            if update_dim > shape_diff:
+                singleton = -1 if update.shape[-1] == 1 else list(update.shape).index(1)
+                update = self.add_op('squeeze', update, singleton)
+                if len(update.shape) > 1:
+                    update_dim = len(update.shape[1:])
 
             # manage shape of idx
             shape_diff = int(shape_diff) - update_dim
@@ -1640,6 +1666,44 @@ class TensorflowBackend(NumpyBackend):
                 idx = self.add_op('concat', indices, 1)
 
         return var, update, idx
+
+    def _process_idx_args(self, var, idx):
+        """Preprocesses the index to a variable.
+
+        Parameters
+        ----------
+        var
+        idx
+
+        Returns
+        -------
+        tuple
+            Variable and preprocessed index.
+
+        """
+
+        shape = var.shape
+
+        # match shape of index to shape
+        ###############################
+
+        if len(idx.shape) < 2:
+            idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
+
+        shape_diff = len(shape) - idx.shape[1]
+        if shape_diff < 0:
+            raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
+                             f'length {idx.shape[1]}')
+
+        # manage shape of idx
+        if shape_diff > 0:
+            indices = []
+            indices.append(idx)
+            for i in range(shape_diff):
+                indices.append(self.add_op('zeros', tuple(idx.shape), idx.dtype))
+            idx = self.add_op('concat', indices, 1)
+
+        return var, idx
 
     def _match_dtypes(self, op1: Any, op2: Any) -> tuple:
         """
@@ -1741,13 +1805,6 @@ class TensorflowBackend(NumpyBackend):
                 return op1.dtype == op2.dtype
             else:
                 return False
-
-    @staticmethod
-    def _generate_layer_run_body(code_gen, op_args):
-        for i, args in enumerate(op_args):
-            code_gen.add_code_line(f"calls[{i}]({args})")
-            code_gen.add_linebreak()
-        return code_gen
 
 
 ##############################################
