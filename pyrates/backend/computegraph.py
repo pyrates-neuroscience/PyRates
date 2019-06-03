@@ -748,7 +748,7 @@ class ComputeGraph(object):
 
         """
 
-        inp, updates = self.backend.stack_vars(*tuple(inputs), **kwargs)
+        inp = self.backend.stack_vars(*tuple(inputs), **kwargs)
         self.backend.next_layer()
         if reduce_dim:
             inp_transform = self.backend.add_op('sum', inp, 0)
@@ -906,7 +906,8 @@ class ComputeGraph(object):
 
         if node in self._net_config_map and op in self._net_config_map[node] and attr in self._net_config_map[node][op]:
             node, op, attr, attr_idx = self._net_config_map[node][op][attr]
-            return self.backend.apply_idx(self._get_op_attr(node, op, attr), attr_idx)
+            idx = f"{list(attr_idx)}" if type(attr_idx) is tuple else attr_idx
+            return self.backend.apply_idx(self._get_op_attr(node, op, attr), idx)
         elif node in self.net_config:
             op = self.net_config[node]['op_graph'].nodes[op]
         else:
