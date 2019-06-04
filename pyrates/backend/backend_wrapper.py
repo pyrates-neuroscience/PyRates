@@ -137,6 +137,14 @@ class NumpyVar(np.ndarray):
     def _get_var(cls, value, name, dtype):
         return np.array(value).view(cls)
 
+    def __deepcopy__(self, memodict={}):
+        obj = super().__deepcopy__(memodict)
+        if not hasattr(obj, 'name'):
+            obj.name = self.name
+        if not hasattr(obj, 'short_name'):
+            obj.short_name = self.short_name
+        return obj
+
 
 class TensorflowVar(NumpyVar):
 
@@ -410,7 +418,8 @@ class PyRatesAssignOp(PyRatesOp):
         var_key = cls._generate_unique_argnames([var.short_name])[0]
         results_args.append(var)
         results_arg_names.append(var_key)
-        upd_key = cls._generate_unique_argnames([upd.short_name])[0] if hasattr(upd, 'short_name') else "upd"
+        upd_key = cls._generate_unique_argnames([upd.short_name])[0] if hasattr(upd, 'short_name') else \
+            cls._generate_unique_argnames(["upd"])[0]
         upd_pos = len(results_args)
         results_args.append(upd)
         results_arg_names.append(upd_key)
@@ -601,7 +610,7 @@ class NumpyBackend(object):
                  dtypes: Optional[Dict[str, object]] = None,
                  name: str = 'net_0',
                  float_default_type: str = 'float32',
-                 optimize_run_time: bool = True
+                 optimize_run_time: bool = False
                  ) -> None:
         """Instantiates tensorflow backend, i.e. a tensorflow graph.
         """
@@ -698,14 +707,12 @@ class NumpyBackend(object):
         self._float_def = self.dtypes[float_default_type]
         self.name = name
         self._rt_optimization = optimize_run_time
+        self._base_layer = 0
 
     def run(self,
             steps: int,
-            inputs: List[dict],
             outputs: Dict[str, tf.Variable],
-            layers: Optional[list] = None,
             sampling_steps: Optional[int] = None,
-            sampling_layer: Optional[int] = None,
             out_dir: Optional[str] = None,
             profile: Optional[str] = None,
             **kwargs
@@ -766,42 +773,19 @@ class NumpyBackend(object):
         if 't' in profile:
             t0 = t.time()
 
-        # set layers to evaluate and to sample
-        if sampling_layer is None:
-            sampling_layer = -1
-        eval_layers = layers if layers else np.arange(len(self.layers)).tolist()
-        if sampling_layer in eval_layers:
-            idx = eval_layers.index(sampling_layer)
-            eval_layers.pop(idx)
-
         # graph execution
         #################
 
         # map layers that need to be executed to compiled network structure
-        eval_layers = list(set(eval_layers))
         imports = kwargs.pop('imports', ["import numpy as np", "from numba import jit, prange",
                                          "from pyrates.backend.funcs import *"])
         decorator = kwargs.pop('decorator', "")
         layer_run_funcs = self.compile(imports=imports, decorator=decorator)
 
-        i_pop = 0
-        for i, l in enumerate(eval_layers.copy()):
-            if l in layer_run_funcs:
-                eval_layers[i-i_pop] = layer_run_funcs.pop(l)
-            else:
-                eval_layers.pop(l)
-                i_pop += 1
-
-        if sampling_layer in layer_run_funcs:
-            sampling_layer = layer_run_funcs[sampling_layer]
-        elif layer_run_funcs:
-            sampling_layer = layer_run_funcs.popitem()
+        sampling_layer = layer_run_funcs.pop(-1)
 
         # simulate backend behavior for each time-step
-        if any(inputs):
-            self._run_inp(eval_layers, sampling_layer, inputs, steps, sampling_steps)
-        else:
-            self._run_no_inp(eval_layers, sampling_layer, steps, sampling_steps)
+        self._run(layer_run_funcs, sampling_layer, steps, sampling_steps)
 
         # output storage and clean-up
         #############################
@@ -969,7 +953,7 @@ class NumpyBackend(object):
         # remove op inputs from layers (need not be evaluated anymore)
         for op_name_tmp in op.input_ops:
             idx_1, idx_2 = self.op_indices[op_name_tmp]
-            self.layers[idx_1][idx_2] = None
+            self._set_op(None, idx_1, idx_2)
 
         # add op to the graph
         if op.constant:
@@ -980,8 +964,8 @@ class NumpyBackend(object):
             else:
                 return new_var
 
-        self.layers[self.layer].append(op)
-        self.op_indices[op.short_name] = (self.layer, len(self.layers[self.layer])-1)
+        self._add_op(op)
+        self.op_indices[op.short_name] = (self.layer, len(self.get_current_layer())-1)
         return op
 
     def add_layer(self, to_beginning=False) -> None:
@@ -998,7 +982,8 @@ class NumpyBackend(object):
 
         if to_beginning:
             self.layers = [[]] + self.layers
-            self.layer = 0
+            self._base_layer += 1
+            self.layer = -self._base_layer
         else:
             self.layer = len(self.layers)
             self.layers.append([])
@@ -1009,17 +994,25 @@ class NumpyBackend(object):
         else:
             self.layer += 1
 
-    def previous_layers(self):
-        if self.layer == 0:
+    def previous_layer(self):
+        if self.layer == -self._base_layer:
             self.add_layer(to_beginning=True)
         else:
             self.layer -= 1
+
+    def remove_layer(self, idx):
+        self.layers.pop(self._base_layer + idx)
+        if idx <= self._base_layer:
+            self._base_layer -= 1
 
     def top_layer(self):
         self.layer = len(self.layers)-1
 
     def bottom_layer(self):
-        self.layer = 0
+        self.layer = -self._base_layer
+
+    def get_current_layer(self):
+        return self.layers[self._base_layer + self.layer]
 
     def clear(self):
         """Resets all tensorflow operations on the graph.
@@ -1041,7 +1034,7 @@ class NumpyBackend(object):
                 return self.vars[name]
 
     def get_layer(self, idx):
-        return self.layers[idx]
+        return self.layers[self._base_layer + idx]
 
     def eval_var(self, var):
         return self.vars[var].eval()
@@ -1052,7 +1045,6 @@ class NumpyBackend(object):
             imports = []
 
         # remove empty layers and operators
-        layer_mapping = {}
         new_layer_idx = 0
         for layer_idx, layer in enumerate(self.layers.copy()):
             for op in layer.copy():
@@ -1060,9 +1052,7 @@ class NumpyBackend(object):
                     layer.pop(layer.index(op))
             if len(layer) == 0:
                 self.layers.pop(new_layer_idx)
-                layer_mapping.update({layer_idx: None})
             else:
-                layer_mapping.update({layer_idx: new_layer_idx})
                 new_layer_idx += 1
 
         # create directory in which to store layer scripts
@@ -1135,14 +1125,7 @@ class NumpyBackend(object):
         sys.path.pop(1)
         os.chdir(orig_path)
 
-        # map new layers to old layer indices
-        for l_key in layer_mapping.copy().keys():
-            if layer_mapping[l_key] is None:
-                layer_mapping.pop(l_key)
-            else:
-                layer_mapping[l_key] = layer_runs[layer_mapping[l_key]]
-
-        return layer_mapping
+        return layer_runs
 
     def eval(self, ops):
         return [op.eval() for op in ops]
@@ -1198,7 +1181,16 @@ class NumpyBackend(object):
     def eval_layer(layer):
         return [func(*args) for func, args in layer]
 
-    def _run_no_inp(self, layers, sampling_layer, steps, sampling_steps):
+    def _set_op(self, op, idx1, idx2):
+        self.layers[self._base_layer+idx1][idx2] = op
+
+    def _add_op(self, op, layer=None):
+        if layer is None:
+            self.get_current_layer().append(op)
+        else:
+            self.get_layer(layer).append(op)
+
+    def _run(self, layers, sampling_layer, steps, sampling_steps):
         if sampling_layer is None:
             for step in range(steps):
                 for func, args in layers:
@@ -1211,22 +1203,22 @@ class NumpyBackend(object):
                 for func, args in layers:
                     func(*args)
 
-    def _run_inp(self, layers, sampling_layer, inputs, steps, sampling_steps):
-        if sampling_layer is None:
-            for step, inp in zip(range(steps), inputs):
-                for key, val in inp.items():
-                    self.vars[key][:] = val
-                for func, args in layers:
-                    func(*args)
-        else:
-            for step, inp in zip(range(steps), inputs):
-                sampling_func, sampling_args = sampling_layer
-                for key, val in inp.items():
-                    self.vars[key][:] = val
-                if step % sampling_steps == 0:
-                    sampling_func(*sampling_args)
-                for func, args in layers:
-                    func(*args)
+    # def _run_inp(self, layers, sampling_layer, inputs, steps, sampling_steps):
+    #     if sampling_layer is None:
+    #         for step, inp in zip(range(steps), inputs):
+    #             for key, val in inp.items():
+    #                 self.vars[key][:] = val
+    #             for func, args in layers:
+    #                 func(*args)
+    #     else:
+    #         for step, inp in zip(range(steps), inputs):
+    #             sampling_func, sampling_args = sampling_layer
+    #             for key, val in inp.items():
+    #                 self.vars[key][:] = val
+    #             if step % sampling_steps == 0:
+    #                 sampling_func(*sampling_args)
+    #             for func, args in layers:
+    #                 func(*args)
 
     def _match_shapes(self, op1: Any, op2: Any, adjust_second: bool = True) -> tuple:
         """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
@@ -1307,7 +1299,7 @@ class NumpyBackend(object):
                       "@jit(nopython=True, fastmath=True, parallel=True, nogil=True)",
                       "@jit(nopython=True, fastmath=True, nogil=True)", "@jit(nopython=True, nogil=True)"]
         decorator_times = [np.infty for _ in range(len(decorators))]
-
+        args = deepcopy(args)
         for i, dec in enumerate(decorators):
             try:
                 operator = self._create_op(op, *args, decorator=dec)
@@ -1503,7 +1495,8 @@ class TensorflowBackend(NumpyBackend):
                          "sigmoid": {'name': "tensorflow_sigmoid", 'call': "tf.sigmoid"},
                          "tanh": {'name': "tensorflow_tanh", 'call': "tf.tanh"},
                          "index": {'name': "pyrates_index", 'call': "pyrates_index"},
-                         "gather": {'name': "tensorflow_gather", 'call': "tf.gather_nd"},
+                         "gather": {'name': "tensorflow_gather", 'call': "tf.gather"},
+                         "gather_nd": {'name': "tensorflow_gather_nd", 'call': "tf.gather_nd"},
                          "mask": {'name': "tensorflow_mask", 'call': "tf.mask"},
                          "group": {'name': "tensorflow_group", 'call': "tf.group"},
                          "stack": {'name': "tensorflow_stack", 'call': "tf.stack"},
@@ -1526,11 +1519,9 @@ class TensorflowBackend(NumpyBackend):
 
     def run(self,
             steps: int,
-            inputs: List[dict],
             outputs: Dict[str, tf.Variable],
             layers: Optional[list] = None,
             sampling_steps: Optional[int] = None,
-            sampling_layer: Optional[int] = None,
             out_dir: Optional[str] = None,
             profile: Optional[str] = None,
             **kwargs
@@ -1539,7 +1530,7 @@ class TensorflowBackend(NumpyBackend):
         kwargs['imports'] = imports
         decorator = kwargs.pop('decorator', "@tf.function")
         kwargs['decorator'] = decorator
-        return super().run(steps, inputs, outputs, layers, sampling_steps, sampling_layer, out_dir, profile, **kwargs)
+        return super().run(steps, outputs, sampling_steps, out_dir, profile, **kwargs)
 
     def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
         """Tries to match the shapes of op1 and op2 such that op can be applied. Then applies op to op1 and op2.
@@ -1596,8 +1587,11 @@ class TensorflowBackend(NumpyBackend):
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         if op is "index":
             if hasattr(args[1], 'shape') or type(args[1]) in (list, tuple):
-                args = self._process_idx_args(*args)
-                return PyRatesOp(self.ops['gather']['call'], self.ops['gather']['name'], decorator, *args)
+                try:
+                    return PyRatesOp(self.ops['gather']['call'], self.ops['gather']['name'], decorator, *args)
+                except (ValueError, IndexError):
+                    args = self._process_idx_args(*args)
+                    return PyRatesOp(self.ops['gather_nd']['call'], self.ops['gather_nd']['name'], decorator, *args)
             return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         if op is "cast":
             args = list(args)
@@ -1635,6 +1629,8 @@ class TensorflowBackend(NumpyBackend):
         if idx.shape[0] != update.shape[0]:
             if update.shape[0] == 1 and len(update.shape) == 1:
                 idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
+            elif idx.shape[0] == 1:
+                update = self.add_op('reshape', update, (1,) + tuple(update.shape))
             else:
                 raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
                                  f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')
@@ -1646,6 +1642,7 @@ class TensorflowBackend(NumpyBackend):
         if shape_diff < 0:
             raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
                              f'length {idx.shape[1]}')
+
         # manage shape of updates
         update_dim = 0
         if len(update.shape) > 1:
@@ -1656,14 +1653,14 @@ class TensorflowBackend(NumpyBackend):
                 if len(update.shape) > 1:
                     update_dim = len(update.shape[1:])
 
-            # manage shape of idx
-            shape_diff = int(shape_diff) - update_dim
-            if shape_diff > 0:
-                indices = []
-                indices.append(idx)
-                for i in range(shape_diff):
-                    indices.append(self.add_op('zeros', tuple(idx.shape), idx.dtype))
-                idx = self.add_op('concat', indices, 1)
+        # manage shape of idx
+        shape_diff = int(shape_diff) - update_dim
+        if shape_diff > 0:
+            indices = []
+            indices.append(idx)
+            for i in range(shape_diff):
+                indices.append(self.add_op('zeros', tuple(idx.shape), idx.dtype))
+            idx = self.add_op('concat', indices, 1)
 
         return var, update, idx
 
@@ -1734,23 +1731,6 @@ class TensorflowBackend(NumpyBackend):
             return self.add_op('cast', op1, op2.dtype), op2
         else:
             return op1, self.add_op('cast', op2, str(type(op1)).split('\'')[-2])
-
-    def _run_inp(self, layers, sampling_layer, inputs, steps, sampling_steps):
-        if sampling_layer is None:
-            for step, inp in zip(range(steps), inputs):
-                for key, val in inp.items():
-                    self.vars[key].assign(val)
-                for func, args in layers:
-                    func(*args)
-        else:
-            sampling_func, sampling_args = sampling_layer
-            for step, inp in zip(range(steps), inputs):
-                for key, val in inp.items():
-                    self.vars[key].assign(val)
-                if step % sampling_steps == 0:
-                    sampling_func(*sampling_args)
-                for func, args in layers:
-                    func(*args)
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:
