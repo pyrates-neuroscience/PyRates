@@ -342,17 +342,26 @@ class ComputeGraph(object):
             sampling_step_size = self.dt
         sampling_steps = int(sampling_step_size / self.dt)
 
+        # add output variables to the backend
+        #####################################
+
         # define output variables
-        outputs_tmp = dict()
+        output_cols = []
+        output_keys = []
+        output_shapes = []
         if outputs:
             for key, val in outputs.items():
-                var_dict = self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col",
-                                        scope="output_collection")
-                outputs_tmp.update(var_dict)
-
-        # add output collector variables to graph
-        output_col = {}
-        store_ops = []
+                var_key, var_val = self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col",
+                                                scope="output_collection").popitem()
+                var_shape = tuple(var_val.shape)
+                if var_shape in output_shapes:
+                    idx = output_shapes.index(var_shape)
+                    output_cols[idx].append(var_val)
+                    output_keys[idx].append(var_key)
+                else:
+                    output_cols.append([var_val])
+                    output_keys.append([var_key])
+                    output_shapes.append(var_shape)
 
         # create counting index for collector variables
         out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
@@ -360,88 +369,105 @@ class ComputeGraph(object):
 
         # add output storage layer to the graph
         self.backend.add_layer()
-        sampling_layer = self.backend.layer
+
+        # add collector variables to the graph
+        output_col = {}
+        for i, (var_col) in enumerate(output_cols):
+            shape = (int(sim_steps / sampling_steps) + 1, len(var_col)) + output_shapes[i]
+            key = f"output_col_{i}"
+            output_col[key] = self.backend.add_var(vtype='state_var', name=f"out_col_{i}", scope="output_collection",
+                                                   value=np.zeros(shape, dtype=self._float_precision))
+            var_stack = self.backend.stack_vars(*var_col)
+
+            # add collect operation to the graph
+            self.backend.add_op('=', output_col[key], var_stack, out_idx, scope="output_collection")
 
         # create increment operator for counting index
         self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
 
-        # add collector variables to the graph
-        for i, (key, var) in enumerate(outputs_tmp.items()):
-            shape = [int(sim_steps / sampling_steps) + 1] + list(var.shape)
-            output_col[key] = self.backend.add_var(vtype='state_var', name=f"out_col_{i}", scope="output_collection",
-                                                   value=np.zeros(shape, dtype=self._float_precision))
-
-            # add collect operation to the graph
-            store_ops.append(self.backend.add_op('=', output_col[key], var, out_idx, scope="output_collection"))
+        # add input variables to the backend
+        ####################################
 
         # linearize input dictionary
         if inputs:
-            inp = list()
-            for step in range(sim_steps):
-                inp_dict = dict()
-                for key, val in inputs.items():
+            inp_dict = dict()
+            for key, val in inputs.items():
 
-                    if '_combined' in list(self.net_config.nodes.keys())[0]:
+                if '_combined' in list(self.net_config.nodes.keys())[0]:
 
-                        # fully vectorized case: add vectorized placeholder variable to input dictionary
-                        var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=key[1], attr=key[2])
-                        inp_dict[var.name] = np.reshape(val[step], var.shape)
+                    # fully vectorized case: add vectorized placeholder variable to input dictionary
+                    var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=key[1], attr=key[2])
+                    inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
-                    elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
-                        # node-vectorized case
-                        if key[0] == 'all':
+                    # node-vectorized case
+                    if key[0] == 'all':
 
-                            # go through all nodes, extract the variable and add it to input dict
-                            i = 0
-                            for node in self.net_config.nodes:
-                                var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                i_new = var.shape[0] if len(var.shape) > 0 else 1
-                                inp_dict[var.name] = np.reshape(val[step, i:i_new], var.shape)
-                                i += i_new
-
-                        elif key[0] in self.net_config.nodes.keys():
-
-                            # add placeholder variable of node(s) to input dictionary
-                            var = self._get_node_attr(node=key[0], op=key[1], attr=key[2])
-                            inp_dict[var.name] = np.reshape(val[step], var.shape)
-
-                        elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
-
-                            # add vectorized placeholder variable of specified node type to input dictionary
-                            for node in list(self.net_config.nodes.keys()):
-                                if key[0] in node:
-                                    break
+                        # go through all nodes, extract the variable and add it to input dict
+                        i = 0
+                        for node in self.net_config.nodes:
                             var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                            inp_dict[var.name] = np.reshape(val[step], var.shape)
+                            i_new = var.shape[0] if len(var.shape) > 0 else 1
+                            inp_dict[var.name] = np.reshape(val[:, i:i_new], (sim_steps,) + tuple(var.shape))
+                            i += i_new
 
-                    else:
+                    elif key[0] in self.net_config.nodes.keys():
 
-                        # non-vectorized case
-                        if key[0] == 'all':
+                        # add placeholder variable of node(s) to input dictionary
+                        var = self._get_node_attr(node=key[0], op=key[1], attr=key[2])
+                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
-                            # go through all nodes, extract the variable and add it to input dict
-                            for i, node in enumerate(self.net_config.nodes.keys()):
+                    elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+
+                        # add vectorized placeholder variable of specified node type to input dictionary
+                        for node in list(self.net_config.nodes.keys()):
+                            if key[0] in node:
+                                break
+                        var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
+
+                else:
+
+                    # non-vectorized case
+                    if key[0] == 'all':
+
+                        # go through all nodes, extract the variable and add it to input dict
+                        for i, node in enumerate(self.net_config.nodes.keys()):
+                            var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                            inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
+
+                    elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+
+                        # extract variables from nodes of specified type
+                        i = 0
+                        for node in self.net_config.nodes.keys():
+                            if key[0] in node:
                                 var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                inp_dict[var.name] = np.reshape(val[step, i], var.shape)
-
-                        elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
-
-                            # extract variables from nodes of specified type
-                            i = 0
-                            for node in self.net_config.nodes.keys():
-                                if key[0] in node:
-                                    var = self._get_node_attr(node=node, op=key[1], attr=key[2])
-                                    inp_dict[var.name] = np.reshape(val[step, i], var.shape)
-                                    i += 1
-
-                # add input dictionary to placeholder input liust
-                inp.append(inp_dict)
+                                inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
+                                i += 1
 
         else:
 
             # create list of nones (no placeholder variables should exist)
-            inp = [None for _ in range(sim_steps)]
+            inp_dict = {}
+
+        if inp_dict:
+
+            self.backend.add_layer(to_beginning=True)
+
+            # create counting index for input variables
+            in_idx = self.backend.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
+                                          scope="network_inputs")
+
+            for key, var in inp_dict.items():
+                var_name = f"{var.short_name}_inp" if hasattr(var, 'short_name') else "var_inp"
+                in_var = self.backend.add_var(vtype='state_var', name=var_name, scope="network_inputs", value=var)
+                in_var_idx = self.backend.add_op('index', in_var, in_idx, scope="network_inputs")
+                self.backend.add_op('=', self.backend.vars[key], in_var_idx, scope="network_inputs")
+
+            # create increment operator for counting index
+            self.backend.add_op('+=', in_idx, np.ones((1,), dtype='int32'), scope="network_inputs")
 
         # run simulation
         ################
@@ -450,14 +476,11 @@ class ComputeGraph(object):
             print("Running simulation...")
 
         if profile is None:
-            output_col = self.backend.run(steps=sim_steps, layers=self.node_updates + self.edge_updates, inputs=inp,
-                                          outputs=output_col, sampling_steps=sampling_steps,
-                                          sampling_layer=sampling_layer, out_dir=out_dir, profile=profile)
+            output_col = self.backend.run(steps=sim_steps, outputs=output_col, sampling_steps=sampling_steps,
+                                          out_dir=out_dir, profile=profile)
         else:
-            output_col, time, memory = self.backend.run(steps=sim_steps, layers=self.node_updates + self.edge_updates,
-                                                        inputs=inp, outputs=output_col, sampling_layer=sampling_layer,
-                                                        sampling_ops=store_ops, out_dir=out_dir, profile=profile,
-                                                        sampling_steps=sampling_steps)
+            output_col, time, memory = self.backend.run(steps=sim_steps, outputs=output_col, out_dir=out_dir,
+                                                        profile=profile, sampling_steps=sampling_steps)
 
         if verbose and profile:
             if simulation_time:
@@ -469,11 +492,18 @@ class ComputeGraph(object):
         # store output variables in data frame
         ######################################
 
+        # ungroup grouped output variables
+        outputs = {}
+        for names, group_key in zip(output_keys, output_col.keys()):
+            out_group = output_col[group_key]
+            for i, key in enumerate(names):
+                outputs[key] = out_group[:, i]
+
         out_var_vals = []
         out_var_names = []
-        for key in list(output_col):
+        for key in list(outputs):
 
-            var = output_col.pop(key)
+            var = outputs.pop(key)
             if len(var.shape) > 1 and var.shape[1] > 1:
                 for i in range(var.shape[1]):
                     out_var_vals.append(var[:, i])
@@ -686,7 +716,9 @@ class ComputeGraph(object):
 
             # store operator variables in net config
             op_vars = self._get_op_attr(node_name, op_name, 'variables')
-            op_vars.update(op_args['vars'])
+            for var_key, var_val in op_args['vars'].items():
+                if var_key not in op_vars:
+                    op_vars[var_key] = var_val
 
             # store update ops in node update collector
             for var in list(set(op_args['lhs_evals'])):
