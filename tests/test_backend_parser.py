@@ -245,7 +245,7 @@ def test_1_5_expression_parser_indexing():
     B = np.eye(10, dtype=np.float32) == 1
     arg_dict = {'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype},
                 'B': {'vtype': 'constant', 'value': B, 'shape': B.shape, 'dtype': B.dtype},
-                'c': {'vtype': 'state_var', 'value': 4, 'Shape': (), 'dtype': 'int32'}}
+                'd': {'vtype': 'state_var', 'value': 4, 'Shape': (), 'dtype': 'int32'}}
     args = parse_dict(arg_dict, backend=b)
 
     # define valid test cases
@@ -258,7 +258,7 @@ def test_1_5_expression_parser_indexing():
                            ("A[5,0:-2]", A[5, 0:-2]),    # two-dim indexing II
                            ("A[A > 0.]", A[A > 0.]),     # boolean indexing
                            ("A[B]", A[B]),               # indexing with other array
-                           ("A[c:8 - 1]",                # using variables as indices
+                           ("A[d:8 - 1]",                # using variables as indices
                             A[4:8 - 1]),
                            ]
 
@@ -268,7 +268,7 @@ def test_1_5_expression_parser_indexing():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
         p.parse_expr()
-        result = p.expr_op.eval().numpy() if hasattr(p.expr_op, 'eval') else p.expr_op.numpy()
+        result = p.expr_op.numpy() if hasattr(p.expr_op, 'numpy') else p.expr_op.eval().numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # define invalid test cases

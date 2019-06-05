@@ -388,9 +388,11 @@ class ComputeGraph(object):
         # add input variables to the backend
         ####################################
 
-        # linearize input dictionary
         if inputs:
+
             inp_dict = dict()
+
+            # linearize input dictionary
             for key, val in inputs.items():
 
                 if '_combined' in list(self.net_config.nodes.keys())[0]:
@@ -447,13 +449,7 @@ class ComputeGraph(object):
                                 inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
                                 i += 1
 
-        else:
-
-            # create list of nones (no placeholder variables should exist)
-            inp_dict = {}
-
-        if inp_dict:
-
+            # add inputs to graph
             self.backend.add_layer(to_beginning=True)
 
             # create counting index for input variables

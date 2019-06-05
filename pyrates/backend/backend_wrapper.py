@@ -310,7 +310,7 @@ class PyRatesOp:
                 results['args'] += new_args
                 results['arg_names'] += new_arg_names
                 n_vars += 1
-            elif type(arg) is NumpyVar or issubclass(type(arg), tf.Variable):
+            elif hasattr(arg, 'short_name'):
                 n_vars += 1
                 arg_name = cls._generate_unique_argnames([arg.short_name])[0]
                 results_args.append(arg)
@@ -541,6 +541,12 @@ class PyRatesIndexOp(PyRatesOp):
             results['args'].append(idx)
             results['arg_names'].append(key)
         elif type(idx) is str or "int" in str(type(idx)) or "float" in str(type(idx)):
+            for arg in args[2:]:
+                if hasattr(arg, 'short_name') and arg.short_name in idx:
+                    name_tmp = arg.short_name
+                    if name_tmp in cls.arg_names:
+                        arg.short_name = f"{name_tmp}_{cls.arg_names[name_tmp]}"
+                        idx = idx.replace(name_tmp, arg.short_name)
             var_idx = f"[{idx}]"
         elif type(idx) in (list, tuple):
             var_idx = f"{list(idx)}"
@@ -1097,31 +1103,38 @@ class NumpyBackend(object):
             os.chdir(net_dir)
 
         # write layer run functions and import them for execution
+        sys.path.insert(1, build_dir)
+        sys.path.insert(2, net_dir)
+        with open(f"__init__.py", 'w') as net_init:
+            net_init.close()
+        net_module = import_module(self.name)
         layer_runs = []
-        sys.path.insert(1, net_dir)
         for i, layer in enumerate(self.layers):
             layer_ops = []
             os.chdir(f"layer_{i}")
-            sys.path.insert(2, os.getcwd())
-            with open(f"layer_{i}_run.py", 'w') as f_run:
-                f_run.close()
-            with open(f"__init__.py", 'w') as f_init:
+            with open(f"__init__.py", 'w') as layer_init:
                 for j in range(len(layer)):
-                    f_init.write(f"from .op_{j} import *\n")
-                f_init.write(f"from .layer_{i}_run import *\n")
-                f_init.close()
-            layer_module = import_module(f"layer_{i}_run", package=f"layer_{i}")
+                    layer_init.write(f"from .op_{j} import *\n")
+                layer_init.close()
+            os.chdir(net_dir)
+            t.sleep(0.1)
+            reload(net_module)
             for j, op in enumerate(layer):
-                op_module = import_module(f".op_{j}", package=f"layer_{i}")
+                op_module = import_module(f".op_{j}", package=f"{self.name}.layer_{i}")
                 layer_ops.append(getattr(op_module, op.short_name))
-            run_func, run_args = self._generate_layer_run(layer, layer_ops, decorator=decorator, imports=imports)
+            run_func, run_args = self._generate_layer_run(layer, i, layer_ops, decorator=decorator, imports=imports)
             with open(f"layer_{i}_run.py", 'w') as f_run:
                 f_run.write(run_func)
                 f_run.close()
-            os.chdir(net_dir)
-            reload(layer_module)
-            layer_runs.append((getattr(layer_module, "layer_run"), run_args))
-            sys.path.pop(2)
+            with open(f"__init__.py", 'w') as net_init:
+                for j in range(i+1):
+                    net_init.write(f"from .layer_{j} import *\n")
+                    net_init.write(f"from .layer_{j}_run import *\n")
+                net_init.close()
+            t.sleep(0.1)
+            reload(net_module)
+            layer_runs.append((getattr(net_module, f"run_l{i}"), run_args))
+        sys.path.pop(2)
         sys.path.pop(1)
         os.chdir(orig_path)
 
@@ -1314,7 +1327,7 @@ class NumpyBackend(object):
 
         return decorators[np.argmin(decorator_times)]
 
-    def _generate_layer_run(self, layer, func_calls, decorator, imports):
+    def _generate_layer_run(self, layer, idx, func_calls, decorator, imports):
 
         # set up file head (imports)
         code_gen = CodeGen()
@@ -1328,7 +1341,7 @@ class NumpyBackend(object):
         if decorator:
             code_gen.add_code_line(decorator)
             code_gen.add_linebreak()
-        code_gen.add_code_line(f"def layer_run(")
+        code_gen.add_code_line(f"def run_l{idx}(")
         op_args_str, op_args, op_names = [], [], []
         for i, (op, func) in enumerate(zip(layer, func_calls)):
             code_gen.add_code_line(f"{op.short_name},")
@@ -1351,22 +1364,6 @@ class NumpyBackend(object):
 
     @staticmethod
     def _generate_layer_run_body(code_gen, ops: List[str], op_args: List[str]):
-        # code_gen.add_code_line("func_calls = (")
-        # for op in ops:
-        #     code_gen.add_code_line(f"{op},")
-        # code_gen.add_code_line(")")
-        # code_gen.add_linebreak()
-        # code_gen.add_code_line("func_args = (")
-        # for args in op_args:
-        #     code_gen.add_code_line(f"({args}),")
-        # code_gen.add_code_line(")")
-        # code_gen.add_linebreak()
-        # code_gen.add_code_line("for i in prange(n_ops):")
-        # code_gen.add_linebreak()
-        # code_gen.add_indent()
-        # for i in range(len(ops)):
-        #     code_gen.add_code_line("func_calls[i](*func_args[i])")
-        #     code_gen.add_linebreak()
         for op, args in zip(ops, op_args):
             code_gen.add_code_line(f"{op}({args})")
             code_gen.add_linebreak()
@@ -1497,7 +1494,7 @@ class TensorflowBackend(NumpyBackend):
                          "index": {'name': "pyrates_index", 'call': "pyrates_index"},
                          "gather": {'name': "tensorflow_gather", 'call': "tf.gather"},
                          "gather_nd": {'name': "tensorflow_gather_nd", 'call': "tf.gather_nd"},
-                         "mask": {'name': "tensorflow_mask", 'call': "tf.mask"},
+                         "mask": {'name': "tensorflow_mask", 'call': "tf.boolean_mask"},
                          "group": {'name': "tensorflow_group", 'call': "tf.group"},
                          "stack": {'name': "tensorflow_stack", 'call': "tf.stack"},
                          "no_op": {'name': "tensorflow_identity", 'call': "tf.identity"},
@@ -1520,7 +1517,6 @@ class TensorflowBackend(NumpyBackend):
     def run(self,
             steps: int,
             outputs: Dict[str, tf.Variable],
-            layers: Optional[list] = None,
             sampling_steps: Optional[int] = None,
             out_dir: Optional[str] = None,
             profile: Optional[str] = None,
@@ -1586,6 +1582,8 @@ class TensorflowBackend(NumpyBackend):
                 args = self._process_update_args(*args)
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         if op is "index":
+            if hasattr(args[1], 'dtype') and 'bool' in str(args[1].dtype):
+                return PyRatesOp(self.ops['mask']['call'], self.ops['mask']['name'], decorator, *args)
             if hasattr(args[1], 'shape') or type(args[1]) in (list, tuple):
                 try:
                     return PyRatesOp(self.ops['gather']['call'], self.ops['gather']['name'], decorator, *args)
