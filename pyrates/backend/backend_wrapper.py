@@ -616,7 +616,7 @@ class NumpyBackend(object):
                  dtypes: Optional[Dict[str, object]] = None,
                  name: str = 'net_0',
                  float_default_type: str = 'float32',
-                 optimize_run_time: bool = False
+                 jit_compile: bool = False
                  ) -> None:
         """Instantiates tensorflow backend, i.e. a tensorflow graph.
         """
@@ -682,6 +682,7 @@ class NumpyBackend(object):
                     "index": {'name': "pyrates_index", 'call': "pyrates_index"},
                     "mask": {'name': "pyrates_mask", 'call': "pr_mask"},
                     "group": {'name': "pyrates_group", 'call': "pr_group"},
+                    "asarray": {'name': "numpy_asarray", 'call': "np.asarray"},
                     "no_op": {'name': "pyrates_identity", 'call': "pr_identity"},
                     }
         if ops:
@@ -712,7 +713,7 @@ class NumpyBackend(object):
         self._build_dir = ""
         self._float_def = self.dtypes[float_default_type]
         self.name = name
-        self._rt_optimization = optimize_run_time
+        self._rt_optimization = jit_compile
         self._base_layer = 0
 
     def run(self,
@@ -934,7 +935,7 @@ class NumpyBackend(object):
         try:
             op = self._create_op(op_name, *args, decorator=decorator)
             in_shape = []
-            expand_ops = ('@', 'index', 'concat', 'expand', 'stack', 'group')
+            expand_ops = ('@', 'index', 'concat', 'expand', 'stack', 'group', 'asarray')
             if op_name not in expand_ops:
                 for arg in args:
                     if hasattr(arg, 'shape'):
@@ -1183,12 +1184,7 @@ class NumpyBackend(object):
             return self.add_op('index', var, idx, *args)
 
     def stack_vars(self, *vars, **kwargs):
-        shape = (len(vars),) + vars[0].shape
-        stack = self.add_var(vtype='state_var', name='stack', value=0., shape=shape, dtype=vars[0].dtype, **kwargs)
-        updates = []
-        for idx, var in enumerate(vars):
-            updates.append(self.add_op('=', stack, var, idx, indexed=True))
-        return stack
+        return self.add_op('asarray', vars)
 
     @staticmethod
     def eval_layer(layer):

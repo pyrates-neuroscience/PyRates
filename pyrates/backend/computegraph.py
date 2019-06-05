@@ -377,7 +377,7 @@ class ComputeGraph(object):
             key = f"output_col_{i}"
             output_col[key] = self.backend.add_var(vtype='state_var', name=f"out_col_{i}", scope="output_collection",
                                                    value=np.zeros(shape, dtype=self._float_precision))
-            var_stack = self.backend.stack_vars(*var_col)
+            var_stack = self.backend.stack_vars(var_col)
 
             # add collect operation to the graph
             self.backend.add_op('=', output_col[key], var_stack, out_idx, scope="output_collection")
