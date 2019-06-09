@@ -207,17 +207,13 @@ class ComputeGraph(object):
 
         # collect output variables
         source_nodes, target_nodes, edge_indices = [], [], []
-        source_vars, source_vars_idx = [], []
         op_names, var_names = [], []
         for source_node, target_node, edge_idx in self.net_config.edges:
             svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
             op, var = svar.split('/')
             svar = self._get_op_attr(source_node, op, var)
-            if svar not in source_vars:
-                source_vars.append(svar)
             op_names.append(op)
             var_names.append(var)
-            source_vars_idx.append(source_vars.index(svar))
             source_nodes.append(source_node)
             target_nodes.append(target_node)
             edge_indices.append(edge_idx)
@@ -528,6 +524,8 @@ class ComputeGraph(object):
         # create dataframe
         if out_var_vals:
             data = np.asarray(out_var_vals).T
+            if len(data.shape) > 2:
+                data = data.squeeze()
             idx = np.arange(0., simulation_time, sampling_step_size)[-data.shape[0]:]
             out_vars = DataFrame(data=data[0:len(idx), :],
                                  index=idx,
@@ -579,7 +577,7 @@ class ComputeGraph(object):
         elif node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
 
             # get output variable of specific backend node
-            var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
+            var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
 
         elif any([node in key for key in self.net_config.nodes.keys()]):
 
@@ -776,7 +774,7 @@ class ComputeGraph(object):
 
         """
 
-        inp = self.backend.stack_vars(*tuple(inputs), **kwargs)
+        inp = self.backend.stack_vars(inputs, **kwargs)
         self.backend.next_layer()
         if reduce_dim:
             inp_transform = self.backend.add_op('sum', inp, 0)
@@ -786,7 +784,7 @@ class ComputeGraph(object):
         self.node_updates.append(self.backend.layer)
         return inp_transform
 
-    def _get_node_attr(self, node: str, attr: str, op: Optional[str] = None) -> Any:
+    def _get_node_attr(self, node: str, attr: str, op: Optional[str] = None, **kwargs) -> Any:
         """Extract attribute from node of the network.
 
         Parameters
@@ -806,13 +804,13 @@ class ComputeGraph(object):
         """
 
         if op:
-            return self._get_op_attr(node, op, attr)
+            return self._get_op_attr(node, op, attr, **kwargs)
         try:
             return self.net_config[node][attr]
         except KeyError:
             vals = []
             for op in self.net_config[node]:
-                vals.append(self._get_op_attr(node, op, attr))
+                vals.append(self._get_op_attr(node, op, attr, **kwargs))
             return vals
 
     def _set_node_attr(self, node: str, attr: str, val: Any, op: Optional[str] = None) -> Any:
@@ -935,7 +933,7 @@ class ComputeGraph(object):
         if node in self._net_config_map and op in self._net_config_map[node] and attr in self._net_config_map[node][op]:
             node, op, attr, attr_idx = self._net_config_map[node][op][attr]
             idx = f"{list(attr_idx)}" if type(attr_idx) is tuple else attr_idx
-            return self.backend.apply_idx(self._get_op_attr(node, op, attr), idx)
+            return self.backend.apply_idx(self._get_op_attr(node, op, attr), idx) if retrieve else attr_idx
         elif node in self.net_config:
             op = self.net_config[node]['op_graph'].nodes[op]
         else:
@@ -1042,34 +1040,13 @@ class ComputeGraph(object):
 
         """
 
-        # function that evaluates whether two node attributes match
-        ###########################################################
-
-        def node_match(n1, n2):
-            for i, eq in enumerate(n1['operator']['equations']):
-                try:
-                    if eq != n2['operator']['equations'][i]:
-                        return False
-                except IndexError:
-                    return False
-            vars1 = list(n1['variables'])
-            vars2 = list(n2['variables'])
-            if vars1 != vars2:
-                return False
-            return True
-
-        # node selection
-        ################
-
         nodes = []
         for node in self.net_config.nodes:
             test_val = self._get_node_attr(node, attr)
-            try:
-                if is_isomorphic(val, test_val, node_match=node_match):
-                    nodes.append(node)
-            except (TypeError, ValueError):
-                if val == test_val:
-                    nodes.append(node)
+            if hasattr(val, 'nodes') and val.nodes.keys() == test_val.nodes.keys():
+                nodes.append(node)
+            elif val == test_val:
+                nodes.append(node)
 
         return nodes
 

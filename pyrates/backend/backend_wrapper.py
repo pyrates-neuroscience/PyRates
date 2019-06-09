@@ -351,12 +351,9 @@ class PyRatesOp:
     def _check_numerics(vals, name):
         check = []
         try:
+            vals = vals.numpy().flatten() if hasattr(vals, 'numpy') else vals.flatten()
             for val in vals:
-                try:
-                    for v in val:
-                        check.append(np.isnan(v) or np.isneginf(v))
-                except TypeError:
-                    check.append(np.isnan(val) or np.isneginf(val))
+                check.append(np.isnan(val) or np.isneginf(val))
         except TypeError:
             check.append(np.isnan(vals) or np.isneginf(vals))
         if any(check):
@@ -948,7 +945,7 @@ class NumpyBackend(object):
                     arg1, arg2 = self.broadcast(args[0], args[1])
                     op = self._create_op(op_name, arg1, arg2, *args[2:], decorator=decorator)
         except (TypeError, ValueError):
-            if type(args[0]) in (tuple, list):
+            if type(args[0]) in (tuple, list) and len(args[0] > 1):
                 args_tmp = self.broadcast(args[0][0], args[0][1])
                 args_tmp = (args_tmp[0], args_tmp[1]) + tuple(args[0][2:])
                 args_new = args_tmp + args[1:]
@@ -1183,7 +1180,7 @@ class NumpyBackend(object):
         else:
             return self.add_op('index', var, idx, *args)
 
-    def stack_vars(self, *vars, **kwargs):
+    def stack_vars(self, vars, **kwargs):
         return self.add_op('asarray', vars)
 
     @staticmethod
@@ -1211,23 +1208,6 @@ class NumpyBackend(object):
                     sampling_func(*sampling_args)
                 for func, args in layers:
                     func(*args)
-
-    # def _run_inp(self, layers, sampling_layer, inputs, steps, sampling_steps):
-    #     if sampling_layer is None:
-    #         for step, inp in zip(range(steps), inputs):
-    #             for key, val in inp.items():
-    #                 self.vars[key][:] = val
-    #             for func, args in layers:
-    #                 func(*args)
-    #     else:
-    #         for step, inp in zip(range(steps), inputs):
-    #             sampling_func, sampling_args = sampling_layer
-    #             for key, val in inp.items():
-    #                 self.vars[key][:] = val
-    #             if step % sampling_steps == 0:
-    #                 sampling_func(*sampling_args)
-    #             for func, args in layers:
-    #                 func(*args)
 
     def _match_shapes(self, op1: Any, op2: Any, adjust_second: bool = True) -> tuple:
         """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
@@ -1302,7 +1282,7 @@ class NumpyBackend(object):
             return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], "", *args)
 
     def _optimize_decorator(self, op, args):
-        decorators = ["", "@jit", "@jit(fastmath=True)" , "@jit(nogil=True)",
+        decorators = ["", "@jit", "@jit(fastmath=True)", "@jit(nogil=True)",
                       "@jit(nogil=True, fastmath=True)", "@jit(nopython=True)", "@jit(nopython=True, parallel=True)",
                       "@jit(nopython=True, fastmath=True)", "@jit(nopython=True, fastmath=True, parallel=True)",
                       "@jit(nopython=True, fastmath=True, parallel=True, nogil=True)",
@@ -1551,7 +1531,7 @@ class TensorflowBackend(NumpyBackend):
 
         return super().broadcast(op1, op2, **kwargs)
 
-    def stack_vars(self, *vars, **kwargs):
+    def stack_vars(self, vars, **kwargs):
         var_count = {}
         for var in vars:
             if hasattr(var, 'short_name'):

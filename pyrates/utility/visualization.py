@@ -211,8 +211,12 @@ def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value
         # simple timeseries plot
         if 'ci' not in kwargs:
             kwargs['ci'] = None
+        ylabel = kwargs.pop('ylabel', df.columns.values[0] if len(df.columns.values) == 1 else df.columns.values[0][-1])
+        xlabel = kwargs.pop('xlabel', 'time')
         ax = sb.lineplot(data=df, x='time', y=variable, hue='node', palette=cmap, **kwargs)
         ax.set_title(title)
+        ax.set_ylabel(ylabel)
+        ax.set_xlabel(xlabel)
 
     elif plot_style == 'ridge_plot':
 
