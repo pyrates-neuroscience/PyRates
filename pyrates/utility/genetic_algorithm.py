@@ -29,9 +29,10 @@
 # external imports
 import numpy as np
 import pandas as pd
-from typing import Optional
+from typing import Optional, Union
 
 # system imports
+import os
 import random
 from itertools import cycle
 
@@ -43,13 +44,11 @@ __status__ = "development"
 
 
 class GeneticAlgorithmTemplate:
-    def __init__(self, initial_gene_pool: dict):
-
-        # self.fitness_func = cdist
-        self.initial_gene_pool = initial_gene_pool
-        self.num_genes = len(initial_gene_pool)
+    def __init__(self):
 
         # Initialize storage variables
+        self.initial_gene_pool = {}
+        self.num_genes = 0
         self.sigma_adapt = 0
         self.gene_names = []
         self.pop = pd.DataFrame()
@@ -57,25 +56,25 @@ class GeneticAlgorithmTemplate:
         self.candidate = pd.DataFrame()
         self.winner = pd.DataFrame()
         self.current_max_fitness = 0
+        self.drop_count = 0
 
-
-        self.__create_pop()
-
-    def run(self, target: list, max_iter: int, min_fit: Optional[float] = 0., n_winners: Optional[int] = 1,
-            n_parent_pairs: Optional[int] = 10, n_new: Optional[int] = 0, sigma_adapt: Optional[float] = 0.,
-            max_stagnation_steps: Optional[int] = 0, stagnation_decimals: Optional[int] = 8,
-            stop_at_stagnation: Optional[bool] = False, enforce_max_iter: Optional[bool] = False,
-            candidate_save: Optional[str] = "", **kwargs):
+    def run(self, initial_gene_pool: dict, target: list, max_iter: int, min_fit: Optional[float] = 0.,
+            n_winners: Optional[int] = 1, n_parent_pairs: Optional[int] = 10, n_new: Optional[int] = 0,
+            sigma_adapt: Optional[float] = 0., max_stagnation_steps: Optional[int] = 0,
+            stagnation_decimals: Optional[int] = 8, max_stagnation_drops: Optional[Union[int, float]] = np.Inf,
+            enforce_max_iter: Optional[bool] = False, candidate_save: Optional[str] = "", drop_save: Optional[str] = "",
+            gene_sampling_func=np.linspace, **kwargs):
         """Run a genetic algorithm to fit genes of a population in respect to a given target vector
 
         Parameters
         ----------
+        initial_gene_pool
         target
-            Values that are used to determine the fitness of a gene combination
+            Target values that are used to determine the fitness of a population member
         max_iter
             Maximum number of iterations (generations) before the computation is terminated
         min_fit
-            Desired fitness. If set, computation will stop after the fitness of one population member exceeds this value
+            Minimum fitness. If set, computation will stop after the fitness of one population member exceeds this value
         n_winners
             Number of strongest members of a population, that will be members of this population's offspring
         n_parent_pairs
@@ -86,16 +85,20 @@ class GeneticAlgorithmTemplate:
         sigma_adapt
             Ratio by which the mean derivation of the gene probability distributions will change during a mutation
         max_stagnation_steps
-            Maximum number of iterations witch no change in the fitness, before the strongest member of a population
-            will be discarded and not be part of this population's offspring
+            Maximum number of iterations with no change in the fitness, before the strongest member of a population
+            will be discarded and not be part of this population's offspring anymore
         stagnation_decimals
             Decimal precision that will be used to detect changes in the fitness of successive populations
-        stop_at_stagnation
+        max_stagnation_drops
             If True, computation will stop when the maximum stagnation is reached
         enforce_max_iter
             If True, all iterations will performed, even if another convergence criterion is reached before
         candidate_save
             If set, the strongest member of a population will be saved to an hdf5 file, before the population is updated
+        drop_save
+            If set, all members that are droped from a population due to stagnation or other criteria will be saved to
+            this folder in hdf5 format
+        gene_sampling_func
         kwargs
 
 
@@ -105,12 +108,19 @@ class GeneticAlgorithmTemplate:
 
         """
 
+        self.initial_gene_pool = initial_gene_pool
+        self.num_genes = len(initial_gene_pool)
+        self.sigma_adapt = sigma_adapt
+        self.drop_count = 0
+
+        # Create starting population
+        ############################
+        self.__create_pop(sampling_func=gene_sampling_func)
+        self.pop_size = self.pop.shape[0]
+
         if n_winners + n_parent_pairs + n_new > self.pop_size:
             print('WARNING: Sum of winners, parents and new members exceeds the population size. Returning')
             return
-
-        self.sigma_adapt = sigma_adapt
-
         # Start genetic algorithm
         #########################
         print("***STARTING GENETIC ALGORITHM***")
@@ -126,6 +136,8 @@ class GeneticAlgorithmTemplate:
             self.current_max_fitness = float(new_candidate.loc[:, "fitness"])
             print(f'Currently fittest genes:')
             self.plot_genes(new_candidate)
+            target_tmp = [np.round(tar[0], decimals=2) for tar in target]
+            print(f'Target: {target_tmp}')
 
             # Check for fitness stagnation
             ##############################
@@ -133,14 +145,22 @@ class GeneticAlgorithmTemplate:
                 if not self.candidate.empty:
                     old_fitness = np.round(float(self.candidate['fitness']), decimals=stagnation_decimals)
                     new_fitness = np.round(self.current_max_fitness, decimals=stagnation_decimals)
+                    # Check for change in fitness
                     if new_fitness == old_fitness:
                         stagnation_count += 1
+                        # Check if stagnation occured
                         if stagnation_count > max_stagnation_steps:
                             print("Maximum fitness stagnation reached!")
-                            if not stop_at_stagnation or enforce_max_iter:
+                            # Check if maximum number of population drops is reached
+                            if not (self.drop_count == max_stagnation_drops) or enforce_max_iter:
                                 print("Dropping fittest from population!")
+                                if drop_save:
+                                    os.makedirs(drop_save, exist_ok=True)
+                                    new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
+                                self.drop_count += 1
                                 self.pop = self.pop.drop(new_candidate.index)
                             else:
+                                print("Returning fittest member!")
                                 return new_candidate
                     else:
                         # Reset stagnation counter
@@ -152,7 +172,7 @@ class GeneticAlgorithmTemplate:
             if candidate_save:
                 self.candidate.to_hdf(candidate_save, key='data')
 
-            # Update curren winning genes
+            # Update current winning genes
             #############################
             if self.winner.empty:
                 self.winner = self.candidate
@@ -165,9 +185,19 @@ class GeneticAlgorithmTemplate:
                 print("Minimum fitness criterion reached!")
                 if enforce_max_iter:
                     print("Dropping fittest from population!")
+                    if drop_save:
+                        new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
+                    self.drop_count += 1
                     self.pop = self.pop.drop(self.candidate.index)
                 else:
                     return self.candidate
+
+            # Drop additional information
+            #############################
+            try:
+                self.pop = self.pop.drop("holgado", axis=1)
+            except KeyError:
+                pass
 
             # Create offspring from current population
             ##########################################
@@ -243,13 +273,17 @@ class GeneticAlgorithmTemplate:
 
         self.pop = offspring
 
-    def __create_pop(self):
+    def __create_pop(self, sampling_func=np.linspace):
         """Create new population from the initial gene pool"""
         pop_grid = {}
 
         for param, value in self.initial_gene_pool.items():
             self.gene_names.append(param)
-            pop_grid[param] = np.linspace(value['min'], value['max'], value['N'])
+            if value['N'] == 1:
+                pop_grid[param] = np.array([np.mean([value['min'], value['max']])])
+            else:
+                pop_grid[param] = sampling_func(value['min'], value['max'], value['N'])
+            # pop_grid[param] = np.linspace(value['min'], value['max'], value['N'])
         self.pop = linearize_grid(pop_grid, permute=True)
         self.pop_size = self.pop.shape[0]
 
@@ -352,8 +386,8 @@ class GeneticAlgorithmTemplate:
 class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
     from scipy.spatial.distance import cdist
 
-    def __init__(self, initial_gene_pool, gs_config, fitness_measure=cdist):
-        super().__init__(initial_gene_pool)
+    def __init__(self, gs_config, fitness_measure=cdist):
+        super().__init__()
 
         self.fitness_measure = fitness_measure
         self.gs_config = gs_config
@@ -374,15 +408,14 @@ class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
 
         for i, candidate_genes in enumerate(param_grid.values):
             candidate_out = results.loc[:, tuple(candidate_genes)].values.T
-
             target_reshaped = np.array(target)[None, :]
             dist = self.fitness_measure(candidate_out, target_reshaped)
             self.pop.at[i, 'fitness'] = float(1 / dist)
 
 
 class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
-    def __init__(self, initial_gene_pool, gs_config, cgs_config):
-        super().__init__(initial_gene_pool)
+    def __init__(self, gs_config, cgs_config):
+        super().__init__()
 
         self.gs_config = gs_config
         self.cgs_config = cgs_config
