@@ -26,21 +26,8 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-from pyrates.frontend.template.operator_graph import OperatorGraphTemplate, OperatorGraphTemplateLoader
+from pyrates.frontend.template.operator_graph import OperatorGraphTemplate
 from pyrates.ir.edge import EdgeIR
-
-
-class EdgeTemplateLoader(OperatorGraphTemplateLoader):
-    """Template loader specific to an EdgeOperatorTemplate. """
-
-    def __new__(cls, path):
-        return super().__new__(cls, path, EdgeTemplate)
-
-    @classmethod
-    def update_template(cls, *args, **kwargs):
-        """Update all entries of a base node template to a more specific template."""
-
-        return super().update_template(EdgeTemplate, *args, **kwargs)
 
 
 class EdgeTemplate(OperatorGraphTemplate):

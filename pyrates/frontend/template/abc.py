@@ -28,10 +28,8 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """ Abstract base classes
 """
-from importlib import import_module
 
-# from pyrates.ir.abc import AbstractBaseIR
-from pyrates.frontend.yaml import to_dict
+from pyrates.frontend.yaml import to_dict as dict_from_yaml
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -41,6 +39,7 @@ class AbstractBaseTemplate:
     """Abstract base class for templates"""
 
     target_ir = None  # placeholder for template-specific intermediate representation (IR) target class
+    cache = {}  # dictionary that keeps track of already loaded templates
 
     def __init__(self, name: str, path: str, description: str = "A template."):
         self.name = name
@@ -50,18 +49,18 @@ class AbstractBaseTemplate:
     def __repr__(self):
         return f"<{self.__class__.__name__} '{self.path}'>"
 
-    def _format_path(self, path):
+    @staticmethod
+    def _complete_template_path(target_path: str, source_path: str) -> str:
         """Check if path contains a folder structure and prepend own path, if it doesn't"""
-        # ToDo: rename to something more meaningful like _prepend_parent_path or _check_path_prepend_parent
 
-        if "." not in path:
-            if "/" in self.path or "\\" in self.path:
+        if "." not in target_path:
+            if "/" in source_path or "\\" in source_path:
                 import os
-                basedir, _ = os.path.split(self.path)
-                path = os.path.normpath(os.path.join(basedir, path))
+                basedir, _ = os.path.split(source_path)
+                target_path = os.path.normpath(os.path.join(basedir, target_path))
             else:
-                path = ".".join((*self.path.split('.')[:-1], path))
-        return path
+                target_path = ".".join((*source_path.split('.')[:-1], target_path))
+        return target_path
 
     @classmethod
     def from_yaml(cls, path):
@@ -73,66 +72,36 @@ class AbstractBaseTemplate:
         path
             Path to template in YAML file of form 'directories.file.template'
         """
-        # ToDo: add AbstractBaseTemplate._format_path functionality here
-        module = import_module(cls.__module__)
-        loader = getattr(module, f"{cls.__name__}Loader")
-        return loader(path)
-
-    def apply(self, *args, **kwargs):
-
-        raise NotImplementedError
-
-
-class TemplateLoader:
-    """Class that loads templates from YAML and returns an OperatorTemplate class instance"""
-
-    cache = {}  # dictionary that keeps track of already loaded templates
-
-    def __new__(cls, path: str, template_cls: type):
-        """Load template recursively and return OperatorTemplate class.
-
-        Parameters
-        ----------
-
-        path
-            string containing path of YAML template of the form path.to.template
-        template_cls
-            class that the loaded template will be instantiated with
-        """
 
         if path in cls.cache:
             template = cls.cache[path]
         else:
-            template_dict = to_dict(path)
+            template_dict = dict_from_yaml(path)
             try:
                 base_path = template_dict.pop("base")
             except KeyError:
                 raise KeyError(f"No 'base' defined for template {path}. Please define a "
                                f"base to derive the template from.")
-            if base_path == template_cls.__name__:
+            if base_path == cls.__name__:
                 # if base refers to the python representation, instantiate here
-                template = template_cls(**template_dict)
+                template = cls(**template_dict)
             else:
                 # load base if needed
-                if "." in base_path:
-                    # reference to template in different file
-                    # noinspection PyCallingNonCallable
-                    template = cls(base_path)
-                else:
-                    # reference to template in same file
-                    base_path = ".".join((*path.split(".")[:-1], base_path))
-                    # noinspection PyCallingNonCallable
-                    template = cls(base_path)
-                template = cls.update_template(template, **template_dict)
+                base_path = cls._complete_template_path(base_path, path)
+
+                base_template = cls.from_yaml(base_path)
+                template = base_template.update_template(**template_dict)
                 # may fail if "base" is present but empty
 
             cls.cache[path] = template
 
         return template
 
-    @classmethod
-    def update_template(cls, *args, **kwargs):
-        """Updates the template with a given list of arguments."""
+    def update_template(self, *args, **kwargs):
+        """Updates the template with a given list of arguments and returns a new instance of the template class."""
         raise NotImplementedError
 
+    def apply(self, *args, **kwargs):
+        """Converts the template into its corresponding intermediate representation class."""
+        raise NotImplementedError
 

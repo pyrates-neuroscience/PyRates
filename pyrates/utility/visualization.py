@@ -41,7 +41,7 @@ from typing import Union, Optional
 # pyrates internal imports
 
 # meta infos
-__author__ = "Richard Gast"
+__author__ = "Richard Gast, Daniel Rose"
 __status__ = "development"
 
 
@@ -571,7 +571,7 @@ def plot_tfr(data: np.ndarray, freqs: list, nodes: Optional[list] = None, separa
     return ax
 
 
-def simple_plot(circuit, _format: str = "png", path: str = None, prog="dot", **pydot_args):
+def plot_network_graph(circuit, _format: str = "png", path: str = None, prog="dot", **pydot_args):
     """Simple straight plot using graphviz via pydot.
 
     Parameters

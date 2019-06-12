@@ -74,15 +74,13 @@ def setup_module():
                                       ])
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
-    from pyrates.frontend.template.operator import OperatorTemplateLoader
     from pyrates.frontend.template.operator import OperatorTemplate
-    from pyrates.frontend import template_from_yaml
 
-    template = template_from_yaml(operator, OperatorTemplate)  # type: OperatorTemplate
+    template = OperatorTemplate.from_yaml(operator)  # type: OperatorTemplate
 
-    assert template.path in OperatorTemplateLoader.cache
+    assert template.path in OperatorTemplate.cache
 
-    cached_template = OperatorTemplateLoader.cache[operator]  # type: OperatorTemplate
+    cached_template = OperatorTemplate.cache[operator]  # type: OperatorTemplate
     assert template is cached_template
     assert template.path == cached_template.path
     assert template.equations == cached_template.equations
@@ -151,8 +149,7 @@ def test_full_jansen_rit_circuit_template_load():
     template = CircuitTemplate.from_yaml(path)
 
     # test, whether circuit is in loader cache
-    from pyrates.frontend.template.abc import TemplateLoader
-    assert template is TemplateLoader.cache[path]
+    assert template is CircuitTemplate.cache[path]
 
     # test, whether node templates have been loaded successfully
     nodes = {"JR_PC": "model_templates.jansen_rit.population.templates.JansenRitPC",
@@ -161,17 +158,17 @@ def test_full_jansen_rit_circuit_template_load():
 
     for key, value in nodes.items():
         assert isinstance(template.nodes[key], NodeTemplate)
-        assert template.nodes[key] is TemplateLoader.cache[value]
+        assert template.nodes[key] is NodeTemplate.cache[value]
         # test operators in node templates
         for op in template.nodes[key].operators:
-            assert op.path in TemplateLoader.cache
+            assert op.path in OperatorTemplate.cache
             assert isinstance(op, OperatorTemplate)
 
     # test, whether coupling operator has been loaded correctly
     coupling_path = "model_templates.jansen_rit.edges.LinearCouplingOperator"
     edge_temp = template.edges[0][2]
     assert isinstance(edge_temp, EdgeTemplate)
-    assert list(edge_temp.operators)[0] is TemplateLoader.cache[coupling_path]
+    assert list(edge_temp.operators)[0] is OperatorTemplate.cache[coupling_path]
 
     assert repr(template) == f"<CircuitTemplate '{path}'>"
 
