@@ -511,6 +511,8 @@ def plot_psd(data: pd.DataFrame, fmin: float = 0., fmax: float = 100., tmin: flo
         # create line plot
         ##################
 
+        if len(data.shape) < 2:
+            data = pd.DataFrame(data=data.values, columns=['data'], index=data.index)
         raw = mne_from_dataframe(data)
         return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs).axes
 
@@ -792,6 +794,9 @@ class Interactive2DParamPlot(object):
                           xticklabels=list(np.round(x_values, decimals=2)), cmap='magma')
         set_num_axis_ticks(ax=self.ax[0], num_x_ticks_old=data_map.shape[1], num_y_ticks_old=data_map.shape[0])
 
+        # set up grid in right subplot
+        self.ax[1].grid(visible=True, color="silver")
+
         # Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot
         self.fig.canvas.mpl_connect('button_press_event', self)
 
@@ -829,7 +834,7 @@ class Interactive2DParamPlot(object):
         plot_timeseries(time_series, ax=self.ax[1])
         self.ax[1].grid(visible=True, color="silver")
         self.ax[1].set_title(f'x: {np.round(x_value, decimals=2)}, y: {np.round(y_value, decimals=2)}')
-        plt.show()
+        self.fig.canvas.draw()
 
     def get_data(self, x_value, y_value):
         """Access data in data_series
@@ -841,7 +846,7 @@ class Interactive2DParamPlot(object):
         :param y_value:
         :return:
         """
-        return self.data[y_value][x_value][self.kwargs["tau_e"]][self.kwargs["tau_i"]]
+        return self.data[y_value][x_value] #[self.kwargs["tau_e"]][self.kwargs["tau_i"]]
 
     def set_map_xlabel(self, label):
         self.ax[0].set_xlabel(label)

@@ -217,9 +217,10 @@ class ExpressionParser(ParserElement):
                                                      Optional(arg_comb.suppress()))) +
                                          par_r.suppress() + Optional(arg_comb)) +
                     Optional(self.expr.suppress() + ZeroOrMore((arg_comb.suppress() + self.expr.suppress())))
-                    + par_r.suppress() | name | pi | e | num_float | num_int).setParseAction(self._push_first) | \
-                   (par_l.setParseAction(self._push_last) + self.expr.suppress() +
-                    par_r).setParseAction(self._push_negone)
+                    + par_r.suppress() | name | pi | e | num_float | num_int
+                    ).setParseAction(self._push_neg_or_first) | \
+                   (par_l.setParseAction(self._push_last) + self.expr.suppress() + par_r
+                    ).setParseAction(self._push_neg)
 
             # apply indexing to atoms
             indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
@@ -266,23 +267,19 @@ class ExpressionParser(ParserElement):
         """
         self.expr_stack.append(toks[0])
 
-    def _push_negone(self, strg, loc, toks):
+    def _push_neg(self, strg, loc, toks):
         """Push negative one multiplier if on first position in toks.
         """
         if toks and toks[0] == '-':
             self.expr_stack.append('-one')
 
-    def _push_all(self, strg, loc, toks):
+    def _push_neg_or_first(self, strg, loc, toks):
         """Push all tokens to expression stack at once (first-to-last).
         """
-        for t in toks:
-            self.expr_stack.append(t)
-
-    def _push_all_reverse(self, strg, loc, toks):
-        """Push all tokens to expression stack at once (last-to-first).
-        """
-        for t in range(len(toks)-1, -1, -1):
-            self.expr_stack.append(toks[t])
+        if toks and toks[0] == '-':
+            self.expr_stack.append('-one')
+        else:
+            self.expr_stack.append(toks[0])
 
     def _push_last(self, strg, loc, toks):
         """Push tokens in last-to-first order to expression stack.

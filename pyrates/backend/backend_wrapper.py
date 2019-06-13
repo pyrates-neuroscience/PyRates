@@ -401,10 +401,17 @@ class PyRatesAssignOp(PyRatesOp):
                     var_idx = f"[{args[2].return_val}]"
                 else:
                     var_idx = f"[{key}]"
+            elif type(args[2]) is str:
+                key = cls._generate_unique_argnames([args[3].short_name])[0]
+                var_idx = f"[{args[2]}]"
+                var_idx = var_idx.replace(args[3].short_name, key)
             else:
                 key = cls._generate_unique_argnames(["idx"])[0]
                 var_idx = f"[{key}]"
-            results_args.append(args[2])
+            if type(args[2]) is str and len(args) > 3:
+                results_args.append(args[3])
+            else:
+                results_args.append(args[2])
             results_arg_names.append(key)
         elif hasattr(var, 'shape') and len(var.shape) > 0 and type(var) is NumpyVar:
             var_idx = "[:]"
@@ -1268,6 +1275,16 @@ class NumpyBackend(object):
         if op in ["=", "+=", "-=", "*=", "/="]:
             if decorator is None and self._rt_optimization:
                 decorator = self._optimize_decorator(op, args)
+            if len(args) > 2 and hasattr(args[2], 'shape') and len(args[2].shape) > 1 and \
+                'bool' not in str(type(args[2])):
+                args_tmp = list(args)
+                if not hasattr(args_tmp[2], 'short_name'):
+                    idx = self.add_var(vtype='state_var', name='idx', value=args_tmp[2])
+                else:
+                    idx = args_tmp[2]
+                var, upd, idx = self._process_update_args(args[0], args[1], idx)
+                idx_str = ",".join([f"{idx.short_name}[:,{i}]" for i in range(idx.shape[1])])
+                args = (var, upd, idx_str, idx)
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         elif op is "index":
             return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], "", *args)
@@ -1337,6 +1354,68 @@ class NumpyBackend(object):
         code_gen = self._generate_layer_run_body(code_gen, op_names, op_args_str)
 
         return code_gen.generate(), tuple(op_args)
+
+    def _process_update_args(self, var, update, idx):
+        """Preprocesses the index and a variable update to match the variable shape.
+
+        Parameters
+        ----------
+        var
+        update
+        idx
+
+        Returns
+        -------
+        tuple
+            Preprocessed index and re-shaped update.
+
+        """
+
+        # pre-process args
+        ###################
+
+        shape = var.shape
+
+        # match shape of index and update to shape
+        ##########################################
+
+        if idx.shape[0] != update.shape[0]:
+            if update.shape[0] == 1 and len(update.shape) == 1:
+                idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
+            elif idx.shape[0] == 1:
+                update = self.add_op('reshape', update, (1,) + tuple(update.shape))
+            else:
+                raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
+                                 f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')
+
+        if len(idx.shape) < 2:
+            idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
+
+        shape_diff = len(shape) - idx.shape[1]
+        if shape_diff < 0:
+            raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
+                             f'length {idx.shape[1]}')
+
+        # manage shape of updates
+        update_dim = 0
+        if len(update.shape) > 1:
+            update_dim = len(update.shape[1:])
+            if update_dim > shape_diff:
+                singleton = -1 if update.shape[-1] == 1 else list(update.shape).index(1)
+                update = self.add_op('squeeze', update, singleton)
+                if len(update.shape) > 1:
+                    update_dim = len(update.shape[1:])
+
+        # manage shape of idx
+        shape_diff = int(shape_diff) - update_dim
+        if shape_diff > 0:
+            indices = []
+            indices.append(idx)
+            for i in range(shape_diff):
+                indices.append(self.add_op('zeros', tuple(idx.shape), idx.dtype))
+            idx = self.add_op('concat', indices, 1)
+
+        return var, update, idx
 
     @staticmethod
     def _generate_layer_run_body(code_gen, ops: List[str], op_args: List[str]):
@@ -1575,68 +1654,6 @@ class TensorflowBackend(NumpyBackend):
                     break
             args = tuple(args)
         return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
-
-    def _process_update_args(self, var, update, idx):
-        """Preprocesses the index and a variable update to match the variable shape.
-
-        Parameters
-        ----------
-        var
-        update
-        idx
-
-        Returns
-        -------
-        tuple
-            Preprocessed index and re-shaped update.
-
-        """
-
-        # pre-process args
-        ###################
-
-        shape = var.shape
-
-        # match shape of index and update to shape
-        ##########################################
-
-        if idx.shape[0] != update.shape[0]:
-            if update.shape[0] == 1 and len(update.shape) == 1:
-                idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
-            elif idx.shape[0] == 1:
-                update = self.add_op('reshape', update, (1,) + tuple(update.shape))
-            else:
-                raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
-                                 f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')
-
-        if len(idx.shape) < 2:
-            idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
-
-        shape_diff = len(shape) - idx.shape[1]
-        if shape_diff < 0:
-            raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
-                             f'length {idx.shape[1]}')
-
-        # manage shape of updates
-        update_dim = 0
-        if len(update.shape) > 1:
-            update_dim = len(update.shape[1:])
-            if update_dim > shape_diff:
-                singleton = -1 if update.shape[-1] == 1 else list(update.shape).index(1)
-                update = self.add_op('squeeze', update, singleton)
-                if len(update.shape) > 1:
-                    update_dim = len(update.shape[1:])
-
-        # manage shape of idx
-        shape_diff = int(shape_diff) - update_dim
-        if shape_diff > 0:
-            indices = []
-            indices.append(idx)
-            for i in range(shape_diff):
-                indices.append(self.add_op('zeros', tuple(idx.shape), idx.dtype))
-            idx = self.add_op('concat', indices, 1)
-
-        return var, update, idx
 
     def _process_idx_args(self, var, idx):
         """Preprocesses the index to a variable.

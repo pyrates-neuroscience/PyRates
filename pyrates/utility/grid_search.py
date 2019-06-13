@@ -113,9 +113,9 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: dict,
     for out_name in out_names:
         outs += [out_name] * n_iters
     multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
-    multi_idx = [outs] + multi_idx
-    index = pd.MultiIndex.from_arrays(multi_idx, names=["out_var"] + param_keys)
-    index = pd.MultiIndex.from_tuples(list(set(index)), names=["out_var"] + param_keys)
+    multi_idx = multi_idx + [outs]
+    index = pd.MultiIndex.from_arrays(multi_idx, names=param_keys + ["out_var"])
+    index = pd.MultiIndex.from_tuples(list(set(index)), names=param_keys + ["out_var"])
 
     # assign parameter updates to each circuit and combine them to unconnected network
     circuit = CircuitIR()
@@ -124,8 +124,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: dict,
     results_indices = []
     i = 0
     for idx in index.values:
-        if idx[1:] not in results_indices:
-            results_indices.append(idx[1:])
+        if idx[:-1] not in results_indices:
+            results_indices.append(idx[:-1])
             new_params = {}
             for key, val in zip(param_keys, idx):
                 if key in param_grid:
@@ -170,7 +170,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: dict,
     for out_name, out_info in zip(out_names, out_nodes):
         node, op, var = out_info
         for node_name, params in zip(circuit_names, results_indices):
-            key = (out_name,) + params
+            key = params + (out_name,)
             idx = list(net.get_var(f"{node_name}/{node}", op, var, retrieve=False).values())
             results_final[key] = results[out_name].iloc[:, idx]
 

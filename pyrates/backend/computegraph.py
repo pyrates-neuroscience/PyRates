@@ -74,7 +74,7 @@ class ComputeGraph(object):
     def __init__(self,
                  net_config: CircuitIR,
                  dt: float = 1e-3,
-                 vectorization: str = 'nodes',
+                 vectorization: str = 'none',
                  name: Optional[str] = 'net0',
                  build_in_place: bool = True,
                  backend: str = 'numpy',
@@ -347,8 +347,7 @@ class ComputeGraph(object):
         output_shapes = []
         if outputs:
             for key, val in outputs.items():
-                var_key, var_val = self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col",
-                                                scope="output_collection").popitem()
+                var_key, var_val = self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col").popitem()
                 var_shape = tuple(var_val.shape)
                 if var_shape in output_shapes:
                     idx = output_shapes.index(var_shape)
@@ -416,11 +415,14 @@ class ComputeGraph(object):
                         var = self._get_node_attr(node=key[0], op=key[1], attr=key[2])
                         inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
-                    elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                    elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]) or \
+                            any([key[0].split('.')[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+
+                        key_tmp = key[0].split('.')[0] if '.' in key[0] else key[0]
 
                         # add vectorized placeholder variable of specified node type to input dictionary
                         for node in list(self.net_config.nodes.keys()):
-                            if key[0] in node:
+                            if key_tmp in node:
                                 break
                         var = self._get_node_attr(node=node, op=key[1], attr=key[2])
                         inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
@@ -498,7 +500,10 @@ class ComputeGraph(object):
             var = outputs.pop(key)
             if len(var.shape) > 1 and var.shape[1] > 1:
                 for i in range(var.shape[1]):
-                    out_var_vals.append(var[:, i])
+                    var_tmp = var[:, i]
+                    if len(var.shape) > 1:
+                        var_tmp = np.squeeze(var_tmp)
+                    out_var_vals.append(var_tmp)
                     key_split = key.split('/')
                     var_name = key_split[-1]
                     var_name = var_name[:var_name.find('_col')]
@@ -584,13 +589,13 @@ class ComputeGraph(object):
             # get output variable from backend nodes of a certain type
             for node_tmp in self.net_config.nodes.keys():
                 if node in node_tmp:
-                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
+                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
         else:
 
             # get output variable of specific, vectorized backend node
             for node_tmp in self._net_config_map.keys():
                 if node in node_tmp and '_all' in node_tmp:
-                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var)
+                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
 
         return var_col
 
@@ -908,7 +913,7 @@ class ComputeGraph(object):
         self.net_config.edges[source, target, edge][attr] = val
         return self.net_config.edges[source, target, edge][attr]
 
-    def _get_op_attr(self, node: str, op: str, attr: str, retrieve: bool = True) -> Any:
+    def _get_op_attr(self, node: str, op: str, attr: str, retrieve: bool = True, **kwargs) -> Any:
         """Extracts attribute of an operator.
 
         Parameters

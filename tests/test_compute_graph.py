@@ -402,5 +402,5 @@ def test_2_4_vectorization():
         #error2 = nmrse(results0.values, results2.values)
 
         assert np.sum(results1.values) > 0.
-        assert np.mean(error1) == pytest.approx(0., rel=1e-6)
+        assert np.mean(error1) == pytest.approx(0., rel=1e-6, abs=1e-6)
         #assert np.mean(error2) == pytest.approx(0., rel=1e-6)
