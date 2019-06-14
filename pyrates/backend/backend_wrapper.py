@@ -1719,6 +1719,20 @@ class TensorflowBackend(NumpyBackend):
         else:
             return op1, self.add_op('cast', op2, str(type(op1)).split('\'')[-2])
 
+    @tf.function
+    def _run(self, layers, sampling_layer, steps, sampling_steps):
+        if sampling_layer is None:
+            for _ in tf.range(steps):
+                for func, args in layers:
+                    func(*args)
+        else:
+            sampling_func, sampling_args = sampling_layer
+            for step in tf.range(steps):
+                if step % sampling_steps == 0:
+                    sampling_func(*sampling_args)
+                for func, args in layers:
+                    func(*args)
+
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:
         """Checks whether the shapes of op1 and op2 are compatible with each other.
