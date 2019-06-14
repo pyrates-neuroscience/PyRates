@@ -378,7 +378,6 @@ class GeneticAlgorithmTemplate:
             print(f'{column}: ', end="")
             print(*data)
 
-
     def eval_fitness(self, target: list, *argv, **kwargs):
         raise NotImplementedError
 
