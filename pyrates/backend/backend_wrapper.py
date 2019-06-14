@@ -788,7 +788,7 @@ class NumpyBackend(object):
         #################
 
         # map layers that need to be executed to compiled network structure
-        imports = kwargs.pop('imports', ["import numpy as np", "from numba import jit, prange",
+        imports = kwargs.pop('imports', ["import numpy as np", "from numba import njit, prange",
                                          "from pyrates.backend.funcs import *"])
         decorator = kwargs.pop('decorator', "")
         layer_run_funcs = self.compile(imports=imports, decorator=decorator)
@@ -1299,11 +1299,7 @@ class NumpyBackend(object):
             return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], "", *args)
 
     def _optimize_decorator(self, op, args):
-        decorators = ["", "@jit", "@jit(fastmath=True)", "@jit(nogil=True)",
-                      "@jit(nogil=True, fastmath=True)", "@jit(nopython=True)", "@jit(nopython=True, parallel=True)",
-                      "@jit(nopython=True, fastmath=True)", "@jit(nopython=True, fastmath=True, parallel=True)",
-                      "@jit(nopython=True, fastmath=True, parallel=True, nogil=True)",
-                      "@jit(nopython=True, fastmath=True, nogil=True)", "@jit(nopython=True, nogil=True)"]
+        decorators = [None, "@njit", "@njit(parallel=True)"]
         decorator_times = [np.infty for _ in range(len(decorators))]
         args = deepcopy(args)
         for i, dec in enumerate(decorators):
