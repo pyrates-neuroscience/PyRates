@@ -244,6 +244,7 @@ class PyRatesOp:
         self.constant = op_dict['constant']
 
         # generate function
+        tf.function()
         func_dict = {}
         exec(op_dict['func'], globals(), func_dict)
         self._callable = func_dict.pop(self.short_name)
@@ -518,14 +519,13 @@ class PyRatesAssignOp(PyRatesOp):
 
             var_idx = ""
 
-        # if update is a NumpyVar, index the elements of the update
-        #upd_idx = "[:]" if hasattr(upd, 'shape') and len(upd.shape) > 0 and type(var) is NumpyVar else ""
-        upd_idx = ""
-
-        # add variable and update to the function arguments
+        # add variable to the function arguments
         var_key = cls._generate_unique_argnames([var.short_name])[0]
+        var_pos = len(results_args)
         results_args.append(var)
         results_arg_names.append(var_key)
+
+        # add variable update to the function arguments
         upd_key = cls._generate_unique_argnames([upd.short_name])[0] if hasattr(upd, 'short_name') else \
             cls._generate_unique_argnames(["upd"])[0]
         upd_pos = len(results_args)
@@ -574,16 +574,21 @@ class PyRatesAssignOp(PyRatesOp):
         # assign update to variable and return variable
         ###############################################
 
+        var_str = results_args[var_pos]['call'] if type(results_args[var_pos]) is dict else var_key
         upd_str = results_args[upd_pos]['call'] if type(results_args[upd_pos]) is dict else upd_key
         if op in ["=", "+=", "-=", "*=", "/="]:
-            code_gen.add_code_line(f"{var_key}{var_idx} {op} {upd_str}{upd_idx}")
-        elif "update" in op:
-            code_gen.add_code_line(f"{var_key}.{op}({var_idx}{upd_str}{upd_idx})")
+            code_gen.add_code_line(f"{var_str}{var_idx} {op} {upd_str}")
+        elif "scatter" in op:
+            scatter_into_first_dim = args[-1]
+            if len(args) > 3 and scatter_into_first_dim:
+                code_gen.add_code_line(f"{var_str}.{op}([{var_idx}], [{upd_str}])")
+            else:
+                code_gen.add_code_line(f"{var_str}.{op}({var_idx}{upd_str})")
         else:
-            code_gen.add_code_line(f"{var_key}{var_idx}.{op}({upd_str}{upd_idx})")
+            code_gen.add_code_line(f"{var_str}{var_idx}.{op}({upd_str})")
         code_gen.add_linebreak()
-        code_gen.add_code_line(f"return {var_key}")
-        results['return_val'] = var_key
+        code_gen.add_code_line(f"return {var_str}")
+        results['return_val'] = var_str
 
         # generate op
         results['func'] = code_gen.generate()
@@ -592,9 +597,14 @@ class PyRatesAssignOp(PyRatesOp):
 
 
 class PyRatesIndexOp(PyRatesOp):
+    """Sub-class for indexing operations. Typically, an index is provided (2. entry in args) indicating which values to
+     extract from a variable (1. entry in args).
+    """
 
     @classmethod
     def generate_op(cls, name, op, args, decorator):
+        """Generates the index function string, call signature etc.
+        """
 
         # initialization
         code_gen = CodeGen()
@@ -602,8 +612,14 @@ class PyRatesIndexOp(PyRatesOp):
                    'call': None, 'input_ops': [], 'return_val': None}
 
         # extract variable
+        ##################
+
         var_tmp = args[0]
+        n_vars = 0
+
         if type(var_tmp) in (PyRatesOp, PyRatesAssignOp, PyRatesIndexOp):
+
+            # nest pyrates operations and their arguments into the indexing operation
             var = var_tmp.return_val
             pop_indices = []
             for arg_tmp in var_tmp.arg_names:
@@ -617,19 +633,32 @@ class PyRatesIndexOp(PyRatesOp):
             results['input_ops'].append(var_tmp.short_name)
             results['args'] += new_args
             results['arg_names'] += new_arg_names
+            n_vars += 1
+
         elif type(var_tmp) is NumpyVar or issubclass(type(var_tmp), tf.Variable):
+
+            # parse pyrates variables into the indexing operation
             var = cls._generate_unique_argnames([var_tmp.short_name])[0]
             results['args'].append(var_tmp)
             results['arg_names'].append(var)
+            n_vars += 1
+
         else:
+
+            # parse constant into the indexing operation
             var = f"c_{cls.n_consts}"
             results['args'].append(var_tmp)
             results['arg_names'].append(var)
             cls.n_consts += 1
 
         # extract idx
+        #############
+
         idx = args[1]
+
         if type(idx) in (PyRatesOp, PyRatesAssignOp, PyRatesIndexOp):
+
+            # nest pyrates operations and their arguments into the indexing operation
             var_idx = f"[{idx.return_val}]"
             pop_indices = []
             for arg_tmp in idx.arg_names:
@@ -643,26 +672,42 @@ class PyRatesIndexOp(PyRatesOp):
             results['input_ops'].append(idx.short_name)
             results['args'] += new_args
             results['arg_names'] += new_arg_names
+            n_vars += 1
+
         elif type(idx) is NumpyVar or issubclass(type(idx), tf.Variable):
+
+            # parse pyrates variables into the indexing operation
             key = cls._generate_unique_argnames([idx.short_name])[0]
             var_idx = f"[{key}]"
             results['args'].append(idx)
             results['arg_names'].append(key)
+            n_vars += 1
+
         elif type(idx) is str or "int" in str(type(idx)) or "float" in str(type(idx)):
+
+            # parse constant numpy-like indices into the indexing operation
             for arg in args[2:]:
                 if hasattr(arg, 'short_name') and arg.short_name in idx:
                     name_tmp = arg.short_name
                     if name_tmp in cls.arg_names:
                         arg.short_name = f"{name_tmp}_{cls.arg_names[name_tmp]}"
                         idx = idx.replace(name_tmp, arg.short_name)
+                    n_vars += 1
             var_idx = f"[{idx}]"
+
         elif type(idx) in (list, tuple):
+
+            # parse list of constant indices into the operation
             var_idx = f"{list(idx)}"
+
         elif hasattr(idx, 'shape'):
+
+            # parse constant array into the operation
             key = cls._generate_unique_argnames(["idx"])[0]
             var_idx = f"[{key}]"
             results['args'].append(idx)
             results['arg_names'].append(key)
+
         else:
             raise ValueError(f'Index type not understood: {idx}. Please consider another form of variable indexing.')
 
@@ -680,7 +725,8 @@ class PyRatesIndexOp(PyRatesOp):
             code_gen.add_code_line(f"{arg},")
 
         # remaining arguments
-        code_gen, results, results_args, results_arg_names, _ = cls._process_args(code_gen, args[2:], results)
+        code_gen, results, results_args, results_arg_names, n_vars_tmp = cls._process_args(code_gen, args[2:], results)
+        n_vars += n_vars_tmp
 
         # end of function head
         code_gen.code[-1] = code_gen.code[-1][:-1]
@@ -699,6 +745,10 @@ class PyRatesIndexOp(PyRatesOp):
         # generate op
         results['func'] = code_gen.generate()
 
+        # check whether any state variables are part of the indexing operation or not
+        if n_vars == 0:
+            results['constant'] = True
+
         return results
 
 
@@ -708,14 +758,29 @@ class PyRatesIndexOp(PyRatesOp):
 
 
 class NumpyBackend(object):
-    """Wrapper to numpy.
+    """Wrapper to numpy. This class provides an interface to all numpy functionalities that may be accessed via pyrates.
+    All numpy variables and operations will be stored in a layered compute graph that can be executed to evaluate the
+    (dynamic) behavior of the graph.
 
     Parameters
     ----------
     ops
-        Additional operations this backend instance can perform, defined as key-value pairs.
+        Additional operations this backend instance can perform, defined as key-value pairs. The key can then be used in
+        every equation parsed into this backend. The value is a dictionary again, with two keys:
+            1) name - the name of the function/operation (used during code generation)
+            2) call - the call signature of the function including import abbreviations (i.e. `np.add` for numpy's add
+            function)
     dtypes
         Additional data-types this backend instance can use, defined as key-value pairs.
+    name
+        Name of the backend instance. Used during code generation to create a recognizable file structure.
+    float_default_type
+        Default float precision. If no data-type is indicated for a particular variable, this will be used.
+    jit_compile
+        If true, all backend functions will be attempted to be build with optimized `jit` decorators.
+    imports
+        Can be used to pass additional import statements that are needed for code generation of the custom functions
+        provided via `ops`. Will be added to the top of each generated code file.
 
     """
 
@@ -724,7 +789,8 @@ class NumpyBackend(object):
                  dtypes: Optional[Dict[str, object]] = None,
                  name: str = 'net_0',
                  float_default_type: str = 'float32',
-                 jit_compile: bool = False
+                 imports: Optional[List[str]] = None,
+                 jit_compile: bool = False,
                  ) -> None:
         """Instantiates tensorflow backend, i.e. a tensorflow graph.
         """
@@ -796,6 +862,7 @@ class NumpyBackend(object):
         if ops:
             self.ops.update(ops)
 
+        # base data-types
         self.dtypes = {"float16": np.float16,
                        "float32": np.float32,
                        "float64": np.float64,
@@ -812,6 +879,7 @@ class NumpyBackend(object):
         if dtypes:
             self.dtypes.update(dtypes)
 
+        # further attributes
         self.vars = dict()
         self.layers = [[]]
         self.var_counter = {}
@@ -823,6 +891,11 @@ class NumpyBackend(object):
         self.name = name
         self._rt_optimization = jit_compile
         self._base_layer = 0
+        if imports:
+            self._imports = imports
+        else:
+            self._imports = ["import numpy as np", "from numba import njit, prange",
+                             "from pyrates.backend.funcs import *"]
 
     def run(self,
             steps: int,
@@ -832,22 +905,16 @@ class NumpyBackend(object):
             profile: Optional[str] = None,
             **kwargs
             ) -> Union[Dict[str, tf.Variable], Tuple[dict, float, float]]:
-        """Executes all operations in tensorflow graph for a given number of steps.
+        """Executes all operations in the backend graph for a given number of steps.
 
         Parameters
         ----------
         steps
             Number of graph evaluations.
-        inputs
-            Inputs fed into the graph.
         outputs
             Variables in the graph to store the history from.
-        layers
-            Indices of layers to evaluate. If None, all will be evaluated.
         sampling_steps
             Number of graph execution steps to combine into a single output step.
-        sampling_layer
-            Index of the layer containing sampling ops.
         out_dir
             Directory to write the session log into.
         profile
@@ -892,10 +959,8 @@ class NumpyBackend(object):
         #################
 
         # map layers that need to be executed to compiled network structure
-        imports = kwargs.pop('imports', ["import numpy as np", "from numba import njit, prange",
-                                         "from pyrates.backend.funcs import *"])
         decorator = kwargs.pop('decorator', "")
-        layer_run_funcs = self.compile(imports=imports, decorator=decorator)
+        layer_run_funcs = self.compile(decorator=decorator)
 
         sampling_layer = layer_run_funcs.pop(-1)
 
@@ -939,7 +1004,6 @@ class NumpyBackend(object):
             Variable type. Can be
                 - `state_var` for variables that can change over time.
                 - `constant` for non-changing variables.
-                - `placeholder` for variables with a value unknown during initialization.
         name
             Name of the variable.
         value
@@ -949,7 +1013,7 @@ class NumpyBackend(object):
         dtype
             Datatype of the variable.
         kwargs
-            Additional keyword arguments passed to the tensorflow functions.
+            Additional keyword arguments.
 
         Returns
         -------
@@ -958,11 +1022,10 @@ class NumpyBackend(object):
 
         """
 
-        # processs input arguments
-        ##########################
-
         # extract variable scope
         scope = kwargs.pop('scope', None)
+
+        # create variable identifier
         if (scope or name):
             if scope:
                 name = f'{scope}/{name}'
@@ -974,8 +1037,6 @@ class NumpyBackend(object):
                 self.var_counter[name] = 1
 
         # create variable
-        #################
-
         var, name = self._create_var(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name)
         self.vars[name] = var
         return var
@@ -989,12 +1050,13 @@ class NumpyBackend(object):
 
         Parameters
         ----------
-        op
-            Key of the operation. Needs to be a key of `TensorflowGraph.ops`
+        op_name
+            Key of the operation. Needs to be a key of `backend.ops`.
         args
             Positional arguments to be passed to the operation.
         kwargs
-            Keyword arguments to be passed to the operation.
+            Keyword arguments to be passed to the operation, except for scope, dependencies and decorator, which are
+            extracted before.
 
         Returns
         -------
@@ -1009,12 +1071,10 @@ class NumpyBackend(object):
         # extract scope
         scope = kwargs.pop('scope', None)
 
-        # extract graph dependencies
-        dependencies = kwargs.pop('dependencies', [])
-
         # extract operator decorator
         decorator = kwargs.pop('decorator', None)
 
+        # generate operator identifier
         name = kwargs.pop('name', None)
         if name and scope:
             name = f'{scope}/{name}'
@@ -1027,6 +1087,8 @@ class NumpyBackend(object):
         else:
             self.op_counter[name] = 0
 
+        # extract and process graph dependencies
+        dependencies = kwargs.pop('dependencies', [])
         if dependencies:
             found = False
             for dep in dependencies:
@@ -1039,9 +1101,12 @@ class NumpyBackend(object):
         # create operation
         ##################
 
-        # generate op
         try:
+
+            # try generating the operator
             op = self._create_op(op_name, *args, decorator=decorator)
+
+            # make sure that the output shape of the operation matches the expectations
             in_shape = []
             expand_ops = ('@', 'index', 'concat', 'expand', 'stack', 'group', 'asarray')
             if op_name not in expand_ops:
@@ -1055,14 +1120,23 @@ class NumpyBackend(object):
                 if hasattr(op, 'shape') and (sum(tuple(op.shape)) > max(in_shape)):
                     arg1, arg2 = self.broadcast(args[0], args[1])
                     op = self._create_op(op_name, arg1, arg2, *args[2:], decorator=decorator)
-        except (TypeError, ValueError):
+
+        except Exception:
+
             if type(args[0]) in (tuple, list) and len(args[0] > 1):
+
+                # broadcast entries of argument tuples
                 args_tmp = self.broadcast(args[0][0], args[0][1])
                 args_tmp = (args_tmp[0], args_tmp[1]) + tuple(args[0][2:])
                 args_new = args_tmp + args[1:]
+
             else:
+
+                # broadcast leading 2 arguments to operation
                 args_tmp = self.broadcast(args[0], args[1])
                 args_new = args_tmp + args[2:]
+
+            # try to generate operation again
             op = self._create_op(op_name, *args_new, decorator=decorator)
 
         # remove op inputs from layers (need not be evaluated anymore)
@@ -1070,7 +1144,7 @@ class NumpyBackend(object):
             idx_1, idx_2 = self.op_indices[op_name_tmp]
             self._set_op(None, idx_1, idx_2)
 
-        # add op to the graph
+        # for constant ops, add a constant to the graph, containing the op evaluation
         if op.constant:
             new_var = op.eval()
             if hasattr(new_var, 'shape'):
@@ -1079,6 +1153,7 @@ class NumpyBackend(object):
             else:
                 return new_var
 
+        # add op to the graph
         self._add_op(op)
         self.op_indices[op.short_name] = (self.layer, len(self.get_current_layer())-1)
         return op
@@ -1088,6 +1163,8 @@ class NumpyBackend(object):
 
         Parameters
         ----------
+        to_beginning
+            If true, layer is appended to the beginning of the layer stack instead of the end
 
         Returns
         -------
@@ -1103,34 +1180,81 @@ class NumpyBackend(object):
             self.layer = len(self.layers)
             self.layers.append([])
 
-    def next_layer(self):
+    def add_output_layer(self, outputs, sampling_steps, out_shapes):
+
+        output_col = {}
+
+        # create counting index for collector variables
+        out_idx = self.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
+                               scope="output_collection")
+
+        # add output storage layer to the graph
+        self.add_layer()
+
+        # add collector variables to the graph
+        for i, (var_col) in enumerate(outputs):
+            shape = (sampling_steps + 1, len(var_col)) + out_shapes[i]
+            key = f"output_col_{i}"
+            output_col[key] = self.add_var(vtype='state_var', name=f"out_col_{i}", scope="output_collection",
+                                           value=np.zeros(shape, dtype=self._float_def))
+            var_stack = self.stack_vars(var_col)
+
+            # add collect operation to the graph
+            self.add_op('=', output_col[key], var_stack, out_idx, scope="output_collection")
+
+        # create increment operator for counting index
+        self.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
+
+        return output_col
+
+    def next_layer(self) -> None:
+        """Jump to next layer in stack. If we are already at end of layer stack, add new layer to the stack and jump to
+        that.
+        """
         if self.layer == len(self.layers)-1:
             self.add_layer()
         else:
             self.layer += 1
 
-    def previous_layer(self):
+    def previous_layer(self) -> None:
+        """Jump to previous layer in stack. If we are already at beginning of layer stack, add new layer to beginning of
+        the stack and jump to that.
+        """
         if self.layer == -self._base_layer:
             self.add_layer(to_beginning=True)
         else:
             self.layer -= 1
 
-    def remove_layer(self, idx):
+    def remove_layer(self, idx) -> None:
+        """Removes layer at index from stack.
+
+        Parameters
+        ----------
+        idx
+            Position of layer in graph.
+
+        """
         self.layers.pop(self._base_layer + idx)
         if idx <= self._base_layer:
             self._base_layer -= 1
 
-    def top_layer(self):
+    def top_layer(self) -> None:
+        """Jump to top layer of the stack.
+        """
         self.layer = len(self.layers)-1
 
-    def bottom_layer(self):
+    def bottom_layer(self) -> None:
+        """Jump to bottom layer of the stack.
+        """
         self.layer = -self._base_layer
 
-    def get_current_layer(self):
+    def get_current_layer(self) -> list:
+        """Get operations in current layer.
+        """
         return self.layers[self._base_layer + self.layer]
 
-    def clear(self):
-        """Resets all tensorflow operations on the graph.
+    def clear(self) -> None:
+        """Removes all layers, variables and operations from graph. Deletes build directory.
         """
         self.vars.clear()
         self.layers = [[]]
@@ -1139,7 +1263,23 @@ class NumpyBackend(object):
         self.layer = 0
         rmtree(self._build_dir)
 
-    def get_var(self, name, updated=True):
+    def get_var(self, name, updated=True) -> NumpyVar:
+        """Retrieve variable from graph.
+
+        Parameters
+        ----------
+        name
+            Identifier of the variable.
+        updated
+            If true, return updated value of a state-variable. Else, return the old, non-updated variable of a
+            state-variable.
+
+        Returns
+        -------
+        NumpyVar
+            Variable from graph.
+
+        """
         if updated:
             return self.vars[name]
         else:
@@ -1148,16 +1288,49 @@ class NumpyBackend(object):
             except KeyError:
                 return self.vars[name]
 
-    def get_layer(self, idx):
+    def get_layer(self, idx) -> list:
+        """Retrieve layer from graph.
+
+        Parameters
+        ----------
+        idx
+            Position of layer in stack.
+
+        """
         return self.layers[self._base_layer + idx]
 
-    def eval_var(self, var):
+    def eval_var(self, var) -> np.ndarray:
+        """Get value of variable.
+
+        Parameters
+        ----------
+        var
+            Identifier of variable in graph.
+
+        Returns
+        -------
+        np.ndarray
+            Current value of the variable.
+
+        """
         return self.vars[var].eval()
 
-    def compile(self, build_dir=None, imports=None, decorator=None):
+    def compile(self, build_dir: str = None, decorator: str = None) -> list:
+        """Compile the graph layers/operations. Creates python files containing the functions in each layer.
 
-        if not imports:
-            imports = []
+        Parameters
+        ----------
+        build_dir
+            Directory in which to create the file structure for the simulation.
+        decorator
+            Decorator to add to the python functions.
+
+        Returns
+        -------
+        list
+            Contains tuples of layer run functions and their respective arguments.
+
+        """
 
         # remove empty layers and operators
         new_layer_idx = 0
@@ -1193,7 +1366,7 @@ class NumpyBackend(object):
         net_dir = os.getcwd()
         self._build_dir = net_dir
 
-        # write layer operations to files and import the respective functions from file
+        # write layer operations to files
         for i, layer in enumerate(self.layers):
             l_dir = f"layer_{i}"
             try:
@@ -1205,22 +1378,29 @@ class NumpyBackend(object):
                 if type(op) is not tuple:
                     op_fname = f"op_{j}"
                     with open(f"{op_fname}.py", 'w') as f:
-                        for imp in imports:
+                        for imp in self._imports:
                             f.write(f"{imp}\n")
                         f.write(op.func)
                         f.close()
             os.chdir(net_dir)
 
         # write layer run functions and import them for execution
+        #########################################################
+
+        # preparations
         sys.path.insert(1, build_dir)
         sys.path.insert(2, net_dir)
         with open(f"__init__.py", 'w') as net_init:
             net_init.close()
         net_module = import_module(self.name)
         layer_runs = []
+
         for i, layer in enumerate(self.layers):
+
             layer_ops = []
             os.chdir(f"layer_{i}")
+
+            # write the layer init
             with open(f"__init__.py", 'w') as layer_init:
                 for j in range(len(layer)):
                     layer_init.write(f"from .op_{j} import *\n")
@@ -1228,13 +1408,19 @@ class NumpyBackend(object):
             os.chdir(net_dir)
             t.sleep(0.1)
             reload(net_module)
+
+            # import the layer operations
             for j, op in enumerate(layer):
                 op_module = import_module(f".op_{j}", package=f"{self.name}.layer_{i}")
                 layer_ops.append(getattr(op_module, op.short_name))
-            run_func, run_args = self._generate_layer_run(layer, i, layer_ops, decorator=decorator, imports=imports)
+
+            # generate the layer run function and write it to file
+            run_func, run_args = self._generate_layer_run(layer, i, layer_ops, decorator=decorator)
             with open(f"layer_{i}_run.py", 'w') as f_run:
                 f_run.write(run_func)
                 f_run.close()
+
+            # update the network init
             with open(f"__init__.py", 'w') as net_init:
                 for j in range(i+1):
                     net_init.write(f"from .layer_{j} import *\n")
@@ -1242,18 +1428,28 @@ class NumpyBackend(object):
                 net_init.close()
             t.sleep(0.1)
             reload(net_module)
+
             layer_runs.append((getattr(net_module, f"run_l{i}"), run_args))
+
         sys.path.pop(2)
         sys.path.pop(1)
         os.chdir(orig_path)
 
         return layer_runs
 
-    def eval(self, ops):
+    def eval(self, ops: list) -> list:
+        """Evaluates each operation in list.
+
+        Parameters
+        ----------
+        ops
+            List of operations to evaluate.
+
+        """
         return [op.eval() for op in ops]
 
     def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
-        """Tries to match the shapes of op1 and op2 such that op can be applied. Then applies op to op1 and op2.
+        """Tries to match the shapes of op1 and op2 such that op can be applied.
 
         Parameters
         ----------
@@ -1261,42 +1457,90 @@ class NumpyBackend(object):
             First argument to the operation.
         op2
             Second argument to the operation.
-        return_ops
-            If true, the adjusted arguments (op1 and op2) are returned.
         kwargs
             Additional keyword arguments to be passed to the backend.
 
         Returns
         -------
-        tp.Union[tuple, tp.Any]
-            Output of op applied to op1 and op2. If return_ops, op1 and op2 are also returned.
+        tuple
+            Broadcasted op1 and op2.
 
         """
 
         # try to match shapes
         if not self._compare_shapes(op1, op2):
 
-            # try removing singleton dimensions from op1/op2
+            # try adjusting op2 to match shape of op1
             op1_tmp, op2_tmp = self._match_shapes(op1, op2, adjust_second=True)
+
             if not self._compare_shapes(op1_tmp, op2_tmp):
+
+                # try adjusting op1 to match shape of op2
                 op1_tmp, op2_tmp = self._match_shapes(op1_tmp, op2_tmp, adjust_second=False)
+
             if self._compare_shapes(op1_tmp, op2_tmp):
                 op1, op2 = op1_tmp, op2_tmp
 
         return op1, op2
 
-    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, *args):
+    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, *args) -> Any:
+        """Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.
+
+        Parameters
+        ----------
+        var
+            Variable to index/update
+        idx
+            Index to variable
+        update
+            Update to variable entries
+
+        Returns
+        -------
+        Any
+            Updated/indexed variable.
+
+        """
+
         if update:
             return self.add_op('=', var, update, idx, *args)
         else:
             return self.add_op('index', var, idx, *args)
 
-    def stack_vars(self, vars, **kwargs):
+    def stack_vars(self, vars: tuple, **kwargs) -> np.ndarray:
+        """Group variables into a stack, with the number of variables being the first dimension of the stack.
+
+        Parameters
+        ----------
+        vars
+            Variables to stack together. Should have the same shapes.
+        kwargs
+            Additional keyword arguments (Ignored in this version of the backend).
+
+        Returns
+        -------
+        np.ndarray
+            Stacked variables.
+
+        """
         return self.add_op('asarray', vars)
 
     @staticmethod
-    def eval_layer(layer):
-        return [func(*args) for func, args in layer]
+    def eval_layer(layer: tuple) -> Any:
+        """Evaluate layer run function (can only be used after compilation has been performed).
+
+        Parameters
+        ----------
+        layer
+            Layer tuple as returned by `compile`.
+
+        Returns
+        -------
+        Any
+            Result of layer evaluation.
+
+        """
+        return layer[0](*layer[1])
 
     def _set_op(self, op, idx1, idx2):
         self.layers[self._base_layer+idx1][idx2] = op
@@ -1386,7 +1630,7 @@ class NumpyBackend(object):
                     idx = self.add_var(vtype='state_var', name='idx', value=args_tmp[2])
                 else:
                     idx = args_tmp[2]
-                var, upd, idx = self._process_update_args(args[0], args[1], idx)
+                var, upd, idx, _ = self._process_update_args(args[0], args[1], idx)
                 idx_str = ",".join([f"{idx.short_name}[:,{i}]" for i in range(idx.shape[1])])
                 args = (var, upd, idx_str, idx)
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
@@ -1420,11 +1664,11 @@ class NumpyBackend(object):
 
         return decorators[np.argmin(decorator_times)]
 
-    def _generate_layer_run(self, layer, idx, func_calls, decorator, imports):
+    def _generate_layer_run(self, layer, idx, func_calls, decorator):
 
         # set up file head (imports)
         code_gen = CodeGen()
-        for imp in imports:
+        for imp in self._imports:
             code_gen.add_code_line(imp)
             code_gen.add_linebreak()
         code_gen.add_code_line(f"n_ops = {len(layer)}")
@@ -1455,7 +1699,7 @@ class NumpyBackend(object):
 
         return code_gen.generate(), tuple(op_args)
 
-    def _process_update_args(self, var, update, idx):
+    def _process_update_args_old(self, var, update, idx):
         """Preprocesses the index and a variable update to match the variable shape.
 
         Parameters
@@ -1517,6 +1761,41 @@ class NumpyBackend(object):
 
         return var, update, idx
 
+    def _process_update_args(self, var, update, idx=None):
+        """Preprocesses the index and a variable update to match the variable shape.
+
+        Parameters
+        ----------
+        var
+        update
+        idx
+
+        Returns
+        -------
+        tuple
+            Preprocessed index and re-shaped update.
+
+        """
+
+        # pre-process args
+        shape = var.shape
+        scatter_into_first_dim = False
+
+        # match shape of index and update to shape
+        ##########################################
+
+        if len(shape) == len(update.shape):
+
+            # make sure that update dims match the variable shape
+            update = self.add_op("squeeze", update)
+
+        if update.shape == shape[1:] or not update.shape:
+
+            # make sure that index and update scatter into the first dimension of update
+            scatter_into_first_dim = True
+
+        return var, update, idx, scatter_into_first_dim
+
     @staticmethod
     def _generate_layer_run_body(code_gen, ops: List[str], op_args: List[str]):
         for op, args in zip(ops, op_args):
@@ -1556,16 +1835,27 @@ class NumpyBackend(object):
 
 
 class TensorflowBackend(NumpyBackend):
-    """Wrapper to tensorflow.
+    """Wrapper to tensorflow. This class provides an interface to all tensorflow functionalities that may be accessed
+    via pyrates. All tensorflow variables and operations will be stored in a layered compute graph that can be executed
+    to evaluate the (dynamic) behavior of the graph.
 
     Parameters
     ----------
     ops
-        Additional operations this backend instance can perform, defined as key-value pairs.
+        Additional operations this backend instance can perform, defined as key-value pairs. The key can then be used in
+        every equation parsed into this backend. The value is a dictionary again, with two keys:
+            1) name - the name of the function/operation (used during code generation)
+            2) call - the call signature of the function including import abbreviations (i.e. `tf.add` for tensorflow's
+            add function)
     dtypes
         Additional data-types this backend instance can use, defined as key-value pairs.
-    use_device
-        Default default_device on which to place variables and operations.
+    name
+        Name of the backend instance. Used during code generation to create a recognizable file structure.
+    float_default_type
+        Default float precision. If no data-type is indicated for a particular variable, this will be used.
+    imports
+        Can be used to pass additional import statements that are needed for code generation of the custom functions
+        provided via `ops`. Will be added to the top of each generated code file.
 
     """
 
@@ -1574,20 +1864,15 @@ class TensorflowBackend(NumpyBackend):
                  dtypes: Optional[Dict[str, object]] = None,
                  name: str = 'net_0',
                  float_default_type: str = 'float32',
-                 use_device: str = 'cpu'
+                 imports: Optional[List[str]] = None,
                  ) -> None:
         """Instantiates tensorflow backend, i.e. a tensorflow graph.
         """
 
-        if use_device == 'cpu':
-            device = '/cpu:0'
-        elif use_device == 'gpu':
-            device = '/gpu:0'
-        else:
-            device = use_device
-        self.default_device = device
+        if not imports:
+            imports = ["import tensorflow as tf", "from pyrates.backend.funcs import *"]
 
-        super().__init__(ops, dtypes, name, float_default_type)
+        super().__init__(ops, dtypes, name, float_default_type, imports)
 
         # define operations and datatypes of the backend
         ################################################
@@ -1655,6 +1940,7 @@ class TensorflowBackend(NumpyBackend):
                          "no_op": {'name': "tensorflow_identity", 'call': "tf.identity"},
                          })
 
+        # base data types
         self.dtypes = {"float16": tf.float16,
                        "float32": tf.float32,
                        "float64": tf.float64,
@@ -1677,32 +1963,11 @@ class TensorflowBackend(NumpyBackend):
             profile: Optional[str] = None,
             **kwargs
             ) -> Union[Dict[str, tf.Variable], Tuple[dict, float, float]]:
-        imports = kwargs.pop('imports', ["import tensorflow as tf", "from pyrates.backend.funcs import *"])
-        kwargs['imports'] = imports
         decorator = kwargs.pop('decorator', "@tf.function")
         kwargs['decorator'] = decorator
         return super().run(steps, outputs, sampling_steps, out_dir, profile, **kwargs)
 
     def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
-        """Tries to match the shapes of op1 and op2 such that op can be applied. Then applies op to op1 and op2.
-
-        Parameters
-        ----------
-        op1
-            First argument to the operation.
-        op2
-            Second argument to the operation.
-        return_ops
-            If true, the adjusted arguments (op1 and op2) are returned.
-        kwargs
-            Additional keyword arguments to be passed to the backend.
-
-        Returns
-        -------
-        tp.Union[tuple, tp.Any]
-            Output of op applied to op1 and op2. If return_ops, op1 and op2 are also returned.
-
-        """
 
         # match data types
         if not self._compare_dtypes(op1, op2):
@@ -1757,17 +2022,6 @@ class TensorflowBackend(NumpyBackend):
 
     def _process_idx_args(self, var, idx):
         """Preprocesses the index to a variable.
-
-        Parameters
-        ----------
-        var
-        idx
-
-        Returns
-        -------
-        tuple
-            Variable and preprocessed index.
-
         """
 
         shape = var.shape
@@ -1794,16 +2048,7 @@ class TensorflowBackend(NumpyBackend):
         return var, idx
 
     def _match_dtypes(self, op1: Any, op2: Any) -> tuple:
-        """
-
-        Parameters
-        ----------
-        op1
-        op2
-
-        Returns
-        -------
-
+        """Match data types of two operators/variables.
         """
 
         if issubclass(type(op1), tf.Variable):
@@ -1846,21 +2091,6 @@ class TensorflowBackend(NumpyBackend):
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:
-        """Checks whether the shapes of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the shapes of op1 and op2 are compatible.
-
-        """
 
         if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
             return tuple(op1.shape) == tuple(op2.shape)
@@ -1904,7 +2134,7 @@ class TensorflowBackend(NumpyBackend):
 ##############################################
 
 class CodeGen:
-    """Generates code
+    """Generates python code. Can add code lines, line-breaks, indents and remove indents.
     """
 
     def __init__(self):
@@ -1912,18 +2142,28 @@ class CodeGen:
         self.lvl = 0
 
     def generate(self):
+        """Generates a single code string from its history of code additions.
+        """
         return "".join(self.code)
 
     def add_code_line(self, code_str):
+        """Add code line string to code.
+        """
         self.code.append("    " * self.lvl + code_str)
 
     def add_linebreak(self):
+        """Add a line-break to the code.
+        """
         self.code.append("\n")
 
     def add_indent(self):
+        """Add an indent to the code.
+        """
         self.lvl += 1
 
     def remove_indent(self):
+        """Remove an indent to the code.
+        """
         if self.lvl == 0:
             raise(SyntaxError("internal error in code generator"))
         self.lvl -= 1

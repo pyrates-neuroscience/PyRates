@@ -33,7 +33,7 @@
 from typing import Optional, Tuple, List, Union, Any
 from pandas import DataFrame, MultiIndex
 import numpy as np
-from networkx import find_cycle, NetworkXNoCycle, DiGraph, is_isomorphic
+from networkx import find_cycle, NetworkXNoCycle, DiGraph
 from copy import deepcopy
 
 # pyrates imports
@@ -342,6 +342,7 @@ class ComputeGraph(object):
         #####################################
 
         # define output variables
+        output_col = {}
         output_cols = []
         output_keys = []
         output_shapes = []
@@ -358,27 +359,10 @@ class ComputeGraph(object):
                     output_keys.append([var_key])
                     output_shapes.append(var_shape)
 
-        # create counting index for collector variables
-        out_idx = self.backend.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
-                                       scope="output_collection")
-
-        # add output storage layer to the graph
-        self.backend.add_layer()
-
-        # add collector variables to the graph
-        output_col = {}
-        for i, (var_col) in enumerate(output_cols):
-            shape = (int(sim_steps / sampling_steps) + 1, len(var_col)) + output_shapes[i]
-            key = f"output_col_{i}"
-            output_col[key] = self.backend.add_var(vtype='state_var', name=f"out_col_{i}", scope="output_collection",
-                                                   value=np.zeros(shape, dtype=self._float_precision))
-            var_stack = self.backend.stack_vars(var_col)
-
-            # add collect operation to the graph
-            self.backend.add_op('=', output_col[key], var_stack, out_idx, scope="output_collection")
-
-        # create increment operator for counting index
-        self.backend.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
+            # create counting index for collector variables
+            output_col.update(self.backend.add_output_layer(outputs=output_cols,
+                                                            sampling_steps=int(sim_steps/sampling_steps),
+                                                            out_shapes=output_shapes))
 
         # add input variables to the backend
         ####################################

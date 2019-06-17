@@ -182,9 +182,11 @@ def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value
 
     # Convert the dataframe to long-form or "tidy" format if necessary
     if type(data) is pd.Series:
-        data = pd.DataFrame(data=data.values, columns=[variable], index=data.index)
-    data['time'] = data.index
-    df = pd.melt(data,
+        data_tmp = pd.DataFrame(data=data.values, columns=[variable], index=data.index)
+    else:
+        data_tmp = data.copy()
+    data_tmp['time'] = data_tmp.index
+    df = pd.melt(data_tmp,
                  id_vars='time',
                  var_name='node',
                  value_name=variable)
@@ -199,7 +201,7 @@ def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value
             if key in col_pal_args:
                 kwargs_tmp[key] = kwargs.pop(key)
         if 'n_colors' not in kwargs_tmp:
-            kwargs_tmp['n_colors'] = data.shape[1] - 1
+            kwargs_tmp['n_colors'] = data_tmp.shape[1] - 1
         cmap = sb.cubehelix_palette(**kwargs_tmp)
 
     if 'ax' not in kwargs.keys():
