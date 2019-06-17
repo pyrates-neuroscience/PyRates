@@ -49,7 +49,7 @@ from typing import Optional, Dict, Callable, List, Union, Tuple, Any
 import numpy as np
 import tensorflow as tf
 from copy import deepcopy
-from numba import jit, prange
+from numba import njit, prange
 import os
 import sys
 from importlib import import_module, reload
@@ -70,11 +70,35 @@ __status__ = "development"
 #############################################
 
 class NumpyVar(np.ndarray):
+    """Base class for adding variables to the PyRates compute graph. Creates a numpy array with additional attributes
+    for variable identification/retrieval from graph. Should be used as parent class for custom variable classes.
 
-    n_vars = 0
+    Parameters
+    ----------
+    vtype
+        Type of the variable. Can be either `constant` or `state_variable`. Constant variables are necessary to perform
+        certain graph optimizations previous to run time.
+    backend
+        Instance of the backend in use.
+    dtype
+        Data-type of the variable. For valid data-types, check the documentation of the backend in use.
+    shape
+        Shape of the variable.
+    value
+        Value of the variable. If scalar, please provide the shape in addition.
+
+    Returns
+    -------
+    NumpyVar
+        Instance of NumpyVar.
+    """
+
+    n_vars = 0    # counter for creating unique variable names
 
     def __new__(cls, vtype: str, backend: Any, name: Optional[str] = None, dtype: Optional[str] = None,
                 shape: Optional[tuple] = None, value: Optional[Any] = None):
+        """Creates new instance of NumpyVar.
+        """
 
         # check whether necessary arguments were provided
         if all([arg is None for arg in [shape, value, dtype]]):
@@ -119,10 +143,14 @@ class NumpyVar(np.ndarray):
         return obj, name
 
     def eval(self):
+        """Returns current value of NumpyVar.
+        """
         return self[:]
 
     @staticmethod
     def _get_value(value, dtype, shape):
+        """Defines initial value of variable.
+        """
         if value is None:
             return np.zeros(shape=shape, dtype=dtype)
         elif not hasattr(value, 'shape'):
@@ -135,6 +163,8 @@ class NumpyVar(np.ndarray):
 
     @classmethod
     def _get_var(cls, value, name, dtype):
+        """Creates new numpy array from NumpyVar.
+        """
         return np.array(value).view(cls)
 
     def __deepcopy__(self, memodict={}):
@@ -147,6 +177,8 @@ class NumpyVar(np.ndarray):
 
 
 class TensorflowVar(NumpyVar):
+    """Class for creating variables via a tensorflow-based PyRates backend.
+    """
 
     @staticmethod
     def _get_value(value, dtype, shape):
@@ -166,21 +198,31 @@ class TensorflowVar(NumpyVar):
 
 
 class PyRatesOp:
+    """Base class for adding operations on variables to the PyRates compute graph. Should be used as parent class for
+    custom operator classes.
 
-    n_consts = 0
-    arg_names = {}
-    op_names = {}
+    Parameters
+    ----------
+    op
+        Call-signature of the operation/function.
+    name
+        Name of the operation/function.
+    decorator
+        Optional function decorators that should be used.
+    args
+        Arguments to the function.
+
+    """
+
+    n_consts = 0      # counter for the number of constants in a operation
+    arg_names = {}    # used to ensure uniqueness of function arguments
+    op_names = {}     # used to ensure uniqueness of function names
 
     def __init__(self, op: str, name: str, decorator: str, *args) -> None:
+        """Instantiates PyRates operator.
         """
 
-        Parameters
-        ----------
-        op
-        backend
-        args
-        """
-
+        # set identifiers of operator
         self.op = op
         self.short_name = name.split('/')[-1]
         self.name = name
@@ -209,17 +251,23 @@ class PyRatesOp:
         # test function
         self.args = deepcopy(op_dict['args'])
         result = self.eval()
-        self.shape = result.shape if hasattr(result, 'shape') else ()
-        self.dtype = result.dtype if hasattr(result, 'dtype') else type(result)
         self.args = op_dict['args'].copy()
 
+        # remember output shape and data-type
+        self.shape = result.shape if hasattr(result, 'shape') else ()
+        self.dtype = result.dtype if hasattr(result, 'dtype') else type(result)
+
     def eval(self):
+        """Evaluates the return values of the PyRates operation.
+        """
         result = self._callable(*self.args)
         self._check_numerics(result, self.name)
         return result
 
     @classmethod
     def generate_op(cls, name, op, args, decorator):
+        """Generates the function string, call signature etc.
+        """
 
         # initialization
         code_gen = CodeGen()
@@ -235,10 +283,10 @@ class PyRatesOp:
             code_gen.add_linebreak()
         code_gen.add_code_line(f"def {name}(")
 
-        # arguments
+        # add arguments to function call
         code_gen, results, results_args, results_arg_names, n_vars = cls._process_args(code_gen, args, results)
 
-        # end
+        # end function call
         code_gen.code[-1] = code_gen.code[-1][:-1]
         code_gen.add_code_line(")")
         results['call'] = code_gen.generate()
@@ -249,11 +297,12 @@ class PyRatesOp:
         # setup return line
         ###################
 
+        # begin
         code_gen.add_code_line(f"return ")
         return_gen = CodeGen()
         return_gen.add_code_line(f"{op}(")
 
-        # add arguments
+        # add operations on arguments
         for key, arg in zip(results_arg_names, results_args):
             if type(arg) is str:
                 if arg is "[":
@@ -287,11 +336,19 @@ class PyRatesOp:
 
     @classmethod
     def _process_args(cls, code_gen, args, results):
+        """Parses arguments to function into argument names that are added to the function call and argument values
+        that can used to set up the return line of the function.
+        """
+
         results_args = []
         results_arg_names = []
         n_vars = 0
+
         for idx, arg in enumerate(args):
+
             if type(arg) in (PyRatesOp, PyRatesAssignOp, PyRatesIndexOp):
+
+                # extract arguments from other operations and nest them into this operation
                 results['input_ops'].append(arg.short_name)
                 pop_indices = []
                 for arg_tmp in arg.arg_names:
@@ -310,7 +367,10 @@ class PyRatesOp:
                 results['args'] += new_args
                 results['arg_names'] += new_arg_names
                 n_vars += 1
+
             elif hasattr(arg, 'short_name'):
+
+                # parse PyRates variable into the function
                 n_vars += 1
                 arg_name = cls._generate_unique_argnames([arg.short_name])[0]
                 results_args.append(arg)
@@ -318,7 +378,10 @@ class PyRatesOp:
                 results['args'].append(arg)
                 results['arg_names'].append(arg_name)
                 code_gen.add_code_line(f"{arg_name},")
+
             elif type(arg) is tuple or type(arg) is list:
+
+                # parse list of arguments
                 tuple_begin = '('
                 results_args.append(tuple_begin)
                 results_arg_names.append(tuple_begin)
@@ -334,7 +397,10 @@ class PyRatesOp:
                 results_arg_names.append(tuple_end)
                 results['args'].append(tuple_end)
                 results['arg_names'].append(tuple_end)
+
             else:
+
+                # parse strings and constant arguments into the function
                 if type(arg) is str:
                     arg_name = cls._generate_unique_argnames([arg])[0]
                 else:
@@ -345,10 +411,14 @@ class PyRatesOp:
                 results_arg_names.append(arg_name)
                 results['args'].append(arg)
                 results['arg_names'].append(arg_name)
+
         return code_gen, results, results_args, results_arg_names, n_vars
 
     @staticmethod
     def _check_numerics(vals, name):
+        """Checks whether function evaluation leads to any NaNs or infinite values.
+        """
+
         check = []
         try:
             vals = vals.numpy().flatten() if hasattr(vals, 'numpy') else vals.flatten()
@@ -361,6 +431,9 @@ class PyRatesOp:
 
     @classmethod
     def _generate_unique_argnames(cls, args: list):
+        """Creates unique name for function argument.
+        """
+
         for i, arg in enumerate(args.copy()):
             if arg in cls.arg_names:
                 args[i] = f"{arg}_{cls.arg_names[arg]}"
@@ -371,9 +444,14 @@ class PyRatesOp:
 
 
 class PyRatesAssignOp(PyRatesOp):
+    """Sub-class for assign operations. Typically, an update (2. entry in args) is assigned to a PyRates variable
+    (1. entry in args). An index can be provided as third argument to target certain entries of the variable.
+    """
 
     @classmethod
     def generate_op(cls, name, op, args, decorator):
+        """Generates the assign function string, call signature etc.
+        """
 
         # initialization
         code_gen = CodeGen()
@@ -383,9 +461,16 @@ class PyRatesAssignOp(PyRatesOp):
         results_arg_names = []
 
         # extract variables
+        ###################
+
         var, upd = args[0:2]
+
         if len(args) > 2:
+
+            # extract variable index if provided
             if "scatter" in op:
+
+                # for tensorflow-like scatter indexing
                 if hasattr(args[2], 'short_name'):
                     key = cls._generate_unique_argnames([args[2].short_name])[0]
                     if hasattr(args[2], 'return_val'):
@@ -395,30 +480,49 @@ class PyRatesAssignOp(PyRatesOp):
                 else:
                     key = cls._generate_unique_argnames(["idx"])[0]
                     var_idx = f"{key},"
+
             elif hasattr(args[2], 'short_name'):
+
+                # for indexing via PyRates variables
                 key = cls._generate_unique_argnames([args[2].short_name])[0]
                 if hasattr(args[2], 'return_val'):
                     var_idx = f"[{args[2].return_val}]"
                 else:
                     var_idx = f"[{key}]"
+
             elif type(args[2]) is str:
+
+                # for indexing via string-based indices
                 key = cls._generate_unique_argnames([args[3].short_name])[0]
                 var_idx = f"[{args[2]}]"
                 var_idx = var_idx.replace(args[3].short_name, key)
+
             else:
+
+                # for indexing via integers
                 key = cls._generate_unique_argnames(["idx"])[0]
                 var_idx = f"[{key}]"
+
             if type(args[2]) is str and len(args) > 3:
                 results_args.append(args[3])
             else:
                 results_args.append(args[2])
             results_arg_names.append(key)
-        elif hasattr(var, 'shape') and len(var.shape) > 0 and type(var) is NumpyVar:
-            var_idx = "[:]"
-        else:
-            var_idx = ""
-        upd_idx = "[:]" if hasattr(upd, 'shape') and len(upd.shape) > 0 and type(var) is NumpyVar else ""
 
+        elif hasattr(var, 'shape') and len(var.shape) > 0 and type(var) is NumpyVar:
+
+            # for numpy variables, refer to variable elements to prevent over-writing variable pointers
+            var_idx = "[:]"
+
+        else:
+
+            var_idx = ""
+
+        # if update is a NumpyVar, index the elements of the update
+        #upd_idx = "[:]" if hasattr(upd, 'shape') and len(upd.shape) > 0 and type(var) is NumpyVar else ""
+        upd_idx = ""
+
+        # add variable and update to the function arguments
         var_key = cls._generate_unique_argnames([var.short_name])[0]
         results_args.append(var)
         results_arg_names.append(var_key)
@@ -1274,7 +1378,7 @@ class NumpyBackend(object):
     def _create_op(self, op, *args, decorator=None):
         if op in ["=", "+=", "-=", "*=", "/="]:
             if decorator is None and self._rt_optimization:
-                decorator = self._optimize_decorator(op, args)
+                decorator = self._build_jit_decorator(op, args)
             if len(args) > 2 and hasattr(args[2], 'shape') and len(args[2].shape) > 1 and \
                 'bool' not in str(type(args[2])):
                 args_tmp = list(args)
@@ -1298,8 +1402,8 @@ class NumpyBackend(object):
                 args = tuple(args)
             return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], "", *args)
 
-    def _optimize_decorator(self, op, args):
-        decorators = [None, "@njit", "@njit(parallel=True)"]
+    def _build_jit_decorator(self, op, args):
+        decorators = ["", "@njit", "@njit(parallel=True)"]
         decorator_times = [np.infty for _ in range(len(decorators))]
         args = deepcopy(args)
         for i, dec in enumerate(decorators):
@@ -1312,7 +1416,7 @@ class NumpyBackend(object):
                     decorator_times[i] = 0.
                     break
             except Exception:
-                continue
+                break
 
         return decorators[np.argmin(decorator_times)]
 
@@ -1719,19 +1823,26 @@ class TensorflowBackend(NumpyBackend):
         else:
             return op1, self.add_op('cast', op2, str(type(op1)).split('\'')[-2])
 
-    @tf.function
     def _run(self, layers, sampling_layer, steps, sampling_steps):
         if sampling_layer is None:
-            for _ in tf.range(steps):
-                for func, args in layers:
-                    func(*args)
+            self._run_without_sampling(layers, steps)
         else:
             sampling_func, sampling_args = sampling_layer
-            for step in tf.range(steps):
-                if step % sampling_steps == 0:
-                    sampling_func(*sampling_args)
-                for func, args in layers:
-                    func(*args)
+            self._run_with_sampling(layers, steps, sampling_func, sampling_args, sampling_steps)
+
+    @tf.function
+    def _run_without_sampling(self, layers, steps):
+        for _ in tf.range(steps):
+            for func, args in layers:
+                func(*args)
+
+    @tf.function
+    def _run_with_sampling(self, layers, steps, sampling_func, sampling_args, sampling_steps):
+        for step in tf.range(steps):
+            if tf.equal(step % sampling_steps, 0):
+                sampling_func(*sampling_args)
+            for func, args in layers:
+                func(*args)
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:

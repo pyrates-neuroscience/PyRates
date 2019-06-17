@@ -73,7 +73,7 @@ results = grid_search(jrc_template,
                       simulation_time=T, dt=dt, sampling_step_size=dts,
                       inputs={('PCs.0', 'Op_exc_syn.0', 'I_ext'): ext_input},
                       outputs={'r': ('PCs.0', 'Op_exc_syn.0', 'r')},
-                      init_kwargs={'vectorization': 'nodes', 'build_in_place': False},
+                      init_kwargs={'vectorization': 'nodes', 'build_in_place': False, 'backend': 'tensorflow'},
                       permute_grid=True)
 
 from pyrates.utility import plot_psd
