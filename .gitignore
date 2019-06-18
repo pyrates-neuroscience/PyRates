@@ -45,7 +45,6 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
-tests/output/
 
 # Translations
 *.mo
@@ -125,4 +124,5 @@ venv.bak/
 
 type_info.json
 
-output/
+tests/output/
+tests/pyrates_build/
