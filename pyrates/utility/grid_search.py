@@ -32,7 +32,7 @@
 # external imports
 import pandas as pd
 import numpy as np
-from typing import Optional
+from typing import Optional, Union
 
 # system imports
 import os
@@ -58,7 +58,7 @@ __author__ = "Christoph Salomon, Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template: str, param_grid: (dict, pd.DataFrame), param_map: dict, dt: float, simulation_time: float,
+def grid_search(circuit_template: str, param_grid: Union[dict, pd.DataFrame], param_map: dict, dt: float, simulation_time: float,
                 inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None,
                 permute_grid: bool = False, **kwargs) -> pd.DataFrame:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
@@ -470,7 +470,7 @@ class ClusterGridSearch(ClusterCompute):
         self.res_dir = f'{self.compute_dir}/Results'
         os.makedirs(self.res_dir, exist_ok=True)
 
-    def run(self, circuit_template: str, params: (dict, pd.DataFrame), param_map: dict, dt: float, simulation_time: float,
+    def run(self, circuit_template: str, params: Union[dict, pd.DataFrame], param_map: dict, dt: float, simulation_time: float,
             inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: (int, list),
             worker_env: str, worker_file: str, result_kwargs: dict = {}, config_kwargs: dict = {},
             add_template_info: bool = False, permute: bool = False, **kwargs) -> str:
@@ -560,7 +560,6 @@ class ClusterGridSearch(ClusterCompute):
         working_grid["chunk_idx"] = -1
         working_grid["err_count"] = 0
 
-        # chunked_grid = self.chunk_grid(grid=param_grid, chunk_size=chunk_size)
         print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
