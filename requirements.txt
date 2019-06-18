@@ -10,3 +10,4 @@ seaborn
 mne
 pydot
 pytest
+paramiko
