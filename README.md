@@ -7,13 +7,24 @@ PyRates is a framework for neural modeling and simulations, developed by Richard
 
 Basic features:
 ---------------
-- Every model implemented in PyRates is translated into a tensorflow graph, a powerful compute engine that provides efficient CPU and GPU parallelization. 
-- Each model is internally represented by a networkx graph of nodes and edges, with the former representing the model units (i.e. single cells, cell populations, ...) and the latter the information transfer between them. In principle, this allows to implement any kind of dynamic neural system that can be expressed as a graph via PyRates.
+- Different backends: `Numpy` for fast simulations of small- to medium-sized networks. `Tensorflow` for large networks that can be efficiently parallelized on GPUs/CPUs.
+- Each model is internally represented by a `networkx` graph of nodes and edges, with the former representing the model units (i.e. single cells, cell populations, ...) and the latter the information transfer between them. In principle, this allows to implement any kind of dynamic neural system that can be expressed as a graph via PyRates.
 - The user has full control over the mathematical equations that nodes and edges are defined by. 
 - Model configuration and simulation can be done within a few lines of code.  
 - Various templates for rate-based population models are provided that can be used for neural network simulations imediatly.
 - Visualization and data analysis tools are provided.
-- Tools for the exploration of model parameter spaces are provided.
+- Tools for fast and parallelized exploration of model parameter spaces are provided.
+
+Installation
+------------
+PyRates can be installed via the `pip` command. We recommend to use `Anaconda` to create a new python environment with Python >= 3.6 and then simply run the following line from a terminal with the environment being activated:
+```
+pip install pyrates
+```
+Alternatively, it is possible to clone this repository and run the following line from the directory in which the repository was cloned:
+```
+python setup.py install
+```
 
 Documentation
 -------------
@@ -24,7 +35,7 @@ Reference
 ---------
 
 If you use this framework, please cite:
-Gast, R., Knoesche, T. R., Daniel, R., Moeller, H. E., and Weiskopf, N. (2018). “P168 pyrates: A python framework for rate-based neural simulations.” BMC Neuroscience. 27th Annual Computational Neuroscience Meeting (CNS*2018): Part One.
+Gast, R., Daniel, R., Moeller, H. E., Weiskopf, N. and Knoesche, T. R. (2019). “PyRates – A Python Framework for rate-based neural Simulations.” bioRxiv (https://www.biorxiv.org/content/10.1101/608067v2).
 
 Contact
 -------
