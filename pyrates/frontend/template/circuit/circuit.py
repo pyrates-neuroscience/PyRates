@@ -63,17 +63,21 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         self.nodes = {}  # type: Dict[str, NodeTemplate]
         if nodes:
-            for key, path in nodes.items():
-                if isinstance(path, str):
-                    path = self._complete_template_path(path, self.path)
+            for key, node in nodes.items():
+                if isinstance(node, str):
+                    path = self._complete_template_path(node, self.path)
                     self.nodes[key] = NodeTemplate.from_yaml(path)
+                else:
+                    self.nodes[key] = node
 
         self.circuits = {}
         if circuits:
-            for key, path in circuits.items():
-                if isinstance(path, str):
-                    path = self._complete_template_path(path, self.path)
+            for key, circuit in circuits.items():
+                if isinstance(circuit, str):
+                    path = self._complete_template_path(circuit, self.path)
                     self.circuits[key] = CircuitTemplate.from_yaml(path)
+                else:
+                    self.circuits[key] = circuit
 
         if edges:
             self.edges = self._get_edge_templates(edges)
@@ -112,25 +116,36 @@ class CircuitTemplate(AbstractBaseTemplate):
                               label=label, circuits=circuits, nodes=nodes,
                               edges=edges)
 
-    def apply(self, label: str = None):
+    def apply(self, label: str = None, in_place: bool = True):
         """Create a Circuit graph instance based on the template"""
 
         if not label:
             label = self.label
 
         # reformat node templates to NodeIR instances
-        nodes = {key: temp.apply() for key, temp in self.nodes.items()}
+        if in_place:
+            nodes = {key: temp.apply() for key, temp in self.nodes.items()}
+        else:
+            nodes = {key: deepcopy(temp).apply() for key, temp in self.nodes.items()}
 
         # reformat edge templates to EdgeIR instances
         edges = []
         for (source, target, template, values) in self.edges:
+
             # get edge template and instantiate it
             values = deepcopy(values)
             weight = values.pop("weight", 1.)
+
             # get delay
             delay = values.pop("delay", None)
 
-            edge_ir = template.apply(values=values)  # type: EdgeIR # edge spec
+            if template is None:
+                edge_ir = EdgeIR()
+            else:
+                if in_place:
+                    edge_ir = template.apply(values=values)  # type: EdgeIR # edge spec
+                else:
+                    edge_ir = deepcopy(template).apply(values=values)  # type: EdgeIR # edge spec
 
             edges.append((source, target,  # edge_unique_key,
                           {"edge_ir": edge_ir,
@@ -158,8 +173,11 @@ class CircuitTemplate(AbstractBaseTemplate):
             if isinstance(edge, dict):
                 edge = (edge["source"], edge["target"], edge["template"], edge["variables"])
             path = edge[2]
-            path = self._complete_template_path(path, self.path)
-            temp = EdgeTemplate.from_yaml(path)
+            try:
+                path = self._complete_template_path(path, self.path)
+                temp = EdgeTemplate.from_yaml(path)
+            except TypeError:
+                temp = None
             edges_with_templates.append((*edge[0:2], temp, *edge[3:]))
         return edges_with_templates
 

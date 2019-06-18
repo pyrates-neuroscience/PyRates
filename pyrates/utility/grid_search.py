@@ -58,9 +58,9 @@ __author__ = "Christoph Salomon, Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template: str, param_grid: Union[dict, pd.DataFrame], param_map: dict, dt: float, simulation_time: float,
+def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union[dict, pd.DataFrame], param_map: dict, dt: float, simulation_time: float,
                 inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None,
-                permute_grid: bool = False, **kwargs) -> pd.DataFrame:
+                permute_grid: bool = False, init_kwargs: dict = None, **kwargs) -> pd.DataFrame:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
     Parameters
@@ -92,101 +92,91 @@ def grid_search(circuit_template: str, param_grid: Union[dict, pd.DataFrame], pa
     Returns
     -------
     pd.DataFrame
-        Simulation results stored in a multi-index data frame where each index level refers to one of the parameters of
+        Simulation results stored in a multi-index data frame where each index lvl refers to one of the parameters of
         param_grid.
 
     """
+
+    # load template if necessary
+    if type(circuit_template) is str:
+        circuit_template = CircuitTemplate.from_yaml(circuit_template)
 
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
         param_grid = linearize_grid(param_grid, permute_grid)
 
+    # create multi-index for later results storage
+    param_keys = list(param_grid.keys())
+    multi_idx = [param_grid[key].values for key in param_keys]
+    n_iters = len(multi_idx[0])
+    outs = []
+    out_names = list(outputs.keys())
+    for out_name in out_names:
+        outs += [out_name] * n_iters
+    multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
+    multi_idx = multi_idx + [outs]
+    index = pd.MultiIndex.from_arrays(multi_idx, names=param_keys + ["out_var"])
+    index = pd.MultiIndex.from_tuples(list(set(index)), names=param_keys + ["out_var"])
+
     # assign parameter updates to each circuit and combine them to unconnected network
     circuit = CircuitIR()
     circuit_names = []
-    param_info = []
-    param_split = "__"
-    val_split = "--"
-    comb = "_"
-    for n in range(param_grid.shape[0]):
-        circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()
-        circuit_names.append(f'{circuit_tmp.label}_{n}')
-        circuit_tmp = adapt_circuit(circuit_tmp, param_grid.iloc[n, :], param_map)
-        circuit.add_circuit(circuit_names[-1], circuit_tmp)
-        param_names = list(param_grid.columns.values)
-        param_info_tmp = [f"{param_names[i]}{val_split}{val}" for i, val in enumerate(param_grid.iloc[n, :])]
-        param_info.append(param_split.join(param_info_tmp))
+    param_keys = index.names
+    results_indices = []
+    i = 0
+    for idx in index.values:
+        if idx[:-1] not in results_indices:
+            results_indices.append(idx[:-1])
+            new_params = {}
+            for key, val in zip(param_keys, idx):
+                if key in param_grid:
+                    new_params[key] = val
+            circuit_tmp = circuit_template.apply()
+            circuit_names.append(f'{circuit_tmp.label}_{i}')
+            circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
+            circuit.add_circuit(circuit_names[-1], circuit_tmp)
+            i += 1
 
     # create backend graph
-    net = ComputeGraph(circuit, dt=dt, **kwargs)
+    if not init_kwargs:
+        init_kwargs = {}
+    net = ComputeGraph(circuit, dt=dt, **init_kwargs)
 
     # adjust input of simulation to combined network
     for inp_key, inp in inputs.items():
         inputs[inp_key] = np.tile(inp, (1, len(circuit_names)))
 
     # adjust output of simulation to combined network
-    nodes = list(CircuitTemplate.from_yaml(circuit_template).apply().nodes)
-    out_names = []
-    for out_key, out in outputs.copy().items():
-        outputs.pop(out_key)
-        out_names_tmp = []
+    nodes = list(circuit_template.apply().nodes)
+    out_nodes = []
+    for out_key in out_names:
+        out = outputs.pop(out_key)
+        out_nodes.append(out)
         if out[0] in nodes:
-            for i, name in enumerate(param_info):
-                out_tmp = list(out)
-                out_tmp[0] = f'{circuit_names[i]}/{out_tmp[0]}'
-                outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{out[0]}'] = tuple(out_tmp)
-                out_names_tmp.append(f'{out_key}{comb}{out[0]}')
-        elif out[0] == 'all':
-            for node in nodes:
-                for i, name in enumerate(param_info):
-                    out_tmp = list(out)
-                    out_tmp[0] = f'{circuit_names[i]}/{node}'
-                    outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = tuple(out_tmp)
-                    out_names_tmp.append(f'{out_key}{comb}{node}')
-        else:
-            node_found = False
-            for node in nodes:
-                if out[0] in node:
-                    node_found = True
-                    for i, name in enumerate(param_info):
-                        out_tmp = list(out)
-                        out_tmp[0] = f'{circuit_names[i]}/{node}'
-                        outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = tuple(out_tmp)
-                        out_names_tmp.append(f'{out_key}{comb}{node}')
-            if not node_found:
-                raise ValueError(f'Invalid output identifier in output: {out_key}. '
-                                 f'Node {out[0]} is not part of this network')
-        out_names += list(set(out_names_tmp))
+            out_tmp = list(out)
+            out_tmp[0] = out_tmp[0].split('.')[0]
+            outputs[out_key] = tuple(out_tmp)
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
                       inputs=inputs,
                       outputs=outputs,
-                      sampling_step_size=sampling_step_size)    # type: pd.DataFrame
+                      sampling_step_size=sampling_step_size,
+                      **kwargs)    # type: pd.DataFrame
+    if 'profile' in kwargs:
+        results, duration, memory = results
 
     # transform results into long-form dataframe with changed parameters as columns
-    multi_idx = [param_grid[key].values for key in param_grid.keys()]
-    n_iters = len(multi_idx[0])
-    outs = []
-    for out_name in out_names:
-        outs += [out_name] * n_iters
-    multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
-    multi_idx.append(outs)
-    index = pd.MultiIndex.from_arrays(multi_idx, names=list(param_grid.keys()) + ["out_var"])
-    index = pd.MultiIndex.from_tuples(list(set(index)), names=list(param_grid.keys()) + ["out_var"])
     results_final = pd.DataFrame(columns=index, data=np.zeros_like(results.values), index=results.index)
-    for col in results.keys():
-        params = col[0].split(param_split)
-        indices = [None] * len(results_final.columns.names)
-        for param in params:
-            var, val = param.split(val_split)[:2]
-            idx = list(results_final.columns.names).index(var)
-            try:
-                indices[idx] = float(val)
-            except ValueError:
-                indices[idx] = val
-        results_final.loc[:, tuple(indices)] = results[col].values
+    for out_name, out_info in zip(out_names, out_nodes):
+        node, op, var = out_info
+        for node_name, params in zip(circuit_names, results_indices):
+            key = params + (out_name,)
+            idx = list(net.get_var(f"{node_name}/{node}", op, var, retrieve=False).values())
+            results_final[key] = results[out_name].iloc[:, idx]
 
+    if 'profile' in kwargs:
+        return results_final, duration, memory
     return results_final
 
 
