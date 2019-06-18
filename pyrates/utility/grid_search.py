@@ -32,7 +32,7 @@
 # external imports
 import pandas as pd
 import numpy as np
-from typing import Optional
+from typing import Optional, Union
 
 # system imports
 import os
@@ -42,6 +42,7 @@ import time as t
 import glob
 import getpass
 import h5py
+import paramiko
 from shutil import copy2
 from pathlib import Path
 from datetime import datetime
@@ -57,9 +58,9 @@ __author__ = "Christoph Salomon, Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: float, simulation_time: float,
+def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union[dict, pd.DataFrame], param_map: dict, dt: float, simulation_time: float,
                 inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None,
-                permute_grid: bool = False, **kwargs) -> pd.DataFrame:
+                permute_grid: bool = False, init_kwargs: dict = None, **kwargs) -> pd.DataFrame:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
     Parameters
@@ -91,105 +92,95 @@ def grid_search(circuit_template: str, param_grid: dict, param_map: dict, dt: fl
     Returns
     -------
     pd.DataFrame
-        Simulation results stored in a multi-index data frame where each index level refers to one of the parameters of
+        Simulation results stored in a multi-index data frame where each index lvl refers to one of the parameters of
         param_grid.
 
     """
+
+    # load template if necessary
+    if type(circuit_template) is str:
+        circuit_template = CircuitTemplate.from_yaml(circuit_template)
 
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
         param_grid = linearize_grid(param_grid, permute_grid)
 
+    # create multi-index for later results storage
+    param_keys = list(param_grid.keys())
+    multi_idx = [param_grid[key].values for key in param_keys]
+    n_iters = len(multi_idx[0])
+    outs = []
+    out_names = list(outputs.keys())
+    for out_name in out_names:
+        outs += [out_name] * n_iters
+    multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
+    multi_idx = multi_idx + [outs]
+    index = pd.MultiIndex.from_arrays(multi_idx, names=param_keys + ["out_var"])
+    index = pd.MultiIndex.from_tuples(list(set(index)), names=param_keys + ["out_var"])
+
     # assign parameter updates to each circuit and combine them to unconnected network
     circuit = CircuitIR()
     circuit_names = []
-    param_info = []
-    param_split = "__"
-    val_split = "--"
-    comb = "_"
-    for n in range(param_grid.shape[0]):
-        circuit_tmp = CircuitTemplate.from_yaml(circuit_template).apply()
-        circuit_names.append(f'{circuit_tmp.label}_{n}')
-        circuit_tmp = adapt_circuit(circuit_tmp, param_grid.iloc[n, :], param_map)
-        circuit.add_circuit(circuit_names[-1], circuit_tmp)
-        param_names = list(param_grid.columns.values)
-        param_info_tmp = [f"{param_names[i]}{val_split}{val}" for i, val in enumerate(param_grid.iloc[n, :])]
-        param_info.append(param_split.join(param_info_tmp))
+    param_keys = index.names
+    results_indices = []
+    i = 0
+    for idx in index.values:
+        if idx[:-1] not in results_indices:
+            results_indices.append(idx[:-1])
+            new_params = {}
+            for key, val in zip(param_keys, idx):
+                if key in param_grid:
+                    new_params[key] = val
+            circuit_tmp = circuit_template.apply()
+            circuit_names.append(f'{circuit_tmp.label}_{i}')
+            circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
+            circuit.add_circuit(circuit_names[-1], circuit_tmp)
+            i += 1
 
     # create backend graph
-    net = ComputeGraph(circuit, dt=dt, **kwargs)
+    if not init_kwargs:
+        init_kwargs = {}
+    net = ComputeGraph(circuit, dt=dt, **init_kwargs)
 
     # adjust input of simulation to combined network
     for inp_key, inp in inputs.items():
         inputs[inp_key] = np.tile(inp, (1, len(circuit_names)))
 
     # adjust output of simulation to combined network
-    nodes = list(CircuitTemplate.from_yaml(circuit_template).apply().nodes)
-    out_names = []
-    for out_key, out in outputs.copy().items():
-        outputs.pop(out_key)
-        out_names_tmp = []
+    nodes = list(circuit_template.apply().nodes)
+    out_nodes = []
+    for out_key in out_names:
+        out = outputs.pop(out_key)
+        out_nodes.append(out)
         if out[0] in nodes:
-            for i, name in enumerate(param_info):
-                out_tmp = list(out)
-                out_tmp[0] = f'{circuit_names[i]}/{out_tmp[0]}'
-                outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{out[0]}'] = tuple(out_tmp)
-                out_names_tmp.append(f'{out_key}{comb}{out[0]}')
-        elif out[0] == 'all':
-            for node in nodes:
-                for i, name in enumerate(param_info):
-                    out_tmp = list(out)
-                    out_tmp[0] = f'{circuit_names[i]}/{node}'
-                    outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = tuple(out_tmp)
-                    out_names_tmp.append(f'{out_key}{comb}{node}')
-        else:
-            node_found = False
-            for node in nodes:
-                if out[0] in node:
-                    node_found = True
-                    for i, name in enumerate(param_info):
-                        out_tmp = list(out)
-                        out_tmp[0] = f'{circuit_names[i]}/{node}'
-                        outputs[f'{name}{param_split}out_var{val_split}{out_key}{comb}{node}'] = tuple(out_tmp)
-                        out_names_tmp.append(f'{out_key}{comb}{node}')
-            if not node_found:
-                raise ValueError(f'Invalid output identifier in output: {out_key}. '
-                                 f'Node {out[0]} is not part of this network')
-        out_names += list(set(out_names_tmp))
+            out_tmp = list(out)
+            out_tmp[0] = out_tmp[0].split('.')[0]
+            outputs[out_key] = tuple(out_tmp)
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
                       inputs=inputs,
                       outputs=outputs,
-                      sampling_step_size=sampling_step_size)    # type: pd.DataFrame
+                      sampling_step_size=sampling_step_size,
+                      **kwargs)    # type: pd.DataFrame
+    if 'profile' in kwargs:
+        results, duration, memory = results
 
     # transform results into long-form dataframe with changed parameters as columns
-    multi_idx = [param_grid[key].values for key in param_grid.keys()]
-    n_iters = len(multi_idx[0])
-    outs = []
-    for out_name in out_names:
-        outs += [out_name] * n_iters
-    multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
-    multi_idx.append(outs)
-    index = pd.MultiIndex.from_arrays(multi_idx, names=list(param_grid.keys()) + ["out_var"])
-    index = pd.MultiIndex.from_tuples(list(set(index)), names=list(param_grid.keys()) + ["out_var"])
     results_final = pd.DataFrame(columns=index, data=np.zeros_like(results.values), index=results.index)
-    for col in results.keys():
-        params = col[0].split(param_split)
-        indices = [None] * len(results_final.columns.names)
-        for param in params:
-            var, val = param.split(val_split)[:2]
-            idx = list(results_final.columns.names).index(var)
-            try:
-                indices[idx] = float(val)
-            except ValueError:
-                indices[idx] = val
-        results_final.loc[:, tuple(indices)] = results[col].values
+    for out_name, out_info in zip(out_names, out_nodes):
+        node, op, var = out_info
+        for node_name, params in zip(circuit_names, results_indices):
+            key = params + (out_name,)
+            idx = list(net.get_var(f"{node_name}/{node}", op, var, retrieve=False).values())
+            results_final[key] = results[out_name].iloc[:, idx]
 
+    if 'profile' in kwargs:
+        return results_final, duration, memory
     return results_final
 
 
-class ClusterCompute(object):
+class ClusterCompute:
     def __init__(self, nodes: list, compute_dir=None):
         """Create new ClusterCompute instance object with unique compute ID
 
@@ -220,7 +211,7 @@ class ClusterCompute(object):
         # Create main compute directory, subdirectories and logfile #
         #############################################################
 
-        # Unique compute ID
+        # Unique compute ID based on date and time
         self.compute_id = datetime.now().strftime("%d%m%y-%H%M%S")
 
         # Main compute directory
@@ -266,7 +257,10 @@ class ClusterCompute(object):
     def __del__(self):
         # Make sure to close all clients when cluster_examples instance is destroyed
         for client in self.clients:
-            client["paramiko_client"].close()
+            try:
+                client["paramiko_client"].close()
+            except TypeError:
+                pass
 
     def cluster_connect(self, nodes: list):
         """Create SSH connections to all nodes in the list, respectively
@@ -275,7 +269,7 @@ class ClusterCompute(object):
         class internal 'clients' list
         Each dictionary contains:
             - ["paramiko_client"]: A paramiko client that can be used to execute commands on the node
-            - ["node_name"]: The name of the connected node
+            - ["node_name"]: The computer name of the connected node
             - ["hardware"]: A dictionary with certain hardware information of the node
             - ["logfile"]: Path to a logfile inside the instance's working directory,
                            where all stdout and stderr of the node will be redirected to
@@ -421,7 +415,6 @@ class ClusterCompute(object):
             Is None if connection fails. For detailed information of the thrown exception see Paramiko documentation
 
         """
-        import paramiko
         client = paramiko.SSHClient()
         try:
             # Using kerberos authentication
@@ -451,8 +444,8 @@ class ClusterGridSearch(ClusterCompute):
     def __init__(self, nodes, compute_dir=None):
         super().__init__(nodes, compute_dir)
 
-        self.res_file_idx = 0
-        self.res_collection = {}
+        self.chunk_idx = 0
+        self.res_file_collection = {}
 
         # Adding additional subfolders to the compute directory
         # Grid directory
@@ -467,10 +460,10 @@ class ClusterGridSearch(ClusterCompute):
         self.res_dir = f'{self.compute_dir}/Results'
         os.makedirs(self.res_dir, exist_ok=True)
 
-    def run(self, circuit_template: str, params: dict, param_map: dict, dt: float, simulation_time: float,
-            inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: int,
+    def run(self, circuit_template: str, params: Union[dict, pd.DataFrame], param_map: dict, dt: float, simulation_time: float,
+            inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: (int, list),
             worker_env: str, worker_file: str, result_kwargs: dict = {}, config_kwargs: dict = {},
-            permute: bool = False, **kwargs) -> str:
+            add_template_info: bool = False, permute: bool = False, **kwargs) -> str:
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
         ClusterGridSearch requires all necessary data (worker script, worker environment, compute directory)
@@ -485,9 +478,9 @@ class ClusterGridSearch(ClusterCompute):
         circuit_template
             Path to the circuit template.
         params
-            Dictionary containing lists of parameters to create the parameter_grid from.
+            Dictionary containing lists of parameters to create the parameter grid from.
         param_map
-            Key-value pairs that map the keys of param_grid to concrete circuit variables.
+            Key-value pairs that map the keys of param_grid to circuit variables.
         dt
             Simulation step-size in s.
         simulation_time
@@ -510,6 +503,9 @@ class ClusterGridSearch(ClusterCompute):
             Key-value pairs that will be added to the result file's 'AdditionalData' dataset
         config_kwargs
             Key-value pairs that will be added to the config file.
+        add_template_info
+            If true, all operator templates and its variables are copied from the yaml file to a dedicated folder in the
+            result file
 
         Returns
         -------
@@ -527,7 +523,10 @@ class ClusterGridSearch(ClusterCompute):
         t0 = t.time()
 
         # Create DataFrame from param dictionary
-        param_grid = linearize_grid(params, permute=permute)
+        if isinstance(params, dict):
+            param_grid = linearize_grid(params, permute=permute)
+        else:
+            param_grid = params
 
         # Create default parameter grid csv-file
         grid_idx = 0
@@ -537,8 +536,20 @@ class ClusterGridSearch(ClusterCompute):
         grid_name = Path(grid_file).stem
         param_grid.to_csv(grid_file, index=True)
 
+        # Add desired chunk size to each node
+        #####################################
+        for i, client in enumerate(self.clients):
+            if isinstance(chunk_size, list):
+                client['chunk_size'] = chunk_size[i]
+            else:
+                client['chunk_size'] = chunk_size
+
         # Assign chunk indices to parameter grid
-        chunked_grid = self.chunk_grid(grid=param_grid, chunk_size=chunk_size)
+        working_grid = param_grid.copy()
+        working_grid["status"] = 'unsolved'
+        working_grid["chunk_idx"] = -1
+        working_grid["err_count"] = 0
+
         print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
@@ -585,7 +596,7 @@ class ClusterGridSearch(ClusterCompute):
         global_res_file = f'{grid_res_dir}/CGS_result_{grid_name}.h5'
 
         # Write grid and config information to global result file
-        with h5py.File(global_res_file, 'w') as file:
+        with h5py.File(global_res_file, 'a') as file:
             for key, value in params.items():
                 file.create_dataset(f'/ParameterGrid/Keys/{key}', data=value)
             for key, value in result_kwargs.items():
@@ -595,6 +606,10 @@ class ClusterGridSearch(ClusterCompute):
             file.create_dataset(f'/Config/simulation_time', data=simulation_time)
             file.create_dataset(f'/Config/dt', data=dt)
             file.create_dataset(f'/Config/sampling_step_size', data=sampling_step_size)
+            if add_template_info:
+                template_file = f'{circuit_template.rsplit("/", 1)[0]}.yaml'
+                self.add_template_information(template_file, file)
+
         param_grid.to_hdf(global_res_file, key='/ParameterGrid/Grid_df')
         print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds')
 
@@ -605,12 +620,14 @@ class ClusterGridSearch(ClusterCompute):
         thread_kwargs = {
             "worker_env": worker_env,
             "worker_file": worker_file,
-            "chunked_grid": chunked_grid,
+            "working_grid": working_grid,
             "grid_name": grid_name,
             "grid_res_dir": grid_res_dir,
             "config_file": config_file,
             "global_res_file": global_res_file
         }
+
+        # TODO: Copy worker environment, worker file and configuration file to the worker, if necessary
 
         # Start cluster computation
         ###########################
@@ -625,7 +642,7 @@ class ClusterGridSearch(ClusterCompute):
         print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
 
         # Check parameter combinations that failed multiple times to compute
-        remaining_params = chunked_grid.loc[chunked_grid["status"] == "failed"].index
+        remaining_params = working_grid.loc[working_grid["status"] == "failed"].index
         if len(remaining_params) > 0:
             print("WARNING: The following parameter indices could not be computed: ")
             print(remaining_params)
@@ -636,23 +653,23 @@ class ClusterGridSearch(ClusterCompute):
         print(f'***WRITING RESULTS TO GLOBAL RESULT FILE***')
         t0 = t.time()
 
-        # Get ordered list of temporary result files to iterate through
-        res_files = glob.glob(f'{grid_res_dir}/*_temp*')
-        res_files.sort()
+        # Get sorted list of temporary result files to iterate through
+        temp_res_files = glob.glob(f'{grid_res_dir}/*_temp*')
+        temp_res_files.sort()
 
         # Read number of different circuit outputs and prepare lists to concatenate results
         res_dict = {}
-        with pd.HDFStore(res_files[0], "r") as store:
+        with pd.HDFStore(temp_res_files[0], "r") as store:
             for key in store.keys():
                 res_dict[key] = []
 
-        # Concatenate results from each temp file and output variable
-        for file in res_files:
+        # Concatenate results from each temporary result file
+        for file in temp_res_files:
             with pd.HDFStore(file, "r") as store:
                 for idx, key in enumerate(store.keys()):
                     res_dict[key].append(store[key])
 
-        # Create DataFrames for each output variable and write to global result file
+        # Create DataFrame for each output variable and write to global result file
         with pd.HDFStore(global_res_file, "a") as store:
             for key, value in res_dict.items():
                 if len(value) > 0:
@@ -660,14 +677,16 @@ class ClusterGridSearch(ClusterCompute):
                     store.put(key=f'/Results/{key}', value=df)
 
         # Delete temporary local result files
-        for file in res_files:
+        for file in temp_res_files:
             os.remove(file)
 
         print(f'Elapsed time: {t.time()-t0:.3f} seconds')
         print(f'Find results in: {grid_res_dir}')
+        print("")
 
-        chunked_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
+        working_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
 
+        # self.__del__()
         return global_res_file
 
     def thread_master(self, client: dict, thread_kwargs: dict):
@@ -686,14 +705,16 @@ class ClusterGridSearch(ClusterCompute):
         """
         thread_name = currentThread().getName()
         connection_lost = False
+        connection_lost_counter = 0
 
         # Get client information
         pm_client = client["paramiko_client"]
         logfile = client["logfile"]
+        chunk_size = client["chunk_size"]
 
         # Get keyword arguments
         config_file = thread_kwargs["config_file"]
-        chunked_grid = thread_kwargs["chunked_grid"]
+        working_grid = thread_kwargs["working_grid"]
         grid_name = thread_kwargs["grid_name"]
         grid_res_dir = thread_kwargs["grid_res_dir"]
         worker_env = thread_kwargs["worker_env"]
@@ -709,23 +730,24 @@ class ClusterGridSearch(ClusterCompute):
 
         # Start scheduler
         #################
-        # Scheduler loop
         while True:
+
             # Temporarily disable thread switching
             with self.lock:
 
                 # Fetch grid chunks
                 ####################
-                remaining_params = chunked_grid.loc[chunked_grid["status"] == "unsolved"]
+
+                # Get all parameters that haven't been successfully computed yet
+                remaining_params = working_grid.loc[working_grid["status"] == "unsolved"]
                 if remaining_params.empty:
                     print(f'[T]\'{thread_name}\': No more parameter combinations available!')
                     break
                 else:
                     # Find chunk index of first value in remaining params and fetch all parameter combinations with the
                     # same chunk index
-                    chunk_idx = remaining_params.iloc[0]["chunk_idx"]
-                    param_idx = remaining_params.loc[remaining_params["chunk_idx"] == chunk_idx].index
-                    chunked_grid.at[param_idx, "status"] = "pending"
+                    param_idx, chunk_idx = self._fetch_index(remaining_params, chunk_size, working_grid)
+                    working_grid.loc[param_idx, "status"] = "pending"
 
                     print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
                     print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
@@ -733,14 +755,17 @@ class ClusterGridSearch(ClusterCompute):
                     # Create parameter sub-grid
                     ###########################
                     subgrid_fp = f'{subgrid_dir}/{thread_name}_Subgrid_{subgrid_idx}.h5'
-                    subgrid_df = chunked_grid.iloc[param_idx]
+                    subgrid_df = working_grid.iloc[param_idx]
                     subgrid_df.to_hdf(subgrid_fp, key="subgrid")
                     subgrid_idx += 1
+
+                    # TODO: Copy subgrid to worker if necessary
 
                     # Temporary result file for current subgrid
                     ###########################################
                     local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_' \
                         f'chunk_{chunk_idx:02}_idx_{param_idx[0]}-{param_idx[-1]}_temp.h5'
+                    self.res_file_collection[chunk_idx] = local_res_file
 
                     # Execute worker script on the remote host
                     ##########################################
@@ -752,74 +777,112 @@ class ClusterGridSearch(ClusterCompute):
                                                                        f' --config_file={config_file}'
                                                                        f' --subgrid={subgrid_fp}'
                                                                        f' --local_res_file={local_res_file}'
-                                                                       # redirect and append stdout and stderr to logfile:
-                                                                       f' &>> {logfile}',
-                                                                       get_pty=True)
+                                                                       f' &>> {logfile}',  # redirect and append stdout
+                                                                                           # and stderr to logfile
+                                                                       get_pty=True)       # execute in pseudoterminal
                     except paramiko.ssh_exception.SSHException as e:
-                        # SSH connection has been lost (remote machine shut down)
+                        # SSH connection has been lost
+                        # (remote machine shut down, ssh connection has been killed manually, ...)
                         print(f'[T]\'{thread_name}\': ERROR: {e}')
-                        chunked_grid.at[param_idx, "status"] = "unsolved"
+                        working_grid.at[param_idx, "status"] = "unsolved"
                         connection_lost = True
 
             # Lock released, thread switching enabled
 
             # Try to reconnect to host if connection has been lost
             ######################################################
-            if connection_lost:
-                # Reconnection loop
+            if connection_lost and connection_lost_counter < 2:
+                # Attempt to reconnect while there are still parameter chunks to fetch
                 while True:
-                    # Try to reconnect while there are still parameter chunks to fetch
-                    if chunked_grid.loc[chunked_grid["status"] == "unsolved"].empty:
+                    if working_grid.loc[working_grid["status"] == "unsolved"].empty:
                         # Stop thread execution if no more parameters are available
                         return
                     else:
-                        t.sleep(30)
+                        print('Attempting to reconnect')
                         pm_client = self.ssh_connect(thread_name, username=getpass.getuser(), print_status=False)
                         if pm_client:
                             print(f'[T]\'{thread_name}\': Reconnected!')
                             connection_lost = False
                             # Escape reconnection loop
                             break
-                # Jump to the beginning of scheduler loop
+                        t.sleep(30)
+                # Jump to the beginning of scheduler loop if reconnection was successful
                 continue
 
-            # Wait for remote computation to finish
-            #######################################
-            status = stdout.channel.recv_exit_status()
+            # Wait for remote computation exit status
+            # (independent of success or failure)
+            #########################################
+            exit_status = stdout.channel.recv_exit_status()
 
             # Update grid status
             ####################
             with self.lock:
-                if status == 0:
+                # Remote machine executed worker script successfully
+                if exit_status == 0:
                     print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
                     print(f'[T]\'{thread_name}\': Updating grid status')
                     try:
+                        # Check if data has been written to result file
                         with pd.HDFStore(local_res_file, "r") as store:
+                            # Check if temporary result file (hdf5) contains keys
                             if len(store.keys()) == 0:
                                 raise KeyError
+                            # Check if each key contains data
                             for key in store.keys():
                                 if len(store[key].index) == 0:
                                     raise KeyError
-                        chunked_grid.at[param_idx, 'status'] = 'done'
+                        working_grid.at[param_idx, 'status'] = 'done'
                     except (KeyError, FileNotFoundError):
                         for row in param_idx:
-                            if chunked_grid.loc[row]["err_count"] < 2:
-                                chunked_grid.at[row, "status"] = "unsolved"
-                                chunked_grid.at[row, "err_count"] = chunked_grid.iloc[row]["err_count"] + 1
+                            if working_grid.loc[row]["err_count"] < 2:
+                                working_grid.at[row, "status"] = "unsolved"
+                                working_grid.at[row, "err_count"] = working_grid.iloc[row]["err_count"] + 1
                             else:
-                                chunked_grid.at[row, "status"] = "failed"
+                                working_grid.at[row, "status"] = "failed"
+
+                # Remote execution was interrupted
                 else:
-                    print(f'[T]\'{thread_name}\': Remote computation failed with exit status {status}')
+                    print(f'[T]\'{thread_name}\': Remote computation failed with exit status {exit_status}')
+                    connection_lost_counter += 1
                     for row in param_idx:
-                        if chunked_grid.loc[row]["err_count"] < 2:
-                            chunked_grid.at[row, "status"] = "unsolved"
-                            chunked_grid.at[row, "err_count"] = chunked_grid.iloc[row]["err_count"] + 1
+                        if working_grid.loc[row]["err_count"] < 4:
+                            working_grid.at[row, "status"] = "unsolved"
+                            working_grid.at[row, "err_count"] = working_grid.iloc[row]["err_count"] + 1
                         else:
-                            chunked_grid.at[row, "status"] = "failed"
+                            working_grid.at[row, "status"] = "failed"
+                    if connection_lost_counter >= 2:
+                        print('Excluding worker from pool')
+                        return
 
             # Lock released, thread switching enabled
-        # End of while loop
+        # End of scheduler loop
+
+        # TODO: Close pty on remote machine?
+
     # End of Thread master
+
+    def _fetch_index(self, remaining_params, worker_chunk_size, working_grid):
+        param_idx = []
+        chunk_count = 0
+        chunk_idx = self.chunk_idx
+        for i, row in remaining_params.iterrows():
+            if chunk_count == worker_chunk_size:
+                self.chunk_idx += 1
+                return pd.Index(param_idx), chunk_idx
+            elif row['chunk_idx'] == -1:
+                # Chunk parameter grid
+                working_grid.loc[i, 'chunk_idx'] = self.chunk_idx
+                param_idx.append(i)
+                chunk_count += 1
+            else:
+                pass
+        # Whole parameter grid is chunked
+        if len(param_idx) == 0:
+            # get all parameters with the same valid chunk index
+            chunk_idx = remaining_params.iloc[0]["chunk_idx"]
+            param_idx = remaining_params.loc[remaining_params["chunk_idx"] == chunk_idx].index
+
+        return pd.Index(param_idx), chunk_idx
 
     #################################
     # CGS internal helper functions #
@@ -837,6 +900,7 @@ class ClusterGridSearch(ClusterCompute):
 
         Returns
         -------
+            pd.DataFrame
 
         """
         # Add status columns to grid
@@ -875,9 +939,9 @@ class ClusterGridSearch(ClusterCompute):
         """
         grid_key_lst = list(param_grid.keys())
         map_key_lst = list(param_map.keys())
+        # Not all keys of parameter map can be found in parameter grid
         if not all((grid_key in map_key_lst for grid_key in grid_key_lst)):
-            # Not all keys of parameter map can be found in parameter grid
-            print("Not all parameter map keys found in parameter grid")
+            print("Not all parameter grid keys found in parameter map")
             print("Parameter map keys:")
             print(*list(param_map.keys()))
             print("Parameter grid keys:")
@@ -885,13 +949,14 @@ class ClusterGridSearch(ClusterCompute):
             return False
         # Parameter grid and parameter map match
         else:
-            print("All parameter map keys found in parameter grid")
+            print("All parameter grid keys found in parameter map")
             return True
 
     @staticmethod
     def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float,
                           inputs: dict, outputs: dict, sampling_step_size: float, add_kwargs: dict):
         """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
+
         Parameters
         ----------
         fp
@@ -906,6 +971,7 @@ class ClusterGridSearch(ClusterCompute):
 
         Returns
         -------
+
         """
         config_dict = {
             "circuit_template": circuit_template,
@@ -922,6 +988,31 @@ class ClusterGridSearch(ClusterCompute):
         with open(fp, "w") as f:
             json.dump(config_dict, f, indent=2)
 
+    @staticmethod
+    def add_template_information(yaml_fp, hdf5_file):
+        """Add opearator information of the circuit template to the global result file"""
+        import yaml
+
+        with open(yaml_fp, 'r') as stream:
+            try:
+                yaml_dict = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
+        for operator_key, operator_value in yaml_dict.items():
+            if "Op" in operator_key:
+                for temp_key, temp_value in operator_value.items():
+                    if isinstance(temp_value, str):
+                        hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}', data=temp_value)
+                    if isinstance(temp_value, list):
+                        for idx, eq in enumerate(temp_value):
+                            hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/eq_{idx}', data=eq)
+                    elif isinstance(temp_value, dict):
+                        for key, value in temp_value.items():
+                            try:
+                                hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/{key}', data=value["default"])
+                            except:
+                                hdf5_file.create_dataset(f'/TemplateInfo/{operator_key}/{temp_key}/{key}', data=value)
 
 #####################
 # Utility functions #

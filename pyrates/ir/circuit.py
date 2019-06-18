@@ -631,7 +631,7 @@ class CircuitIR(AbstractBaseIR):
 
 class SubCircuitView(AbstractBaseIR):
     """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
-    level) circuit is referenced locally as 'top_level_circuit' and all subgraph-related information is computed only
+    lvl) circuit is referenced locally as 'top_level_circuit' and all subgraph-related information is computed only
     when needed."""
 
     def __init__(self, top_level_circuit: CircuitIR, subgraph_key: str):

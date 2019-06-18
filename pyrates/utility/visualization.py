@@ -145,7 +145,7 @@ def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True
     return cmap
 
 
-def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value', plot_style: str = 'line_plot',
+def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str = 'line_plot',
                     bg_style: str = 'darkgrid', **kwargs) -> plt.Axes:
     """Plot timeseries from a data frame.
 
@@ -182,9 +182,13 @@ def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value
 
     # Convert the dataframe to long-form or "tidy" format if necessary
     if type(data) is pd.Series:
-        data = pd.DataFrame(data=data.values, columns=[variable], index=data.index)
-    data['time'] = data.index
-    df = pd.melt(data,
+        data_tmp = pd.DataFrame(data=data.values, columns=[variable], index=data.index)
+    else:
+        data_tmp = data.copy()
+    idx = kwargs.pop('tmin', data_tmp.index[0])
+    data_tmp = data_tmp.loc[idx:, :]
+    data_tmp['time'] = data_tmp.index
+    df = pd.melt(data_tmp,
                  id_vars='time',
                  var_name='node',
                  value_name=variable)
@@ -199,7 +203,7 @@ def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value
             if key in col_pal_args:
                 kwargs_tmp[key] = kwargs.pop(key)
         if 'n_colors' not in kwargs_tmp:
-            kwargs_tmp['n_colors'] = data.shape[1] - 1
+            kwargs_tmp['n_colors'] = data_tmp.shape[1] - 1
         cmap = sb.cubehelix_palette(**kwargs_tmp)
 
     if 'ax' not in kwargs.keys():
@@ -211,8 +215,12 @@ def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value
         # simple timeseries plot
         if 'ci' not in kwargs:
             kwargs['ci'] = None
+        ylabel = kwargs.pop('ylabel', df.columns.values[0] if len(df.columns.values) == 1 else df.columns.values[0][-1])
+        xlabel = kwargs.pop('xlabel', 'time')
         ax = sb.lineplot(data=df, x='time', y=variable, hue='node', palette=cmap, **kwargs)
         ax.set_title(title)
+        ax.set_ylabel(ylabel)
+        ax.set_xlabel(xlabel)
 
     elif plot_style == 'ridge_plot':
 
@@ -507,6 +515,8 @@ def plot_psd(data: pd.DataFrame, fmin: float = 0., fmax: float = 100., tmin: flo
         # create line plot
         ##################
 
+        if len(data.shape) < 2:
+            data = pd.DataFrame(data=data.values, columns=['data'], index=data.index)
         raw = mne_from_dataframe(data)
         return plot_raw_psd(raw, tmin=tmin, fmin=fmin, fmax=fmax, **kwargs).axes
 
@@ -752,8 +762,11 @@ def _draw_heatmap(*args, **kwargs):
 
 
 class Interactive2DParamPlot(object):
-    def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array, **kwargs):
-        """
+    def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array, tmin=0.,
+                 **kwargs):
+        """Creates an interactive 2D plot that allows visualization of time series using button press events
+
+        Derive child class and change get_data() respectively to utilize this plotting method
 
         Parameters
         ----------
@@ -765,6 +778,8 @@ class Interactive2DParamPlot(object):
             ndarray containing values used to access a column in data_series
         y_values
             ndarray containing values used to access a column in data_series
+        tmin
+            Starting point for time-series plots in time units (float).
         kwargs
             Additional information to access a column in data_series if necessary
 
@@ -772,7 +787,7 @@ class Interactive2DParamPlot(object):
         -------
 
         """
-        self.data = data_series
+        self.data = data_series.loc[tmin:, :]
         self.x_values = x_values
         self.y_values = y_values
         self.kwargs = kwargs
@@ -787,6 +802,16 @@ class Interactive2DParamPlot(object):
         plot_connectivity(data_map, ax=self.ax[0], yticklabels=list(np.round(y_values, decimals=2)),
                           xticklabels=list(np.round(x_values, decimals=2)), cmap='magma')
         set_num_axis_ticks(ax=self.ax[0], num_x_ticks_old=data_map.shape[1], num_y_ticks_old=data_map.shape[0])
+        self.ax[0].invert_yaxis()
+
+        # self.ax[0].grid(visible=True, color="white")
+
+        # set up grid in right subplot
+        self.ax[1].grid(visible=True, color="silver")
+        x, y = self.x_values[0], self.y_values[0]
+        time_series = self.get_data(x, y)
+        plot_timeseries(time_series, ax=self.ax[1])
+        self.ax[1].set_title(f'x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}')
 
         # Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot
         self.fig.canvas.mpl_connect('button_press_event', self)
@@ -807,7 +832,6 @@ class Interactive2DParamPlot(object):
             return
 
         # Reset axes
-        self.ax[1].clear()
         self.marker[0].remove()
 
         # Transform cursor coordinates in x and y values
@@ -819,25 +843,19 @@ class Interactive2DParamPlot(object):
         # Add marker at event coordinates
         self.marker = self.ax[0].plot(x_sample, y_sample, 'x', color='white', markersize='10')
 
-        time_series = self.get_data(x_value, y_value)
-
         # Update serial plot
-        plot_timeseries(time_series, ax=self.ax[1])
-        self.ax[1].grid(visible=True, color="silver")
-        self.ax[1].set_title(f'x: {np.round(x_value, decimals=2)}, y: {np.round(y_value, decimals=2)}')
-        plt.show()
+        self.update_lineplot(x_value, y_value)
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
 
-    def get_data(self, x_value, y_value):
-        """Access data in data_series
+    def update_lineplot(self, x, y):
 
-        Adapt this function based on the structure of data_series.
-        Additional keywords are accessible using self.kwargs[]
-
-        :param x_value:
-        :param y_value:
-        :return:
-        """
-        return self.data[y_value][x_value][self.kwargs["tau_e"]][self.kwargs["tau_i"]]
+        line = self.ax[1].get_lines()[0]
+        data = self.get_data(x, y)
+        line.set_data(data.index, data.values)
+        self.ax[1].set_title(f'x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}')
+        self.ax[1].relim()
+        self.ax[1].autoscale_view()
 
     def set_map_xlabel(self, label):
         self.ax[0].set_xlabel(label)
@@ -854,8 +872,20 @@ class Interactive2DParamPlot(object):
     def set_series_ylabel(self, label):
         self.ax[1].set_ylabel(label)
 
-    def set_series_xticklabels(self, labels):
-        pass
+    def get_data(self, x_value, y_value, *argv, **kwargs):
+        """Virtual method
+
+        Derive a child class from Interactive2DParamPlotTemplate and rewrite this function to access data using
+        x_value, y_value und kwargs (accessible using self.kwargs[])
+
+        Example:
+            class Interactive2DParamPlot(Interactive2DParamPlotTemplate):
+
+                def get_data(self, x_value, y_value):
+                    return self.data[y_value][x_value][self.kwargs["param_1"]][self.kwargs["param_2"]]
+
+        """
+        raise NotImplementedError
 
 
 def save_fig_as_pickle(fp, fig):

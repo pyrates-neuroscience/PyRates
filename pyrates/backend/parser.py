@@ -35,9 +35,7 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 from numbers import Number
 import math
-import tensorflow as tf
 import typing as tp
-from copy import copy
 import numpy as np
 
 # meta infos
@@ -117,7 +115,7 @@ class ExpressionParser(ParserElement):
 
         # input arguments
         self.lhs = lhs
-        self.args = args
+        self.args = args.copy()
         self.backend = backend
         self.parser_kwargs = kwargs
         self.solve = solve
@@ -160,19 +158,9 @@ class ExpressionParser(ParserElement):
 
             # parentheses
             par_l = Literal("(")
-            par_r = Literal(")")
+            par_r = Literal(")").setParseAction(self._push_first)
             idx_l = Literal("[")
             idx_r = Literal("]")
-
-            # numeric types
-            num_float = Combine(Word("+-" + nums, nums) +
-                                Optional(point + Optional(Word(nums))) +
-                                Optional(e + Word("+-" + nums, nums)))
-            num_int = Word("+-" + nums, nums)
-
-            # variables and functions
-            name = Word(alphas, alphas + nums + "_$")
-            func_name = Combine(name + par_l, adjacent=True)
 
             # basic mathematical operations
             plus = Literal("+")
@@ -185,6 +173,16 @@ class ExpressionParser(ParserElement):
             exp_2 = Combine(mult + mult)
             transp = Combine(point + Literal("T"))
             inv = Combine(point + Literal("I"))
+
+            # numeric types
+            num_float = Combine(Word("-" + nums, nums) +
+                                Optional(point + Optional(Word(nums))) +
+                                Optional(e + Word("-" + nums, nums)))
+            num_int = Word("-" + nums, nums)
+
+            # variables and functions
+            name = Word(alphas, alphas + nums + "_$")
+            func_name = Combine(name + par_l, adjacent=True)
 
             # math operation groups
             op_add = plus | minus
@@ -214,12 +212,15 @@ class ExpressionParser(ParserElement):
             arg_comb = comma.setParseAction(self._push_first)
 
             # basic computation unit
-            atom = (Optional("-") + (func_name + self.expr.suppress() + ZeroOrMore((arg_comb.suppress() +
-                                                                                    self.expr.suppress()))
-                                     + par_r | name | pi | e | num_float | num_int
-                                     ).setParseAction(self._push_first)
-                    ).setParseAction(self._push_negone) | \
-                   (par_l.suppress() + self.expr.suppress() + par_r.suppress()).setParseAction(self._push_negone)
+            atom = (func_name + Optional(par_l.suppress() + self.expr.suppress() +
+                                         ZeroOrMore((arg_comb.suppress() + self.expr.suppress() +
+                                                     Optional(arg_comb.suppress()))) +
+                                         par_r.suppress() + Optional(arg_comb)) +
+                    Optional(self.expr.suppress() + ZeroOrMore((arg_comb.suppress() + self.expr.suppress())))
+                    + par_r.suppress() | name | pi | e | num_float | num_int
+                    ).setParseAction(self._push_neg_or_first) | \
+                   (par_l.setParseAction(self._push_last) + self.expr.suppress() + par_r
+                    ).setParseAction(self._push_neg)
 
             # apply indexing to atoms
             indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
@@ -266,23 +267,19 @@ class ExpressionParser(ParserElement):
         """
         self.expr_stack.append(toks[0])
 
-    def _push_negone(self, strg, loc, toks):
+    def _push_neg(self, strg, loc, toks):
         """Push negative one multiplier if on first position in toks.
         """
         if toks and toks[0] == '-':
             self.expr_stack.append('-one')
 
-    def _push_all(self, strg, loc, toks):
+    def _push_neg_or_first(self, strg, loc, toks):
         """Push all tokens to expression stack at once (first-to-last).
         """
-        for t in toks:
-            self.expr_stack.append(t)
-
-    def _push_all_reverse(self, strg, loc, toks):
-        """Push all tokens to expression stack at once (last-to-first).
-        """
-        for t in range(len(toks)-1, -1, -1):
-            self.expr_stack.append(toks[t])
+        if toks and toks[0] == '-':
+            self.expr_stack.append('-one')
+        else:
+            self.expr_stack.append(toks[0])
 
     def _push_last(self, strg, loc, toks):
         """Push tokens in last-to-first order to expression stack.
@@ -313,7 +310,8 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            self.expr_op = self.backend.add_op('neg', self.parse(expr_stack), **self.parser_kwargs)
+            #op1, op2 = self.backend.broadcast(self.parse(expr_stack), -1, **self.parser_kwargs)
+            self.expr_op = self.backend.add_op('*', self.parse(expr_stack), -1, **self.parser_kwargs)
 
         elif op in "+-**/^@<=>=!==":
 
@@ -322,7 +320,8 @@ class ExpressionParser(ParserElement):
             op1 = self.parse(expr_stack)
 
             # combine elements via mathematical/boolean operator
-            self.expr_op = self.broadcast(op, op1, op2, **self.parser_kwargs)
+            #op1, op2 = self.backend.broadcast(op1, op2, **self.parser_kwargs)
+            self.expr_op = self.backend.add_op(op, op1, op2, **self.parser_kwargs)
 
         elif ".T" == op or ".I" == op:
 
@@ -339,10 +338,14 @@ class ExpressionParser(ParserElement):
                     if expr_stack[-1] == ":":
                         index.append(expr_stack.pop())
                     else:
-                        lhs = self.lhs
-                        self.lhs = False
-                        index.append(self.parse(expr_stack))
-                        self.lhs = lhs
+                        try:
+                            int(expr_stack[-1])
+                            index.append(expr_stack.pop())
+                        except ValueError:
+                            lhs = self.lhs
+                            self.lhs = False
+                            index.append(self.parse(expr_stack))
+                            self.lhs = lhs
                 indices.append(index[::-1])
                 if expr_stack[-1] == ",":
                     expr_stack.pop()
@@ -360,16 +363,13 @@ class ExpressionParser(ParserElement):
                     elif isinstance(ind, Number):
                         idx += f"{ind}"
                     else:
-                        try:
-                            self.args['idx'][f'var_{i}'] = ind.__copy__()
-                        except AttributeError:
-                            self.args['idx'][f'var_{i}'] = copy(ind)
-                        idx += f"var_{i}"
+                        self.args['idx'][f'idx_var_{i}'] = ind
+                        idx += f"idx_var_{i}"
                     i += 1
                 idx += ","
             idx = idx[0:-1]
 
-            # extract variable and apply index
+            # extract variable
             if self.lhs:
                 op = expr_stack[-1]
                 if op in self.args['updates']:
@@ -378,12 +378,14 @@ class ExpressionParser(ParserElement):
                     self.lhs = False
                     op_to_idx = self.parse([op])
                     self.lhs = True
-                self.args['updates'][op] = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
-                self.expr_op = self.args['updates'][op]
             else:
                 op_to_idx = self.parse(expr_stack)
-                self.expr_op = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
+
+            # apply index
+            op_idx = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
+            self.args['updates'][op] = op_idx
+            self.expr_op = op_idx
 
         elif op == "PI":
 
@@ -398,20 +400,7 @@ class ExpressionParser(ParserElement):
         elif op in self.args['inputs']:
 
             # extract input variable from args dict and move it to the vars collection
-            if f'{op}_old' in self.args['vars']:
-                self.args['vars'][op] = self.broadcast(self.assign,
-                                                       self.args['vars'][f'{op}_old'],
-                                                       self.args['inputs'].pop(op),
-                                                       **self.parser_kwargs)
-            elif op in self.args['vars']:
-                self.args['vars'][op] = self.broadcast(self.assign,
-                                                       self.args['vars'][op],
-                                                       self.args['inputs'].pop(op),
-                                                       **self.parser_kwargs)
-            else:
-                self.args['vars'][op] = self.args['inputs'].pop(op)
-
-            # return variable if right-hand side, else parse variable
+            self.args['vars'][op] = self.args['inputs'].pop(op)
             if self.lhs:
                 self.parse([op])
             else:
@@ -435,7 +424,8 @@ class ExpressionParser(ParserElement):
 
                     # calculate update of differential equation
                     var_update = self.update(old_var, self.args.pop('rhs'), dt, **self.parser_kwargs)
-                    self.args['updates'][op] = self.broadcast(self.assign, var, var_update, **self.parser_kwargs)
+                    #var, var_update = self.backend.broadcast(var, var_update, **self.parser_kwargs)
+                    self.args['updates'][op] = self.backend.add_op(self.assign, var, var_update, **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
                     self.expr_op = self.args['updates'][op]
 
@@ -443,10 +433,9 @@ class ExpressionParser(ParserElement):
 
                     # update variable according to rhs
                     var = self.args['updates'][op] if op in self.args['updates'] else self.args['vars'][op]
-                    self.args['updates'][op] = self.broadcast(self.assign,
-                                                              var,
-                                                              self.args.pop('rhs'),
-                                                              **self.parser_kwargs)
+                    #var, var_update = self.backend.broadcast(var, self.args.pop('rhs'), **self.parser_kwargs)
+                    self.args['updates'][op] = self.backend.add_op(self.assign, var, self.args.pop('rhs'),
+                                                                   **self.parser_kwargs)
                     self.args['lhs_evals'].append(op)
                     self.expr_op = self.args['updates'][op]
 
@@ -462,6 +451,8 @@ class ExpressionParser(ParserElement):
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
+            expr_stack.pop(-1)
+
             # extract data type
             try:
                 self.expr_op = self.backend.add_op('cast', self.parse(expr_stack), op[0:-1], **self.parser_kwargs)
@@ -470,6 +461,8 @@ class ExpressionParser(ParserElement):
                                      f"{op[0:-1]} is not a valid data-type for this parser.")
 
         elif op[-1] == "(":
+
+            expr_stack.pop(-1)
 
             # parse arguments
             args = []
@@ -491,6 +484,29 @@ class ExpressionParser(ParserElement):
                     f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
                     f"in arguments dictionary.")
 
+        elif op == ")":
+
+            # check whether expression in parenthesis is a group of arguments to a function
+            start_par = expr_stack.index("(")
+            if "," in expr_stack[start_par:]:
+
+                args = []
+                while True:
+                    args.append(self.parse(expr_stack))
+                    if expr_stack[-1] == ",":
+                        expr_stack.pop(-1)
+                    elif expr_stack[-1] == "(":
+                        expr_stack.pop(-1)
+                        break
+                    else:
+                        break
+                self.expr_op = args[::-1]
+
+            else:
+
+                self.expr_op = self.parse(expr_stack)
+                expr_stack.pop(-1)
+
         elif any([op == "True", op == "true", op == "False", op == "false"]):
 
             # return boolean
@@ -498,36 +514,11 @@ class ExpressionParser(ParserElement):
 
         elif "." in op:
 
-            # return float
-            while self.constant_counter < 1e7:
-                try:
-                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{self.constant_counter}',
-                                                   value=float(op), shape=(), dtype=self.backend.dtypes['float32'],
-                                                   **self.parser_kwargs)
-                    self.constant_counter += 1
-                    break
-                except (ValueError, KeyError) as e:
-                    self.constant_counter += 1
-            else:
-                raise e
-
-            self.expr_op = arg_tmp
+            self.expr_op = float(op)
 
         elif op.isnumeric():
 
-            # return integer
-            while self.constant_counter < 1e7:
-                try:
-                    arg_tmp = self.backend.add_var(vtype='constant', name=f'op_{self.constant_counter}', value=int(op),
-                                                   shape=(), dtype=self.backend.dtypes['int32'], **self.parser_kwargs)
-                    self.constant_counter += 1
-                    break
-                except (ValueError, KeyError) as e:
-                    self.constant_counter += 1
-            else:
-                raise e
-
-            self.expr_op = arg_tmp
+            self.expr_op = int(op)
 
         elif op[0].isalpha():
 
@@ -535,10 +526,12 @@ class ExpressionParser(ParserElement):
 
                 # add new variable to arguments that represents rhs op
                 rhs = self.args.pop('rhs')
+                shape = rhs.shape if rhs.shape else (1,)
                 new_var = self.backend.add_var(vtype='state_var', name=op, value=0.,
-                                               shape=rhs.shape, dtype=rhs.dtype, **self.parser_kwargs)
+                                               shape=shape, dtype=rhs.dtype, **self.parser_kwargs)
                 self.args['vars'][op] = new_var
-                self.args['updates'][op] = self.broadcast(self.assign, new_var, rhs, **self.parser_kwargs)
+                #new_var, rhs = self.backend.broadcast(new_var, rhs, **self.parser_kwargs)
+                self.args['updates'][op] = self.backend.add_op(self.assign, new_var, rhs, **self.parser_kwargs)
                 self.args['lhs_evals'].append(op)
                 self.expr_op = self.args['updates'][op]
 
@@ -554,127 +547,7 @@ class ExpressionParser(ParserElement):
 
         return self.expr_op
 
-    def broadcast(self, op: str, op1: tp.Any, op2: tp.Any, return_ops: bool = False, **kwargs
-                  ) -> tp.Union[tuple, tp.Any]:
-        """Tries to match the shapes of op1 and op2 such that op can be applied. Then applies op to op1 and op2.
-
-        Parameters
-        ----------
-        op
-            Name/key of the backend operation.
-        op1
-            First argument to the operation.
-        op2
-            Second argument to the operation.
-        return_ops
-            If true, the adjusted arguments (op1 and op2) are returned.
-        kwargs
-            Additional keyword arguments to be passed to the backend.
-
-        Returns
-        -------
-        tp.Union[tuple, tp.Any]
-            Output of op applied to op1 and op2. If return_ops, op1 and op2 are also returned.
-
-        """
-
-        kwargs.update(self.parser_kwargs)
-
-        # get key and value of ops if they are dicts
-        if type(op1) is dict:
-            (op1_key, op1_val), = op1.items()
-        else:
-            op1_val = op1
-            op1_key = None
-        if type(op2) is dict:
-            (op2_key, op2_val), = op2.items()
-        else:
-            op2_val = op2
-            op2_key = None
-
-        if not self.compare_shapes(op1_val, op2_val):
-
-            # try removing singleton dimensions from op1/op2
-            op1_val_tmp, op2_val_tmp = self.match_shapes(op1_val, op2_val, adjust_second=True, assign=op == self.assign)
-            if not self.compare_shapes(op1_val_tmp, op2_val_tmp):
-                op1_val_tmp, op2_val_tmp = self.match_shapes(op1_val_tmp, op2_val_tmp, adjust_second=False,
-                                                             assign=op == self.assign)
-            if self.compare_shapes(op1_val_tmp, op2_val_tmp):
-                op1_val, op2_val = op1_val_tmp, op2_val_tmp
-
-        try:
-
-            # try applying the operation with matched shapes
-            new_op = self.apply_op(op, op1_val, op2_val, op1_key, op2_key, **kwargs)
-
-        except TypeError:
-
-            # try to re-cast the data-types of op1/op2
-            try:
-                op2_val_tmp = self.backend.add_op('cast', op2_val, op1_val.dtype, **self.parser_kwargs)
-                new_op = self.apply_op(op, op1_val, op2_val_tmp, op1_key, op2_key, **kwargs)
-            except TypeError:
-                op1_val_tmp = self.backend.add_op('cast', op1_val, op2_val.dtype, **self.parser_kwargs)
-                new_op = self.apply_op(op, op1_val_tmp, op2_val, op1_key, op2_key, **kwargs)
-
-        except ValueError:
-
-            # try to match additional keyword arguments to shape of op1
-            for key, var in kwargs.items():
-                if hasattr(var, 'shape'):
-                    _, kwargs[key] = self.match_shapes(op1_val, var, adjust_second=True, assign=op == self.assign)
-            new_op = self.apply_op(op, op1_val, op2_val, op1_key, op2_key, **kwargs)
-
-        if return_ops:
-            return new_op, op1_val, op2_val
-        return new_op
-
-    def apply_op(self, op: str, x: tp.Any, y: tp.Any, x_key: tp.Optional[str] = None, y_key: tp.Optional[str] = None,
-                 **kwargs) -> tp.Any:
-        """Applies a backend operation to variables x and y.
-
-        Parameters
-        ----------
-        op
-            Name/key of the backend operation.
-        x
-            First arguments to op.
-        y
-            Second argument to op.
-        x_key
-            If x is a keyword argument of op, pass the keyword here.
-        y_key
-            If y is a keyword argument of op, pass the keyword here.
-        kwargs
-            Additional keyword arguments to be passed to op.
-
-        Returns
-        -------
-        tp.Any
-            Result of applying op to x and y.
-
-        """
-
-        # collect arguments
-        args = []
-        if x_key:
-            kwargs[x_key] = x
-        else:
-            args.append(x)
-        if y_key:
-            kwargs[y_key] = y
-        else:
-            args.append(y)
-
-        # check consistency for assign operations
-        if op == '+=' and args and not hasattr(args[0], 'assign_add'):
-            args[1] = self.broadcast('+', *tuple(args), **kwargs)
-            op = '='
-            return self.apply_op(op, *tuple(args), **kwargs)
-
-        return self.backend.add_op(op, *tuple(args), **kwargs)
-
-    def apply_idx(self, op: tp.Any, idx: tp.Any, **kwargs) -> tp.Any:
+    def apply_idx(self, op: tp.Any, idx: tp.Any, **kwargs) -> tuple:
         """Apply index idx to operation op.
 
         Parameters
@@ -700,63 +573,35 @@ class ExpressionParser(ParserElement):
             raise ValueError(f'Indexing of differential equations is currently not supported. Please consider '
                              f'changing equation {self.expr_str}.')
 
-        # extract variables from index if index has a string-based representation
+        # get update
+        update = self.args.pop('rhs', None)
+
+        # get constants/variables that are part of the index
+        args = []
+        i = 0
+        if idx in self.args['idx']:
+            idx = self.args['idx'].pop(idx)
         if type(idx) is str:
-            idx_tmp = idx.split(',')
-            for i in idx_tmp:
-                idx_tmp2 = i.split(':')
-                for j in idx_tmp2:
-                    if j in self.args['idx'].keys():
-                        exec(f"{j} = self.args['idx']['{j}']")
+            idx_old = idx
+            idx = []
+            for idx_tmp in idx_old.split(','):
+                for idx_tmp2 in idx_tmp.split(':'):
+                    idx.append(idx_tmp2)
+                    if idx_tmp2 in self.args['idx']:
+                        idx_var = self.args['idx'].pop(idx_tmp2)
+                        if not hasattr(idx_var, 'short_name'):
+                            idx_var.short_name = idx_tmp2
+                            i += 1
+                        else:
+                            idx[-1] = idx_var.short_name
+                        args.append(idx_var)
+                    idx.append(':')
+                idx.pop(-1)
+                idx.append(',')
+            idx.pop(-1)
+            idx = "".join(idx)
 
-        # apply idx
-        if self.lhs:
-
-            update = self.args.pop('rhs')
-            op_shape = op.shape
-            op_old = op
-
-            try:
-                op = eval(f'op[{idx}]')
-            except ValueError:
-                idx, update = self._process_idx(idx, op.shape, locals(), update=update, **kwargs)
-                update = self.backend.add_op('scatter', idx, update, op.shape, **kwargs)
-            except TypeError:
-                if locals()[idx].dtype.is_bool:
-                    op = self.broadcast('*', op, locals()[idx], **kwargs)
-                else:
-                    raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
-                                    f'the tensor to be indexed.')
-            try:
-                op_new = self.broadcast(self.assign, op, update, **kwargs)
-                self.args.pop('idx')
-                return op_new
-            except ValueError:
-                op_new = self.backend.add_var('state_var', 'var_storage', shape=op_shape, dtype=op.dtype, **kwargs)
-                op_new_fill = self.broadcast(self.assign, op_new, op_old, **kwargs)
-                kwargs['dependencies'] = [op_new_fill]
-                self.args['rhs'] = update
-                return self.apply_idx(op_new, idx, **kwargs)
-
-        else:
-
-            try:
-                op_idx = eval(f'op[{idx}]')
-            except ValueError:
-                idx = self._process_idx(idx, op.shape, locals(), **kwargs)
-                if len(idx.shape) > 1:
-                    op_idx = self.backend.add_op('gather_nd', op, idx, **kwargs)
-                else:
-                    op_idx = self.backend.add_op('gather', op, idx, **kwargs)
-            except TypeError:
-                if locals()[idx].dtype.is_bool:
-                    op_idx = self.broadcast('*', op, locals()[idx], **kwargs)
-                else:
-                    raise TypeError(f'Index is of type {locals()[idx].dtype} that does not match type {op.dtype} of '
-                                    f'the tensor to be indexed.')
-
-            self.args.pop('idx')
-            return op_idx
+        return self.backend.apply_idx(op, idx, update, *tuple(args))
 
     def update(self, var_old, var_delta, dt, **kwargs):
         """Solves single step of a differential equation.
@@ -774,284 +619,10 @@ class ExpressionParser(ParserElement):
         """
 
         kwargs.update(self.parser_kwargs)
-        var_update = self.broadcast('*', var_delta, dt, **kwargs)
-        return self.broadcast('+', var_old, var_update, **kwargs)
-
-    def _process_idx(self, idx: tp.Any, shape: tuple, local_vars: dict, update: tp.Optional[tp.Any] = None, **kwargs
-                     ) -> tuple:
-        """Preprocesses the index and a variable update to match the variable shape.
-
-        Parameters
-        ----------
-        idx
-            Index object.
-        shape
-            Shape of the variable to be indexed.
-        local_vars
-            Dictionary containing all local variables from the environment this function was called from.
-        update
-            The update that should be assigned to the variable with shape at the indexed positions.
-
-        Returns
-        -------
-        tuple
-            Preprocessed index and re-shaped update.
-
-        """
-
-        # pre-process index
-        ###################
-
-        try:
-            idx = local_vars[idx]
-        except KeyError:
-            dims = idx.split(',')
-            indices = []
-            for i, dim in enumerate(dims):
-                try:
-                    indices.append([local_vars[dim]])
-                except KeyError:
-                    if dim == ':':
-                        indices.append([j for j in range(shape[i])])
-                    elif ':' in dim:
-                        dim_range_tmp = dim.split(':')
-                        dim_range = []
-                        for d in dim_range_tmp:
-                            try:
-                                d_tmp = local_vars[d]
-                            except KeyError:
-                                d_tmp = int(d)
-                            if (hasattr(d_tmp, 'name') and 'Neg' in d_tmp.name.split('/')[-1]) or \
-                                    (type(d_tmp) is int and d_tmp < 0):
-                                d_tmp = self.backend.add_op('+', d_tmp, shape[i], **kwargs)
-                            dim_range.append(d_tmp)
-                        if len(dim_range) == 3:
-                            indices.append(self.backend.add_op('range', dim_range[0], limit=dim_range[1],
-                                                               delta=dim_range[2], **kwargs))
-                        elif len(dim_range) == 2:
-                            indices.append(self.backend.add_op('range', dim_range[0], limit=dim_range[1], **kwargs))
-                        elif dim[0] == ':':
-                            indices.append(self.backend.add_op('range', limit=dim_range[0], **kwargs))
-                        else:
-                            indices.append(self.backend.add_op('range', dim_range[0], **kwargs))
-                    else:
-                        indices.append([int(dim)])
-            try:
-                idx = self.backend.add_var(vtype='constant', name='idx', value=np.array(indices, dtype=np.int32))
-            except ValueError:
-                idx = []
-                for idx0 in indices[0]:
-                    for idx1 in indices[1]:
-                        idx.append([idx0, idx1])
-
-        # match shape of index and update to shape
-        ##########################################
-
-        if update is not None and idx.shape[0] != update.shape[0]:
-            if update.shape[0] == 1 and len(update.shape) == 1:
-                idx = self.backend.add_op('reshape', idx, (1,) + tuple(idx.shape), **kwargs)
-            else:
-                raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
-                                 f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')
-
-        if len(idx.shape) < 2 and update is not None:
-            idx = self.backend.add_op('reshape', idx, list(idx.shape) + [1], **kwargs)
-
-        if len(idx.shape) > 1:
-
-            shape_diff = len(shape) - idx.shape[1]
-            if shape_diff < 0:
-                raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
-                                 f'length {idx.shape[1]}')
-            elif update is not None:
-
-                # manage shape of updates
-                update_dim = 0
-                if len(update.shape) > 1:
-                    update_dim = len(update.shape[1:])
-                    if update_dim > shape_diff:
-                        singleton = -1 if update.shape[-1] == 1 else list(update.shape).index(1)
-                        update = self.backend.add_op('squeeze', update, axis=singleton, **kwargs)
-                        if len(update.shape) > 1:
-                            update_dim = len(update.shape[1:])
-
-                # manage shape of idx
-                shape_diff = int(shape_diff) - update_dim
-                if shape_diff > 0:
-                    indices = []
-                    for i in range(shape_diff):
-                        indices.append(self.backend.add_op('zeros', (idx.shape[0], 1), dtype=idx.dtype, **kwargs))
-                    indices.append(self.backend.add_op('reshape', idx, indices[-1].shape, **kwargs))
-                    idx = self.backend.add_op('concat', indices, axis=1, **kwargs)
-
-                return idx, update
-        if update is None:
-            return idx
-        return idx, update
-
-    def match_shapes(self, op1: tp.Any, op2: tp.Any, adjust_second: bool = True, assign: bool = False) -> tuple:
-        """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-        assign
-            If true, the re-shaped operators will be assigned to new variables. Else, the manipulation will be performed
-            in place.
-        adjust_second
-            If true, the second operator will be re-shaped according to the shape of the first operator. If false,
-            it will be done the other way around.
-
-        Returns
-        -------
-        tuple
-            The re-shaped operators.
-
-        """
-
-        if adjust_second:
-
-            if len(op2.shape) == 0 and len(op1.shape) > 0 and assign:
-
-                # create array of zeros and fill it with op2
-                op2 = self.backend.add_op('+', self.backend.add_op("zeros", op1.shape, op1.dtype), op2)
-
-            elif (len(op1.shape) > len(op2.shape)) and (1 in op1.shape) and (len(op2.shape) > 0):
-
-                # reshape op2 to match the shape of op1
-                target_shape = op1.shape
-                idx = list(target_shape).index(1)
-                if idx == 0:
-                    op2 = self.backend.add_op('reshape', op2, [1, op2.shape[0]], **self.parser_kwargs)
-                else:
-                    op2 = self.backend.add_op('reshape', op2, [op2.shape[0], 1], **self.parser_kwargs)
-
-            elif (len(op2.shape) > len(op1.shape) and 1 in op2.shape) or \
-                    (len(op1.shape) == 2 and len(op2.shape) == 2 and op1.shape[1] != op2.shape[0] and 1 in op2.shape):
-
-                # cut singleton dimension from op2
-                idx = list(op2.shape).index(1)
-                op2 = self.backend.add_op('squeeze', op2, idx, **self.parser_kwargs)
-
-        else:
-
-            if len(op1.shape) == 0 and len(op2.shape) > 0 and assign:
-
-                # create array of zeros and fill it with op2
-                op1 = self.backend.add_op('+', self.backend.add_op("zeros", op2.shape, op2.dtype, op1))
-
-            elif (len(op2.shape) > len(op1.shape)) and (1 in op2.shape) and (len(op1.shape) > 0):
-
-                # reshape op2 to match the shape of op1
-                target_shape = op2.shape
-                idx = list(target_shape).index(1)
-                if idx == 0:
-                    op1 = self.backend.add_op('reshape', op1, [1, op1.shape[0]], **self.parser_kwargs)
-                else:
-                    op1 = self.backend.add_op('reshape', op1, [op1.shape[0], 1], **self.parser_kwargs)
-
-            elif len(op1.shape) > len(op2.shape) and 1 in op1.shape or \
-                    (len(op1.shape) == 2 and len(op2.shape) == 2 and op1.shape[1] != op2.shape[0] and 1 in op1.shape):
-
-                # cut singleton dimension from op2
-                idx = list(op1.shape).index(1)
-                op1 = self.backend.add_op('squeeze', op1, idx, **self.parser_kwargs)
-
-        return op1, op2
-
-    @staticmethod
-    def compare_shapes(op1: tp.Any, op2: tp.Any) -> bool:
-        """Checks whether the shapes of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the shapes of op1 and op2 are compatible.
-
-        """
-
-        if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
-            if op1.shape == op2.shape:
-                return True
-            elif len(op1.shape) > 1 and len(op2.shape) > 1:
-                return True
-            else:
-                return False
-        else:
-            return True
-
-    @staticmethod
-    def compare_dtypes(op1: tp.Any, op2: tp.Any) -> bool:
-        """Checks whether the data types of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the data types of op1 and op2 are compatible.
-
-        """
-
-        if op1.dtype == op2.dtype:
-            return True
-        elif op1.dtype.name in op2.dtype.name:
-            return True
-        elif op2.dtype.name in op1.dtype.name:
-            return True
-        elif op1.dtype.base_dtype == op2.dtype.base_dtype:
-            return True
-        else:
-            return False
-
-
-class PyRatesVar(object):
-    def __init__(self, vtype: str, dtype: str, shape: tuple, value: tp.Any, name: str, backend: tp.Any) -> None:
-        """
-
-        Parameters
-        ----------
-        vtype
-        dtype
-        shape
-        value
-        name
-        backend
-        """
-
-        self.vtype = vtype
-        self.shape = tuple(shape)
-        self.value = value
-        self.name = name
-        self.backend = backend
-        if dtype in self.backend.dtypes:
-            self.dtype = backend.dtypes[dtype]
-        else:
-            for dtype_tmp in self.backend.dtypes:
-                if dtype_tmp in dtype:
-                    self.dtype = backend.dtypes[dtype_tmp]
-                    break
-            else:
-                raise ValueError(f'Invalid data type: {dtype}. Check documentation of the backend wrapper in use for '
-                                 'valid data types.')
-
-    def eval(self):
-        return self.backend.eval(self.name)
+        var_delta, dt = self.backend.broadcast(var_delta, dt, **kwargs)
+        var_update = self.backend.add_op('*', var_delta, dt, **kwargs)
+        #var_old, var_update = self.backend.broadcast(var_old, var_update, **kwargs)
+        return self.backend.add_op('+', var_old, var_update, **kwargs)
 
 
 def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
@@ -1085,7 +656,7 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
     # preprocess equations
     left_hand_sides, right_hand_sides, update_types = preprocess_equations(equations, solver='euler')
 
-    # go through pre-processed equations and add introduce new variables for old values of state variables
+    # go through pre-processed equations and add new variables for old values of state variables
     for lhs in left_hand_sides:
 
         # get key of lhs variable
@@ -1097,6 +668,8 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
             if key == lhs_var and '_old' not in key:
                 if type(var) is dict:
                     var_dict = var.copy()
+                    if 'value' in var_dict and hasattr(var_dict['value'], 'shape'):
+                        var_dict['value'] = np.asarray(var_dict['value'].tolist())
                 elif callable(var):
                     var_tmp = var()
                     var_dict = {'vtype': 'state_var',
@@ -1104,13 +677,8 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
                                 'shape': var_tmp.shape,
                                 'value': 0.}
                 else:
-                    dtype = None
-                    for data_type in backend.dtypes.keys():
-                        if data_type in str(var.dtype):
-                            dtype = data_type
-                            break
                     var_dict = {'vtype': 'state_var',
-                                'dtype': dtype,
+                                'dtype': var.dtype,
                                 'shape': var.shape,
                                 'value': 0.}
                 equation_args['vars'].update(parse_dict({f'{key}_old': var_dict}, backend=backend, **kwargs))
@@ -1196,32 +764,21 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
 
     """
 
-    var_dict_tf = {}
+    var_dict_new = {}
 
     # go through dictionary items and instantiate variables
     #######################################################
 
     for var_name, var in var_dict.items():
 
-        # preprocess variable definition
-        if var['value'] is None:
-            var['value'] = 0.
-        init_val = var['value'] if hasattr(var['value'], 'shape') else np.zeros(()) + var['value']
-        dtype = backend.dtypes[var['dtype']] if type(var['dtype']) is str else var['dtype']
-        shape = var['shape'] if 'shape' in var.keys() else init_val.shape
-
         # instantiate variable
         if var['vtype'] == 'raw':
-            var_dict_tf[var_name] = var['value']
+            var_dict_new[var_name] = var['value']
         else:
-            var_dict_tf[var_name] = backend.add_var(vtype=var['vtype'],
-                                                    name=var_name,
-                                                    value=init_val,
-                                                    shape=shape,
-                                                    dtype=dtype,
-                                                    **kwargs)
+            var.update(kwargs)
+            var_dict_new[var_name] = backend.add_var(name=var_name, **var)
 
-    return var_dict_tf
+    return var_dict_new
 
 
 def preprocess_equations(eqs: list, solver: str) -> tuple:

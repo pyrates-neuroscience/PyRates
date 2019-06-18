@@ -2,7 +2,7 @@ numpy
 matplotlib
 networkx
 pandas
-tensorflow >=1.12, <=1.13
+tensorflow==2.0.0-alpha
 pyparsing
 ruamel.yaml
 scipy
@@ -10,3 +10,4 @@ seaborn
 mne
 pydot
 pytest
+paramiko

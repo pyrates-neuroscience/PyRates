@@ -54,11 +54,17 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
             self.operators[operator_template] = {}  # single operator path with no variations
         elif isinstance(operators, list):
             for op in operators:
-                operator_template = self._load_operator_template(op)
+                try:
+                    operator_template = self._load_operator_template(op)
+                except TypeError:
+                    operator_template = op
                 self.operators[operator_template] = {}  # multiple operator paths with no variations
         elif isinstance(operators, dict):
             for op, variations in operators.items():
-                operator_template = self._load_operator_template(op)
+                try:
+                    operator_template = self._load_operator_template(op)
+                except TypeError:
+                    operator_template = op
                 self.operators[operator_template] = variations
         # for op, variations in operators.items():
         #     if "." not in op:
