@@ -788,9 +788,9 @@ class ClusterGridSearch(ClusterCompute):
                                                                        f' --config_file={config_file}'
                                                                        f' --subgrid={subgrid_fp}'
                                                                        f' --local_res_file={local_res_file}'
-                                                                       # redirect and append stdout and stderr to logfile:
-                                                                       f' &>> {logfile}',
-                                                                       get_pty=True)
+                                                                       f' &>> {logfile}',  # redirect and append stdout
+                                                                                           # and stderr to logfile
+                                                                       get_pty=True)       # execute in pseudoterminal
                     except paramiko.ssh_exception.SSHException as e:
                         # SSH connection has been lost
                         # (remote machine shut down, ssh connection has been killed manually, ...)
@@ -1028,6 +1028,7 @@ class ClusterGridSearch(ClusterCompute):
 #####################
 # Utility functions #
 #####################
+
 
 def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
     """Turns the grid into a grid that can be traversed linearly, i.e. pairwise.
