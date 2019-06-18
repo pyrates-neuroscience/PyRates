@@ -102,7 +102,7 @@ def test_1_2_expression_parser_parsing_exceptions():
         args = parse_dict({'a': {'vtype': 'constant', 'value': np.ones((3, 3)), 'dtype': 'float32', 'shape': (3, 3)},
                            'b': {'vtype': 'constant', 'value': 5., 'dtype': 'float32', 'shape': ()}},
                           backend=b)
-        with pytest.raises(KeyError):
+        with pytest.raises((KeyError, IndexError)):
             Parser("a / b(5.)", {'vars': args}, backend=b).parse_expr()()
 
 

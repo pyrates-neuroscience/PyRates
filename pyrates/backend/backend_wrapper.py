@@ -1630,7 +1630,7 @@ class NumpyBackend(object):
                     idx = self.add_var(vtype='state_var', name='idx', value=args_tmp[2])
                 else:
                     idx = args_tmp[2]
-                var, upd, idx, _ = self._process_update_args(args[0], args[1], idx)
+                var, upd, idx = self._process_update_args_old(args[0], args[1], idx)
                 idx_str = ",".join([f"{idx.short_name}[:,{i}]" for i in range(idx.shape[1])])
                 args = (var, upd, idx_str, idx)
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
@@ -1784,12 +1784,17 @@ class NumpyBackend(object):
         # match shape of index and update to shape
         ##########################################
 
-        if len(shape) == len(update.shape):
+        if len(shape) == len(update.shape) and shape != update.shape:
 
             # make sure that update dims match the variable shape
             update = self.add_op("squeeze", update)
 
-        if update.shape == shape[1:] or not update.shape:
+        if shape[0] == idx.shape[0] and len(shape) > 1 and sum(idx.shape) > 1:
+
+            # make sure that index scatters into first dimension of variable
+            idx = self.add_op("index", idx, ":, None")
+
+        elif update.shape == shape[1:] or update.shape == shape[:-1]:
 
             # make sure that index and update scatter into the first dimension of update
             scatter_into_first_dim = True
@@ -1999,7 +2004,7 @@ class TensorflowBackend(NumpyBackend):
                     op = "update_add"
                 else:
                     op = "update_sub"
-                args = self._process_update_args(*args)
+                args = self._process_update_args_old(*args)
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], decorator, *args)
         if op is "index":
             if hasattr(args[1], 'dtype') and 'bool' in str(args[1].dtype):

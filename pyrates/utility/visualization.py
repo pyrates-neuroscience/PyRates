@@ -185,6 +185,8 @@ def plot_timeseries(data: Union[pd.DataFrame, pd.Series], variable: str = 'value
         data_tmp = pd.DataFrame(data=data.values, columns=[variable], index=data.index)
     else:
         data_tmp = data.copy()
+    idx = kwargs.pop('tmin', data_tmp.index[0])
+    data_tmp = data_tmp.loc[idx:, :]
     data_tmp['time'] = data_tmp.index
     df = pd.melt(data_tmp,
                  id_vars='time',
@@ -760,7 +762,8 @@ def _draw_heatmap(*args, **kwargs):
 
 
 class Interactive2DParamPlot(object):
-    def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array, **kwargs):
+    def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array, tmin=0.,
+                 **kwargs):
         """
 
         Parameters
@@ -773,6 +776,8 @@ class Interactive2DParamPlot(object):
             ndarray containing values used to access a column in data_series
         y_values
             ndarray containing values used to access a column in data_series
+        tmin
+            Starting point for time-series plots in time units (float).
         kwargs
             Additional information to access a column in data_series if necessary
 
@@ -780,7 +785,7 @@ class Interactive2DParamPlot(object):
         -------
 
         """
-        self.data = data_series
+        self.data = data_series.loc[tmin:, :]
         self.x_values = x_values
         self.y_values = y_values
         self.kwargs = kwargs
@@ -798,6 +803,10 @@ class Interactive2DParamPlot(object):
 
         # set up grid in right subplot
         self.ax[1].grid(visible=True, color="silver")
+        x, y = self.x_values[0], self.y_values[0]
+        time_series = self.get_data(x, y)
+        plot_timeseries(time_series, ax=self.ax[1])
+        self.ax[1].set_title(f'x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}')
 
         # Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot
         self.fig.canvas.mpl_connect('button_press_event', self)
@@ -818,7 +827,6 @@ class Interactive2DParamPlot(object):
             return
 
         # Reset axes
-        self.ax[1].clear()
         self.marker[0].remove()
 
         # Transform cursor coordinates in x and y values
@@ -830,13 +838,19 @@ class Interactive2DParamPlot(object):
         # Add marker at event coordinates
         self.marker = self.ax[0].plot(x_sample, y_sample, 'x', color='white', markersize='10')
 
-        time_series = self.get_data(x_value, y_value)
-
         # Update serial plot
-        plot_timeseries(time_series, ax=self.ax[1])
-        self.ax[1].grid(visible=True, color="silver")
-        self.ax[1].set_title(f'x: {np.round(x_value, decimals=2)}, y: {np.round(y_value, decimals=2)}')
+        self.update_lineplot(x_value, y_value)
         self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+    def update_lineplot(self, x, y):
+
+        line = self.ax[1].get_lines()[0]
+        data = self.get_data(x, y)
+        line.set_data(data.index, data.values)
+        self.ax[1].set_title(f'x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}')
+        self.ax[1].relim()
+        self.ax[1].autoscale_view()
 
     def get_data(self, x_value, y_value):
         """Access data in data_series
