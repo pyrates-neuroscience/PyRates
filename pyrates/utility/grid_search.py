@@ -449,6 +449,7 @@ class ClusterCompute:
                 print(f'\'{node}\': ', err)
             return None
 
+
 class ClusterGridSearch(ClusterCompute):
     def __init__(self, nodes, compute_dir=None):
         super().__init__(nodes, compute_dir)
@@ -787,12 +788,12 @@ class ClusterGridSearch(ClusterCompute):
                                                                        f' --config_file={config_file}'
                                                                        f' --subgrid={subgrid_fp}'
                                                                        f' --local_res_file={local_res_file}'
-                                                                       # redirect and append stdout and stderr to logfile:
-                                                                       f' &>> {logfile}',
-                                                                       get_pty=True)
+                                                                       f' &>> {logfile}',  # redirect and append stdout
+                                                                                           # and stderr to logfile
+                                                                       get_pty=True)       # execute in pseudoterminal
                     except paramiko.ssh_exception.SSHException as e:
                         # SSH connection has been lost
-                        # (remote machine shut down or ssh connection has been killed)
+                        # (remote machine shut down, ssh connection has been killed manually, ...)
                         print(f'[T]\'{thread_name}\': ERROR: {e}')
                         working_grid.at[param_idx, "status"] = "unsolved"
                         connection_lost = True
@@ -802,9 +803,8 @@ class ClusterGridSearch(ClusterCompute):
             # Try to reconnect to host if connection has been lost
             ######################################################
             if connection_lost and connection_lost_counter < 2:
-                # Reconnection loop
+                # Attempt to reconnect while there are still parameter chunks to fetch
                 while True:
-                    # Try to reconnect while there are still parameter chunks to fetch
                     if working_grid.loc[working_grid["status"] == "unsolved"].empty:
                         # Stop thread execution if no more parameters are available
                         return
@@ -817,7 +817,7 @@ class ClusterGridSearch(ClusterCompute):
                             # Escape reconnection loop
                             break
                         t.sleep(30)
-                # Jump to the beginning of scheduler loop if reconnection was succesfull
+                # Jump to the beginning of scheduler loop if reconnection was successful
                 continue
 
             # Wait for remote computation exit status
@@ -828,14 +828,17 @@ class ClusterGridSearch(ClusterCompute):
             # Update grid status
             ####################
             with self.lock:
-                # Remote machine executed script successfully
+                # Remote machine executed worker script successfully
                 if exit_status == 0:
                     print(f'[T]\'{thread_name}\': Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds')
                     print(f'[T]\'{thread_name}\': Updating grid status')
                     try:
+                        # Check if data has been written to result file
                         with pd.HDFStore(local_res_file, "r") as store:
+                            # Check if temporary result file (hdf5) contains keys
                             if len(store.keys()) == 0:
                                 raise KeyError
+                            # Check if each key contains data
                             for key in store.keys():
                                 if len(store[key].index) == 0:
                                     raise KeyError
@@ -1025,6 +1028,7 @@ class ClusterGridSearch(ClusterCompute):
 #####################
 # Utility functions #
 #####################
+
 
 def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
     """Turns the grid into a grid that can be traversed linearly, i.e. pairwise.
