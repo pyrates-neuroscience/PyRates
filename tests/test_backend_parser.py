@@ -9,7 +9,8 @@ import pytest
 # pyrates internal imports
 from pyrates.backend.parser import parse_equation_list, parse_dict
 from pyrates.backend.parser import ExpressionParser
-from pyrates.backend.backend_wrapper import TensorflowBackend, NumpyBackend
+from pyrates.backend.numpy_backend import NumpyBackend
+from pyrates.backend.tensorflow_backend import TensorflowBackend
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -81,7 +82,7 @@ def test_1_2_expression_parser_parsing_exceptions():
         args = parse_dict({'a': {'vtype': 'constant', 'value': np.ones((3, 3)), 'dtype': 'float32', 'shape': (3, 3)},
                            'b': {'vtype': 'constant', 'value': np.ones((4, 4)), 'dtype': 'float32', 'shape': (4, 4)}},
                           backend=b)
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             Parser("a + b", {'vars': args}, backend=b).parse_expr()
 
         # wrong data type of dictionary arguments
@@ -245,7 +246,7 @@ def test_1_5_expression_parser_indexing():
     B = np.eye(10, dtype=np.float32) == 1
     arg_dict = {'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype},
                 'B': {'vtype': 'constant', 'value': B, 'shape': B.shape, 'dtype': B.dtype},
-                'd': {'vtype': 'state_var', 'value': 4, 'Shape': (), 'dtype': 'int32'}}
+                'd': {'vtype': 'constant', 'value': 4, 'Shape': (), 'dtype': 'int32'}}
     args = parse_dict(arg_dict, backend=b)
 
     # define valid test cases
@@ -268,7 +269,14 @@ def test_1_5_expression_parser_indexing():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={'vars': args}, backend=b)
         p.parse_expr()
-        result = p.expr_op.numpy() if hasattr(p.expr_op, 'numpy') else p.expr_op.eval().numpy()
+        if hasattr(p.expr_op, 'numpy'):
+            result = p.expr_op.numpy()
+        elif hasattr(p.expr_op, 'eval'):
+            result = p.expr_op.eval()
+            if hasattr(result, 'numpy'):
+                result = result.numpy()
+        else:
+            result = p.expr_op
         assert result == pytest.approx(target, rel=1e-6)
 
     # define invalid test cases

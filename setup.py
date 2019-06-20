@@ -11,7 +11,6 @@ INSTALL_REQUIREMENTS = ['numpy',
                         'ruamel.yaml',
                         'scipy',
                         'seaborn',
-                        'numba',
                         'mne',
                         'pydot',
                         'paramiko']

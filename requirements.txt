@@ -11,4 +11,3 @@ mne
 pydot
 pytest
 paramiko
-numba

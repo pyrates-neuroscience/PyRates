@@ -38,7 +38,6 @@ from copy import deepcopy
 
 # pyrates imports
 from pyrates.backend.parser import parse_equation_list, parse_dict
-from pyrates.backend.backend_wrapper import TensorflowBackend, NumpyBackend
 from pyrates import PyRatesException
 from pyrates.ir.circuit import CircuitIR
 
@@ -94,8 +93,10 @@ class ComputeGraph(object):
 
         # instantiate the backend and set the backend default_device
         if backend == 'tensorflow':
+            from .tensorflow_backend import TensorflowBackend
             backend = TensorflowBackend
         elif backend == 'numpy':
+            from .numpy_backend import NumpyBackend
             backend = NumpyBackend
         else:
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
@@ -287,7 +288,8 @@ class ComputeGraph(object):
             sampling_step_size: Optional[float] = None,
             out_dir: Optional[str] = None,
             verbose: bool = True,
-            profile: Optional[str] = None
+            profile: Optional[str] = None,
+            **kwargs
             ) -> Union[DataFrame, Tuple[DataFrame, float, float]]:
         """Simulate the backend behavior over time via a tensorflow session.
 
@@ -455,10 +457,10 @@ class ComputeGraph(object):
 
         if profile is None:
             output_col = self.backend.run(steps=sim_steps, outputs=output_col, sampling_steps=sampling_steps,
-                                          out_dir=out_dir, profile=profile)
+                                          out_dir=out_dir, profile=profile, **kwargs)
         else:
             output_col, time, memory = self.backend.run(steps=sim_steps, outputs=output_col, out_dir=out_dir,
-                                                        profile=profile, sampling_steps=sampling_steps)
+                                                        profile=profile, sampling_steps=sampling_steps, **kwargs)
 
         if verbose and profile:
             if simulation_time:
