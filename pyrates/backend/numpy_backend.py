@@ -1305,7 +1305,7 @@ class NumpyBackend(object):
         # create directory in which to store layer scripts
         orig_path = os.getcwd()
         if build_dir:
-            os.mkdir(build_dir)
+            os.makedirs(build_dir, exist_ok=True)
         dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
         try:
             os.mkdir(dir_name)

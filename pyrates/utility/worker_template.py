@@ -65,13 +65,24 @@ def main(_):
 
     with open(config_file) as g_conf:
         global_config_dict = json.load(g_conf)
-
         circuit_template = global_config_dict['circuit_template']
         param_map = global_config_dict['param_map']
-        sampling_step_size = global_config_dict['sampling_step_size']
         dt = global_config_dict['dt']
         simulation_time = global_config_dict['simulation_time']
-        # 'inputs' and 'outputs' are optional parameters
+
+        # Optional parameters
+        #####################
+        # sampling_step_size
+        try:
+            sampling_step_size = global_config_dict['sampling_step_size']
+        except KeyError:
+            sampling_step_size = dt
+
+        try:
+            backend = global_config_dict['backend']
+        except KeyError:
+            backend = 'numpy'
+
         try:
             inputs_temp = global_config_dict['inputs']
             if inputs_temp:
@@ -82,6 +93,7 @@ def main(_):
                 inputs = {}
         except KeyError:
             inputs = {}
+
         try:
             outputs_temp = global_config_dict['outputs']
             if outputs_temp:
@@ -104,7 +116,11 @@ def main(_):
     param_grid = pd.read_hdf(subgrid, key="subgrid")
 
     # grid_search() can't handle additional columns in the parameter grid
-    param_grid = param_grid.drop(['status', 'chunk_idx', 'err_count'], axis=1)
+    try:
+        param_grid = param_grid.drop(['status', 'chunk_idx', 'err_count'], axis=1)
+    except KeyError:
+        pass
+
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     # Compute parameter subgrid using grid_search
@@ -113,14 +129,22 @@ def main(_):
     print("***COMPUTING PARAMETER GRID***")
     t0 = time.time()
 
-    results = grid_search(circuit_template=circuit_template,
-                          param_grid=param_grid,
-                          param_map=param_map,
-                          inputs=inputs,
-                          outputs=outputs,
-                          sampling_step_size=sampling_step_size,
-                          dt=dt,
-                          simulation_time=simulation_time)
+    # grid_search returns an unsorted DataFrame yielding results for all parameter combinations in param_grid
+    results, _t, _ = grid_search(
+        circuit_template=circuit_template,
+        param_grid=param_grid,
+        param_map=param_map,
+        simulation_time=simulation_time,
+        dt=dt,
+        sampling_step_size=sampling_step_size,
+        permute_grid=False,
+        inputs=inputs,
+        outputs=outputs,
+        init_kwargs={
+            'backend': backend,
+            'vectorization': 'nodes'
+        },
+        profile='t')
 
     out_vars = results.columns.levels[-1]
 
@@ -139,14 +163,13 @@ def main(_):
 
             # Order results according to rows in parameter grid
             ###################################################
-            for i, idx in enumerate(param_grid.index):
-                idx_list = param_grid.iloc[i].values.tolist()
-                idx_list.append(out_var)
-
-                result = results.loc[:, tuple(idx_list)].to_frame()
+            # Iterate over rows in param_grid and use its values to index columns in results
+            for i, column_values in enumerate(param_grid.values):
+                result = results.loc[:, tuple([column_values, out_var])]
                 result.columns.names = results.columns.names
                 res_lst.append(result)
 
+            # Concatenate all DataFrame in res_lst to one global ordered DataFrame
             result_ordered = pd.concat(res_lst, axis=1)
 
             # Postprocess ordered results (optional)
@@ -169,21 +192,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default="~/worker_test/config_file.json",
+        default="/nobackup/spanien1/salomon/CGS/Holgado/GeneticClusterFit_diseased_1/Config/DefaultConfig_3.json",
         help="Config file with all necessary data to start grid_search() except for parameter grid"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default="~/worker_test/subgrid.h5",
+        default="/nobackup/spanien1/salomon/CGS/Holgado/GeneticClusterFit_diseased_1/Grids/Subgrids/DefaultGrid_3/tiber/tiber_Subgrid_0.h5",
         help="Path to csv-file with sub grid to compute on the remote machine"
     )
 
     parser.add_argument(
         "--local_res_file",
         type=str,
-        default="~/worker_test/result.h5",
+        default="//data/hu_salomon/Documents/CGSWorkerTests/test/test_result.h5",
         help="hdf5-file to save results to"
     )
 
