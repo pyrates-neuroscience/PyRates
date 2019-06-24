@@ -853,6 +853,7 @@ class NumpyBackend(object):
         self.name = name
         self._rt_optimization = jit_compile
         self._base_layer = 0
+        self._output_layer_added = False
         self._imports = ["import numpy as np", "from pyrates.backend.funcs import *"]
         if imports:
             for imp in imports:
@@ -1147,7 +1148,11 @@ class NumpyBackend(object):
                                scope="output_collection")
 
         # add output storage layer to the graph
-        self.add_layer()
+        if self._output_layer_added:
+            self.top_layer()
+        else:
+            self.add_layer()
+            self._output_layer_added = True
 
         # add collector variables to the graph
         for i, (var_col) in enumerate(outputs):
