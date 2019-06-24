@@ -89,6 +89,7 @@ class ComputeGraph(object):
         super().__init__()
         self.name = name
         self._float_precision = float_precision
+        self._first_run = True
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend and set the backend default_device
@@ -330,6 +331,12 @@ class ComputeGraph(object):
 
         if verbose:
             print("Preparing simulation...")
+
+        if not self._first_run:
+            self.backend.remove_layer(0)
+            self.backend.remove_layer(self.backend.top_layer())
+        else:
+            self._first_run = False
 
         # basic simulation parameters initialization
         if not simulation_time:
