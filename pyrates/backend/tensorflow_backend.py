@@ -328,24 +328,10 @@ class TensorflowBackend(NumpyBackend):
 
     def _run(self, layers, sampling_layer, steps, sampling_steps):
         if sampling_layer is None:
-            self._run_without_sampling(layers, steps)
+            run_without_sampling(layers, steps)
         else:
             sampling_func, sampling_args = sampling_layer
-            self._run_with_sampling(layers, steps, sampling_func, sampling_args, sampling_steps)
-
-    @tf.function
-    def _run_without_sampling(self, layers, steps):
-        for _ in tf.range(steps):
-            for func, args in layers:
-                func(*args)
-
-    @tf.function
-    def _run_with_sampling(self, layers, steps, sampling_func, sampling_args, sampling_steps):
-        for step in tf.range(steps):
-            if tf.equal(step % sampling_steps, 0):
-                sampling_func(*sampling_args)
-            for func, args in layers:
-                func(*args)
+            run_with_sampling(layers, steps, sampling_func, sampling_args, sampling_steps)
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:
@@ -385,3 +371,19 @@ class TensorflowBackend(NumpyBackend):
                 return op1.dtype == op2.dtype
             else:
                 return False
+
+
+@tf.function
+def run_without_sampling(layers, steps):
+    for _ in tf.range(steps):
+        for func, args in layers:
+            func(*args)
+
+
+@tf.function
+def run_with_sampling(layers, steps, sampling_func, sampling_args, sampling_steps):
+    for step in tf.range(steps):
+        if tf.equal(step % sampling_steps, 0):
+            sampling_func(*sampling_args)
+        for func, args in layers:
+            func(*args)

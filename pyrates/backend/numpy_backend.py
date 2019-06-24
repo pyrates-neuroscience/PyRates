@@ -39,13 +39,14 @@ add_op
 add_layer
 
 Currently supported backends:
+- Numpy: NumpyBackend.
 - Tensorflow: TensorflowBackend.
 
 """
 
 # external imports
 import time as t
-from typing import Optional, Dict, List, Union, Tuple, Any, Callable
+from typing import Optional, Dict, List, Union, Tuple, Any
 import numpy as np
 from copy import deepcopy
 import os
@@ -1195,15 +1196,17 @@ class NumpyBackend(object):
         if idx <= self._base_layer:
             self._base_layer -= 1
 
-    def top_layer(self) -> None:
+    def top_layer(self) -> int:
         """Jump to top layer of the stack.
         """
         self.layer = len(self.layers)-1
+        return self.layer
 
-    def bottom_layer(self) -> None:
+    def bottom_layer(self) -> int:
         """Jump to bottom layer of the stack.
         """
         self.layer = -self._base_layer
+        return self.layer
 
     def get_current_layer(self) -> list:
         """Get operations in current layer.
@@ -1604,7 +1607,7 @@ class NumpyBackend(object):
 
         # create layer run function
         def layer_run(funcs, func_args):
-            [func(*args) for func, args in zip(funcs, func_args)]
+            return [func(*args) for func, args in zip(funcs, func_args)]
 
         # apply function decorator to layer run function if provided
         if decorator:
