@@ -126,7 +126,7 @@ class CircuitIR(AbstractBaseIR):
         attr
             Additional attributes (keyword arguments) that can be added to the node data. (Default `networkx` syntax.)
         """
-
+        label = label
         new_label = self._get_unique_label(label)
 
         self.graph.add_node(new_label, node=node, **attr)
@@ -293,7 +293,6 @@ class CircuitIR(AbstractBaseIR):
     def _validate_separate_key_path(self, *paths: str):
 
         for key in paths:
-
             # (circuits), node, operator and variable specifiers
 
             *node, op, var = key.split("/")
@@ -301,7 +300,7 @@ class CircuitIR(AbstractBaseIR):
             node = "/".join(node)
 
             # re-reference node labels, if necessary
-            # this syntax yields "node" back as default if it is not in label_map
+            # this syntax yields `node` back as default if it is not in label_map
             node = self.label_map.get(node, node)
             # re_reference operator labels, if necessary
             op = self._validate_rename_op_label(self[node], op)

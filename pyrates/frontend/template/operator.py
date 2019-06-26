@@ -28,6 +28,7 @@
 # external imports
 import re
 from copy import deepcopy
+from sys import intern
 from typing import Union
 
 # pyrates internal imports
@@ -61,9 +62,9 @@ class OperatorTemplate(AbstractBaseTemplate):
         super().__init__(name, path, description)
 
         if isinstance(equations, str):
-            self.equations = [equations]
+            self.equations = [intern(equations)]
         else:
-            self.equations = equations
+            self.equations = [intern(eq) for eq in equations]
         self.variables = variables
 
     def update_template(self, name: str, path: str, equations: Union[str, list, dict] = None,
@@ -300,26 +301,26 @@ def _update_equation(equation: str,  # original equation
     # replace existing terms by new ones
     if replace:
         for old, new in replace.items():
-            equation = equation.replace(old, new)
+            equation = intern(equation.replace(old, new))
             # this might fail, if multiple replacements refer or contain the same variables
             # is it possible to call str.replace with tuples?
 
     # remove terms
     if remove:
         if isinstance(remove, str):
-            equation = equation.replace(remove, "")
+            equation = intern(equation.replace(remove, ""))
         else:
             for old in remove:
-                equation = equation.replace(old, "")
+                equation = intern(equation.replace(old, ""))
 
     # append terms at the end of the equation string
     if append:
         # only allowing single append per update
-        equation = f"{equation} {append}"
+        equation = intern(f"{equation} {append}")
 
         # prepend terms at the beginning of the equation string
     if prepend:
         # only allowing single prepend per update
-        equation = f"{prepend} {equation}"
+        equation = intern(f"{prepend} {equation}")
 
     return equation
