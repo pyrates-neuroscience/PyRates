@@ -28,8 +28,8 @@ python setup.py install
 
 Documentation
 -------------
-For a full API of PyRates, see READTHEDOCSLINK.
-For examplary simulations and model configurations, please have a look at the jupyter notebooks in the documenation folder.
+For a full API of PyRates, see pyrates.readthedocs.io/en/latest.
+For examplary simulations and model configurations, please have a look at the jupyter notebooks provided in the documenation folder.
 
 Reference
 ---------
