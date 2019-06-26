@@ -12,5 +12,4 @@ pydot
 pytest
 paramiko
 numba
-open-edx-theme
 edx-sphinx-theme
