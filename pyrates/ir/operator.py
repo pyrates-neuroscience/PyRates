@@ -42,12 +42,26 @@ __status__ = "Development"
 
 class OperatorIR(AbstractBaseIR):
 
+    __slots__ = ["_equations", "_inputs", "_output"]
+
     def __init__(self, equations: List[str], inputs: list, output: str, template: str=None):
 
         super().__init__(template)
-        self.output = output
-        self.inputs = inputs
-        self.equations = equations
+        self._output = output
+        self._inputs = inputs
+        self._equations = equations
+
+    @property
+    def output(self):
+        return self._output
+
+    @property
+    def inputs(self):
+        return self._inputs
+
+    @property
+    def equations(self):
+        return self._equations
 
     # @staticmethod
     # def _reduce_ode_order(equations: str, variables):

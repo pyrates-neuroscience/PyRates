@@ -37,8 +37,14 @@ __status__ = "Development"
 class AbstractBaseIR:
     """Abstract base class for intermediate representation classes"""
 
+    __slots__ = ["_template"]
+
     def __init__(self, template: str = None):
-        self.template = template
+        self._template = template
+
+    @property
+    def template(self):
+        return self._template
 
     def __getitem__(self, key: str):
         """

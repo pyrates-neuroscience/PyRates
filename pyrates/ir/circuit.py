@@ -50,6 +50,7 @@ class CircuitIR(AbstractBaseIR):
     and variables."""
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
+    __slots__ = ["_label", "_label_counter", "_label_map", "_graph", "_sub_circuits"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -73,12 +74,12 @@ class CircuitIR(AbstractBaseIR):
         """
 
         super().__init__(template)
-        self.label = label
-        self.label_counter = {}
-        self.label_map = {}
+        self._label = label
+        self._label_counter = {}
+        self._label_map = {}
 
-        self.graph = MultiDiGraph()
-        self.sub_circuits = set()
+        self._graph = MultiDiGraph()
+        self._sub_circuits = set()
 
         if circuits:
             for key, temp in circuits.items():
@@ -89,6 +90,26 @@ class CircuitIR(AbstractBaseIR):
 
         if edges:
             self.add_edges_from(edges)
+
+    @property
+    def label(self):
+        return self._label
+
+    @property
+    def label_counter(self):
+        return self._label_counter
+
+    @property
+    def label_map(self):
+        return self._label_map
+
+    @property
+    def graph(self):
+        return self._graph
+
+    @property
+    def sub_circuits(self):
+        return self._sub_circuits
 
     def add_nodes_from(self, nodes: Dict[str, NodeIR], **attr):
         """ Add multiple nodes to circuit. Allows networkx-style adding if from_templates is set to False.
