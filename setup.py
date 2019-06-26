@@ -13,7 +13,8 @@ INSTALL_REQUIREMENTS = ['numpy',
                         'seaborn',
                         'mne',
                         'pydot',
-                        'paramiko']
+                        'paramiko',
+                        'numba']
 
 CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Programming Language :: Python :: 3.6",
