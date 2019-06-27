@@ -37,7 +37,7 @@ __status__ = "Development"
 class AbstractBaseIR:
     """Abstract base class for intermediate representation classes"""
 
-    __slots__ = ["_template"]
+    __slots__ = ["_template", '_h']
 
     def __init__(self, template: str = None):
         self._template = template
@@ -91,6 +91,9 @@ class AbstractBaseIR:
             return False
         else:
             return True
+
+    def __hash__(self):
+        return self._h
 
     # @classmethod
     # def from_dict(cls, **kwargs):

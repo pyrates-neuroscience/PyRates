@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -28,11 +27,11 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-# import re
+import re
 from copy import deepcopy
-from typing import List, Union, Iterator
+from typing import List, Iterator, Tuple, Dict, Union
 
-# from pyrates import PyRatesException
+from pyrates import PyRatesException
 # from pyrates.frontend.utility import deep_freeze
 from pyrates.ir.abc import AbstractBaseIR
 
@@ -41,27 +40,37 @@ __status__ = "Development"
 
 
 class OperatorIR(AbstractBaseIR):
+    """This implementation of the Operator IR is aimed to be hashable and immutable. Following Python standards, we
+    assume that users are consenting adults. Objects are thus not actually mutable, just slightly protected. This might
+    change in the future."""
+    __slots__ = ["_equations", "_variables", "_inputs", "_output"]
 
-    __slots__ = ["_equations", "_inputs", "_output"]
-
-    def __init__(self, equations: List[str], inputs: list, output: str, template: str=None):
+    def __init__(self, equations: List[str], variables: List[tuple], inputs: List[str], output:str, template: str = None):
 
         super().__init__(template)
+        # define hash
+
+        self._equations = tuple(equations)
+        self._variables = tuple(variables)
+        self._inputs = tuple(inputs)
         self._output = output
-        self._inputs = inputs
-        self._equations = equations
+        self._h = hash((self._equations, self._variables, self._inputs, self._output))
 
     @property
-    def output(self):
-        return self._output
+    def variables(self):
+        return self._variables
+
+    @property
+    def equations(self):
+        return self._equations
 
     @property
     def inputs(self):
         return self._inputs
 
     @property
-    def equations(self):
-        return self._equations
+    def output(self):
+        return self._output
 
     # @staticmethod
     # def _reduce_ode_order(equations: str, variables):
@@ -93,10 +102,6 @@ class OperatorIR(AbstractBaseIR):
     #         return eq1, eq2, variables
     #     else:
     #         return equations, variables
-
-    def copy(self):
-
-        return self.__class__(deepcopy(self.equations), deepcopy(self.inputs), deepcopy(self.output))
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """
