@@ -58,7 +58,7 @@ class OperatorIR(AbstractBaseIR):
 
     @property
     def variables(self):
-        return self._variables
+        return {vname: (vtype, dtype, shape) for vname, vtype, dtype, shape in self._variables}
 
     @property
     def equations(self):
@@ -121,3 +121,7 @@ class OperatorIR(AbstractBaseIR):
                 return key
         else:
             raise KeyError(f"Variable `{key}` not found in equations {self.equations}")
+
+    def __str__(self):
+
+        return f"<{self.__class__.__name__}({self.equations}), hash = {hash(self)} >"

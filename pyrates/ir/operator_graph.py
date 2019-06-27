@@ -27,10 +27,11 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from typing import Iterator, Dict
+from typing import Iterator, Dict, List
 from networkx import DiGraph, find_cycle, NetworkXNoCycle
 
 from pyrates import PyRatesException
+from pyrates.ir.operator import OperatorIR
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -39,43 +40,41 @@ __status__ = "Development"
 class OperatorGraph(DiGraph):
     """Intermediate representation for nodes and edges."""
 
-    def __init__(self, operators: dict = None, template: str = ""):
+    def __init__(self, operators: Dict[str, OperatorIR] = None, template: str = ""):
 
         super().__init__()
         if not operators:
             operators = {}
-        all_outputs = {}  # type: Dict[str, dict]
+
+        all_outputs = {}  # type: Dict[str, List[str]]
         # op_inputs, op_outputs = set(), set()
 
-        for key, item in operators.items():
-
-            op_instance = item["operator"]
-            op_variables = item["variables"]
+        for key, operator in operators.items():
 
             # add operator as node to local operator_graph
-            self.add_node(key, operator=op_instance, variables=op_variables)
+            inputs = {var: dict(sources=set(), reduce_dim=True) for var in operator.inputs}
+            self.add_node(key, operator=operator, inputs=inputs, label=key)
 
             # collect all output variables
-            out_var = op_instance.output
+            out_var = operator.output
 
             # check, if variable name exists in outputs and create empty list if it doesn't
             if out_var not in all_outputs:
-                all_outputs[out_var] = {}
+                all_outputs[out_var] = []
 
-            all_outputs[out_var][key] = out_var
-            # this assumes input and output variables map on each other by equal name
-            # with additional information, non-equal names could also be mapped here
+            all_outputs[out_var].append(key)
 
         # link outputs to inputs
-        for op_key, op in self.operators(get_ops=True):
+        for label, data in self.nodes(data=True):
+            op = data["operator"]
             for in_var in op.inputs:
                 if in_var in all_outputs:
                     # link all collected outputs of given variable in inputs field of operator
-                    for predecessor, out_var in all_outputs[in_var].items():
+                    for predecessor in all_outputs[in_var]:
                         # add predecessor output as source; this would also work for non-equal variable names
-                        if predecessor not in op.inputs[in_var]["sources"]:
-                            op.inputs[in_var]["sources"].append(predecessor)
-                        self.add_edge(predecessor, op_key)
+                        data["inputs"][in_var]["sources"].add(predecessor)
+                        # adding into set means there will be no order, but also nothing can be added twice
+                        self.add_edge(predecessor, label)
                 else:
                     pass  # means, that 'source' will remain an empty list and no incoming edge will be added
 
@@ -86,6 +85,11 @@ class OperatorGraph(DiGraph):
         else:
             raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node "
                                    "or edge.")
+
+        self._h = hash(tuple(self.nodes))
+
+    def __hash__(self):
+        return self._h
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """
@@ -111,7 +115,7 @@ class OperatorGraph(DiGraph):
             item = self.nodes[key]["operator"]
         else:
             # variable specified, so we return variable properties instead
-            item = self.nodes[key]["variables"][var]
+            item = self.nodes[key]["operator"].variables[var]
 
         return item
 
@@ -119,14 +123,14 @@ class OperatorGraph(DiGraph):
         """Return an iterator containing all operator labels in the operator graph."""
         return iter(self.nodes)
 
-    def operators(self, get_ops=False, get_vars=False):
+    def operators(self, get_ops=False, get_vals=False):
         """Alias for self.nodes"""
 
-        if get_ops and get_vars:
-            return ((key, data["operator"], data["variables"]) for key, data in self.nodes(data=True))
+        if get_ops and get_vals:
+            return ((data["label"], op, data["values"]) for op, data in self.nodes(data=True))
         elif get_ops:
-            return ((key, data["operator"]) for key, data in self.nodes(data=True))
-        elif get_vars:
-            return ((key, data["variables"]) for key, data in self.nodes(data=True))
+            return ((data["label"], op) for op, data in self.nodes(data=True))
+        elif get_vals:
+            return ((data["label"], data["values"]) for op, data in self.nodes(data=True))
         else:
             return self.nodes

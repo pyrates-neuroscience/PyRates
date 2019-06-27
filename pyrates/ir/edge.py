@@ -39,9 +39,9 @@ __status__ = "Development"
 
 class EdgeIR(NodeIR):
 
-    def __init__(self, operators: dict=None, template: str = None):
+    def __init__(self, operators: dict = None, values: dict = None, template: str = None):
 
-        super().__init__(operators, template)
+        super().__init__(operators, values, template)
 
     @property
     def input(self):

@@ -123,7 +123,7 @@ class OperatorTemplate(AbstractBaseTemplate):
         try:
             instance, default_values = self.cache[key]
 
-            for vname, value in default_values:
+            for vname, value in default_values.items():
                 if vname not in values:
                     values[vname] = value
 

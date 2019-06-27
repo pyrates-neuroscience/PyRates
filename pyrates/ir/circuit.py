@@ -364,6 +364,8 @@ class CircuitIR(AbstractBaseIR):
                 op_label, *_ = op_label.split(".")
             else:
                 return op_label
+        else:
+            return op_label
 
         # build grammar for pyparsing
         grammar = Literal(op_label) + "." + Word(nums)

@@ -39,16 +39,21 @@ __status__ = "Development"
 
 class NodeIR(AbstractBaseIR):
 
-    __slots__ = ["_op_graph"]
+    __slots__ = ["_op_graph", "_values"]
 
-    def __init__(self, operators: dict=None, template: str=None):
+    def __init__(self, operators: list = None, values: dict = None, template: str=None):
 
         super().__init__(template)
         self._op_graph = OperatorGraph(operators)
+        self._values = values
 
     @property
     def op_graph(self):
         return self._op_graph
+
+    @property
+    def values(self):
+        return self._values
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """Alias for self.op_graph.getitem_from_iterator"""
