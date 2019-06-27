@@ -1,0 +1,357 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyrates.utility.data_analysis &mdash; PyRates 0.7.1 documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../../../_static/css/PyRates_logo_color.ico"/>
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'../../../',
+        VERSION:'0.7.1',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="../../../_static/language_data.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+    
+
+  
+
+  
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="PyRates 0.7.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="pyrates" href="../../pyrates.html"/> 
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="../../../contents.html" class="icon icon-home"> PyRates</a>
+        <form class="wy-form" action="../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search document" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">PyRates</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="../../../contents.html">Table of Contents</a> &raquo;</li>
+  <li><a href="">pyrates.utility.data_analysis</a></li>
+  <li class="wy-breadcrumbs-aside"><a href="https://docs.google.com/forms/d/1T5QGnYb_QnQoMO7T_eatq02miPTY40WVe3cgGphNAdY/viewform?entry.1952574704&entry.241692674=PyRates%3A%20_modules/pyrates/utility/data_analysis" target="_blank">Give Doc Feedback</a>
+  </li>
+</ul>
+<hr/>
+
+          
+  <h1>Source code for pyrates.utility.data_analysis</h1><div class="highlight"><pre>
+<span></span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural </span>
+<span class="c1"># network model_templates and simulations. See also:</span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1"># </span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and </span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain </span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1"># </span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1"># </span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1"># </span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1"># </span>
+<span class="c1"># CITATION:</span>
+<span class="c1"># </span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+
+<span class="c1"># external imports</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">List</span>
+
+<span class="c1"># meta infos</span>
+<span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Richard Gast&quot;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;development&quot;</span>
+
+
+<div class="viewcode-block" id="functional_connectivity"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.data_analysis.functional_connectivity">[docs]</a><span class="k">def</span> <span class="nf">functional_connectivity</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;cov&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Calculate functional connectivity of node timeseries in data.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data</span>
+<span class="sd">        Pandas dataframe containing the simulation results.</span>
+<span class="sd">    metric</span>
+<span class="sd">        Type of connectivtiy measurement that should be used.</span>
+<span class="sd">            - `cov` for covariance (uses `np.cov`)</span>
+<span class="sd">            - `corr` for pearsson correlation (uses `np.corrcoef`)</span>
+<span class="sd">            - `csd` for cross-spectral density (uses `mne.time_frequency.csd_array_morlet`)</span>
+<span class="sd">            - `coh` for coherenc (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">            - `cohy` for coherency (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">            - `imcoh` for imaginary coherence (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">            - `plv` for phase locking value (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">            - `ppc` for pairwise phase consistency (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">            - `pli` for phase lag index (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">            - `pli2_unbiased` for unbiased estimate of squared phase lag index</span>
+<span class="sd">               (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">            - `wpli`for weighted phase lag index (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">            - `wpli2_debiased` for debiased weighted phase lag index (uses `mne.connectivtiy.spectral_connectivity`)</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional keyword arguments passed to respective function used for fc calculation.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    np.ndarray</span>
+<span class="sd">        Pairwise functional connectivity</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="s1">&#39;time&#39;</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">)</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">idx</span>
+
+    <span class="c1"># calculate functional connectivity</span>
+    <span class="c1">###################################</span>
+
+    <span class="k">if</span> <span class="n">metric</span> <span class="o">==</span> <span class="s1">&#39;cov&#39;</span><span class="p">:</span>
+
+        <span class="c1"># covariance</span>
+        <span class="n">fc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">metric</span> <span class="o">==</span> <span class="s1">&#39;corr&#39;</span><span class="p">:</span>
+
+        <span class="c1"># pearsson correlation coefficient</span>
+        <span class="n">fc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">corrcoef</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">metric</span> <span class="o">==</span> <span class="s1">&#39;csd&#39;</span><span class="p">:</span>
+
+        <span class="kn">from</span> <span class="nn">mne.time_frequency</span> <span class="k">import</span> <span class="n">csd_array_morlet</span>
+        <span class="n">fc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">csd_array_morlet</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span>
+                                     <span class="n">sfreq</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                                     <span class="n">ch_names</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+                                     <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">get_data</span><span class="p">())</span>
+
+    <span class="k">elif</span> <span class="n">metric</span> <span class="ow">in</span> <span class="s1">&#39;cohcohyimcohplvppcplipli2_unbiasedwpliwpli2_debiased&#39;</span><span class="p">:</span>
+
+        <span class="c1"># phase-based connectivtiy/synchronization measurement</span>
+        <span class="kn">from</span> <span class="nn">mne.connectivity</span> <span class="k">import</span> <span class="n">spectral_connectivity</span>
+        <span class="n">fc</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">spectral_connectivity</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span>
+                                               <span class="n">method</span><span class="o">=</span><span class="n">metric</span><span class="p">,</span>
+                                               <span class="n">sfreq</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                                               <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">fc</span> <span class="o">=</span> <span class="n">fc</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;FC metric is not supported by this function: </span><span class="si">{metric}</span><span class="s1">. Check the documentation of the &#39;</span>
+                         <span class="n">f</span><span class="s1">&#39;argument `metric` for valid options.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">fc</span></div>
+
+
+<div class="viewcode-block" id="analytic_signal"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.data_analysis.analytic_signal">[docs]</a><span class="k">def</span> <span class="nf">analytic_signal</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">fmin</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">fmax</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">nodes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Calculates analytic signal from simulation results, using the hilbert transform.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data</span>
+<span class="sd">        Simulation results.</span>
+<span class="sd">    fmin</span>
+<span class="sd">        Lower bound frequency for bandpass filter that will be applied to the data.</span>
+<span class="sd">    fmax</span>
+<span class="sd">        Upper bound frequency for bandpass filter that will be applied to the data.</span>
+<span class="sd">    nodes</span>
+<span class="sd">        List of node names for which to calculate the analytic signal.</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional keyword arguments that will be passed to the `mne.Raw.filter` method.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pd.DataFrame</span>
+<span class="sd">        Dataframe containing the fields `time`, `node`, `amplitude` and `phase`.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="s1">&#39;time&#39;</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">)</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">idx</span>
+
+    <span class="k">if</span> <span class="n">nodes</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="n">nodes</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="n">nodes</span><span class="p">]</span>
+
+    <span class="c1"># create mne raw data object</span>
+    <span class="kn">from</span> <span class="nn">pyrates.utility</span> <span class="k">import</span> <span class="n">mne_from_dataframe</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n">mne_from_dataframe</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="c1"># bandpass filter the raw data</span>
+    <span class="n">raw</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">l_freq</span><span class="o">=</span><span class="n">fmin</span><span class="p">,</span> <span class="n">h_freq</span><span class="o">=</span><span class="n">fmax</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="c1"># apply hilbert transform</span>
+    <span class="n">raw</span><span class="o">.</span><span class="n">apply_hilbert</span><span class="p">()</span>
+
+    <span class="c1"># get phase of analytic signal</span>
+    <span class="k">def</span> <span class="nf">get_angle</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">angle</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+    <span class="n">raw_phase</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">raw_phase</span><span class="o">.</span><span class="n">apply_function</span><span class="p">(</span><span class="n">get_angle</span><span class="p">)</span>
+    <span class="n">raw_phase</span><span class="o">.</span><span class="n">apply_function</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">real</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">raw_phase</span><span class="o">.</span><span class="n">apply_function</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unwrap</span><span class="p">)</span>
+
+    <span class="c1"># get amplitude of analytic signal</span>
+    <span class="n">raw_amplitude</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">raw_amplitude</span><span class="o">.</span><span class="n">apply_function</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">)</span>
+    <span class="n">raw_amplitude</span><span class="o">.</span><span class="n">apply_function</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">real</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="c1"># combine phase and amplitude into dataframe</span>
+    <span class="n">time</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">index</span>
+    <span class="n">data_phase</span> <span class="o">=</span> <span class="n">raw_phase</span><span class="o">.</span><span class="n">to_data_frame</span><span class="p">(</span><span class="n">scalings</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;eeg&#39;</span><span class="p">:</span> <span class="mf">1.</span><span class="p">})</span>
+    <span class="n">data_phase</span><span class="p">[</span><span class="s1">&#39;time&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span>
+    <span class="n">data_amp</span> <span class="o">=</span> <span class="n">raw_amplitude</span><span class="o">.</span><span class="n">to_data_frame</span><span class="p">(</span><span class="n">scalings</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;eeg&#39;</span><span class="p">:</span> <span class="mf">1.</span><span class="p">})</span>
+    <span class="n">data_amp</span><span class="p">[</span><span class="s1">&#39;time&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">melt</span><span class="p">(</span><span class="n">data_phase</span><span class="p">,</span> <span class="n">id_vars</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;time&#39;</span><span class="p">],</span> <span class="n">var_name</span><span class="o">=</span><span class="s1">&#39;node&#39;</span><span class="p">,</span> <span class="n">value_name</span><span class="o">=</span><span class="s1">&#39;phase&#39;</span><span class="p">)</span>
+    <span class="n">data_tmp</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">melt</span><span class="p">(</span><span class="n">data_amp</span><span class="p">,</span> <span class="n">id_vars</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;time&#39;</span><span class="p">],</span> <span class="n">var_name</span><span class="o">=</span><span class="s1">&#39;node&#39;</span><span class="p">,</span> <span class="n">value_name</span><span class="o">=</span><span class="s1">&#39;amplitude&#39;</span><span class="p">)</span>
+    <span class="n">data</span><span class="p">[</span><span class="s1">&#39;amplitude&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data_tmp</span><span class="p">[</span><span class="s1">&#39;amplitude&#39;</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">data</span></div>
+
+
+<div class="viewcode-block" id="time_frequency"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.data_analysis.time_frequency">[docs]</a><span class="k">def</span> <span class="nf">time_frequency</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">freqs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;morlet&#39;</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;avg_power&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+                   <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Calculates time-frequency representation for each node.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data</span>
+<span class="sd">        Simulation results.</span>
+<span class="sd">    freqs</span>
+<span class="sd">        Frequencies of interest.</span>
+<span class="sd">    method</span>
+<span class="sd">        Method to be used for TFR calculation. Can be `morlet` for `mne.time_frequency.tfr_array_morlet` or</span>
+<span class="sd">        `multitaper` for `mne.time_frequency.tfr_array_multitaper`.</span>
+<span class="sd">    output</span>
+<span class="sd">        Type of the output variable to be calculated. For options, see `mne.time_frequency.tfr_array_morlet`.</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional keyword arguments to be passed to the function used for tfr calculation.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    np.ndarray</span>
+<span class="sd">        Time-frequency representation (n x f x t) for each node (n) at each frequency of interest (f) and time (t).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="s1">&#39;time&#39;</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">)</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">idx</span>
+
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;morlet&#39;</span><span class="p">:</span>
+
+        <span class="kn">from</span> <span class="nn">mne.time_frequency</span> <span class="k">import</span> <span class="n">tfr_array_morlet</span>
+        <span class="k">return</span> <span class="n">tfr_array_morlet</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span>
+                                <span class="n">sfreq</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                                <span class="n">freqs</span><span class="o">=</span><span class="n">freqs</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="n">output</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;multitaper&#39;</span><span class="p">:</span>
+
+        <span class="kn">from</span> <span class="nn">mne.time_frequency</span> <span class="k">import</span> <span class="n">tfr_array_multitaper</span>
+        <span class="k">return</span> <span class="n">tfr_array_multitaper</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span>
+                                    <span class="n">sfreq</span><span class="o">=</span><span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                                    <span class="n">freqs</span><span class="o">=</span><span class="n">freqs</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="n">output</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+</pre></div>
+
+          <footer>
+  
+
+  <hr/>
+
+  <p style="font-size: 85%">
+      Copyright &copy; 2019, Richard Gast, Daniel Rose, Christoph Salomon
+    <br/>
+    <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a>
+    <br/>
+    These works by <a xmlns:cc="http://creativecommons.org/ns#" href="http://open.edx.org" property="cc:attributionName" rel="cc:attributionURL">edX Inc.</a>
+    are licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+  </p>
+
+ 
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+</body>
+</html>

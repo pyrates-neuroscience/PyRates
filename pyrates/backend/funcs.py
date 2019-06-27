@@ -44,6 +44,7 @@ __status__ = "development"
 def pr_sigmoid(x):
     return 1./(1. + np.exp(-x))
 
+
 def pr_softmax(x, axis=0):
     x_exp = np.exp(x)
     return x_exp/np.sum(x_exp, axis=axis)

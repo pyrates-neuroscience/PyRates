@@ -1,0 +1,421 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyrates.utility.mne_wrapper &mdash; PyRates 0.7.1 documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../../../_static/css/PyRates_logo_color.ico"/>
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'../../../',
+        VERSION:'0.7.1',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="../../../_static/language_data.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+    
+
+  
+
+  
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="PyRates 0.7.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="pyrates" href="../../pyrates.html"/> 
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="../../../contents.html" class="icon icon-home"> PyRates</a>
+        <form class="wy-form" action="../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search document" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">PyRates</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="../../../contents.html">Table of Contents</a> &raquo;</li>
+  <li><a href="">pyrates.utility.mne_wrapper</a></li>
+  <li class="wy-breadcrumbs-aside"><a href="https://docs.google.com/forms/d/1T5QGnYb_QnQoMO7T_eatq02miPTY40WVe3cgGphNAdY/viewform?entry.1952574704&entry.241692674=PyRates%3A%20_modules/pyrates/utility/mne_wrapper" target="_blank">Give Doc Feedback</a>
+  </li>
+</ul>
+<hr/>
+
+          
+  <h1>Source code for pyrates.utility.mne_wrapper</h1><div class="highlight"><pre>
+<span></span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural </span>
+<span class="c1"># network model_templates and simulations. See also:</span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1"># </span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and </span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain </span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1"># </span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1"># </span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1"># </span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1"># </span>
+<span class="c1"># CITATION:</span>
+<span class="c1"># </span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+<span class="sd">&quot;&quot;&quot;Provides functions to build MNE objects (raw, epoch, evoked) from PyRates simulation results (csv) or from circuit</span>
+<span class="sd">objects.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c1"># external packages</span>
+<span class="kn">import</span> <span class="nn">mne</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">List</span>
+<span class="kn">from</span> <span class="nn">pandas</span> <span class="k">import</span> <span class="n">DataFrame</span>
+
+<span class="c1"># pyrates internal imports</span>
+
+<span class="c1"># meta infos</span>
+<span class="n">__author__</span> <span class="o">=</span> <span class="s1">&#39;Richard Gast&#39;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s1">&#39;Development&#39;</span>
+
+
+<span class="c1">############################################################</span>
+<span class="c1"># wrapper to build an mne object from observer information #</span>
+<span class="c1">############################################################</span>
+
+
+<div class="viewcode-block" id="mne_from_dataframe"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.mne_wrapper.mne_from_dataframe">[docs]</a><span class="k">def</span> <span class="nf">mne_from_dataframe</span><span class="p">(</span><span class="n">sim_results</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span>
+                       <span class="n">ch_types</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">&#39;eeg&#39;</span><span class="p">,</span>
+                       <span class="n">ch_names</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                       <span class="n">events</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                       <span class="n">event_keys</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                       <span class="n">epoch_start</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                       <span class="n">epoch_end</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                       <span class="n">epoch_duration</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                       <span class="n">epoch_averaging</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                       <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">mne</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">Raw</span><span class="p">,</span> <span class="n">mne</span><span class="o">.</span><span class="n">Epochs</span><span class="p">,</span> <span class="n">mne</span><span class="o">.</span><span class="n">Evoked</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Uses the data stored on a circuit to create a raw/epoch/evoked mne object.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    sim_results</span>
+<span class="sd">        Pandas dataframe in which circuit simulation results are stored (output of circuit&#39;s `run` function).</span>
+<span class="sd">    ch_types</span>
+<span class="sd">        Type of the channels, the observation time-series of the observers refer to.</span>
+<span class="sd">    ch_names</span>
+<span class="sd">        Name of each channel/observation time-series.</span>
+<span class="sd">    events</span>
+<span class="sd">        2D array defining events during the simulation. For a more detailed documentation, see the docstring for</span>
+<span class="sd">        parameter `events` of :class:`mne.Epochs`.</span>
+<span class="sd">    event_keys</span>
+<span class="sd">        Names of the events. For a more detailed documentation, see the docstring for parameter `event_id` of</span>
+<span class="sd">        :class:`mne.Epochs`.</span>
+<span class="sd">    epoch_start</span>
+<span class="sd">        Time, relative to event onset, at which an epoch should start [unit = s]. For a more detailed documentation,</span>
+<span class="sd">        see the docstring for parameter `tmin` of :class:`mne.Epochs`.</span>
+<span class="sd">    epoch_end</span>
+<span class="sd">        Time, relative to event onset, at which an epoch should end [unit = s]. For a more detailed documentation,</span>
+<span class="sd">        see the docstring for parameter `tmax` of :class:`mne.Epochs`.</span>
+<span class="sd">    epoch_duration</span>
+<span class="sd">        Instead of passing `events`, this parameter can be used to create epochs with a fixed duration [unit = s].</span>
+<span class="sd">        If this is used, do not pass `epoch_start` or `epoch_end`. For a more detailed documentation,</span>
+<span class="sd">        see the docstring for parameter `duration` of :function:`mne.make_fixed_length_events`.</span>
+<span class="sd">    epoch_averaging</span>
+<span class="sd">        Only relevant, if `events` or `event_duration` were passede. If true, an :class:`mne.EvokedArray` instance will</span>
+<span class="sd">        be returned that contains ttime-series averaged over all epochs.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Union[mne.io.Raw, mne.Epochs, mne.Evoked]</span>
+<span class="sd">        MNE object that contains either the raw, epoched, or averaged (over epochs) data.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># extract information from arguments</span>
+    <span class="c1">####################################</span>
+
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">sim_results</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">sim_results</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># channel information</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ch_names</span><span class="p">:</span>
+        <span class="n">ch_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">sim_results</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">ch_types</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">ch_types</span> <span class="o">=</span> <span class="p">[</span><span class="n">ch_types</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ch_names</span><span class="p">))]</span>
+    <span class="n">ch_names_str</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">ch_names</span><span class="p">:</span>
+        <span class="n">ch_names_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+
+    <span class="c1"># epoch/event information</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">epoch_start</span><span class="p">:</span>
+        <span class="n">epoch_start</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.2</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">epoch_duration</span> <span class="k">else</span> <span class="mf">0.</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">epoch_end</span><span class="p">:</span>
+        <span class="n">epoch_end</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">epoch_duration</span> <span class="k">else</span> <span class="n">epoch_duration</span> <span class="o">-</span> <span class="mi">1</span><span class="o">/</span><span class="n">dt</span>
+
+    <span class="c1"># create raw mne object</span>
+    <span class="c1">#######################</span>
+
+    <span class="c1"># create mne info object</span>
+    <span class="n">info</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">create_info</span><span class="p">(</span><span class="n">ch_names</span><span class="o">=</span><span class="n">ch_names_str</span><span class="p">,</span> <span class="n">ch_types</span><span class="o">=</span><span class="n">ch_types</span><span class="p">,</span> <span class="n">sfreq</span><span class="o">=</span><span class="mi">1</span><span class="o">/</span><span class="n">dt</span><span class="p">)</span>
+
+    <span class="c1"># create raw object from info and circuit data</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">RawArray</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">sim_results</span><span class="p">[</span><span class="n">ch_names</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">info</span><span class="o">=</span><span class="n">info</span><span class="p">)</span>
+
+    <span class="c1"># create final mne object</span>
+    <span class="c1">#########################</span>
+
+    <span class="c1"># if events or event information is passed, create Epoch or Evoked object</span>
+    <span class="k">if</span> <span class="n">events</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">epoch_duration</span><span class="p">:</span>
+
+        <span class="c1"># check whether events still have to be created or not</span>
+        <span class="k">if</span> <span class="n">events</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">events</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">make_fixed_length_events</span><span class="p">(</span><span class="n">raw</span><span class="o">=</span><span class="n">raw</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="n">epoch_duration</span><span class="p">)</span>
+
+        <span class="c1"># check whether event labels still have to be created or not</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">event_keys</span><span class="p">:</span>
+            <span class="n">event_keys</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">events</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]):</span>
+                <span class="n">event_keys</span><span class="p">[</span><span class="s1">&#39;event_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">event</span><span class="p">)]</span> <span class="o">=</span> <span class="n">event</span>
+
+        <span class="c1"># create epoch object from raw data and event information</span>
+        <span class="n">mne_object</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">Epochs</span><span class="p">(</span><span class="n">raw</span><span class="o">=</span><span class="n">raw</span><span class="p">,</span> <span class="n">events</span><span class="o">=</span><span class="n">events</span><span class="p">,</span> <span class="n">event_id</span><span class="o">=</span><span class="n">event_keys</span><span class="p">,</span> <span class="n">tmin</span><span class="o">=</span><span class="n">epoch_start</span><span class="p">,</span> <span class="n">tmax</span><span class="o">=</span><span class="n">epoch_end</span><span class="p">)</span>
+
+        <span class="c1"># create Evoked object by averaging over epochs if epoch_averaging is true</span>
+        <span class="k">if</span> <span class="n">epoch_averaging</span><span class="p">:</span>
+
+            <span class="c1"># average over epoch data</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">mne_object</span><span class="o">.</span><span class="n">get_data</span><span class="p">()</span>
+            <span class="n">n_epochs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="c1"># create evoked object</span>
+            <span class="n">mne_object</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">EvokedArray</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">info</span><span class="o">=</span><span class="n">info</span><span class="p">,</span> <span class="n">tmin</span><span class="o">=</span><span class="n">epoch_start</span><span class="p">,</span> <span class="n">comment</span><span class="o">=</span><span class="n">event_keys</span><span class="p">[</span><span class="s1">&#39;event_0&#39;</span><span class="p">],</span>
+                                         <span class="n">nave</span><span class="o">=</span><span class="n">n_epochs</span><span class="p">)</span>
+
+    <span class="c1"># stick with Raw object</span>
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="n">mne_object</span> <span class="o">=</span> <span class="n">raw</span>
+
+    <span class="k">return</span> <span class="n">mne_object</span></div>
+
+
+<span class="c1">###################################################</span>
+<span class="c1"># wrapper to build an mne object from output file #</span>
+<span class="c1">###################################################</span>
+
+
+<div class="viewcode-block" id="mne_from_csv"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.mne_wrapper.mne_from_csv">[docs]</a><span class="k">def</span> <span class="nf">mne_from_csv</span><span class="p">(</span><span class="n">csv_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+                 <span class="n">ch_types</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">&#39;eeg&#39;</span><span class="p">,</span>
+                 <span class="n">ch_names</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">events</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">event_keys</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">epoch_start</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">epoch_end</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">epoch_duration</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">epoch_averaging</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">mne</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">Raw</span><span class="p">,</span> <span class="n">mne</span><span class="o">.</span><span class="n">Epochs</span><span class="p">,</span> <span class="n">mne</span><span class="o">.</span><span class="n">Evoked</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Uses the data stored on circuit to create a raw/epoch/evoked mne object.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    csv_dir</span>
+<span class="sd">        Full path + filename of the csv file that contains the circuit outputs from which an MNE object should be</span>
+<span class="sd">        created.</span>
+<span class="sd">    ch_types</span>
+<span class="sd">        Type of the channels, the observation time-series of the observers refer to.</span>
+<span class="sd">    ch_names</span>
+<span class="sd">        Name of each channel/observation time-series.</span>
+<span class="sd">    events</span>
+<span class="sd">        2D array defining events during the simulation. For a more detailed documentation, see the docstring for</span>
+<span class="sd">        parameter `events` of :class:`mne.Epochs`.</span>
+<span class="sd">    event_keys</span>
+<span class="sd">        Names of the events. For a more detailed documentation, see the docstring for parameter `event_id` of</span>
+<span class="sd">        :class:`mne.Epochs`.</span>
+<span class="sd">    epoch_start</span>
+<span class="sd">        Time, relative to event onset, at which an epoch should start [unit = s]. For a more detailed documentation,</span>
+<span class="sd">        see the docstring for parameter `tmin` of :class:`mne.Epochs`.</span>
+<span class="sd">    epoch_end</span>
+<span class="sd">        Time, relative to event onset, at which an epoch should end [unit = s]. For a more detailed documentation,</span>
+<span class="sd">        see the docstring for parameter `tmax` of :class:`mne.Epochs`.</span>
+<span class="sd">    epoch_duration</span>
+<span class="sd">        Instead of passing `events`, this parameter can be used to create epochs with a fixed duration [unit = s].</span>
+<span class="sd">        If this is used, do not pass `epoch_start` or `epoch_end`. For a more detailed documentation,</span>
+<span class="sd">        see the docstring for parameter `duration` of :function:`mne.make_fixed_length_events`.</span>
+<span class="sd">    epoch_averaging</span>
+<span class="sd">        Only relevant, if `events` or `event_duration` were passede. If true, an :class:`mne.EvokedArray` instance will</span>
+<span class="sd">        be returned that contains ttime-series averaged over all epochs.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Union[mne.io.Raw, mne.Epochs, mne.Evoked]</span>
+<span class="sd">        MNE object that contains either the raw, epoched, or averaged (over epochs) data.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># extract information from arguments</span>
+    <span class="c1">####################################</span>
+
+    <span class="c1"># from data file</span>
+    <span class="kn">from</span> <span class="nn">pandas.io.parsers</span> <span class="k">import</span> <span class="n">read_csv</span>
+
+    <span class="n">output</span> <span class="o">=</span> <span class="n">read_csv</span><span class="p">(</span><span class="n">csv_dir</span><span class="p">,</span> <span class="n">delim_whitespace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">states</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">values</span>
+    <span class="n">sfreq</span> <span class="o">=</span> <span class="n">states</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">states</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">states</span> <span class="o">=</span> <span class="n">states</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:]</span>
+    <span class="n">n_channels</span> <span class="o">=</span> <span class="n">states</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="c1"># channel information</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">ch_types</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">ch_types</span> <span class="o">=</span> <span class="p">[</span><span class="n">ch_types</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_channels</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ch_names</span><span class="p">:</span>
+        <span class="n">ch_names</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="n">ch_names</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># epoch/event information</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">epoch_start</span><span class="p">:</span>
+        <span class="n">epoch_start</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.2</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">epoch_duration</span> <span class="k">else</span> <span class="mf">0.</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">epoch_end</span><span class="p">:</span>
+        <span class="n">epoch_end</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">epoch_duration</span> <span class="k">else</span> <span class="n">epoch_duration</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">sfreq</span>
+
+    <span class="c1"># create raw mne object</span>
+    <span class="c1">#######################</span>
+
+    <span class="c1"># create mne info object</span>
+    <span class="n">info</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">create_info</span><span class="p">(</span><span class="n">ch_names</span><span class="o">=</span><span class="n">ch_names</span><span class="p">,</span> <span class="n">ch_types</span><span class="o">=</span><span class="n">ch_types</span><span class="p">,</span> <span class="n">sfreq</span><span class="o">=</span><span class="n">sfreq</span><span class="p">)</span>
+
+    <span class="c1"># create raw object from info and circuit data</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">RawArray</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">states</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">info</span><span class="o">=</span><span class="n">info</span><span class="p">)</span>
+
+    <span class="c1"># create final mne object</span>
+    <span class="c1">#########################</span>
+
+    <span class="c1"># if events or event information is passed, create Epoch or Evoked object</span>
+    <span class="k">if</span> <span class="n">events</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">epoch_duration</span><span class="p">:</span>
+
+        <span class="c1"># check whether events still have to be created or not</span>
+        <span class="k">if</span> <span class="n">events</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">events</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">make_fixed_length_events</span><span class="p">(</span><span class="n">raw</span><span class="o">=</span><span class="n">raw</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="n">epoch_duration</span><span class="p">)</span>
+
+        <span class="c1"># check whether event labels still have to be created or not</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">event_keys</span><span class="p">:</span>
+            <span class="n">event_keys</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">events</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]):</span>
+                <span class="n">event_keys</span><span class="p">[</span><span class="s1">&#39;event_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">event</span><span class="p">)]</span> <span class="o">=</span> <span class="n">event</span>
+
+        <span class="c1"># create epoch object from raw data and event information</span>
+        <span class="n">mne_object</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">Epochs</span><span class="p">(</span><span class="n">raw</span><span class="o">=</span><span class="n">raw</span><span class="p">,</span> <span class="n">events</span><span class="o">=</span><span class="n">events</span><span class="p">,</span> <span class="n">event_id</span><span class="o">=</span><span class="n">event_keys</span><span class="p">,</span> <span class="n">tmin</span><span class="o">=</span><span class="n">epoch_start</span><span class="p">,</span> <span class="n">tmax</span><span class="o">=</span><span class="n">epoch_end</span><span class="p">)</span>
+
+        <span class="c1"># create Evoked object by averaging over epochs if epoch_averaging is true</span>
+        <span class="k">if</span> <span class="n">epoch_averaging</span><span class="p">:</span>
+
+            <span class="c1"># average over epoch data</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">mne_object</span><span class="o">.</span><span class="n">get_data</span><span class="p">()</span>
+            <span class="n">n_epochs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="c1"># create evoked object</span>
+            <span class="n">mne_object</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">EvokedArray</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">info</span><span class="o">=</span><span class="n">info</span><span class="p">,</span> <span class="n">tmin</span><span class="o">=</span><span class="n">epoch_start</span><span class="p">,</span> <span class="n">comment</span><span class="o">=</span><span class="n">event_keys</span><span class="p">[</span><span class="s1">&#39;event_0&#39;</span><span class="p">],</span>
+                                         <span class="n">nave</span><span class="o">=</span><span class="n">n_epochs</span><span class="p">)</span>
+
+    <span class="c1"># stick with Raw object</span>
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="n">mne_object</span> <span class="o">=</span> <span class="n">raw</span>
+
+    <span class="k">return</span> <span class="n">mne_object</span></div>
+</pre></div>
+
+          <footer>
+  
+
+  <hr/>
+
+  <p style="font-size: 85%">
+      Copyright &copy; 2019, Richard Gast, Daniel Rose, Christoph Salomon
+    <br/>
+    <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a>
+    <br/>
+    These works by <a xmlns:cc="http://creativecommons.org/ns#" href="http://open.edx.org" property="cc:attributionName" rel="cc:attributionURL">edX Inc.</a>
+    are licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+  </p>
+
+ 
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+</body>
+</html>

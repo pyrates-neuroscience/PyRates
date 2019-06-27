@@ -864,7 +864,7 @@ def preprocess_equations(eqs: list, solver: str) -> tuple:
 
     elif solver == 'mp':
 
-        # use second-order runge-kutta solver
+        # use midpoint method
         k1_col, k2_col, rhs_new = [], [], []
         for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
             k1_col.append(f"{lhs_var}_k1 = {rhs}")

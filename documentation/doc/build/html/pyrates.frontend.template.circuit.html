@@ -1,0 +1,189 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyrates.frontend.template.circuit package &mdash; PyRates 0.7.1 documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="_static/css/PyRates_logo_color.ico"/>
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'./',
+        VERSION:'0.7.1',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="_static/language_data.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+    
+
+  
+
+  
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="PyRates 0.7.1 documentation" href="index.html"/> 
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="contents.html" class="icon icon-home"> PyRates</a>
+        <form class="wy-form" action="search.html" method="get">
+  <input type="text" name="q" placeholder="Search document" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            <ul>
+<li><a class="reference internal" href="#">pyrates.frontend.template.circuit package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.circuit.circuit">pyrates.frontend.template.circuit.circuit module</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.circuit">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">PyRates</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="contents.html">Table of Contents</a> &raquo;</li>
+  <li><a href="">pyrates.frontend.template.circuit package</a></li>
+  <li class="wy-breadcrumbs-aside"><a href="https://docs.google.com/forms/d/1T5QGnYb_QnQoMO7T_eatq02miPTY40WVe3cgGphNAdY/viewform?entry.1952574704&entry.241692674=PyRates%3A%20pyrates.frontend.template.circuit" target="_blank">Give Doc Feedback</a>
+  </li>
+</ul>
+<hr/>
+
+          
+  <div class="section" id="pyrates-frontend-template-circuit-package">
+<h1>pyrates.frontend.template.circuit package<a class="headerlink" href="#pyrates-frontend-template-circuit-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-pyrates.frontend.template.circuit.circuit">
+<span id="pyrates-frontend-template-circuit-circuit-module"></span><h2>pyrates.frontend.template.circuit.circuit module<a class="headerlink" href="#module-pyrates.frontend.template.circuit.circuit" title="Permalink to this headline">¶</a></h2>
+<p>Basic neural mass backend class plus derivations of it.</p>
+<p>This module includes the base circuit class that manages the set-up and simulation of population networks. Additionally,
+it features various sub-classes that act as circuit constructors and allow to build circuits based on different input
+arguments. For more detailed descriptions, see the respective docstrings.</p>
+<dl class="class">
+<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">CircuitTemplate</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = 'A circuit template.'</em>, <em class="sig-param">label: str = 'circuit'</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: dict = None</em>, <em class="sig-param">edges: List[tuple] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="pyrates.frontend.template.html#pyrates.frontend.template.abc.AbstractBaseTemplate" title="pyrates.frontend.template.abc.AbstractBaseTemplate"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.frontend.template.abc.AbstractBaseTemplate</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply">
+<code class="sig-name descname">apply</code><span class="sig-paren">(</span><em class="sig-param">label: str = None</em>, <em class="sig-param">in_place: bool = True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a Circuit graph instance based on the template</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.target_ir">
+<code class="sig-name descname">target_ir</code><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.target_ir" title="Permalink to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference internal" href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR" title="pyrates.ir.circuit.CircuitIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.circuit.CircuitIR</span></code></a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.update_template">
+<code class="sig-name descname">update_template</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = None</em>, <em class="sig-param">label: str = None</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: dict = None</em>, <em class="sig-param">edges: List[tuple] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate.update_template"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.update_template" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update all entries of the circuit template in their respective ways.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.frontend.template.circuit.circuit.update_dict">
+<code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">update_dict</code><span class="sig-paren">(</span><em class="sig-param">base_dict: dict</em>, <em class="sig-param">updates: dict</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#update_dict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.update_dict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="pyrates.frontend.template.circuit.circuit.update_edges">
+<code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">update_edges</code><span class="sig-paren">(</span><em class="sig-param">base_edges: List[tuple], updates: List[Union[tuple, dict]]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#update_edges"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.update_edges" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add edges to list of edges. Removing or altering is currently not supported.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.frontend.template.circuit">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-pyrates.frontend.template.circuit" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          <footer>
+  
+
+  <hr/>
+
+  <p style="font-size: 85%">
+      Copyright &copy; 2019, Richard Gast, Daniel Rose, Christoph Salomon
+    <br/>
+    <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a>
+    <br/>
+    These works by <a xmlns:cc="http://creativecommons.org/ns#" href="http://open.edx.org" property="cc:attributionName" rel="cc:attributionURL">edX Inc.</a>
+    are licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+  </p>
+
+ 
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+</body>
+</html>
