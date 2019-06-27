@@ -40,6 +40,7 @@ from copy import deepcopy
 from pyrates.backend.parser import parse_equation_list, parse_dict
 from pyrates import PyRatesException
 from pyrates.ir.circuit import CircuitIR
+from pyrates.frontend import CircuitTemplate
 
 # meta infos
 __author__ = "Richard Gast"
@@ -71,7 +72,7 @@ class ComputeGraph(object):
     """
 
     def __init__(self,
-                 net_config: CircuitIR,
+                 net_config: Union[str, CircuitIR],
                  dt: float = 1e-3,
                  vectorization: str = 'none',
                  name: Optional[str] = 'net0',
@@ -90,6 +91,8 @@ class ComputeGraph(object):
         self.name = name
         self._float_precision = float_precision
         self._first_run = True
+        if type(net_config) is str:
+            net_config = CircuitTemplate.from_yaml(net_config).apply()
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend and set the backend default_device

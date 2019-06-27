@@ -4,18 +4,11 @@ from pyrates import __version__
 PYRATES_TEAM = "Richard Gast, Daniel Rose"
 
 INSTALL_REQUIREMENTS = ['numpy',
-                        'matplotlib',
                         'networkx',
                         'pandas',
                         'pyparsing',
                         'ruamel.yaml',
-                        'scipy',
-                        'seaborn',
-                        'mne',
-                        'pydot',
-                        'paramiko',
-                        'numba',
-                        'edx-sphinx-theme']
+                        ]
 
 CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Programming Language :: Python :: 3.6",
@@ -31,7 +24,7 @@ CLASSIFIERS = ["Programming Language :: Python :: 3",
 with open("README.md", "r", encoding="utf8") as fh:
     DESCRIPTION = fh.read()
 
-setup(name='pyrates',
+setup(name='pyrates_minimal',
       version=__version__,
       description='Neural Network Modeling Framework',
       long_description=DESCRIPTION,

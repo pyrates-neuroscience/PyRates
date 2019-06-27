@@ -217,7 +217,7 @@ class PyRatesOp:
         self._callable = func_dict.pop(self.short_name)
 
         # test function
-        self.args = deepcopy(op_dict['args'])
+        self.args = self._deepcopy(op_dict['args'])
         result = self.eval()
         self.args = op_dict['args'].copy()
 
@@ -415,6 +415,10 @@ class PyRatesOp:
         func_dict = {}
         exec(func_str, globals(), func_dict)
         return func_dict
+
+    @staticmethod
+    def _deepcopy(x):
+        return deepcopy(x)
 
 
 class PyRatesAssignOp(PyRatesOp):
@@ -1605,7 +1609,7 @@ class NumpyBackend(object):
             for i, func in enumerate(layer_ops):
                 try:
                     func_decorated = decorator(func, **kwargs)
-                    func_decorated(*deepcopy(op_args[i]))
+                    func_decorated(*self._deepcopy(op_args[i]))
                     layer_ops[i] = func_decorated
                 except Exception:
                     continue
@@ -1618,7 +1622,7 @@ class NumpyBackend(object):
         if decorator:
             try:
                 layer_run_new = decorator(layer_run, **kwargs)
-                layer_run_new(layer_ops, deepcopy(op_args))
+                layer_run_new(layer_ops, self._deepcopy(op_args))
                 layer_run = layer_run_new
             except Exception:
                 pass
@@ -1756,6 +1760,10 @@ class NumpyBackend(object):
                 return False
         else:
             return True
+
+    @staticmethod
+    def _deepcopy(x):
+        return deepcopy(x)
 
 
 class CodeGen:

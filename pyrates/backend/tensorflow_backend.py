@@ -30,7 +30,7 @@
 """
 
 # external imports
-from typing import Optional, Dict, Callable, List, Union, Tuple, Any
+from typing import Optional, Dict, Callable, List, Any
 import tensorflow as tf
 
 # pyrates internal imports
