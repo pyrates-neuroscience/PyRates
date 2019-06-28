@@ -32,7 +32,6 @@
 
 # external imports
 import numpy as np
-from numba import jit
 
 # meta infos
 __author__ = "Richard Gast"
@@ -42,12 +41,10 @@ __status__ = "development"
 # function definitions
 ######################
 
-@jit(nopython=True, fastmath=True)
 def pr_sigmoid(x):
     return 1./(1. + np.exp(-x))
 
 
-@jit(nopython=True, fastmath=True)
 def pr_softmax(x, axis=0):
     x_exp = np.exp(x)
     return x_exp/np.sum(x_exp, axis=axis)

@@ -40,6 +40,7 @@ from copy import deepcopy
 from pyrates.backend.parser import parse_equation_list, parse_dict
 from pyrates import PyRatesException
 from pyrates.ir.circuit import CircuitIR
+from pyrates.frontend import CircuitTemplate
 
 # meta infos
 __author__ = "Richard Gast"
@@ -71,7 +72,7 @@ class ComputeGraph(object):
     """
 
     def __init__(self,
-                 net_config: CircuitIR,
+                 net_config: Union[str, CircuitIR],
                  dt: float = 1e-3,
                  vectorization: str = 'none',
                  name: Optional[str] = 'net0',
@@ -90,6 +91,8 @@ class ComputeGraph(object):
         self.name = name
         self._float_precision = float_precision
         self._first_run = True
+        if type(net_config) is str:
+            net_config = CircuitTemplate.from_yaml(net_config).apply()
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend and set the backend default_device
@@ -357,21 +360,21 @@ class ComputeGraph(object):
         output_shapes = []
         if outputs:
             for key, val in outputs.items():
-                var_key, var_val = self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col").popitem()
-                var_shape = tuple(var_val.shape)
-                if var_shape in output_shapes:
-                    idx = output_shapes.index(var_shape)
-                    output_cols[idx].append(var_val)
-                    output_keys[idx].append(var_key)
-                else:
-                    output_cols.append([var_val])
-                    output_keys.append([var_key])
-                    output_shapes.append(var_shape)
+                for var_key, var_val in self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col").items():
+                    var_shape = tuple(var_val.shape)
+                    if var_shape in output_shapes:
+                        idx = output_shapes.index(var_shape)
+                        output_cols[idx].append(var_val)
+                        output_keys[idx].append(var_key)
+                    else:
+                        output_cols.append([var_val])
+                        output_keys.append([var_key])
+                        output_shapes.append(var_shape)
 
-            # create counting index for collector variables
-            output_col.update(self.backend.add_output_layer(outputs=output_cols,
-                                                            sampling_steps=int(sim_steps/sampling_steps),
-                                                            out_shapes=output_shapes))
+                # create counting index for collector variables
+                output_col.update(self.backend.add_output_layer(outputs=output_cols,
+                                                                sampling_steps=int(sim_steps/sampling_steps),
+                                                                out_shapes=output_shapes))
 
         # add input variables to the backend
         ####################################
@@ -500,9 +503,7 @@ class ComputeGraph(object):
                     key_split = key.split('/')
                     var_name = key_split[-1]
                     var_name = var_name[:var_name.find('_col')]
-                    node_name = ""
-                    for key_tmp in key_split[:-1]:
-                        node_name += key_tmp
+                    node_name = "/".join(key_split[:-1])
                     out_var_names.append((var_name, f'{node_name}_{i}'))
             else:
                 if len(var.shape) > 1:
@@ -511,9 +512,7 @@ class ComputeGraph(object):
                 key_split = key.split('/')
                 var_name = key_split[-1]
                 var_name = var_name[:var_name.find('_col')]
-                node_name = ""
-                for key_tmp in key_split[:-1]:
-                    node_name += key_tmp
+                node_name = "/".join(key_split[:-1])
                 out_var_names.append((var_name, node_name))
 
         # create multi-index
@@ -570,25 +569,28 @@ class ComputeGraph(object):
 
             # collect output variable from every node in backend
             for node in self.net_config.nodes.keys():
-                var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
+                var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
 
         elif node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
 
             # get output variable of specific backend node
-            var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
+            var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
 
         elif any([node in key for key in self.net_config.nodes.keys()]):
 
             # get output variable from backend nodes of a certain type
             for node_tmp in self.net_config.nodes.keys():
                 if node in node_tmp:
-                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
+                    var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
         else:
 
             # get output variable of specific, vectorized backend node
+            i = 0
             for node_tmp in self._net_config_map.keys():
-                if node in node_tmp and '_all' in node_tmp:
-                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
+                if node in node_tmp:
+                    var_col[f'{node}/{op}/{var_name}_{i}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
+                                                                                 **kwargs)
+                    i += 1
 
         return var_col
 

@@ -1,0 +1,414 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyrates.frontend.nxgraph &mdash; PyRates 0.7.1 documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../../../_static/css/PyRates_logo_color.ico"/>
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'../../../',
+        VERSION:'0.7.1',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="../../../_static/language_data.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+    
+
+  
+
+  
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="PyRates 0.7.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="pyrates.frontend" href="../frontend.html"/> 
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="../../../contents.html" class="icon icon-home"> PyRates</a>
+        <form class="wy-form" action="../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search document" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">PyRates</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="../../../contents.html">Table of Contents</a> &raquo;</li>
+  <li><a href="">pyrates.frontend.nxgraph</a></li>
+  <li class="wy-breadcrumbs-aside"><a href="https://docs.google.com/forms/d/1T5QGnYb_QnQoMO7T_eatq02miPTY40WVe3cgGphNAdY/viewform?entry.1952574704&entry.241692674=PyRates%3A%20_modules/pyrates/frontend/nxgraph" target="_blank">Give Doc Feedback</a>
+  </li>
+</ul>
+<hr/>
+
+          
+  <h1>Source code for pyrates.frontend.nxgraph</h1><div class="highlight"><pre>
+<span></span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural </span>
+<span class="c1"># network models and simulations. See also: </span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1"># </span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and </span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain </span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1"># </span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1"># </span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1"># </span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1"># </span>
+<span class="c1"># CITATION:</span>
+<span class="c1"># </span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span>
+
+<span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+<span class="kn">from</span> <span class="nn">networkx</span> <span class="k">import</span> <span class="n">MultiDiGraph</span><span class="p">,</span> <span class="n">DiGraph</span><span class="p">,</span> <span class="n">find_cycle</span><span class="p">,</span> <span class="n">NetworkXNoCycle</span>
+
+<span class="kn">from</span> <span class="nn">pyrates</span> <span class="k">import</span> <span class="n">PyRatesException</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.edge</span> <span class="k">import</span> <span class="n">EdgeIR</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.circuit</span> <span class="k">import</span> <span class="n">CircuitIR</span>
+<span class="kn">from</span> <span class="nn">pyrates.frontend.dict</span> <span class="k">import</span> <span class="n">to_node</span>
+<span class="kn">from</span> <span class="nn">pyrates.frontend._registry</span> <span class="k">import</span> <span class="n">register_interface</span>
+
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
+
+
+<div class="viewcode-block" id="to_circuit"><a class="viewcode-back" href="../../../pyrates.frontend.html#pyrates.frontend.nxgraph.to_circuit">[docs]</a><span class="nd">@register_interface</span>
+<span class="k">def</span> <span class="nf">to_circuit</span><span class="p">(</span><span class="n">graph</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">MultiDiGraph</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;circuit&quot;</span><span class="p">,</span>
+               <span class="n">node_creator</span><span class="o">=</span><span class="n">to_node</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create a CircuitIR instance out of a networkx.MultiDiGraph&quot;&quot;&quot;</span>
+
+    <span class="n">circuit</span> <span class="o">=</span> <span class="n">CircuitIR</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        <span class="n">circuit</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">node</span><span class="o">=</span><span class="n">node_creator</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+
+    <span class="n">required_keys</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;source_var&quot;</span><span class="p">,</span> <span class="s2">&quot;target_var&quot;</span><span class="p">,</span> <span class="s2">&quot;weight&quot;</span><span class="p">,</span> <span class="s2">&quot;delay&quot;</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="nb">all</span><span class="p">([</span><span class="n">key</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">required_keys</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="s2">&quot;edge_ir&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+                <span class="n">data</span><span class="p">[</span><span class="s2">&quot;edge_ir&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">EdgeIR</span><span class="p">()</span>
+            <span class="n">source_var</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;source_var&quot;</span><span class="p">)</span>
+            <span class="n">target_var</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;target_var&quot;</span><span class="p">)</span>
+            <span class="n">circuit</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{source}</span><span class="s2">/</span><span class="si">{source_var}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{target}</span><span class="s2">/</span><span class="si">{target_var}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Missing a key out of </span><span class="si">{required_keys}</span><span class="s2"> in an edge with source `</span><span class="si">{source}</span><span class="s2">` and target&quot;</span>
+                           <span class="n">f</span><span class="s2">&quot;`</span><span class="si">{target}</span><span class="s2">`&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">circuit</span></div>
+
+
+<div class="viewcode-block" id="from_circuit"><a class="viewcode-back" href="../../../pyrates.frontend.html#pyrates.frontend.nxgraph.from_circuit">[docs]</a><span class="k">def</span> <span class="nf">from_circuit</span><span class="p">(</span><span class="n">circuit</span><span class="p">,</span> <span class="n">revert_node_names</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Old implementation that transforms all information in a circuit to a networkx.MultiDiGraph with a few additional</span>
+<span class="sd">    transformations that the old backend needed.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Circuit2NetDef</span><span class="o">.</span><span class="n">network_def</span><span class="p">(</span><span class="n">circuit</span><span class="p">,</span> <span class="n">revert_node_names</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Circuit2NetDef"><a class="viewcode-back" href="../../../pyrates.frontend.html#pyrates.frontend.nxgraph.Circuit2NetDef">[docs]</a><span class="k">class</span> <span class="nc">Circuit2NetDef</span><span class="p">:</span>
+    <span class="c1"># label_counter = {}  # type: Dict[str, int]</span>
+
+<div class="viewcode-block" id="Circuit2NetDef.network_def"><a class="viewcode-back" href="../../../pyrates.frontend.html#pyrates.frontend.nxgraph.Circuit2NetDef.network_def">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">network_def</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">circuit</span><span class="p">:</span> <span class="n">CircuitIR</span><span class="p">,</span> <span class="n">revert_node_names</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;A bit of a workaround to connect interfaces of frontend and backend.</span>
+<span class="sd">        TODO: Remove BackendIRFormatter and adapt corresponding tests&quot;&quot;&quot;</span>
+        <span class="c1"># import re</span>
+
+        <span class="n">network_def</span> <span class="o">=</span> <span class="n">MultiDiGraph</span><span class="p">()</span>
+
+        <span class="n">edge_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">node_dict</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="c1"># reorganize node to conform with backend API</span>
+        <span class="c1">#############################################</span>
+        <span class="k">for</span> <span class="n">node_key</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">node</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;node&quot;</span><span class="p">]</span>
+            <span class="c1"># reformat all node internals into operators + operator_args</span>
+            <span class="k">if</span> <span class="n">revert_node_names</span><span class="p">:</span>
+                <span class="n">names</span> <span class="o">=</span> <span class="n">node_key</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+                <span class="n">node_key</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="n">names</span><span class="p">))</span>
+            <span class="n">node_dict</span><span class="p">[</span><span class="n">node_key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># type: Dict[str, Union[list, dict]]</span>
+            <span class="n">node_dict</span><span class="p">[</span><span class="n">node_key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_nd_reformat_operators</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">op_graph</span><span class="p">))</span>
+            <span class="n">op_order</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_nd_get_operator_order</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">op_graph</span><span class="p">)</span>  <span class="c1"># type: list</span>
+            <span class="c1"># noinspection PyTypeChecker</span>
+            <span class="n">node_dict</span><span class="p">[</span><span class="n">node_key</span><span class="p">][</span><span class="s2">&quot;operator_order&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">op_order</span>
+
+        <span class="c1"># reorganize edge to conform with backend API</span>
+        <span class="c1">#############################################</span>
+        <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="c1"># move edge operators to node</span>
+            <span class="k">if</span> <span class="n">revert_node_names</span><span class="p">:</span>
+                <span class="n">source</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="n">source</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)))</span>
+                <span class="n">target</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)))</span>
+            <span class="n">node_dict</span><span class="p">[</span><span class="n">target</span><span class="p">],</span> <span class="n">edge</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_move_edge_ops_to_node</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">node_dict</span><span class="p">[</span><span class="n">target</span><span class="p">],</span> <span class="n">data</span><span class="p">)</span>
+
+            <span class="n">edge_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="o">**</span><span class="n">edge</span><span class="p">)))</span>
+
+        <span class="c1"># network_def.add_nodes_from(node_dict)</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">node_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">network_def</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="o">**</span><span class="n">node</span><span class="p">)</span>
+        <span class="n">network_def</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">(</span><span class="n">edge_list</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">network_def</span>  <span class="c1"># return MultiDiGraph as needed by ComputeGraph class</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_nd_reformat_operators</span><span class="p">(</span><span class="n">op_graph</span><span class="p">:</span> <span class="n">DiGraph</span><span class="p">):</span>
+        <span class="n">operator_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">operators</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">op_key</span><span class="p">,</span> <span class="n">op_dict</span> <span class="ow">in</span> <span class="n">op_graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">op_cp</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">op_dict</span><span class="p">)</span>  <span class="c1"># duplicate operator info</span>
+            <span class="n">var_dict</span> <span class="o">=</span> <span class="n">op_cp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;variables&quot;</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">var_key</span><span class="p">,</span> <span class="n">var_props</span> <span class="ow">in</span> <span class="n">var_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">var_prop_cp</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">var_props</span><span class="p">)</span>  <span class="c1"># duplicate variable properties</span>
+
+                <span class="c1"># if var_key in op_dict[&quot;variables&quot;]:  # workaround to get values back into operator_args</span>
+                <span class="c1">#     var_prop_cp[&quot;value&quot;] = deepcopy(op_dict[&quot;values&quot;][var_key])</span>
+
+                <span class="n">var_prop_cp</span><span class="p">[</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>  <span class="c1"># default to scalars for now</span>
+                <span class="n">var_prop_cp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;unit&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="n">var_prop_cp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="n">var_prop_cp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="c1"># var_prop_cp[&quot;name&quot;] = f&quot;{new_op_key}/{var_key}&quot;  # has been thrown out</span>
+                <span class="n">operator_args</span><span class="p">[</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{op_key}</span><span class="s2">/</span><span class="si">{var_key}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">var_prop_cp</span><span class="p">)</span>
+
+            <span class="n">op_cp</span><span class="p">[</span><span class="s2">&quot;equations&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">op_cp</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">equations</span>
+            <span class="n">op_cp</span><span class="p">[</span><span class="s2">&quot;inputs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">op_cp</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">inputs</span>
+            <span class="n">op_cp</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">op_cp</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">output</span>
+            <span class="c1"># op_cp.pop(&quot;values&quot;, None)</span>
+            <span class="n">op_cp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;operator&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">operators</span><span class="p">[</span><span class="n">op_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">op_cp</span>
+
+        <span class="n">reformatted</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">operator_args</span><span class="o">=</span><span class="n">operator_args</span><span class="p">,</span>
+                           <span class="n">operators</span><span class="o">=</span><span class="n">operators</span><span class="p">,</span>
+                           <span class="n">inputs</span><span class="o">=</span><span class="p">{})</span>
+        <span class="k">return</span> <span class="n">reformatted</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_nd_get_operator_order</span><span class="p">(</span><span class="n">op_graph</span><span class="p">:</span> <span class="n">DiGraph</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        op_graph</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        op_order</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># check, if cycles are present in operator graph (which would be problematic</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">find_cycle</span><span class="p">(</span><span class="n">op_graph</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">NetworkXNoCycle</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="s2">&quot;Found cyclic operator graph. Cycles are not allowed for operators within one node.&quot;</span><span class="p">)</span>
+
+        <span class="n">op_order</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">graph</span> <span class="o">=</span> <span class="n">op_graph</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>  <span class="c1"># type: DiGraph</span>
+        <span class="k">while</span> <span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
+            <span class="c1"># noinspection PyTypeChecker</span>
+            <span class="n">primary_nodes</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span> <span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">in_degree</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">in_degree</span> <span class="k">if</span> <span class="n">in_degree</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span>
+            <span class="n">op_order</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">primary_nodes</span><span class="p">)</span>
+            <span class="n">graph</span><span class="o">.</span><span class="n">remove_nodes_from</span><span class="p">(</span><span class="n">primary_nodes</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">op_order</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_move_edge_ops_to_node</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">node_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">edge_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        target</span>
+<span class="sd">            Key identifying target node in backend graph</span>
+<span class="sd">        node_dict</span>
+<span class="sd">            Dictionary of target node (to move operators into)</span>
+<span class="sd">        edge_dict</span>
+<span class="sd">            Dictionary with edge properties (to move operators from)</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        node_dict</span>
+<span class="sd">            Updated dictionary of target node</span>
+<span class="sd">        edge_dict</span>
+<span class="sd">             Dictionary of reformatted edge</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># grab all edge variables</span>
+        <span class="n">edge</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="p">[</span><span class="s2">&quot;edge_ir&quot;</span><span class="p">]</span>  <span class="c1"># type: EdgeIR</span>
+        <span class="n">source_var</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="p">[</span><span class="s2">&quot;source_var&quot;</span><span class="p">]</span>
+        <span class="n">target_var</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="p">[</span><span class="s2">&quot;target_var&quot;</span><span class="p">]</span>
+        <span class="n">weight</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="p">[</span><span class="s2">&quot;weight&quot;</span><span class="p">]</span>
+        <span class="n">delay</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="p">[</span><span class="s2">&quot;delay&quot;</span><span class="p">]</span>
+        <span class="n">input_var</span> <span class="o">=</span> <span class="n">edge</span><span class="o">.</span><span class="n">input</span>
+        <span class="n">output_var</span> <span class="o">=</span> <span class="n">edge</span><span class="o">.</span><span class="n">output</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">edge</span><span class="o">.</span><span class="n">op_graph</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># reformat all edge internals into operators + operator_args</span>
+            <span class="n">op_data</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_nd_reformat_operators</span><span class="p">(</span><span class="n">edge</span><span class="o">.</span><span class="n">op_graph</span><span class="p">)</span>  <span class="c1"># type: dict</span>
+            <span class="n">op_order</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_nd_get_operator_order</span><span class="p">(</span><span class="n">edge</span><span class="o">.</span><span class="n">op_graph</span><span class="p">)</span>  <span class="c1"># type: List[str]</span>
+            <span class="n">operators</span> <span class="o">=</span> <span class="n">op_data</span><span class="p">[</span><span class="s2">&quot;operators&quot;</span><span class="p">]</span>
+            <span class="n">operator_args</span> <span class="o">=</span> <span class="n">op_data</span><span class="p">[</span><span class="s2">&quot;operator_args&quot;</span><span class="p">]</span>
+
+            <span class="c1"># operator keys refer to a unique combination of template names and changed values</span>
+
+            <span class="c1"># add operators to target node in reverse order, so they can be safely prepended</span>
+            <span class="n">added_ops</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">for</span> <span class="n">op_name</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">op_order</span><span class="p">):</span>
+                <span class="c1"># check if operator name is already known in target node</span>
+                <span class="k">if</span> <span class="n">op_name</span> <span class="ow">in</span> <span class="n">node_dict</span><span class="p">[</span><span class="s2">&quot;operators&quot;</span><span class="p">]:</span>
+                    <span class="k">pass</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">added_ops</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="c1"># this should all go smoothly, because operator should not be known yet</span>
+                    <span class="c1"># add operator dict to target node operators</span>
+                    <span class="n">node_dict</span><span class="p">[</span><span class="s2">&quot;operators&quot;</span><span class="p">][</span><span class="n">op_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">operators</span><span class="p">[</span><span class="n">op_name</span><span class="p">]</span>
+                    <span class="c1"># prepend operator to op_order</span>
+                    <span class="n">node_dict</span><span class="p">[</span><span class="s2">&quot;operator_order&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">op_name</span><span class="p">)</span>
+                    <span class="c1"># ToDo: consider using collections.deque instead</span>
+                    <span class="c1"># add operator args to target node</span>
+                    <span class="n">node_dict</span><span class="p">[</span><span class="s2">&quot;operator_args&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">operator_args</span><span class="p">)</span>
+
+            <span class="n">out_op</span> <span class="o">=</span> <span class="n">op_order</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">out_var</span> <span class="o">=</span> <span class="n">operators</span><span class="p">[</span><span class="n">out_op</span><span class="p">][</span><span class="s1">&#39;output&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">added_ops</span><span class="p">:</span>
+                <span class="c1"># append operator output to target operator sources</span>
+                <span class="c1"># assume that only last operator in edge operator_order gives the output</span>
+                <span class="c1"># for op_name in node_dict[&quot;operators&quot;]:</span>
+                <span class="c1">#     if out_var in node_dict[&quot;operators&quot;][op_name][&quot;inputs&quot;]:</span>
+                <span class="c1">#         if out_var_long not in node_dict[&quot;operators&quot;][op_name][&quot;inputs&quot;][out_var]:</span>
+                <span class="c1">#             # add reference to source operator that was previously in an edge</span>
+                <span class="c1">#             node_dict[&quot;operators&quot;][op_name][&quot;inputs&quot;][out_var].append(output_var)</span>
+
+                <span class="c1"># shortcut, since target_var and output_var are known:</span>
+                <span class="n">target_op</span><span class="p">,</span> <span class="n">target_vname</span> <span class="o">=</span> <span class="n">target_var</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">output_var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">node_dict</span><span class="p">[</span><span class="s2">&quot;operators&quot;</span><span class="p">][</span><span class="n">target_op</span><span class="p">][</span><span class="s2">&quot;inputs&quot;</span><span class="p">][</span><span class="n">target_vname</span><span class="p">][</span><span class="s2">&quot;sources&quot;</span><span class="p">]:</span>
+                    <span class="n">node_dict</span><span class="p">[</span><span class="s2">&quot;operators&quot;</span><span class="p">][</span><span class="n">target_op</span><span class="p">][</span><span class="s2">&quot;inputs&quot;</span><span class="p">][</span><span class="n">target_vname</span><span class="p">][</span><span class="s2">&quot;sources&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">out_op</span><span class="p">)</span>
+
+            <span class="c1"># simplify edges and save into edge_list</span>
+            <span class="c1"># op_graph = edge.op_graph</span>
+            <span class="c1"># in_ops = [op for op, in_degree in op_graph.in_degree if in_degree == 0]</span>
+            <span class="c1"># if len(in_ops) == 1:</span>
+            <span class="c1">#     # simple case: only one input operator? then it&#39;s the first in the operator order.</span>
+            <span class="c1">#     target_op = op_order[0]</span>
+            <span class="c1">#     target_inputs = operators[target_op][&quot;inputs&quot;]</span>
+            <span class="c1">#     if len(target_var) != 1:</span>
+            <span class="c1">#         raise PyRatesException(&quot;Either too many or too few input variables detected. &quot;</span>
+            <span class="c1">#                                &quot;Needs to be exactly one.&quot;)</span>
+            <span class="c1">#     target_var = list(target_inputs.keys())[0]</span>
+            <span class="c1">#     target_var = f&quot;{target_op}/{target_var}&quot;</span>
+            <span class="c1"># else:</span>
+            <span class="c1">#     raise NotImplementedError(&quot;Transforming an edge with multiple input operators is not yet handled.&quot;)</span>
+
+            <span class="c1"># shortcut to new target war:</span>
+            <span class="n">target_var</span> <span class="o">=</span> <span class="n">input_var</span>
+        <span class="n">edge_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;source_var&quot;</span><span class="p">:</span> <span class="n">source_var</span><span class="p">,</span>
+                     <span class="s2">&quot;target_var&quot;</span><span class="p">:</span> <span class="n">target_var</span><span class="p">,</span>
+                     <span class="s2">&quot;weight&quot;</span><span class="p">:</span> <span class="n">weight</span><span class="p">,</span>
+                     <span class="s2">&quot;delay&quot;</span><span class="p">:</span> <span class="n">delay</span><span class="p">}</span>
+        <span class="c1"># set target_var to singular input of last operator added</span>
+        <span class="k">return</span> <span class="n">node_dict</span><span class="p">,</span> <span class="n">edge_dict</span></div>
+</pre></div>
+
+          <footer>
+  
+
+  <hr/>
+
+  <p style="font-size: 85%">
+      Copyright &copy; 2019, Richard Gast, Daniel Rose, Christoph Salomon
+    <br/>
+    <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a>
+    <br/>
+    These works by <a xmlns:cc="http://creativecommons.org/ns#" href="http://open.edx.org" property="cc:attributionName" rel="cc:attributionURL">edX Inc.</a>
+    are licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+  </p>
+
+ 
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+</body>
+</html>

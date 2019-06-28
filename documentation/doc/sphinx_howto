@@ -1,0 +1,13 @@
+This is an instruction for how to set up the sphinx documentation for PyRates:
+
+1. call "sphinx-quickstart --master contents --ext-autodoc --ext-doctest --ext-todo --ext-coverage --ext-mathjax --ext-viewcode" and set up the project under PyRates/documentation/doc
+2. add the following extensions to the extensions list in conf.py: 'sphinx.ext.napoleon'
+3. call "sphinx-apidoc -f -o source PYRATESDIR/pyrates"
+4. call "make html"
+
+To change the style of the html, choose one of the sphinx themes under https://sphinx-themes.org/ and integrate the respective conf.py into the conf.py generated above.
+
+Other helpful websites:
+
+https://docs.readthedocs.io/en/stable/intro/import-guide.html
+https://edx-sphinx-theme.readthedocs.io/en/latest/readme.html#overview

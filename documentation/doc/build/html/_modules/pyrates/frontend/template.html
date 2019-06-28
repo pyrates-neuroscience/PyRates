@@ -1,0 +1,191 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyrates.frontend.template &mdash; PyRates 0.7.1 documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../../../_static/css/PyRates_logo_color.ico"/>
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'../../../',
+        VERSION:'0.7.1',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="../../../_static/language_data.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+    
+
+  
+
+  
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="PyRates 0.7.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="pyrates.frontend" href="../frontend.html"/> 
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="../../../contents.html" class="icon icon-home"> PyRates</a>
+        <form class="wy-form" action="../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search document" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">PyRates</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="../../../contents.html">Table of Contents</a> &raquo;</li>
+  <li><a href="">pyrates.frontend.template</a></li>
+  <li class="wy-breadcrumbs-aside"><a href="https://docs.google.com/forms/d/1T5QGnYb_QnQoMO7T_eatq02miPTY40WVe3cgGphNAdY/viewform?entry.1952574704&entry.241692674=PyRates%3A%20_modules/pyrates/frontend/template" target="_blank">Give Doc Feedback</a>
+  </li>
+</ul>
+<hr/>
+
+          
+  <h1>Source code for pyrates.frontend.template</h1><div class="highlight"><pre>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural </span>
+<span class="c1"># network models and simulations. See also: </span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1"># </span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and </span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain </span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1"># </span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1"># </span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1"># </span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1"># </span>
+<span class="c1"># CITATION:</span>
+<span class="c1"># </span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+
+<span class="kn">from</span> <span class="nn">.node</span> <span class="k">import</span> <span class="n">NodeTemplate</span>
+<span class="kn">from</span> <span class="nn">.operator</span> <span class="k">import</span> <span class="n">OperatorTemplate</span>
+<span class="kn">from</span> <span class="nn">.edge</span> <span class="k">import</span> <span class="n">EdgeTemplate</span>
+<span class="kn">from</span> <span class="nn">.circuit</span> <span class="k">import</span> <span class="n">CircuitTemplate</span>
+<span class="kn">from</span> <span class="nn">pyrates.frontend._registry</span> <span class="k">import</span> <span class="n">register_interface</span>
+
+
+<span class="c1"># module-lvl functions for template conversion</span>
+<span class="c1"># writing them out explicitly</span>
+<div class="viewcode-block" id="to_circuit"><a class="viewcode-back" href="../../../pyrates.frontend.template.html#pyrates.frontend.template.to_circuit">[docs]</a><span class="nd">@register_interface</span>
+<span class="k">def</span> <span class="nf">to_circuit</span><span class="p">(</span><span class="n">template</span><span class="p">:</span> <span class="n">CircuitTemplate</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Takes a circuit template and returns a CircuitIR instance from it.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">template</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="to_node"><a class="viewcode-back" href="../../../pyrates.frontend.template.html#pyrates.frontend.template.to_node">[docs]</a><span class="nd">@register_interface</span>
+<span class="k">def</span> <span class="nf">to_node</span><span class="p">(</span><span class="n">template</span><span class="p">:</span> <span class="n">NodeTemplate</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Takes a node template and returns a NodeIR instance from it.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">template</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="to_edge"><a class="viewcode-back" href="../../../pyrates.frontend.template.html#pyrates.frontend.template.to_edge">[docs]</a><span class="nd">@register_interface</span>
+<span class="k">def</span> <span class="nf">to_edge</span><span class="p">(</span><span class="n">template</span><span class="p">:</span> <span class="n">EdgeTemplate</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Takes a edge template and returns a EdgeIR instance from it.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">template</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="to_operator"><a class="viewcode-back" href="../../../pyrates.frontend.template.html#pyrates.frontend.template.to_operator">[docs]</a><span class="nd">@register_interface</span>
+<span class="k">def</span> <span class="nf">to_operator</span><span class="p">(</span><span class="n">template</span><span class="p">:</span> <span class="n">OperatorTemplate</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Takes a operator template and returns a OperatorIR instance from it.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">template</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span></div>
+</pre></div>
+
+          <footer>
+  
+
+  <hr/>
+
+  <p style="font-size: 85%">
+      Copyright &copy; 2019, Richard Gast, Daniel Rose, Christoph Salomon
+    <br/>
+    <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a>
+    <br/>
+    These works by <a xmlns:cc="http://creativecommons.org/ns#" href="http://open.edx.org" property="cc:attributionName" rel="cc:attributionURL">edX Inc.</a>
+    are licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+  </p>
+
+ 
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+</body>
+</html>

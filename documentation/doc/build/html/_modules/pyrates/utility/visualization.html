@@ -1,0 +1,1088 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyrates.utility.visualization &mdash; PyRates 0.7.1 documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../../../_static/css/PyRates_logo_color.ico"/>
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'../../../',
+        VERSION:'0.7.1',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="../../../_static/language_data.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+    
+
+  
+
+  
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="PyRates 0.7.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="pyrates" href="../../pyrates.html"/> 
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="../../../contents.html" class="icon icon-home"> PyRates</a>
+        <form class="wy-form" action="../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search document" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">PyRates</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="../../../contents.html">Table of Contents</a> &raquo;</li>
+  <li><a href="">pyrates.utility.visualization</a></li>
+  <li class="wy-breadcrumbs-aside"><a href="https://docs.google.com/forms/d/1T5QGnYb_QnQoMO7T_eatq02miPTY40WVe3cgGphNAdY/viewform?entry.1952574704&entry.241692674=PyRates%3A%20_modules/pyrates/utility/visualization" target="_blank">Give Doc Feedback</a>
+  </li>
+</ul>
+<hr/>
+
+          
+  <h1>Source code for pyrates.utility.visualization</h1><div class="highlight"><pre>
+<span></span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural </span>
+<span class="c1"># network model_templates and simulations. See also:</span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1"># </span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and </span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain </span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1"># </span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1"># </span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1"># </span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1"># </span>
+<span class="c1"># CITATION:</span>
+<span class="c1"># </span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+<span class="sd">&quot;&quot;&quot;Visualization functionality for pyrates networks and backend simulations.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c1"># external imports</span>
+<span class="kn">import</span> <span class="nn">seaborn</span> <span class="k">as</span> <span class="nn">sb</span>
+<span class="kn">import</span> <span class="nn">networkx.drawing.nx_pydot</span> <span class="k">as</span> <span class="nn">pydot</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">mpl_toolkits.mplot3d</span> <span class="k">import</span> <span class="n">Axes3D</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="c1"># pyrates internal imports</span>
+
+<span class="c1"># meta infos</span>
+<span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Richard Gast, Daniel Rose&quot;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;development&quot;</span>
+
+
+<div class="viewcode-block" id="create_cmap"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.create_cmap">[docs]</a><span class="k">def</span> <span class="nf">create_cmap</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">palette_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">as_cmap</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">list</span><span class="p">,</span> <span class="n">plt</span><span class="o">.</span><span class="n">Axes</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Create a colormap or color palette object.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name</span>
+<span class="sd">        Name of the pyrates colormap. If specified, palette_type will be ignored.</span>
+<span class="sd">    palette_type</span>
+<span class="sd">        Type of the seaborn color palette to use. Only necessary if no name is specified.</span>
+<span class="sd">    as_cmap</span>
+<span class="sd">        If true, a matplotlib colormap object will be returned. Else a seaborn color palette (list).</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Keyword arguments for the wrapped seaborn functions.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Union[list, plt.Axes]</span>
+<span class="sd">        cmap or seaborn color palette.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">from</span> <span class="nn">seaborn</span> <span class="k">import</span> <span class="n">cubehelix_palette</span><span class="p">,</span> <span class="n">dark_palette</span><span class="p">,</span> <span class="n">light_palette</span><span class="p">,</span> <span class="n">diverging_palette</span><span class="p">,</span> <span class="n">hls_palette</span><span class="p">,</span> <span class="n">husl_palette</span><span class="p">,</span> \
+        <span class="n">color_palette</span><span class="p">,</span> <span class="n">crayon_palette</span><span class="p">,</span> <span class="n">xkcd_palette</span><span class="p">,</span> <span class="n">mpl_palette</span>
+    <span class="kn">import</span> <span class="nn">matplotlib.colors</span> <span class="k">as</span> <span class="nn">mcolors</span>
+
+    <span class="k">if</span> <span class="s1">&#39;/&#39;</span> <span class="ow">in</span> <span class="n">name</span><span class="p">:</span>
+
+        <span class="c1"># create diverging colormap</span>
+        <span class="n">name1</span><span class="p">,</span> <span class="n">name2</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+        <span class="n">vmin</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;vmin&#39;</span><span class="p">,</span> <span class="mf">0.</span><span class="p">)</span>
+        <span class="n">vmax</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;vmax&#39;</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">vmin</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
+            <span class="n">vmin</span> <span class="o">=</span> <span class="p">(</span><span class="n">vmin</span><span class="p">,</span> <span class="n">vmin</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">vmax</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
+            <span class="n">vmax</span> <span class="o">=</span> <span class="p">(</span><span class="n">vmax</span><span class="p">,</span> <span class="n">vmax</span><span class="p">)</span>
+        <span class="n">kwargs1</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">kwargs2</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">name2</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">cmap1</span> <span class="o">=</span> <span class="n">create_cmap</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs1</span><span class="p">,</span> <span class="n">as_cmap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">cmap2</span> <span class="o">=</span> <span class="n">create_cmap</span><span class="p">(</span><span class="n">name2</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs2</span><span class="p">,</span> <span class="n">as_cmap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;n_colors&#39;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+        <span class="n">colors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">cmap1</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">vmin</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">vmax</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">n</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span>
+                            <span class="n">cmap2</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">vmin</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">vmax</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">n</span><span class="p">[</span><span class="mi">1</span><span class="p">])[::</span><span class="o">-</span><span class="mi">1</span><span class="p">])))</span>
+        <span class="k">return</span> <span class="n">mcolors</span><span class="o">.</span><span class="n">LinearSegmentedColormap</span><span class="o">.</span><span class="n">from_list</span><span class="p">(</span><span class="s1">&#39;cmap_diverging&#39;</span><span class="p">,</span> <span class="n">colors</span><span class="p">)</span>
+
+    <span class="c1"># extract colorrange</span>
+    <span class="k">if</span> <span class="n">as_cmap</span><span class="p">:</span>
+        <span class="n">vmin</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;vmin&#39;</span><span class="p">,</span> <span class="mf">0.</span><span class="p">)</span>
+        <span class="n">vmax</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;vmax&#39;</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;n_colors&#39;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+        <span class="n">crange</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">vmin</span><span class="p">,</span> <span class="n">vmax</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span> <span class="k">if</span> <span class="n">vmax</span><span class="o">-</span><span class="n">vmin</span> <span class="o">&lt;</span> <span class="mf">1.</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">crange</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">if</span> <span class="s1">&#39;pyrates&#39;</span> <span class="ow">in</span> <span class="n">name</span><span class="p">:</span>
+
+        <span class="c1"># create pyrates colormap</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;pyrates_red&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">cubehelix_palette</span><span class="p">(</span><span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="n">start</span><span class="o">=-</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">rot</span><span class="o">=-</span><span class="mf">0.1</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;pyrates_green&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">cubehelix_palette</span><span class="p">(</span><span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span> <span class="n">rot</span><span class="o">=-</span><span class="mf">0.1</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;pyrates_blue&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">dark_palette</span><span class="p">((</span><span class="mi">210</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="mi">60</span><span class="p">),</span> <span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="s1">&#39;husl&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;pyrates_yellow&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">dark_palette</span><span class="p">((</span><span class="mi">70</span><span class="p">,</span> <span class="mi">95</span><span class="p">,</span> <span class="mi">65</span><span class="p">),</span> <span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="s1">&#39;husl&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;pyrates_purple&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">dark_palette</span><span class="p">((</span><span class="mi">270</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">55</span><span class="p">),</span> <span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="s1">&#39;husl&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="c1"># create seaborn colormap</span>
+        <span class="k">if</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;cubehelix&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">cubehelix_palette</span><span class="p">(</span><span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;dark&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">dark_palette</span><span class="p">(</span><span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;light&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">light_palette</span><span class="p">(</span><span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;hls&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">hls_palette</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;husl&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">husl_palette</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;diverging&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">diverging_palette</span><span class="p">(</span><span class="n">as_cmap</span><span class="o">=</span><span class="n">as_cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;crayon&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">crayon_palette</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;xkcd&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">xkcd_palette</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">palette_type</span> <span class="o">==</span> <span class="s1">&#39;mpl&#39;</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">mpl_palette</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">color_palette</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="c1"># apply colorrange</span>
+    <span class="k">if</span> <span class="n">crange</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">cmap</span> <span class="o">=</span> <span class="n">mcolors</span><span class="o">.</span><span class="n">LinearSegmentedColormap</span><span class="o">.</span><span class="n">from_list</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">cmap</span><span class="p">(</span><span class="n">crange</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">cmap</span></div>
+
+
+<div class="viewcode-block" id="plot_timeseries"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.plot_timeseries">[docs]</a><span class="k">def</span> <span class="nf">plot_timeseries</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">variable</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">plot_style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;line_plot&#39;</span><span class="p">,</span>
+                    <span class="n">bg_style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;darkgrid&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">plt</span><span class="o">.</span><span class="n">Axes</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Plot timeseries from a data frame.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data</span>
+<span class="sd">        Results of a pyrates simulation.</span>
+<span class="sd">    variable</span>
+<span class="sd">        Name of the variable to be plotted</span>
+<span class="sd">    plot_style</span>
+<span class="sd">        Can be either `line_plot` for plotting with seaborn.lineplot() or `ridge_plot` for using seaborn.lineplot()</span>
+<span class="sd">        on a grid with the y-axis being separated for each population.</span>
+<span class="sd">    bg_style</span>
+<span class="sd">        Background style of the seaborn plot</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional key-word arguments for the seaborn function.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    plt.Axes</span>
+<span class="sd">        Handle of the figure axes the time-series were plotted into.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">sb</span><span class="o">.</span><span class="n">set_style</span><span class="p">(</span><span class="n">bg_style</span><span class="p">)</span>
+
+    <span class="c1"># pre-process data</span>
+    <span class="n">demean</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;demean&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">demean</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">-=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="n">i</span><span class="p">])</span>
+            <span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="n">i</span><span class="p">])</span>
+    <span class="n">title</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;title&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Convert the dataframe to long-form or &quot;tidy&quot; format if necessary</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="ow">is</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+        <span class="n">data_tmp</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="n">variable</span><span class="p">],</span> <span class="n">index</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">data_tmp</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;tmin&#39;</span><span class="p">,</span> <span class="n">data_tmp</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">data_tmp</span> <span class="o">=</span> <span class="n">data_tmp</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">idx</span><span class="p">:,</span> <span class="p">:]</span>
+    <span class="n">data_tmp</span><span class="p">[</span><span class="s1">&#39;time&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data_tmp</span><span class="o">.</span><span class="n">index</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">melt</span><span class="p">(</span><span class="n">data_tmp</span><span class="p">,</span>
+                 <span class="n">id_vars</span><span class="o">=</span><span class="s1">&#39;time&#39;</span><span class="p">,</span>
+                 <span class="n">var_name</span><span class="o">=</span><span class="s1">&#39;node&#39;</span><span class="p">,</span>
+                 <span class="n">value_name</span><span class="o">=</span><span class="n">variable</span><span class="p">)</span>
+
+    <span class="c1"># create color palette</span>
+    <span class="k">if</span> <span class="s1">&#39;cmap&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="n">cmap</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;cmap&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">col_pal_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;start&#39;</span><span class="p">,</span> <span class="s1">&#39;rot&#39;</span><span class="p">,</span> <span class="s1">&#39;gamma&#39;</span><span class="p">,</span> <span class="s1">&#39;hue&#39;</span><span class="p">,</span> <span class="s1">&#39;light&#39;</span><span class="p">,</span> <span class="s1">&#39;dark&#39;</span><span class="p">,</span> <span class="s1">&#39;reverse&#39;</span><span class="p">,</span> <span class="s1">&#39;n_colors&#39;</span><span class="p">]</span>
+        <span class="n">kwargs_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">col_pal_args</span><span class="p">:</span>
+                <span class="n">kwargs_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;n_colors&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs_tmp</span><span class="p">:</span>
+            <span class="n">kwargs_tmp</span><span class="p">[</span><span class="s1">&#39;n_colors&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data_tmp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">cmap</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">cubehelix_palette</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs_tmp</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s1">&#39;ax&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;ax&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ax</span>
+
+    <span class="k">if</span> <span class="n">plot_style</span> <span class="o">==</span> <span class="s1">&#39;line_plot&#39;</span><span class="p">:</span>
+
+        <span class="c1"># simple timeseries plot</span>
+        <span class="k">if</span> <span class="s1">&#39;ci&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;ci&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">ylabel</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;ylabel&#39;</span><span class="p">,</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">xlabel</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;xlabel&#39;</span><span class="p">,</span> <span class="s1">&#39;time&#39;</span><span class="p">)</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">lineplot</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">df</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">variable</span><span class="p">,</span> <span class="n">hue</span><span class="o">=</span><span class="s1">&#39;node&#39;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="n">ylabel</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="n">xlabel</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">plot_style</span> <span class="o">==</span> <span class="s1">&#39;ridge_plot&#39;</span><span class="p">:</span>
+
+        <span class="c1"># create facet grid</span>
+        <span class="n">grid_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;col_wrap&#39;</span><span class="p">,</span> <span class="s1">&#39;sharex&#39;</span><span class="p">,</span> <span class="s1">&#39;sharey&#39;</span><span class="p">,</span> <span class="s1">&#39;height&#39;</span><span class="p">,</span> <span class="s1">&#39;aspect&#39;</span><span class="p">,</span> <span class="s1">&#39;row_order&#39;</span><span class="p">,</span> <span class="s1">&#39;col_order&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;dropna&#39;</span><span class="p">,</span> <span class="s1">&#39;legend_out&#39;</span><span class="p">,</span> <span class="s1">&#39;margin_titles&#39;</span><span class="p">,</span> <span class="s1">&#39;xlim&#39;</span><span class="p">,</span> <span class="s1">&#39;ylim&#39;</span><span class="p">,</span> <span class="s1">&#39;gridspec_kws&#39;</span><span class="p">,</span> <span class="s1">&#39;size&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;subplot_kws&#39;</span><span class="p">]</span>
+        <span class="n">kwargs_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">grid_args</span><span class="p">:</span>
+                <span class="n">kwargs_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">facet_hue</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;facet_hue&#39;</span><span class="p">,</span> <span class="s1">&#39;node&#39;</span><span class="p">)</span>
+        <span class="n">facet_row</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;facet_row&#39;</span><span class="p">,</span> <span class="s1">&#39;node&#39;</span><span class="p">)</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">FacetGrid</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">row</span><span class="o">=</span><span class="n">facet_row</span><span class="p">,</span> <span class="n">hue</span><span class="o">=</span><span class="n">facet_hue</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_tmp</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">plt</span><span class="o">.</span><span class="n">get_fignums</span><span class="p">()[</span><span class="o">-</span><span class="mi">2</span><span class="p">]))</span>
+
+        <span class="c1"># map line plots</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">sb</span><span class="o">.</span><span class="n">lineplot</span><span class="p">,</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="n">variable</span><span class="p">,</span> <span class="n">ci</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">plt</span><span class="o">.</span><span class="n">axhline</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">clip_on</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="c1"># labeling args</span>
+        <span class="n">label_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;fontsize&#39;</span><span class="p">]</span>
+        <span class="n">kwargs_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">label_args</span><span class="p">:</span>
+                <span class="n">kwargs_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+
+        <span class="c1"># Define and use a simple function to label the plot in axes coordinates</span>
+        <span class="k">def</span> <span class="nf">label</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">color</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
+            <span class="n">ax_tmp</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span>
+            <span class="n">ax_tmp</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">fontweight</span><span class="o">=</span><span class="s2">&quot;bold&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span>
+                        <span class="n">ha</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">,</span> <span class="n">va</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">,</span> <span class="n">transform</span><span class="o">=</span><span class="n">ax_tmp</span><span class="o">.</span><span class="n">transAxes</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_tmp</span><span class="p">)</span>
+
+        <span class="n">ax</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="s1">&#39;time&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Set the subplots to overlap</span>
+        <span class="n">hspace</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;hspace&#39;</span><span class="p">,</span> <span class="o">-.</span><span class="mi">05</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">subplots_adjust</span><span class="p">(</span><span class="n">hspace</span><span class="o">=</span><span class="n">hspace</span><span class="p">)</span>
+
+        <span class="c1"># Remove axes details that don&#39;t play well with overlap</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_titles</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">yticks</span><span class="o">=</span><span class="p">[])</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">despine</span><span class="p">(</span><span class="n">bottom</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">left</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Plot style is not supported by this function: </span><span class="si">{plot_style}</span><span class="s1">. Check the documentation of the &#39;</span>
+                         <span class="n">f</span><span class="s1">&#39;argument `plot_style` for valid options.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ax</span></div>
+
+
+<div class="viewcode-block" id="plot_connectivity"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.plot_connectivity">[docs]</a><span class="k">def</span> <span class="nf">plot_connectivity</span><span class="p">(</span><span class="n">fc</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span> <span class="n">threshold</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">plot_style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;heatmap&#39;</span><span class="p">,</span>
+                      <span class="n">bg_style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;whitegrid&#39;</span><span class="p">,</span> <span class="n">node_order</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">auto_cluster</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                      <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">plt</span><span class="o">.</span><span class="n">Axes</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Plot functional connectivity between nodes in backend.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    fc</span>
+<span class="sd">        Pandas dataframe containing or numpy array containing the functional connectivities.</span>
+<span class="sd">    threshold</span>
+<span class="sd">        Connectivtiy threshold to be applied (only connectivities larger than the threshold will be shown).</span>
+<span class="sd">    plot_style</span>
+<span class="sd">        Can either be `heatmap` for plotting with seaborn.heatmap or `circular_graph` for plotting with</span>
+<span class="sd">         mne.viz.plot_connectivity_circle. Check out the respective function docstrings for information on</span>
+<span class="sd">         their arguments (can be passed to kwargs).</span>
+<span class="sd">    bg_style</span>
+<span class="sd">        Only relevant if plot_style == heatmap. Then this will define the style of the background of the plot.</span>
+<span class="sd">    node_order</span>
+<span class="sd">        Order in which the nodes should appear in the plot.</span>
+<span class="sd">    auto_cluster</span>
+<span class="sd">        If true, automatic cluster detection will be used to arange the nodes</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional arguments for the fc calculation or fc plotting that can be passed.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    plt.Axes</span>
+<span class="sd">        Handle of the axis the plot was created in.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># turn fc into dataframe if necessary</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">fc</span><span class="p">)</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;yticklabels&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="s1">&#39;yticklabels&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">else</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;xticklabels&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="s1">&#39;xticklabels&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">else</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="n">fc</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">fc</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">],</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cols</span><span class="p">])</span>
+
+    <span class="c1"># apply threshold</span>
+    <span class="k">if</span> <span class="n">threshold</span><span class="p">:</span>
+        <span class="n">fc</span><span class="p">[</span><span class="n">fc</span> <span class="o">&lt;</span> <span class="n">threshold</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.</span>
+
+    <span class="c1"># cluster the columns</span>
+    <span class="c1">#####################</span>
+
+    <span class="k">if</span> <span class="n">auto_cluster</span><span class="p">:</span>
+
+        <span class="n">idx_r</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="n">idx_c</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])]</span>
+
+        <span class="c1"># Create a categorical color palette for node groups</span>
+        <span class="n">col_pal_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;h&#39;</span><span class="p">,</span> <span class="s1">&#39;s&#39;</span><span class="p">,</span> <span class="s1">&#39;l&#39;</span><span class="p">]</span>
+        <span class="n">kwargs_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">col_pal_args</span><span class="p">:</span>
+                <span class="n">kwargs_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">node_pal</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">husl_palette</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">idx_c</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs_tmp</span><span class="p">)</span>
+        <span class="n">nodes</span> <span class="o">=</span> <span class="n">fc</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span>
+        <span class="n">node_lut</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">nodes</span><span class="p">),</span> <span class="n">node_pal</span><span class="p">))</span>
+
+        <span class="c1"># Convert the palette to vectors that will be drawn on the side of the fc plot</span>
+        <span class="n">node_colors</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">fc</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">node_lut</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">node_order</span><span class="p">:</span>
+
+        <span class="n">idx_c</span> <span class="o">=</span> <span class="p">[</span><span class="n">node_order</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">fc</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">]</span>
+        <span class="n">idx_r</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="n">idx_r</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="n">idx_c</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])]</span>
+
+    <span class="n">fc</span> <span class="o">=</span> <span class="n">fc</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">idx_r</span><span class="p">,</span> <span class="n">idx_c</span><span class="p">]</span>
+
+    <span class="c1"># plot the functional connectivities</span>
+    <span class="c1">####################################</span>
+
+    <span class="c1"># choose plot style</span>
+    <span class="k">if</span> <span class="n">plot_style</span> <span class="o">==</span> <span class="s1">&#39;heatmap&#39;</span><span class="p">:</span>
+
+        <span class="c1"># seaborn plot</span>
+        <span class="k">if</span> <span class="s1">&#39;xticklabels&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;xticklabels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">fc</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">idx_c</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;yticklabels&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;yticklabels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">fc</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="n">idx_r</span><span class="p">]</span>
+
+        <span class="n">sb</span><span class="o">.</span><span class="n">set_style</span><span class="p">(</span><span class="n">bg_style</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">auto_cluster</span><span class="p">:</span>
+            <span class="n">ax</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">clustermap</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">fc</span><span class="p">,</span> <span class="n">row_colors</span><span class="o">=</span><span class="n">node_colors</span><span class="p">,</span> <span class="n">col_colors</span><span class="o">=</span><span class="n">node_colors</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ax</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">heatmap</span><span class="p">(</span><span class="n">fc</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">plot_style</span> <span class="o">==</span> <span class="s1">&#39;circular_graph&#39;</span><span class="p">:</span>
+
+        <span class="c1"># mne python plot</span>
+        <span class="kn">from</span> <span class="nn">mne.viz</span> <span class="k">import</span> <span class="n">circular_layout</span><span class="p">,</span> <span class="n">plot_connectivity_circle</span>
+
+        <span class="c1"># get node order for node layout</span>
+        <span class="n">node_names</span> <span class="o">=</span> <span class="n">fc</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span>
+        <span class="k">if</span> <span class="n">auto_cluster</span><span class="p">:</span>
+            <span class="n">cluster_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;method&#39;</span><span class="p">,</span> <span class="s1">&#39;metric&#39;</span><span class="p">,</span> <span class="s1">&#39;z_score&#39;</span><span class="p">,</span> <span class="s1">&#39;standard_scale&#39;</span><span class="p">]</span>
+            <span class="n">kwargs_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">cluster_args</span><span class="p">:</span>
+                    <span class="n">kwargs_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="n">clust_map</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">clustermap</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">fc</span><span class="p">,</span> <span class="n">row_colors</span><span class="o">=</span><span class="n">node_colors</span><span class="p">,</span> <span class="n">col_colors</span><span class="o">=</span><span class="n">node_colors</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_tmp</span><span class="p">)</span>
+            <span class="n">node_order</span> <span class="o">=</span> <span class="p">[</span><span class="n">node_names</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">clust_map</span><span class="o">.</span><span class="n">dendrogram_row</span><span class="o">.</span><span class="n">reordered_ind</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">node_order</span><span class="p">:</span>
+            <span class="n">node_order</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">node_names</span><span class="p">)</span>
+
+        <span class="c1"># create circular node layout</span>
+        <span class="n">kwargs_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">layout_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;start_pos&#39;</span><span class="p">,</span> <span class="s1">&#39;start_between&#39;</span><span class="p">,</span> <span class="s1">&#39;group_boundaries&#39;</span><span class="p">,</span> <span class="s1">&#39;group_sep&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">layout_args</span><span class="p">:</span>
+                <span class="n">kwargs_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">node_angles</span> <span class="o">=</span> <span class="n">circular_layout</span><span class="p">(</span><span class="n">node_names</span><span class="p">,</span> <span class="n">node_order</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_tmp</span><span class="p">)</span>
+
+        <span class="c1"># plot the circular graph</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">plot_connectivity_circle</span><span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">node_names</span><span class="p">,</span> <span class="n">node_angles</span><span class="o">=</span><span class="n">node_angles</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Plot style is not supported by this function: </span><span class="si">{plot_style}</span><span class="s1">. Check the documentation of the &#39;</span>
+                         <span class="n">f</span><span class="s1">&#39;argument `plot_style` for valid options.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ax</span></div>
+
+
+<div class="viewcode-block" id="plot_phase"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.plot_phase">[docs]</a><span class="k">def</span> <span class="nf">plot_phase</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">bg_style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;whitegrid&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">sb</span><span class="o">.</span><span class="n">FacetGrid</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Plot phase of populations in a polar plot.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data</span>
+<span class="sd">        Long (tidy) format dataframe containing fields `node`, `phase` and `amplitude`.</span>
+<span class="sd">    bg_style</span>
+<span class="sd">        Background style of the plot.</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional keyword args to be passed to `seaborn.FacetGrid` or `seaborn.scatterplot`</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    sb.FacetGrid</span>
+<span class="sd">        Axis handle of the created plot.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">sb</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">style</span><span class="o">=</span><span class="n">bg_style</span><span class="p">)</span>
+
+    <span class="c1"># create facet grid</span>
+    <span class="n">grid_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;col_wrap&#39;</span><span class="p">,</span> <span class="s1">&#39;sharex&#39;</span><span class="p">,</span> <span class="s1">&#39;sharey&#39;</span><span class="p">,</span> <span class="s1">&#39;height&#39;</span><span class="p">,</span> <span class="s1">&#39;aspect&#39;</span><span class="p">,</span> <span class="s1">&#39;palette&#39;</span><span class="p">,</span> <span class="s1">&#39;row_order&#39;</span><span class="p">,</span> <span class="s1">&#39;col_order&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;hue_order&#39;</span><span class="p">,</span> <span class="s1">&#39;hue_kws&#39;</span><span class="p">,</span> <span class="s1">&#39;dropna&#39;</span><span class="p">,</span> <span class="s1">&#39;legend_out&#39;</span><span class="p">,</span> <span class="s1">&#39;margin_titles&#39;</span><span class="p">,</span> <span class="s1">&#39;xlim&#39;</span><span class="p">,</span> <span class="s1">&#39;ylim&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;gridspec_kws&#39;</span><span class="p">,</span> <span class="s1">&#39;size&#39;</span><span class="p">]</span>
+    <span class="n">kwargs_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">grid_args</span><span class="p">:</span>
+            <span class="n">kwargs_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">FacetGrid</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">hue</span><span class="o">=</span><span class="s1">&#39;node&#39;</span><span class="p">,</span> <span class="n">subplot_kws</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">polar</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">despine</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_tmp</span><span class="p">)</span>
+
+    <span class="c1"># plot phase and amplitude into polar plot</span>
+    <span class="n">scatter_kwargs</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;style&#39;</span><span class="p">,</span> <span class="s1">&#39;sizes&#39;</span><span class="p">,</span> <span class="s1">&#39;size_order&#39;</span><span class="p">,</span> <span class="s1">&#39;size_norm&#39;</span><span class="p">,</span> <span class="s1">&#39;markers&#39;</span><span class="p">,</span> <span class="s1">&#39;style_order&#39;</span><span class="p">,</span> <span class="s1">&#39;x_bins&#39;</span><span class="p">,</span> <span class="s1">&#39;y_bins&#39;</span><span class="p">,</span>
+                      <span class="s1">&#39;units&#39;</span><span class="p">,</span> <span class="s1">&#39;estimator&#39;</span><span class="p">,</span> <span class="s1">&#39;ci&#39;</span><span class="p">,</span> <span class="s1">&#39;n_boot&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;x_jitter&#39;</span><span class="p">,</span> <span class="s1">&#39;y_jitter&#39;</span><span class="p">,</span> <span class="s1">&#39;legend&#39;</span><span class="p">,</span> <span class="s1">&#39;ax&#39;</span><span class="p">]</span>
+    <span class="n">kwargs_tmp2</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">scatter_kwargs</span><span class="p">:</span>
+            <span class="n">kwargs_tmp2</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">sb</span><span class="o">.</span><span class="n">scatterplot</span><span class="p">,</span> <span class="s1">&#39;phase&#39;</span><span class="p">,</span> <span class="s1">&#39;amplitude&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_tmp2</span><span class="p">)</span>
+
+    <span class="c1"># plot customization</span>
+    <span class="n">ax_tmp</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">facet_axis</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">ax_tmp</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;amplitude&#39;</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;amplitude&#39;</span><span class="p">]))</span>
+    <span class="n">ax_tmp</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">yaxis</span><span class="o">.</span><span class="n">set_label_coords</span><span class="p">(</span><span class="mf">1.15</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">)</span>
+    <span class="n">ax_tmp</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="n">ax_tmp</span><span class="o">.</span><span class="n">get_ylabel</span><span class="p">(),</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">locs</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">yticks</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">yticks</span><span class="p">(</span><span class="n">locs</span><span class="p">)</span>
+    <span class="n">locs</span><span class="p">,</span> <span class="n">labels</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">()</span>
+    <span class="n">labels</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">l</span><span class="o">.</span><span class="n">_x</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">labels</span><span class="p">]</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">(</span><span class="n">locs</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ax</span></div>
+
+
+<div class="viewcode-block" id="plot_psd"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.plot_psd">[docs]</a><span class="k">def</span> <span class="nf">plot_psd</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">fmin</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.</span><span class="p">,</span> <span class="n">fmax</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100.</span><span class="p">,</span> <span class="n">tmin</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">plt</span><span class="o">.</span><span class="n">Axes</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Plots the power-spectral density for each column in data.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data</span>
+<span class="sd">        Dataframe with simulation results.</span>
+<span class="sd">    fmin</span>
+<span class="sd">        Minimum frequency to be displayed.</span>
+<span class="sd">    fmax</span>
+<span class="sd">        Maximum frequency to be displayed.</span>
+<span class="sd">    tmin</span>
+<span class="sd">        Time at which to start psd calculation.</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional keyword arguments to be passed to `mne.viz.plot_raw_psd`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    plt.Axes</span>
+<span class="sd">        Handle of the created plot.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">from</span> <span class="nn">pyrates.utility</span> <span class="k">import</span> <span class="n">mne_from_dataframe</span>
+    <span class="kn">from</span> <span class="nn">mne.viz</span> <span class="k">import</span> <span class="n">plot_raw_psd</span>
+
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="ow">is</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="ow">and</span> <span class="s1">&#39;out_var&#39;</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">names</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">names</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+
+        <span class="c1"># create heatmap</span>
+        <span class="c1">################</span>
+
+        <span class="c1"># calculate psd&#39;s for each condition</span>
+        <span class="n">psd_keys</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;n_fft&#39;</span><span class="p">,</span> <span class="s1">&#39;picks&#39;</span><span class="p">,</span> <span class="s1">&#39;n_overlap&#39;</span><span class="p">,</span> <span class="s1">&#39;dB&#39;</span><span class="p">,</span> <span class="s1">&#39;estimate&#39;</span><span class="p">,</span> <span class="s1">&#39;average&#39;</span><span class="p">,</span> <span class="s1">&#39;n_jobs&#39;</span><span class="p">]</span>
+        <span class="n">psd_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">copy</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">psd_keys</span><span class="p">:</span>
+                <span class="n">psd_kwargs</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+        <span class="n">data_col</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">col_names</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+            <span class="n">_</span> <span class="o">=</span> <span class="n">plot_psd</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">col</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]],</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">fmin</span><span class="o">=</span><span class="n">fmin</span><span class="p">,</span> <span class="n">fmax</span><span class="o">=</span><span class="n">fmax</span><span class="p">,</span> <span class="n">tmin</span><span class="o">=</span><span class="n">tmin</span><span class="p">,</span> <span class="o">**</span><span class="n">psd_kwargs</span><span class="p">)</span>
+            <span class="nb">pow</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span><span class="o">.</span><span class="n">get_lines</span><span class="p">()[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">get_ydata</span><span class="p">())</span>
+            <span class="n">freqs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span><span class="o">.</span><span class="n">get_lines</span><span class="p">()[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">get_xdata</span><span class="p">())</span>
+            <span class="n">data_col</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">pow</span><span class="p">)</span>
+            <span class="n">col_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">col</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">plt</span><span class="o">.</span><span class="n">gcf</span><span class="p">())</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">data_col</span><span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">col_names</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">freqs</span><span class="p">,</span> <span class="n">decimals</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="c1"># plot the data</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">plot_connectivity</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">values</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:],</span> <span class="n">xticklabels</span><span class="o">=</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+                               <span class="n">yticklabels</span><span class="o">=</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">plot_style</span><span class="o">=</span><span class="s1">&#39;heatmap&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ax</span>
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="c1"># create line plot</span>
+        <span class="c1">##################</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;data&#39;</span><span class="p">],</span> <span class="n">index</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">mne_from_dataframe</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">plot_raw_psd</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">tmin</span><span class="o">=</span><span class="n">tmin</span><span class="p">,</span> <span class="n">fmin</span><span class="o">=</span><span class="n">fmin</span><span class="p">,</span> <span class="n">fmax</span><span class="o">=</span><span class="n">fmax</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">axes</span></div>
+
+
+<div class="viewcode-block" id="plot_tfr"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.plot_tfr">[docs]</a><span class="k">def</span> <span class="nf">plot_tfr</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">freqs</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">nodes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">separate_nodes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+             <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">plt</span><span class="o">.</span><span class="n">Axes</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data</span>
+<span class="sd">        Numpy array (n x f x t) containing the instantaneous power estimates for each node (n), each frequency (f) at</span>
+<span class="sd">        every timestep (t).</span>
+<span class="sd">    freqs</span>
+<span class="sd">        Frequencies of interest.</span>
+<span class="sd">    nodes</span>
+<span class="sd">        Nodes of interest in order of interest.</span>
+<span class="sd">    separate_nodes</span>
+<span class="sd">        If true, create a separate figure for each node.</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional keyword arguments to be passed to `seaborn.heatmap` or `seaborn.FacetGrid`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    plt.Axes</span>
+<span class="sd">        Handle of the created plot.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">nodes</span><span class="p">:</span>
+        <span class="n">nodes</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+    <span class="k">if</span> <span class="s1">&#39;xticklabels&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="k">if</span> <span class="s1">&#39;step_size&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">xticks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">*</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;step_size&#39;</span><span class="p">),</span> <span class="n">decimals</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;xticklabels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">xticks</span><span class="p">]</span>
+    <span class="k">if</span> <span class="s1">&#39;yticklabels&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;yticklabels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freqs</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">separate_nodes</span><span class="p">:</span>
+
+        <span class="c1"># plot heatmap separately for each node</span>
+        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+            <span class="n">ax</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">heatmap</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:],</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="c1"># Convert the dataframe to long-form or &quot;tidy&quot; format</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">MultiIndex</span><span class="o">.</span><span class="n">from_product</span><span class="p">((</span><span class="n">nodes</span><span class="p">,</span> <span class="n">freqs</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])),</span> <span class="n">names</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;nodes&#39;</span><span class="p">,</span> <span class="s1">&#39;freqs&#39;</span><span class="p">,</span> <span class="s1">&#39;time&#39;</span><span class="p">))</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">index</span><span class="o">=</span><span class="n">indices</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;values&#39;</span><span class="p">,))</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+
+        <span class="c1"># create facet grid</span>
+        <span class="n">grid_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;col_wrap&#39;</span><span class="p">,</span> <span class="s1">&#39;sharex&#39;</span><span class="p">,</span> <span class="s1">&#39;sharey&#39;</span><span class="p">,</span> <span class="s1">&#39;height&#39;</span><span class="p">,</span> <span class="s1">&#39;aspect&#39;</span><span class="p">,</span> <span class="s1">&#39;palette&#39;</span><span class="p">,</span> <span class="s1">&#39;col_order&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;dropna&#39;</span><span class="p">,</span> <span class="s1">&#39;legend_out&#39;</span><span class="p">,</span> <span class="s1">&#39;margin_titles&#39;</span><span class="p">,</span> <span class="s1">&#39;xlim&#39;</span><span class="p">,</span> <span class="s1">&#39;ylim&#39;</span><span class="p">,</span> <span class="s1">&#39;gridspec_kws&#39;</span><span class="p">,</span> <span class="s1">&#39;size&#39;</span><span class="p">]</span>
+        <span class="n">kwargs_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">grid_args</span><span class="p">:</span>
+                <span class="n">kwargs_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">sb</span><span class="o">.</span><span class="n">FacetGrid</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">col</span><span class="o">=</span><span class="s1">&#39;nodes&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_tmp</span><span class="p">)</span>
+
+        <span class="c1"># map heatmaps to grid</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">map_dataframe</span><span class="p">(</span><span class="n">_draw_heatmap</span><span class="p">,</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;freqs&#39;</span><span class="p">,</span> <span class="s1">&#39;values&#39;</span><span class="p">,</span> <span class="n">cbar</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">square</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ax</span></div>
+
+
+<div class="viewcode-block" id="plot_network_graph"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.plot_network_graph">[docs]</a><span class="k">def</span> <span class="nf">plot_network_graph</span><span class="p">(</span><span class="n">circuit</span><span class="p">,</span> <span class="n">_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;png&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">prog</span><span class="o">=</span><span class="s2">&quot;dot&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Simple straight plot using graphviz via pydot.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    circuit</span>
+<span class="sd">        `CircuitIR` instance to plot graph from</span>
+<span class="sd">    _format</span>
+<span class="sd">        output format</span>
+<span class="sd">    path</span>
+<span class="sd">        path to print image to. If `None` is given, will try to plot using matplotlib/IPython</span>
+<span class="sd">    prog</span>
+<span class="sd">        graphviz layout algorithm name. Defaults to &quot;dot&quot;. Another recommendation is &quot;circo&quot;. Other valid options:</span>
+<span class="sd">        &quot;fdp&quot;, &quot;neato&quot;, &quot;osage&quot;, &quot;patchwork&quot;, &quot;twopi&quot;, &quot;pydot_args&quot;. See graphviz documentation for more info.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+    <span class="c1"># import pydot</span>
+
+    <span class="c1"># copy plain node names and plain edges, to avoid conflicts with graphviz</span>
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">MultiDiGraph</span><span class="p">()</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="p">(</span><span class="n">node</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span><span class="n">nodes</span><span class="p">)</span>
+    <span class="n">edges</span> <span class="o">=</span> <span class="p">(</span><span class="n">edge</span> <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">(</span><span class="n">edges</span><span class="p">)</span>
+
+    <span class="c1"># pass graph to pydot</span>
+    <span class="n">dot_graph</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">drawing</span><span class="o">.</span><span class="n">nx_pydot</span><span class="o">.</span><span class="n">to_pydot</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>
+
+    <span class="c1"># check and format given path</span>
+    <span class="k">if</span> <span class="n">path</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">write_graph</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">dot_graph</span><span class="p">,</span> <span class="n">prog</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">show_graph</span><span class="p">(</span><span class="n">dot_graph</span><span class="p">,</span> <span class="n">_format</span><span class="p">,</span> <span class="n">prog</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="plot_graph_with_subgraphs"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.plot_graph_with_subgraphs">[docs]</a><span class="k">def</span> <span class="nf">plot_graph_with_subgraphs</span><span class="p">(</span><span class="n">circuit</span><span class="p">,</span> <span class="n">_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;png&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">prog</span><span class="o">=</span><span class="s2">&quot;dot&quot;</span><span class="p">,</span>
+                              <span class="n">node_style</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">,</span> <span class="n">cluster_style</span><span class="o">=</span><span class="s2">&quot;rounded&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Simple straight plot using graphviz via pydot.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    circuit</span>
+<span class="sd">        `CircuitIR` instance to plot graph from</span>
+<span class="sd">    _format</span>
+<span class="sd">        output format</span>
+<span class="sd">    path</span>
+<span class="sd">        path to print image to. If `None` is given, will try to plot using matplotlib/IPython</span>
+<span class="sd">    prog</span>
+<span class="sd">        graphviz layout algorithm name. Defaults to &quot;dot&quot;. Another recommendation is &quot;circo&quot;. Other valid options:</span>
+<span class="sd">        &quot;fdp&quot;, &quot;neato&quot;, &quot;osage&quot;, &quot;patchwork&quot;, &quot;twopi&quot;, &quot;pydot_args&quot;. See graphviz documentation for more info.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">import</span> <span class="nn">pydot</span>
+
+    <span class="c1"># copy plain node names and plain edges, to avoid conflicts with graphviz</span>
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">pydot</span><span class="o">.</span><span class="n">Dot</span><span class="p">(</span><span class="n">graph_type</span><span class="o">=</span><span class="s1">&#39;digraph&#39;</span><span class="p">,</span> <span class="n">fontname</span><span class="o">=</span><span class="s2">&quot;Verdana&quot;</span><span class="p">)</span>
+    <span class="n">clusters</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">subcircuit</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">sub_circuits</span><span class="p">:</span>
+        <span class="n">clusters</span><span class="p">[</span><span class="n">subcircuit</span><span class="p">]</span> <span class="o">=</span> <span class="n">pydot</span><span class="o">.</span><span class="n">Cluster</span><span class="p">(</span><span class="n">subcircuit</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">subcircuit</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="c1"># node = data[&quot;node&quot;]</span>
+        <span class="o">*</span><span class="n">subcircuit</span><span class="p">,</span> <span class="n">node</span> <span class="o">=</span> <span class="n">label</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="n">node</span> <span class="o">=</span> <span class="n">pydot</span><span class="o">.</span><span class="n">Node</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">set_style</span><span class="p">(</span><span class="n">node_style</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">subcircuit</span><span class="p">:</span>
+            <span class="n">subcircuit</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">subcircuit</span><span class="p">)</span>
+            <span class="n">cluster</span> <span class="o">=</span> <span class="n">clusters</span><span class="p">[</span><span class="n">subcircuit</span><span class="p">]</span>
+            <span class="n">cluster</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">graph</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="n">clusters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="n">cluster</span><span class="o">.</span><span class="n">set_style</span><span class="p">(</span><span class="n">cluster_style</span><span class="p">)</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">add_subgraph</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">:</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">pydot</span><span class="o">.</span><span class="n">Edge</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">))</span>
+
+    <span class="c1">#</span>
+    <span class="c1"># # pass graph to pydot</span>
+    <span class="c1"># dot_graph = nx.drawing.nx_pydot.to_pydot(graph)</span>
+    <span class="c1">#</span>
+    <span class="c1"># # check and format given path</span>
+    <span class="k">if</span> <span class="n">path</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">write_graph</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">prog</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">show_graph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">_format</span><span class="p">,</span> <span class="n">prog</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="write_graph"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.write_graph">[docs]</a><span class="k">def</span> <span class="nf">write_graph</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">dot_graph</span><span class="p">,</span> <span class="n">prog</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Write DOT graph to file.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    path</span>
+<span class="sd">    dot_graph</span>
+<span class="sd">    prog</span>
+<span class="sd">    pydot_args</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">os</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+    <span class="c1"># draw graph and write to file, given the format</span>
+    <span class="k">return</span> <span class="n">dot_graph</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="nb">format</span><span class="p">,</span> <span class="n">prog</span><span class="o">=</span><span class="n">prog</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="show_graph"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.show_graph">[docs]</a><span class="k">def</span> <span class="nf">show_graph</span><span class="p">(</span><span class="n">dot_graph</span><span class="p">,</span> <span class="n">_format</span><span class="p">,</span> <span class="n">prog</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Show DOT graph using matplotlib or IPython.display</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dot_graph</span>
+<span class="sd">    _format</span>
+<span class="sd">    prog</span>
+<span class="sd">    pydot_args</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+    <span class="kn">import</span> <span class="nn">matplotlib.image</span> <span class="k">as</span> <span class="nn">mpimg</span>
+
+    <span class="k">if</span> <span class="n">_format</span> <span class="o">==</span> <span class="s2">&quot;png&quot;</span><span class="p">:</span>
+        <span class="c1"># draw graph and write out postscript string</span>
+        <span class="n">image_bytes</span> <span class="o">=</span> <span class="n">dot_graph</span><span class="o">.</span><span class="n">create_png</span><span class="p">(</span><span class="n">prog</span><span class="o">=</span><span class="n">prog</span><span class="p">,</span> <span class="o">**</span><span class="n">pydot_args</span><span class="p">)</span>
+
+        <span class="c1"># check interactive session</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span> <span class="nn">sys</span>
+            <span class="n">_</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">ps1</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="c1"># treat the dot output bytes as an image file</span>
+            <span class="kn">from</span> <span class="nn">io</span> <span class="k">import</span> <span class="n">BytesIO</span>
+            <span class="n">bio</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">()</span>
+            <span class="n">bio</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">image_bytes</span><span class="p">)</span>
+            <span class="n">bio</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">img</span> <span class="o">=</span> <span class="n">mpimg</span><span class="o">.</span><span class="n">imread</span><span class="p">(</span><span class="n">bio</span><span class="p">)</span>
+
+            <span class="c1"># plot the image</span>
+            <span class="n">imgplot</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">aspect</span><span class="o">=</span><span class="s1">&#39;equal&#39;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">block</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">imgplot</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">IPython.display</span> <span class="k">import</span> <span class="n">Image</span><span class="p">,</span> <span class="n">display</span>
+
+            <span class="k">return</span> <span class="n">Image</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">image_bytes</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;No plotting option implemented for format &#39;</span><span class="si">{_format}</span><span class="s2">&#39;&quot;</span><span class="p">)</span></div>
+
+
+<span class="k">def</span> <span class="nf">_draw_heatmap</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Wraps seaborn.heatmap to work with long, tidy format dataframes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;data&#39;</span><span class="p">)</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">columns</span><span class="o">=</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">values</span><span class="o">=</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">sb</span><span class="o">.</span><span class="n">heatmap</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Interactive2DParamPlot"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot">[docs]</a><span class="k">class</span> <span class="nc">Interactive2DParamPlot</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_map</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">,</span> <span class="n">data_series</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">x_values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">,</span> <span class="n">y_values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">,</span> <span class="n">tmin</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span>
+                 <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates an interactive 2D plot that allows visualization of time series using button press events</span>
+
+<span class="sd">        Derive child class and change get_data() respectively to utilize this plotting method</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        data_map</span>
+<span class="sd">            2D ndarray containing a value based on each column data_series, respectively.</span>
+<span class="sd">        data_series</span>
+<span class="sd">            DataFrame containing all data series used to crate the data map</span>
+<span class="sd">        x_values</span>
+<span class="sd">            ndarray containing values used to access a column in data_series</span>
+<span class="sd">        y_values</span>
+<span class="sd">            ndarray containing values used to access a column in data_series</span>
+<span class="sd">        tmin</span>
+<span class="sd">            Starting point for time-series plots in time units (float).</span>
+<span class="sd">        kwargs</span>
+<span class="sd">            Additional information to access a column in data_series if necessary</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data_series</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">tmin</span><span class="p">:,</span> <span class="p">:]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x_values</span> <span class="o">=</span> <span class="n">x_values</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y_values</span> <span class="o">=</span> <span class="n">y_values</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+
+        <span class="c1"># Create canvas</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">ncols</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">nrows</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">gridspec_kw</span><span class="o">=</span><span class="p">{})</span>
+
+        <span class="c1"># Initiate marker</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">marker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;white&#39;</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="s1">&#39;10&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Plot 2D data in left subplot</span>
+        <span class="n">plot_connectivity</span><span class="p">(</span><span class="n">data_map</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">yticklabels</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">y_values</span><span class="p">,</span> <span class="n">decimals</span><span class="o">=</span><span class="mi">2</span><span class="p">)),</span>
+                          <span class="n">xticklabels</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">x_values</span><span class="p">,</span> <span class="n">decimals</span><span class="o">=</span><span class="mi">2</span><span class="p">)),</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;magma&#39;</span><span class="p">)</span>
+        <span class="n">set_num_axis_ticks</span><span class="p">(</span><span class="n">ax</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">num_x_ticks_old</span><span class="o">=</span><span class="n">data_map</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">num_y_ticks_old</span><span class="o">=</span><span class="n">data_map</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">invert_yaxis</span><span class="p">()</span>
+
+        <span class="c1"># self.ax[0].grid(visible=True, color=&quot;white&quot;)</span>
+
+        <span class="c1"># set up grid in right subplot</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="n">visible</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;silver&quot;</span><span class="p">)</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_values</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">time_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="n">plot_timeseries</span><span class="p">(</span><span class="n">time_series</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">mpl_connect</span><span class="p">(</span><span class="s1">&#39;button_press_event&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to access a column in data_series using x and y values based on cursor position</span>
+
+<span class="sd">        Is called on mouse button press event. Converts the current cursor coordinates inside the plot into x and y</span>
+<span class="sd">        values based on the data in x_values and y_values. x and y values are used to access a column in data_series.</span>
+<span class="sd">        Access of data_series can be customized in self.get_data().</span>
+
+<span class="sd">        :param event:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Only allow button press events in the (left) 2D overview plot</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">inaxes</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+            <span class="k">return</span>
+
+        <span class="c1"># Reset axes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">marker</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
+
+        <span class="c1"># Transform cursor coordinates in x and y values</span>
+        <span class="n">x_sample</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">xdata</span><span class="p">)</span>
+        <span class="n">y_sample</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">ydata</span><span class="p">)</span>
+        <span class="n">x_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_values</span><span class="p">[</span><span class="n">x_sample</span><span class="p">]</span>
+        <span class="n">y_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_values</span><span class="p">[</span><span class="n">y_sample</span><span class="p">]</span>
+
+        <span class="c1"># Add marker at event coordinates</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">marker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x_sample</span><span class="p">,</span> <span class="n">y_sample</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;white&#39;</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="s1">&#39;10&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Update serial plot</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update_lineplot</span><span class="p">(</span><span class="n">x_value</span><span class="p">,</span> <span class="n">y_value</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">draw</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">flush_events</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Interactive2DParamPlot.update_lineplot"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot.update_lineplot">[docs]</a>    <span class="k">def</span> <span class="nf">update_lineplot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+
+        <span class="n">line</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">get_lines</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="n">line</span><span class="o">.</span><span class="n">set_data</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">relim</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">autoscale_view</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Interactive2DParamPlot.set_map_xlabel"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot.set_map_xlabel">[docs]</a>    <span class="k">def</span> <span class="nf">set_map_xlabel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="n">label</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Interactive2DParamPlot.set_map_ylabel"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot.set_map_ylabel">[docs]</a>    <span class="k">def</span> <span class="nf">set_map_ylabel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="n">label</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Interactive2DParamPlot.set_map_title"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot.set_map_title">[docs]</a>    <span class="k">def</span> <span class="nf">set_map_title</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">title</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">title</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Interactive2DParamPlot.set_series_xlabel"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot.set_series_xlabel">[docs]</a>    <span class="k">def</span> <span class="nf">set_series_xlabel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="n">label</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Interactive2DParamPlot.set_series_ylabel"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot.set_series_ylabel">[docs]</a>    <span class="k">def</span> <span class="nf">set_series_ylabel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="n">label</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Interactive2DParamPlot.get_data"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot.get_data">[docs]</a>    <span class="k">def</span> <span class="nf">get_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x_value</span><span class="p">,</span> <span class="n">y_value</span><span class="p">,</span> <span class="o">*</span><span class="n">argv</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Virtual method</span>
+
+<span class="sd">        Derive a child class from Interactive2DParamPlotTemplate and rewrite this function to access data using</span>
+<span class="sd">        x_value, y_value und kwargs (accessible using self.kwargs[])</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">            class Interactive2DParamPlot(Interactive2DParamPlotTemplate):</span>
+
+<span class="sd">                def get_data(self, x_value, y_value):</span>
+<span class="sd">                    return self.data[y_value][x_value][self.kwargs[&quot;param_1&quot;]][self.kwargs[&quot;param_2&quot;]]</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div></div>
+
+
+<div class="viewcode-block" id="save_fig_as_pickle"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.save_fig_as_pickle">[docs]</a><span class="k">def</span> <span class="nf">save_fig_as_pickle</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">fig</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Save a figure object in pickle format.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    fp</span>
+<span class="sd">        /desired_dir/desired_filename.pickle</span>
+<span class="sd">    fig</span>
+<span class="sd">        Figure object as returned by matplotlib.pyplot.subplots</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">pickle</span>
+    <span class="n">pickle_out</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span>
+    <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">pickle_out</span><span class="p">)</span>
+    <span class="n">pickle_out</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="load_fig_from_pickle"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.load_fig_from_pickle">[docs]</a><span class="k">def</span> <span class="nf">load_fig_from_pickle</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Opens a file dialog to select and load a *.pickle file.</span>
+
+<span class="sd">    If the pickle file contains a figure object it will automatically be plotted</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">pickle</span>
+    <span class="kn">from</span> <span class="nn">tkinter</span> <span class="k">import</span> <span class="n">Tk</span><span class="p">,</span> <span class="n">filedialog</span>
+
+    <span class="n">root</span> <span class="o">=</span> <span class="n">Tk</span><span class="p">()</span>
+    <span class="n">root</span><span class="o">.</span><span class="n">withdraw</span><span class="p">()</span>
+    <span class="n">file_path</span> <span class="o">=</span> <span class="n">filedialog</span><span class="o">.</span><span class="n">askopenfilename</span><span class="p">(</span><span class="n">filetypes</span><span class="o">=</span><span class="p">((</span><span class="s2">&quot;pickle files&quot;</span><span class="p">,</span> <span class="s2">&quot;*.pickle&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;all files&quot;</span><span class="p">,</span> <span class="s2">&quot;*.*&quot;</span><span class="p">)))</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">pickle_in</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span>
+        <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">pickle_in</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">FileNotFoundError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="n">pickle</span><span class="o">.</span><span class="n">UnpicklingError</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="set_num_axis_ticks"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.visualization.set_num_axis_ticks">[docs]</a><span class="k">def</span> <span class="nf">set_num_axis_ticks</span><span class="p">(</span><span class="n">ax</span><span class="p">,</span> <span class="n">num_x_ticks_old</span><span class="p">,</span> <span class="n">num_y_ticks_old</span><span class="p">,</span> <span class="n">num_x_ticks_new</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">num_y_ticks_new</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Set the number of x and y ticks of a plot axis</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    ax</span>
+<span class="sd">    num_x_ticks_old</span>
+<span class="sd">    num_y_ticks_old</span>
+<span class="sd">    num_x_ticks_new</span>
+<span class="sd">    num_y_ticks_new</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">step_tick_x</span><span class="p">,</span> <span class="n">step_tick_y</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_x_ticks_old</span> <span class="o">/</span> <span class="n">num_x_ticks_new</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_y_ticks_old</span> <span class="o">/</span> <span class="n">num_y_ticks_new</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">tick</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ax</span><span class="o">.</span><span class="n">xaxis</span><span class="o">.</span><span class="n">iter_ticks</span><span class="p">()):</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="n">step_tick_x</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">tick</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">tick</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ax</span><span class="o">.</span><span class="n">yaxis</span><span class="o">.</span><span class="n">iter_ticks</span><span class="p">()):</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="n">step_tick_y</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">tick</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span></div>
+</pre></div>
+
+          <footer>
+  
+
+  <hr/>
+
+  <p style="font-size: 85%">
+      Copyright &copy; 2019, Richard Gast, Daniel Rose, Christoph Salomon
+    <br/>
+    <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a>
+    <br/>
+    These works by <a xmlns:cc="http://creativecommons.org/ns#" href="http://open.edx.org" property="cc:attributionName" rel="cc:attributionURL">edX Inc.</a>
+    are licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+  </p>
+
+ 
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+</body>
+</html>

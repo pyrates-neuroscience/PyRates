@@ -140,8 +140,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     # create backend graph
     if not init_kwargs:
         init_kwargs = {}
-    vectorize = init_kwargs.pop('vectorization', 'nodes')
-    net = ComputeGraph(circuit, dt=dt, vectorization=vectorize, **init_kwargs)
+    vectorization = init_kwargs.pop('vectorization', 'nodes')
+    net = ComputeGraph(circuit, dt=dt, vectorization=vectorization, **init_kwargs)
 
     # adjust input of simulation to combined network
     for inp_key, inp in inputs.items():
