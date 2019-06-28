@@ -223,3 +223,16 @@ def time_frequency(data: pd.DataFrame, freqs: List[float], method: str = 'morlet
         return tfr_array_multitaper(np.reshape(data.values.T, (1, data.shape[1], data.shape[0])),
                                     sfreq=1. / (data.index[1] - data.index[0]),
                                     freqs=freqs, output=output, **kwargs)
+
+
+def get_psd(data, tmin=0.0):
+    # Compute spectrum
+    dt = data.index[1] - data.index[0]
+    n = data.shape[0]
+    n_two = 1 if n == 0 else 2 ** (n - 1).bit_length()
+    freqs = np.linspace(0, 1 / dt, n_two)
+    spec = np.abs(np.fft.fft(data.loc[tmin:], n=n_two, axis=0))
+
+    freqs = freqs[:int(len(spec) / 2)]
+    spec = spec[:int(len(spec) / 2)]
+    return freqs, spec
