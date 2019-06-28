@@ -166,6 +166,8 @@ def main(_):
     print("***POSTPROCESSING AND CREATING RESULT FILES***")
     t0 = time.time()
 
+    # results.to_hdf(local_res_file, key=out_vars[0])
+
     with pd.HDFStore(local_res_file, "w") as store:
         for out_var in out_vars:
             res_lst = []
