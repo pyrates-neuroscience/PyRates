@@ -898,7 +898,7 @@ class Interactive2DParamPlot(object):
                     return self.data[y_value][x_value][self.kwargs["param_1"]][self.kwargs["param_2"]]
 
         """
-        raise NotImplementedError
+        return self.data[y_value][x_value]
 
 
 def save_fig_as_pickle(fp, fig):
