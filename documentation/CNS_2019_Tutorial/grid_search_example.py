@@ -56,19 +56,19 @@ dt = 1e-3
 dts = 1e-2
 ext_input = np.random.uniform(3., 5., (int(T/dt), 1))
 
-results = grid_search(jrc_template,
-                      param_grid={'w_ep': w_ein_pc, 'w_ip': w_iin_pc},
-                      param_map={'w_ep': {'var': [(None, 'weight')],
-                                          'edges': [('EINs.0', 'PCs.0', 0)]},
-                                 'w_ip': {'var': [(None, 'weight')],
-                                          'edges': [('IINs.0', 'PCs.0', 0)]}},
-                      simulation_time=T, dt=dt, sampling_step_size=dts,
-                      inputs={('PCs.0', 'Op_exc_syn.0', 'I_ext'): ext_input},
-                      outputs={'r': ('PCs.0', 'Op_exc_syn.0', 'r')},
-                      init_kwargs={'vectorization': 'nodes', 'build_in_place': False},
-                      permute_grid=True)
-
-from pyrates.utility import plot_psd
+results, t, _ = grid_search(jrc_template,
+                            param_grid={'w_ep': w_ein_pc, 'w_ip': w_iin_pc},
+                            param_map={'w_ep': {'var': [(None, 'weight')],
+                                                'edges': [('EINs.0', 'PCs.0', 0)]},
+                                       'w_ip': {'var': [(None, 'weight')],
+                                                'edges': [('IINs.0', 'PCs.0', 0)]}},
+                            simulation_time=T, dt=dt, sampling_step_size=dts,
+                            inputs={('PCs.0', 'Op_exc_syn.0', 'I_ext'): ext_input},
+                            outputs={'r': ('PCs.0', 'Op_exc_syn.0', 'r')},
+                            init_kwargs={'backend': 'numpy', 'vectorization': 'nodes', 'build_in_place': False},
+                            permute_grid=True,
+                            profile='t',
+                            verbose=True)
 
 # calculate power-spectral density of firing rate fluctuations
 max_freq = np.zeros((len(w_ein_pc), len(w_iin_pc)))
