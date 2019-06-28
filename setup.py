@@ -24,7 +24,7 @@ CLASSIFIERS = ["Programming Language :: Python :: 3",
 with open("README.md", "r", encoding="utf8") as fh:
     DESCRIPTION = fh.read()
 
-setup(name='pyrates_minimal',
+setup(name='pyrates',
       version=__version__,
       description='Neural Network Modeling Framework',
       long_description=DESCRIPTION,
