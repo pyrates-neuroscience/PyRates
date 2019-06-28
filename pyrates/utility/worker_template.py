@@ -123,12 +123,9 @@ def main(_):
 
     param_grid = pd.read_hdf(subgrid, key="subgrid")
 
-    # grid_search() can't handle additional columns in the parameter grid
-    try:
-        param_grid = param_grid.drop(['status', 'chunk_idx', 'err_count'], axis=1)
-    except KeyError:
-        pass
-
+    # Drop all columns that don't contain a parameter map value (e.g. status, chunk_idx, err_count) since grid_search()
+    # can't handle additional columns
+    param_grid = param_grid[list(param_map.keys())]
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     # Compute parameter subgrid using grid_search
@@ -137,6 +134,7 @@ def main(_):
     print("***COMPUTING PARAMETER GRID***")
     t0 = time.time()
 
+    backend = "numpy"
     # grid_search returns an unsorted DataFrame yielding results for all parameter combinations in param_grid
     results, _t, _ = grid_search(
         circuit_template=circuit_template,
@@ -150,11 +148,13 @@ def main(_):
         outputs={"r_i": ("I.0", "Op_i.0", "r"),
                  "r_e": ("E.0", "Op_e.0", "r")},
         init_kwargs={
-            'backend': 'tensorflow',
+            'backend': backend,
             'vectorization': 'nodes'
         },
         profile='t',
-        build_dir=build_dir)
+        build_dir=build_dir,
+        decorator=njit,
+        parallel=False)
 
     out_vars = results.columns.levels[-1]
 
@@ -202,21 +202,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default="/nobackup/spanien1/salomon/WorkerTestData/holgado_subgrid/test_config.json",
+        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_config.json',
         help="File to load grid_search configuration parameter from"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default="/nobackup/spanien1/salomon/WorkerTestData/holgado_subgrid/test_grid.h5",
+        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_grid.h5',
         help="File to load parameter grid from"
     )
 
     parser.add_argument(
         "--local_res_file",
         type=str,
-        default="/nobackup/spanien1/salomon/WorkerTestData/holgado_subgrid/test_result.h5",
+        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_result.h5',
         help="File to save results to"
     )
 
