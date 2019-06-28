@@ -29,17 +29,25 @@
 # system imports
 import os
 import sys
+import ast
 import json
 import time
 import argparse
+import warnings
 
 # external imports
+from numba import njit, config
 import numpy as np
 import pandas as pd
 from pyrates.utility.grid_search import grid_search
 
 
 def main(_):
+    config.THREADING_LAYER = 'omp'
+
+    # Disable general warnings
+    warnings.filterwarnings("ignore")
+
     # disable TF-gpu warnings
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     t_total = time.time()
@@ -53,6 +61,7 @@ def main(_):
     config_file = FLAGS.config_file
     subgrid = FLAGS.subgrid
     local_res_file = FLAGS.local_res_file
+    build_dir = FLAGS.build_dir
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
@@ -71,6 +80,7 @@ def main(_):
 
         # Optional parameters
         #####################
+        # sampling_step_size
         try:
             sampling_step_size = global_config_dict['sampling_step_size']
         except KeyError:
@@ -82,19 +92,26 @@ def main(_):
             backend = 'numpy'
 
         try:
-            inputs = global_config_dict['inputs']
+            inputs_temp = global_config_dict['inputs']
+            if inputs_temp:
+                inputs = {}
+                for key, value in inputs_temp.items():
+                    inputs[ast.literal_eval(key)] = list(value)
+            else:
+                inputs = {}
         except KeyError:
             inputs = {}
 
         try:
-            outputs = global_config_dict['outputs']
+            outputs_temp = global_config_dict['outputs']
+            if outputs_temp:
+                outputs = {}
+                for key, value in outputs_temp.items():
+                    outputs[str(key)] = tuple(value)
+            else:
+                outputs = {}
         except KeyError:
             outputs = {}
-
-        try:
-            init_kwargs = global_config_dict['init_kwargs']
-        except KeyError:
-            init_kwargs = {}
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
@@ -130,8 +147,12 @@ def main(_):
         sampling_step_size=sampling_step_size,
         permute_grid=False,
         inputs=inputs,
-        outputs=outputs,
-        init_kwargs=init_kwargs,
+        outputs={"r_i": ("I.0", "Op_i.0", "r"),
+                 "r_e": ("E.0", "Op_e.0", "r")},
+        init_kwargs={
+            'backend': 'tensorflow',
+            'vectorization': 'nodes'
+        },
         profile='t',
         build_dir=build_dir)
 
@@ -181,22 +202,29 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default="/nobackup/spanien1/salomon/CGS/Holgado/GeneticClusterFit_diseased_1/Config/DefaultConfig_3.json",
-        help="Config file with all necessary data to start grid_search() except for parameter grid"
+        default="/nobackup/spanien1/salomon/WorkerTestData/holgado_subgrid/test_config.json",
+        help="File to load grid_search configuration parameter from"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default="/nobackup/spanien1/salomon/CGS/Holgado/GeneticClusterFit_diseased_1/Grids/Subgrids/DefaultGrid_3/tiber/tiber_Subgrid_0.h5",
-        help="Path to csv-file with sub grid to compute on the remote machine"
+        default="/nobackup/spanien1/salomon/WorkerTestData/holgado_subgrid/test_grid.h5",
+        help="File to load parameter grid from"
     )
 
     parser.add_argument(
         "--local_res_file",
         type=str,
-        default="//data/hu_salomon/Documents/CGSWorkerTests/test/test_result.h5",
-        help="hdf5-file to save results to"
+        default="/nobackup/spanien1/salomon/WorkerTestData/holgado_subgrid/test_result.h5",
+        help="File to save results to"
+    )
+
+    parser.add_argument(
+        "--build_dir",
+        type=str,
+        default=os.getcwd(),
+        help="Custom PyRates build directory"
     )
 
     FLAGS = parser.parse_args()
