@@ -42,6 +42,66 @@ import pandas as pd
 from pyrates.utility.grid_search import grid_search
 
 
+def load_config(config_file):
+    with open(config_file) as g_conf:
+        config_dict = json.load(g_conf)
+
+    if 'sampling_step_size' not in config_dict.keys():
+        config_dict['sampling_step_size'] = config_dict['dt']
+
+    if 'backend' not in config_dict.keys():
+        config_dict['backend'] = 'numpy'
+
+    try:
+        inputs_temp = config_dict['inputs']
+        if inputs_temp:
+            inputs = {}
+            for key, value in inputs_temp.items():
+                inputs[ast.literal_eval(key)] = list(value)
+            config_dict['inputs'] = inputs
+        else:
+            config_dict['inputs'] = {}
+    except KeyError:
+        config_dict['inputs'] = {}
+
+    try:
+        outputs_temp = config_dict['outputs']
+        if outputs_temp:
+            outputs = {}
+            for key, value in outputs_temp.items():
+                outputs[str(key)] = tuple(value)
+            config_dict['outputs'] = outputs
+        else:
+            config_dict['outputs'] = {}
+    except KeyError:
+        config_dict['outputs'] = {}
+
+    return config_dict
+
+
+def run_grid_search(conf, param_grid, build_dir):
+    results, _t, _ = grid_search(
+        circuit_template=conf["circuit_template"],
+        param_grid=param_grid,
+        param_map=conf["param_map"],
+        simulation_time=conf["simulation_time"],
+        dt=conf["dt"],
+        sampling_step_size=conf["sampling_step_size"],
+        permute_grid=False,
+        inputs=conf["inputs"],
+        outputs=conf["outputs"],
+        init_kwargs={
+            'backend': conf['backend'],
+            'vectorization': 'nodes'
+        },
+        profile='t',
+        build_dir=build_dir,
+        decorator=njit,
+        parallel=False)
+
+    return results
+
+
 def main(_):
     config.THREADING_LAYER = 'omp'
 
@@ -71,47 +131,7 @@ def main(_):
     print("***LOADING GLOBAL CONFIG FILE***")
     t0 = time.time()
 
-    with open(config_file) as g_conf:
-        global_config_dict = json.load(g_conf)
-        circuit_template = global_config_dict['circuit_template']
-        param_map = global_config_dict['param_map']
-        dt = global_config_dict['dt']
-        simulation_time = global_config_dict['simulation_time']
-
-        # Optional parameters
-        #####################
-        # sampling_step_size
-        try:
-            sampling_step_size = global_config_dict['sampling_step_size']
-        except KeyError:
-            sampling_step_size = dt
-
-        try:
-            backend = global_config_dict['backend']
-        except KeyError:
-            backend = 'numpy'
-
-        try:
-            inputs_temp = global_config_dict['inputs']
-            if inputs_temp:
-                inputs = {}
-                for key, value in inputs_temp.items():
-                    inputs[ast.literal_eval(key)] = list(value)
-            else:
-                inputs = {}
-        except KeyError:
-            inputs = {}
-
-        try:
-            outputs_temp = global_config_dict['outputs']
-            if outputs_temp:
-                outputs = {}
-                for key, value in outputs_temp.items():
-                    outputs[str(key)] = tuple(value)
-            else:
-                outputs = {}
-        except KeyError:
-            outputs = {}
+    config_dict = load_config(config_file=config_file)
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
@@ -125,7 +145,7 @@ def main(_):
 
     # Drop all columns that don't contain a parameter map value (e.g. status, chunk_idx, err_count) since grid_search()
     # can't handle additional columns
-    param_grid = param_grid[list(param_map.keys())]
+    param_grid = param_grid[list(config_dict['param_map'].keys())]
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     # Compute parameter subgrid using grid_search
@@ -134,27 +154,7 @@ def main(_):
     print("***COMPUTING PARAMETER GRID***")
     t0 = time.time()
 
-    backend = "numpy"
-    # grid_search returns an unsorted DataFrame yielding results for all parameter combinations in param_grid
-    results, _t, _ = grid_search(
-        circuit_template=circuit_template,
-        param_grid=param_grid,
-        param_map=param_map,
-        simulation_time=simulation_time,
-        dt=dt,
-        sampling_step_size=sampling_step_size,
-        permute_grid=False,
-        inputs=inputs,
-        outputs={"r_i": ("I.0", "Op_i.0", "r"),
-                 "r_e": ("E.0", "Op_e.0", "r")},
-        init_kwargs={
-            'backend': backend,
-            'vectorization': 'nodes'
-        },
-        profile='t',
-        build_dir=build_dir,
-        decorator=njit,
-        parallel=False)
+    results = run_grid_search(conf=config_dict, param_grid=param_grid, build_dir=build_dir)
 
     out_vars = results.columns.levels[-1]
 
@@ -168,7 +168,6 @@ def main(_):
 
     with pd.HDFStore(local_res_file, "w") as store:
         for out_var in out_vars:
-            key = out_var.replace(".", "")
             res_lst = []
 
             # Order results according to rows in parameter grid
@@ -187,7 +186,7 @@ def main(_):
 
             # Write DataFrames to local result file
             ######################################
-            store.put(key=key, value=result_ordered)
+            store.put(key=out_var, value=result_ordered)
 
     # TODO: Copy local result file back to master if needed
 
