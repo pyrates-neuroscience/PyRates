@@ -145,7 +145,7 @@ class ComputeGraph(object):
             # noinspection PyTypeChecker
             primary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
             self.node_updates.append(self.backend.layer)
-            op_updates = self._add_ops(primary_ops, node_name=node_name, primary_ops=True)
+            self._add_ops(primary_ops, node_name=node_name, primary_ops=True)
             self.backend.next_layer()
 
             # remove parsed operators from graph
@@ -158,52 +158,14 @@ class ComputeGraph(object):
                 # noinspection PyTypeChecker
                 secondary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
                 self.node_updates.append(self.backend.layer)
-                op_updates = self._add_ops(secondary_ops, node_name=node_name, updates=op_updates, primary_ops=False)
+                self._add_ops(secondary_ops, node_name=node_name, primary_ops=False)
                 self.backend.next_layer()
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(secondary_ops)
 
-        # add layer that contains left-hand side equation updates
-        ########################################################
-
-        self.backend.top_layer()
-        node_names, op_names, var_names, var_updates = [], [], [], []
-
-        for node_name in self.net_config.nodes:
-            op_graph = self._get_node_attr(node_name, 'op_graph')
-            for op_name, op in op_graph.nodes.items():
-                for key_old, var in op['variables'].items():
-
-                    # check if variable is a state variable updated via a differential equation
-                    if '_old' in key_old:
-                        # extract variable name and values
-                        key_new = key_old.replace('_old', '')
-                        var_new = op['variables'][key_new]
-                        var_old = op['variables'][key_old]
-
-                        # define mapping equation and its arguments
-                        eq = f'{key_old} = {key_new}'
-                        args = {'inputs': {key_new: var_new}, 'vars': {key_old: var_old}}
-
-                        # parse mapping
-                        args = parse_equation_list([eq], args, backend=self.backend,
-                                                   scope=f"{self.name}/{node_name}/{op_name}")
-
-                        args.pop('lhs_evals')
-
-                        # add info to lists
-                        node_names.append(node_name)
-                        op_names.append(op_name)
-                        var_names.append(key_old)
-                        var_updates.append(args['vars'][key_old])
-
         # add layer to node updates
         self.node_updates.append(self.backend.layer)
-
-        # save control dependencies to network config
-        for node_name, op_name, var_name, var in zip(node_names, op_names, var_names, var_updates):
-            self._set_op_attr(node_name, op_name, var_name, var)
 
         # parse edges
         #############
@@ -216,7 +178,6 @@ class ComputeGraph(object):
         for source_node, target_node, edge_idx in self.net_config.edges:
             svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
             op, var = svar.split('/')
-            svar = self._get_op_attr(source_node, op, var)
             op_names.append(op)
             var_names.append(var)
             source_nodes.append(source_node)
@@ -258,30 +219,26 @@ class ComputeGraph(object):
             idx = "[source_idx]" if sidx else ""
             assign = '+=' if add_project else '='
             eq = f"target_var{d} {assign} source_var{idx} * weight"
-            args = {'vars': {}, 'inputs': {}}
-            args['vars']['weight'] = {'vtype': 'constant', 'dtype': svar.dtype, 'value': weight}
+            args = {}
+            args['weight'] = {'vtype': 'constant', 'dtype': svar.dtype, 'value': weight}
             if tidx:
-                args['vars']['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                               'value': np.array(tidx, dtype=np.int32)}
             if sidx:
-                args['vars']['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                               'value': np.array(sidx, dtype=np.int32)}
-            args['inputs']['target_var'] = tvar
-            args['inputs']['source_var'] = svar
+            args['target_var'] = tvar
+            args['source_var'] = svar
 
             # parse mapping
             args = parse_equation_list([eq], args, backend=self.backend,
                                        scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}")
 
-            args.pop('lhs_evals')
-
             # store information in network config
             edge = self.net_config.edges[source_node, target_node, edge_idx]
 
             # update edge attributes
-            edge.update(args['inputs'])
-            edge.update(args['vars'])
-            edge.update(args['updates'])
+            edge.update(args)
 
         self.edge_updates = [self.backend.layer] if self.backend.layers[self.backend.layer] else []
 
@@ -599,8 +556,7 @@ class ComputeGraph(object):
         """
         self.backend.clear()
 
-    def _add_ops(self, ops: List[str], node_name: str, updates: Optional[dict] = None, primary_ops: bool = False
-                 ) -> dict:
+    def _add_ops(self, ops: List[str], node_name: str, primary_ops: bool = False) -> None:
         """Adds a number of operations to the backend graph.
 
         Parameters
@@ -616,28 +572,23 @@ class ComputeGraph(object):
 
         Returns
         -------
-        dict
-            Key-value pairs of all operations currently parsed into the backend graph.
+        None
 
         """
 
         # set up update operation collector variable
-        if updates is None:
-            updates = {}
-        updates_new = {}
+        updates = {}
 
         # add operations of same hierarchical lvl to compute graph
         ############################################################
 
         for op_name in ops:
 
-            updates_new[op_name] = {}
+            updates[op_name] = {}
 
             # retrieve operator and operator args
-            op_args = dict()
-            op_args['vars'] = self._get_op_attr(node_name, op_name, 'variables')
-            op_args['vars']['dt'] = self._dt
-            op_args['inputs'] = {}
+            op_args = self._get_op_attr(node_name, op_name, 'variables')
+            op_args['dt'] = self._dt
             op_info = self._get_op_attr(node_name, op_name, 'operator')
 
             # handle operator inputs
@@ -702,23 +653,24 @@ class ComputeGraph(object):
                         in_ops = in_ops_col[0]
 
                     # add input variable to dictionary
-                    op_args['inputs'][var_name] = in_ops
+                    op_args[var_name] = in_ops
 
             # parse equations into tensorflow
             op_args = parse_equation_list(op_info['equations'], op_args, backend=self.backend,
                                           scope=f"{self.name}/{node_name}/{op_name}")
 
-            # store operator variables in net config
+            # store variables updates
+            for var_key, var_val in op_args.items():
+                updates[op_name][var_key] = var_val
+
+        # store variables updates in net_config
+        for op_name in updates:
             op_vars = self._get_op_attr(node_name, op_name, 'variables')
-            for var_key, var_val in op_args['vars'].items():
-                if var_key not in op_vars:
-                    op_vars[var_key] = var_val
+            for var_key, var_val in updates[op_name].items():
+                op_vars[var_key] = var_val
 
-            # store update ops in node update collector
-            for var in list(set(op_args['lhs_evals'])):
-                updates_new[op_name][var] = op_args['updates'][var]
-
-        return updates
+        # advance in backend layer
+        self.backend.next_layer()
 
     def _get_op_input(self, node: str, op: str, in_op: str, primary_ops: bool = False
                       ) -> Any:

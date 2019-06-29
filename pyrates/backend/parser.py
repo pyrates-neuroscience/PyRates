@@ -36,7 +36,6 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
 from numbers import Number
 import math
 import typing as tp
-import numpy as np
 
 # meta infos
 __author__ = "Richard Gast"
@@ -57,14 +56,8 @@ class ExpressionParser(ParserElement):
         Mathematical expression in string format.
     args
         Dictionary containing all variables and functions needed to evaluate the expression.
-    lhs
-        If True, parser will treat `expr_str` as left-hand side of an equation, if False as right-hand side.
-    solve
-        If True, the parser will treat the left hand side as a differential variable that needs to be integrated over
-        time.
-    assign_add
-        If True, the right hand side will be added to the current value of left hand side. If False, the left hand side
-        value will be replaced with the right hand side.
+    backend
+        Backend instance in which to parse all variables and operations.
     kwargs
         Additional keyword arguments to be passed to the backend functions.
 
@@ -100,8 +93,7 @@ class ExpressionParser(ParserElement):
 
     """
 
-    def __init__(self, expr_str: str, args: dict, backend, lhs: bool = False, solve=False, assign_add=False,
-                 **kwargs) -> None:
+    def __init__(self, expr_str: str, args: dict, backend: tp.Any, **kwargs) -> None:
         """Instantiates expression parser.
         """
 
@@ -114,26 +106,14 @@ class ExpressionParser(ParserElement):
         #############################
 
         # input arguments
-        self.lhs = lhs
-        self.args = args.copy()
+        self.vars = args.copy()
         self.backend = backend
         self.parser_kwargs = kwargs
-        self.solve = solve
-        self.assign = '+=' if assign_add else '='
-        self.constant_counter = 0
 
-        # check whether the all important fields exist in args
-        if 'updates' not in self.args.keys():
-            self.args['updates'] = {}
-        if 'vars' not in self.args.keys():
-            self.args['vars'] = {}
-        if 'inputs' not in self.args.keys():
-            self.args['inputs'] = {}
-        if 'lhs_evals' not in self.args.keys():
-            self.args['lhs_evals'] = []
+        self.lhs, self.rhs, self._diff_eq, self._assign_type, self.lhs_key = self._preprocess_expr_str(expr_str)
 
         # add functions from args dictionary to backend, if passed
-        for key, val in self.args.items():
+        for key, val in args.items():
             if callable(val):
                 self.backend.ops[key] = val
 
@@ -142,7 +122,8 @@ class ExpressionParser(ParserElement):
         self.expr = None
         self.expr_stack = []
         self.expr_list = []
-        self.expr_op = None
+        self.op = None
+        self._finished_rhs = False
 
         # define algebra
         ################
@@ -234,57 +215,42 @@ class ExpressionParser(ParserElement):
             factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self._push_first))
             self.expr << factor + ZeroOrMore((op_add + factor).setParseAction(self._push_first))
 
-        # extract symbols and operations from expression string
-        self.expr_list = self.expr.parseString(self.expr_str)
-
     def parse_expr(self):
         """Parses string-based expression.
         """
 
-        # check whether parsing was successful
-        expr_str = self.expr_str
-        for sub_str in sorted(self.expr_stack, key=len)[::-1]:
-            if sub_str == 'E':
-                sub_str = 'e'
-            expr_str = expr_str.replace(sub_str, "")
-        expr_str = expr_str.replace(" ", "")
-        expr_str = expr_str.replace("(", "")
-        expr_str = expr_str.replace(")", "")
-        expr_str = expr_str.replace("-", "")
-        if len(expr_str) > 0:
-            raise ValueError(f"Error while parsing expression: {self.expr_str}. {expr_str} could not be parsed.")
+        # extract symbols and operations from equations right-hand side
+        self.expr_list = self.expr.parseString(self.rhs)
+        self._check_parsed_expr(self.rhs)
 
-        # turn expression into operation
-        if self.lhs:
-            self.parse(self.expr_stack[:])
-        else:
-            self.args['rhs'] = self.parse(self.expr_stack[:])
+        # parse rhs into backend
+        rhs = self.parse(self.expr_stack[:])
 
-        return self.args
+        # create new variable for lhs update
+        name = f"{self.lhs_key}_update"
+        i = 0
+        name = f"{name}_{i}"
+        while name in self.vars:
+            i += 1
+            name[-1] = i
+        dtype = rhs.dtype if hasattr(rhs, 'dtype') else self.backend._float_def
+        shape = rhs.shape if hasattr(rhs, 'shape') else ()
+        delta = self.backend.add_var('state_var', name=name, dtype=dtype, shape=shape)
 
-    def _push_first(self, strg, loc, toks):
-        """Push tokens in first-to-last order to expression stack.
-        """
-        self.expr_stack.append(toks[0])
+        # assign rhs to new variable
+        self.backend.add_op('=', delta, rhs)
+        self.rhs = delta
+        self.clear()
+        self._finished_rhs = True
 
-    def _push_neg(self, strg, loc, toks):
-        """Push negative one multiplier if on first position in toks.
-        """
-        if toks and toks[0] == '-':
-            self.expr_stack.append('-one')
+        # extract symbols and operations from left-hand side
+        self.expr_list = self.expr.parseString(self.lhs)
+        self._check_parsed_expr(self.lhs)
 
-    def _push_neg_or_first(self, strg, loc, toks):
-        """Push all tokens to expression stack at once (first-to-last).
-        """
-        if toks and toks[0] == '-':
-            self.expr_stack.append('-one')
-        else:
-            self.expr_stack.append(toks[0])
+        # parse lhs into backend
+        self.lhs = self._update_lhs()
 
-    def _push_last(self, strg, loc, toks):
-        """Push tokens in last-to-first order to expression stack.
-        """
-        self.expr_stack.append(toks[-1])
+        return self.lhs, self.rhs, self.vars
 
     def parse(self, expr_stack: list) -> tp.Any:
         """Parse elements in expression stack to operation.
@@ -310,23 +276,36 @@ class ExpressionParser(ParserElement):
         if op == '-one':
 
             # multiply expression by minus one
-            #op1, op2 = self.backend.broadcast(self.parse(expr_stack), -1, **self.parser_kwargs)
-            self.expr_op = self.backend.add_op('*', self.parse(expr_stack), -1, **self.parser_kwargs)
+            self.op = self.backend.add_op('*', self.parse(expr_stack), -1, **self.parser_kwargs)
 
-        elif op in "+-**/^@<=>=!==":
+        elif op in ["*=", "/=", "+=", "-=", "="]:
+
+            # collect rhs
+            op1 = self.parse(expr_stack)
+
+            # collect lhs
+            indexed_lhs = True if "]" in expr_stack else False
+            op2 = self.parse(expr_stack)
+
+            # combine elements via mathematical/boolean operator
+            if indexed_lhs:
+                self.op = self._apply_idx(op=op2[0], idx=op2[1], update=op1, update_type=op, **self.parser_kwargs)
+            else:
+                self.op = self.backend.add_op(op, op2, op1, **self.parser_kwargs)
+
+        elif op in "+-/**^@<=>=!==":
 
             # collect elements to combine
             op2 = self.parse(expr_stack)
             op1 = self.parse(expr_stack)
 
             # combine elements via mathematical/boolean operator
-            #op1, op2 = self.backend.broadcast(op1, op2, **self.parser_kwargs)
-            self.expr_op = self.backend.add_op(op, op1, op2, **self.parser_kwargs)
+            self.op = self.backend.add_op(op, op1, op2, **self.parser_kwargs)
 
         elif ".T" == op or ".I" == op:
 
             # transpose/invert expression
-            self.expr_op = self.backend.add_op(op, self.parse(expr_stack), **self.parser_kwargs)
+            self.op = self.backend.add_op(op, self.parse(expr_stack), **self.parser_kwargs)
 
         elif op == "]":
 
@@ -342,18 +321,18 @@ class ExpressionParser(ParserElement):
                             int(expr_stack[-1])
                             index.append(expr_stack.pop())
                         except ValueError:
-                            lhs = self.lhs
-                            self.lhs = False
+                            tmp = self._finished_rhs
+                            self._finished_rhs = False
                             index.append(self.parse(expr_stack))
-                            self.lhs = lhs
+                            self._finished_rhs = tmp
                 indices.append(index[::-1])
                 if expr_stack[-1] == ",":
                     expr_stack.pop()
             expr_stack.pop()
 
             # build string-based representation of idx
-            if 'idx' not in self.args.keys():
-                self.args['idx'] = {}
+            if 'idx' not in self.vars.keys():
+                self.vars['idx'] = {}
             idx = ""
             i = 0
             for index in indices[::-1]:
@@ -363,91 +342,39 @@ class ExpressionParser(ParserElement):
                     elif isinstance(ind, Number):
                         idx += f"{ind}"
                     else:
-                        self.args['idx'][f'idx_var_{i}'] = ind
+                        self.vars['idx'][f'idx_var_{i}'] = ind
                         idx += f"idx_var_{i}"
                     i += 1
                 idx += ","
             idx = idx[0:-1]
 
-            # extract variable
-            if self.lhs:
-                op = expr_stack[-1]
-                if op in self.args['updates']:
-                    op_to_idx = self.args['updates'][op]
+            # extract variable and apply idx if its a rhs variable. Else return variable and index
+            if self._finished_rhs:
+                op = expr_stack.pop(-1)
+                if op in self.vars:
+                    op_to_idx = self.vars[op]
                 else:
-                    self.lhs = False
                     op_to_idx = self.parse([op])
-                    self.lhs = True
-                self.args['lhs_evals'].append(op)
+                self.op = (op_to_idx, idx)
             else:
                 op_to_idx = self.parse(expr_stack)
-
-            # apply index
-            op_idx = self.apply_idx(op_to_idx, idx, **self.parser_kwargs)
-            self.args['updates'][op] = op_idx
-            self.expr_op = op_idx
+                op_idx = self._apply_idx(op_to_idx, idx, **self.parser_kwargs)
+                self.op = op_idx
 
         elif op == "PI":
 
             # return float representation of pi
-            self.expr_op = math.pi
+            self.op = math.pi
 
         elif op == "E":
 
             # return float representation of e
-            self.expr_op = math.e
+            self.op = math.e
 
-        elif op in self.args['inputs']:
+        elif op in self.vars:
 
-            # extract input variable from args dict and move it to the vars collection
-            self.args['vars'][op] = self.args['inputs'].pop(op)
-            if self.lhs:
-                self.parse([op])
-            else:
-                self.expr_op = self.args['vars'][op]
-
-        elif op in self.args['vars']:
-
-            if self.lhs:
-
-                if self.solve:
-
-                    # parse dt
-                    self.lhs = False
-                    dt = self.parse(['dt'])
-                    self.lhs = True
-
-                    # get variables
-                    var = self.args['vars'][op]
-                    var_name = f'{op}_old'
-                    old_var = self.args['vars'][var_name]
-
-                    # calculate update of differential equation
-                    var_update = self.update(old_var, self.args.pop('rhs'), dt, **self.parser_kwargs)
-                    #var, var_update = self.backend.broadcast(var, var_update, **self.parser_kwargs)
-                    self.args['updates'][op] = self.backend.add_op(self.assign, var, var_update, **self.parser_kwargs)
-                    self.args['lhs_evals'].append(op)
-                    self.expr_op = self.args['updates'][op]
-
-                else:
-
-                    # update variable according to rhs
-                    var = self.args['updates'][op] if op in self.args['updates'] else self.args['vars'][op]
-                    #var, var_update = self.backend.broadcast(var, self.args.pop('rhs'), **self.parser_kwargs)
-                    self.args['updates'][op] = self.backend.add_op(self.assign, var, self.args.pop('rhs'),
-                                                                   **self.parser_kwargs)
-                    self.args['lhs_evals'].append(op)
-                    self.expr_op = self.args['updates'][op]
-
-            else:
-
-                # extract constant/variable from args dict
-                self.expr_op = self.args['vars'][f'{op}_old'] if f'{op}_old' in self.args['vars'] \
-                    else self.args['vars'][op]
-
-        elif op in self.args['updates']:
-
-            self.expr_op = self.args['updates'][op]
+            # extract constant/variable from args dict
+            self.op = self.vars[op]
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
@@ -455,7 +382,7 @@ class ExpressionParser(ParserElement):
 
             # extract data type
             try:
-                self.expr_op = self.backend.add_op('cast', self.parse(expr_stack), op[0:-1], **self.parser_kwargs)
+                self.op = self.backend.add_op('cast', self.parse(expr_stack), op[0:-1], **self.parser_kwargs)
             except AttributeError:
                 raise AttributeError(f"Datatype casting error in expression: {self.expr_str}. "
                                      f"{op[0:-1]} is not a valid data-type for this parser.")
@@ -476,9 +403,9 @@ class ExpressionParser(ParserElement):
             # apply function to arguments
             try:
                 if len(args) == 1:
-                    self.expr_op = self.backend.add_op(op[0:-1], args[0], **self.parser_kwargs)
+                    self.op = self.backend.add_op(op[0:-1], args[0], **self.parser_kwargs)
                 else:
-                    self.expr_op = self.backend.add_op(op[0:-1], *tuple(args[::-1]), **self.parser_kwargs)
+                    self.op = self.backend.add_op(op[0:-1], *tuple(args[::-1]), **self.parser_kwargs)
             except KeyError:
                 raise KeyError(
                     f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
@@ -500,40 +427,32 @@ class ExpressionParser(ParserElement):
                         break
                     else:
                         break
-                self.expr_op = args[::-1]
+                self.op = args[::-1]
 
             else:
 
-                self.expr_op = self.parse(expr_stack)
+                self.op = self.parse(expr_stack)
                 expr_stack.pop(-1)
 
         elif any([op == "True", op == "true", op == "False", op == "false"]):
 
             # return boolean
-            self.expr_op = True if op in "Truetrue" else False
+            self.op = True if op in "Truetrue" else False
 
         elif "." in op:
 
-            self.expr_op = float(op)
+            self.op = float(op)
 
         elif op.isnumeric():
 
-            self.expr_op = int(op)
+            self.op = int(op)
 
         elif op[0].isalpha():
 
-            if self.lhs:
+            if self._finished_rhs:
 
-                # add new variable to arguments that represents rhs op
-                rhs = self.args.pop('rhs')
-                shape = rhs.shape if rhs.shape else (1,)
-                new_var = self.backend.add_var(vtype='state_var', name=op, value=0.,
-                                               shape=shape, dtype=rhs.dtype, **self.parser_kwargs)
-                self.args['vars'][op] = new_var
-                #new_var, rhs = self.backend.broadcast(new_var, rhs, **self.parser_kwargs)
-                self.args['updates'][op] = self.backend.add_op(self.assign, new_var, rhs, **self.parser_kwargs)
-                self.args['lhs_evals'].append(op)
-                self.expr_op = self.args['updates'][op]
+                self.op = self.rhs
+                self.vars[op] = self.op
 
             else:
 
@@ -545,9 +464,187 @@ class ExpressionParser(ParserElement):
             raise ValueError(f"Undefined operation detected in expression: {self.expr_str}. {op} cannot be "
                              f"interpreted by this parser.")
 
-        return self.expr_op
+        return self.op
 
-    def apply_idx(self, op: tp.Any, idx: tp.Any, **kwargs) -> tuple:
+    def clear(self):
+        """Clears expression list and stack.
+        """
+        self.expr_list.clear()
+        self.expr_stack.clear()
+
+    def _update_lhs(self):
+        """Applies update to left-hand side of equation. For differential equations, different solving schemes are
+        available.
+        """
+
+        # extract update parameters
+        solver = self.parser_kwargs.pop('solver', 'euler')
+        diff_eq = self._diff_eq
+
+        # advance one backend layer
+        self.backend.next_layer()
+
+        # update left-hand side of equation
+        ###################################
+
+        if diff_eq:
+
+            if solver == 'euler':
+
+                # use explicit forward euler
+                op = self.parse(self.expr_stack + ['dt', 'rhs', '*', '+='])
+
+            # elif solver == 'rk23':
+            #
+            #     # use second-order runge-kutta solver
+            #     k1_col, k2_col, rhs_new = [], [], []
+            #     for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
+            #         k1_col.append(f"{lhs_var}_k1 = {rhs}")
+            #         k1_col.append(f"{lhs_var}_k1_added = ({lhs_var} + dt * {lhs_var}_k1 * 2/3)")
+            #         for lhs_var_tmp in lhs_var_col:
+            #             rhs = replace(rhs, lhs_var_tmp, f"{lhs_var_tmp}_k1_added")
+            #         k2_col.append(f"{lhs_var}_k2 = {rhs}")
+            #         k2_col.append(f"{lhs} += dt * (0.25 * {lhs_var}_k1 + 0.75 * {lhs_var}_k2)")
+            #     eqs_new = k1_col + k2_col
+
+            # elif solver == 'mp':
+            #
+            #     # use midpoint method
+            #     k1_col, k2_col, rhs_new = [], [], []
+            #     for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
+            #         k1_col.append(f"{lhs_var}_k1 = {rhs}")
+            #         k1_col.append(f"{lhs_var}_k1_added = ({lhs_var} + dt * {lhs_var}_k1 * 0.5)")
+            #         for lhs_var_tmp in lhs_var_col:
+            #             rhs = replace(rhs, lhs_var_tmp, f"{lhs_var_tmp}_k1_added")
+            #         k2_col.append(f"{lhs_var}_k2 = {rhs}")
+            #         k2_col.append(f"{lhs} += dt * {lhs_var}_k2")
+            #     eqs_new = k1_col + k2_col
+
+            else:
+
+                raise ValueError(f'Wrong solver type: {solver}. '
+                                 f'Please check the docstring of this function for available solvers.')
+
+        else:
+
+            op = self.parse(self.expr_stack + ['rhs', self._assign_type])
+
+        # reset backend layer
+        self.backend.previous_layer()
+
+        return op
+
+    def _preprocess_expr_str(self, expr: str) -> tuple:
+        """Turns differential equations into simple algebraic equations using a certain solver scheme and extracts
+        left-hand side, right-hand side and update type of the equation.
+
+        Parameters
+        ----------
+        expr
+            Equation in string format.
+
+        Returns
+        -------
+        tuple
+            Contains left hand side, right hand side and left hand side update type
+        """
+
+        assign_types = ['+=', '-=', '*=', '/=']
+        not_assign_types = ['<=', '>=', '==', '!=']
+
+        # collect equation specifics
+        ############################
+
+        # split equation into lhs and rhs and check lhs assign type
+        found_assign_type = False
+        for assign_type in assign_types:
+            if assign_type in expr:
+                if f' {assign_type} ' in expr:
+                    lhs, rhs = expr.split(f' {assign_type} ', maxsplit=1)
+                elif f' {assign_type}' in expr:
+                    lhs, rhs = expr.split(f' {assign_type}', maxsplit=1)
+                elif f'{assign_type} ' in expr:
+                    lhs, rhs = expr.split(f'{assign_type} ', maxsplit=1)
+                else:
+                    lhs, rhs = expr.split(assign_type, maxsplit=1)
+                found_assign_type = True
+                break
+            elif '=' in expr:
+                assign_type = '='
+                assign = True
+                for not_assign_type in not_assign_types:
+                    if not_assign_type in expr:
+                        expr_tmp = expr.replace(not_assign_type, '')
+                        if '=' not in expr_tmp:
+                            assign = False
+                if assign:
+                    if f' = ' in expr:
+                        lhs, rhs = expr.split(f' = ', maxsplit=1)
+                    elif f' {assign_type}' in expr:
+                        lhs, rhs = expr.split(f' =', maxsplit=1)
+                    elif f'{assign_type} ' in expr:
+                        lhs, rhs = expr.split(f'= ', maxsplit=1)
+                    else:
+                        lhs, rhs = expr.split(f"=", maxsplit=1)
+                    found_assign_type = True
+                    break
+
+        if not found_assign_type:
+            return self._preprocess_expr_str(f"x = {expr}")
+
+        # for the left-hand side, check whether it includes a differential operator
+        if "d/dt" in lhs:
+            diff_eq = True
+            lhs_split = lhs.split('*')
+            lhs = "".join(lhs_split[1:])
+        elif "'" in lhs:
+            diff_eq = True
+            lhs = lhs.replace("'", "")
+        elif "d" in lhs and "/dt" in lhs:
+            diff_eq = True
+            lhs = lhs.split('/dt')[0]
+            lhs = lhs.replace("d", "", count=1)
+        else:
+            diff_eq = False
+
+        # get clean name of lhs
+        lhs_key = lhs.split('[')[0]
+        lhs_key = lhs_key.replace(' ', '')
+        lhs = lhs.replace(' ', '')
+
+        # store equation specifics
+        if diff_eq and assign_type != '=':
+            raise ValueError(f'Wrong assignment method for equation: {expr}. '
+                             f'A differential equation cannot be combined with an assign type other than `=`.')
+
+        return lhs, rhs, diff_eq, assign_type, lhs_key
+
+    def _push_first(self, strg, loc, toks):
+        """Push tokens in first-to-last order to expression stack.
+        """
+        self.expr_stack.append(toks[0])
+
+    def _push_neg(self, strg, loc, toks):
+        """Push negative one multiplier if on first position in toks.
+        """
+        if toks and toks[0] == '-':
+            self.expr_stack.append('-one')
+
+    def _push_neg_or_first(self, strg, loc, toks):
+        """Push all tokens to expression stack at once (first-to-last).
+        """
+        if toks and toks[0] == '-':
+            self.expr_stack.append('-one')
+        else:
+            self.expr_stack.append(toks[0])
+
+    def _push_last(self, strg, loc, toks):
+        """Push tokens in last-to-first order to expression stack.
+        """
+        self.expr_stack.append(toks[-1])
+
+    def _apply_idx(self, op: tp.Any, idx: tp.Any, update: tp.Optional[tp.Any] = None,
+                   update_type: tp.Optional[str] = None, **kwargs) -> tp.Any:
         """Apply index idx to operation op.
 
         Parameters
@@ -556,6 +653,10 @@ class ExpressionParser(ParserElement):
             Operation to be indexed.
         idx
             Index to op.
+        update
+            Update to apply to op at idx.
+        update_type
+            Type of left-hand side update (e.g. `=` or `+=`).
         kwargs
             Additional keyword arguments to be passed to the indexing functions.
 
@@ -568,27 +669,19 @@ class ExpressionParser(ParserElement):
 
         kwargs.update(self.parser_kwargs)
 
-        # do some initial checks
-        if self.lhs and self.solve:
-            raise ValueError(f'Indexing of differential equations is currently not supported. Please consider '
-                             f'changing equation {self.expr_str}.')
-
-        # get update
-        update = self.args.pop('rhs', None)
-
         # get constants/variables that are part of the index
         args = []
         i = 0
-        if idx in self.args['idx']:
-            idx = self.args['idx'].pop(idx)
+        if idx in self.vars['idx']:
+            idx = self.vars['idx'].pop(idx)
         if type(idx) is str:
             idx_old = idx
             idx = []
             for idx_tmp in idx_old.split(','):
                 for idx_tmp2 in idx_tmp.split(':'):
                     idx.append(idx_tmp2)
-                    if idx_tmp2 in self.args['idx']:
-                        idx_var = self.args['idx'].pop(idx_tmp2)
+                    if idx_tmp2 in self.vars['idx']:
+                        idx_var = self.vars['idx'].pop(idx_tmp2)
                         if not hasattr(idx_var, 'short_name'):
                             idx_var.short_name = idx_tmp2
                             i += 1
@@ -601,28 +694,36 @@ class ExpressionParser(ParserElement):
             idx.pop(-1)
             idx = "".join(idx)
 
-        return self.backend.apply_idx(op, idx, update, *tuple(args))
+        return self.backend.apply_idx(op, idx, update, update_type, *tuple(args))
 
-    def update(self, var_old, var_delta, dt, **kwargs):
-        """Solves single step of a differential equation.
+    def _check_parsed_expr(self, expr_str) -> None:
+        """check whether parsing of expression string was successful.
 
         Parameters
         ----------
-        var_old
-        var_delta
-        dt
-        kwargs
-
-        Returns
-        -------
-
+        expr_str
+            Expression that has been attempted to be parsed.
         """
+        expr_str
+        for sub_str in sorted(self.expr_stack, key=len)[::-1]:
+            if sub_str == 'E':
+                sub_str = 'e'
+            expr_str = expr_str.replace(sub_str, "")
+        expr_str = expr_str.replace(" ", "")
+        expr_str = expr_str.replace("(", "")
+        expr_str = expr_str.replace(")", "")
+        expr_str = expr_str.replace("-", "")
+        if len(expr_str) > 0:
+            raise ValueError(f"Error while parsing expression: {self.expr_str}. {expr_str} could not be parsed.")
 
-        kwargs.update(self.parser_kwargs)
-        var_delta, dt = self.backend.broadcast(var_delta, dt, **kwargs)
-        var_update = self.backend.add_op('*', var_delta, dt, **kwargs)
-        #var_old, var_update = self.backend.broadcast(var_old, var_update, **kwargs)
-        return self.backend.add_op('+', var_old, var_update, **kwargs)
+    @staticmethod
+    def _compare(x, y):
+        """Checks whether x and y are equal or not.
+        """
+        test = x == y
+        if hasattr(test, 'shape'):
+            test = test.any()
+        return test
 
 
 def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
@@ -646,102 +747,30 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
         equation parsing).
 
     """
-
-    # preprocess equations and equation arguments
-    #############################################
-
-    if 'inputs' not in equation_args:
-        equation_args['inputs'] = {}
-
-    # preprocess equations
-    left_hand_sides, right_hand_sides, update_types = preprocess_equations(equations, solver='euler')
+    updates = {}
 
     # go through pre-processed equations and add new variables for old values of state variables
-    for lhs in left_hand_sides:
+    for eq in equations:
 
-        # get key of lhs variable
-        lhs_var = lhs.split('[')[0]
-        lhs_var = lhs_var.replace(' ', '')
+        # parse arguments
+        #################
 
-        # see whether lhs variable is a state variable. If yes, add variable to argument dictionary (for old value)
-        for key, var in equation_args['vars'].copy().items():
-            if key == lhs_var and '_old' not in key:
-                if type(var) is dict:
-                    var_dict = var.copy()
-                    if 'value' in var_dict and hasattr(var_dict['value'], 'shape'):
-                        var_dict['value'] = np.asarray(var_dict['value'].tolist())
-                elif callable(var):
-                    var_tmp = var()
-                    var_dict = {'vtype': 'state_var',
-                                'dtype': var_tmp.dtype,
-                                'shape': var_tmp.shape,
-                                'value': 0.}
-                else:
-                    var_dict = {'vtype': 'state_var',
-                                'dtype': var.dtype,
-                                'shape': var.shape,
-                                'value': 0.}
-                equation_args['vars'].update(parse_dict({f'{key}_old': var_dict}, backend=backend, **kwargs))
+        args_tmp = {}
+        for key, arg in equation_args.items():
+            if type(arg) is dict and 'vtype' in arg.keys():
+                args_tmp[key] = arg
+        args_tmp = parse_dict(args_tmp, backend, **kwargs)
+        equation_args.update(args_tmp)
 
-    # parse equations
-    #################
+        # parse equation
+        ################
 
-    for lhs, rhs, add_assign in zip(left_hand_sides, right_hand_sides, update_types):
-        equation_args = parse_equation(lhs, rhs, equation_args, backend, assign_add=add_assign, **kwargs)
+        parser = ExpressionParser(expr_str=eq, args=equation_args, backend=backend, **kwargs)
+        parser.parse_expr()
 
-    return equation_args
+        updates[parser.lhs_key] = parser.vars[parser.lhs_key]
 
-
-def parse_equation(lhs: str, rhs: str, equation_args: dict, backend: tp.Any, solve: bool = False,
-                   assign_add: bool = False, **kwargs) -> dict:
-    """Parses lhs and rhs of an equation.
-
-    Parameters
-    ----------
-    lhs
-        Left hand side of an equation.
-    rhs
-        Right hand side of an equation.
-    equation_args
-        Dictionary containing all variables and functions needed to evaluate the expression.
-    backend
-        Backend instance to parse the equation into.
-    solve
-        If true, the left hand side will be treated as a differential variable that needs to be integrated over time.
-    assign_add
-        If true, the right hand side will be added to the current value of the left hand side instead of replacing it.
-    kwargs
-        Additional keyword arguments to be passed to the backend.
-
-    Returns
-    -------
-    dict
-        The updated equation_args dictionary (variables were manipulated in place during equation parsing).
-
-    """
-
-    # parse arguments
-    #################
-
-    args_tmp = {}
-    for key, arg in equation_args['vars'].items():
-        if type(arg) is dict and 'vtype' in arg.keys():
-            args_tmp[key] = arg
-    args_tmp = parse_dict(args_tmp, backend, **kwargs)
-    equation_args['vars'].update(args_tmp)
-
-    # parse equation
-    ################
-
-    # parse rhs
-    rhs_parser = ExpressionParser(expr_str=rhs, args=equation_args, backend=backend, **kwargs)
-    equation_args = rhs_parser.parse_expr()
-
-    # parse lhs
-    lhs_parser = ExpressionParser(expr_str=lhs, args=equation_args, lhs=True, solve=solve, backend=backend,
-                                  assign_add=assign_add, **kwargs)
-
-    return lhs_parser.parse_expr()
+    return updates
 
 
 def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
@@ -779,117 +808,6 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
             var_dict_new[var_name] = backend.add_var(name=var_name, **var)
 
     return var_dict_new
-
-
-def preprocess_equations(eqs: list, solver: str) -> tuple:
-    """Turns differential equations into simple algebraic equations using a certain solver scheme.
-
-    Parameters
-    ----------
-    eqs
-        Collection of equations to be pre-processed.
-    solver
-        Type of the solver.
-
-    Returns
-    -------
-    tuple
-        Contains left hand sides, right hand sides and left hand side update modes (= or +=)
-    """
-
-    # collect equation specifics
-    ############################
-
-    lhs_col, rhs_col, add_assign_col = [], [], []
-    de_lhs_col, de_rhs_col, lhs_var_col = [], [], []
-
-    for eq in eqs:
-
-        # split equation into lhs and rhs and check update type
-        if ' += ' in eq:
-            lhs, rhs = eq.split(' += ')
-            add_assign = True
-        else:
-            lhs, rhs = eq.split(' = ')
-            add_assign = False
-
-        # for the left-hand side, check whether it includes a differential operator
-        if "d/dt" in lhs:
-            diff_eq = True
-            lhs_split = lhs.split('*')
-            lhs = "".join(lhs_split[1:])
-        else:
-            diff_eq = False
-
-        # get key of lhs variable
-        lhs_var = lhs.split('[')[0]
-        lhs_var = lhs_var.replace(' ', '')
-
-        # store equation specifics
-        if diff_eq:
-            if add_assign:
-                raise ValueError(f'Wrong assignment method for equation: {eq}. '
-                                 f'A differential equation cannot be combined with a `+=` assign.')
-            de_lhs_col.append(lhs)
-            de_rhs_col.append(rhs)
-            lhs_var_col.append(lhs_var)
-        else:
-            lhs_col.append(lhs)
-            rhs_col.append(rhs)
-            add_assign_col.append(add_assign)
-
-    # solve differential equations
-    ##############################
-
-    eqs_new = []
-
-    if solver == 'euler':
-
-        # use explicit forward euler
-        for lhs, rhs in zip(de_lhs_col, de_rhs_col):
-            eqs_new.append(f"{lhs} += dt * ({rhs})")
-
-    elif solver == 'rk23':
-
-        # use second-order runge-kutta solver
-        k1_col, k2_col, rhs_new = [], [], []
-        for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
-            k1_col.append(f"{lhs_var}_k1 = {rhs}")
-            k1_col.append(f"{lhs_var}_k1_added = ({lhs_var} + dt * {lhs_var}_k1 * 2/3)")
-            for lhs_var_tmp in lhs_var_col:
-                rhs = replace(rhs, lhs_var_tmp, f"{lhs_var_tmp}_k1_added")
-            k2_col.append(f"{lhs_var}_k2 = {rhs}")
-            k2_col.append(f"{lhs} += dt * (0.25 * {lhs_var}_k1 + 0.75 * {lhs_var}_k2)")
-        eqs_new = k1_col + k2_col
-
-    elif solver == 'mp':
-
-        # use midpoint method
-        k1_col, k2_col, rhs_new = [], [], []
-        for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
-            k1_col.append(f"{lhs_var}_k1 = {rhs}")
-            k1_col.append(f"{lhs_var}_k1_added = ({lhs_var} + dt * {lhs_var}_k1 * 0.5)")
-            for lhs_var_tmp in lhs_var_col:
-                rhs = replace(rhs, lhs_var_tmp, f"{lhs_var_tmp}_k1_added")
-            k2_col.append(f"{lhs_var}_k2 = {rhs}")
-            k2_col.append(f"{lhs} += dt * {lhs_var}_k2")
-        eqs_new = k1_col + k2_col
-
-    else:
-
-        raise ValueError(f'Wrong solver type: {solver}. '
-                         f'Please check the docstring of this function for available solvers.')
-
-    # preprocess the newly added differential equation updates
-    ##########################################################
-
-    if eqs_new:
-        lhs_tmp, rhs_tmp, add_assign_tmp = preprocess_equations(eqs_new, solver)
-        lhs_col += lhs_tmp
-        rhs_col += rhs_tmp
-        add_assign_col += add_assign_tmp
-
-    return lhs_col, rhs_col, add_assign_col
 
 
 def replace(eq: str, term: str, replacement: str) -> str:
