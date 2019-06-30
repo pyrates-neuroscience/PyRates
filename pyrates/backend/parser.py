@@ -36,6 +36,7 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
 from numbers import Number
 import math
 import typing as tp
+from copy import deepcopy
 
 # meta infos
 __author__ = "Richard Gast"
@@ -494,32 +495,6 @@ class ExpressionParser(ParserElement):
                 # use explicit forward euler
                 op = self.parse(self.expr_stack + ['dt', 'rhs', '*', '+='])
 
-            # elif solver == 'rk23':
-            #
-            #     # use second-order runge-kutta solver
-            #     k1_col, k2_col, rhs_new = [], [], []
-            #     for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
-            #         k1_col.append(f"{lhs_var}_k1 = {rhs}")
-            #         k1_col.append(f"{lhs_var}_k1_added = ({lhs_var} + dt * {lhs_var}_k1 * 2/3)")
-            #         for lhs_var_tmp in lhs_var_col:
-            #             rhs = replace(rhs, lhs_var_tmp, f"{lhs_var_tmp}_k1_added")
-            #         k2_col.append(f"{lhs_var}_k2 = {rhs}")
-            #         k2_col.append(f"{lhs} += dt * (0.25 * {lhs_var}_k1 + 0.75 * {lhs_var}_k2)")
-            #     eqs_new = k1_col + k2_col
-
-            # elif solver == 'mp':
-            #
-            #     # use midpoint method
-            #     k1_col, k2_col, rhs_new = [], [], []
-            #     for lhs, rhs, lhs_var in zip(de_lhs_col, de_rhs_col, lhs_var_col):
-            #         k1_col.append(f"{lhs_var}_k1 = {rhs}")
-            #         k1_col.append(f"{lhs_var}_k1_added = ({lhs_var} + dt * {lhs_var}_k1 * 0.5)")
-            #         for lhs_var_tmp in lhs_var_col:
-            #             rhs = replace(rhs, lhs_var_tmp, f"{lhs_var_tmp}_k1_added")
-            #         k2_col.append(f"{lhs_var}_k2 = {rhs}")
-            #         k2_col.append(f"{lhs} += dt * {lhs_var}_k2")
-            #     eqs_new = k1_col + k2_col
-
             else:
 
                 raise ValueError(f'Wrong solver type: {solver}. '
@@ -549,47 +524,13 @@ class ExpressionParser(ParserElement):
             Contains left hand side, right hand side and left hand side update type
         """
 
-        assign_types = ['+=', '-=', '*=', '/=']
-        not_assign_types = ['<=', '>=', '==', '!=']
-
         # collect equation specifics
         ############################
 
-        # split equation into lhs and rhs and check lhs assign type
-        found_assign_type = False
-        for assign_type in assign_types:
-            if assign_type in expr:
-                if f' {assign_type} ' in expr:
-                    lhs, rhs = expr.split(f' {assign_type} ', maxsplit=1)
-                elif f' {assign_type}' in expr:
-                    lhs, rhs = expr.split(f' {assign_type}', maxsplit=1)
-                elif f'{assign_type} ' in expr:
-                    lhs, rhs = expr.split(f'{assign_type} ', maxsplit=1)
-                else:
-                    lhs, rhs = expr.split(assign_type, maxsplit=1)
-                found_assign_type = True
-                break
-            elif '=' in expr:
-                assign_type = '='
-                assign = True
-                for not_assign_type in not_assign_types:
-                    if not_assign_type in expr:
-                        expr_tmp = expr.replace(not_assign_type, '')
-                        if '=' not in expr_tmp:
-                            assign = False
-                if assign:
-                    if f' = ' in expr:
-                        lhs, rhs = expr.split(f' = ', maxsplit=1)
-                    elif f' {assign_type}' in expr:
-                        lhs, rhs = expr.split(f' =', maxsplit=1)
-                    elif f'{assign_type} ' in expr:
-                        lhs, rhs = expr.split(f'= ', maxsplit=1)
-                    else:
-                        lhs, rhs = expr.split(f"=", maxsplit=1)
-                    found_assign_type = True
-                    break
+        # split equation into lhs and rhs and assign type
+        lhs, rhs, assign_type = split_equation(expr)
 
-        if not found_assign_type:
+        if not assign_type:
             return self._preprocess_expr_str(f"x = {expr}")
 
         # for the left-hand side, check whether it includes a differential operator
@@ -747,9 +688,49 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
         equation parsing).
 
     """
+
+    updates = {}
+    solver = kwargs.pop('solver', 'euler')
+    update_num = 0
+
+    if solver == 'midpoint':
+
+        if any(['/dt' in eq or "'" in eq for eq in equations]):
+            update_num += 1
+            dt_tmp = equation_args['dt']
+            equation_args['dt'] = dt_tmp/2
+            state_vars = {key: var for key, var in equation_args.items()
+                          if ((type(var) is dict) and (var['vtype'] == 'state_var'))}
+            equations_tmp, state_vars = update_lhs(equations.copy(), state_vars, update_num)
+            equation_args.update(state_vars)
+            updates = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend, **kwargs)
+            equation_args['dt'] = dt_tmp
+            backend.next_layer()
+            backend.next_layer()
+
+    equations, updates = update_rhs(equations, updates, update_num, "(var_placeholder + update_placeholder)")
+    equation_args.update(updates)
+    updates = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
+
+    return updates
+
+
+def parse_equations(equations, equation_args, backend, **kwargs) -> dict:
+    """
+
+    Parameters
+    ----------
+    equations
+    equation_args
+    backend
+
+    Returns
+    -------
+    dict
+
+    """
     updates = {}
 
-    # go through pre-processed equations and add new variables for old values of state variables
     for eq in equations:
 
         # parse arguments
@@ -771,6 +752,64 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
         updates[parser.lhs_key] = parser.vars[parser.lhs_key]
 
     return updates
+
+
+def update_rhs(equations: list, equation_args: dict, update_num: int, update_str: str) -> tuple:
+    """
+
+    Parameters
+    ----------
+    equations
+    equation_args
+    update_num
+    update_str
+
+    Returns
+    -------
+    tuple
+
+    """
+    updated_args = {}
+    while equation_args:
+        key, arg = equation_args.popitem()
+        if f"_upd_{update_num}" in key:
+            key = key.replace(f"_upd_{update_num}", "")
+        new_key = f"{key}_upd_{update_num}"
+        for i, eq in enumerate(equations.copy()):
+            lhs, rhs, assign = split_equation(eq)
+            replace_str = update_str.replace('update_placeholder', new_key)
+            replace_str = replace_str.replace('var_placeholder', key)
+            rhs = replace(rhs, key, replace_str)
+            equations[i] = f"{lhs} {assign} {rhs}"
+        updated_args[new_key] = arg
+    return equations, updated_args
+
+
+def update_lhs(equations: list, equation_args: dict, update_num: int) -> tuple:
+    """
+
+    Parameters
+    ----------
+    equations
+    equation_args
+    update_num
+
+    Returns
+    -------
+    tuple
+
+    """
+    updated_args = {}
+    while equation_args:
+        key, arg = equation_args.popitem()
+        new_key = f"{key}_upd_{update_num}"
+        for i, eq in enumerate(equations.copy()):
+            lhs, rhs, _ = split_equation(eq)
+            if key in lhs:
+                lhs = new_key
+                equations[i] = f"{lhs} = dt * ({rhs})"
+        updated_args[new_key] = arg
+    return equations, updated_args
 
 
 def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
@@ -808,6 +847,57 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
             var_dict_new[var_name] = backend.add_var(name=var_name, **var)
 
     return var_dict_new
+
+
+def split_equation(expr):
+    """
+
+    Parameters
+    ----------
+    expr
+
+    Returns
+    -------
+
+    """
+    assign_types = ['+=', '-=', '*=', '/=']
+    not_assign_types = ['<=', '>=', '==', '!=']
+    found_assign_type = False
+    for assign_type in assign_types:
+        if assign_type in expr:
+            if f' {assign_type} ' in expr:
+                lhs, rhs = expr.split(f' {assign_type} ', maxsplit=1)
+            elif f' {assign_type}' in expr:
+                lhs, rhs = expr.split(f' {assign_type}', maxsplit=1)
+            elif f'{assign_type} ' in expr:
+                lhs, rhs = expr.split(f'{assign_type} ', maxsplit=1)
+            else:
+                lhs, rhs = expr.split(assign_type, maxsplit=1)
+            found_assign_type = True
+            break
+        elif '=' in expr:
+            assign_type = '='
+            assign = True
+            for not_assign_type in not_assign_types:
+                if not_assign_type in expr:
+                    expr_tmp = expr.replace(not_assign_type, '')
+                    if '=' not in expr_tmp:
+                        assign = False
+            if assign:
+                if f' = ' in expr:
+                    lhs, rhs = expr.split(f' = ', maxsplit=1)
+                elif f' {assign_type}' in expr:
+                    lhs, rhs = expr.split(f' =', maxsplit=1)
+                elif f'{assign_type} ' in expr:
+                    lhs, rhs = expr.split(f'= ', maxsplit=1)
+                else:
+                    lhs, rhs = expr.split(f"=", maxsplit=1)
+                found_assign_type = True
+                break
+
+    if not found_assign_type:
+        return lhs, rhs, False
+    return lhs, rhs, assign_type
 
 
 def replace(eq: str, term: str, replacement: str) -> str:

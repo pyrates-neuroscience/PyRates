@@ -66,8 +66,10 @@ class ComputeGraph(object):
     build_in_place
         If False, a copy of the `net_config``will be made before compute graph creation. Should be used, if the
         `net_config` will be re-used for multiple compute graphs.
-    use_device
-        Can be either `cpu` or `gpu`. Device placement will be soft.
+    backend
+        Backend in which to build the compute graph.
+    solver
+        Numerical solver to use for differential equations.
 
     """
 
@@ -78,6 +80,7 @@ class ComputeGraph(object):
                  name: Optional[str] = 'net0',
                  build_in_place: bool = True,
                  backend: str = 'numpy',
+                 solver: str = 'euler',
                  float_precision: str = 'float32',
                  **kwargs
                  ) -> None:
@@ -107,6 +110,7 @@ class ComputeGraph(object):
         kwargs['name'] = self.name
         kwargs['float_default_type'] = self._float_precision
         self.backend = backend(**kwargs)
+        self.solver = solver
 
         # pre-process the network configuration
         self.dt = dt
@@ -231,7 +235,7 @@ class ComputeGraph(object):
             args['source_var'] = svar
 
             # parse mapping
-            args = parse_equation_list([eq], args, backend=self.backend,
+            args = parse_equation_list([eq], args, backend=self.backend, solver=self.solver,
                                        scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}")
 
             # store information in network config
@@ -656,7 +660,7 @@ class ComputeGraph(object):
                     op_args[var_name] = in_ops
 
             # parse equations into tensorflow
-            op_args = parse_equation_list(op_info['equations'], op_args, backend=self.backend,
+            op_args = parse_equation_list(op_info['equations'], op_args, backend=self.backend, solver=self.solver,
                                           scope=f"{self.name}/{node_name}/{op_name}")
 
             # store variables updates

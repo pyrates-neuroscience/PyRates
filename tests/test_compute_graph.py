@@ -105,7 +105,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         results = net.run(sim_time, inputs={('pop0.0', 'op1.0', 'u'): inp}, outputs={'a': ('pop0.0', 'op1.0', 'a')})
-        #net.clear()
+        net.clear()
 
         # calculate operator behavior from hand
         update1 = lambda x, y: x + dt*(y-x)
@@ -123,6 +123,7 @@ def test_2_1_operator():
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
         results = net.run(sim_time, outputs={'a': ('pop0.0', 'op2.0', 'a')})
         net.clear()
+
         # calculate operator behavior from hand
         update2 = lambda x: 1./(1. + np.exp(-x))
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
