@@ -125,6 +125,7 @@ class ExpressionParser(ParserElement):
         self.expr_list = []
         self.op = None
         self._finished_rhs = False
+        self.rhs_eval = None
 
         # define algebra
         ################
@@ -240,6 +241,7 @@ class ExpressionParser(ParserElement):
 
         # assign rhs to new variable
         self.backend.add_op('=', delta, rhs)
+        self.rhs_eval = rhs
         self.rhs = delta
         self.clear()
         self._finished_rhs = True
@@ -612,7 +614,6 @@ class ExpressionParser(ParserElement):
 
         # get constants/variables that are part of the index
         args = []
-        i = 0
         if idx in self.vars['idx']:
             idx = self.vars['idx'].pop(idx)
         if type(idx) is str:
@@ -624,11 +625,12 @@ class ExpressionParser(ParserElement):
                     if idx_tmp2 in self.vars['idx']:
                         idx_var = self.vars['idx'].pop(idx_tmp2)
                         if not hasattr(idx_var, 'short_name'):
-                            idx_var.short_name = idx_tmp2
-                            i += 1
+                            if hasattr(idx_var, 'shape') and tuple(idx_var.shape):
+                                idx_var = idx_var[0]
+                            idx[-1] = f"{idx_var}"
                         else:
                             idx[-1] = idx_var.short_name
-                        args.append(idx_var)
+                            args.append(idx_var)
                     idx.append(':')
                 idx.pop(-1)
                 idx.append(',')
@@ -862,7 +864,7 @@ def split_equation(expr):
     """
     assign_types = ['+=', '-=', '*=', '/=']
     not_assign_types = ['<=', '>=', '==', '!=']
-    found_assign_type = False
+    lhs, rhs, assign_type, found_assign_type = "", "", "", False
     for assign_type in assign_types:
         if assign_type in expr:
             if f' {assign_type} ' in expr:

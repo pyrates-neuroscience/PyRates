@@ -1773,7 +1773,7 @@ class NumpyBackend(object):
                 return True
             elif len(op1.shape) > 1 and len(op2.shape) > 1:
                 return True
-            elif len(op1.shape) == 0 or len(op2.shape) == 0:
+            elif len(op1.shape) == 0 and len(op2.shape) == 0:
                 return True
             else:
                 return False
