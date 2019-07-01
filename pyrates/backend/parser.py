@@ -698,21 +698,87 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
     if solver == 'midpoint':
 
         if any(['/dt' in eq or "'" in eq for eq in equations]):
+
+            # first rhs evaluation
             update_num += 1
             dt_tmp = equation_args['dt']
             equation_args['dt'] = dt_tmp/2
             state_vars = {key: var for key, var in equation_args.items()
                           if ((type(var) is dict) and (var['vtype'] == 'state_var'))}
-            equations_tmp, state_vars = update_lhs(equations.copy(), state_vars, update_num)
+            equations_tmp, state_vars = update_lhs(equations.copy(), state_vars, update_num, 'dt', {})
             equation_args.update(state_vars)
             updates = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend, **kwargs)
             equation_args['dt'] = dt_tmp
             backend.next_layer()
             backend.next_layer()
 
-    equations, updates = update_rhs(equations, updates, update_num, "(var_placeholder + update_placeholder)")
-    equation_args.update(updates)
-    updates = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
+            # second rhs evaluation + combination of the two
+            equations, updates = update_rhs(equations, updates, update_num, "(var_placeholder + update_placeholder)")
+            equation_args.update(updates)
+            updates = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
+
+    elif solver == 'rk23':
+
+        if any(['/dt' in eq or "'" in eq for eq in equations]):
+
+            # first rhs evaluation
+            update_num += 1
+            state_vars = {key: var for key, var in equation_args.items()
+                          if ((type(var) is dict) and (var['vtype'] == 'state_var'))}
+            state_vars_orig = dict(state_vars.items())
+            equations_tmp, state_vars = update_lhs(equations.copy(), state_vars, update_num, "", state_vars_orig)
+            for var_orig in state_vars_orig.copy().keys():
+                if not any([var_orig in var for var in state_vars]):
+                    state_vars_orig.pop(var_orig)
+            equation_args.update(state_vars)
+            updates = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend, **kwargs)
+            backend.next_layer()
+            backend.next_layer()
+
+            # second rhs evaluation
+            equations_tmp, updates_new = update_rhs(equations.copy(), updates, update_num,
+                                                    "(var_placeholder + 0.5*dt*update_placeholder)")
+            updates.update(updates_new)
+            state_vars = {key: var for key, var in equation_args.items()
+                          if any([orig_key in key for orig_key in state_vars_orig])}
+            update_num += 1
+            equations_tmp, state_vars = update_lhs(equations_tmp, state_vars, update_num, "", state_vars_orig)
+            equation_args.update(state_vars)
+            updates_new = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend,
+                                          **kwargs)
+            updates.update(updates_new)
+            backend.next_layer()
+            backend.next_layer()
+
+            # third rhs evaluation
+            equations, updates_new = update_rhs(equations, updates, update_num,
+                                                "(var_placeholder - dt*var_placeholder_1 + 2.0*dt*update_placeholder)")
+            updates.update(updates_new)
+            state_vars = {key: var for key, var in equation_args.items()
+                          if any([orig_key in key for orig_key in state_vars_orig])}
+            update_num += 1
+            equations, state_vars = update_lhs(equations, state_vars, update_num, "", state_vars_orig)
+            equation_args.update(state_vars)
+            updates_new = parse_equations(equations=equations, equation_args=equation_args, backend=backend,
+                                          **kwargs)
+            updates.update(updates_new)
+            backend.next_layer()
+            backend.next_layer()
+
+            # combination of 3 rhs evaluations a'la rk23
+            equation_args.update(updates)
+            equations = [f'{var} += dt * ({var}_upd_1/6. + 2.*{var}_upd_2/3. + {var}_upd_3/6.)'
+                         for var in state_vars_orig]
+            updates = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
+
+    elif solver == 'euler':
+
+        updates = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
+
+    else:
+
+        valid_solvers = ['euler', 'midpoint', 'rk23']
+        raise ValueError(f'Invalid solver: {solver}. Valid differential equation solvers are: {valid_solvers}.')
 
     return updates
 
@@ -771,23 +837,45 @@ def update_rhs(equations: list, equation_args: dict, update_num: int, update_str
     tuple
 
     """
+
+    # collect variable updates from earlier rhs evaluations
+    var_updates = {}
+    for key, arg in equation_args.items():
+        if f"_upd_{update_num}" in key:
+            key = key.replace(f"_upd_{update_num}", "")
+        if "_upd_" in key:
+            idx = int(key[-1])
+            var = key[:-6]
+            if var in var_updates:
+                var_updates[var].append((f'var_placeholder_{idx}', key))
+            else:
+                var_updates[var] = [(f'var_placeholder_{idx}', key)]
+
+    # integrate previous rhs evaluations into rhs equations
     updated_args = {}
     while equation_args:
         key, arg = equation_args.popitem()
         if f"_upd_{update_num}" in key:
             key = key.replace(f"_upd_{update_num}", "")
-        new_key = f"{key}_upd_{update_num}"
-        for i, eq in enumerate(equations.copy()):
-            lhs, rhs, assign = split_equation(eq)
-            replace_str = update_str.replace('update_placeholder', new_key)
-            replace_str = replace_str.replace('var_placeholder', key)
-            rhs = replace(rhs, key, replace_str)
-            equations[i] = f"{lhs} {assign} {rhs}"
-        updated_args[new_key] = arg
+        if "_upd_" in key:
+            updated_args[key] = arg
+        else:
+            new_key = f"{key}_upd_{update_num}"
+            for i, eq in enumerate(equations.copy()):
+                lhs, rhs, assign = split_equation(eq)
+                replace_str = update_str.replace('update_placeholder', new_key)
+                if key in var_updates:
+                    for placeholder, var in var_updates[key]:
+                        replace_str = replace_str.replace(placeholder, var)
+                replace_str = replace_str.replace('var_placeholder', key)
+                rhs = replace(rhs, key, replace_str)
+                equations[i] = f"{lhs} {assign} {rhs}"
+            updated_args[new_key] = arg
+
     return equations, updated_args
 
 
-def update_lhs(equations: list, equation_args: dict, update_num: int) -> tuple:
+def update_lhs(equations: list, equation_args: dict, update_num: int, rhs_scalar: str, var_dict: dict) -> tuple:
     """
 
     Parameters
@@ -795,6 +883,8 @@ def update_lhs(equations: list, equation_args: dict, update_num: int) -> tuple:
     equations
     equation_args
     update_num
+    rhs_scalar
+    var_dict
 
     Returns
     -------
@@ -804,13 +894,22 @@ def update_lhs(equations: list, equation_args: dict, update_num: int) -> tuple:
     updated_args = {}
     while equation_args:
         key, arg = equation_args.popitem()
-        new_key = f"{key}_upd_{update_num}"
-        for i, eq in enumerate(equations.copy()):
-            lhs, rhs, _ = split_equation(eq)
-            if key in lhs:
-                lhs = new_key
-                equations[i] = f"{lhs} = dt * ({rhs})"
-        updated_args[new_key] = arg
+        if "_upd_" in key and f"_upd_{update_num-1}" not in key:
+            updated_args[key] = arg
+        else:
+            key = key.replace(f"_upd_{update_num-1}", "")
+            new_key = f"{key}_upd_{update_num}"
+            add_to_args = False
+            for i, eq in enumerate(equations.copy()):
+                lhs, rhs, _ = split_equation(eq)
+                if key in lhs:
+                    lhs = new_key
+                    equations[i] = f"{lhs} = {rhs_scalar} * ({rhs})" if rhs_scalar else f"{lhs} = {rhs}"
+                    add_to_args = True
+            if add_to_args:
+                if key in var_dict:
+                    arg = var_dict[key].copy()
+                updated_args[new_key] = arg
     return equations, updated_args
 
 
