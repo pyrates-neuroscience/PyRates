@@ -29,7 +29,6 @@
 # system imports
 import os
 import sys
-import ast
 import json
 import time
 import argparse
@@ -133,7 +132,8 @@ def main(_):
         inputs=inputs,
         outputs=outputs,
         init_kwargs=init_kwargs,
-        profile='t')
+        profile='t',
+        build_dir=build_dir)
 
     out_vars = results.columns.levels[-1]
 
