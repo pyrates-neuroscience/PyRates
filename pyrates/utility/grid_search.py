@@ -341,33 +341,41 @@ class ClusterCompute:
 
         """
 
-        stdin, stdout, stderr = pm_client.exec_command("lscpu | grep 'Model name'")
-        cpu = stdout.readline().split()
-        cpu = ' '.join(map(str, cpu[2:]))
+        try:
+            stdin, stdout, stderr = pm_client.exec_command("lscpu | grep 'Model name'")
+            cpu = stdout.readline().split()
+            cpu = ' '.join(map(str, cpu[2:]))
+        except IndexError:
+            cpu = "N/A"
         print(f'CPU: {cpu}')
 
-        stdin, stdout, stderr = pm_client.exec_command("lscpu | grep 'CPU(s)'")
-        num_cpu_cores = int(stdout.readline().split(":")[1])
+        try:
+            stdin, stdout, stderr = pm_client.exec_command("lscpu | grep 'CPU(s)'")
+            num_cpu_cores = int(stdout.readline().split(":")[1])
+        except IndexError:
+            num_cpu_cores = "N/A"
         print(f'Cores: {num_cpu_cores}')
 
-        stdin, stdout, stderr = pm_client.exec_command("lscpu | grep 'min MHz'")
-        cpu_min = float(stdout.readline().split(":")[1])
-        print(f'CPU min: {cpu_min} MHz')
+        try:
+            stdin, stdout, stderr = pm_client.exec_command("lscpu | grep 'max MHz'")
+            cpu_freq = float(stdout.readline().split(":")[1])
+        except IndexError:
+            cpu_freq = "N/A"
+        print(f'CPU freq: {cpu_freq} MHz')
 
-        stdin, stdout, stderr = pm_client.exec_command("lscpu | grep 'max MHz'")
-        cpu_max = float(stdout.readline().split(":")[1])
-        print(f'CPU max: {cpu_max} MHz')
-
-        stdin, stdout, stderr = pm_client.exec_command("free -m | grep 'Mem'")
-        total_mem = int(stdout.readline().split()[1])
+        try:
+            stdin, stdout, stderr = pm_client.exec_command("free -m | grep 'Mem'")
+            total_mem = int(stdout.readline().split()[1])
+        except IndexError:
+            total_mem = "N/A"
         print(f'Total memory: {total_mem} MByte')
+
         print("")
 
         hw = {
             'cpu': cpu,
             'num_cpu_cores': num_cpu_cores,
-            'cpu_min': cpu_min,
-            'cpu_max': cpu_max,
+            'cpu_freq': cpu_freq,
             'total_mem': total_mem
         }
         return hw
