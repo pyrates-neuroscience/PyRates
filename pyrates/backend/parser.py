@@ -1021,7 +1021,7 @@ def replace(eq: str, term: str, replacement: str) -> str:
     """
 
     # define follow-up operations/signs that are allowed to follow directly after term in eq
-    allowed_follow_ops = '+=*/^<>=!.%@[]():, '
+    allowed_chars = '+=*/^<>=!.%@[]():, '
 
     # replace every proper appearance of term in eq with replacement
     ################################################################
@@ -1033,16 +1033,18 @@ def replace(eq: str, term: str, replacement: str) -> str:
     while idx != -1:
 
         # get idx of sign that follows after term
-        idx_follow_op = idx+len(term)
+        idx_next_char = idx+len(term)
+        idx_previous_char = idx-1
 
         # if it is an allowed sign, replace term, else not
-        if (idx_follow_op < len(eq) and eq[idx_follow_op] in allowed_follow_ops) or idx_follow_op == len(eq):
+        if (idx_next_char < len(eq) and (eq[idx_next_char] in allowed_chars) or idx_next_char == len(eq)) and \
+                (eq[idx_previous_char] in allowed_chars or idx_previous_char < 0):
             eq_new += f"{eq[:idx]} {replacement}"
         else:
-            eq_new += f"{eq[:idx_follow_op]}"
+            eq_new += f"{eq[:idx_next_char]}"
 
         # jump to next appearance of term in eq
-        eq = eq[idx_follow_op:]
+        eq = eq[idx_next_char:]
         idx = eq.find(term)
 
     # add rest of eq to new eq
