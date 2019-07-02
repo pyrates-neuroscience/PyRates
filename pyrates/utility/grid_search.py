@@ -43,7 +43,6 @@ import glob
 import getpass
 import h5py
 import paramiko
-from shutil import copy2
 from pathlib import Path
 from datetime import datetime
 from threading import Thread, currentThread, RLock
