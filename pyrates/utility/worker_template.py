@@ -33,14 +33,21 @@ import ast
 import json
 import time
 import argparse
+import warnings
 
 # external imports
+from numba import njit, config
 import numpy as np
 import pandas as pd
 from pyrates.utility.grid_search import grid_search
 
 
 def main(_):
+    config.THREADING_LAYER = 'omp'
+
+    # Disable general warnings
+    warnings.filterwarnings("ignore")
+
     # disable TF-gpu warnings
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     t_total = time.time()
@@ -54,6 +61,7 @@ def main(_):
     config_file = FLAGS.config_file
     subgrid = FLAGS.subgrid
     local_res_file = FLAGS.local_res_file
+    build_dir = FLAGS.build_dir
 
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
@@ -107,12 +115,9 @@ def main(_):
 
     param_grid = pd.read_hdf(subgrid, key="subgrid")
 
-    # grid_search() can't handle additional columns in the parameter grid
-    try:
-        param_grid = param_grid.drop(['status', 'chunk_idx', 'err_count'], axis=1)
-    except KeyError:
-        pass
-
+    # Drop all columns that don't contain a parameter map value (e.g. status, chunk_idx, err_count) since grid_search()
+    # can't handle additional columns
+    param_grid = param_grid[list(global_config_dict['param_map'].keys())]
     print(f'Elapsed time: {time.time()-t0:.3f} seconds')
 
     # Compute parameter subgrid using grid_search
@@ -147,7 +152,6 @@ def main(_):
 
     with pd.HDFStore(local_res_file, "w") as store:
         for out_var in out_vars:
-            key = out_var.replace(".", "")
             res_lst = []
 
             # Order results according to rows in parameter grid
@@ -166,7 +170,7 @@ def main(_):
 
             # Write DataFrames to local result file
             ######################################
-            store.put(key=key, value=result_ordered)
+            store.put(key=out_var, value=result_ordered)
 
     # TODO: Copy local result file back to master if needed
 
@@ -181,22 +185,29 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default="/nobackup/spanien1/salomon/CGS/Holgado/GeneticClusterFit_diseased_1/Config/DefaultConfig_3.json",
-        help="Config file with all necessary data to start grid_search() except for parameter grid"
+        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_config.json',
+        help="File to load grid_search configuration parameter from"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default="/nobackup/spanien1/salomon/CGS/Holgado/GeneticClusterFit_diseased_1/Grids/Subgrids/DefaultGrid_3/tiber/tiber_Subgrid_0.h5",
-        help="Path to csv-file with sub grid to compute on the remote machine"
+        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_grid.h5',
+        help="File to load parameter grid from"
     )
 
     parser.add_argument(
         "--local_res_file",
         type=str,
-        default="//data/hu_salomon/Documents/CGSWorkerTests/test/test_result.h5",
-        help="hdf5-file to save results to"
+        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_result.h5',
+        help="File to save results to"
+    )
+
+    parser.add_argument(
+        "--build_dir",
+        type=str,
+        default=os.getcwd(),
+        help="Custom PyRates build directory"
     )
 
     FLAGS = parser.parse_args()
