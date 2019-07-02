@@ -127,6 +127,8 @@ class ComputeGraph(object):
         # parse node operations
         #######################
 
+        print('building the compute graph...')
+
         self.node_updates = []
 
         for node_name, node in self.net_config.nodes.items():
@@ -294,7 +296,7 @@ class ComputeGraph(object):
         ####################
 
         if verbose:
-            print("Preparing simulation...")
+            print("Preparing the simulation...")
 
         if not self._first_run:
             self.backend.remove_layer(0)
@@ -321,7 +323,9 @@ class ComputeGraph(object):
         output_shapes = []
         if outputs:
             for key, val in outputs.items():
-                for var_key, var_val in self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col").items():
+                val_split = val.split('/')
+                node, op, var = "/".join(val_split[:-2]), val_split[-2], val_split[-1]
+                for var_key, var_val in self.get_var(node=node, op=op, var=var, var_name=f"{key}_col").items():
                     var_shape = tuple(var_val.shape)
                     if var_shape in output_shapes:
                         idx = output_shapes.index(var_shape)
@@ -347,60 +351,63 @@ class ComputeGraph(object):
             # linearize input dictionary
             for key, val in inputs.items():
 
+                key_split = key.split('/')
+                node, op, attr = "/".join(key_split[:-2]), key_split[-2], key_split[-1]
+
                 if '_combined' in list(self.net_config.nodes.keys())[0]:
 
                     # fully vectorized case: add vectorized placeholder variable to input dictionary
-                    var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=key[1], attr=key[2])
+                    var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=op, attr=attr)
                     inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
                 elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
                     # node-vectorized case
-                    if key[0] == 'all':
+                    if node == 'all':
 
                         # go through all nodes, extract the variable and add it to input dict
                         i = 0
-                        for node in self.net_config.nodes:
-                            var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        for node_tmp in self.net_config.nodes:
+                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
                             i_new = var.shape[0] if len(var.shape) > 0 else 1
                             inp_dict[var.name] = np.reshape(val[:, i:i_new], (sim_steps,) + tuple(var.shape))
                             i += i_new
 
-                    elif key[0] in self.net_config.nodes.keys():
+                    elif node in self.net_config.nodes.keys():
 
                         # add placeholder variable of node(s) to input dictionary
-                        var = self._get_node_attr(node=key[0], op=key[1], attr=key[2])
+                        var = self._get_node_attr(node=node, op=op, attr=attr)
                         inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
-                    elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]) or \
-                            any([key[0].split('.')[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                    elif any([node in key_tmp for key_tmp in self.net_config.nodes.keys()]) or \
+                            any([node.split('.')[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
-                        key_tmp = key[0].split('.')[0] if '.' in key[0] else key[0]
+                        node_tmp = node.split('.')[0] if '.' in node else node
 
                         # add vectorized placeholder variable of specified node type to input dictionary
-                        for node in list(self.net_config.nodes.keys()):
-                            if key_tmp in node:
+                        for node_tmp2 in list(self.net_config.nodes.keys()):
+                            if node_tmp in node_tmp2:
                                 break
-                        var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        var = self._get_node_attr(node=node_tmp2, op=op, attr=attr)
                         inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
                 else:
 
                     # non-vectorized case
-                    if key[0] == 'all':
+                    if node == 'all':
 
                         # go through all nodes, extract the variable and add it to input dict
-                        for i, node in enumerate(self.net_config.nodes.keys()):
-                            var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        for i, node_tmp in enumerate(self.net_config.nodes.keys()):
+                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
                             inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
 
-                    elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                    elif any([node in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
                         # extract variables from nodes of specified type
                         i = 0
-                        for node in self.net_config.nodes.keys():
-                            if key[0] in node:
-                                var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        for node_tmp in self.net_config.nodes.keys():
+                            if node in node_tmp:
+                                var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
                                 inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
                                 i += 1
 
@@ -424,7 +431,7 @@ class ComputeGraph(object):
         ################
 
         if verbose:
-            print("Running simulation...")
+            print("Running the simulation...")
 
         if profile is None:
             output_col = self.backend.run(steps=sim_steps, outputs=output_col, sampling_steps=sampling_steps,
@@ -439,6 +446,8 @@ class ComputeGraph(object):
                       f"simulation resolution of {self.dt} s.")
             else:
                 print(f"ComputeGraph computations finished after {time} seconds.")
+        elif verbose:
+            print('finished!')
 
         # store output variables in data frame
         ######################################
@@ -1536,6 +1545,8 @@ class ComputeGraph(object):
         None
 
         """
+
+        print('vectorizing the graph nodes...')
 
         # First stage: Vectorize over nodes
         ###################################
