@@ -39,12 +39,12 @@ def test_worker_template(tmp_path):
 
     import json
     import subprocess
+    import pandas as pd
     import numpy as np
 
-    from pyrates.utility.grid_search import grid_search, linearize_grid
+    from pyrates.utility.grid_search import linearize_grid
 
     # Simple Jansen-Rit circuit
-    test_path = "data/hu_salomon/Documents/CGSWorkerTests/simple_test_model"
     config_file = f'{tmp_path}/test_config.json'
     subgrid = f'{tmp_path}/test_grid.h5'
     result_file = f'{tmp_path}/test_result.h5'
@@ -58,7 +58,7 @@ def test_worker_template(tmp_path):
                        'nodes': ['PC.0']}}
 
     # Create param_grid file
-    u = np.linspace(100, 400, 20)
+    u = np.linspace(100, 400, 10)
     param_grid = {'u': u}
     param_grid = linearize_grid(param_grid, permute=False)
     param_grid.to_hdf(subgrid, key='subgrid')
@@ -82,6 +82,7 @@ def test_worker_template(tmp_path):
     with open(config_file, "w") as f:
         json.dump(config_dict, f, indent=2)
 
+    # Run worker template as console command with arguments
     cmd = ['/data/u_salomon_software/anaconda3/envs/PyRates/bin/python',
            f'/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py',
            f'--config_file={config_file}',
@@ -90,50 +91,53 @@ def test_worker_template(tmp_path):
            f'--build_dir={build_dir}']
     subprocess.Popen(cmd).wait()
 
-    # results_1 = pd.read_hdf(result_file, key='r')
-    # results_2, _t, _ = grid_search(
-    #     circuit_template=circuit_template,
-    #     param_grid=param_grid,
-    #     param_map=param_map,
-    #     simulation_time=sim_time,
-    #     dt=dt,
-    #     permute_grid=False,
-    #     inputs={},
-    #     outputs={'r': ('PC.0', 'PRO.0', 'm_out')},
-    #     init_kwargs={
-    #         'backend': 'numpy',
-    #         'vectorization': 'nodes'
-    #     },
-    #     profile='t')
-    # # #
-    # res_lst = []
-    # for i, column_values in enumerate(param_grid.values):
-    #     result_3 = results_2.loc[:, column_values]
-    #     result_3.columns.names = results_2.columns.names
-    #     res_lst.append(result_3)
-    # results_3 = pd.concat(res_lst, axis=1)
+    # Load results from result file
+    results = pd.read_hdf(result_file, key=list(output.keys())[0])
+
+    assert not results.empty
+
+
+def test_cluster_compute(tmp_path):
+    import sys
+    import platform
+    import pandas as pd
+    import numpy as np
+
+    from pyrates.utility.grid_search import linearize_grid, ClusterGridSearch
+
     #
-    # print(results_1 == results_2)
-    #
-    # check = []
-    # for i, column_name in enumerate(param_grid.values):
-    #     result_1 = results_1.loc[:, column_name]
-    #     result_2 = results_2.loc[:, column_name]
-    #     result_3 = results_3.loc[:, column_name]
-    #     check.append((result_1 == result_2).all()[0])
-    # print(check)
+    nodes = [platform.node()]
 
-    # test against explicit graph computation
-    assert 0
+    # Simulation specs
+    circuit_template = "model_templates.jansen_rit.simple_jansenrit.JRC"
+    dt = 1e-3
+    sim_time = 1.0
+    param_map = {'u': {'var': [('RPO_e_pc.0', 'u')],
+                       'nodes': ['PC.0']}}
 
+    # Create param_grid file
+    u = np.linspace(100, 400, 10)
+    param_grid = {'u': u}
+    param_grid = linearize_grid(param_grid, permute=False)
 
+    output = {'r': 'PC.0/PRO.0/m_out'}
+    cgs = ClusterGridSearch(nodes=nodes, compute_dir=tmp_path)
+    res_file = cgs.run(
+        circuit_template=circuit_template,
+        params=param_grid,
+        param_map=param_map,
+        simulation_time=sim_time,
+        dt=dt,
+        sampling_step_size=dt,
+        inputs={},
+        outputs=output,
+        chunk_size=len(u),
+        worker_env=sys.executable,
+        worker_file='/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py',
+        add_template_info=False,
+        init_kwargs={
+            'backend': 'numpy'
+        })
 
-
-# def test_cluster_compute():
-#     pass
-#
-
-
-
-# test worker template with special test files
-# test cgs with only the current workstation as worker
+    results = pd.read_hdf(res_file, key=f'Results/{list(output.keys())[0]}')
+    assert not results.empty
