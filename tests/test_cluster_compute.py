@@ -72,7 +72,7 @@ def test_worker_template(tmp_path):
         "outputs": output,
         "backend": 'numpy',
         "init_kwargs": {
-            'backend': 'numpy',
+            'backend': 'tensorflow',
             'vectorization': 'nodes',
             'solver': 'euler'
         },
@@ -136,7 +136,7 @@ def test_cluster_compute(tmp_path):
         worker_file='/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py',
         add_template_info=False,
         init_kwargs={
-            'backend': 'numpy'
+            'backend': 'tensorflow'
         })
 
     results = pd.read_hdf(res_file, key=f'Results/{list(output.keys())[0]}')
