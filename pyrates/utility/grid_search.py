@@ -444,10 +444,12 @@ class ClusterGridSearch(ClusterCompute):
         self.res_dir = f'{self.compute_dir}/Results'
         os.makedirs(self.res_dir, exist_ok=True)
 
-    def run(self, circuit_template: str, params: Union[dict, pd.DataFrame], param_map: dict, dt: float, simulation_time: float,
-            inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: (int, list),
-            worker_env: str, worker_file: str, result_kwargs: dict = {}, config_kwargs: dict = {},
-            add_template_info: bool = False, permute: bool = False, **kwargs) -> str:
+    def run(self, circuit_template: str, params: Union[dict, pd.DataFrame], param_map: dict, dt: float,
+            simulation_time: float, chunk_size: (int, list), worker_env: str, worker_file: str,
+            inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None, result_kwargs: Optional[dict] = {},
+            config_kwargs: Optional[dict] = {}, add_template_info: Optional[bool] = False,
+            permute: Optional[bool] = False, **kwargs) -> str:
+
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
         ClusterGridSearch requires all necessary data (worker script, worker environment, compute directory)
