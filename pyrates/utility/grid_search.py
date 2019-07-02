@@ -449,10 +449,10 @@ class ClusterGridSearch(ClusterCompute):
         os.makedirs(self.build_dir, exist_ok=True)
 
     def run(self, circuit_template: str, params: Union[dict, pd.DataFrame], param_map: dict, dt: float,
-            simulation_time: float, chunk_size: (int, list), worker_env: str, worker_file: str,
-            inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None, result_kwargs: Optional[dict] = {},
-            config_kwargs: Optional[dict] = {}, add_template_info: Optional[bool] = False,
-            permute: Optional[bool] = False, **kwargs) -> str:
+            simulation_time: float,
+            inputs: dict, outputs: dict, sampling_step_size: float, chunk_size: (int, list),
+            worker_env: str, worker_file: str, result_kwargs: dict = {}, config_kwargs: dict = {},
+            add_template_info: bool = False, permute: bool = False, **kwargs) -> str:
 
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
@@ -722,10 +722,6 @@ class ClusterGridSearch(ClusterCompute):
         os.makedirs(subgrid_dir, exist_ok=True)
         subgrid_idx = 0
 
-        # Create build_dir for grid_search numpy backend
-        local_build_dir = f'{self.build_dir}/{thread_name}'
-        os.makedirs(local_build_dir, exist_ok=True)
-
         # Start scheduler
         #################
         while True:
@@ -775,7 +771,6 @@ class ClusterGridSearch(ClusterCompute):
                                                                        f' --config_file={config_file}'
                                                                        f' --subgrid={subgrid_fp}'
                                                                        f' --local_res_file={local_res_file}'
-                                                                       f' --build_dir={local_build_dir}'
                                                                        f' &>> {logfile}',  # redirect and append stdout
                                                                                            # and stderr to logfile
                                                                        get_pty=True)       # execute in pseudoterminal
