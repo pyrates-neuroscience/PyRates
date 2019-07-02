@@ -470,10 +470,6 @@ class ClusterGridSearch(ClusterCompute):
         self.res_dir = f'{self.compute_dir}/Results'
         os.makedirs(self.res_dir, exist_ok=True)
 
-        # Build directory for pyrates backend
-        self.build_dir = f'{self.compute_dir}/Builds'
-        os.makedirs(self.build_dir, exist_ok=True)
-
     def run(self, circuit_template: str, params: Union[dict, pd.DataFrame], param_map: dict, dt: float,
             simulation_time: float, chunk_size: (int, list), worker_env: str, worker_file: str,
             inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None, result_kwargs: Optional[dict] = {},
@@ -744,10 +740,6 @@ class ClusterGridSearch(ClusterCompute):
         os.makedirs(subgrid_dir, exist_ok=True)
         subgrid_idx = 0
 
-        # Create build_dir for grid_search numpy backend
-        local_build_dir = f'{self.build_dir}/{thread_name}'
-        os.makedirs(local_build_dir, exist_ok=True)
-
         # Start scheduler
         #################
         while True:
@@ -797,7 +789,6 @@ class ClusterGridSearch(ClusterCompute):
                                                                        f' --config_file={config_file}'
                                                                        f' --subgrid={subgrid_fp}'
                                                                        f' --local_res_file={local_res_file}'
-                                                                       f' --build_dir={local_build_dir}'
                                                                        f' &>> {logfile}',  # redirect and append stdout
                                                                                            # and stderr to logfile
                                                                        get_pty=True)       # execute in pseudoterminal
