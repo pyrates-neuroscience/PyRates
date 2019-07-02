@@ -101,7 +101,7 @@ class NumpyVar(np.ndarray):
 
         # get shape
         if not shape:
-            shape = value.shape if hasattr(value, 'shape') else ()
+            shape = value.shape if hasattr(value, 'shape') else (1,)
 
         # get data type
         if not dtype:
@@ -1192,6 +1192,22 @@ class NumpyBackend(object):
         else:
             self.layer -= 1
 
+    def goto_layer(self, idx: int) -> None:
+        """Jump to layer indicated by index.
+
+        Parameters
+        ----------
+        idx
+            Position of layer to jump towards.
+
+
+        Returns
+        -------
+        None
+
+        """
+        self.layer = self._base_layer + idx
+
     def remove_layer(self, idx) -> None:
         """Removes layer at index from stack.
 
@@ -1441,7 +1457,7 @@ class NumpyBackend(object):
 
         return op1, op2
 
-    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, *args) -> Any:
+    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, update_type: str = None, *args) -> Any:
         """Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.
 
         Parameters
@@ -1452,6 +1468,8 @@ class NumpyBackend(object):
             Index to variable
         update
             Update to variable entries
+        update_type
+            Type of lhs update (e.g. `=` or `+=`)
 
         Returns
         -------
@@ -1459,9 +1477,10 @@ class NumpyBackend(object):
             Updated/indexed variable.
 
         """
-
-        if update:
-            return self.add_op('=', var, update, idx, *args)
+        if update is not None:
+            if not update_type:
+                update_type = '='
+            return self.add_op(update_type, var, update, idx, *args)
         else:
             return self.add_op('index', var, idx, *args)
 
@@ -1754,7 +1773,7 @@ class NumpyBackend(object):
                 return True
             elif len(op1.shape) > 1 and len(op2.shape) > 1:
                 return True
-            elif len(op1.shape) == 0 or len(op2.shape) == 0:
+            elif len(op1.shape) == 0 and len(op2.shape) == 0:
                 return True
             else:
                 return False

@@ -123,6 +123,7 @@ def test_2_1_operator():
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
         results = net.run(sim_time, outputs={'a': ('pop0.0', 'op2.0', 'a')})
         net.clear()
+
         # calculate operator behavior from hand
         update2 = lambda x: 1./(1. + np.exp(-x))
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
@@ -180,6 +181,7 @@ def test_2_2_node():
 
         # simulate node behavior
         results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+        net.clear()
 
         # calculate node behavior from hand
         update0 = lambda x: x + dt * 2.
@@ -200,6 +202,7 @@ def test_2_2_node():
 
         # simulate node behavior
         results = net.run(sim_time, outputs={'a': ('pop0.0', 'op5.0', 'a')})
+        net.clear()
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
@@ -216,6 +219,7 @@ def test_2_2_node():
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net6").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
         results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+        net.clear()
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps + 1, 3), dtype=np.float32)
@@ -234,6 +238,7 @@ def test_2_2_node():
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net7").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
         results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'), 'b': ('pop0.0', 'op3.0', 'b')})
+        net.clear()
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps + 1, 4), dtype=np.float32)
