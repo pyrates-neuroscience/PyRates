@@ -72,10 +72,11 @@ def test_worker_template(tmp_path):
         "outputs": output,
         "backend": 'numpy',
         "init_kwargs": {
-            'backend': 'tensorflow',
+            'backend': 'numpy',
             'vectorization': 'nodes',
             'solver': 'euler'
         },
+        "target": [[0,0], [0,0], [0,0], [0,0], [0,0], [0,0], [0,0], [0,0]]
     }
 
     # Create test configuration file for worker template
@@ -84,7 +85,7 @@ def test_worker_template(tmp_path):
 
     # Run worker template as console command with arguments
     cmd = ['/data/u_salomon_software/anaconda3/envs/PyRates/bin/python',
-           f'/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py',
+           f'/data/hu_salomon/PycharmProjects/MasterThesis/ClusterCompute/worker/worker_holgado_diseased.py',
            f'--config_file={config_file}',
            f'--subgrid={subgrid}',
            f'--local_res_file={result_file}',
@@ -92,7 +93,10 @@ def test_worker_template(tmp_path):
     subprocess.Popen(cmd).wait()
 
     # Load results from result file
-    results = pd.read_hdf(result_file, key=list(output.keys())[0])
+    try:
+        results = pd.read_hdf(result_file, key=list(output.keys())[0])
+    except FileNotFoundError:
+        assert 0
 
     assert not results.empty
 
@@ -136,7 +140,7 @@ def test_cluster_compute(tmp_path):
         worker_file='/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py',
         add_template_info=False,
         init_kwargs={
-            'backend': 'tensorflow'
+            'backend': 'numpy'
         })
 
     results = pd.read_hdf(res_file, key=f'Results/{list(output.keys())[0]}')
