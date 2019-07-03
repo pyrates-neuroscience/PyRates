@@ -12,4 +12,4 @@ pydot
 pytest
 paramiko
 numba
-edx-sphinx-theme
+alabaster
