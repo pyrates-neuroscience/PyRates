@@ -134,6 +134,9 @@ class GeneticAlgorithmTemplate:
             self.eval_fitness(target, **kwargs)
             new_candidate = self.pop.nlargest(1, "fitness")
             self.current_max_fitness = float(new_candidate.loc[:, "fitness"])
+
+            # If no population member yields a proper fitness value since all computed timeseries contained at least one
+            # undefined value (e.g. np.NaN)
             print(f'Currently fittest genes:')
             self.plot_genes(new_candidate)
             target_tmp = [np.round(tar[0], decimals=2) for tar in target]
@@ -142,6 +145,7 @@ class GeneticAlgorithmTemplate:
             # Check for fitness stagnation
             ##############################
             if max_stagnation_steps > 0:
+                # Before the first iteration self.candidate is empty. Skip stagnation check in that case
                 if not self.candidate.empty:
                     old_fitness = np.round(float(self.candidate['fitness']), decimals=stagnation_decimals)
                     new_fitness = np.round(self.current_max_fitness, decimals=stagnation_decimals)
@@ -161,6 +165,7 @@ class GeneticAlgorithmTemplate:
                                 self.pop = self.pop.drop(new_candidate.index)
                             else:
                                 print("Returning fittest member!")
+                                print("")
                                 return new_candidate
                     else:
                         # Reset stagnation counter
@@ -176,6 +181,7 @@ class GeneticAlgorithmTemplate:
             #############################
             if self.winner.empty:
                 self.winner = self.candidate
+            # Cast floats since truth value of a pd.Series is ambiguous
             elif float(self.candidate['fitness']) > float(self.winner['fitness']):
                 self.winner = self.candidate
 
@@ -201,8 +207,15 @@ class GeneticAlgorithmTemplate:
 
             # Create offspring from current population
             ##########################################
-            self.__create_offspring(n_parent_pairs=n_parent_pairs, n_new=n_new, n_winners=n_winners)
-            iter_count += 1
+            if self.current_max_fitness == -np.inf:
+                print(f'No candidate available for the current gene set')
+                print(f'Generating new population')
+                self.__create_pop(sampling_func=gene_sampling_func)
+                iter_count += 1
+            else:
+                print(f'Generating offspring')
+                self.__create_offspring(n_parent_pairs=n_parent_pairs, n_new=n_new, n_winners=n_winners)
+                iter_count += 1
 
         # End of iteration loop
         print("Maximum iterations reached")
@@ -289,7 +302,7 @@ class GeneticAlgorithmTemplate:
 
         sigmas = [self.initial_gene_pool[gene]['sigma'] for gene in self.initial_gene_pool.keys()]
 
-        self.pop['fitness'] = 0.0
+        self.pop['fitness'] = -np.inf
         self.pop['sigma'] = [sigmas for _ in range(self.pop_size)]
 
     def __select_winners(self, n_winners):
@@ -373,10 +386,25 @@ class GeneticAlgorithmTemplate:
         return childs
 
     def plot_genes(self, pop_member):
-        for column in pop_member.columns.tolist():
-            data = pop_member.loc[:, column].to_list()
-            print(f'{column}: ', end="")
-            print(*data)
+        # Iterate over all genes of the member
+        for gene in pop_member.columns.tolist():
+            print(f'{gene}:', end=" ")
+            data = pop_member[gene].array[0]
+            if isinstance(data, list):
+                print('[', end="")
+                for val in data:
+                    print(f'{val}', end=", ")
+                print(']', end=" ")
+            else:
+                print(float(np.round(data, decimals=5)), end=" ")
+
+            # Print borders if available in initial gene pool
+            try:
+                min = np.round(self.initial_gene_pool[gene]['min'], decimals=2)
+                max = np.round(self.initial_gene_pool[gene]['max'], decimals=2)
+                print(f' [min: {min}, max: {max}]')
+            except KeyError:
+                print("")
 
     def eval_fitness(self, target: list, *argv, **kwargs):
         raise NotImplementedError
