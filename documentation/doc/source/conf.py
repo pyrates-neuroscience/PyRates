@@ -39,7 +39,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
     'sphinx.ext.githubpages', 
-    'edx_theme',
+    'alabaster',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -74,17 +74,42 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
+import alabaster
+html_theme_path = [alabaster.get_path()]
+html_theme = 'alabaster'
+
+# Add any paths that contain custom static files (such as style sheets) here,
+# relative to this directory. They are copied after the builtin static files,
+# so a file named "default.css" will overwrite the builtin "default.css".
+html_static_path = ['../build/html/_static']
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {'logo': 'PyRates_logo_color.png',
+                      'logo_name': True,
+                      'logo_text_align': 'center',
+    		      'github_repo': 'PyRates',
+                      'github_user': 'pyrates-neuroscience', 
+                      'codecov_button': False,
+                      'github_button': True,
+                      'travis_button': True,
+                      'show_related': True,
+                      'show_powered_by': True,
+                      'show_relbars': True,
+                      'base_bg': '#deddd9',
+                      'topic_bg': '#15a1b8',
+                      'sidebar_hr': '#214478',
+                      'sidebar_header': '#214478',
+                      'sidebar_width': '200px',
+                      'table_border': '#214478',
+                      'font_family': 'Roboto',
+                      'head_font_family': 'Roboto Slab',
+                      'caption_font_family': 'Roboto Condensed',
 
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+
+}
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
@@ -94,21 +119,27 @@ html_static_path = ['_static']
 # default: ``['localtoc.html', 'relations.html', 'sourcelink.html',
 # 'searchbox.html']``.
 #
-# html_sidebars = {}
+html_sidebars = {
+    '**': [
+        'about.html',
+        'localtoc.html',
+        'sourcelink.html',
+        'searchbox.html',
+    ]
+}
 
 #---sphinx-themes-----
-import os
-import edx_theme
+#import os
+#import edx_theme
 
-html_theme = 'edx_theme'
-html_theme_path = [edx_theme.get_html_theme_path()]
-html_favicon = os.path.join('/home/rgast/PycharmProjects/PyRates/documentation/doc/build/html', '_static', 'css', 'PyRates_logo_color.ico')
+#html_theme = 'edx_theme'
+#html_theme_path = [edx_theme.get_html_theme_path()]
+#html_favicon = os.path.join('../build/html', '_static', 'css', 'PyRates_logo_color.ico')
 
-latex_documents = [
-    (master_doc, 'edx-sphinx-theme.tex', 'edx-sphinx-theme Documentation',
-     author, 'manual'),
-]
-
+#latex_documents = [
+#    (master_doc, 'edx-sphinx-theme.tex', 'edx-sphinx-theme Documentation',
+#     author, 'manual'),
+#]
 
 # -- Extension configuration -------------------------------------------------
 

@@ -35,6 +35,7 @@ from pandas import DataFrame, MultiIndex
 import numpy as np
 from networkx import find_cycle, NetworkXNoCycle, DiGraph
 from copy import deepcopy
+from warnings import filterwarnings
 
 # pyrates imports
 from pyrates.backend.parser import parse_equation_list, parse_dict
@@ -86,6 +87,8 @@ class ComputeGraph(object):
                  ) -> None:
         """Instantiates operator.
         """
+
+        filterwarnings("ignore", category=FutureWarning)
 
         # set basic attributes
         ######################
@@ -226,7 +229,8 @@ class ComputeGraph(object):
             assign = '+=' if add_project else '='
             eq = f"target_var{d} {assign} source_var{idx} * weight"
             args = {}
-            args['weight'] = {'vtype': 'constant', 'dtype': svar.dtype, 'value': weight}
+            dtype = svar.dtype if hasattr(svar, 'dtype') else svar['dtype']
+            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
             if tidx:
                 args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                               'value': np.array(tidx, dtype=np.int32)}
@@ -291,6 +295,8 @@ class ComputeGraph(object):
             call of the function, only the dataframe will be returned.
 
         """
+
+        filterwarnings("ignore", category=FutureWarning)
 
         # prepare simulation
         ####################
