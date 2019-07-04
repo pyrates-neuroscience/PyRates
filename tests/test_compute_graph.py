@@ -191,7 +191,7 @@ def test_2_2_node():
             targets[i+1, 0] = update0(targets[i, 0])
             targets[i+1, 1] = update1(targets[i, 1], targets[i+1, 0])
 
-        diff = results['a'].values[:, 0] - targets[:-1, 1]
+        diff = results['a'].values[1:, 0] - targets[:-2, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of node with 2 independent operators
@@ -210,7 +210,7 @@ def test_2_2_node():
             targets[i+1, 0] = update0(targets[i, 0])
             targets[i+1, 1] = update1(targets[i, 1], 0.)
 
-        diff = results['a'].values[:, 0] - targets[:-1, 1]
+        diff = results['a'].values[1:, 0] - targets[:-2, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of node with 2 independent operators projecting to the same target operator
@@ -229,7 +229,7 @@ def test_2_2_node():
             targets[i+1, 1] = update2(targets[i, 1])
             targets[i+1, 2] = update1(targets[i, 2], targets[i+1, 0] + targets[i+1, 1])
 
-        diff = results['a'].values[:, 0] - targets[:-1, 2]
+        diff = results['a'].values[1:, 0] - targets[:-2, 2]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of node with 1 source operator projecting to 2 independent targets
@@ -250,8 +250,8 @@ def test_2_2_node():
             targets[i+1, 2] = update3(targets[i, 2], targets[i, 3], targets[i+1, 0])
             targets[i+1, 3] = update4(targets[i, 3], targets[i, 2])
 
-        diff = np.mean(np.abs(results['a'].values[:, 0] - targets[:-1, 1])) + \
-               np.mean(np.abs(results['b'].values[:, 0] - targets[:-1, 3]))
+        diff = np.mean(np.abs(results['a'].values[1:, 0] - targets[:-2, 1])) + \
+               np.mean(np.abs(results['b'].values[1:, 0] - targets[:-2, 3]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 

@@ -126,6 +126,7 @@ class ExpressionParser(ParserElement):
         self.op = None
         self._finished_rhs = False
         self.rhs_eval = None
+        self._instant_update = kwargs.pop('instant_update', False)
 
         # define algebra
         ################
@@ -237,12 +238,19 @@ class ExpressionParser(ParserElement):
             name[-1] = i
         dtype = rhs.dtype if hasattr(rhs, 'dtype') else self.backend._float_def
         shape = rhs.shape if hasattr(rhs, 'shape') else ()
-        delta = self.backend.add_var('state_var', name=name, dtype=dtype, shape=shape)
 
-        # assign rhs to new variable
-        self.backend.add_op('=', delta, rhs)
+        if not self._instant_update:
+
+            # assign rhs to new variable
+            delta = self.backend.add_var('state_var', name=name, dtype=dtype, shape=shape, **self.parser_kwargs)
+            self.backend.add_op('=', delta, rhs)
+            self.rhs = delta
+
+        else:
+
+            self.rhs = rhs
+
         self.rhs_eval = rhs
-        self.rhs = delta
         self.clear()
         self._finished_rhs = True
 
@@ -496,18 +504,22 @@ class ExpressionParser(ParserElement):
 
                 # use explicit forward euler
                 op = self.parse(self.expr_stack + ['dt', 'rhs', '*', '+='])
+                self.backend.previous_layer()
 
             else:
 
                 raise ValueError(f'Wrong solver type: {solver}. '
                                  f'Please check the docstring of this function for available solvers.')
 
+        elif self._instant_update:
+
+            self.backend.previous_layer()
+            op = self.parse(self.expr_stack + ['rhs', self._assign_type])
+
         else:
 
             op = self.parse(self.expr_stack + ['rhs', self._assign_type])
-
-        # reset backend layer
-        self.backend.previous_layer()
+            self.backend.previous_layer()
 
         return op
 
@@ -691,31 +703,27 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
 
     """
 
-    updates = {}
     solver = kwargs.pop('solver', 'euler')
     update_num = 0
 
     if solver == 'midpoint':
 
-        if any(['/dt' in eq or "'" in eq for eq in equations]):
+        if any(['/dt' in eq or "'" in eq for eq, _ in equations]):
 
             # first rhs evaluation
             update_num += 1
-            dt_tmp = equation_args['dt']
-            equation_args['dt'] = dt_tmp/2
             state_vars = {key: var for key, var in equation_args.items()
-                          if ((type(var) is dict) and (var['vtype'] == 'state_var'))}
-            equations_tmp, state_vars = update_lhs(equations.copy(), state_vars, update_num, 'dt', {})
+                          if (type(var) is dict) and ('vtype' in var) and (var['vtype'] == 'state_var')}
+            equations_tmp, state_vars = update_lhs(equations.copy(), state_vars, update_num, 'dt*0.5', {})
             equation_args.update(state_vars)
-            updates = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend, **kwargs)
-            equation_args['dt'] = dt_tmp
+            updates, equation_args = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend, **kwargs)
             backend.next_layer()
             backend.next_layer()
 
             # second rhs evaluation + combination of the two
             equations, updates = update_rhs(equations, updates, update_num, "(var_placeholder + update_placeholder)")
             equation_args.update(updates)
-            updates = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
+            _, equation_args = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
 
     elif solver == 'rk23':
 
@@ -731,7 +739,8 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
                 if not any([var_orig in var for var in state_vars]):
                     state_vars_orig.pop(var_orig)
             equation_args.update(state_vars)
-            updates = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend, **kwargs)
+            updates, equation_args = parse_equations(equations=equations_tmp, equation_args=equation_args,
+                                                     backend=backend, **kwargs)
             backend.next_layer()
             backend.next_layer()
 
@@ -744,8 +753,8 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
             update_num += 1
             equations_tmp, state_vars = update_lhs(equations_tmp, state_vars, update_num, "", state_vars_orig)
             equation_args.update(state_vars)
-            updates_new = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend,
-                                          **kwargs)
+            updates_new, equation_args = parse_equations(equations=equations_tmp, equation_args=equation_args,
+                                                         backend=backend, **kwargs)
             updates.update(updates_new)
             backend.next_layer()
             backend.next_layer()
@@ -759,8 +768,8 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
             update_num += 1
             equations, state_vars = update_lhs(equations, state_vars, update_num, "", state_vars_orig)
             equation_args.update(state_vars)
-            updates_new = parse_equations(equations=equations, equation_args=equation_args, backend=backend,
-                                          **kwargs)
+            updates_new, equation_args = parse_equations(equations=equations, equation_args=equation_args,
+                                                         backend=backend, **kwargs)
             updates.update(updates_new)
             backend.next_layer()
             backend.next_layer()
@@ -769,21 +778,22 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
             equation_args.update(updates)
             equations = [f'{var} += dt * ({var}_upd_1/6. + 2.*{var}_upd_2/3. + {var}_upd_3/6.)'
                          for var in state_vars_orig]
-            updates = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
+            _, equation_args = parse_equations(equations=equations, equation_args=equation_args, backend=backend,
+                                               **kwargs)
 
     elif solver == 'euler':
 
-        updates = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
+        _, equation_args = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
 
     else:
 
         valid_solvers = ['euler', 'midpoint', 'rk23']
         raise ValueError(f'Invalid solver: {solver}. Valid differential equation solvers are: {valid_solvers}.')
 
-    return updates
+    return equation_args
 
 
-def parse_equations(equations, equation_args, backend, **kwargs) -> dict:
+def parse_equations(equations, equation_args, backend, **kwargs) -> tuple:
     """
 
     Parameters
@@ -794,32 +804,56 @@ def parse_equations(equations, equation_args, backend, **kwargs) -> dict:
 
     Returns
     -------
-    dict
+    tuple
 
     """
     updates = {}
 
-    for eq in equations:
+    for eq, scope in equations:
 
         # parse arguments
         #################
 
+        # extract operator variables from equation args
+        op_args = {key.split('/')[-1]: var for key, var in equation_args.items() if scope in key}
+        inputs = op_args['inputs']
+        unprocessed_inputs = []
+        for key, inp in inputs.items():
+            inp_tmp = equation_args[inp]
+            op_args[key] = inp_tmp
+            if type(inp_tmp) is dict:
+                unprocessed_inputs.append(key)
+
+        # parse operator variables in backend
         args_tmp = {}
-        for key, arg in equation_args.items():
-            if type(arg) is dict and 'vtype' in arg.keys():
+        for key, arg in op_args.items():
+            if type(arg) is dict and 'vtype' in arg:
                 args_tmp[key] = arg
-        args_tmp = parse_dict(args_tmp, backend, **kwargs)
-        equation_args.update(args_tmp)
+        args_tmp = parse_dict(args_tmp, backend, scope=scope, **kwargs)
+        op_args.update(args_tmp)
+        op_args['dt'] = equation_args['all/all/dt']
 
         # parse equation
         ################
 
-        parser = ExpressionParser(expr_str=eq, args=equation_args, backend=backend, **kwargs)
+        instant_update = op_args.pop('instant_update', False)
+        parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope,
+                                  instant_update=instant_update, **kwargs)
         parser.parse_expr()
 
-        updates[parser.lhs_key] = parser.vars[parser.lhs_key]
+        updates[f"{scope}/{parser.lhs_key}"] = parser.vars[parser.lhs_key]
 
-    return updates
+        # udpate equations args
+        #######################
+
+        for key, var in parser.vars.items():
+            if key != "inputs" and key != "rhs" and key != "dt":
+                equation_args[f"{scope}/{key}"] = var
+
+        for key in unprocessed_inputs:
+            equation_args[inputs[key]] = parser.vars[key]
+
+    return updates, equation_args
 
 
 def update_rhs(equations: list, equation_args: dict, update_num: int, update_str: str) -> tuple:
@@ -841,36 +875,38 @@ def update_rhs(equations: list, equation_args: dict, update_num: int, update_str
     # collect variable updates from earlier rhs evaluations
     var_updates = {}
     for key, arg in equation_args.items():
-        if f"_upd_{update_num}" in key:
-            key = key.replace(f"_upd_{update_num}", "")
-        if "_upd_" in key:
-            idx = int(key[-1])
-            var = key[:-6]
-            if var in var_updates:
-                var_updates[var].append((f'var_placeholder_{idx}', key))
+        node, op, var = key.split('/')
+        if f"_upd_{update_num}" in var:
+            var = var.replace(f"_upd_{update_num}", "")
+        if "_upd_" in var:
+            idx = int(var[-1])
+            var_tmp = var[:-6]
+            if var_tmp in var_updates:
+                var_updates[var_tmp].append((f'var_placeholder_{idx}', var))
             else:
-                var_updates[var] = [(f'var_placeholder_{idx}', key)]
+                var_updates[var_tmp] = [(f'var_placeholder_{idx}', var)]
 
     # integrate previous rhs evaluations into rhs equations
     updated_args = {}
     while equation_args:
         key, arg = equation_args.popitem()
-        if f"_upd_{update_num}" in key:
-            key = key.replace(f"_upd_{update_num}", "")
-        if "_upd_" in key:
-            updated_args[key] = arg
+        node, op, var = key.split('/')
+        if f"_upd_{update_num}" in var:
+            var = var.replace(f"_upd_{update_num}", "")
+        if "_upd_" in var:
+            updated_args[f"{node}/{op}/{var}"] = arg
         else:
-            new_key = f"{key}_upd_{update_num}"
-            for i, eq in enumerate(equations.copy()):
+            new_var = f"{var}_upd_{update_num}"
+            for i, (eq, scope) in enumerate(equations.copy()):
                 lhs, rhs, assign = split_equation(eq)
-                replace_str = update_str.replace('update_placeholder', new_key)
-                if key in var_updates:
-                    for placeholder, var in var_updates[key]:
-                        replace_str = replace_str.replace(placeholder, var)
-                replace_str = replace_str.replace('var_placeholder', key)
-                rhs = replace(rhs, key, replace_str)
-                equations[i] = f"{lhs} {assign} {rhs}"
-            updated_args[new_key] = arg
+                replace_str = update_str.replace('update_placeholder', new_var)
+                if var in var_updates:
+                    for placeholder, var_tmp in var_updates[var]:
+                        replace_str = replace_str.replace(placeholder, var_tmp)
+                replace_str = replace_str.replace('var_placeholder', var)
+                rhs = replace(rhs, var, replace_str)
+                equations[i] = (f"{lhs} {assign} {rhs}", scope)
+            updated_args[f"{node}/{op}/{new_var}"] = arg
 
     return equations, updated_args
 
@@ -894,22 +930,23 @@ def update_lhs(equations: list, equation_args: dict, update_num: int, rhs_scalar
     updated_args = {}
     while equation_args:
         key, arg = equation_args.popitem()
-        if "_upd_" in key and f"_upd_{update_num-1}" not in key:
+        node, op, var = key.split('/')
+        if "_upd_" in var and f"_upd_{update_num-1}" not in var:
             updated_args[key] = arg
         else:
-            key = key.replace(f"_upd_{update_num-1}", "")
-            new_key = f"{key}_upd_{update_num}"
+            var = var.replace(f"_upd_{update_num-1}", "")
+            new_var = f"{var}_upd_{update_num}"
             add_to_args = False
-            for i, eq in enumerate(equations.copy()):
+            for i, (eq, scope) in enumerate(equations.copy()):
                 lhs, rhs, _ = split_equation(eq)
-                if key in lhs:
-                    lhs = new_key
-                    equations[i] = f"{lhs} = {rhs_scalar} * ({rhs})" if rhs_scalar else f"{lhs} = {rhs}"
+                if var in lhs:
+                    lhs = new_var
+                    equations[i] = (f"{lhs} = {rhs_scalar} * ({rhs})" if rhs_scalar else f"{lhs} = {rhs}", scope)
                     add_to_args = True
             if add_to_args:
                 if key in var_dict:
                     arg = var_dict[key].copy()
-                updated_args[new_key] = arg
+                updated_args[f"{node}/{op}/{new_var}"] = arg
     return equations, updated_args
 
 
@@ -1001,7 +1038,7 @@ def split_equation(expr):
     return lhs, rhs, assign_type
 
 
-def replace(eq: str, term: str, replacement: str) -> str:
+def replace(eq: str, term: str, replacement: str, rhs_only=False, lhs_only=False) -> str:
     """Replaces a term in an equation with a replacement term.
 
     Parameters
@@ -1036,9 +1073,13 @@ def replace(eq: str, term: str, replacement: str) -> str:
         idx_follow_op = idx+len(term)
 
         # if it is an allowed sign, replace term, else not
+        replaced = False
         if (idx_follow_op < len(eq) and eq[idx_follow_op] in allowed_follow_ops) or idx_follow_op == len(eq):
-            eq_new += f"{eq[:idx]} {replacement}"
-        else:
+            eq_part = eq[:idx]
+            if (rhs_only and "=" in eq_part) or (lhs_only and "=" not in eq_part) or (not rhs_only and not lhs_only):
+                eq_new += f"{eq_part} {replacement}"
+                replaced = True
+        if not replaced:
             eq_new += f"{eq[:idx_follow_op]}"
 
         # jump to next appearance of term in eq

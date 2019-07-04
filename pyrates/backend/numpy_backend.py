@@ -1077,7 +1077,10 @@ class NumpyBackend(object):
                     if hasattr(arg, 'shape'):
                         in_shape.append(sum(tuple(arg.shape)))
                     elif type(arg) in (tuple, list):
-                        in_shape.append(sum(arg))
+                        if hasattr(arg[0], 'shape'):
+                            in_shape.append(sum(tuple(arg[0].shape)))
+                        else:
+                            in_shape.append(sum(arg))
                     else:
                         in_shape.append(1)
                 if hasattr(op, 'shape') and (sum(tuple(op.shape)) > max(in_shape)):
@@ -1086,7 +1089,7 @@ class NumpyBackend(object):
 
         except Exception:
 
-            if type(args[0]) in (tuple, list) and len(args[0] > 1):
+            if type(args[0]) in (tuple, list) and len(args[0]) > 1:
 
                 # broadcast entries of argument tuples
                 args_tmp = self.broadcast(args[0][0], args[0][1])
