@@ -77,7 +77,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         sim_time = 10.0
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op0.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op0.0/a'})
         net.clear()
 
         # generate target values
@@ -104,7 +104,7 @@ def test_2_1_operator():
         inp = np.zeros((sim_steps, 1)) + 0.5
 
         # simulate operator behavior
-        results = net.run(sim_time, inputs={('pop0.0', 'op1.0', 'u'): inp}, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+        results = net.run(sim_time, inputs={'pop0.0/op1.0/u': inp}, outputs={'a': 'pop0.0/op1.0/a'})
         net.clear()
 
         # calculate operator behavior from hand
@@ -121,7 +121,7 @@ def test_2_1_operator():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net2").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op2.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op2.0/a'})
         net.clear()
 
         # calculate operator behavior from hand
@@ -140,8 +140,8 @@ def test_2_1_operator():
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net3").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
         results = net.run(sim_time,
-                          outputs={'b': ('pop0.0', 'op3.0', 'b')},
-                          inputs={('pop0.0', 'op3.0', 'u'): inp},
+                          outputs={'b': 'pop0.0/op3.0/b'},
+                          inputs={'pop0.0/op3.0/u': inp},
                           out_dir="/tmp/log")
         net.clear()
 
@@ -180,7 +180,7 @@ def test_2_2_node():
         net = ComputeGraph(net_config=net_config, name='net0', vectorization='none', dt=dt, backend=b)
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -201,7 +201,7 @@ def test_2_2_node():
         net = ComputeGraph(net_config=net_config, name='net1', vectorization='none', dt=dt, backend=b)
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op5.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op5.0/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -218,7 +218,7 @@ def test_2_2_node():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net6").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -237,7 +237,7 @@ def test_2_2_node():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net7").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'), 'b': ('pop0.0', 'op3.0', 'b')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a', 'b': 'pop0.0/op3.0/b'})
         net.clear()
 
         # calculate node behavior from hand
@@ -290,7 +290,7 @@ def test_2_3_edge():
             targets[i + 1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
 
         # simulate edge behavior
-        results = net.run(sim_time, outputs={'a': ('pop1.0', 'op1.0', 'a'), 'b': ('pop2.0', 'op1.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop1.0/op1.0/a', 'b': 'pop2.0/op1.0/a'})
 
         diff = np.mean(np.abs(results['a']['pop1.0/op1.0'].values - targets[:-1, 2])) + \
                np.mean(np.abs(results['b']['pop2.0/op1.0'].values - targets[:-1, 3]))
@@ -304,9 +304,9 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
         net = ComputeGraph(net_config=net_config, name='net1', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
-                                             'b': ('pop1.0', 'op7.0', 'a')},
-                          inputs={('pop1.0', 'op7.0', 'inp'): inp})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a',
+                                             'b': 'pop1.0/op7.0/a'},
+                          inputs={'pop1.0/op7.0/inp': inp})
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -324,8 +324,8 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net10").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op8.0', 'a'),
-                                             'b': ('pop1.0', 'op8.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op8.0/a',
+                                             'b': 'pop1.0/op8.0/a'})
 
         # calculate edge behavior from hand
         delay0 = int(0.5/dt)
@@ -350,9 +350,9 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
-                                             'b': ('pop1.0', 'op7.0', 'a')},
-                          inputs={('pop1.0', 'op7.0', 'inp'): inp})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a',
+                                             'b': 'pop1.0/op7.0/a'},
+                          inputs={'pop1.0/op7.0/inp': inp})
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -396,10 +396,10 @@ def test_2_4_vectorization():
         #                    backend='numpy')
 
         # simulate network behaviors
-        results0 = net0.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-                            inputs={('all', 'op7.0', 'inp'): inp})
-        results1 = net1.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-                            inputs={('all', 'op7.0', 'inp'): inp}, out_dir='/tmp/log')
+        results0 = net0.run(sim_time, outputs={'a': 'pop0.0/op7.0/a', 'b': 'pop1.0/op7.0/a'},
+                            inputs={'all/op7.0/inp': inp})
+        results1 = net1.run(sim_time, outputs={'a': 'pop0.0/op7.0/a', 'b': 'pop1.0/op7.0/a'},
+                            inputs={'all/op7.0/inp': inp}, out_dir='/tmp/log')
         #results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
         #                    inputs={('all', 'op7.0', 'inp'): inp})
 
