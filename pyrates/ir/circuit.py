@@ -50,7 +50,7 @@ class CircuitIR(AbstractBaseIR):
     and variables."""
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
-    __slots__ = ["_label", "_label_counter", "_label_map", "_graph", "_sub_circuits"]
+    __slots__ = ["_label", "_label_counter", "_label_map", "_graph", "_sub_circuits", "_reference_map"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -80,6 +80,8 @@ class CircuitIR(AbstractBaseIR):
 
         self._graph = MultiDiGraph()
         self._sub_circuits = set()
+
+        self._reference_map = {}
 
         if circuits:
             for key, temp in circuits.items():
@@ -111,8 +113,25 @@ class CircuitIR(AbstractBaseIR):
     def sub_circuits(self):
         return self._sub_circuits
 
+    def _collect_references(self, edge_or_node):
+        """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
+        References are collected as a list, because nodes and edges are (currently) not hashable."""
+
+        op_graph = edge_or_node.op_graph
+        try:
+            self._reference_map[op_graph].append(edge_or_node)
+        except KeyError:
+            self._reference_map[op_graph] = [edge_or_node]
+
+        # for key, data in edge_or_node:
+        #     op = data["operator"]
+        #     try:
+        #         self._reference_map[op].add(op_graph)
+        #     except KeyError:
+        #         self._reference_map[op] = {op_graph}
+
     def add_nodes_from(self, nodes: Dict[str, NodeIR], **attr):
-        """ Add multiple nodes to circuit. Allows networkx-style adding if from_templates is set to False.
+        """ Add multiple nodes to circuit. Allows networkx-style adding of nodes.
 
         Parameters
         ----------
@@ -123,15 +142,18 @@ class CircuitIR(AbstractBaseIR):
             additional keyword attributes that can be added to the node data. (default `networkx` syntax.)
         """
 
-        # get unique labels for nodes
-        for label in nodes:
-            self.label_map[label] = self._get_unique_label(label)
+        # get unique labels for nodes  --> deprecated and removed.
+        # for label in nodes:
+        #     self.label_map[label] = self._get_unique_label(label)
 
-        # rename node keys
+        # collect references to op_graphs in nodes
+        for node in nodes.values():
+            self._collect_references(node)
+
         # assign NodeIR instances as "node" keys in a separate dictionary, because networkx saves node attributes into
         # a dictionary
         # reformat dictionary to tuple/generator, since networkx does not parse dictionary correctly in add_nodes_from
-        nodes = ((self.label_map[key], {"node": node}) for key, node in nodes.items())
+        nodes = ((key, {"node": node}) for key, node in nodes.items())
         self.graph.add_nodes_from(nodes, **attr)
 
     def add_node(self, label: str, node: NodeIR, **attr):
@@ -147,12 +169,10 @@ class CircuitIR(AbstractBaseIR):
         attr
             Additional attributes (keyword arguments) that can be added to the node data. (Default `networkx` syntax.)
         """
-        label = label
-        new_label = self._get_unique_label(label)
+        self.graph.add_node(label, node=node, **attr)
 
-        self.graph.add_node(new_label, node=node, **attr)
-
-        self.label_map[label] = new_label
+        # collect references to op_graph in node
+        self._collect_references(node)
 
     def add_edges_from(self, edges, **attr):
         """ Add multiple edges. This method explicitly assumes, that edges are given in edge_templates instead of
@@ -199,6 +219,10 @@ class CircuitIR(AbstractBaseIR):
                                "source_var": "/".join(source[-2:]),
                                "target_var": "/".join(target[-2:])
                                }))
+
+            # collect references to op_graph in edge ir
+            self._collect_references(edge_ir)
+
         self.graph.add_edges_from(edge_list, **attr)
 
     def add_edge(self, source: str, target: str, edge_ir: EdgeIR, weight: float = 1., delay: float = None,
@@ -263,53 +287,8 @@ class CircuitIR(AbstractBaseIR):
 
         self.graph.add_edge(source_node, target_node, **attr_dict)
 
-    def _get_unique_label(self, label: str) -> str:
-        """Tests, if a given node `label` already exists in the circuit and renames it uniquely, if necessary.
-        Uniqueness is generally ensure by appending a counter of the form ".0" . If the given label already has a
-        counter, it will be detected ond potentially altered if uniqueness requires it. The resulting (new) label is
-        returned.
-
-        Parameters
-        ----------
-        label
-
-        Returns
-        -------
-        unique_label
-        """
-        # test, if label already has a counter and separate it, if necessary
-        # could use pyparsing instead of regex, but actually seems more robust and simple enough in this case
-        match = re.match("(.+)[.]([\d]+$)", label)
-        if match:
-            # see if label already exists, just continue if it doesn't
-            if label in self:
-                # create new label
-                # separate base label and counter
-                label, counter = match.groups()
-                counter = int(counter)
-                if label not in self.label_counter:
-                    self.label_counter[label] = counter + 1
-                elif counter > self.label_counter[label]:
-                    self.label_counter[label] = counter + 1
-                else:
-                    self.label_counter[label] += 1
-                # set label
-                unique_label = f"{label}.{self.label_counter[label]}"
-            else:
-                # pass original label
-                unique_label = label
-
-        else:
-            # define counter
-            if label in self.label_counter:
-                self.label_counter[label] += 1
-            else:
-                self.label_counter[label] = 0
-
-            # set label
-            unique_label = f"{label}.{self.label_counter[label]}"
-
-        return unique_label
+        # collect references to op_graph in edge ir
+        self._collect_references(edge_ir)
 
     def _validate_separate_key_path(self, *paths: str):
 

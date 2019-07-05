@@ -67,3 +67,6 @@ class NodeIR(AbstractBaseIR):
     @property
     def operators(self):
         return self.op_graph.operators
+
+    def __hash__(self):
+        raise NotImplementedError

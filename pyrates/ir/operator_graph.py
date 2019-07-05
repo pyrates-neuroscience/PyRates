@@ -36,19 +36,53 @@ from pyrates.ir.operator import OperatorIR
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
+# define cache for OperatorGraph instances
 
+op_graph_cache = {}
+
+
+def _cache_op_graph(cls):
+    """Cache unique instances of operator graphs and return the instance. If hash of Operator graph is not known yet,
+    a new instance will be created. Otherwise, an instance from cash will be returned."""
+
+    def cache_func(operators: Dict[str, OperatorIR] = None, template: str = ""):
+
+        if operators is None:
+            operators = {}
+
+        # compute hash from incoming operators. Different order of operators in input might lead to different hash.
+        h = hash(tuple(operators.values()))
+
+        try:
+            op_graph = op_graph_cache[h]
+        except KeyError:
+            op_graph = cls(operators, template)
+            # test, if hash computation leads to same result
+            assert h == hash(op_graph)
+            op_graph_cache[h] = op_graph
+
+        return op_graph
+
+    return cache_func
+
+
+@_cache_op_graph
 class OperatorGraph(DiGraph):
     """Intermediate representation for nodes and edges."""
 
     def __init__(self, operators: Dict[str, OperatorIR] = None, template: str = ""):
 
         super().__init__()
-        if not operators:
+        if operators is None:
             operators = {}
 
+        # compute hash from incoming operators. Different order of operators in input might lead to different hash.
+        self._h = hash(tuple(operators.values()))
+
+        # collect all information about output variables of operators
+        #############################################################
         all_outputs = {}  # type: Dict[str, List[str]]
         # op_inputs, op_outputs = set(), set()
-
         for key, operator in operators.items():
 
             # add operator as node to local operator_graph
@@ -65,6 +99,7 @@ class OperatorGraph(DiGraph):
             all_outputs[out_var].append(key)
 
         # link outputs to inputs
+        ########################
         for label, data in self.nodes(data=True):
             op = data["operator"]
             for in_var in op.inputs:
@@ -78,6 +113,8 @@ class OperatorGraph(DiGraph):
                 else:
                     pass  # means, that 'source' will remain an empty list and no incoming edge will be added
 
+        # check for cycle in operator graph
+        ###################################
         try:
             find_cycle(self)
         except NetworkXNoCycle:
@@ -85,8 +122,6 @@ class OperatorGraph(DiGraph):
         else:
             raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node "
                                    "or edge.")
-
-        self._h = hash(tuple(self.nodes))
 
     def __hash__(self):
         return self._h
@@ -121,7 +156,7 @@ class OperatorGraph(DiGraph):
 
     def __iter__(self):
         """Return an iterator containing all operator labels in the operator graph."""
-        return iter(self.nodes)
+        return iter(self.nodes(data=True))
 
     def operators(self, get_ops=False, get_vals=False):
         """Alias for self.nodes"""
