@@ -45,7 +45,8 @@ class OperatorIR(AbstractBaseIR):
     change in the future."""
     __slots__ = ["_equations", "_variables", "_inputs", "_output"]
 
-    def __init__(self, equations: List[str], variables: List[tuple], inputs: List[str], output:str, template: str = None):
+    def __init__(self, equations: List[str], variables: List[tuple], inputs: List[str], output: str,
+                 template: str = None):
 
         super().__init__(template)
         # define hash

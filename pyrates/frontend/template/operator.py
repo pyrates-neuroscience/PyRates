@@ -119,6 +119,8 @@ class OperatorTemplate(AbstractBaseTemplate):
         # key for global operator cache is template name.
         # ToDo: Consider replacing this cache with a separate by-circuit cache.
         key = self.name
+        if values is None:
+            values = {}
 
         try:
             instance, default_values = self.cache[key]
