@@ -3,7 +3,7 @@
 
 PRO:
   base: OperatorTemplate
-  equations: "m_out = m_max / (1. + exp(r*(V_thr - PSP)))"
+  equations: ["V = PSP", "m_out = m_max / (1. + exp(r*(V_thr - V)))"]
   variables:
     m_out:
       default: output
@@ -95,9 +95,9 @@ DummyEdge:
 JRC:
   base: CircuitTemplate
   nodes:
+    PC: PC
     EIN: EIN
     IIN: IIN
-    PC: PC
   edges:
     - [PC/PRO/m_out, IIN/RPO_e/m_in, DummyEdge, {weight: 33.75}]
     - [PC/PRO/m_out, EIN/RPO_e/m_in, DummyEdge, {weight: 135.}]

@@ -188,7 +188,6 @@ class ComputeGraph(object):
                 args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                       'value': np.array(sidx, dtype=np.int32)}
             args[tvar] = tval
-            args['instant_update'] = True
 
             # add edge operator to target node
             op_name = f'{source_node}_{edge_idx}'
@@ -220,6 +219,7 @@ class ComputeGraph(object):
             graph = op_graph.copy()  # type: DiGraph
 
             # go through all operators on node and pre-process + extract equations and variables
+            i = 0
             while graph.nodes:
 
                 # get all operators that have no dependencies on other operators
@@ -228,13 +228,21 @@ class ComputeGraph(object):
                 op_eqs, op_vars = self._add_ops(ops, node_name=node_name)
 
                 # collect primary operator equations and variables
-                equations += op_eqs
+                if len(equations) == i:
+                    equations.append(op_eqs)
+                else:
+                    equations[i] += op_eqs
                 for key, var in op_vars.items():
                     if key not in variables:
                         variables[key] = var
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
+                i += 1
+
+        equations_final = []
+        for eqs in equations:
+            equations_final += eqs
 
         # parse all equations and variables into the backend
         ####################################################
@@ -242,7 +250,7 @@ class ComputeGraph(object):
         self.backend.bottom_layer()
 
         # parse mapping
-        variables = parse_equation_list(equations=equations, equation_args=variables, backend=self.backend,
+        variables = parse_equation_list(equations=equations_final, equation_args=variables, backend=self.backend,
                                         solver=self.solver)
 
         # save parsed variables in net config
@@ -1198,7 +1206,6 @@ class ComputeGraph(object):
             eqs_op_rotate = [f"{var}_buffer_{idx} = concat(({var}_buffer_{idx}[:, 1:], {var}_buffer_{idx}_reset), 1)"]
 
         # add buffer operators to operator graph
-        var_dict['instant_update'] = True
         op_graph.add_node(f'{op}_{var}_buffer_rotate_{idx}',
                           operator={'inputs': {},
                                     'output': f'{var}_buffer_{idx}',

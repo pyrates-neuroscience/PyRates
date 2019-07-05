@@ -126,7 +126,7 @@ class ExpressionParser(ParserElement):
         self.op = None
         self._finished_rhs = False
         self.rhs_eval = None
-        self._instant_update = kwargs.pop('instant_update', False)
+        self._layer = kwargs.pop('layer', 0)
 
         # define algebra
         ################
@@ -227,6 +227,12 @@ class ExpressionParser(ParserElement):
         self._check_parsed_expr(self.rhs)
 
         # parse rhs into backend
+        base_layer = self.backend.layer
+        if self._layer == -1:
+            #self.backend._input_layer_added = True
+            self.backend.previous_layer()
+        elif self._layer == 1:
+            self.backend.next_layer()
         rhs = self.parse(self.expr_stack[:])
 
         # create new variable for lhs update
@@ -239,7 +245,7 @@ class ExpressionParser(ParserElement):
         dtype = rhs.dtype if hasattr(rhs, 'dtype') else self.backend._float_def
         shape = rhs.shape if hasattr(rhs, 'shape') else ()
 
-        if not self._instant_update:
+        if self._layer == 0:
 
             # assign rhs to new variable
             delta = self.backend.add_var('state_var', name=name, dtype=dtype, shape=shape, **self.parser_kwargs)
@@ -260,6 +266,9 @@ class ExpressionParser(ParserElement):
 
         # parse lhs into backend
         self.lhs = self._update_lhs()
+
+        # reset backend layer
+        self.backend.goto_layer(base_layer)
 
         return self.lhs, self.rhs, self.vars
 
@@ -425,7 +434,9 @@ class ExpressionParser(ParserElement):
         elif op == ")":
 
             # check whether expression in parenthesis is a group of arguments to a function
-            start_par = expr_stack.index("(")
+            start_par = -1
+            while "(" not in expr_stack[start_par]:
+                start_par -= 1
             if "," in expr_stack[start_par:]:
 
                 args = []
@@ -462,7 +473,11 @@ class ExpressionParser(ParserElement):
 
             if self._finished_rhs:
 
-                self.op = self.rhs
+                if op == 'rhs':
+                    self.op = self.rhs
+                else:
+                    self.op = self.backend.add_var(vtype='state_var', name=op, shape=self.rhs_eval.shape,
+                                                   dtype=self.rhs_eval.dtype)
                 self.vars[op] = self.op
 
             else:
@@ -492,9 +507,6 @@ class ExpressionParser(ParserElement):
         solver = self.parser_kwargs.pop('solver', 'euler')
         diff_eq = self._diff_eq
 
-        # advance one backend layer
-        self.backend.next_layer()
-
         # update left-hand side of equation
         ###################################
 
@@ -503,6 +515,7 @@ class ExpressionParser(ParserElement):
             if solver == 'euler':
 
                 # use explicit forward euler
+                self.backend.next_layer()
                 op = self.parse(self.expr_stack + ['dt', 'rhs', '*', '+='])
                 self.backend.previous_layer()
 
@@ -511,15 +524,17 @@ class ExpressionParser(ParserElement):
                 raise ValueError(f'Wrong solver type: {solver}. '
                                  f'Please check the docstring of this function for available solvers.')
 
-        elif self._instant_update:
+        elif self._layer == 0:
 
-            self.backend.previous_layer()
+            # simple update
+            self.backend.next_layer()
             op = self.parse(self.expr_stack + ['rhs', self._assign_type])
+            self.backend.previous_layer()
 
         else:
 
+            # simple update
             op = self.parse(self.expr_stack + ['rhs', self._assign_type])
-            self.backend.previous_layer()
 
         return op
 
@@ -809,6 +824,7 @@ def parse_equations(equations, equation_args, backend, **kwargs) -> tuple:
     """
     updates = {}
 
+    diff_eq_pos = -1
     for eq, scope in equations:
 
         # parse arguments
@@ -816,7 +832,7 @@ def parse_equations(equations, equation_args, backend, **kwargs) -> tuple:
 
         # extract operator variables from equation args
         op_args = {key.split('/')[-1]: var for key, var in equation_args.items() if scope in key}
-        inputs = op_args['inputs']
+        inputs = op_args['inputs'] if 'inputs' in op_args else {}
         unprocessed_inputs = []
         for key, inp in inputs.items():
             inp_tmp = equation_args[inp]
@@ -833,12 +849,20 @@ def parse_equations(equations, equation_args, backend, **kwargs) -> tuple:
         op_args.update(args_tmp)
         op_args['dt'] = equation_args['all/all/dt']
 
+        # define position of equation in backend layer structure
+        ########################################################
+
+        if ('dt' in eq or "'" in eq) and diff_eq_pos == -1:
+            diff_eq_pos = 0
+            backend.next_layer()
+        elif ('dt' not in eq and "'" not in eq) and diff_eq_pos == 0:
+            diff_eq_pos = 1
+            backend.next_layer()
+
         # parse equation
         ################
 
-        instant_update = op_args.pop('instant_update', False)
-        parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope,
-                                  instant_update=instant_update, **kwargs)
+        parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, layer=diff_eq_pos, **kwargs)
         parser.parse_expr()
 
         updates[f"{scope}/{parser.lhs_key}"] = parser.vars[parser.lhs_key]
@@ -850,8 +874,8 @@ def parse_equations(equations, equation_args, backend, **kwargs) -> tuple:
             if key != "inputs" and key != "rhs" and key != "dt":
                 equation_args[f"{scope}/{key}"] = var
 
-        for key in unprocessed_inputs:
-            equation_args[inputs[key]] = parser.vars[key]
+        for key, inp in inputs.items():
+            equation_args[inp] = parser.vars[key]
 
     return updates, equation_args
 
