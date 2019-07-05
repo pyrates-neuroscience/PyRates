@@ -30,13 +30,14 @@
 operations.
 """
 
-# external imports
-from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
-    ZeroOrMore, Forward, nums, alphas, ParserElement
-from numbers import Number
 import math
 import typing as tp
 from copy import deepcopy
+from numbers import Number
+
+# external imports
+from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
+    ZeroOrMore, Forward, nums, alphas, ParserElement
 
 # meta infos
 __author__ = "Richard Gast"
@@ -741,9 +742,9 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
         # first rhs evaluation
         update_num += 1
         state_vars = {key: var for key, var in equation_args.items()
-                      if ((type(var) is dict) and (var['vtype'] == 'state_var'))}
+                      if (type(var) is dict) and ('vtype' in var) and (var['vtype'] == 'state_var')}
         state_vars_orig = dict(state_vars.items())
-        equations_tmp, state_vars = update_lhs(equations.copy(), state_vars, update_num, "", state_vars_orig)
+        equations_tmp, state_vars = update_lhs(deepcopy(equations), state_vars, update_num, "0.5*dt", state_vars_orig)
         for var_orig in state_vars_orig.copy().keys():
             if not any([var_orig in var for var in state_vars]):
                 state_vars_orig.pop(var_orig)
@@ -754,40 +755,42 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
         backend.next_layer()
 
         # second rhs evaluation
-        equations_tmp, updates_new = update_rhs(equations.copy(), updates, update_num,
-                                                "(var_placeholder + 0.5*dt*update_placeholder)")
-        updates.update(updates_new)
+        updates.update({key: arg for key, arg in equation_args.items() if 'inputs' in key})
+        equations_tmp, updates = update_rhs(deepcopy(equations), updates, update_num,
+                                            "(var_placeholder + update_placeholder)")
+        equation_args = update_equation_args(equation_args, updates)
         state_vars = {key: var for key, var in equation_args.items()
                       if any([orig_key in key for orig_key in state_vars_orig])}
         update_num += 1
-        equations_tmp, state_vars = update_lhs(equations_tmp, state_vars, update_num, "", state_vars_orig)
+        equations_tmp, state_vars = update_lhs(equations_tmp, state_vars, update_num, "2.*dt", state_vars_orig)
         equation_args.update(state_vars)
         updates_new, equation_args = parse_equations(equations=equations_tmp, equation_args=equation_args,
                                                      backend=backend, **kwargs)
-        updates.update(updates_new)
         backend.next_layer()
         backend.next_layer()
 
         # third rhs evaluation
-        equations, updates_new = update_rhs(equations, updates, update_num,
-                                            "(var_placeholder - dt*var_placeholder_1 + 2.0*dt*update_placeholder)")
         updates.update(updates_new)
+        equations, updates = update_rhs(equations, updates, update_num,
+                                        "(var_placeholder - 2*var_placeholder_1 + update_placeholder)")
+        equation_args = update_equation_args(equation_args, updates)
         state_vars = {key: var for key, var in equation_args.items()
                       if any([orig_key in key for orig_key in state_vars_orig])}
         update_num += 1
-        equations, state_vars = update_lhs(equations, state_vars, update_num, "", state_vars_orig)
+        equations, state_vars = update_lhs(equations, state_vars, update_num, "dt*0.5", state_vars_orig)
         equation_args.update(state_vars)
-        updates_new, equation_args = parse_equations(equations=equations, equation_args=equation_args,
-                                                     backend=backend, **kwargs)
-        updates.update(updates_new)
+        updates, equation_args = parse_equations(equations=equations, equation_args=equation_args,
+                                                 backend=backend, **kwargs)
         backend.next_layer()
         backend.next_layer()
 
         # combination of 3 rhs evaluations a'la rk23
-        equation_args.update(updates)
-        equations = [f'{var} += dt * ({var}_upd_1/6. + 2.*{var}_upd_2/3. + {var}_upd_3/6.)'
-                     for var in state_vars_orig]
-        _, equation_args = parse_equations(equations=equations, equation_args=equation_args, backend=backend,
+        equation_args = update_equation_args(equation_args, updates)
+        equations = []
+        for var_info in state_vars_orig:
+            node, op, var = var_info.split('/')
+            equations.append((f'{var} += ({var}_upd_1 + {var}_upd_2 + {var}_upd_3)/3.', f"{node}/{op}"))
+        _, equation_args = parse_equations(equations=[equations], equation_args=equation_args, backend=backend,
                                            **kwargs)
 
     elif solver == 'euler':
@@ -998,9 +1001,12 @@ def update_lhs(equations: list, equation_args: dict, update_num: int, rhs_scalar
                                                    scope)
                                 add_to_args = True
             if add_to_args:
-                if key in var_dict:
-                    arg = var_dict[key].copy()
+                for var_key, var in var_dict.copy().items():
+                    if var_key in key:
+                        arg = var
+                        break
                 updated_args[f"{node}/{op}/{new_var}"] = arg
+
     return equations, updated_args
 
 
