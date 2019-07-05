@@ -438,7 +438,7 @@ def test_1_7_equation_parsing():
     for eq, args, target in zip(equations, arguments, results):
 
         # tensorflow-based parsing
-        result_tmp = parse_equation_list(equations=[(eq, 'node/op')], equation_args=args, backend=b)['node/op/a']
+        result_tmp = parse_equation_list(equations=[[(eq, 'node/op')]], equation_args=args, backend=b)['node/op/a']
         result = result_tmp.numpy() if hasattr(result_tmp, 'numpy') else result_tmp.eval().numpy()
         #assert result == pytest.approx(target, rel=1e-6)
 
@@ -454,5 +454,5 @@ def test_1_7_equation_parsing():
     # test equation parser on different test equations
     for eq, args, target in zip(equations, arguments, results):
         # tensorflow-based parsing
-        result = parse_equation_list(equations=[(eq, 'node/op')], equation_args=args, backend=b)['node/op/a']
+        result = parse_equation_list(equations=[[(eq, 'node/op')]], equation_args=args, backend=b)['node/op/a']
         #assert result == pytest.approx(target, rel=1e-6)

@@ -1,9 +1,18 @@
 %YAML 1.2
 ---
 
+OBS:
+  base: OperatorTemplate
+  equations: "V = PSP"
+  variables:
+    V:
+      default: variable
+    PSP:
+      default: input
+
 PRO:
   base: OperatorTemplate
-  equations: ["V = PSP", "m_out = m_max / (1. + exp(r*(V_thr - V)))"]
+  equations: ["m_out = m_max / (1. + exp(r*(V_thr - PSP)))"]
   variables:
     m_out:
       default: output
@@ -75,6 +84,7 @@ PC:
     - RPO_e_pc
     - RPO_i
     - PRO
+    - OBS
 
 IIN:
   base: NodeTemplate

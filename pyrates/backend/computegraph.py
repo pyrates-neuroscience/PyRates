@@ -240,17 +240,13 @@ class ComputeGraph(object):
                 graph.remove_nodes_from(ops)
                 i += 1
 
-        equations_final = []
-        for eqs in equations:
-            equations_final += eqs
-
         # parse all equations and variables into the backend
         ####################################################
 
         self.backend.bottom_layer()
 
         # parse mapping
-        variables = parse_equation_list(equations=equations_final, equation_args=variables, backend=self.backend,
+        variables = parse_equation_list(equations=equations, equation_args=variables, backend=self.backend,
                                         solver=self.solver)
 
         # save parsed variables in net config
