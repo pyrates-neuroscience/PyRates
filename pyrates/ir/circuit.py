@@ -616,17 +616,17 @@ class CircuitIR(AbstractBaseIR):
         # second pass: add operators to target op graph and rename sources according to key_map
         for key, data in op_graph.nodes(data=True):
             op = data["operator"]
-            variables = data["variables"]
+            inputs = deepcopy(data["inputs"])
             # go through all input variables and rename source operators
-            for var, var_data in op.inputs.items():
-                sources = []
+            for var, var_data in inputs.items():
+                sources = set()
                 for source_op in var_data["sources"]:
-                    sources.append(key_map[source_op])
-                op.inputs[var]["sources"] = sources
+                    sources.add(key_map[source_op])
+                inputs[var]["sources"] = sources
 
             # add operator to target_node's operator graph
             # TODO: implement add_node method on OperatorGraph class
-            target_node.op_graph.add_node(key_map[key], operator=op, variables=variables)
+            target_node.op_graph.add_node(key_map[key], operator=op, inputs=inputs, label=key_map[key])
 
         # add edges that previously existed
         for source_op, target_op in op_graph.edges:
@@ -641,7 +641,7 @@ class CircuitIR(AbstractBaseIR):
         output_op, output_var = output_var.split("/")
         output_op = key_map[output_op]
 
-        target_node[target_op].inputs[target_var]["sources"].append(output_op)
+        target_node.op_graph.node[target_op]["inputs"][target_var]["sources"].add(output_op)
 
         # make sure the changes are saved (might not be necessary)
         # nodes[target] = target_node
