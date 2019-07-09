@@ -38,7 +38,7 @@ from copy import deepcopy
 from warnings import filterwarnings
 
 # pyrates imports
-from pyrates.backend.parser import parse_equation_list, parse_dict
+from pyrates.backend.parser import parse_equation_system, parse_dict
 from pyrates import PyRatesException
 from pyrates.ir.circuit import CircuitIR
 from pyrates.frontend import CircuitTemplate
@@ -133,9 +133,6 @@ class ComputeGraph(object):
 
         print('building the compute graph...')
 
-        equations = []
-        variables = {'all/all/dt': self._dt}
-
         # collect output variables
         source_nodes, target_nodes, edge_indices = [], [], []
         op_names, var_names = [], []
@@ -213,32 +210,14 @@ class ComputeGraph(object):
         # parse node operations
         #######################
 
-        for node_name, node in self.net_config.nodes.items():
-
-            op_graph = self._get_node_attr(node_name, 'op_graph')
-            graph = op_graph.copy()  # type: DiGraph
-
-            # go through all operators on node and pre-process + extract equations and variables
-            i = 0
-            while graph.nodes:
-
-                # get all operators that have no dependencies on other operators
-                # noinspection PyTypeChecker
-                ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
-                op_eqs, op_vars = self._add_ops(ops, node_name=node_name)
-
-                # collect primary operator equations and variables
-                if len(equations) == i:
-                    equations.append(op_eqs)
-                else:
-                    equations[i] += op_eqs
-                for key, var in op_vars.items():
-                    if key not in variables:
-                        variables[key] = var
-
-                # remove parsed operators from graph
-                graph.remove_nodes_from(ops)
-                i += 1
+        variables = {'all/all/dt': self._dt}
+        edge_equations, variables_tmp = self._extract_op_layers(layers=[0])
+        variables.update(variables_tmp)
+        node_equations, variables_tmp = self._extract_op_layers(layers=[0], exclude=True)
+        variables.update(variables_tmp)
+        if not node_equations:
+            node_equations = edge_equations
+            edge_equations = []
 
         # parse all equations and variables into the backend
         ####################################################
@@ -246,8 +225,8 @@ class ComputeGraph(object):
         self.backend.bottom_layer()
 
         # parse mapping
-        variables = parse_equation_list(equations=equations, equation_args=variables, backend=self.backend,
-                                        solver=self.solver)
+        variables = parse_equation_system(edge_equations=edge_equations, node_equations=node_equations,
+                                          equation_args=variables, backend=self.backend, solver=self.solver)
 
         # save parsed variables in net config
         for key, val in variables.items():
@@ -889,6 +868,46 @@ class ComputeGraph(object):
                 return op[attr]
             except KeyError:
                 return None
+
+    def _extract_op_layers(self, layers, exclude=False):
+        """Extracts
+
+        Returns
+        -------
+
+        """
+
+        equations = []
+        variables = {}
+
+        for node_name, node in self.net_config.nodes.items():
+
+            op_graph = self._get_node_attr(node_name, 'op_graph')
+            graph = op_graph.copy()  # type: DiGraph
+
+            # go through all operators on node and pre-process + extract equations and variables
+            i = 0
+            while graph.nodes:
+
+                # get all operators that have no dependencies on other operators
+                # noinspection PyTypeChecker
+                ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
+
+                if (i in layers and not exclude) or (i not in layers and exclude):
+
+                    op_eqs, op_vars = self._add_ops(ops, node_name=node_name)
+
+                    # collect primary operator equations and variables
+                    equations += op_eqs
+                    for key, var in op_vars.items():
+                        if key not in variables:
+                            variables[key] = var
+
+                # remove parsed operators from graph
+                graph.remove_nodes_from(ops)
+                i += 1
+
+        return equations, variables
 
     @staticmethod
     def _apply_idx(var: Any, idx: Optional[Union[int, tuple]] = None) -> Any:

@@ -38,5 +38,5 @@ c) backend_wrapper
 """
 
 from .computegraph import ComputeGraph
-from .parser import ExpressionParser, parse_dict, parse_equation_list
+from .parser import ExpressionParser, parse_dict, parse_equation_system
 from .funcs import *
