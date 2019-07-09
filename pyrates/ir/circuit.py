@@ -28,11 +28,10 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-import re
 from copy import deepcopy
 from typing import Union, Dict, Iterator
 
-from pyparsing import Word, ParseException, nums, Literal, LineEnd, Suppress, alphanums
+from pyparsing import Word, ParseException, nums, Literal
 from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGraph
 from pandas import DataFrame
 
@@ -50,7 +49,7 @@ class CircuitIR(AbstractBaseIR):
     and variables."""
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
-    __slots__ = ["_label", "_label_counter", "_label_map", "_graph", "_sub_circuits", "_reference_map"]
+    __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -74,12 +73,11 @@ class CircuitIR(AbstractBaseIR):
         """
 
         super().__init__(template)
-        self._label = label
-        self._label_counter = {}
-        self._label_map = {}
+        self.label = label
+        self.label_map = {}
 
-        self._graph = MultiDiGraph()
-        self._sub_circuits = set()
+        self.graph = MultiDiGraph()
+        self.sub_circuits = set()
 
         self._reference_map = {}
 
@@ -92,26 +90,6 @@ class CircuitIR(AbstractBaseIR):
 
         if edges:
             self.add_edges_from(edges)
-
-    @property
-    def label(self):
-        return self._label
-
-    @property
-    def label_counter(self):
-        return self._label_counter
-
-    @property
-    def label_map(self):
-        return self._label_map
-
-    @property
-    def graph(self):
-        return self._graph
-
-    @property
-    def sub_circuits(self):
-        return self._sub_circuits
 
     def _collect_references(self, edge_or_node):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
@@ -299,13 +277,11 @@ class CircuitIR(AbstractBaseIR):
 
             node = "/".join(node)
 
+            # TODO: check, whether checking the node label against the label map ist still necessary
             # re-reference node labels, if necessary
             # this syntax yields `node` back as default if it is not in label_map
             node = self.label_map.get(node, node)
-            # re_reference operator labels, if necessary
-            op = self._validate_rename_op_label(self[node], op)
             # ignore circuits for now
-            # note: current implementation assumes, that this method is only called, if an edge is added
             path = "/".join((node, op, var))
             # check if path is valid
             if path not in self:
@@ -313,59 +289,6 @@ class CircuitIR(AbstractBaseIR):
 
             separated = (node, op, var)
             yield separated
-
-    @staticmethod
-    def _validate_rename_op_label(node: NodeIR, op_label: str) -> str:
-        """
-        References to operators in source/target references may mismatch actual operator labels, due to internal renaming
-        that can not be accounted for in the YAML templates. This method looks for the first instance of an operator in
-        a specific node, assuming it exists at all. Additionally, this assumes, that only one variation of an operator
-        template (of same name) can exist in any single node.
-        Note: The latter assumption becomes invalid, if edge operators are moved to nodes, because in that case multiple
-        variations of the same operator can exist in one node.
-
-        Parameters
-        ----------
-        node
-        op_label
-
-        Returns
-        -------
-        new_op_label
-
-        """
-        # variant 1: label already has a counter --> might actually already exist.
-
-        if "." in op_label:
-            try:
-                _ = node[op_label]
-            except KeyError:
-                op_label, *_ = op_label.split(".")
-            else:
-                return op_label
-        else:
-            return op_label
-
-        # build grammar for pyparsing
-        grammar = Literal(op_label) + "." + Word(nums)
-        found = 0  # count how many matching operators were found
-        for op_key in node:
-            try:
-                grammar.parseString(op_key, parseAll=True)
-            except ParseException:
-                continue
-            else:
-                op_label = op_key
-                found += 1
-
-        if found == 1:
-            return op_label
-        elif not found:
-            raise PyRatesException(f"Could not identify operator with base name '{op_label}' "
-                                   f"in node `{node}`.")
-        else:
-            raise PyRatesException(f"Unable to uniquely identify operator key. "
-                                   f"Found multiple occurrences for operator with base name '{op_label}'.")
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
 
@@ -514,7 +437,46 @@ class CircuitIR(AbstractBaseIR):
             # target_var = data.pop("target_var")
             self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
 
-    def move_edge_operators_to_nodes(self, copy_data=True):
+    def optimize_graph_in_place(self):
+
+        # 1: collapse all nodes that use the same operator graph into one node
+        ######################################################################
+
+        # a: create new node with generic name that contains common operator graph
+        # - do not add back-ref for now
+        # - add some counter for the generic name, e.g. node1, node2...
+        # b: initialize all variables as empty lists
+        # node by node:
+        #   c: append all variable values to respective lists
+        #   d: note reference to collapsed node in `self.label_map` as f'{generic_name}[{index}]'
+        #   e: delete reference for node in operator graph reference collection
+        #
+        # d: re-reference all edges accordingly (add new ones and remove old ones)
+        # - rename source/target nodes in edges
+        # - add index to source_var/target_var
+
+        # 2: move all operators from edges to respective coupling nodes and reference labels accordingly
+        ################################################################################################
+
+        # a: create coupling nodes: graph by graph
+        # - find all operator graphs referenced by edges (all that still have references?)
+        # - create corresponding coupling node
+        # - add some counter for coupling nodes, e.g. coupling1, coupling2
+        # - initialize all variables as empty lists
+        # edge by edge
+        #   b: get new reference for source/target nodes
+        #   c: get respective index for source/target variables
+        #   d: append all variable values to respective lists
+        #   e: add two new edges
+        #   - nodeN->couplingM: weight=1, delay=0
+        #   - couplingN->nodeN: weight=weight, delay=delay, additional data
+        #   f: delete old edge and op_graph reference
+        # g: delete all old nodes
+        # - verify that nodes do not have incoming or outgoing edges (are isolated)
+
+        pass
+
+    def move_edge_operators_to_nodes(self, copy_data=True, in_place=True):
         """Returns a new CircuitIR instance, where all operators that were previously in edges are moved to their
         respective target nodes."""
         # if copy_data:
@@ -566,7 +528,7 @@ class CircuitIR(AbstractBaseIR):
 
     @staticmethod
     def _move_ops_to_target(target, input_var, output_var, target_var, op_graph: DiGraph, op_label_counter, nodes):
-        # check, if cycles are present in operator graph (which would be problematic
+        # check, if cycles are present in operator graph (which would be problematic)
         try:
             find_cycle(op_graph)
         except NetworkXNoCycle:

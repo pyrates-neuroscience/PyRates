@@ -41,8 +41,8 @@ __status__ = "Development"
 
 class OperatorIR(AbstractBaseIR):
     """This implementation of the Operator IR is aimed to be hashable and immutable. Following Python standards, we
-    assume that users are consenting adults. Objects are thus not actually mutable, just slightly protected. This might
-    change in the future."""
+    assume that users are consenting adults. Objects are thus not actually immutable, just slightly protected.
+    This might change in the future."""
     __slots__ = ["_equations", "_variables", "_inputs", "_output"]
 
     def __init__(self, equations: List[str], variables: List[tuple], inputs: List[str], output: str,
