@@ -770,6 +770,7 @@ def parse_equation_list(equations: list, equation_args: dict, backend: tp.Any, *
         backend.next_layer()
 
         # third rhs evaluation
+        updates.update({key: arg for key, arg in equation_args.items() if 'inputs' in key})
         updates.update(updates_new)
         equations, updates = update_rhs(equations, updates, update_num,
                                         "(var_placeholder - 2*var_placeholder_1 + update_placeholder)")
@@ -889,17 +890,18 @@ def update_rhs(equations: list, equation_args: dict, update_num: int, update_str
 
     # collect variable updates from earlier rhs evaluations
     var_updates = {}
-    for key, arg in equation_args.items():
-        node, op, var = key.split('/')
-        if f"_upd_{update_num}" in var:
-            var = var.replace(f"_upd_{update_num}", "")
-        if "_upd_" in var:
-            idx = int(var[-1])
-            var_tmp = var[:-6]
-            if var_tmp in var_updates:
-                var_updates[var_tmp].append((f'var_placeholder_{idx}', var))
-            else:
-                var_updates[var_tmp] = [(f'var_placeholder_{idx}', var)]
+    if update_num > 1:
+        for key, arg in equation_args.items():
+            node, op, var = key.split('/')
+            if f"_upd_{update_num}" in var:
+                var = var.replace(f"_upd_{update_num}", "")
+            if "_upd_" in var:
+                idx = int(var[-1])
+                var_tmp = var[:-6]
+                if var_tmp in var_updates:
+                    var_updates[var_tmp].append((f'var_placeholder_{idx}', var))
+                else:
+                    var_updates[var_tmp] = [(f'var_placeholder_{idx}', var)]
 
     # integrate previous rhs evaluations into rhs equations
     updated_args = {}
@@ -910,23 +912,29 @@ def update_rhs(equations: list, equation_args: dict, update_num: int, update_str
         if 'inputs' in key:
 
             for var, arg_tmp in arg.copy().items():
-                new_var = f"{var}_upd_{update_num}"
-                arg_tmp = arg_tmp.split('/')
-                arg_tmp[-1] = f"{arg_tmp[-1]}_upd_{update_num}"
-                arg_tmp = "/".join(arg_tmp)
-                if arg_tmp in equation_args or arg_tmp in updated_args:
-                    arg[new_var] = arg_tmp
-                    replace_str = update_str.replace('update_placeholder', new_var)
-                    if var in var_updates:
-                        for placeholder, var_tmp in var_updates[var]:
-                            replace_str = replace_str.replace(placeholder, var_tmp)
-                    replace_str = replace_str.replace('var_placeholder', var)
-                    for i, layer in enumerate(equations.copy()):
-                        for j, (eq, scope) in enumerate(layer):
-                            lhs, rhs, assign = split_equation(eq)
-                            if replace_str not in rhs:
-                                rhs = replace(rhs, var, replace_str)
-                            equations[i][j] = (f"{lhs} {assign} {rhs}", scope)
+                if f"_upd_{update_num}" in var:
+                    var = var.replace(f"_upd_{update_num}", "")
+                if "_upd_" not in var:
+                    new_var = f"{var}_upd_{update_num}"
+                    arg_tmp = arg_tmp.split('/')
+                    arg_tmp[-1] = f"{arg_tmp[-1]}_upd_{update_num}"
+                    arg_tmp = "/".join(arg_tmp)
+                    if arg_tmp in equation_args or arg_tmp in updated_args:
+                        arg[new_var] = arg_tmp
+                        replace_str = update_str.replace('update_placeholder', new_var)
+                        if var in var_updates:
+                            for placeholder, var_tmp in var_updates[var]:
+                                replace_str = replace_str.replace(placeholder, var_tmp)
+                        else:
+                            for i in range(1, update_num):
+                                replace_str = replace_str.replace(f'var_placeholder_{i}', f'{var}_upd_{i}')
+                        replace_str = replace_str.replace('var_placeholder', var)
+                        for i, layer in enumerate(equations.copy()):
+                            for j, (eq, scope) in enumerate(layer):
+                                lhs, rhs, assign = split_equation(eq)
+                                if replace_str not in rhs:
+                                    rhs = replace(rhs, var, replace_str)
+                                equations[i][j] = (f"{lhs} {assign} {rhs}", scope)
 
         else:
 
