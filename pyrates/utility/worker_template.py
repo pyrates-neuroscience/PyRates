@@ -85,11 +85,6 @@ def main(_):
             sampling_step_size = dt
 
         try:
-            backend = global_config_dict['backend']
-        except KeyError:
-            backend = 'numpy'
-
-        try:
             inputs = global_config_dict['inputs']
         except KeyError:
             inputs = {}

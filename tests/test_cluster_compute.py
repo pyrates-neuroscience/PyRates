@@ -54,7 +54,7 @@ def test_worker_template(tmp_path):
     circuit_template = "model_templates.jansen_rit.simple_jansenrit.JRC"
     dt = 1e-3
     sim_time = 1.0
-    param_map = {'u': {'var': [('RPO_e_pc.0', 'u')],
+    param_map = {'u': {'vars': ['RPO_e_pc.0/u'],
                        'nodes': ['PC.0']}}
 
     # Create param_grid file
@@ -85,7 +85,7 @@ def test_worker_template(tmp_path):
 
     # Run worker template as console command with arguments
     cmd = ['/data/u_salomon_software/anaconda3/envs/PyRates/bin/python',
-           f'/data/hu_salomon/PycharmProjects/MasterThesis/ClusterCompute/worker/worker_holgado_diseased.py',
+           f'/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py',
            f'--config_file={config_file}',
            f'--subgrid={subgrid}',
            f'--local_res_file={result_file}',
@@ -116,7 +116,7 @@ def test_cluster_compute(tmp_path):
     circuit_template = "model_templates.jansen_rit.simple_jansenrit.JRC"
     dt = 1e-3
     sim_time = 1.0
-    param_map = {'u': {'var': [('RPO_e_pc.0', 'u')],
+    param_map = {'u': {'vars': ['RPO_e_pc.0/u'],
                        'nodes': ['PC.0']}}
 
     # Create param_grid file
@@ -139,8 +139,12 @@ def test_cluster_compute(tmp_path):
         worker_env=sys.executable,
         worker_file='/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py',
         add_template_info=False,
-        init_kwargs={
-            'backend': 'numpy'
+        config_kwargs={
+            "init_kwargs": {
+                'backend': 'numpy',
+                'vectorization': 'nodes',
+                'solver': 'euler'
+            }
         })
 
     results = pd.read_hdf(res_file, key=f'Results/{list(output.keys())[0]}')
