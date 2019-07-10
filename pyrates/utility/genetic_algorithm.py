@@ -346,18 +346,20 @@ class GeneticAlgorithmTemplate:
         """Create n_parent_pairs parent combinations. The occurrence probability for each parent is based on that
         parent's fitness"""
         parents = []
+        # Reproduction probability for each parent is based on its relative fitness
         parent_repro = self.pop['fitness'].to_numpy()
         parent_repro = np.nan_to_num(parent_repro, copy=True)
         parent_repro /= parent_repro.sum()
 
+        # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values
         for n in range(n_parent_pairs):
-            p_idx = list(np.random.choice(parent_indices, size=(2,), replace=False, p=parent_repro))
+            p_idx = np.random.choice(parent_indices, size=(2,), replace=False, p=parent_repro)
             parents.append((self.pop.iloc[p_idx[0], :], self.pop.iloc[p_idx[1], :]))
         return parents
 
     def __crossover(self, parent_pairs, n_tries=5):
-        """Create a child from each parent pair. Each child gene is uniformly chosen from its parents
+        """Create a child from each parent pair. Each child gene is uniformly chosen from one of its parents
 
         If the child already exists in the current population, new genes are chosen, but maximal n_tries times before a
         ValueError is raised.
