@@ -62,8 +62,8 @@ class GeneticAlgorithmTemplate:
             n_winners: Optional[int] = 1, n_parent_pairs: Optional[int] = 10, n_new: Optional[int] = 0,
             sigma_adapt: Optional[float] = 0., max_stagnation_steps: Optional[int] = 0,
             stagnation_decimals: Optional[int] = 8, max_stagnation_drops: Optional[Union[int, float]] = np.Inf,
-            enforce_max_iter: Optional[bool] = False, candidate_save: Optional[str] = "", drop_save: Optional[str] = "",
-            gene_sampling_func=np.linspace, **kwargs):
+            enforce_max_iter: Optional[bool] = False, new_pop_on_drop: Optional[bool] = False,
+            candidate_save: Optional[str] = "", drop_save: Optional[str] = "", gene_sampling_func=np.linspace, **kwargs):
         """Run a genetic algorithm to fit genes of a population in respect to a given target vector
 
         Parameters
@@ -93,6 +93,9 @@ class GeneticAlgorithmTemplate:
             If True, computation will stop when the maximum stagnation is reached
         enforce_max_iter
             If True, all iterations will performed, even if another convergence criterion is reached before
+        new_pop_on_drop
+            If True, a whole new population is created once the fitness stagnates. If False, only the fittest member of
+            the population is dropped
         candidate_save
             If set, the strongest member of a population will be saved to an hdf5 file, before the population is updated
         drop_save
@@ -162,7 +165,10 @@ class GeneticAlgorithmTemplate:
                                     os.makedirs(drop_save, exist_ok=True)
                                     new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                                 self.drop_count += 1
-                                self.pop = self.pop.drop(new_candidate.index)
+                                if new_pop_on_drop:
+                                    self.__create_pop(sampling_func=gene_sampling_func)
+                                else:
+                                    self.pop = self.pop.drop(new_candidate.index)
                             else:
                                 print("Returning fittest member!")
                                 print("")
@@ -346,20 +352,18 @@ class GeneticAlgorithmTemplate:
         """Create n_parent_pairs parent combinations. The occurrence probability for each parent is based on that
         parent's fitness"""
         parents = []
-        # Reproduction probability for each parent is based on its relative fitness
         parent_repro = self.pop['fitness'].to_numpy()
         parent_repro = np.nan_to_num(parent_repro, copy=True)
         parent_repro /= parent_repro.sum()
 
-        # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values
         for n in range(n_parent_pairs):
-            p_idx = np.random.choice(parent_indices, size=(2,), replace=False, p=parent_repro)
+            p_idx = list(np.random.choice(parent_indices, size=(2,), replace=False, p=parent_repro))
             parents.append((self.pop.iloc[p_idx[0], :], self.pop.iloc[p_idx[1], :]))
         return parents
 
     def __crossover(self, parent_pairs, n_tries=5):
-        """Create a child from each parent pair. Each child gene is uniformly chosen from one of its parents
+        """Create a child from each parent pair. Each child gene is uniformly chosen from its parents
 
         If the child already exists in the current population, new genes are chosen, but maximal n_tries times before a
         ValueError is raised.
