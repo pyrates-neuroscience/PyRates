@@ -687,88 +687,30 @@ class CircuitIR(AbstractBaseIR):
                                                        'value': dt}},
                                                backend=backend)['dt']
 
-        # parse node operations
-        #######################
+        # move edge operations to nodes
+        ###############################
 
         print('building the compute graph...')
 
-        self.node_updates = []
-
-        for node_name, node in self.net_config.nodes.items():
-
-            self.backend.bottom_layer()
-            op_graph = self._get_node_attr(node_name, 'op_graph')
-
-            # check operators for cyclic relationships
-            try:
-                find_cycle(op_graph)
-            except NetworkXNoCycle:
-                pass
-            else:
-                raise PyRatesException("Found cyclic operator graph. "
-                                       "Cycles are not allowed for operators within one node.")
-
-            graph = op_graph.copy()  # type: DiGraph
-
-            # first, parse operators that have no dependencies on other operators
-            # noinspection PyTypeChecker
-            primary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
-            self.node_updates.append(self.backend.layer)
-            self._add_ops(primary_ops, node_name=node_name, primary_ops=True)
-            self.backend.next_layer()
-
-            # remove parsed operators from graph
-            graph.remove_nodes_from(primary_ops)
-
-            # now, pass all other operators on the node
-            while graph.nodes:
-                # get all operators that have no dependencies on other operators
-                # noinspection PyTypeChecker
-                secondary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
-                self.node_updates.append(self.backend.layer)
-                self._add_ops(secondary_ops, node_name=node_name, primary_ops=False)
-                self.backend.next_layer()
-
-                # remove parsed operators from graph
-                graph.remove_nodes_from(secondary_ops)
-
-        # add layer to node updates
-        self.node_updates.append(self.backend.layer)
-
-        # parse edges
-        #############
-
-        self.backend.top_layer()
-
-        # collect output variables
-        source_nodes, target_nodes, edge_indices = [], [], []
-        op_names, var_names = [], []
-        for source_node, target_node, edge_idx in self.net_config.edges:
-            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
-            op, var = svar.split('/')
-            op_names.append(op)
-            var_names.append(var)
-            source_nodes.append(source_node)
-            target_nodes.append(target_node)
-            edge_indices.append(edge_idx)
-
-        for source_node, target_node, edge_idx in zip(source_nodes, target_nodes, edge_indices):
+        # create equations and variables for each edge
+        for source_node, target_node, edge_idx, data in self.edges(data=True, keys=True):
 
             # extract edge information
-            weight = self._get_edge_attr(source_node, target_node, edge_idx, 'weight')
-            delay = self._get_edge_attr(source_node, target_node, edge_idx, 'delay')
-            sidx = self._get_edge_attr(source_node, target_node, edge_idx, 'source_idx')
-            tidx = self._get_edge_attr(source_node, target_node, edge_idx, 'target_idx')
-            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var')
-            tvar = self._get_edge_attr(source_node, target_node, edge_idx, 'target_var', retrieve_from_node=False)
-            add_project = self._get_edge_attr(source_node, target_node, edge_idx, 'add_project')
+            weight = data['weight']
+            delay = data['delay']
+            sidx = data['source_idx']
+            tidx = data['target_idx']
+            svar = data['source_var']
+            sop, svar = svar.split("/")
+            sval = self.nodes[source_node]["node"].values[sop][svar]
 
-            # get original target variable
-            op, var = tvar.split('/')
-            try:
-                tvar = self._get_op_attr(target_node, op, f'{var}_old')
-            except KeyError:
-                tvar = self._get_op_attr(target_node, op, var)
+            tvar = data['target_var']
+            top, tvar = tvar.split("/")
+            tval = self.nodes[target_node]["node"].values[top][tvar]
+
+            add_project = False
+            # TODO: add thirds stage of vectorization, s.th. the add_project argument is set.
+            target_graph = self._get_node_attr(target_node, 'op_graph')
 
             # define target index
             if delay is not None and tidx:
@@ -786,9 +728,9 @@ class CircuitIR(AbstractBaseIR):
             d = "[target_idx]" if tidx else ""
             idx = "[source_idx]" if sidx else ""
             assign = '+=' if add_project else '='
-            eq = f"target_var{d} {assign} source_var{idx} * weight"
+            eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
             args = {}
-            dtype = svar.dtype if hasattr(svar, 'dtype') else svar['dtype']
+            dtype = sval['dtype']
             args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
             if tidx:
                 args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
@@ -796,21 +738,61 @@ class CircuitIR(AbstractBaseIR):
             if sidx:
                 args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                       'value': np.array(sidx, dtype=np.int32)}
-            args['target_var'] = tvar
-            args['source_var'] = svar
+            args[tvar] = tval
 
-            # parse mapping
-            args = parse_equation_list([eq], args, backend=self.backend, solver=self.solver,
-                                       scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}")
+            # add edge operator to target node
+            op_name = f'edge_from_{source_node}_{edge_idx}'
+            target_graph.add_node(op_name,
+                                  operator={'inputs': {svar: {'sources': [sop],
+                                                              'reduce_dim': True,
+                                                              'node': source_node}},
+                                            'output': tvar,
+                                            'equations': [eq]},
+                                  variables=args)
 
-            # store information in network config
-            edge = self.net_config.edges[source_node, target_node, edge_idx]
+            # connect edge operator to target operator
+            target_graph.add_edge(op_name, top)
 
-            # update edge attributes
-            edge.update(args)
+            # add input information to target operator
+            inputs = self._get_op_attr(target_node, top, 'inputs')
+            if tvar in inputs.keys():
+                inputs[tvar]['sources'].append(op_name)
+            else:
+                inputs[tvar] = {'sources': [op_name],
+                                'reduce_dim': True}
 
-        self.edge_updates = [self.backend.layer] if self.backend.layers[self.backend.layer] else []
+        # collect node and edge operators
+        #################################
 
+        variables = {'all/all/dt': self._dt}
+
+        # edge operators
+        equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
+        variables.update(variables_tmp)
+
+        # node operators
+        equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
+        variables.update(variables_tmp)
+        if equations_tmp:
+            equations = equations_tmp + equations
+        for i, layer in enumerate(equations.copy()):
+            if not layer:
+                equations.pop(i)
+
+        # parse all equations and variables into the backend
+        ####################################################
+
+        self.backend.bottom_layer()
+
+        # parse mapping
+        variables = parse_equation_system(equations=equations, equation_args=variables, backend=self.backend,
+                                          solver=self.solver)
+
+        # save parsed variables in net config
+        for key, val in variables.items():
+            node, op, var = key.split('/')
+            if "inputs" not in var and var != "dt":
+                self._set_node_attr(node, var, val, op=op)
 
 class SubCircuitView(AbstractBaseIR):
     """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
