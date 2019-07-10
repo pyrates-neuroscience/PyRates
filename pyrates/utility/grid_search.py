@@ -670,7 +670,7 @@ class ClusterGridSearch(ClusterCompute):
         t0 = t.time()
 
         # Get sorted list of temporary result files to iterate through
-        temp_res_files = glob.glob(f'{grid_res_dir}/*_temp*')
+        temp_res_files = [glob.glob(f'{grid_res_dir}/*_temp*')]
         temp_res_files.sort()
 
         # Read number of different circuit outputs and prepare lists to concatenate results
