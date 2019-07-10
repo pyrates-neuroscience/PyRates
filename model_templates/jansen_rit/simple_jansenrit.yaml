@@ -1,9 +1,18 @@
 %YAML 1.2
 ---
 
+OBS:
+  base: OperatorTemplate
+  equations: "V = PSP"
+  variables:
+    V:
+      default: variable
+    PSP:
+      default: input
+
 PRO:
   base: OperatorTemplate
-  equations: "m_out = m_max / (1. + exp(r*(V_thr - PSP)))"
+  equations: ["m_out = m_max / (1. + exp(r*(V_thr - PSP)))"]
   variables:
     m_out:
       default: output
@@ -15,6 +24,63 @@ PRO:
       default: 560.
     V_thr:
       default: 6e-3
+
+JRC_op:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * PSP_ein = PSP_t_ein'
+    - 'd/dt * PSP_t_ein =  h_e*c_pc_ein/tau_e * sigmoid((PSP_pc_e + PSP_pc_i), m_max, r, V_thr) - (1./tau_e)^2. * PSP_ein - (2./tau_e) * PSP_t_ein'
+    - 'd/dt * PSP_iin = PSP_t_iin'
+    - 'd/dt * PSP_t_iin =  h_e*c_pc_iin/tau_e * sigmoid((PSP_pc_e + PSP_pc_i), m_max, r, V_thr) - (1./tau_e)^2. * PSP_iin - (2./tau_e) * PSP_t_iin'
+    - 'd/dt * PSP_pc_e = PSP_t_pc_e'
+    - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c_ein_pc*sigmoid(PSP_ein, m_max, r, V_thr) + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
+    - 'd/dt * PSP_pc_i = PSP_t_pc_i'
+    - 'd/dt * PSP_t_pc_i =  h_i*c_iin_pc/tau_i * sigmoid(PSP_iin, m_max, r, V_thr) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
+    - 'PSP_pc = PSP_pc_e + PSP_pc_i'
+  variables:
+    h_e:
+      default: 3.25e-3
+    tau_e:
+      default: 10e-3
+    h_i:
+      default: -22e-3
+    tau_i:
+      default: 20e-3
+    u:
+      default: placeholder
+    PSP_ein:
+      default: variable
+    PSP_t_ein:
+      default: variable
+    PSP_iin:
+      default: variable
+    PSP_t_iin:
+      default: variable
+    PSP_pc:
+      default: output
+    PSP_pc_e:
+      default: variable
+    PSP_t_pc_e:
+      default: variable
+    PSP_pc_i:
+      default: variable
+    PSP_t_pc_i:
+      default: variable
+    m_max:
+      default: 5.
+    r:
+      default: 560.
+    V_thr:
+      default: 6e-3
+    c_ein_pc:
+      default: 108.0
+    c_iin_pc:
+      default: 33.75
+    c_pc_ein:
+      default: 135.0
+    c_pc_iin:
+      default: 33.75
+
 
 RPO_e_pc:
   base: OperatorTemplate
@@ -69,12 +135,18 @@ RPO_i:
     PSP_t:
       default: variable
 
+JRC_pop:
+  base: NodeTemplate
+  operators:
+    - JRC_op
+
 PC:
   base: NodeTemplate
   operators:
     - RPO_e_pc
     - RPO_i
     - PRO
+    - OBS
 
 IIN:
   base: NodeTemplate
@@ -95,11 +167,17 @@ DummyEdge:
 JRC:
   base: CircuitTemplate
   nodes:
+    PC: PC
     EIN: EIN
     IIN: IIN
-    PC: PC
   edges:
     - [PC/PRO/m_out, IIN/RPO_e/m_in, DummyEdge, {weight: 33.75}]
     - [PC/PRO/m_out, EIN/RPO_e/m_in, DummyEdge, {weight: 135.}]
     - [EIN/PRO/m_out, PC/RPO_e_pc/m_in, DummyEdge, {weight: 108.}]
     - [IIN/PRO/m_out, PC/RPO_i/m_in, DummyEdge, {weight: 33.75}]
+
+JRC_simple:
+  base: CircuitTemplate
+  nodes:
+    JRC: JRC_pop
+  edges:

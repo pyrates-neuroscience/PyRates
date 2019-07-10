@@ -78,7 +78,7 @@ def test_2_1_operator():
         # simulate operator behavior
         sim_time = 10.0
         results = net.run(sim_time, outputs={'a': 'pop0.0/op0.0/a'})
-        net.clear()
+        #net.clear()
 
         # generate target values
         sim_steps = int(sim_time/dt)
@@ -122,14 +122,14 @@ def test_2_1_operator():
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net2").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0.0/op2.0/a'})
-        net.clear()
+        #net.clear()
 
         # calculate operator behavior from hand
         update2 = lambda x: 1./(1. + np.exp(-x))
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1, 1] = update2(targets[i, 0])
             targets[i+1, 0] = update1(targets[i, 0], targets[i, 1])
+            targets[i+1, 1] = update2(targets[i, 0])
 
         diff = results['a'].values[:, 0] - targets[:-1, 0]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
@@ -392,20 +392,14 @@ def test_2_4_vectorization():
                             backend=b)
         net1 = ComputeGraph(net_config=net_config0, name='net1', vectorization='nodes', dt=dt, build_in_place=False,
                             backend=b)
-        #net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorization='full', dt=dt, build_in_place=False,
-        #                    backend='numpy')
 
         # simulate network behaviors
         results0 = net0.run(sim_time, outputs={'a': 'pop0.0/op7.0/a', 'b': 'pop1.0/op7.0/a'},
                             inputs={'all/op7.0/inp': inp})
         results1 = net1.run(sim_time, outputs={'a': 'pop0.0/op7.0/a', 'b': 'pop1.0/op7.0/a'},
                             inputs={'all/op7.0/inp': inp}, out_dir='/tmp/log')
-        #results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-        #                    inputs={('all', 'op7.0', 'inp'): inp})
 
         error1 = nmrse(results0.values, results1.values)
-        #error2 = nmrse(results0.values, results2.values)
 
         assert np.sum(results1.values) > 0.
         assert np.mean(error1) == pytest.approx(0., rel=1e-6, abs=1e-6)
-        #assert np.mean(error2) == pytest.approx(0., rel=1e-6)

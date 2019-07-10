@@ -1077,7 +1077,10 @@ class NumpyBackend(object):
                     if hasattr(arg, 'shape'):
                         in_shape.append(sum(tuple(arg.shape)))
                     elif type(arg) in (tuple, list):
-                        in_shape.append(sum(arg))
+                        if hasattr(arg[0], 'shape'):
+                            in_shape.append(sum(tuple(arg[0].shape)))
+                        else:
+                            in_shape.append(sum(arg))
                     else:
                         in_shape.append(1)
                 if hasattr(op, 'shape') and (sum(tuple(op.shape)) > max(in_shape)):
@@ -1086,7 +1089,7 @@ class NumpyBackend(object):
 
         except Exception:
 
-            if type(args[0]) in (tuple, list) and len(args[0] > 1):
+            if type(args[0]) in (tuple, list) and len(args[0]) > 1:
 
                 # broadcast entries of argument tuples
                 args_tmp = self.broadcast(args[0][0], args[0][1])
@@ -1140,7 +1143,7 @@ class NumpyBackend(object):
             self._base_layer += 1
             self.layer = -self._base_layer
         else:
-            self.layer = len(self.layers)
+            self.layer = len(self.layers) - self._base_layer
             self.layers.append([])
 
     def add_output_layer(self, outputs, sampling_steps, out_shapes):
@@ -1178,7 +1181,7 @@ class NumpyBackend(object):
         """Jump to next layer in stack. If we are already at end of layer stack, add new layer to the stack and jump to
         that.
         """
-        if self.layer == len(self.layers)-1:
+        if self._base_layer+self.layer == len(self.layers)-1:
             self.add_layer()
         else:
             self.layer += 1
@@ -1206,7 +1209,7 @@ class NumpyBackend(object):
         None
 
         """
-        self.layer = self._base_layer + idx
+        self.layer = idx
 
     def remove_layer(self, idx) -> None:
         """Removes layer at index from stack.
@@ -1224,7 +1227,7 @@ class NumpyBackend(object):
     def top_layer(self) -> int:
         """Jump to top layer of the stack.
         """
-        self.layer = len(self.layers)-1
+        self.layer = len(self.layers)-1-self._base_layer
         return self.layer
 
     def bottom_layer(self) -> int:
