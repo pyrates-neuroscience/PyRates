@@ -99,7 +99,7 @@ class ComputeGraph(object):
         self._first_run = True
         if type(net_config) is str:
             net_config = CircuitTemplate.from_yaml(net_config).apply()
-        net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
+        net_config = net_config.optimize_graph_in_place()
 
         # instantiate the backend and set the backend default_device
         if backend == 'tensorflow':
@@ -1403,7 +1403,7 @@ class ComputeGraph(object):
 
                 # check whether the variable field exists on the operator
                 try:
-                    variables = op['variables']
+                    variables = op['operator'].variables
                 except KeyError:
                     raise KeyError(f'Key `variables` not found in operator {op_name} of node {node_name}. Every '
                                    f'operator on a node needs a field `variables` under which all necessary '

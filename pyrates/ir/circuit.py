@@ -29,12 +29,14 @@
 """
 from copy import deepcopy
 from typing import Union, Dict, Iterator
+from warnings import filterwarnings
 
 from pyparsing import Word, ParseException, nums, Literal
 from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGraph
 from pandas import DataFrame
 
 from pyrates import PyRatesException
+from pyrates.backend import parse_dict
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
@@ -48,7 +50,8 @@ class CircuitIR(AbstractBaseIR):
     and variables."""
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
-    __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map"]
+    __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map",
+                 "_first_run", "_vectorized", "_compile_info"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -89,6 +92,10 @@ class CircuitIR(AbstractBaseIR):
 
         if edges:
             self.add_edges_from(edges)
+
+        self._first_run = True
+        self._vectorized = False
+        self._compile_info = {}
 
     def _collect_references(self, edge_or_node):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
@@ -436,6 +443,11 @@ class CircuitIR(AbstractBaseIR):
             # target_var = data.pop("target_var")
             self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
 
+    @staticmethod
+    def from_yaml(path):
+        from pyrates.frontend import circuit_from_yaml
+        return circuit_from_yaml(path)
+
     def optimize_graph_in_place(self, max_node_idx: int = 100000):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
@@ -475,7 +487,7 @@ class CircuitIR(AbstractBaseIR):
 
                 # refer node key to new node and respective list index of its values
                 # format: "nodeX[Z]" with X = node index and Z = list index for values
-                self.label_map[node_key] = f"{new_name}[{node_size[op_graph]}]"
+                self.label_map[node_key] = (new_name, node_size[op_graph])
                 # increment op_graph size counter
                 node_size[op_graph] += 1
 
@@ -505,7 +517,7 @@ class CircuitIR(AbstractBaseIR):
                 node_op_graph_map[op_graph] = (new_name, collapsed_node)
 
                 # now save the reference to the new node name with index number to label_map
-                self.label_map[node_key] = f"{new_name}[0]"
+                self.label_map[node_key] = (new_name, 0)
                 # and set size of this node to 1
                 node_size[op_graph] = 1
 
@@ -601,12 +613,8 @@ class CircuitIR(AbstractBaseIR):
             # get new reference for source/target nodes
             # new references should have format "vector_node{node_idx}[{vector_idx}]"
             # the follow raises an error, if the format is wrong for some reason
-            source = self.label_map[source]
-            source, source_idx = source.split("[")
-            source_idx = int(source_idx[:-1])
-            target = self.label_map[target]
-            target, target_idx = target.split("[")
-            target_idx = int(target_idx[:-1])
+            source, source_idx = self.label_map[source]
+            target, target_idx = self.label_map[target]
 
             # add edge from source to the new node
             self.graph.add_edge(source, new_name,
@@ -626,6 +634,182 @@ class CircuitIR(AbstractBaseIR):
             self.graph.remove_edge(*specifier)
 
     # def _vectorize_common_in_place(self, max_node_idx, old_name, node_op_graph_map, node_sizes, name_idx):
+
+    def compile(self,
+                dt: float = 1e-3,
+                # vectorization: str = 'none',
+                # name: Optional[str] = 'net0',
+                # build_in_place: bool = True,
+                backend: str = 'numpy',
+                solver: str = 'euler',
+                float_precision: str = 'float32',
+                **kwargs
+                ) -> None:
+        """Instantiates operator.
+        """
+
+        filterwarnings("ignore", category=FutureWarning)
+
+        # set basic attributes
+        ######################
+
+        # self._float_precision = float_precision
+        # self._first_run = True
+        # if type(net_config) is str:
+        #     net_config = CircuitTemplate.from_yaml(net_config).apply()
+        if not self._vectorized:
+            net_config = self.optimize_graph_in_place()
+
+        # instantiate the backend and set the backend default_device
+        if backend == 'tensorflow':
+            from pyrates.backend.tensorflow_backend import TensorflowBackend
+            backend = TensorflowBackend
+        elif backend == 'numpy':
+            from pyrates.backend.numpy_backend import NumpyBackend
+            backend = NumpyBackend
+        else:
+            raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
+        kwargs['name'] = self.label
+        kwargs['float_default_type'] = float_precision
+
+        self._compile_info["backend"] = backend(**kwargs)
+        self._compile_info["solver"] = solver
+
+        # pre-process the network configuration
+        self._compile_info["dt"] = dt
+        self._compile_info["_net_config_map"] = {}
+        # self.net_config = self._net_config_consistency_check(net_config) if build_in_place \
+        #     else self._net_config_consistency_check(deepcopy(net_config))
+        # self._vectorize(vectorization_mode=vectorization)
+
+        # set time constant of the network
+        self._compile_info["_dt"] = parse_dict({'dt': {'vtype': 'constant', 'dtype': float_precision, 'shape': (),
+                                                       'value': dt}},
+                                               backend=backend)['dt']
+
+        # parse node operations
+        #######################
+
+        print('building the compute graph...')
+
+        self.node_updates = []
+
+        for node_name, node in self.net_config.nodes.items():
+
+            self.backend.bottom_layer()
+            op_graph = self._get_node_attr(node_name, 'op_graph')
+
+            # check operators for cyclic relationships
+            try:
+                find_cycle(op_graph)
+            except NetworkXNoCycle:
+                pass
+            else:
+                raise PyRatesException("Found cyclic operator graph. "
+                                       "Cycles are not allowed for operators within one node.")
+
+            graph = op_graph.copy()  # type: DiGraph
+
+            # first, parse operators that have no dependencies on other operators
+            # noinspection PyTypeChecker
+            primary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
+            self.node_updates.append(self.backend.layer)
+            self._add_ops(primary_ops, node_name=node_name, primary_ops=True)
+            self.backend.next_layer()
+
+            # remove parsed operators from graph
+            graph.remove_nodes_from(primary_ops)
+
+            # now, pass all other operators on the node
+            while graph.nodes:
+                # get all operators that have no dependencies on other operators
+                # noinspection PyTypeChecker
+                secondary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
+                self.node_updates.append(self.backend.layer)
+                self._add_ops(secondary_ops, node_name=node_name, primary_ops=False)
+                self.backend.next_layer()
+
+                # remove parsed operators from graph
+                graph.remove_nodes_from(secondary_ops)
+
+        # add layer to node updates
+        self.node_updates.append(self.backend.layer)
+
+        # parse edges
+        #############
+
+        self.backend.top_layer()
+
+        # collect output variables
+        source_nodes, target_nodes, edge_indices = [], [], []
+        op_names, var_names = [], []
+        for source_node, target_node, edge_idx in self.net_config.edges:
+            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
+            op, var = svar.split('/')
+            op_names.append(op)
+            var_names.append(var)
+            source_nodes.append(source_node)
+            target_nodes.append(target_node)
+            edge_indices.append(edge_idx)
+
+        for source_node, target_node, edge_idx in zip(source_nodes, target_nodes, edge_indices):
+
+            # extract edge information
+            weight = self._get_edge_attr(source_node, target_node, edge_idx, 'weight')
+            delay = self._get_edge_attr(source_node, target_node, edge_idx, 'delay')
+            sidx = self._get_edge_attr(source_node, target_node, edge_idx, 'source_idx')
+            tidx = self._get_edge_attr(source_node, target_node, edge_idx, 'target_idx')
+            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var')
+            tvar = self._get_edge_attr(source_node, target_node, edge_idx, 'target_var', retrieve_from_node=False)
+            add_project = self._get_edge_attr(source_node, target_node, edge_idx, 'add_project')
+
+            # get original target variable
+            op, var = tvar.split('/')
+            try:
+                tvar = self._get_op_attr(target_node, op, f'{var}_old')
+            except KeyError:
+                tvar = self._get_op_attr(target_node, op, var)
+
+            # define target index
+            if delay is not None and tidx:
+                tidx_tmp = []
+                for idx, d in zip(tidx, delay):
+                    if type(idx) is list:
+                        tidx_tmp.append(idx + [d])
+                    else:
+                        tidx_tmp.append([idx, d])
+                tidx = tidx_tmp
+            elif not tidx and delay is not None:
+                tidx = list(delay)
+
+            # create mapping equation and its arguments
+            d = "[target_idx]" if tidx else ""
+            idx = "[source_idx]" if sidx else ""
+            assign = '+=' if add_project else '='
+            eq = f"target_var{d} {assign} source_var{idx} * weight"
+            args = {}
+            dtype = svar.dtype if hasattr(svar, 'dtype') else svar['dtype']
+            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
+            if tidx:
+                args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                      'value': np.array(tidx, dtype=np.int32)}
+            if sidx:
+                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                      'value': np.array(sidx, dtype=np.int32)}
+            args['target_var'] = tvar
+            args['source_var'] = svar
+
+            # parse mapping
+            args = parse_equation_list([eq], args, backend=self.backend, solver=self.solver,
+                                       scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}")
+
+            # store information in network config
+            edge = self.net_config.edges[source_node, target_node, edge_idx]
+
+            # update edge attributes
+            edge.update(args)
+
+        self.edge_updates = [self.backend.layer] if self.backend.layers[self.backend.layer] else []
 
 
 class SubCircuitView(AbstractBaseIR):
