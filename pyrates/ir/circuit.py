@@ -29,12 +29,14 @@
 """
 from copy import deepcopy
 from typing import Union, Dict, Iterator
+from warnings import filterwarnings
 
 from pyparsing import Word, ParseException, nums, Literal
 from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGraph
 from pandas import DataFrame
 
 from pyrates import PyRatesException
+from pyrates.backend import parse_dict
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
@@ -48,7 +50,8 @@ class CircuitIR(AbstractBaseIR):
     and variables."""
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
-    __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map"]
+    __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map",
+                 "_first_run", "_vectorized", "_compile_info"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -89,6 +92,10 @@ class CircuitIR(AbstractBaseIR):
 
         if edges:
             self.add_edges_from(edges)
+
+        self._first_run = True
+        self._vectorized = False
+        self._compile_info = {}
 
     def _collect_references(self, edge_or_node):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
@@ -436,6 +443,11 @@ class CircuitIR(AbstractBaseIR):
             # target_var = data.pop("target_var")
             self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
 
+    @staticmethod
+    def from_yaml(path):
+        from pyrates.frontend import circuit_from_yaml
+        return circuit_from_yaml(path)
+
     def optimize_graph_in_place(self, max_node_idx: int = 100000):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
@@ -475,7 +487,7 @@ class CircuitIR(AbstractBaseIR):
 
                 # refer node key to new node and respective list index of its values
                 # format: "nodeX[Z]" with X = node index and Z = list index for values
-                self.label_map[node_key] = f"{new_name}[{node_size[op_graph]}]"
+                self.label_map[node_key] = (new_name, node_size[op_graph])
                 # increment op_graph size counter
                 node_size[op_graph] += 1
 
@@ -505,7 +517,7 @@ class CircuitIR(AbstractBaseIR):
                 node_op_graph_map[op_graph] = (new_name, collapsed_node)
 
                 # now save the reference to the new node name with index number to label_map
-                self.label_map[node_key] = f"{new_name}[0]"
+                self.label_map[node_key] = (new_name, 0)
                 # and set size of this node to 1
                 node_size[op_graph] = 1
 
@@ -601,12 +613,8 @@ class CircuitIR(AbstractBaseIR):
             # get new reference for source/target nodes
             # new references should have format "vector_node{node_idx}[{vector_idx}]"
             # the follow raises an error, if the format is wrong for some reason
-            source = self.label_map[source]
-            source, source_idx = source.split("[")
-            source_idx = int(source_idx[:-1])
-            target = self.label_map[target]
-            target, target_idx = target.split("[")
-            target_idx = int(target_idx[:-1])
+            source, source_idx = self.label_map[source]
+            target, target_idx = self.label_map[target]
 
             # add edge from source to the new node
             self.graph.add_edge(source, new_name,
@@ -627,6 +635,164 @@ class CircuitIR(AbstractBaseIR):
 
     # def _vectorize_common_in_place(self, max_node_idx, old_name, node_op_graph_map, node_sizes, name_idx):
 
+    def compile(self,
+                dt: float = 1e-3,
+                # vectorization: str = 'none',
+                # name: Optional[str] = 'net0',
+                # build_in_place: bool = True,
+                backend: str = 'numpy',
+                solver: str = 'euler',
+                float_precision: str = 'float32',
+                **kwargs
+                ) -> None:
+        """Instantiates operator.
+        """
+
+        filterwarnings("ignore", category=FutureWarning)
+
+        # set basic attributes
+        ######################
+
+        # self._float_precision = float_precision
+        # self._first_run = True
+        # if type(net_config) is str:
+        #     net_config = CircuitTemplate.from_yaml(net_config).apply()
+        if not self._vectorized:
+            net_config = self.optimize_graph_in_place()
+
+        # instantiate the backend and set the backend default_device
+        if backend == 'tensorflow':
+            from pyrates.backend.tensorflow_backend import TensorflowBackend
+            backend = TensorflowBackend
+        elif backend == 'numpy':
+            from pyrates.backend.numpy_backend import NumpyBackend
+            backend = NumpyBackend
+        else:
+            raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
+        kwargs['name'] = self.label
+        kwargs['float_default_type'] = float_precision
+
+        self._compile_info["backend"] = backend(**kwargs)
+        self._compile_info["solver"] = solver
+
+        # pre-process the network configuration
+        self._compile_info["dt"] = dt
+        self._compile_info["_net_config_map"] = {}
+        # self.net_config = self._net_config_consistency_check(net_config) if build_in_place \
+        #     else self._net_config_consistency_check(deepcopy(net_config))
+        # self._vectorize(vectorization_mode=vectorization)
+
+        # set time constant of the network
+        self._compile_info["_dt"] = parse_dict({'dt': {'vtype': 'constant', 'dtype': float_precision, 'shape': (),
+                                                       'value': dt}},
+                                               backend=backend)['dt']
+
+        # move edge operations to nodes
+        ###############################
+
+        print('building the compute graph...')
+
+        # create equations and variables for each edge
+        for source_node, target_node, edge_idx, data in self.edges(data=True, keys=True):
+
+            # extract edge information
+            weight = data['weight']
+            delay = data['delay']
+            sidx = data['source_idx']
+            tidx = data['target_idx']
+            svar = data['source_var']
+            sop, svar = svar.split("/")
+            sval = self.nodes[source_node]["node"].values[sop][svar]
+
+            tvar = data['target_var']
+            top, tvar = tvar.split("/")
+            tval = self.nodes[target_node]["node"].values[top][tvar]
+
+            add_project = False
+            # TODO: add thirds stage of vectorization, s.th. the add_project argument is set.
+            target_graph = self._get_node_attr(target_node, 'op_graph')
+
+            # define target index
+            if delay is not None and tidx:
+                tidx_tmp = []
+                for idx, d in zip(tidx, delay):
+                    if type(idx) is list:
+                        tidx_tmp.append(idx + [d])
+                    else:
+                        tidx_tmp.append([idx, d])
+                tidx = tidx_tmp
+            elif not tidx and delay is not None:
+                tidx = list(delay)
+
+            # create mapping equation and its arguments
+            d = "[target_idx]" if tidx else ""
+            idx = "[source_idx]" if sidx else ""
+            assign = '+=' if add_project else '='
+            eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
+            args = {}
+            dtype = sval['dtype']
+            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
+            if tidx:
+                args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                      'value': np.array(tidx, dtype=np.int32)}
+            if sidx:
+                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                      'value': np.array(sidx, dtype=np.int32)}
+            args[tvar] = tval
+
+            # add edge operator to target node
+            op_name = f'edge_from_{source_node}_{edge_idx}'
+            target_graph.add_node(op_name,
+                                  operator={'inputs': {svar: {'sources': [sop],
+                                                              'reduce_dim': True,
+                                                              'node': source_node}},
+                                            'output': tvar,
+                                            'equations': [eq]},
+                                  variables=args)
+
+            # connect edge operator to target operator
+            target_graph.add_edge(op_name, top)
+
+            # add input information to target operator
+            inputs = self._get_op_attr(target_node, top, 'inputs')
+            if tvar in inputs.keys():
+                inputs[tvar]['sources'].append(op_name)
+            else:
+                inputs[tvar] = {'sources': [op_name],
+                                'reduce_dim': True}
+
+        # collect node and edge operators
+        #################################
+
+        variables = {'all/all/dt': self._dt}
+
+        # edge operators
+        equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
+        variables.update(variables_tmp)
+
+        # node operators
+        equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
+        variables.update(variables_tmp)
+        if equations_tmp:
+            equations = equations_tmp + equations
+        for i, layer in enumerate(equations.copy()):
+            if not layer:
+                equations.pop(i)
+
+        # parse all equations and variables into the backend
+        ####################################################
+
+        self.backend.bottom_layer()
+
+        # parse mapping
+        variables = parse_equation_system(equations=equations, equation_args=variables, backend=self.backend,
+                                          solver=self.solver)
+
+        # save parsed variables in net config
+        for key, val in variables.items():
+            node, op, var = key.split('/')
+            if "inputs" not in var and var != "dt":
+                self._set_node_attr(node, var, val, op=op)
 
 class SubCircuitView(AbstractBaseIR):
     """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top

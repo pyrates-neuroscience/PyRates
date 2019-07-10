@@ -1,0 +1,1233 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.utility.grid_search &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for pyrates.utility.grid_search</h1><div class="highlight"><pre>
+<span></span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural </span>
+<span class="c1"># network model_templates and simulations. See also:</span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1"># </span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and </span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain </span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1"># </span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1"># </span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1"># </span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1"># </span>
+<span class="c1"># CITATION:</span>
+<span class="c1"># </span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+<span class="sd">&quot;&quot;&quot;Functions for performing parameter grid simulations with pyrates model_templates.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c1"># external imports</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="c1"># system imports</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">time</span> <span class="k">as</span> <span class="nn">t</span>
+<span class="kn">import</span> <span class="nn">glob</span>
+<span class="kn">import</span> <span class="nn">getpass</span>
+<span class="kn">import</span> <span class="nn">h5py</span>
+<span class="kn">import</span> <span class="nn">paramiko</span>
+<span class="kn">from</span> <span class="nn">shutil</span> <span class="k">import</span> <span class="n">copy2</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="k">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">threading</span> <span class="k">import</span> <span class="n">Thread</span><span class="p">,</span> <span class="n">currentThread</span><span class="p">,</span> <span class="n">RLock</span>
+
+<span class="c1"># pyrates internal imports</span>
+<span class="kn">from</span> <span class="nn">pyrates.backend</span> <span class="k">import</span> <span class="n">ComputeGraph</span>
+<span class="kn">from</span> <span class="nn">pyrates.frontend</span> <span class="k">import</span> <span class="n">CircuitTemplate</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.circuit</span> <span class="k">import</span> <span class="n">CircuitIR</span>
+
+<span class="c1"># meta infos</span>
+<span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Christoph Salomon, Richard Gast&quot;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;development&quot;</span>
+
+
+<div class="viewcode-block" id="grid_search"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.grid_search">[docs]</a><span class="k">def</span> <span class="nf">grid_search</span><span class="p">(</span><span class="n">circuit_template</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">CircuitTemplate</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">param_grid</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">dict</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span> <span class="n">param_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">simulation_time</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+                <span class="n">inputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">outputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">sampling_step_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="n">permute_grid</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">init_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    circuit_template</span>
+<span class="sd">        Path to the circuit template.</span>
+<span class="sd">    param_grid</span>
+<span class="sd">        Key-value pairs for each circuit parameter that should be altered over different circuit parametrizations.</span>
+<span class="sd">    param_map</span>
+<span class="sd">        Key-value pairs that map the keys of param_grid to concrete circuit variables.</span>
+<span class="sd">    dt</span>
+<span class="sd">        Simulation step-size in s.</span>
+<span class="sd">    simulation_time</span>
+<span class="sd">        Simulation time in s.</span>
+<span class="sd">    inputs</span>
+<span class="sd">        Inputs as provided to the `run` method of `:class:ComputeGraph`.</span>
+<span class="sd">    outputs</span>
+<span class="sd">        Outputs as provided to the `run` method of `:class:ComputeGraph`.</span>
+<span class="sd">    sampling_step_size</span>
+<span class="sd">        Sampling step-size as provided to the `run` method of `:class:ComputeGraph`.</span>
+<span class="sd">    permute_grid</span>
+<span class="sd">        If true, all combinations of the provided param_grid values will be realized. If false, the param_grid values</span>
+<span class="sd">        will be traversed pairwise.</span>
+<span class="sd">    kwargs</span>
+<span class="sd">        Additional keyword arguments passed to the `:class:ComputeGraph` initialization.</span>
+
+
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pd.DataFrame</span>
+<span class="sd">        Simulation results stored in a multi-index data frame where each index lvl refers to one of the parameters of</span>
+<span class="sd">        param_grid.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># load template if necessary</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">circuit_template</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">circuit_template</span> <span class="o">=</span> <span class="n">CircuitTemplate</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">circuit_template</span><span class="p">)</span>
+
+    <span class="c1"># linearize parameter grid if necessary</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">param_grid</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">param_grid</span> <span class="o">=</span> <span class="n">linearize_grid</span><span class="p">(</span><span class="n">param_grid</span><span class="p">,</span> <span class="n">permute_grid</span><span class="p">)</span>
+
+    <span class="c1"># create multi-index for later results storage</span>
+    <span class="n">param_keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">param_grid</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="n">multi_idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">param_grid</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">values</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">param_keys</span><span class="p">]</span>
+    <span class="n">n_iters</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">multi_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">outs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">out_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">outputs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="k">for</span> <span class="n">out_name</span> <span class="ow">in</span> <span class="n">out_names</span><span class="p">:</span>
+        <span class="n">outs</span> <span class="o">+=</span> <span class="p">[</span><span class="n">out_name</span><span class="p">]</span> <span class="o">*</span> <span class="n">n_iters</span>
+    <span class="n">multi_idx</span> <span class="o">=</span> <span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">out_names</span><span class="p">)</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">multi_idx</span><span class="p">]</span>
+    <span class="n">multi_idx</span> <span class="o">=</span> <span class="n">multi_idx</span> <span class="o">+</span> <span class="p">[</span><span class="n">outs</span><span class="p">]</span>
+    <span class="n">index</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">MultiIndex</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">multi_idx</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="n">param_keys</span> <span class="o">+</span> <span class="p">[</span><span class="s2">&quot;out_var&quot;</span><span class="p">])</span>
+    <span class="n">index</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">MultiIndex</span><span class="o">.</span><span class="n">from_tuples</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">index</span><span class="p">)),</span> <span class="n">names</span><span class="o">=</span><span class="n">param_keys</span> <span class="o">+</span> <span class="p">[</span><span class="s2">&quot;out_var&quot;</span><span class="p">])</span>
+
+    <span class="c1"># assign parameter updates to each circuit and combine them to unconnected network</span>
+    <span class="n">circuit</span> <span class="o">=</span> <span class="n">CircuitIR</span><span class="p">()</span>
+    <span class="n">circuit_names</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">param_keys</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">names</span>
+    <span class="n">results_indices</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">idx</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results_indices</span><span class="p">:</span>
+            <span class="n">results_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">new_params</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">param_keys</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">param_grid</span><span class="p">:</span>
+                    <span class="n">new_params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+            <span class="n">circuit_tmp</span> <span class="o">=</span> <span class="n">circuit_template</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span>
+            <span class="n">circuit_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="si">{circuit_tmp.label}</span><span class="s1">_</span><span class="si">{i}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">circuit_tmp</span> <span class="o">=</span> <span class="n">adapt_circuit</span><span class="p">(</span><span class="n">circuit_tmp</span><span class="p">,</span> <span class="n">new_params</span><span class="p">,</span> <span class="n">param_map</span><span class="p">)</span>
+            <span class="n">circuit</span><span class="o">.</span><span class="n">add_circuit</span><span class="p">(</span><span class="n">circuit_names</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">circuit_tmp</span><span class="p">)</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="c1"># create backend graph</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">init_kwargs</span><span class="p">:</span>
+        <span class="n">init_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">vectorization</span> <span class="o">=</span> <span class="n">init_kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;vectorization&#39;</span><span class="p">,</span> <span class="s1">&#39;nodes&#39;</span><span class="p">)</span>
+    <span class="n">net</span> <span class="o">=</span> <span class="n">ComputeGraph</span><span class="p">(</span><span class="n">circuit</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span> <span class="n">vectorization</span><span class="o">=</span><span class="n">vectorization</span><span class="p">,</span> <span class="o">**</span><span class="n">init_kwargs</span><span class="p">)</span>
+
+    <span class="c1"># adjust input of simulation to combined network</span>
+    <span class="k">for</span> <span class="n">inp_key</span><span class="p">,</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">inputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">inputs</span><span class="p">[</span><span class="n">inp_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">circuit_names</span><span class="p">)))</span>
+
+    <span class="c1"># adjust output of simulation to combined network</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">circuit_template</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
+    <span class="n">out_nodes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">out_key</span> <span class="ow">in</span> <span class="n">out_names</span><span class="p">:</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">out_key</span><span class="p">)</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+        <span class="n">out_nodes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+        <span class="n">node</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
+            <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">out</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">outputs</span><span class="p">[</span><span class="n">out_key</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">((</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span><span class="p">))</span>
+
+    <span class="c1"># simulate the circuits behavior</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">net</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">simulation_time</span><span class="o">=</span><span class="n">simulation_time</span><span class="p">,</span>
+                      <span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span>
+                      <span class="n">outputs</span><span class="o">=</span><span class="n">outputs</span><span class="p">,</span>
+                      <span class="n">sampling_step_size</span><span class="o">=</span><span class="n">sampling_step_size</span><span class="p">,</span>
+                      <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>    <span class="c1"># type: pd.DataFrame</span>
+    <span class="k">if</span> <span class="s1">&#39;profile&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="n">results</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">memory</span> <span class="o">=</span> <span class="n">results</span>
+
+    <span class="c1"># transform results into long-form dataframe with changed parameters as columns</span>
+    <span class="n">results_final</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">index</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">values</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="n">results</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">out_name</span><span class="p">,</span> <span class="n">out_info</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">out_names</span><span class="p">,</span> <span class="n">out_nodes</span><span class="p">):</span>
+        <span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">out_info</span>
+        <span class="k">for</span> <span class="n">node_name</span><span class="p">,</span> <span class="n">params</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">circuit_names</span><span class="p">,</span> <span class="n">results_indices</span><span class="p">):</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="n">params</span> <span class="o">+</span> <span class="p">(</span><span class="n">out_name</span><span class="p">,)</span>
+            <span class="n">idx</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">get_var</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{node_name}</span><span class="s2">/</span><span class="si">{node}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">retrieve</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+            <span class="n">results_final</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="n">out_name</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="n">idx</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="s1">&#39;profile&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">results_final</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">memory</span>
+    <span class="k">return</span> <span class="n">results_final</span></div>
+
+
+<div class="viewcode-block" id="ClusterCompute"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute">[docs]</a><span class="k">class</span> <span class="nc">ClusterCompute</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nodes</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">compute_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create new ClusterCompute instance object with unique compute ID</span>
+
+<span class="sd">        Creates a compute directory for the ClusterCompute instance, either in the specified path or as a default</span>
+<span class="sd">        folder in the current working directory of the executing script.</span>
+<span class="sd">        Creates a logfile in ComputeDirectory/Logs and tees all future stdout and stderr of the executing script</span>
+<span class="sd">        to this file</span>
+<span class="sd">        Connects to all nodes via SSH and saves the corresponding paramiko client in self.clients</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        nodes:</span>
+<span class="sd">            List of names or IP addresses of working stations/servers in the local network</span>
+<span class="sd">        compute_dir:</span>
+<span class="sd">            Full path to a directory that will be used as compute directory.</span>
+<span class="sd">            If none is given, a default compute directory is created in the current working directory</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        ClusterCompute instance object</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">clients</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lock</span> <span class="o">=</span> <span class="n">RLock</span><span class="p">()</span>
+
+        <span class="c1">#############################################################</span>
+        <span class="c1"># Create main compute directory, subdirectories and logfile #</span>
+        <span class="c1">#############################################################</span>
+
+        <span class="c1"># Unique compute ID based on date and time</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compute_id</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2">%m%y-%H%M%S&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Main compute directory</span>
+        <span class="k">if</span> <span class="n">compute_dir</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">compute_dir</span> <span class="o">=</span> <span class="n">compute_dir</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">compute_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Create default compute directory in the current working directory</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">compute_dir</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;{os.getcwd()}/ClusterCompute_</span><span class="si">{self.compute_id}</span><span class="s1">&#39;</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">compute_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># Logfile directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_dir</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.compute_dir}</span><span class="s1">/Logs/</span><span class="si">{self.compute_id}</span><span class="s1">&#39;</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># Global logfile to copy stdout and stderr to</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_logfile</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.log_dir}</span><span class="s1">/Global_logfile.log&#39;</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">global_logfile</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1">####################################</span>
+        <span class="c1"># Tee stdout and stderr to logfile #</span>
+        <span class="c1">####################################</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">StreamTee</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_logfile</span><span class="p">)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span> <span class="o">=</span> <span class="n">StreamTee</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_logfile</span><span class="p">)</span>
+
+        <span class="c1">###########################</span>
+        <span class="c1"># Write header to logfile #</span>
+        <span class="c1">###########################</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;***NEW CLUSTER INSTANCE CREATED***&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Compute ID: </span><span class="si">{self.compute_id}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Compute directory: </span><span class="si">{self.compute_dir}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Global logfile: </span><span class="si">{self.global_logfile}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1">##################</span>
+        <span class="c1"># Create cluster #</span>
+        <span class="c1">##################</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;***CONNECTING TO NODES...***&quot;</span><span class="p">)</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cluster_connect</span><span class="p">(</span><span class="n">nodes</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Nodes connected. Elapsed time: {t.time()-t0:.3f} seconds&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Make sure to close all clients when cluster_examples instance is destroyed</span>
+        <span class="k">for</span> <span class="n">client</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">clients</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="p">[</span><span class="s2">&quot;paramiko_client&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+<div class="viewcode-block" id="ClusterCompute.cluster_connect"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute.cluster_connect">[docs]</a>    <span class="k">def</span> <span class="nf">cluster_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nodes</span><span class="p">:</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create SSH connections to all nodes in the list, respectively</span>
+
+<span class="sd">        Connect to all nodes in the given list via SSH, using ssh_connect(). Adds a dictionary for each node to the</span>
+<span class="sd">        class internal &#39;clients&#39; list</span>
+<span class="sd">        Each dictionary contains:</span>
+<span class="sd">            - [&quot;paramiko_client&quot;]: A paramiko client that can be used to execute commands on the node</span>
+<span class="sd">            - [&quot;node_name&quot;]: The computer name of the connected node</span>
+<span class="sd">            - [&quot;hardware&quot;]: A dictionary with certain hardware information of the node</span>
+<span class="sd">            - [&quot;logfile&quot;]: Path to a logfile inside the instance&#39;s working directory,</span>
+<span class="sd">                           where all stdout and stderr of the node will be redirected to</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        nodes</span>
+<span class="sd">            List with names or IP addresses of working stations/servers in the local network</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">username</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getuser</span><span class="p">()</span>
+        <span class="c1"># password = getpass.getpass(prompt=&#39;Enter password: &#39;, stream=sys.stderr)</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh_connect</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Create local logfiles</span>
+                <span class="n">local_logfile</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.log_dir}</span><span class="s1">/Local_logfile_</span><span class="si">{node}</span><span class="s1">.log&#39;</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">local_logfile</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+                <span class="n">hw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_hardware_spec</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">clients</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;paramiko_client&quot;</span><span class="p">:</span> <span class="n">client</span><span class="p">,</span>
+                    <span class="s2">&quot;node_name&quot;</span><span class="p">:</span> <span class="n">node</span><span class="p">,</span>
+                    <span class="s2">&quot;hardware&quot;</span><span class="p">:</span> <span class="n">hw</span><span class="p">,</span>
+                    <span class="s2">&quot;logfile&quot;</span><span class="p">:</span> <span class="n">local_logfile</span><span class="p">})</span></div>
+
+<div class="viewcode-block" id="ClusterCompute.spawn_thread"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute.spawn_thread">[docs]</a>    <span class="k">def</span> <span class="nf">spawn_thread</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">thread_kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        client</span>
+<span class="sd">        thread_kwargs</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">t_</span> <span class="o">=</span> <span class="n">Thread</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">client</span><span class="p">[</span><span class="s2">&quot;node_name&quot;</span><span class="p">],</span>
+            <span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">thread_master</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">thread_kwargs</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">t_</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">t_</span></div>
+
+<div class="viewcode-block" id="ClusterCompute.thread_master"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute.thread_master">[docs]</a>    <span class="k">def</span> <span class="nf">thread_master</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">thread_kwargs_</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Function that is executed by every thread. Every instance of thread_master is bound to a different client</span>
+
+<span class="sd">        The thread_master() function can be arbitrarily changed to fit the needs of the user.</span>
+<span class="sd">        Commandline commands on the remote node can be executed using client[&quot;paramiko_client&quot;].exec_command(&quot;&quot;)</span>
+<span class="sd">        self.lock can be used to ensure that a code snippet is executed without threads being switched in between</span>
+<span class="sd">        e.g.</span>
+<span class="sd">            with self.lock:</span>
+<span class="sd">                some code that is executed without switching to another thread</span>
+<span class="sd">        Since thread_master() is called by spawn_threads(), which again is called by run(), **kwargs of</span>
+<span class="sd">        spawn_threads() are parsed as a single dict to thread_master(). **kwargs of run() are NOT automatically parsed</span>
+<span class="sd">        to spawn_threads() or thread_master().</span>
+
+<span class="sd">        Params</span>
+<span class="sd">        ------</span>
+<span class="sd">        client</span>
+<span class="sd">            dict containing a paramiko client, name of the connected node, dict with hardware specifications and</span>
+<span class="sd">            a path to a logfile.</span>
+<span class="sd">        kwargs_</span>
+<span class="sd">            dict containing **kwargs of spawn_threads() as key/value pairs</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="ClusterCompute.get_hardware_spec"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute.get_hardware_spec">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_hardware_spec</span><span class="p">(</span><span class="n">pm_client</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print hardware specifications of the workstation tied to the paramiko client</span>
+
+<span class="sd">        Prints CPU model, number of CPU cores, min CPU freq, max CPU freq and working memory of a paramiko client</span>
+<span class="sd">        connected to a remote worker node</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        pm_client</span>
+<span class="sd">            Paramiko client</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dict</span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">stdin</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">pm_client</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s2">&quot;lscpu | grep &#39;Model name&#39;&quot;</span><span class="p">)</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">cpu</span><span class="p">[</span><span class="mi">2</span><span class="p">:]))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;CPU: </span><span class="si">{cpu}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="n">stdin</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">pm_client</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s2">&quot;lscpu | grep &#39;CPU(s)&#39;&quot;</span><span class="p">)</span>
+        <span class="n">num_cpu_cores</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Cores: </span><span class="si">{num_cpu_cores}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="n">stdin</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">pm_client</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s2">&quot;lscpu | grep &#39;min MHz&#39;&quot;</span><span class="p">)</span>
+        <span class="n">cpu_min</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;CPU min: </span><span class="si">{cpu_min}</span><span class="s1"> MHz&#39;</span><span class="p">)</span>
+
+        <span class="n">stdin</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">pm_client</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s2">&quot;lscpu | grep &#39;max MHz&#39;&quot;</span><span class="p">)</span>
+        <span class="n">cpu_max</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;CPU max: </span><span class="si">{cpu_max}</span><span class="s1"> MHz&#39;</span><span class="p">)</span>
+
+        <span class="n">stdin</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">pm_client</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s2">&quot;free -m | grep &#39;Mem&#39;&quot;</span><span class="p">)</span>
+        <span class="n">total_mem</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Total memory: </span><span class="si">{total_mem}</span><span class="s1"> MByte&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="n">hw</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;cpu&#39;</span><span class="p">:</span> <span class="n">cpu</span><span class="p">,</span>
+            <span class="s1">&#39;num_cpu_cores&#39;</span><span class="p">:</span> <span class="n">num_cpu_cores</span><span class="p">,</span>
+            <span class="s1">&#39;cpu_min&#39;</span><span class="p">:</span> <span class="n">cpu_min</span><span class="p">,</span>
+            <span class="s1">&#39;cpu_max&#39;</span><span class="p">:</span> <span class="n">cpu_max</span><span class="p">,</span>
+            <span class="s1">&#39;total_mem&#39;</span><span class="p">:</span> <span class="n">total_mem</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">hw</span></div>
+
+<div class="viewcode-block" id="ClusterCompute.ssh_connect"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute.ssh_connect">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">ssh_connect</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">username</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">print_status</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Connect to a host via SSH and return a respective paramiko.SSHClient</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        node</span>
+<span class="sd">            Name or IP-address of the host to connect to</span>
+<span class="sd">        username</span>
+<span class="sd">        password</span>
+<span class="sd">            ssh_connect uses kerberos authentication so no password is required. If kerberos is not available on your</span>
+<span class="sd">            network, Paramiko needs a password to create the SSH connection</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        paramiko.SSHClient()</span>
+<span class="sd">            Is None if connection fails. For detailed information of the thrown exception see Paramiko documentation</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">SSHClient</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Using kerberos authentication</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span> <span class="n">gss_auth</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">gss_kex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">print_status</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="se">\&#39;</span><span class="si">{node}</span><span class="se">\&#39;</span><span class="s1">: Connection established!&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">client</span>
+        <span class="k">except</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">ssh_exception</span><span class="o">.</span><span class="n">NoValidConnectionsError</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">print_status</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="se">\&#39;</span><span class="si">{node}</span><span class="se">\&#39;</span><span class="s1">: &#39;</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">except</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">ssh_exception</span><span class="o">.</span><span class="n">AuthenticationException</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">print_status</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="se">\&#39;</span><span class="si">{node}</span><span class="se">\&#39;</span><span class="s1">: &#39;</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">except</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">ssh_exception</span><span class="o">.</span><span class="n">SSHException</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">print_status</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="se">\&#39;</span><span class="si">{node}</span><span class="se">\&#39;</span><span class="s1">: &#39;</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">except</span> <span class="ne">IOError</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">print_status</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="se">\&#39;</span><span class="si">{node}</span><span class="se">\&#39;</span><span class="s1">: &#39;</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span></div></div>
+
+
+<div class="viewcode-block" id="ClusterGridSearch"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch">[docs]</a><span class="k">class</span> <span class="nc">ClusterGridSearch</span><span class="p">(</span><span class="n">ClusterCompute</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nodes</span><span class="p">,</span> <span class="n">compute_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">compute_dir</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">chunk_idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">res_file_collection</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="c1"># Adding additional subfolders to the compute directory</span>
+        <span class="c1"># Grid directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">grid_dir</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.compute_dir}</span><span class="s1">/Grids&#39;</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">grid_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># Config directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config_dir</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.compute_dir}</span><span class="s1">/Config&#39;</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># Result directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">res_dir</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.compute_dir}</span><span class="s1">/Results&#39;</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">res_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ClusterGridSearch.run"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">circuit_template</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">dict</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span> <span class="n">param_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">simulation_time</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+            <span class="n">inputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">outputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">sampling_step_size</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">),</span>
+            <span class="n">worker_env</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">worker_file</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">result_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{},</span> <span class="n">config_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{},</span>
+            <span class="n">add_template_info</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">permute</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Run multiple instances of grid_search simultaneously on different workstations in the compute cluster</span>
+
+<span class="sd">        ClusterGridSearch requires all necessary data (worker script, worker environment, compute directory)</span>
+<span class="sd">        to be stored on a server. After a connection is established, all data on the remote workers has to be accessible</span>
+<span class="sd">        in the same way as it would be on the master worker (same root directory, same filepaths, etc.)</span>
+<span class="sd">        Paths inside the run function have to be adjusted respectively.</span>
+
+<span class="sd">        FTP implementation is planned in future versions for direct file transfer between the master and the workers.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        circuit_template</span>
+<span class="sd">            Path to the circuit template.</span>
+<span class="sd">        params</span>
+<span class="sd">            Dictionary containing lists of parameters to create the parameter grid from.</span>
+<span class="sd">        param_map</span>
+<span class="sd">            Key-value pairs that map the keys of param_grid to circuit variables.</span>
+<span class="sd">        dt</span>
+<span class="sd">            Simulation step-size in s.</span>
+<span class="sd">        simulation_time</span>
+<span class="sd">            Simulation time in s.</span>
+<span class="sd">        inputs</span>
+<span class="sd">            inputs as provided to the `run` method of `:class:ComputeGraph`.</span>
+<span class="sd">        outputs</span>
+<span class="sd">            Outputs as provided to the `run` method of `:class:ComputeGraph`.</span>
+<span class="sd">        sampling_step_size</span>
+<span class="sd">            Sampling step-size as provided to the `run` method of `:class:ComputeGraph`.</span>
+<span class="sd">        permute</span>
+<span class="sd">            If true, all combinations of the parameter values in params will be created.</span>
+<span class="sd">        chunk_size</span>
+<span class="sd">            Number of parameter combinations computed simultaneously on one worker</span>
+<span class="sd">        worker_env</span>
+<span class="sd">            Python executable inside an environment in which the remote worker script is called.</span>
+<span class="sd">        worker_file</span>
+<span class="sd">            Python script that will be executed by each remote worker.</span>
+<span class="sd">        result_kwargs</span>
+<span class="sd">            Key-value pairs that will be added to the result file&#39;s &#39;AdditionalData&#39; dataset</span>
+<span class="sd">        config_kwargs</span>
+<span class="sd">            Key-value pairs that will be added to the config file.</span>
+<span class="sd">        add_template_info</span>
+<span class="sd">            If true, all operator templates and its variables are copied from the yaml file to a dedicated folder in the</span>
+<span class="sd">            result file</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        str</span>
+<span class="sd">            .hdf5 file containing the computation results as DataFrame in dataset &#39;/Results/...&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">t_total</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Prepare parameter grid</span>
+        <span class="c1">########################</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;***PREPARING PARAMETER GRID***&quot;</span><span class="p">)</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="c1"># Create DataFrame from param dictionary</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">param_grid</span> <span class="o">=</span> <span class="n">linearize_grid</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">permute</span><span class="o">=</span><span class="n">permute</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">param_grid</span> <span class="o">=</span> <span class="n">params</span>
+
+        <span class="c1"># Create default parameter grid csv-file</span>
+        <span class="n">grid_idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.grid_dir}</span><span class="s1">/DefaultGrid_</span><span class="si">{grid_idx}</span><span class="s1">.csv&#39;</span><span class="p">):</span>
+            <span class="n">grid_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">grid_file</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.grid_dir}</span><span class="s1">/DefaultGrid_</span><span class="si">{grid_idx}</span><span class="s1">.csv&#39;</span>
+        <span class="n">grid_name</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">grid_file</span><span class="p">)</span><span class="o">.</span><span class="n">stem</span>
+        <span class="n">param_grid</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">grid_file</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># Add desired chunk size to each node</span>
+        <span class="c1">#####################################</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">client</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">clients</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">chunk_size</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">client</span><span class="p">[</span><span class="s1">&#39;chunk_size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">chunk_size</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">client</span><span class="p">[</span><span class="s1">&#39;chunk_size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">chunk_size</span>
+
+        <span class="c1"># Assign chunk indices to parameter grid</span>
+        <span class="n">working_grid</span> <span class="o">=</span> <span class="n">param_grid</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">working_grid</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;unsolved&#39;</span>
+        <span class="n">working_grid</span><span class="p">[</span><span class="s2">&quot;chunk_idx&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">working_grid</span><span class="p">[</span><span class="s2">&quot;err_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Done! Elapsed time: {t.time() - t0:.3f} seconds&#39;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Check key consistency</span>
+        <span class="c1">#######################</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***&quot;</span><span class="p">)</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_key_consistency</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">param_map</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Terminating execution!&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Done! Elapsed time: {t.time() - t0:.3f} seconds&#39;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Create config file</span>
+        <span class="c1">#####################</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;***CREATING CONFIG FILE***&quot;</span><span class="p">)</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">config_idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.config_dir}</span><span class="s1">/DefaultConfig_</span><span class="si">{config_idx}</span><span class="s1">.json&#39;</span><span class="p">):</span>
+            <span class="n">config_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">config_file</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.config_dir}</span><span class="s1">/DefaultConfig_</span><span class="si">{config_idx}</span><span class="s1">.json&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_cgs_config</span><span class="p">(</span><span class="n">fp</span><span class="o">=</span><span class="n">config_file</span><span class="p">,</span>
+                               <span class="n">circuit_template</span><span class="o">=</span><span class="n">circuit_template</span><span class="p">,</span>
+                               <span class="n">param_map</span><span class="o">=</span><span class="n">param_map</span><span class="p">,</span>
+                               <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span>
+                               <span class="n">simulation_time</span><span class="o">=</span><span class="n">simulation_time</span><span class="p">,</span>
+                               <span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span>
+                               <span class="n">outputs</span><span class="o">=</span><span class="n">outputs</span><span class="p">,</span>
+                               <span class="n">sampling_step_size</span><span class="o">=</span><span class="n">sampling_step_size</span><span class="p">,</span>
+                               <span class="n">add_kwargs</span><span class="o">=</span><span class="n">config_kwargs</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Done! Elapsed time: {t.time() - t0:.3f} seconds&#39;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Create global result file</span>
+        <span class="c1">############################</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;***CREATING GLOBAL RESULT FILE***&quot;</span><span class="p">)</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="c1"># Create result directory and result file for current parameter grid</span>
+        <span class="n">grid_res_dir</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.res_dir}</span><span class="s1">/</span><span class="si">{grid_name}</span><span class="s1">&#39;</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">grid_res_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">global_res_file</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{grid_res_dir}</span><span class="s1">/CGS_result_</span><span class="si">{grid_name}</span><span class="s1">.h5&#39;</span>
+
+        <span class="c1"># Write grid and config information to global result file</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">global_res_file</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/ParameterGrid/Keys/</span><span class="si">{key}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">result_kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/AdditionalData/</span><span class="si">{key}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+            <span class="n">file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/Config/config_file&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">config_file</span><span class="p">)</span>
+            <span class="n">file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/Config/circuit_template&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">circuit_template</span><span class="p">)</span>
+            <span class="n">file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/Config/simulation_time&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">simulation_time</span><span class="p">)</span>
+            <span class="n">file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/Config/dt&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">dt</span><span class="p">)</span>
+            <span class="n">file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/Config/sampling_step_size&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">sampling_step_size</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">add_template_info</span><span class="p">:</span>
+                <span class="n">template_file</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;{circuit_template.rsplit(&quot;/&quot;, 1)[0]}.yaml&#39;</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">add_template_information</span><span class="p">(</span><span class="n">template_file</span><span class="p">,</span> <span class="n">file</span><span class="p">)</span>
+
+        <span class="n">param_grid</span><span class="o">.</span><span class="n">to_hdf</span><span class="p">(</span><span class="n">global_res_file</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="s1">&#39;/ParameterGrid/Grid_df&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Done. Elapsed time: {t.time() - t0:.3f} seconds&#39;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Create keyword dictionary for threads</span>
+        <span class="c1">#######################################</span>
+        <span class="n">thread_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;worker_env&quot;</span><span class="p">:</span> <span class="n">worker_env</span><span class="p">,</span>
+            <span class="s2">&quot;worker_file&quot;</span><span class="p">:</span> <span class="n">worker_file</span><span class="p">,</span>
+            <span class="s2">&quot;working_grid&quot;</span><span class="p">:</span> <span class="n">working_grid</span><span class="p">,</span>
+            <span class="s2">&quot;grid_name&quot;</span><span class="p">:</span> <span class="n">grid_name</span><span class="p">,</span>
+            <span class="s2">&quot;grid_res_dir&quot;</span><span class="p">:</span> <span class="n">grid_res_dir</span><span class="p">,</span>
+            <span class="s2">&quot;config_file&quot;</span><span class="p">:</span> <span class="n">config_file</span><span class="p">,</span>
+            <span class="s2">&quot;global_res_file&quot;</span><span class="p">:</span> <span class="n">global_res_file</span>
+        <span class="p">}</span>
+
+        <span class="c1"># TODO: Copy worker environment, worker file and configuration file to the worker, if necessary</span>
+
+        <span class="c1"># Start cluster computation</span>
+        <span class="c1">###########################</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;***STARTING CLUSTER COMPUTATION***&quot;</span><span class="p">)</span>
+        <span class="c1"># Spawn threads to control each node connection and start computation</span>
+        <span class="n">threads</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">spawn_thread</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">thread_kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">client</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">clients</span><span class="p">]</span>
+        <span class="c1"># Wait for all threads to finish</span>
+        <span class="k">for</span> <span class="n">t_</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+            <span class="n">t_</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Check parameter combinations that failed multiple times to compute</span>
+        <span class="n">remaining_params</span> <span class="o">=</span> <span class="n">working_grid</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">working_grid</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;failed&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">index</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">remaining_params</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;WARNING: The following parameter indices could not be computed: &quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">remaining_params</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Write local results to global result file</span>
+        <span class="c1">###########################################</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;***WRITING RESULTS TO GLOBAL RESULT FILE***&#39;</span><span class="p">)</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="c1"># Get sorted list of temporary result files to iterate through</span>
+        <span class="n">temp_res_files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="si">{grid_res_dir}</span><span class="s1">/*_temp*&#39;</span><span class="p">)</span>
+        <span class="n">temp_res_files</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+
+        <span class="c1"># Read number of different circuit outputs and prepare lists to concatenate results</span>
+        <span class="n">res_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">with</span> <span class="n">pd</span><span class="o">.</span><span class="n">HDFStore</span><span class="p">(</span><span class="n">temp_res_files</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">store</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">store</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="n">res_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># Concatenate results from each temporary result file</span>
+        <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">temp_res_files</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">pd</span><span class="o">.</span><span class="n">HDFStore</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">store</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+                    <span class="n">res_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">store</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
+
+        <span class="c1"># Create DataFrame for each output variable and write to global result file</span>
+        <span class="k">with</span> <span class="n">pd</span><span class="o">.</span><span class="n">HDFStore</span><span class="p">(</span><span class="n">global_res_file</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">store</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">res_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">store</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">f</span><span class="s1">&#39;/Results/</span><span class="si">{key}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">df</span><span class="p">)</span>
+
+        <span class="c1"># Delete temporary local result files</span>
+        <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">temp_res_files</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Elapsed time: {t.time()-t0:.3f} seconds&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Find results in: </span><span class="si">{grid_res_dir}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="n">working_grid</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;{os.path.dirname(grid_file)}/</span><span class="si">{grid_name}</span><span class="s1">_</span><span class="si">{self.compute_id}</span><span class="s1">_ResultStatus.csv&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># self.__del__()</span>
+        <span class="k">return</span> <span class="n">global_res_file</span></div>
+
+<div class="viewcode-block" id="ClusterGridSearch.thread_master"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.thread_master">[docs]</a>    <span class="k">def</span> <span class="nf">thread_master</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">thread_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Function that is executed by each thread to schedule computations on the respective worker</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        client</span>
+<span class="sd">            Dictionary containing all information about the remote worker that is tied to the current thread</span>
+<span class="sd">        thread_kwargs</span>
+<span class="sd">            Dictionary containing all kwargs that are passed to the thread function</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">thread_name</span> <span class="o">=</span> <span class="n">currentThread</span><span class="p">()</span><span class="o">.</span><span class="n">getName</span><span class="p">()</span>
+        <span class="n">connection_lost</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">connection_lost_counter</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="c1"># Get client information</span>
+        <span class="n">pm_client</span> <span class="o">=</span> <span class="n">client</span><span class="p">[</span><span class="s2">&quot;paramiko_client&quot;</span><span class="p">]</span>
+        <span class="n">logfile</span> <span class="o">=</span> <span class="n">client</span><span class="p">[</span><span class="s2">&quot;logfile&quot;</span><span class="p">]</span>
+        <span class="n">chunk_size</span> <span class="o">=</span> <span class="n">client</span><span class="p">[</span><span class="s2">&quot;chunk_size&quot;</span><span class="p">]</span>
+
+        <span class="c1"># Get keyword arguments</span>
+        <span class="n">config_file</span> <span class="o">=</span> <span class="n">thread_kwargs</span><span class="p">[</span><span class="s2">&quot;config_file&quot;</span><span class="p">]</span>
+        <span class="n">working_grid</span> <span class="o">=</span> <span class="n">thread_kwargs</span><span class="p">[</span><span class="s2">&quot;working_grid&quot;</span><span class="p">]</span>
+        <span class="n">grid_name</span> <span class="o">=</span> <span class="n">thread_kwargs</span><span class="p">[</span><span class="s2">&quot;grid_name&quot;</span><span class="p">]</span>
+        <span class="n">grid_res_dir</span> <span class="o">=</span> <span class="n">thread_kwargs</span><span class="p">[</span><span class="s2">&quot;grid_res_dir&quot;</span><span class="p">]</span>
+        <span class="n">worker_env</span> <span class="o">=</span> <span class="n">thread_kwargs</span><span class="p">[</span><span class="s2">&quot;worker_env&quot;</span><span class="p">]</span>
+        <span class="n">worker_file</span> <span class="o">=</span> <span class="n">thread_kwargs</span><span class="p">[</span><span class="s2">&quot;worker_file&quot;</span><span class="p">]</span>
+
+        <span class="c1"># Prepare worker command</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{worker_env}</span><span class="s1"> </span><span class="si">{worker_file}</span><span class="s1">&#39;</span>
+
+        <span class="c1"># Create folder to save local subgrids to</span>
+        <span class="n">subgrid_dir</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{self.grid_dir}</span><span class="s1">/Subgrids/</span><span class="si">{grid_name}</span><span class="s1">/</span><span class="si">{thread_name}</span><span class="s1">&#39;</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">subgrid_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">subgrid_idx</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="c1"># Start scheduler</span>
+        <span class="c1">#################</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+
+            <span class="c1"># Temporarily disable thread switching</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+
+                <span class="c1"># Fetch grid chunks</span>
+                <span class="c1">####################</span>
+
+                <span class="c1"># Get all parameters that haven&#39;t been successfully computed yet</span>
+                <span class="n">remaining_params</span> <span class="o">=</span> <span class="n">working_grid</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">working_grid</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;unsolved&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">remaining_params</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[T]</span><span class="se">\&#39;</span><span class="si">{thread_name}</span><span class="se">\&#39;</span><span class="s1">: No more parameter combinations available!&#39;</span><span class="p">)</span>
+                    <span class="k">break</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Find chunk index of first value in remaining params and fetch all parameter combinations with the</span>
+                    <span class="c1"># same chunk index</span>
+                    <span class="n">param_idx</span><span class="p">,</span> <span class="n">chunk_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fetch_index</span><span class="p">(</span><span class="n">remaining_params</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">,</span> <span class="n">working_grid</span><span class="p">)</span>
+                    <span class="n">working_grid</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">param_idx</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;pending&quot;</span>
+
+                    <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[T]</span><span class="se">\&#39;</span><span class="si">{thread_name}</span><span class="se">\&#39;</span><span class="s1">: Fetching {len(param_idx)} indices: &#39;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[</span><span class="si">{param_idx[0]}</span><span class="s1">] - [</span><span class="si">{param_idx[-1]}</span><span class="s1">]&#39;</span><span class="p">)</span>
+
+                    <span class="c1"># Create parameter sub-grid</span>
+                    <span class="c1">###########################</span>
+                    <span class="n">subgrid_fp</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{subgrid_dir}</span><span class="s1">/</span><span class="si">{thread_name}</span><span class="s1">_Subgrid_</span><span class="si">{subgrid_idx}</span><span class="s1">.h5&#39;</span>
+                    <span class="n">subgrid_df</span> <span class="o">=</span> <span class="n">working_grid</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">param_idx</span><span class="p">]</span>
+                    <span class="n">subgrid_df</span><span class="o">.</span><span class="n">to_hdf</span><span class="p">(</span><span class="n">subgrid_fp</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="s2">&quot;subgrid&quot;</span><span class="p">)</span>
+                    <span class="n">subgrid_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                    <span class="c1"># TODO: Copy subgrid to worker if necessary</span>
+
+                    <span class="c1"># Temporary result file for current subgrid</span>
+                    <span class="c1">###########################################</span>
+                    <span class="n">local_res_file</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{grid_res_dir}</span><span class="s1">/CGS_result_</span><span class="si">{grid_name}</span><span class="s1">_&#39;</span> \
+                        <span class="n">f</span><span class="s1">&#39;chunk_</span><span class="si">{chunk_idx:02}</span><span class="s1">_idx_</span><span class="si">{param_idx[0]}</span><span class="s1">-</span><span class="si">{param_idx[-1]}</span><span class="s1">_temp.h5&#39;</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">res_file_collection</span><span class="p">[</span><span class="n">chunk_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">local_res_file</span>
+
+                    <span class="c1"># Execute worker script on the remote host</span>
+                    <span class="c1">##########################################</span>
+                    <span class="n">t0</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[T]</span><span class="se">\&#39;</span><span class="si">{thread_name}</span><span class="se">\&#39;</span><span class="s1">: Starting remote computation...&#39;</span><span class="p">)</span>
+                        <span class="n">stdin</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">pm_client</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="n">command</span> <span class="o">+</span>
+                                                                       <span class="n">f</span><span class="s1">&#39; --config_file=</span><span class="si">{config_file}</span><span class="s1">&#39;</span>
+                                                                       <span class="n">f</span><span class="s1">&#39; --subgrid=</span><span class="si">{subgrid_fp}</span><span class="s1">&#39;</span>
+                                                                       <span class="n">f</span><span class="s1">&#39; --local_res_file=</span><span class="si">{local_res_file}</span><span class="s1">&#39;</span>
+                                                                       <span class="n">f</span><span class="s1">&#39; &amp;&gt;&gt; </span><span class="si">{logfile}</span><span class="s1">&#39;</span><span class="p">,</span>  <span class="c1"># redirect and append stdout</span>
+                                                                                           <span class="c1"># and stderr to logfile</span>
+                                                                       <span class="n">get_pty</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>       <span class="c1"># execute in pseudoterminal</span>
+                    <span class="k">except</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">ssh_exception</span><span class="o">.</span><span class="n">SSHException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                        <span class="c1"># SSH connection has been lost</span>
+                        <span class="c1"># (remote machine shut down, ssh connection has been killed manually, ...)</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[T]</span><span class="se">\&#39;</span><span class="si">{thread_name}</span><span class="se">\&#39;</span><span class="s1">: ERROR: </span><span class="si">{e}</span><span class="s1">&#39;</span><span class="p">)</span>
+                        <span class="n">working_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">param_idx</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;unsolved&quot;</span>
+                        <span class="n">connection_lost</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="c1"># Lock released, thread switching enabled</span>
+
+            <span class="c1"># Try to reconnect to host if connection has been lost</span>
+            <span class="c1">######################################################</span>
+            <span class="k">if</span> <span class="n">connection_lost</span> <span class="ow">and</span> <span class="n">connection_lost_counter</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="c1"># Attempt to reconnect while there are still parameter chunks to fetch</span>
+                <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">working_grid</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">working_grid</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;unsolved&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+                        <span class="c1"># Stop thread execution if no more parameters are available</span>
+                        <span class="k">return</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Attempting to reconnect&#39;</span><span class="p">)</span>
+                        <span class="n">pm_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh_connect</span><span class="p">(</span><span class="n">thread_name</span><span class="p">,</span> <span class="n">username</span><span class="o">=</span><span class="n">getpass</span><span class="o">.</span><span class="n">getuser</span><span class="p">(),</span> <span class="n">print_status</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">pm_client</span><span class="p">:</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[T]</span><span class="se">\&#39;</span><span class="si">{thread_name}</span><span class="se">\&#39;</span><span class="s1">: Reconnected!&#39;</span><span class="p">)</span>
+                            <span class="n">connection_lost</span> <span class="o">=</span> <span class="kc">False</span>
+                            <span class="c1"># Escape reconnection loop</span>
+                            <span class="k">break</span>
+                        <span class="n">t</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span>
+                <span class="c1"># Jump to the beginning of scheduler loop if reconnection was successful</span>
+                <span class="k">continue</span>
+
+            <span class="c1"># Wait for remote computation exit status</span>
+            <span class="c1"># (independent of success or failure)</span>
+            <span class="c1">#########################################</span>
+            <span class="n">exit_status</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv_exit_status</span><span class="p">()</span>
+
+            <span class="c1"># Update grid status</span>
+            <span class="c1">####################</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+                <span class="c1"># Remote machine executed worker script successfully</span>
+                <span class="k">if</span> <span class="n">exit_status</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[T]</span><span class="se">\&#39;</span><span class="si">{thread_name}</span><span class="se">\&#39;</span><span class="s1">: Remote computation finished. Elapsed time: {t.time()-t0:.3f} seconds&#39;</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[T]</span><span class="se">\&#39;</span><span class="si">{thread_name}</span><span class="se">\&#39;</span><span class="s1">: Updating grid status&#39;</span><span class="p">)</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="c1"># Check if data has been written to result file</span>
+                        <span class="k">with</span> <span class="n">pd</span><span class="o">.</span><span class="n">HDFStore</span><span class="p">(</span><span class="n">local_res_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">store</span><span class="p">:</span>
+                            <span class="c1"># Check if temporary result file (hdf5) contains keys</span>
+                            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                                <span class="k">raise</span> <span class="ne">KeyError</span>
+                            <span class="c1"># Check if each key contains data</span>
+                            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">store</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">store</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                                    <span class="k">raise</span> <span class="ne">KeyError</span>
+                        <span class="n">working_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">param_idx</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;done&#39;</span>
+                    <span class="k">except</span> <span class="p">(</span><span class="ne">KeyError</span><span class="p">,</span> <span class="ne">FileNotFoundError</span><span class="p">):</span>
+                        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">param_idx</span><span class="p">:</span>
+                            <span class="k">if</span> <span class="n">working_grid</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">row</span><span class="p">][</span><span class="s2">&quot;err_count&quot;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+                                <span class="n">working_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;unsolved&quot;</span>
+                                <span class="n">working_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="s2">&quot;err_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">working_grid</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">row</span><span class="p">][</span><span class="s2">&quot;err_count&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">working_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;failed&quot;</span>
+
+                <span class="c1"># Remote execution was interrupted</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;[T]</span><span class="se">\&#39;</span><span class="si">{thread_name}</span><span class="se">\&#39;</span><span class="s1">: Remote computation failed with exit status </span><span class="si">{exit_status}</span><span class="s1">&#39;</span><span class="p">)</span>
+                    <span class="n">connection_lost_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">param_idx</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">working_grid</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">row</span><span class="p">][</span><span class="s2">&quot;err_count&quot;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">4</span><span class="p">:</span>
+                            <span class="n">working_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;unsolved&quot;</span>
+                            <span class="n">working_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="s2">&quot;err_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">working_grid</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">row</span><span class="p">][</span><span class="s2">&quot;err_count&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">working_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;failed&quot;</span>
+                    <span class="k">if</span> <span class="n">connection_lost_counter</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Excluding worker from pool&#39;</span><span class="p">)</span>
+                        <span class="k">return</span></div>
+
+            <span class="c1"># Lock released, thread switching enabled</span>
+        <span class="c1"># End of scheduler loop</span>
+
+        <span class="c1"># TODO: Close pty on remote machine?</span>
+
+    <span class="c1"># End of Thread master</span>
+
+    <span class="k">def</span> <span class="nf">_fetch_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remaining_params</span><span class="p">,</span> <span class="n">worker_chunk_size</span><span class="p">,</span> <span class="n">working_grid</span><span class="p">):</span>
+        <span class="n">param_idx</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">chunk_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">chunk_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">chunk_idx</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">remaining_params</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">chunk_count</span> <span class="o">==</span> <span class="n">worker_chunk_size</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">chunk_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Index</span><span class="p">(</span><span class="n">param_idx</span><span class="p">),</span> <span class="n">chunk_idx</span>
+            <span class="k">elif</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;chunk_idx&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                <span class="c1"># Chunk parameter grid</span>
+                <span class="n">working_grid</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="s1">&#39;chunk_idx&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">chunk_idx</span>
+                <span class="n">param_idx</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                <span class="n">chunk_count</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="c1"># Whole parameter grid is chunked</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">param_idx</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># get all parameters with the same valid chunk index</span>
+            <span class="n">chunk_idx</span> <span class="o">=</span> <span class="n">remaining_params</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;chunk_idx&quot;</span><span class="p">]</span>
+            <span class="n">param_idx</span> <span class="o">=</span> <span class="n">remaining_params</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">remaining_params</span><span class="p">[</span><span class="s2">&quot;chunk_idx&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">chunk_idx</span><span class="p">]</span><span class="o">.</span><span class="n">index</span>
+
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Index</span><span class="p">(</span><span class="n">param_idx</span><span class="p">),</span> <span class="n">chunk_idx</span>
+
+    <span class="c1">#################################</span>
+    <span class="c1"># CGS internal helper functions #</span>
+    <span class="c1">#################################</span>
+<div class="viewcode-block" id="ClusterGridSearch.chunk_grid"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.chunk_grid">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">chunk_grid</span><span class="p">(</span><span class="n">grid</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create a pd.DataFrame from the params dict and assign a chunk index to each parameter combination</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        grid</span>
+<span class="sd">            pd.DataFrame with all parameter combinations that can be traversed linearly</span>
+<span class="sd">        chunk_size</span>
+<span class="sd">            Number of parameter combinations to be computed simultaneously on one worker</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            pd.DataFrame</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Add status columns to grid</span>
+        <span class="n">chunked_grid</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">chunked_grid</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;unsolved&#39;</span>
+        <span class="n">chunked_grid</span><span class="p">[</span><span class="s2">&quot;chunk_idx&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">chunked_grid</span><span class="p">[</span><span class="s2">&quot;err_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="c1"># Assign a chunk index to each parameter combination</span>
+        <span class="n">chunk_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">param_idx</span> <span class="o">=</span> <span class="n">chunked_grid</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">chunked_grid</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;unsolved&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">[:</span><span class="n">chunk_size</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">param_idx</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">chunked_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">param_idx</span><span class="p">,</span> <span class="s1">&#39;chunk_idx&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">chunk_count</span>
+                <span class="n">chunked_grid</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">param_idx</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;chunked&quot;</span>
+                <span class="n">chunk_count</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">chunked_grid</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;unsolved&#39;</span>
+
+        <span class="k">return</span> <span class="n">chunked_grid</span></div>
+
+<div class="viewcode-block" id="ClusterGridSearch.check_key_consistency"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.check_key_consistency">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">check_key_consistency</span><span class="p">(</span><span class="n">param_grid</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">param_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check if keys in param_grid and param_map match</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        param_grid</span>
+<span class="sd">        param_map</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        bool</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">grid_key_lst</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">param_grid</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">map_key_lst</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">param_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="c1"># Not all keys of parameter map can be found in parameter grid</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">((</span><span class="n">grid_key</span> <span class="ow">in</span> <span class="n">map_key_lst</span> <span class="k">for</span> <span class="n">grid_key</span> <span class="ow">in</span> <span class="n">grid_key_lst</span><span class="p">)):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Not all parameter grid keys found in parameter map&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Parameter map keys:&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="nb">list</span><span class="p">(</span><span class="n">param_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Parameter grid keys:&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="nb">list</span><span class="p">(</span><span class="n">param_grid</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="c1"># Parameter grid and parameter map match</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;All parameter grid keys found in parameter map&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="ClusterGridSearch.create_cgs_config"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.create_cgs_config">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_cgs_config</span><span class="p">(</span><span class="n">fp</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">circuit_template</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">param_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">simulation_time</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+                          <span class="n">inputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">outputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">sampling_step_size</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">add_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates a configfile.json containing a dictionary with all input parameters as key-value pairs</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        fp</span>
+<span class="sd">        circuit_template</span>
+<span class="sd">        param_map</span>
+<span class="sd">        dt</span>
+<span class="sd">        simulation_time</span>
+<span class="sd">        inputs</span>
+<span class="sd">        outputs</span>
+<span class="sd">        sampling_step_size</span>
+<span class="sd">        add_kwargs</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">config_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;circuit_template&quot;</span><span class="p">:</span> <span class="n">circuit_template</span><span class="p">,</span>
+            <span class="s2">&quot;param_map&quot;</span><span class="p">:</span> <span class="n">param_map</span><span class="p">,</span>
+            <span class="s2">&quot;dt&quot;</span><span class="p">:</span> <span class="n">dt</span><span class="p">,</span>
+            <span class="s2">&quot;simulation_time&quot;</span><span class="p">:</span> <span class="n">simulation_time</span><span class="p">,</span>
+            <span class="s2">&quot;outputs&quot;</span><span class="p">:</span> <span class="n">outputs</span><span class="p">,</span>
+            <span class="s2">&quot;sampling_step_size&quot;</span><span class="p">:</span> <span class="n">sampling_step_size</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">inputs</span><span class="p">:</span>
+            <span class="n">config_dict</span><span class="p">[</span><span class="s2">&quot;inputs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="o">*</span><span class="n">inputs</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span> <span class="nb">list</span><span class="p">(</span><span class="o">*</span><span class="n">inputs</span><span class="o">.</span><span class="n">values</span><span class="p">())}</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">add_kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">config_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">config_dict</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ClusterGridSearch.add_template_information"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.add_template_information">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">add_template_information</span><span class="p">(</span><span class="n">yaml_fp</span><span class="p">,</span> <span class="n">hdf5_file</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Add opearator information of the circuit template to the global result file&quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">yaml</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">yaml_fp</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">yaml_dict</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">yaml</span><span class="o">.</span><span class="n">YAMLError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">operator_key</span><span class="p">,</span> <span class="n">operator_value</span> <span class="ow">in</span> <span class="n">yaml_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="s2">&quot;Op&quot;</span> <span class="ow">in</span> <span class="n">operator_key</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">temp_key</span><span class="p">,</span> <span class="n">temp_value</span> <span class="ow">in</span> <span class="n">operator_value</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">temp_value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                        <span class="n">hdf5_file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/TemplateInfo/</span><span class="si">{operator_key}</span><span class="s1">/</span><span class="si">{temp_key}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">temp_value</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">temp_value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">eq</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">temp_value</span><span class="p">):</span>
+                            <span class="n">hdf5_file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/TemplateInfo/</span><span class="si">{operator_key}</span><span class="s1">/</span><span class="si">{temp_key}</span><span class="s1">/eq_</span><span class="si">{idx}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">eq</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">temp_value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">temp_value</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                            <span class="k">try</span><span class="p">:</span>
+                                <span class="n">hdf5_file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/TemplateInfo/</span><span class="si">{operator_key}</span><span class="s1">/</span><span class="si">{temp_key}</span><span class="s1">/</span><span class="si">{key}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">value</span><span class="p">[</span><span class="s2">&quot;default&quot;</span><span class="p">])</span>
+                            <span class="k">except</span><span class="p">:</span>
+                                <span class="n">hdf5_file</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;/TemplateInfo/</span><span class="si">{operator_key}</span><span class="s1">/</span><span class="si">{temp_key}</span><span class="s1">/</span><span class="si">{key}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">value</span><span class="p">)</span></div></div>
+
+<span class="c1">#####################</span>
+<span class="c1"># Utility functions #</span>
+<span class="c1">#####################</span>
+
+
+<div class="viewcode-block" id="linearize_grid"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.linearize_grid">[docs]</a><span class="k">def</span> <span class="nf">linearize_grid</span><span class="p">(</span><span class="n">grid</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">permute</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Turns the grid into a grid that can be traversed linearly, i.e. pairwise.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    grid</span>
+<span class="sd">        Parameter grid.</span>
+<span class="sd">    permute</span>
+<span class="sd">        If true, all combinations of the parameter values in grid will be created.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pd.DataFrame</span>
+<span class="sd">        Resulting linear grid in form of a data frame.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">arg_lengths</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">grid</span><span class="o">.</span><span class="n">values</span><span class="p">()]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">arg_lengths</span><span class="p">)))</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">permute</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">grid</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">vals</span><span class="p">,</span> <span class="n">keys</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">grid</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+            <span class="n">keys</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">new_grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="o">*</span><span class="nb">tuple</span><span class="p">(</span><span class="n">vals</span><span class="p">)),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">grid</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">new_grid</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">keys</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="adapt_circuit"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.adapt_circuit">[docs]</a><span class="k">def</span> <span class="nf">adapt_circuit</span><span class="p">(</span><span class="n">circuit</span><span class="p">:</span> <span class="n">CircuitIR</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">param_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CircuitIR</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Changes the parametrization of a circuit.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    circuit</span>
+<span class="sd">        Circuit instance.</span>
+<span class="sd">    params</span>
+<span class="sd">        Key-value pairs of the parameters that should be changed.</span>
+<span class="sd">    param_map</span>
+<span class="sd">        Map between the keys in params and the circuit variables.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    CircuitIR</span>
+<span class="sd">        Updated circuit instance.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s1">&#39;var&#39;</span><span class="p">]:</span>
+            <span class="n">nodes</span> <span class="o">=</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s1">&#39;nodes&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;nodes&#39;</span> <span class="ow">in</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">else</span> <span class="p">[]</span>
+            <span class="n">edges</span> <span class="o">=</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s1">&#39;edges&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;edges&#39;</span> <span class="ow">in</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">else</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">node</span><span class="p">][</span><span class="s1">&#39;node&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
+                    <span class="n">circuit</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">node</span><span class="p">][</span><span class="s1">&#39;node&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;variables&#39;</span><span class="p">][</span><span class="n">var</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">]:</span>
+                    <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">][</span><span class="n">op</span><span class="p">][</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">]:</span>
+                    <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">][</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">circuit</span></div>
+
+
+<div class="viewcode-block" id="StreamTee"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.StreamTee">[docs]</a><span class="k">class</span> <span class="nc">StreamTee</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Tee all stdout to a specified logfile&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stream1</span><span class="p">,</span> <span class="n">stream2fp</span><span class="p">):</span>
+        <span class="n">stream2</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">stream2fp</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stream1</span> <span class="o">=</span> <span class="n">stream1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stream2</span> <span class="o">=</span> <span class="n">stream2</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__missing_method_name</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># Hack!</span>
+
+    <span class="k">def</span> <span class="nf">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">object</span><span class="o">.</span><span class="fm">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__missing_method_name</span> <span class="o">=</span> <span class="n">name</span>  <span class="c1"># Could also be a property</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;__methodmissing__&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__methodmissing__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c1"># Emit method call to the log copy</span>
+        <span class="n">callable2</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stream2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">__missing_method_name</span><span class="p">)</span>
+        <span class="n">callable2</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># Emit method call to stdout (stream 1)</span>
+        <span class="n">callable1</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stream1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">__missing_method_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">callable1</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../../../index.html">
+    <img class="logo" src="../../../_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,208 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.frontend.template.circuit package &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pyrates.frontend.template.edge package" href="pyrates.frontend.template.edge.html" />
+    <link rel="prev" title="pyrates.frontend.template package" href="pyrates.frontend.template.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.frontend.template.html" title="Previous document">pyrates.frontend.template package</a>
+        </li>
+        <li>
+          <a href="pyrates.frontend.template.edge.html" title="Next document">pyrates.frontend.template.edge package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="pyrates-frontend-template-circuit-package">
+<h1>pyrates.frontend.template.circuit package<a class="headerlink" href="#pyrates-frontend-template-circuit-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-pyrates.frontend.template.circuit.circuit">
+<span id="pyrates-frontend-template-circuit-circuit-module"></span><h2>pyrates.frontend.template.circuit.circuit module<a class="headerlink" href="#module-pyrates.frontend.template.circuit.circuit" title="Permalink to this headline">¶</a></h2>
+<p>Basic neural mass backend class plus derivations of it.</p>
+<p>This module includes the base circuit class that manages the set-up and simulation of population networks. Additionally,
+it features various sub-classes that act as circuit constructors and allow to build circuits based on different input
+arguments. For more detailed descriptions, see the respective docstrings.</p>
+<dl class="class">
+<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">CircuitTemplate</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = 'A circuit template.'</em>, <em class="sig-param">label: str = 'circuit'</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: dict = None</em>, <em class="sig-param">edges: List[tuple] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="pyrates.frontend.template.html#pyrates.frontend.template.abc.AbstractBaseTemplate" title="pyrates.frontend.template.abc.AbstractBaseTemplate"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.frontend.template.abc.AbstractBaseTemplate</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply">
+<code class="sig-name descname">apply</code><span class="sig-paren">(</span><em class="sig-param">label: str = None</em>, <em class="sig-param">in_place: bool = True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a Circuit graph instance based on the template</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.target_ir">
+<code class="sig-name descname">target_ir</code><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.target_ir" title="Permalink to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference internal" href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR" title="pyrates.ir.circuit.CircuitIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.circuit.CircuitIR</span></code></a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.update_template">
+<code class="sig-name descname">update_template</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = None</em>, <em class="sig-param">label: str = None</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: dict = None</em>, <em class="sig-param">edges: List[tuple] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate.update_template"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.update_template" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update all entries of the circuit template in their respective ways.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.frontend.template.circuit.circuit.update_dict">
+<code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">update_dict</code><span class="sig-paren">(</span><em class="sig-param">base_dict: dict</em>, <em class="sig-param">updates: dict</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#update_dict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.update_dict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="pyrates.frontend.template.circuit.circuit.update_edges">
+<code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">update_edges</code><span class="sig-paren">(</span><em class="sig-param">base_edges: List[tuple], updates: List[Union[tuple, dict]]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#update_edges"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.update_edges" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add edges to list of edges. Removing or altering is currently not supported.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.frontend.template.circuit">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-pyrates.frontend.template.circuit" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.frontend.template.html" title="Previous document">pyrates.frontend.template package</a>
+        </li>
+        <li>
+          <a href="pyrates.frontend.template.edge.html" title="Next document">pyrates.frontend.template.edge package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">pyrates.frontend.template.circuit package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.circuit.circuit">pyrates.frontend.template.circuit.circuit module</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.circuit">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/pyrates.frontend.template.circuit.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/pyrates.frontend.template.circuit.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

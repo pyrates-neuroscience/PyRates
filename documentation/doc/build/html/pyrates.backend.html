@@ -1,0 +1,1248 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.backend package &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pyrates.ir package" href="pyrates.ir.html" />
+    <link rel="prev" title="pyrates.frontend.template.edge package" href="pyrates.frontend.template.edge.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.frontend.template.edge.html" title="Previous document">pyrates.frontend.template.edge package</a>
+        </li>
+        <li>
+          <a href="pyrates.ir.html" title="Next document">pyrates.ir package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="pyrates-backend-package">
+<h1>pyrates.backend package<a class="headerlink" href="#pyrates-backend-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-pyrates.backend.computegraph">
+<span id="pyrates-backend-computegraph-module"></span><h2>pyrates.backend.computegraph module<a class="headerlink" href="#module-pyrates.backend.computegraph" title="Permalink to this headline">¶</a></h2>
+<p>This module provides the backend class that should be used to set up any backend in pyrates.</p>
+<dl class="class">
+<dt id="pyrates.backend.computegraph.ComputeGraph">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.computegraph.</code><code class="sig-name descname">ComputeGraph</code><span class="sig-paren">(</span><em class="sig-param">net_config: Union[str, pyrates.ir.circuit.CircuitIR], dt: float = 0.001, vectorization: str = 'none', name: Optional[str] = 'net0', build_in_place: bool = True, backend: str = 'numpy', solver: str = 'euler', float_precision: str = 'float32', **kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Creates a compute graph that contains all nodes in the network plus their recurrent connections.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>net_config</strong> – Intermediate representation of the network configuration. For a more detailed description, see the documentation
+of <cite>pyrates.IR.CircuitIR</cite>.</p></li>
+<li><p><strong>dt</strong> – Step-size with which the network should be simulated later on.
+Important for discretizing delays, differential equations, …</p></li>
+<li><p><strong>vectorization</strong> – Defines the mode of automatic parallelization optimization that should be used. Can be <cite>nodes</cite> for lumping all
+nodes together in a vector, <cite>full</cite> for full vectorization of the network, or <cite>None</cite> for no vectorization.</p></li>
+<li><p><strong>name</strong> – Name of the network.</p></li>
+<li><p><strong>build_in_place</strong> – If False, a copy of the <cite>net_config``will be made before compute graph creation. Should be used, if the
+`net_config</cite> will be re-used for multiple compute graphs.</p></li>
+<li><p><strong>backend</strong> – Backend in which to build the compute graph.</p></li>
+<li><p><strong>solver</strong> – Numerical solver to use for differential equations.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="pyrates.backend.computegraph.ComputeGraph.clear">
+<code class="sig-name descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clears the backend graph from all operations and variables.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.computegraph.ComputeGraph.get_var">
+<code class="sig-name descname">get_var</code><span class="sig-paren">(</span><em class="sig-param">node: str</em>, <em class="sig-param">op: str</em>, <em class="sig-param">var: str</em>, <em class="sig-param">var_name: Optional[str] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph.get_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph.get_var" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extracts a variable from the graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>node</strong> – Name of the node(s), the variable exists on. Can be ‘all’ for all nodes, or a sub-string that defines a
+class of nodes or a specific node name.</p></li>
+<li><p><strong>op</strong> – Name of the operator the variable belongs to.</p></li>
+<li><p><strong>var</strong> – Name of the variable.</p></li>
+<li><p><strong>var_name</strong> – Name under which the variable should be returned</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments that may be used to pass arguments for the backend like name scopes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Dictionary with all variables found in the network that match the provided signature.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.computegraph.ComputeGraph.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">simulation_time: Optional[float] = None</em>, <em class="sig-param">inputs: Optional[dict] = None</em>, <em class="sig-param">outputs: Optional[dict] = None</em>, <em class="sig-param">sampling_step_size: Optional[float] = None</em>, <em class="sig-param">out_dir: Optional[str] = None</em>, <em class="sig-param">verbose: bool = True</em>, <em class="sig-param">profile: Optional[str] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; Union[pandas.core.frame.DataFrame, Tuple[pandas.core.frame.DataFrame, float, float]]<a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simulate the backend behavior over time via a tensorflow session.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>simulation_time</strong> – Simulation time in seconds.</p></li>
+<li><p><strong>inputs</strong> – Inputs for placeholder variables. Each key is a tuple that specifies a placeholder variable in the graph
+in the following format: (node_name, op_name, var_name). Each value is an array that defines the input for
+the placeholder variable over time (first dimension).</p></li>
+<li><p><strong>outputs</strong> – Output variables that will be returned. Each key is the desired name of an output variable and each value is
+a tuple that specifies a variable in the graph in the following format: (node_name, op_name, var_name).</p></li>
+<li><p><strong>sampling_step_size</strong> – Time in seconds between sampling points of the output variables.</p></li>
+<li><p><strong>out_dir</strong> – Directory in which to store outputs.</p></li>
+<li><p><strong>verbose</strong> – If true, status updates will be printed to the console.</p></li>
+<li><p><strong>profile</strong> – Can be used to extract information about graph execution time and memory load. Can be:
+- <cite>t</cite> for returning the total graph execution time.
+- <cite>m</cite> for returning the peak memory consumption during graph excecution.
+- <cite>mt</cite> or <cite>tm</cite> for both</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
+simulation time in seconds and the third the peak memory consumption. If profiling was not chosen during
+call of the function, only the dataframe will be returned.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Union[DataFrame, Tuple[DataFrame, float, float]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.backend.funcs">
+<span id="pyrates-backend-funcs-module"></span><h2>pyrates.backend.funcs module<a class="headerlink" href="#module-pyrates.backend.funcs" title="Permalink to this headline">¶</a></h2>
+<p>Contains functions that may be used as backend operations</p>
+<dl class="function">
+<dt id="pyrates.backend.funcs.pr_sigmoid">
+<code class="sig-prename descclassname">pyrates.backend.funcs.</code><code class="sig-name descname">pr_sigmoid</code><span class="sig-paren">(</span><em class="sig-param">x</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/funcs.html#pr_sigmoid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.funcs.pr_sigmoid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.funcs.pr_softmax">
+<code class="sig-prename descclassname">pyrates.backend.funcs.</code><code class="sig-name descname">pr_softmax</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">axis=0</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/funcs.html#pr_softmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.funcs.pr_softmax" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.backend.numpy_backend">
+<span id="pyrates-backend-numpy-backend-module"></span><h2>pyrates.backend.numpy_backend module<a class="headerlink" href="#module-pyrates.backend.numpy_backend" title="Permalink to this headline">¶</a></h2>
+<p>Contains wrapper classes for different backends that are needed by the parser module.</p>
+<p>A new backend needs to implement the following methods</p>
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.__init__">
+<code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">__init__</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyrates.backend.numpy_backend.__init__" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.run">
+<code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">run</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyrates.backend.numpy_backend.run" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.add_var">
+<code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">add_var</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyrates.backend.numpy_backend.add_var" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.add_op">
+<code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">add_op</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyrates.backend.numpy_backend.add_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.add_layer">
+<code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">add_layer</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyrates.backend.numpy_backend.add_layer" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">Currently supported backends:</code></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">- Numpy: NumpyBackend.</code></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">- Tensorflow: TensorflowBackend.</code></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.numpy_backend.CodeGen">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">CodeGen</code><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#CodeGen"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.CodeGen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Generates python code. Can add code lines, line-breaks, indents and remove indents.</p>
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.CodeGen.add_code_line">
+<code class="sig-name descname">add_code_line</code><span class="sig-paren">(</span><em class="sig-param">code_str</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#CodeGen.add_code_line"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.CodeGen.add_code_line" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add code line string to code.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.CodeGen.add_indent">
+<code class="sig-name descname">add_indent</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#CodeGen.add_indent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.CodeGen.add_indent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add an indent to the code.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.CodeGen.add_linebreak">
+<code class="sig-name descname">add_linebreak</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#CodeGen.add_linebreak"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.CodeGen.add_linebreak" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a line-break to the code.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.CodeGen.generate">
+<code class="sig-name descname">generate</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#CodeGen.generate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.CodeGen.generate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a single code string from its history of code additions.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.CodeGen.remove_indent">
+<code class="sig-name descname">remove_indent</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#CodeGen.remove_indent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.CodeGen.remove_indent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove an indent to the code.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">NumpyBackend</code><span class="sig-paren">(</span><em class="sig-param">ops: Optional[Dict[str</em>, <em class="sig-param">str]] = None</em>, <em class="sig-param">dtypes: Optional[Dict[str</em>, <em class="sig-param">object]] = None</em>, <em class="sig-param">name: str = 'net_0'</em>, <em class="sig-param">float_default_type: str = 'float32'</em>, <em class="sig-param">imports: Optional[List[str]] = None</em>, <em class="sig-param">jit_compile: bool = False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Wrapper to numpy. This class provides an interface to all numpy functionalities that may be accessed via pyrates.
+All numpy variables and operations will be stored in a layered compute graph that can be executed to evaluate the
+(dynamic) behavior of the graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ops</strong> – <p>Additional operations this backend instance can perform, defined as key-value pairs. The key can then be used in
+every equation parsed into this backend. The value is a dictionary again, with two keys:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>name - the name of the function/operation (used during code generation)</p></li>
+</ol>
+<p>2) call - the call signature of the function including import abbreviations (i.e. <cite>np.add</cite> for numpy’s add
+function)</p>
+</div></blockquote>
+</p></li>
+<li><p><strong>dtypes</strong> – Additional data-types this backend instance can use, defined as key-value pairs.</p></li>
+<li><p><strong>name</strong> – Name of the backend instance. Used during code generation to create a recognizable file structure.</p></li>
+<li><p><strong>float_default_type</strong> – Default float precision. If no data-type is indicated for a particular variable, this will be used.</p></li>
+<li><p><strong>jit_compile</strong> – If true, all backend functions will be attempted to be build with optimized <cite>jit</cite> decorators.</p></li>
+<li><p><strong>imports</strong> – Can be used to pass additional import statements that are needed for code generation of the custom functions
+provided via <cite>ops</cite>. Will be added to the top of each generated code file.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.add_layer">
+<code class="sig-name descname">add_layer</code><span class="sig-paren">(</span><em class="sig-param">to_beginning=False</em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Adds a new layer to the backend and sets cursor to that layer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>to_beginning</strong> – If true, layer is appended to the beginning of the layer stack instead of the end</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.add_op">
+<code class="sig-name descname">add_op</code><span class="sig-paren">(</span><em class="sig-param">op_name: str</em>, <em class="sig-param">*args</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; Union[pyrates.backend.numpy_backend.PyRatesOp, pyrates.backend.numpy_backend.NumpyVar]<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_op"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_op" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add operation to the backend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>op_name</strong> – Key of the operation. Needs to be a key of <cite>backend.ops</cite>.</p></li>
+<li><p><strong>args</strong> – Positional arguments to be passed to the operation.</p></li>
+<li><p><strong>kwargs</strong> – Keyword arguments to be passed to the operation, except for scope, dependencies and decorator, which are
+extracted before.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Handle for the lambda-numpy function</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Union[<a class="reference internal" href="#pyrates.backend.numpy_backend.PyRatesOp" title="pyrates.backend.numpy_backend.PyRatesOp">PyRatesOp</a>, PyRatesVar]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.add_output_layer">
+<code class="sig-name descname">add_output_layer</code><span class="sig-paren">(</span><em class="sig-param">outputs</em>, <em class="sig-param">sampling_steps</em>, <em class="sig-param">out_shapes</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_output_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_output_layer" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.add_var">
+<code class="sig-name descname">add_var</code><span class="sig-paren">(</span><em class="sig-param">vtype: str</em>, <em class="sig-param">name: Optional[str] = None</em>, <em class="sig-param">value: Optional[Any] = None</em>, <em class="sig-param">shape: Union[tuple</em>, <em class="sig-param">list</em>, <em class="sig-param">numpy.core.fromnumeric.shape</em>, <em class="sig-param">None] = None</em>, <em class="sig-param">dtype: Union[str</em>, <em class="sig-param">numpy.dtype</em>, <em class="sig-param">None] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; pyrates.backend.numpy_backend.NumpyVar<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_var" title="Permalink to this definition">¶</a></dt>
+<dd><p>Adds a variable to the backend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>vtype</strong> – <dl class="simple">
+<dt>Variable type. Can be</dt><dd><ul>
+<li><p><cite>state_var</cite> for variables that can change over time.</p></li>
+<li><p><cite>constant</cite> for non-changing variables.</p></li>
+</ul>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>name</strong> – Name of the variable.</p></li>
+<li><p><strong>value</strong> – Value of the variable. Not needed for placeholders.</p></li>
+<li><p><strong>shape</strong> – Shape of the variable.</p></li>
+<li><p><strong>dtype</strong> – Datatype of the variable.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Handle for the numpy variable.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>PyRatesVar</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.apply_idx">
+<code class="sig-name descname">apply_idx</code><span class="sig-paren">(</span><em class="sig-param">var: Any</em>, <em class="sig-param">idx: str</em>, <em class="sig-param">update: Optional[Any] = None</em>, <em class="sig-param">update_type: str = None</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span> &#x2192; Any<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.apply_idx"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.apply_idx" title="Permalink to this definition">¶</a></dt>
+<dd><p>Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>var</strong> – Variable to index/update</p></li>
+<li><p><strong>idx</strong> – Index to variable</p></li>
+<li><p><strong>update</strong> – Update to variable entries</p></li>
+<li><p><strong>update_type</strong> – Type of lhs update (e.g. <cite>=</cite> or <cite>+=</cite>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Updated/indexed variable.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Any</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.bottom_layer">
+<code class="sig-name descname">bottom_layer</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; int<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.bottom_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.bottom_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Jump to bottom layer of the stack.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.broadcast">
+<code class="sig-name descname">broadcast</code><span class="sig-paren">(</span><em class="sig-param">op1: Any</em>, <em class="sig-param">op2: Any</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.broadcast"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.broadcast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tries to match the shapes of op1 and op2 such that op can be applied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>op1</strong> – First argument to the operation.</p></li>
+<li><p><strong>op2</strong> – Second argument to the operation.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Broadcasted op1 and op2.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.clear">
+<code class="sig-name descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Removes all layers, variables and operations from graph. Deletes build directory.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.compile">
+<code class="sig-name descname">compile</code><span class="sig-paren">(</span><em class="sig-param">build_dir: Optional[str] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; list<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.compile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.compile" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compile the graph layers/operations. Creates python files containing the functions in each layer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>build_dir</strong> – Directory in which to create the file structure for the simulation.</p></li>
+<li><p><strong>decorator</strong> – Decorator to add to the python functions.</p></li>
+<li><p><strong>decorator_kwargs</strong> – Keyword arguments for the function decorator</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Contains tuples of layer run functions and their respective arguments.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.eval">
+<code class="sig-name descname">eval</code><span class="sig-paren">(</span><em class="sig-param">ops: list</em><span class="sig-paren">)</span> &#x2192; list<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.eval"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates each operation in list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>ops</strong> – List of operations to evaluate.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.eval_layer">
+<em class="property">static </em><code class="sig-name descname">eval_layer</code><span class="sig-paren">(</span><em class="sig-param">layer: tuple</em><span class="sig-paren">)</span> &#x2192; Any<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.eval_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.eval_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate layer run function (can only be used after compilation has been performed).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>layer</strong> – Layer tuple as returned by <cite>compile</cite>.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Result of layer evaluation.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Any</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.eval_var">
+<code class="sig-name descname">eval_var</code><span class="sig-paren">(</span><em class="sig-param">var</em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.eval_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.eval_var" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get value of variable.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>var</strong> – Identifier of variable in graph.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Current value of the variable.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.get_current_layer">
+<code class="sig-name descname">get_current_layer</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; list<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.get_current_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.get_current_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get operations in current layer.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.get_layer">
+<code class="sig-name descname">get_layer</code><span class="sig-paren">(</span><em class="sig-param">idx</em><span class="sig-paren">)</span> &#x2192; list<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.get_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.get_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve layer from graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>idx</strong> – Position of layer in stack.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.get_var">
+<code class="sig-name descname">get_var</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">updated=True</em><span class="sig-paren">)</span> &#x2192; pyrates.backend.numpy_backend.NumpyVar<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.get_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.get_var" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve variable from graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – Identifier of the variable.</p></li>
+<li><p><strong>updated</strong> – If true, return updated value of a state-variable. Else, return the old, non-updated variable of a
+state-variable.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Variable from graph.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="#pyrates.backend.numpy_backend.NumpyVar" title="pyrates.backend.numpy_backend.NumpyVar">NumpyVar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.goto_layer">
+<code class="sig-name descname">goto_layer</code><span class="sig-paren">(</span><em class="sig-param">idx: int</em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.goto_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.goto_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Jump to layer indicated by index.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>idx</strong> – Position of layer to jump towards.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.next_layer">
+<code class="sig-name descname">next_layer</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.next_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.next_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Jump to next layer in stack. If we are already at end of layer stack, add new layer to the stack and jump to
+that.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.previous_layer">
+<code class="sig-name descname">previous_layer</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.previous_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.previous_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Jump to previous layer in stack. If we are already at beginning of layer stack, add new layer to beginning of
+the stack and jump to that.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.remove_layer">
+<code class="sig-name descname">remove_layer</code><span class="sig-paren">(</span><em class="sig-param">idx</em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.remove_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.remove_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Removes layer at index from stack.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>idx</strong> – Position of layer in graph.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">steps: int</em>, <em class="sig-param">outputs: dict</em>, <em class="sig-param">sampling_steps: Optional[int] = None</em>, <em class="sig-param">out_dir: Optional[str] = None</em>, <em class="sig-param">profile: Optional[str] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; Union[dict, Tuple[dict, float, float]]<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Executes all operations in the backend graph for a given number of steps.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>steps</strong> – Number of graph evaluations.</p></li>
+<li><p><strong>outputs</strong> – Variables in the graph to store the history from.</p></li>
+<li><p><strong>sampling_steps</strong> – Number of graph execution steps to combine into a single output step.</p></li>
+<li><p><strong>out_dir</strong> – Directory to write the session log into.</p></li>
+<li><p><strong>profile</strong> – Can be used to extract information about graph execution time and memory load. Can be:
+- <cite>t</cite> for returning the total graph execution time.
+- <cite>m</cite> for returning the peak memory consumption during graph excecution.
+- <cite>mt</cite> or <cite>tm</cite> for both</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>If <cite>profile</cite> was requested, a tuple is returned that contains</dt><dd><ol class="arabic simple">
+<li><p>the results dictionary</p></li>
+<li><p>the simulation time if <cite>t</cite> was requested, else None.</p></li>
+<li><p>the peak memory consumption if <cite>m</cite> was requested, else None.</p></li>
+</ol>
+</dd>
+</dl>
+<p>If not, only the results dictionary is returned which contains a numpy array with results for each
+output key that was provided via <cite>outputs</cite>.</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Union[Dict[str, tf.Variable], Tuple[dict, float, float]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.stack_vars">
+<code class="sig-name descname">stack_vars</code><span class="sig-paren">(</span><em class="sig-param">vars: tuple</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.stack_vars"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.stack_vars" title="Permalink to this definition">¶</a></dt>
+<dd><p>Group variables into a stack, with the number of variables being the first dimension of the stack.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>vars</strong> – Variables to stack together. Should have the same shapes.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments (Ignored in this version of the backend).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Stacked variables.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.top_layer">
+<code class="sig-name descname">top_layer</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; int<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.top_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.top_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Jump to top layer of the stack.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.numpy_backend.NumpyVar">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">NumpyVar</code><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyVar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyVar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></p>
+<p>Base class for adding variables to the PyRates compute graph. Creates a numpy array with additional attributes
+for variable identification/retrieval from graph. Should be used as parent class for custom variable classes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>vtype</strong> – Type of the variable. Can be either <cite>constant</cite> or <cite>state_variable</cite>. Constant variables are necessary to perform
+certain graph optimizations previous to run time.</p></li>
+<li><p><strong>backend</strong> – Instance of the backend in use.</p></li>
+<li><p><strong>dtype</strong> – Data-type of the variable. For valid data-types, check the documentation of the backend in use.</p></li>
+<li><p><strong>shape</strong> – Shape of the variable.</p></li>
+<li><p><strong>value</strong> – Value of the variable. If scalar, please provide the shape in addition.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Instance of NumpyVar.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="#pyrates.backend.numpy_backend.NumpyVar" title="pyrates.backend.numpy_backend.NumpyVar">NumpyVar</a></p>
+</dd>
+</dl>
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyVar.eval">
+<code class="sig-name descname">eval</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyVar.eval"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyVar.eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns current value of NumpyVar.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.numpy_backend.NumpyVar.n_vars">
+<code class="sig-name descname">n_vars</code><em class="property"> = 0</em><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyVar.n_vars" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.numpy_backend.PyRatesAssignOp">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">PyRatesAssignOp</code><span class="sig-paren">(</span><em class="sig-param">op: str</em>, <em class="sig-param">name: str</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#PyRatesAssignOp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesAssignOp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.backend.numpy_backend.PyRatesOp" title="pyrates.backend.numpy_backend.PyRatesOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.backend.numpy_backend.PyRatesOp</span></code></a></p>
+<p>Sub-class for assign operations. Typically, an update (2. entry in args) is assigned to a PyRates variable
+(1. entry in args). An index can be provided as third argument to target certain entries of the variable.</p>
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.PyRatesAssignOp.generate_op">
+<em class="property">classmethod </em><code class="sig-name descname">generate_op</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">op</em>, <em class="sig-param">args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#PyRatesAssignOp.generate_op"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesAssignOp.generate_op" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates the assign function string, call signature etc.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.numpy_backend.PyRatesIndexOp">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">PyRatesIndexOp</code><span class="sig-paren">(</span><em class="sig-param">op: str</em>, <em class="sig-param">name: str</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#PyRatesIndexOp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesIndexOp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.backend.numpy_backend.PyRatesOp" title="pyrates.backend.numpy_backend.PyRatesOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.backend.numpy_backend.PyRatesOp</span></code></a></p>
+<p>Sub-class for indexing operations. Typically, an index is provided (2. entry in args) indicating which values to
+extract from a variable (1. entry in args).</p>
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.PyRatesIndexOp.generate_op">
+<em class="property">classmethod </em><code class="sig-name descname">generate_op</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">op</em>, <em class="sig-param">args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#PyRatesIndexOp.generate_op"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesIndexOp.generate_op" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates the index function string, call signature etc.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.numpy_backend.PyRatesOp">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.numpy_backend.</code><code class="sig-name descname">PyRatesOp</code><span class="sig-paren">(</span><em class="sig-param">op: str</em>, <em class="sig-param">name: str</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#PyRatesOp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesOp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Base class for adding operations on variables to the PyRates compute graph. Should be used as parent class for
+custom operator classes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>op</strong> – Call-signature of the operation/function.</p></li>
+<li><p><strong>name</strong> – Name of the operation/function.</p></li>
+<li><p><strong>decorator</strong> – Optional function decorators that should be used.</p></li>
+<li><p><strong>args</strong> – Arguments to the function.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="attribute">
+<dt id="pyrates.backend.numpy_backend.PyRatesOp.arg_names">
+<code class="sig-name descname">arg_names</code><em class="property"> = {}</em><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesOp.arg_names" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.PyRatesOp.eval">
+<code class="sig-name descname">eval</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#PyRatesOp.eval"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesOp.eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates the return values of the PyRates operation.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.PyRatesOp.generate_op">
+<em class="property">classmethod </em><code class="sig-name descname">generate_op</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">op</em>, <em class="sig-param">args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#PyRatesOp.generate_op"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesOp.generate_op" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates the function string, call signature etc.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.numpy_backend.PyRatesOp.n_consts">
+<code class="sig-name descname">n_consts</code><em class="property"> = 0</em><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesOp.n_consts" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.numpy_backend.PyRatesOp.op_names">
+<code class="sig-name descname">op_names</code><em class="property"> = {}</em><a class="headerlink" href="#pyrates.backend.numpy_backend.PyRatesOp.op_names" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.backend.parser">
+<span id="pyrates-backend-parser-module"></span><h2>pyrates.backend.parser module<a class="headerlink" href="#module-pyrates.backend.parser" title="Permalink to this headline">¶</a></h2>
+<p>This module provides parser classes and functions to parse string-based equations into symbolic representations of
+operations.</p>
+<dl class="class">
+<dt id="pyrates.backend.parser.ExpressionParser">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">ExpressionParser</code><span class="sig-paren">(</span><em class="sig-param">expr_str: str</em>, <em class="sig-param">args: dict</em>, <em class="sig-param">backend: Any</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">pyparsing.ParserElement</span></code></p>
+<p>Base class for parsing mathematical expressions from a string format into a symbolic representation of the
+mathematical operation expressed by it.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expr_str</strong> – Mathematical expression in string format.</p></li>
+<li><p><strong>args</strong> – Dictionary containing all variables and functions needed to evaluate the expression.</p></li>
+<li><p><strong>backend</strong> – Backend instance in which to parse all variables and operations.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend functions.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.lhs">
+<code class="sig-name descname">lhs</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.lhs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Boolean, indicates whether expression is left-hand side or right-hand side of an equation</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.args">
+<code class="sig-name descname">args</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.args" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dictionary containing the variables of an expression</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.solve">
+<code class="sig-name descname">solve</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.solve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Only relevant for lhs expressions. If True, lhs will be treated as a first-order ordinary differential equation.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.expr_str">
+<code class="sig-name descname">expr_str</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.expr_str" title="Permalink to this definition">¶</a></dt>
+<dd><p>String representation of the mathematical expression</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.expr">
+<code class="sig-name descname">expr</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.expr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Symbolic (Pyparsing-based) representation of mathematical expression.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.expr_stack">
+<code class="sig-name descname">expr_stack</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.expr_stack" title="Permalink to this definition">¶</a></dt>
+<dd><p>List representation of the syntax tree of the (parsed) mathematical expression.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.expr_list">
+<code class="sig-name descname">expr_list</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.expr_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>List representation of the mathematical expression.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.op">
+<code class="sig-name descname">op</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.op" title="Permalink to this definition">¶</a></dt>
+<dd><p>Operator for calculating the mathematical expression (symbolic representation).</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser._op_tmp">
+<code class="sig-name descname">_op_tmp</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser._op_tmp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Helper variable for building <cite>op</cite>.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.ops">
+<code class="sig-name descname">ops</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.ops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dictionary containing all mathematical operations that are allowed for a specific instance of the
+<cite>ExpressionParser</cite> (e.g. +, -, <a href="#id1"><span class="problematic" id="id2">*</span></a>, /).</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.funcs">
+<code class="sig-name descname">funcs</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.funcs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dictionary containing all additional functions that can be used within mathematical expressions with a specific
+instance of the <cite>ExpressionParser</cite> (e.g. sum(), reshape(), float32()).</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.parser.ExpressionParser.dtypes">
+<code class="sig-name descname">dtypes</code><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.dtypes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dictionary containing all data-types that can be used within mathematical expressions with a specific instance
+of the <cite>ExpressionParser</cite> (e.g. float32, bool, int32).</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.parser.ExpressionParser.clear">
+<code class="sig-name descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clears expression list and stack.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.parser.ExpressionParser.parse">
+<code class="sig-name descname">parse</code><span class="sig-paren">(</span><em class="sig-param">expr_stack: list</em><span class="sig-paren">)</span> &#x2192; Any<a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse elements in expression stack to operation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>expr_stack</strong> – Ordered list with expression variables and operations.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Parsed expression stack element (object type depends on the backend).</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tp.Any</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.parser.ExpressionParser.parse_expr">
+<code class="sig-name descname">parse_expr</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.parse_expr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.parse_expr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses string-based expression.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.parse_dict">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_dict</code><span class="sig-paren">(</span><em class="sig-param">var_dict: dict</em>, <em class="sig-param">backend</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_dict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_dict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses a dictionary with variable information and creates backend variables from that information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>var_dict</strong> – Contains key-value pairs for each variable that should be translated into the backend graph.
+Each value is a dictionary again containing the variable information (needs at least a field for <cite>vtype</cite>).</p></li>
+<li><p><strong>backend</strong> – Backend instance that the variables should be added to.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Key-value pairs with the backend variable names and handles.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.parse_equation_list">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_equation_list</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">backend: Any</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_equation_list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_equation_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses a list of equations into the backend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>equations</strong> – Collection of equations that should be evaluated together.</p></li>
+<li><p><strong>equation_args</strong> – Key-value pairs of arguments needed for parsing the equations.</p></li>
+<li><p><strong>backend</strong> – Backend instance to parse the equations into.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The updated equations args (in-place manipulation of all variables in equation_args happens during
+equation parsing).</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.parse_equations">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_equations</code><span class="sig-paren">(</span><em class="sig-param">equations</em>, <em class="sig-param">equation_args</em>, <em class="sig-param">backend</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_equations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_equations" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>equations</strong> – </p></li>
+<li><p><strong>equation_args</strong> – </p></li>
+<li><p><strong>backend</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.replace">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">replace</code><span class="sig-paren">(</span><em class="sig-param">eq: str</em>, <em class="sig-param">term: str</em>, <em class="sig-param">replacement: str</em><span class="sig-paren">)</span> &#x2192; str<a class="reference internal" href="_modules/pyrates/backend/parser.html#replace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.replace" title="Permalink to this definition">¶</a></dt>
+<dd><p>Replaces a term in an equation with a replacement term.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>eq</strong> – Equation that includes the term.</p></li>
+<li><p><strong>term</strong> – Term that should be replaced.</p></li>
+<li><p><strong>replacement</strong> – Replacement for all occurences of term.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The updated equation.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.split_equation">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">split_equation</code><span class="sig-paren">(</span><em class="sig-param">expr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#split_equation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.split_equation" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>expr</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.update_lhs">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">update_lhs</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">update_num: int</em>, <em class="sig-param">rhs_scalar: str</em>, <em class="sig-param">var_dict: dict</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#update_lhs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.update_lhs" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>equations</strong> – </p></li>
+<li><p><strong>equation_args</strong> – </p></li>
+<li><p><strong>update_num</strong> – </p></li>
+<li><p><strong>rhs_scalar</strong> – </p></li>
+<li><p><strong>var_dict</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.update_rhs">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">update_rhs</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">update_num: int</em>, <em class="sig-param">update_str: str</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#update_rhs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.update_rhs" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>equations</strong> – </p></li>
+<li><p><strong>equation_args</strong> – </p></li>
+<li><p><strong>update_num</strong> – </p></li>
+<li><p><strong>update_str</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.backend.tensorflow_backend">
+<span id="pyrates-backend-tensorflow-backend-module"></span><h2>pyrates.backend.tensorflow_backend module<a class="headerlink" href="#module-pyrates.backend.tensorflow_backend" title="Permalink to this headline">¶</a></h2>
+<p>Wraps tensorflow such that it’s low-level functions can be used by PyRates to create and simulate a compute graph.</p>
+<dl class="class">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowAssignOp">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.tensorflow_backend.</code><code class="sig-name descname">TensorflowAssignOp</code><span class="sig-paren">(</span><em class="sig-param">op: str</em>, <em class="sig-param">name: str</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowAssignOp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowAssignOp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.backend.numpy_backend.PyRatesAssignOp" title="pyrates.backend.numpy_backend.PyRatesAssignOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.backend.numpy_backend.PyRatesAssignOp</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowAssignOp.eval">
+<code class="sig-name descname">eval</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowAssignOp.eval"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowAssignOp.eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates the return values of the PyRates operation.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowBackend">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.tensorflow_backend.</code><code class="sig-name descname">TensorflowBackend</code><span class="sig-paren">(</span><em class="sig-param">ops: Optional[Dict[str</em>, <em class="sig-param">Callable]] = None</em>, <em class="sig-param">dtypes: Optional[Dict[str</em>, <em class="sig-param">object]] = None</em>, <em class="sig-param">name: str = 'net_0'</em>, <em class="sig-param">float_default_type: str = 'float32'</em>, <em class="sig-param">imports: Optional[List[str]] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowBackend"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowBackend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.backend.numpy_backend.NumpyBackend" title="pyrates.backend.numpy_backend.NumpyBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.backend.numpy_backend.NumpyBackend</span></code></a></p>
+<p>Wrapper to tensorflow. This class provides an interface to all tensorflow functionalities that may be accessed
+via pyrates. All tensorflow variables and operations will be stored in a layered compute graph that can be executed
+to evaluate the (dynamic) behavior of the graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ops</strong> – <p>Additional operations this backend instance can perform, defined as key-value pairs. The key can then be used in
+every equation parsed into this backend. The value is a dictionary again, with two keys:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>name - the name of the function/operation (used during code generation)</p></li>
+</ol>
+<p>2) call - the call signature of the function including import abbreviations (i.e. <cite>tf.add</cite> for tensorflow’s
+add function)</p>
+</div></blockquote>
+</p></li>
+<li><p><strong>dtypes</strong> – Additional data-types this backend instance can use, defined as key-value pairs.</p></li>
+<li><p><strong>name</strong> – Name of the backend instance. Used during code generation to create a recognizable file structure.</p></li>
+<li><p><strong>float_default_type</strong> – Default float precision. If no data-type is indicated for a particular variable, this will be used.</p></li>
+<li><p><strong>imports</strong> – Can be used to pass additional import statements that are needed for code generation of the custom functions
+provided via <cite>ops</cite>. Will be added to the top of each generated code file.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowBackend.broadcast">
+<code class="sig-name descname">broadcast</code><span class="sig-paren">(</span><em class="sig-param">op1: Any</em>, <em class="sig-param">op2: Any</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowBackend.broadcast"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowBackend.broadcast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tries to match the shapes of op1 and op2 such that op can be applied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>op1</strong> – First argument to the operation.</p></li>
+<li><p><strong>op2</strong> – Second argument to the operation.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Broadcasted op1 and op2.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowBackend.stack_vars">
+<code class="sig-name descname">stack_vars</code><span class="sig-paren">(</span><em class="sig-param">vars</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowBackend.stack_vars"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowBackend.stack_vars" title="Permalink to this definition">¶</a></dt>
+<dd><p>Group variables into a stack, with the number of variables being the first dimension of the stack.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>vars</strong> – Variables to stack together. Should have the same shapes.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments (Ignored in this version of the backend).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Stacked variables.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowIndexOp">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.tensorflow_backend.</code><code class="sig-name descname">TensorflowIndexOp</code><span class="sig-paren">(</span><em class="sig-param">op: str</em>, <em class="sig-param">name: str</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowIndexOp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowIndexOp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.backend.numpy_backend.PyRatesIndexOp" title="pyrates.backend.numpy_backend.PyRatesIndexOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.backend.numpy_backend.PyRatesIndexOp</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowIndexOp.eval">
+<code class="sig-name descname">eval</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowIndexOp.eval"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowIndexOp.eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates the return values of the PyRates operation.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowOp">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.tensorflow_backend.</code><code class="sig-name descname">TensorflowOp</code><span class="sig-paren">(</span><em class="sig-param">op: str</em>, <em class="sig-param">name: str</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowOp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowOp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.backend.numpy_backend.PyRatesOp" title="pyrates.backend.numpy_backend.PyRatesOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.backend.numpy_backend.PyRatesOp</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowOp.eval">
+<code class="sig-name descname">eval</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowOp.eval"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowOp.eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates the return values of the PyRates operation.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowVar">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.tensorflow_backend.</code><code class="sig-name descname">TensorflowVar</code><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowVar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowVar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.backend.numpy_backend.NumpyVar" title="pyrates.backend.numpy_backend.NumpyVar"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.backend.numpy_backend.NumpyVar</span></code></a></p>
+<p>Class for creating variables via a tensorflow-based PyRates backend.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.tensorflow_backend.run_with_sampling">
+<code class="sig-prename descclassname">pyrates.backend.tensorflow_backend.</code><code class="sig-name descname">run_with_sampling</code><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#run_with_sampling"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.run_with_sampling" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.backend.tensorflow_backend.run_without_sampling">
+<code class="sig-prename descclassname">pyrates.backend.tensorflow_backend.</code><code class="sig-name descname">run_without_sampling</code><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#run_without_sampling"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.run_without_sampling" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.backend">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-pyrates.backend" title="Permalink to this headline">¶</a></h2>
+<p>PyRates backend module including the following sub-modules:</p>
+<ol class="loweralpha simple">
+<li><dl class="simple">
+<dt>parser</dt><dd><p>Used to parse string-based equations into symbolic backend representations.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>computegraph</dt><dd><p>Used to realize hierarchical structure between mathematical equations.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>backend_wrapper</dt><dd><p>Interface to the backends available in PyRates.</p>
+</dd>
+</dl>
+</li>
+</ol>
+</div>
+</div>
+
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.frontend.template.edge.html" title="Previous document">pyrates.frontend.template.edge package</a>
+        </li>
+        <li>
+          <a href="pyrates.ir.html" title="Next document">pyrates.ir package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">pyrates.backend package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.computegraph">pyrates.backend.computegraph module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.funcs">pyrates.backend.funcs module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.numpy_backend">pyrates.backend.numpy_backend module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.parser">pyrates.backend.parser module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.tensorflow_backend">pyrates.backend.tensorflow_backend module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/pyrates.backend.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/pyrates.backend.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

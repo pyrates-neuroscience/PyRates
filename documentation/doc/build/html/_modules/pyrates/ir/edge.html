@@ -1,0 +1,212 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.ir.edge &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for pyrates.ir.edge</h1><div class="highlight"><pre>
+<span></span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural </span>
+<span class="c1"># network model_templates and simulations. See also:</span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1"># </span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and </span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain </span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1"># </span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1"># </span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1"># </span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1"># </span>
+<span class="c1"># CITATION:</span>
+<span class="c1"># </span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">List</span>
+
+<span class="kn">from</span> <span class="nn">pyrates</span> <span class="k">import</span> <span class="n">PyRatesException</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.node</span> <span class="k">import</span> <span class="n">NodeIR</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
+
+
+<div class="viewcode-block" id="EdgeIR"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.edge.edge.EdgeIR">[docs]</a><span class="k">class</span> <span class="nc">EdgeIR</span><span class="p">(</span><span class="n">NodeIR</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="nb">dict</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">operators</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">input</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Detect input variable of edge, assuming only one input variable exists. This also references the operator</span>
+<span class="sd">        the variable belongs to.&quot;&quot;&quot;</span>
+        <span class="c1"># noinspection PyTypeChecker</span>
+        <span class="n">in_op</span> <span class="o">=</span> <span class="p">[</span><span class="n">op</span> <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">in_degree</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">in_degree</span> <span class="k">if</span> <span class="n">in_degree</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span>  <span class="c1"># type: List[str]</span>
+
+        <span class="c1"># multiple input operations are possible, as long as they require the same singular input variable</span>
+        <span class="n">in_var</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">op_key</span> <span class="ow">in</span> <span class="n">in_op</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">[</span><span class="n">op_key</span><span class="p">]</span><span class="o">.</span><span class="n">inputs</span><span class="p">:</span>
+                <span class="n">in_var</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{op_key}</span><span class="s2">/</span><span class="si">{var}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_var</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">in_var</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_var</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="s2">&quot;Too many input variables found. Exactly one or zero input variables are &quot;</span>
+                                   <span class="s2">&quot;required per edge.&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">input_var</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">input</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">output</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Detect output variable of edge, assuming only one output variable exists.&quot;&quot;&quot;</span>
+
+        <span class="c1"># try to find single output variable</span>
+        <span class="c1"># noinspection PyTypeChecker</span>
+        <span class="n">out_op</span> <span class="o">=</span> <span class="p">[</span><span class="n">op</span> <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">out_degree</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">out_degree</span> <span class="k">if</span> <span class="n">out_degree</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span>  <span class="c1"># type: List[str]</span>
+
+        <span class="c1"># only one single output operator allowed</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">out_op</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">out_var</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">out_op</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">output</span>
+            <span class="k">return</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{out_op[0]}</span><span class="s2">/</span><span class="si">{out_var}</span><span class="s2">&quot;</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">out_op</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="s2">&quot;Too many or too little output operators found. Exactly one output operator and &quot;</span>
+                                   <span class="s2">&quot;associated output variable is required per edge.&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">output_var</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span></div>
+
+</pre></div>
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../../../index.html">
+    <img class="logo" src="../../../_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

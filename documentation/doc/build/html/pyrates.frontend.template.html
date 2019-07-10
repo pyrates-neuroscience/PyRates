@@ -1,0 +1,351 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.frontend.template package &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pyrates.frontend.template.circuit package" href="pyrates.frontend.template.circuit.html" />
+    <link rel="prev" title="pyrates.frontend package" href="pyrates.frontend.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.frontend.html" title="Previous document">pyrates.frontend package</a>
+        </li>
+        <li>
+          <a href="pyrates.frontend.template.circuit.html" title="Next document">pyrates.frontend.template.circuit package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="pyrates-frontend-template-package">
+<h1>pyrates.frontend.template package<a class="headerlink" href="#pyrates-frontend-template-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="pyrates.frontend.template.circuit.html">pyrates.frontend.template.circuit package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.template.circuit.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.template.circuit.html#module-pyrates.frontend.template.circuit.circuit">pyrates.frontend.template.circuit.circuit module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.template.circuit.html#module-pyrates.frontend.template.circuit">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pyrates.frontend.template.edge.html">pyrates.frontend.template.edge package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.template.edge.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.template.edge.html#module-pyrates.frontend.template.edge.edge">pyrates.frontend.template.edge.edge module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.template.edge.html#module-pyrates.frontend.template.edge">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-pyrates.frontend.template.abc">
+<span id="pyrates-frontend-template-abc-module"></span><h2>pyrates.frontend.template.abc module<a class="headerlink" href="#module-pyrates.frontend.template.abc" title="Permalink to this headline">¶</a></h2>
+<p>Abstract base classes</p>
+<dl class="class">
+<dt id="pyrates.frontend.template.abc.AbstractBaseTemplate">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.template.abc.</code><code class="sig-name descname">AbstractBaseTemplate</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = 'A template.'</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/abc.html#AbstractBaseTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.abc.AbstractBaseTemplate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Abstract base class for templates</p>
+<dl class="method">
+<dt id="pyrates.frontend.template.abc.AbstractBaseTemplate.apply">
+<code class="sig-name descname">apply</code><span class="sig-paren">(</span><em class="sig-param">*args</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/abc.html#AbstractBaseTemplate.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.abc.AbstractBaseTemplate.apply" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts the template into its corresponding intermediate representation class.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.abc.AbstractBaseTemplate.cache">
+<code class="sig-name descname">cache</code><em class="property"> = {}</em><a class="headerlink" href="#pyrates.frontend.template.abc.AbstractBaseTemplate.cache" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.frontend.template.abc.AbstractBaseTemplate.from_yaml">
+<em class="property">classmethod </em><code class="sig-name descname">from_yaml</code><span class="sig-paren">(</span><em class="sig-param">path</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/abc.html#AbstractBaseTemplate.from_yaml"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.abc.AbstractBaseTemplate.from_yaml" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience method that looks for a loader class for the template type and applies it, assuming
+the class naming convention ‘&lt;template class&gt;Loader’.</p>
+<dl class="simple">
+<dt>path</dt><dd><p>Path to template in YAML file of form ‘directories.file.template’</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.abc.AbstractBaseTemplate.target_ir">
+<code class="sig-name descname">target_ir</code><em class="property"> = None</em><a class="headerlink" href="#pyrates.frontend.template.abc.AbstractBaseTemplate.target_ir" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.frontend.template.abc.AbstractBaseTemplate.update_template">
+<code class="sig-name descname">update_template</code><span class="sig-paren">(</span><em class="sig-param">*args</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/abc.html#AbstractBaseTemplate.update_template"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.abc.AbstractBaseTemplate.update_template" title="Permalink to this definition">¶</a></dt>
+<dd><p>Updates the template with a given list of arguments and returns a new instance of the template class.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.frontend.template.node">
+<span id="pyrates-frontend-template-node-module"></span><h2>pyrates.frontend.template.node module<a class="headerlink" href="#module-pyrates.frontend.template.node" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.frontend.template.node.NodeTemplate">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.template.node.</code><code class="sig-name descname">NodeTemplate</code><span class="sig-paren">(</span><em class="sig-param">name: str, path: str, operators: Union[str, List[str], dict], description: str = 'A node or an edge.', label: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/node.html#NodeTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.node.NodeTemplate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.frontend.template.operator_graph.OperatorGraphTemplate" title="pyrates.frontend.template.operator_graph.OperatorGraphTemplate"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.frontend.template.operator_graph.OperatorGraphTemplate</span></code></a></p>
+<p>Generic template for a node in the computational backend graph. A single node may encompass several
+different operators. One template defines a typical structure of a given node type.</p>
+<dl class="attribute">
+<dt id="pyrates.frontend.template.node.NodeTemplate.target_ir">
+<code class="sig-name descname">target_ir</code><a class="headerlink" href="#pyrates.frontend.template.node.NodeTemplate.target_ir" title="Permalink to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference internal" href="pyrates.ir.html#pyrates.ir.node.NodeIR" title="pyrates.ir.node.NodeIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.node.NodeIR</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.frontend.template.operator">
+<span id="pyrates-frontend-template-operator-module"></span><h2>pyrates.frontend.template.operator module<a class="headerlink" href="#module-pyrates.frontend.template.operator" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.frontend.template.operator.OperatorTemplate">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.template.operator.</code><code class="sig-name descname">OperatorTemplate</code><span class="sig-paren">(</span><em class="sig-param">name: str, path: str, equations: Union[list, str], variables: dict, description: str = 'An operator template.'</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/operator.html#OperatorTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.operator.OperatorTemplate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.frontend.template.abc.AbstractBaseTemplate" title="pyrates.frontend.template.abc.AbstractBaseTemplate"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.frontend.template.abc.AbstractBaseTemplate</span></code></a></p>
+<p>Generic template for an operator with a name, equations, variables and possible
+initialization conditions. The template can be used to create variations of a specific
+equations or variables.</p>
+<dl class="method">
+<dt id="pyrates.frontend.template.operator.OperatorTemplate.apply">
+<code class="sig-name descname">apply</code><span class="sig-paren">(</span><em class="sig-param">return_key=False</em>, <em class="sig-param">values: dict = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/operator.html#OperatorTemplate.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.operator.OperatorTemplate.apply" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the non-editable but unique, cashed definition of the operator.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.operator.OperatorTemplate.cache">
+<code class="sig-name descname">cache</code><em class="property"> = {}</em><a class="headerlink" href="#pyrates.frontend.template.operator.OperatorTemplate.cache" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.operator.OperatorTemplate.key_counter">
+<code class="sig-name descname">key_counter</code><em class="property"> = {}</em><a class="headerlink" href="#pyrates.frontend.template.operator.OperatorTemplate.key_counter" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.operator.OperatorTemplate.key_map">
+<code class="sig-name descname">key_map</code><em class="property"> = {}</em><a class="headerlink" href="#pyrates.frontend.template.operator.OperatorTemplate.key_map" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.operator.OperatorTemplate.target_ir">
+<code class="sig-name descname">target_ir</code><a class="headerlink" href="#pyrates.frontend.template.operator.OperatorTemplate.target_ir" title="Permalink to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference internal" href="pyrates.ir.html#pyrates.ir.operator.OperatorIR" title="pyrates.ir.operator.OperatorIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.operator.OperatorIR</span></code></a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.frontend.template.operator.OperatorTemplate.update_template">
+<code class="sig-name descname">update_template</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">equations: Union[str</em>, <em class="sig-param">list</em>, <em class="sig-param">dict] = None</em>, <em class="sig-param">variables: dict = None</em>, <em class="sig-param">description: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/operator.html#OperatorTemplate.update_template"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.operator.OperatorTemplate.update_template" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update all entries of the Operator template in their respective ways.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.frontend.template.operator_graph">
+<span id="pyrates-frontend-template-operator-graph-module"></span><h2>pyrates.frontend.template.operator_graph module<a class="headerlink" href="#module-pyrates.frontend.template.operator_graph" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.frontend.template.operator_graph.OperatorGraphTemplate">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.template.operator_graph.</code><code class="sig-name descname">OperatorGraphTemplate</code><span class="sig-paren">(</span><em class="sig-param">name: str, path: str, operators: Union[str, List[str], dict], description: str = 'A node or an edge.', label: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/operator_graph.html#OperatorGraphTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.operator_graph.OperatorGraphTemplate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.frontend.template.abc.AbstractBaseTemplate" title="pyrates.frontend.template.abc.AbstractBaseTemplate"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.frontend.template.abc.AbstractBaseTemplate</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.frontend.template.operator_graph.OperatorGraphTemplate.apply">
+<code class="sig-name descname">apply</code><span class="sig-paren">(</span><em class="sig-param">values: dict = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/operator_graph.html#OperatorGraphTemplate.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.operator_graph.OperatorGraphTemplate.apply" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply template to gain a node or edge intermediate representation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> – dictionary with operator/variable as keys and values to update these variables as items.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.frontend.template.operator_graph.OperatorGraphTemplate.target_ir">
+<code class="sig-name descname">target_ir</code><a class="headerlink" href="#pyrates.frontend.template.operator_graph.OperatorGraphTemplate.target_ir" title="Permalink to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference internal" href="pyrates.ir.html#pyrates.ir.operator_graph.OperatorGraph" title="pyrates.ir.operator_graph.OperatorGraph"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.operator_graph.OperatorGraph</span></code></a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.frontend.template.operator_graph.OperatorGraphTemplate.update_template">
+<code class="sig-name descname">update_template</code><span class="sig-paren">(</span><em class="sig-param">name: str, path: str, label: str, operators: Union[str, List[str], dict] = None, description: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/operator_graph.html#OperatorGraphTemplate.update_template"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.operator_graph.OperatorGraphTemplate.update_template" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update all entries of a base edge template to a more specific template.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.frontend.template">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-pyrates.frontend.template" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="pyrates.frontend.template.to_circuit">
+<code class="sig-prename descclassname">pyrates.frontend.template.</code><code class="sig-name descname">to_circuit</code><span class="sig-paren">(</span><em class="sig-param">template: pyrates.frontend.template.circuit.circuit.CircuitTemplate</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template.html#to_circuit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.to_circuit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes a circuit template and returns a CircuitIR instance from it.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.frontend.template.to_edge">
+<code class="sig-prename descclassname">pyrates.frontend.template.</code><code class="sig-name descname">to_edge</code><span class="sig-paren">(</span><em class="sig-param">template: pyrates.frontend.template.edge.edge.EdgeTemplate</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template.html#to_edge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.to_edge" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes a edge template and returns a EdgeIR instance from it.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.frontend.template.to_node">
+<code class="sig-prename descclassname">pyrates.frontend.template.</code><code class="sig-name descname">to_node</code><span class="sig-paren">(</span><em class="sig-param">template: pyrates.frontend.template.node.NodeTemplate</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template.html#to_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.to_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes a node template and returns a NodeIR instance from it.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.frontend.template.to_operator">
+<code class="sig-prename descclassname">pyrates.frontend.template.</code><code class="sig-name descname">to_operator</code><span class="sig-paren">(</span><em class="sig-param">template: pyrates.frontend.template.operator.OperatorTemplate</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template.html#to_operator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.to_operator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes a operator template and returns a OperatorIR instance from it.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.frontend.html" title="Previous document">pyrates.frontend package</a>
+        </li>
+        <li>
+          <a href="pyrates.frontend.template.circuit.html" title="Next document">pyrates.frontend.template.circuit package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">pyrates.frontend.template package</a><ul>
+<li><a class="reference internal" href="#subpackages">Subpackages</a></li>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.abc">pyrates.frontend.template.abc module</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.node">pyrates.frontend.template.node module</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.operator">pyrates.frontend.template.operator module</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.operator_graph">pyrates.frontend.template.operator_graph module</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/pyrates.frontend.template.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/pyrates.frontend.template.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

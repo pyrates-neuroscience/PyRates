@@ -57,7 +57,7 @@ class OperatorIR(AbstractBaseIR):
 
     @property
     def variables(self):
-        return {vname: (vtype, dtype, shape) for vname, vtype, dtype, shape in self._variables}
+        return {vname: dict(vtype=vtype, dtype=dtype, shape=shape) for vname, vtype, dtype, shape in self._variables}
 
     @property
     def equations(self):

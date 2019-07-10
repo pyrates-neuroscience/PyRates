@@ -1,0 +1,509 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.backend.tensorflow_backend &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for pyrates.backend.tensorflow_backend</h1><div class="highlight"><pre>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural</span>
+<span class="c1"># network model_templates and simulations. See also:</span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and</span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain</span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1">#</span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1">#</span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1">#</span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1">#</span>
+<span class="c1"># CITATION:</span>
+<span class="c1">#</span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+
+<span class="sd">&quot;&quot;&quot;Wraps tensorflow such that it&#39;s low-level functions can be used by PyRates to create and simulate a compute graph.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c1"># external imports</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+
+<span class="c1"># pyrates internal imports</span>
+<span class="kn">from</span> <span class="nn">.funcs</span> <span class="k">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">.numpy_backend</span> <span class="k">import</span> <span class="n">NumpyBackend</span><span class="p">,</span> <span class="n">NumpyVar</span><span class="p">,</span> <span class="n">PyRatesIndexOp</span><span class="p">,</span> <span class="n">PyRatesAssignOp</span><span class="p">,</span> <span class="n">PyRatesOp</span>
+
+<span class="c1"># meta infos</span>
+<span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Richard Gast&quot;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;development&quot;</span>
+
+
+<div class="viewcode-block" id="TensorflowVar"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowVar">[docs]</a><span class="k">class</span> <span class="nc">TensorflowVar</span><span class="p">(</span><span class="n">NumpyVar</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Class for creating variables via a tensorflow-based PyRates backend.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_value</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">list</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="n">value</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">value</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_get_var</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">Variable</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="TensorflowOp"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowOp">[docs]</a><span class="k">class</span> <span class="nc">TensorflowOp</span><span class="p">(</span><span class="n">PyRatesOp</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TensorflowOp.eval"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowOp.eval">[docs]</a>    <span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">globals</span><span class="p">()[</span><span class="s1">&#39;tf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tf</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_callable</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_numerics</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_generate_func</span><span class="p">(</span><span class="n">func_str</span><span class="p">):</span>
+        <span class="n">func_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">exec</span><span class="p">(</span><span class="n">func_str</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">func_dict</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">func_dict</span></div>
+
+
+<div class="viewcode-block" id="TensorflowAssignOp"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowAssignOp">[docs]</a><span class="k">class</span> <span class="nc">TensorflowAssignOp</span><span class="p">(</span><span class="n">PyRatesAssignOp</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TensorflowAssignOp.eval"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowAssignOp.eval">[docs]</a>    <span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_callable</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_numerics</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_generate_func</span><span class="p">(</span><span class="n">func_str</span><span class="p">):</span>
+        <span class="n">func_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">exec</span><span class="p">(</span><span class="n">func_str</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">func_dict</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">func_dict</span></div>
+
+
+<div class="viewcode-block" id="TensorflowIndexOp"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowIndexOp">[docs]</a><span class="k">class</span> <span class="nc">TensorflowIndexOp</span><span class="p">(</span><span class="n">PyRatesIndexOp</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TensorflowIndexOp.eval"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowIndexOp.eval">[docs]</a>    <span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_callable</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_numerics</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_generate_func</span><span class="p">(</span><span class="n">func_str</span><span class="p">):</span>
+        <span class="n">func_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">exec</span><span class="p">(</span><span class="n">func_str</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">func_dict</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">func_dict</span></div>
+
+
+<div class="viewcode-block" id="TensorflowBackend"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowBackend">[docs]</a><span class="k">class</span> <span class="nc">TensorflowBackend</span><span class="p">(</span><span class="n">NumpyBackend</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Wrapper to tensorflow. This class provides an interface to all tensorflow functionalities that may be accessed</span>
+<span class="sd">    via pyrates. All tensorflow variables and operations will be stored in a layered compute graph that can be executed</span>
+<span class="sd">    to evaluate the (dynamic) behavior of the graph.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    ops</span>
+<span class="sd">        Additional operations this backend instance can perform, defined as key-value pairs. The key can then be used in</span>
+<span class="sd">        every equation parsed into this backend. The value is a dictionary again, with two keys:</span>
+<span class="sd">            1) name - the name of the function/operation (used during code generation)</span>
+<span class="sd">            2) call - the call signature of the function including import abbreviations (i.e. `tf.add` for tensorflow&#39;s</span>
+<span class="sd">            add function)</span>
+<span class="sd">    dtypes</span>
+<span class="sd">        Additional data-types this backend instance can use, defined as key-value pairs.</span>
+<span class="sd">    name</span>
+<span class="sd">        Name of the backend instance. Used during code generation to create a recognizable file structure.</span>
+<span class="sd">    float_default_type</span>
+<span class="sd">        Default float precision. If no data-type is indicated for a particular variable, this will be used.</span>
+<span class="sd">    imports</span>
+<span class="sd">        Can be used to pass additional import statements that are needed for code generation of the custom functions</span>
+<span class="sd">        provided via `ops`. Will be added to the top of each generated code file.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">ops</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">dtypes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;net_0&#39;</span><span class="p">,</span>
+                 <span class="n">float_default_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;float32&#39;</span><span class="p">,</span>
+                 <span class="n">imports</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Instantiates tensorflow backend, i.e. a tensorflow graph.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">imports</span><span class="p">:</span>
+            <span class="n">imports</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;import tensorflow as tf&quot;</span><span class="p">]</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ops</span><span class="p">,</span> <span class="n">dtypes</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">float_default_type</span><span class="p">,</span> <span class="n">imports</span><span class="p">)</span>
+
+        <span class="c1"># define operations and datatypes of the backend</span>
+        <span class="c1">################################################</span>
+
+        <span class="c1"># base math operations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;+&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_add&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.add&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;-&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_subtract&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.subtract&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;*&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_multiply&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.multiply&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;/&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_divide&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.divide&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;%&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_modulo&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.mod&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;^&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_power&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.pow&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;**&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_power&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.pow&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;@&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_dot&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.dot&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;.T&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_transpose&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.transpose&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;.I&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_invert&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.invert&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;&gt;&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_greater&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.greater&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;&lt;&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_less&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.less&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;==&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_equal&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.equal&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;!=&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_not_equal&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.not_equal&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;&gt;=&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_greater_equal&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.greater_equal&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;&lt;=&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_less_equal&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.less_equal&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;=&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;assign&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;assign&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;+=&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;assign_add&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;assign_add&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;-=&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;assign_subtract&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;assign_sub&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;update&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_update&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;scatter_nd_update&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;update_add&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_update_add&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;scatter_nd_add&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;update_sub&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_update_sub&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;scatter_nd_sub&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;neg&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;negative&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;neg_one&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;sin&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_sin&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.sin&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;cos&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_cos&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.cos&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;tan&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_tan&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.tan&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;atan&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_atan&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.arctan&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;abs&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_abs&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.abs&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;sqrt&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_sqrt&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.sqrt&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;sq&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_square&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.square&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;exp&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_exp&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.exp&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_max&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.max&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_min&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.min&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;argmax&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_transpose&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.argmax&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;argmin&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_argmin&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.argmin&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;round&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_round&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.round&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;sum&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_sum&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.reduce_sum&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;mean&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_mean&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.reduce_mean&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;concat&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_concatenate&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.concat&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;reshape&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_reshape&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.reshape&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;shape&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_shape&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.shape&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;dtype&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_dtype&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.dtype&quot;</span><span class="p">},</span>
+                         <span class="s1">&#39;squeeze&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_squeeze&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.squeeze&quot;</span><span class="p">},</span>
+                         <span class="s1">&#39;expand&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;tensorflow_expand&#39;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.expand_dims&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;roll&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_roll&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.roll&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;cast&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_cast&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.cast&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;randn&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_randn&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.randn&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;ones&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_ones&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.ones&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;zeros&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_zeros&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.zeros&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_arange&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.arange&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;softmax&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_softmax&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.softmax&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;sigmoid&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_sigmoid&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.sigmoid&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;tanh&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_tanh&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.tanh&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;index&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;pyrates_index&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;pyrates_index&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;gather&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_gather&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.gather&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;gather_nd&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_gather_nd&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.gather_nd&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;mask&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_mask&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.boolean_mask&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;group&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_group&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.group&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;stack&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_stack&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.stack&quot;</span><span class="p">},</span>
+                         <span class="s2">&quot;no_op&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;tensorflow_identity&quot;</span><span class="p">,</span> <span class="s1">&#39;call&#39;</span><span class="p">:</span> <span class="s2">&quot;tf.identity&quot;</span><span class="p">},</span>
+                         <span class="p">})</span>
+
+        <span class="c1"># base data types</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dtypes</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;float16&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">float16</span><span class="p">,</span>
+                       <span class="s2">&quot;float32&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                       <span class="s2">&quot;float64&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+                       <span class="s2">&quot;int16&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">int16</span><span class="p">,</span>
+                       <span class="s2">&quot;int32&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span>
+                       <span class="s2">&quot;int64&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span>
+                       <span class="s2">&quot;uint16&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">uint16</span><span class="p">,</span>
+                       <span class="s2">&quot;uint32&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">uint32</span><span class="p">,</span>
+                       <span class="s2">&quot;uint64&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">uint64</span><span class="p">,</span>
+                       <span class="s2">&quot;complex64&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">complex64</span><span class="p">,</span>
+                       <span class="s2">&quot;complex128&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span>
+                       <span class="s2">&quot;bool&quot;</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">bool</span>
+                       <span class="p">}</span>
+
+<div class="viewcode-block" id="TensorflowBackend.broadcast"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowBackend.broadcast">[docs]</a>    <span class="k">def</span> <span class="nf">broadcast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op1</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">op2</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+
+        <span class="c1"># match data types</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compare_dtypes</span><span class="p">(</span><span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="p">):</span>
+            <span class="n">op1</span><span class="p">,</span> <span class="n">op2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_match_dtypes</span><span class="p">(</span><span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TensorflowBackend.stack_vars"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowBackend.stack_vars">[docs]</a>    <span class="k">def</span> <span class="nf">stack_vars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">vars</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">var_count</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="s1">&#39;short_name&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">short_name</span> <span class="ow">in</span> <span class="n">var_count</span><span class="p">:</span>
+                    <span class="n">var</span><span class="o">.</span><span class="n">short_name</span> <span class="o">+=</span> <span class="n">f</span><span class="s1">&#39;_</span><span class="si">{var_count[var.short_name]}</span><span class="s1">&#39;</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">var_count</span><span class="p">[</span><span class="n">var</span><span class="o">.</span><span class="n">short_name</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;stack&#39;</span><span class="p">,</span> <span class="nb">vars</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_create_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vtype</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">TensorflowVar</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="n">vtype</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_create_op</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">decorator</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">op</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;=&quot;</span><span class="p">,</span> <span class="s2">&quot;+=&quot;</span><span class="p">,</span> <span class="s2">&quot;-=&quot;</span><span class="p">,</span> <span class="s2">&quot;*=&quot;</span><span class="p">,</span> <span class="s2">&quot;/=&quot;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="s1">&#39;shape&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;=&quot;</span><span class="p">:</span>
+                    <span class="n">op</span> <span class="o">=</span> <span class="s2">&quot;update&quot;</span>
+                <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;+=&quot;</span><span class="p">:</span>
+                    <span class="n">op</span> <span class="o">=</span> <span class="s2">&quot;update_add&quot;</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">op</span> <span class="o">=</span> <span class="s2">&quot;update_sub&quot;</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_update_args_old</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">TensorflowAssignOp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;call&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">op</span> <span class="ow">is</span> <span class="s2">&quot;index&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;dtype&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="s1">&#39;bool&#39;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">TensorflowOp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="s1">&#39;mask&#39;</span><span class="p">][</span><span class="s1">&#39;call&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="s1">&#39;mask&#39;</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">TensorflowOp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="s1">&#39;gather&#39;</span><span class="p">][</span><span class="s1">&#39;call&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="s1">&#39;gather&#39;</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+                <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">IndexError</span><span class="p">):</span>
+                    <span class="n">args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_idx_args</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="n">TensorflowOp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="s1">&#39;gather_nd&#39;</span><span class="p">][</span><span class="s1">&#39;call&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="s1">&#39;gather_nd&#39;</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">TensorflowIndexOp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;call&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">op</span> <span class="ow">is</span> <span class="s2">&quot;cast&quot;</span><span class="p">:</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtypes</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                    <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtypes</span><span class="p">[</span><span class="n">dtype</span><span class="p">]</span>
+                    <span class="k">break</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">TensorflowOp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;call&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_process_idx_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Preprocesses the index to a variable.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">shape</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="c1"># match shape of index to shape</span>
+        <span class="c1">###############################</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;reshape&#39;</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,))</span>
+
+        <span class="n">shape_diff</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">-</span> <span class="n">idx</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">shape_diff</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Invalid index shape. Operation has shape </span><span class="si">{shape}</span><span class="s1">, but received an index of &#39;</span>
+                             <span class="n">f</span><span class="s1">&#39;length </span><span class="si">{idx.shape[1]}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="c1"># manage shape of idx</span>
+        <span class="k">if</span> <span class="n">shape_diff</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">indices</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">shape_diff</span><span class="p">):</span>
+                <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;zeros&#39;</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">idx</span><span class="o">.</span><span class="n">dtype</span><span class="p">))</span>
+            <span class="n">idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;concat&#39;</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">var</span><span class="p">,</span> <span class="n">idx</span>
+
+    <span class="k">def</span> <span class="nf">_match_dtypes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op1</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">op2</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Match data types of two operators/variables.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">op1</span><span class="p">),</span> <span class="n">tf</span><span class="o">.</span><span class="n">Variable</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">op2</span><span class="p">),</span> <span class="n">tf</span><span class="o">.</span><span class="n">Variable</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;16&quot;</span><span class="p">,</span> <span class="s2">&quot;32&quot;</span><span class="p">,</span> <span class="s2">&quot;64&quot;</span><span class="p">,</span> <span class="s2">&quot;128&quot;</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">op1</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                        <span class="k">return</span> <span class="n">op1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;cast&#39;</span><span class="p">,</span> <span class="n">op2</span><span class="p">,</span> <span class="n">op1</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">op2</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;cast&#39;</span><span class="p">,</span> <span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">op2</span>
+            <span class="k">return</span> <span class="n">op1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;cast&#39;</span><span class="p">,</span> <span class="n">op2</span><span class="p">,</span> <span class="n">op1</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">issubclass</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">op2</span><span class="p">),</span> <span class="n">tf</span><span class="o">.</span><span class="n">Variable</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;cast&#39;</span><span class="p">,</span> <span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">op2</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op1</span><span class="p">,</span> <span class="s1">&#39;numpy&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">op1</span><span class="p">)</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">op1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;cast&#39;</span><span class="p">,</span> <span class="n">op2</span><span class="p">,</span> <span class="n">op1</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op2</span><span class="p">,</span> <span class="s1">&#39;numpy&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">op2</span><span class="p">)</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;cast&#39;</span><span class="p">,</span> <span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">op2</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">op1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;cast&#39;</span><span class="p">,</span> <span class="n">op2</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">op1</span><span class="p">))</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\&#39;</span><span class="s1">&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">])</span>
+
+    <span class="k">def</span> <span class="nf">_run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layers</span><span class="p">,</span> <span class="n">sampling_layer</span><span class="p">,</span> <span class="n">steps</span><span class="p">,</span> <span class="n">sampling_steps</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">sampling_layer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">run_without_sampling</span><span class="p">(</span><span class="n">layers</span><span class="p">,</span> <span class="n">steps</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sampling_func</span><span class="p">,</span> <span class="n">sampling_args</span> <span class="o">=</span> <span class="n">sampling_layer</span>
+            <span class="n">run_with_sampling</span><span class="p">(</span><span class="n">layers</span><span class="p">,</span> <span class="n">steps</span><span class="p">,</span> <span class="n">sampling_func</span><span class="p">,</span> <span class="n">sampling_args</span><span class="p">,</span> <span class="n">sampling_steps</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_compare_shapes</span><span class="p">(</span><span class="n">op1</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">op2</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op1</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op2</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">op1</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">op2</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op1</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">op1</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op2</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">op2</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">op1</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">op2</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_compare_dtypes</span><span class="p">(</span><span class="n">op1</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">op2</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Checks whether the data types of op1 and op2 are compatible with each other.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        op1</span>
+<span class="sd">            First operator.</span>
+<span class="sd">        op2</span>
+<span class="sd">            Second operator.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        bool</span>
+<span class="sd">            If true, the data types of op1 and op2 are compatible.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">op1</span> <span class="o">+</span> <span class="n">op2</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op1</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op2</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">op1</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">op2</span><span class="o">.</span><span class="n">dtype</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="run_without_sampling"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.run_without_sampling">[docs]</a><span class="nd">@tf</span><span class="o">.</span><span class="n">function</span>
+<span class="k">def</span> <span class="nf">run_without_sampling</span><span class="p">(</span><span class="n">layers</span><span class="p">,</span> <span class="n">steps</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">tf</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="n">steps</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">func</span><span class="p">,</span> <span class="n">args</span> <span class="ow">in</span> <span class="n">layers</span><span class="p">:</span>
+            <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="run_with_sampling"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.run_with_sampling">[docs]</a><span class="nd">@tf</span><span class="o">.</span><span class="n">function</span>
+<span class="k">def</span> <span class="nf">run_with_sampling</span><span class="p">(</span><span class="n">layers</span><span class="p">,</span> <span class="n">steps</span><span class="p">,</span> <span class="n">sampling_func</span><span class="p">,</span> <span class="n">sampling_args</span><span class="p">,</span> <span class="n">sampling_steps</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">tf</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="n">steps</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">tf</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">step</span> <span class="o">%</span> <span class="n">sampling_steps</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="n">sampling_func</span><span class="p">(</span><span class="o">*</span><span class="n">sampling_args</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">func</span><span class="p">,</span> <span class="n">args</span> <span class="ow">in</span> <span class="n">layers</span><span class="p">:</span>
+            <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../../../index.html">
+    <img class="logo" src="../../../_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

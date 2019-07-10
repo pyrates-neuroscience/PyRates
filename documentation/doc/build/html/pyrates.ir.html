@@ -1,0 +1,482 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.ir package &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pyrates.utility package" href="pyrates.utility.html" />
+    <link rel="prev" title="pyrates.backend package" href="pyrates.backend.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.backend.html" title="Previous document">pyrates.backend package</a>
+        </li>
+        <li>
+          <a href="pyrates.utility.html" title="Next document">pyrates.utility package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="pyrates-ir-package">
+<h1>pyrates.ir package<a class="headerlink" href="#pyrates-ir-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-pyrates.ir.abc">
+<span id="pyrates-ir-abc-module"></span><h2>pyrates.ir.abc module<a class="headerlink" href="#module-pyrates.ir.abc" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.ir.abc.AbstractBaseIR">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.abc.</code><code class="sig-name descname">AbstractBaseIR</code><span class="sig-paren">(</span><em class="sig-param">template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/abc.html#AbstractBaseIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.abc.AbstractBaseIR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Abstract base class for intermediate representation classes</p>
+<dl class="method">
+<dt id="pyrates.ir.abc.AbstractBaseIR.getitem_from_iterator">
+<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/abc.html#AbstractBaseIR.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.abc.AbstractBaseIR.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.ir.circuit">
+<span id="pyrates-ir-circuit-module"></span><h2>pyrates.ir.circuit module<a class="headerlink" href="#module-pyrates.ir.circuit" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.ir.circuit.CircuitIR">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.circuit.</code><code class="sig-name descname">CircuitIR</code><span class="sig-paren">(</span><em class="sig-param">label: str = 'circuit'</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: Dict[str</em>, <em class="sig-param">pyrates.ir.node.NodeIR] = None</em>, <em class="sig-param">edges: list = None</em>, <em class="sig-param">template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.ir.abc.AbstractBaseIR" title="pyrates.ir.abc.AbstractBaseIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.abc.AbstractBaseIR</span></code></a></p>
+<p>Custom graph data structure that represents a backend of nodes and edges with associated equations
+and variables.</p>
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.add_circuit">
+<code class="sig-name descname">add_circuit</code><span class="sig-paren">(</span><em class="sig-param">label: str</em>, <em class="sig-param">circuit</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.add_circuit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.add_circuit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a single circuit (with its own nodes and edges) to this circuit (like a subgraph in a graph).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> – Assigned name of the circuit. If this name is already in use, the label will be renamed in the form
+<cite>label.idx</cite>.</p></li>
+<li><p><strong>circuit</strong> – Instance of <cite>CircuitIR</cite> or <cite>CircuitTemplate</cite> or a dictionary, where the key ‘template’ refers to a
+<cite>CircuitTemplate</cite> instance and ‘values’ refers to updates that should be applied to the template.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.add_edge">
+<code class="sig-name descname">add_edge</code><span class="sig-paren">(</span><em class="sig-param">source: str</em>, <em class="sig-param">target: str</em>, <em class="sig-param">edge_ir: pyrates.ir.edge.EdgeIR</em>, <em class="sig-param">weight: float = 1.0</em>, <em class="sig-param">delay: float = None</em>, <em class="sig-param">identify_relations=True</em>, <em class="sig-param">**data</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.add_edge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.add_edge" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>source</strong> – </p></li>
+<li><p><strong>target</strong> – </p></li>
+<li><p><strong>edge_ir</strong> – </p></li>
+<li><p><strong>weight</strong> – </p></li>
+<li><p><strong>delay</strong> – </p></li>
+<li><p><strong>data</strong> – If no template is given, <cite>data</cite> is assumed to conform to the format that is needed to add an edge. I.e.,
+<cite>data</cite> needs to contain fields for <cite>weight</cite>, <cite>delay</cite>, <cite>edge_ir</cite>, <cite>source_var</cite>, <cite>target_var</cite>.</p></li>
+<li><p><strong>identify_relations</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.add_edges_from">
+<code class="sig-name descname">add_edges_from</code><span class="sig-paren">(</span><em class="sig-param">edges</em>, <em class="sig-param">**attr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.add_edges_from"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.add_edges_from" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add multiple edges. This method explicitly assumes, that edges are given in edge_templates instead of
+existing instances of <cite>EdgeIR</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>edges</strong> – List of edges, each of shape [source/op/var, target/op/var, edge_dict]. The edge_dict must contain the
+keys “edge_ir”, and optionally “weight” and “delay”.</p></li>
+<li><p><strong>attr</strong> – Additional attributes (keyword arguments) that can be added to the edge data. (Default <cite>networkx</cite> syntax.)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.add_node">
+<code class="sig-name descname">add_node</code><span class="sig-paren">(</span><em class="sig-param">label: str</em>, <em class="sig-param">node: pyrates.ir.node.NodeIR</em>, <em class="sig-param">**attr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.add_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.add_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add single node</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> – String to identify node by. Is tested for uniqueness internally, and renamed if necessary. Renamed labels
+are stored in the <cite>CircuitIR</cite> instance attribute <cite>label_map</cite>.</p></li>
+<li><p><strong>node</strong> – Instance of <cite>NodeIR</cite>. Will be added with the key “node” to the node dictionary.</p></li>
+<li><p><strong>attr</strong> – Additional attributes (keyword arguments) that can be added to the node data. (Default <cite>networkx</cite> syntax.)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.add_nodes_from">
+<code class="sig-name descname">add_nodes_from</code><span class="sig-paren">(</span><em class="sig-param">nodes: Dict[str, pyrates.ir.node.NodeIR], **attr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.add_nodes_from"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.add_nodes_from" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add multiple nodes to circuit. Allows networkx-style adding if from_templates is set to False.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>nodes</strong> – Dictionary with node label as key. The item is a NodeIR instance. Note that the item type is not tested
+here, but passing anything that does not behave like a <cite>NodeIR</cite> may cause problems later.</p></li>
+<li><p><strong>attr</strong> – additional keyword attributes that can be added to the node data. (default <cite>networkx</cite> syntax.)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.edges">
+<em class="property">property </em><code class="sig-name descname">edges</code><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.edges" title="Permalink to this definition">¶</a></dt>
+<dd><p>Shortcut to self.graph.edges. See documentation of <cite>networkx.MultiDiGraph.edges</cite>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.from_circuits">
+<em class="property">classmethod </em><code class="sig-name descname">from_circuits</code><span class="sig-paren">(</span><em class="sig-param">label: str</em>, <em class="sig-param">circuits: dict</em>, <em class="sig-param">connectivity: Union[list</em>, <em class="sig-param">tuple</em>, <em class="sig-param">pandas.core.frame.DataFrame] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.from_circuits"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.from_circuits" title="Permalink to this definition">¶</a></dt>
+<dd><p>Circuit creation method that takes multiple circuits (templates or instances of <cite>CircuitIR</cite>) as inputs to
+create one larger circuit out of these. With additional <cite>connectivity</cite> information, these circuit can directly
+be interlinked.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> – Name of new circuit. Should not collide with any circuit label given in <cite>circuits</cite>.</p></li>
+<li><p><strong>circuits</strong> – Dictionary with unique circuit labels as keys and circuits as items. Circuits may either be instances of
+<cite>CircuitTemplate</cite> or <cite>CircuitIR</cite>. Alternatively, a circuit template may also be given via a sub-dictionary
+with keys <cite>template</cite> and <cite>values</cite>, where <cite>values</cite> is a dictionary of variable value updates for the given
+template.</p></li>
+<li><p><strong>connectivity</strong> – Optional <cite>list</cite>, <cite>tuple</cite> or <cite>pandas.DataFrame’ with connectivity information to create edges between the
+given circuits. If `list</cite> or <cite>tuple</cite>, then each item must be formatted the same way as <cite>edges</cite> in
+<cite>add_edges_from</cite>: (‘circuit/source_node/op/var’, ‘circuit/target_node/op/var’, edge_template, variables).
+If given as a <cite>DataFrame</cite>, keys (indices and column names) must refer to sources and targets, respectively,
+as column name/index (string of form ‘circuit/node/op/var’) and items may then be edge templates and
+associated variables.
+Empty cells in the DataFrame should be filled with something ‘falsy’ (as in evaluates to <cite>False</cite> in Python).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>instance of <cite>CircuitIR</cite></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>circuit</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.getitem_from_iterator">
+<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.move_edge_operators_to_nodes">
+<code class="sig-name descname">move_edge_operators_to_nodes</code><span class="sig-paren">(</span><em class="sig-param">copy_data=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.move_edge_operators_to_nodes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.move_edge_operators_to_nodes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a new CircuitIR instance, where all operators that were previously in edges are moved to their
+respective target nodes.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.nodes">
+<em class="property">property </em><code class="sig-name descname">nodes</code><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.nodes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Shortcut to self.graph.nodes. See documentation of <cite>networkx.MultiDiGraph.nodes</cite>.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.ir.circuit.SubCircuitView">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.circuit.</code><code class="sig-name descname">SubCircuitView</code><span class="sig-paren">(</span><em class="sig-param">top_level_circuit: pyrates.ir.circuit.CircuitIR</em>, <em class="sig-param">subgraph_key: str</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#SubCircuitView"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.SubCircuitView" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.ir.abc.AbstractBaseIR" title="pyrates.ir.abc.AbstractBaseIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.abc.AbstractBaseIR</span></code></a></p>
+<p>View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
+lvl) circuit is referenced locally as ‘top_level_circuit’ and all subgraph-related information is computed only
+when needed.</p>
+<dl class="method">
+<dt id="pyrates.ir.circuit.SubCircuitView.getitem_from_iterator">
+<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#SubCircuitView.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.SubCircuitView.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.SubCircuitView.induced_graph">
+<em class="property">property </em><code class="sig-name descname">induced_graph</code><a class="headerlink" href="#pyrates.ir.circuit.SubCircuitView.induced_graph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the subgraph specified by <cite>subgraph_key</cite>.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.ir.edge">
+<span id="pyrates-ir-edge-module"></span><h2>pyrates.ir.edge module<a class="headerlink" href="#module-pyrates.ir.edge" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.ir.edge.EdgeIR">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.edge.</code><code class="sig-name descname">EdgeIR</code><span class="sig-paren">(</span><em class="sig-param">operators: dict = None</em>, <em class="sig-param">template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/edge.html#EdgeIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.edge.EdgeIR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.ir.node.NodeIR" title="pyrates.ir.node.NodeIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.node.NodeIR</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.ir.edge.EdgeIR.input">
+<em class="property">property </em><code class="sig-name descname">input</code><a class="headerlink" href="#pyrates.ir.edge.EdgeIR.input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Detect input variable of edge, assuming only one input variable exists. This also references the operator
+the variable belongs to.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.edge.EdgeIR.input_var">
+<em class="property">property </em><code class="sig-name descname">input_var</code><a class="headerlink" href="#pyrates.ir.edge.EdgeIR.input_var" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.edge.EdgeIR.output">
+<em class="property">property </em><code class="sig-name descname">output</code><a class="headerlink" href="#pyrates.ir.edge.EdgeIR.output" title="Permalink to this definition">¶</a></dt>
+<dd><p>Detect output variable of edge, assuming only one output variable exists.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.edge.EdgeIR.output_var">
+<em class="property">property </em><code class="sig-name descname">output_var</code><a class="headerlink" href="#pyrates.ir.edge.EdgeIR.output_var" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.ir.node">
+<span id="pyrates-ir-node-module"></span><h2>pyrates.ir.node module<a class="headerlink" href="#module-pyrates.ir.node" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.ir.node.NodeIR">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.node.</code><code class="sig-name descname">NodeIR</code><span class="sig-paren">(</span><em class="sig-param">operators: dict = None</em>, <em class="sig-param">template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#NodeIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.NodeIR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.ir.abc.AbstractBaseIR" title="pyrates.ir.abc.AbstractBaseIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.abc.AbstractBaseIR</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.ir.node.NodeIR.getitem_from_iterator">
+<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#NodeIR.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.NodeIR.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for self.op_graph.getitem_from_iterator</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.node.NodeIR.operators">
+<em class="property">property </em><code class="sig-name descname">operators</code><a class="headerlink" href="#pyrates.ir.node.NodeIR.operators" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.ir.operator">
+<span id="pyrates-ir-operator-module"></span><h2>pyrates.ir.operator module<a class="headerlink" href="#module-pyrates.ir.operator" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.ir.operator.OperatorIR">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.operator.</code><code class="sig-name descname">OperatorIR</code><span class="sig-paren">(</span><em class="sig-param">equations: List[str], inputs: list, output: str, template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#OperatorIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.OperatorIR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.ir.abc.AbstractBaseIR" title="pyrates.ir.abc.AbstractBaseIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.abc.AbstractBaseIR</span></code></a></p>
+<dl class="method">
+<dt id="pyrates.ir.operator.OperatorIR.copy">
+<code class="sig-name descname">copy</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#OperatorIR.copy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.OperatorIR.copy" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.OperatorIR.getitem_from_iterator">
+<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#OperatorIR.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.OperatorIR.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks if a variable named by key exists in an equations.
+:param key:
+:param key_iter:</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p></p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>key</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.ir.operator_graph">
+<span id="pyrates-ir-operator-graph-module"></span><h2>pyrates.ir.operator_graph module<a class="headerlink" href="#module-pyrates.ir.operator_graph" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyrates.ir.operator_graph.OperatorGraph">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.operator_graph.</code><code class="sig-name descname">OperatorGraph</code><span class="sig-paren">(</span><em class="sig-param">operators: dict = None</em>, <em class="sig-param">template: str = ''</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#OperatorGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.OperatorGraph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">networkx.classes.digraph.DiGraph</span></code></p>
+<p>Intermediate representation for nodes and edges.</p>
+<dl class="method">
+<dt id="pyrates.ir.operator_graph.OperatorGraph.getitem_from_iterator">
+<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#OperatorGraph.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.OperatorGraph.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If <cite>key_iter</cite>
+contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of
+a variable that belong to an operator is returned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> – </p></li>
+<li><p><strong>key_iter</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>operator or variable properties</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>item</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator_graph.OperatorGraph.operators">
+<code class="sig-name descname">operators</code><span class="sig-paren">(</span><em class="sig-param">get_ops=False</em>, <em class="sig-param">get_vars=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#OperatorGraph.operators"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.OperatorGraph.operators" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for self.nodes</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyrates.ir">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-pyrates.ir" title="Permalink to this headline">¶</a></h2>
+<p>This module contains classes relevant for the intermediate representation (IR) in PyRates. All variations of PyRates
+frontends should produce valid instances of IR classes defined in this module and all backends should accept only these
+instances as input. Thus the intermediate representation is assumed to be consistent across different frontends and
+backends.</p>
+</div>
+</div>
+
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.backend.html" title="Previous document">pyrates.backend package</a>
+        </li>
+        <li>
+          <a href="pyrates.utility.html" title="Next document">pyrates.utility package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">pyrates.ir package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-pyrates.ir.abc">pyrates.ir.abc module</a></li>
+<li><a class="reference internal" href="#module-pyrates.ir.circuit">pyrates.ir.circuit module</a></li>
+<li><a class="reference internal" href="#module-pyrates.ir.edge">pyrates.ir.edge module</a></li>
+<li><a class="reference internal" href="#module-pyrates.ir.node">pyrates.ir.node module</a></li>
+<li><a class="reference internal" href="#module-pyrates.ir.operator">pyrates.ir.operator module</a></li>
+<li><a class="reference internal" href="#module-pyrates.ir.operator_graph">pyrates.ir.operator_graph module</a></li>
+<li><a class="reference internal" href="#module-pyrates.ir">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/pyrates.ir.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/pyrates.ir.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

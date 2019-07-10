@@ -4,18 +4,11 @@ from pyrates import __version__
 PYRATES_TEAM = "Richard Gast, Daniel Rose"
 
 INSTALL_REQUIREMENTS = ['numpy',
-                        'matplotlib',
                         'networkx',
                         'pandas',
                         'pyparsing',
                         'ruamel.yaml',
-                        'scipy',
-                        'seaborn',
-                        'mne',
-                        'pydot',
-                        'paramiko',
-                        'numba',
-                        'edx-sphinx-theme']
+                        ]
 
 CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Programming Language :: Python :: 3.6",

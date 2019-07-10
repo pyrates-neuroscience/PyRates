@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-# lib/
+lib/
 lib64/
 parts/
 sdist/
@@ -64,7 +64,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+docs/build/
 
 # PyBuilder
 target/

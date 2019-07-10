@@ -181,6 +181,25 @@ def analytic_signal(data: pd.DataFrame, fmin: float, fmax: float, nodes: List[st
     return data
 
 
+def welch(data, tmin=0., tmax=None, **kwargs):
+
+    # prepare data frame
+    dt = data.index[1] - data.index[0]
+    tmin = int(tmin / dt)
+    tmax = data.shape[0] + 1 if tmax is None else max([int(tmax/dt), data.shape[0] + 1])
+    if len(data.shape) > 1:
+        data = data.iloc[tmin:tmax, :]
+    else:
+        data = data.iloc[tmin:tmax]
+
+    # Compute power spectral density
+    try:
+        from scipy.signal import welch
+        return welch(data.values, fs=1/dt, axis=0, **kwargs)
+    except IndexError:
+        return np.NaN, np.NaN
+
+
 def time_frequency(data: pd.DataFrame, freqs: List[float], method: str = 'morlet', output: str = 'avg_power', **kwargs
                    ) -> np.ndarray:
     """Calculates time-frequency representation for each node.
