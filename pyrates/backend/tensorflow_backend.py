@@ -235,6 +235,29 @@ class TensorflowBackend(NumpyBackend):
 
         return super().broadcast(op1, op2, **kwargs)
 
+    def get_var(self, name):
+        """Retrieve variable from graph.
+
+        Parameters
+        ----------
+        name
+            Identifier of the variable.
+
+        Returns
+        -------
+        NumpyVar
+            Variable from graph.
+
+        """
+        try:
+            return self.vars[name]
+        except KeyError as e:
+            for var in self.vars:
+                if f"{name}:" in var:
+                    return self.vars[var]
+            else:
+                raise e
+
     def stack_vars(self, vars, **kwargs):
         var_count = {}
         for var in vars:

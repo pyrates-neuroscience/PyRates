@@ -203,6 +203,8 @@ class ComputeGraph(object):
         # edge operators
         equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
         variables.update(variables_tmp)
+        if equations:
+            self.backend._input_layer_added = True
 
         # node operators
         equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
@@ -391,21 +393,7 @@ class ComputeGraph(object):
                                 inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
                                 i += 1
 
-            # add inputs to graph
-            self.backend.add_layer(to_beginning=True)
-
-            # create counting index for input variables
-            in_idx = self.backend.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
-                                          scope="network_inputs")
-
-            for key, var in inp_dict.items():
-                var_name = f"{var.short_name}_inp" if hasattr(var, 'short_name') else "var_inp"
-                in_var = self.backend.add_var(vtype='state_var', name=var_name, scope="network_inputs", value=var)
-                in_var_idx = self.backend.add_op('index', in_var, in_idx, scope="network_inputs")
-                self.backend.add_op('=', self.backend.vars[key], in_var_idx, scope="network_inputs")
-
-            # create increment operator for counting index
-            self.backend.add_op('+=', in_idx, np.ones((1,), dtype='int32'), scope="network_inputs")
+            self.backend.add_input_layer(inputs=inp_dict)
 
         # run simulation
         ################
