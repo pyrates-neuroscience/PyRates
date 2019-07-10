@@ -1,118 +1,53 @@
 
-
 <!DOCTYPE html>
-<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
-<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <title>pyrates.backend package &mdash; PyRates 0.7.1 documentation</title>
-  
 
-  
-  
-    <link rel="shortcut icon" href="_static/css/PyRates_logo_color.ico"/>
-  
-
-  
-  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
-
-  
-  
-    <script type="text/javascript">
-      var DOCUMENTATION_OPTIONS = {
-        URL_ROOT:'./',
-        VERSION:'0.7.1',
-        COLLAPSE_INDEX:false,
-        FILE_SUFFIX:'.html',
-        HAS_SOURCE:  true
-      };
-    </script>
-      <script type="text/javascript" src="_static/jquery.js"></script>
-      <script type="text/javascript" src="_static/underscore.js"></script>
-      <script type="text/javascript" src="_static/doctools.js"></script>
-      <script type="text/javascript" src="_static/language_data.js"></script>
-      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
-
-    
-
-  
-
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.backend package &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pyrates.ir package" href="pyrates.ir.html" />
+    <link rel="prev" title="pyrates.frontend.template.edge package" href="pyrates.frontend.template.edge.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   
   
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
   
-    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
-    <script type="text/javascript" src="_static/js/theme.js"></script>
 
-
-  
-        <link rel="index" title="Index"
-              href="genindex.html"/>
-        <link rel="search" title="Search" href="search.html"/>
-    <link rel="top" title="PyRates 0.7.1 documentation" href="index.html"/> 
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
-
-</head>
-
-<body class="wy-body-for-nav">
-
-  <div class="wy-grid-for-nav">
-
-    
-    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
-      <div class="wy-side-nav-search">
-        <a href="contents.html" class="icon icon-home"> PyRates</a>
-        <form class="wy-form" action="search.html" method="get">
-  <input type="text" name="q" placeholder="Search document" />
-  <input type="hidden" name="check_keywords" value="yes" />
-  <input type="hidden" name="area" value="default" />
-</form>
-      </div>
-
-      <div class="wy-menu wy-menu-vertical" data-spy="affix">
-        
-        
-            <ul>
-<li><a class="reference internal" href="#">pyrates.backend package</a><ul>
-<li><a class="reference internal" href="#submodules">Submodules</a></li>
-<li><a class="reference internal" href="#module-pyrates.backend.computegraph">pyrates.backend.computegraph module</a></li>
-<li><a class="reference internal" href="#module-pyrates.backend.funcs">pyrates.backend.funcs module</a></li>
-<li><a class="reference internal" href="#module-pyrates.backend.numpy_backend">pyrates.backend.numpy_backend module</a></li>
-<li><a class="reference internal" href="#module-pyrates.backend.parser">pyrates.backend.parser module</a></li>
-<li><a class="reference internal" href="#module-pyrates.backend.tensorflow_backend">pyrates.backend.tensorflow_backend module</a></li>
-<li><a class="reference internal" href="#module-pyrates.backend">Module contents</a></li>
-</ul>
-</li>
-</ul>
-
-        
-      </div>
-      &nbsp;
-    </nav>
-
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-
-      
-      <nav class="wy-nav-top">
-        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
-        <a href="/">PyRates</a>
-      </nav>
-
-
-      
-      <div class="wy-nav-content">
-        <div class="rst-content">
-          <ul class="wy-breadcrumbs">
-  <li><a href="contents.html">Table of Contents</a> &raquo;</li>
-  <li><a href="">pyrates.backend package</a></li>
-  <li class="wy-breadcrumbs-aside"><a href="https://docs.google.com/forms/d/1T5QGnYb_QnQoMO7T_eatq02miPTY40WVe3cgGphNAdY/viewform?entry.1952574704&entry.241692674=PyRates%3A%20pyrates.backend" target="_blank">Give Doc Feedback</a>
-  </li>
-</ul>
-<hr/>
-
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.frontend.template.edge.html" title="Previous document">pyrates.frontend.template.edge package</a>
+        </li>
+        <li>
+          <a href="pyrates.ir.html" title="Next document">pyrates.ir package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
           
+
+          <div class="body" role="main">
+            
   <div class="section" id="pyrates-backend-package">
 <h1>pyrates.backend package<a class="headerlink" href="#pyrates-backend-package" title="Permalink to this headline">¶</a></h1>
 <div class="section" id="submodules">
@@ -123,7 +58,7 @@
 <p>This module provides the backend class that should be used to set up any backend in pyrates.</p>
 <dl class="class">
 <dt id="pyrates.backend.computegraph.ComputeGraph">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.computegraph.</code><code class="sig-name descname">ComputeGraph</code><span class="sig-paren">(</span><em class="sig-param">net_config: pyrates.ir.circuit.CircuitIR</em>, <em class="sig-param">dt: float = 0.001</em>, <em class="sig-param">vectorization: str = 'none'</em>, <em class="sig-param">name: Optional[str] = 'net0'</em>, <em class="sig-param">build_in_place: bool = True</em>, <em class="sig-param">backend: str = 'numpy'</em>, <em class="sig-param">float_precision: str = 'float32'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.computegraph.</code><code class="sig-name descname">ComputeGraph</code><span class="sig-paren">(</span><em class="sig-param">net_config: Union[str, pyrates.ir.circuit.CircuitIR], dt: float = 0.001, vectorization: str = 'none', name: Optional[str] = 'net0', build_in_place: bool = True, backend: str = 'numpy', solver: str = 'euler', float_precision: str = 'float32', **kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Creates a compute graph that contains all nodes in the network plus their recurrent connections.</p>
 <dl class="field-list simple">
@@ -138,7 +73,8 @@ nodes together in a vector, <cite>full</cite> for full vectorization of the netw
 <li><p><strong>name</strong> – Name of the network.</p></li>
 <li><p><strong>build_in_place</strong> – If False, a copy of the <cite>net_config``will be made before compute graph creation. Should be used, if the
 `net_config</cite> will be re-used for multiple compute graphs.</p></li>
-<li><p><strong>use_device</strong> – Can be either <cite>cpu</cite> or <cite>gpu</cite>. Device placement will be soft.</p></li>
+<li><p><strong>backend</strong> – Backend in which to build the compute graph.</p></li>
+<li><p><strong>solver</strong> – Numerical solver to use for differential equations.</p></li>
 </ul>
 </dd>
 </dl>
@@ -211,14 +147,14 @@ call of the function, only the dataframe will be returned.</p>
 <div class="section" id="module-pyrates.backend.funcs">
 <span id="pyrates-backend-funcs-module"></span><h2>pyrates.backend.funcs module<a class="headerlink" href="#module-pyrates.backend.funcs" title="Permalink to this headline">¶</a></h2>
 <p>Contains functions that may be used as backend operations</p>
-<dl class="attribute">
+<dl class="function">
 <dt id="pyrates.backend.funcs.pr_sigmoid">
-<code class="sig-prename descclassname">pyrates.backend.funcs.</code><code class="sig-name descname">pr_sigmoid</code><a class="reference internal" href="_modules/pyrates/backend/funcs.html#pr_sigmoid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.funcs.pr_sigmoid" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">pyrates.backend.funcs.</code><code class="sig-name descname">pr_sigmoid</code><span class="sig-paren">(</span><em class="sig-param">x</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/funcs.html#pr_sigmoid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.funcs.pr_sigmoid" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<dl class="attribute">
+<dl class="function">
 <dt id="pyrates.backend.funcs.pr_softmax">
-<code class="sig-prename descclassname">pyrates.backend.funcs.</code><code class="sig-name descname">pr_softmax</code><a class="reference internal" href="_modules/pyrates/backend/funcs.html#pr_softmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.funcs.pr_softmax" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">pyrates.backend.funcs.</code><code class="sig-name descname">pr_softmax</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">axis=0</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/funcs.html#pr_softmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.funcs.pr_softmax" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </div>
@@ -409,7 +345,7 @@ extracted before.</p></li>
 
 <dl class="method">
 <dt id="pyrates.backend.numpy_backend.NumpyBackend.apply_idx">
-<code class="sig-name descname">apply_idx</code><span class="sig-paren">(</span><em class="sig-param">var: Any</em>, <em class="sig-param">idx: str</em>, <em class="sig-param">update: Optional[Any] = None</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span> &#x2192; Any<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.apply_idx"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.apply_idx" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">apply_idx</code><span class="sig-paren">(</span><em class="sig-param">var: Any</em>, <em class="sig-param">idx: str</em>, <em class="sig-param">update: Optional[Any] = None</em>, <em class="sig-param">update_type: str = None</em>, <em class="sig-param">*args</em><span class="sig-paren">)</span> &#x2192; Any<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.apply_idx"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.apply_idx" title="Permalink to this definition">¶</a></dt>
 <dd><p>Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -417,6 +353,7 @@ extracted before.</p></li>
 <li><p><strong>var</strong> – Variable to index/update</p></li>
 <li><p><strong>idx</strong> – Index to variable</p></li>
 <li><p><strong>update</strong> – Update to variable entries</p></li>
+<li><p><strong>update_type</strong> – Type of lhs update (e.g. <cite>=</cite> or <cite>+=</cite>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -561,6 +498,23 @@ state-variable.</p></li>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p><a class="reference internal" href="#pyrates.backend.numpy_backend.NumpyVar" title="pyrates.backend.numpy_backend.NumpyVar">NumpyVar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.goto_layer">
+<code class="sig-name descname">goto_layer</code><span class="sig-paren">(</span><em class="sig-param">idx: int</em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.goto_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.goto_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Jump to layer indicated by index.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>idx</strong> – Position of layer to jump towards.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>None</p>
 </dd>
 </dl>
 </dd></dl>
@@ -771,7 +725,7 @@ custom operator classes.</p>
 operations.</p>
 <dl class="class">
 <dt id="pyrates.backend.parser.ExpressionParser">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">ExpressionParser</code><span class="sig-paren">(</span><em class="sig-param">expr_str: str</em>, <em class="sig-param">args: dict</em>, <em class="sig-param">backend</em>, <em class="sig-param">lhs: bool = False</em>, <em class="sig-param">solve=False</em>, <em class="sig-param">assign_add=False</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">ExpressionParser</code><span class="sig-paren">(</span><em class="sig-param">expr_str: str</em>, <em class="sig-param">args: dict</em>, <em class="sig-param">backend: Any</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">pyparsing.ParserElement</span></code></p>
 <p>Base class for parsing mathematical expressions from a string format into a symbolic representation of the
 mathematical operation expressed by it.</p>
@@ -780,11 +734,7 @@ mathematical operation expressed by it.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>expr_str</strong> – Mathematical expression in string format.</p></li>
 <li><p><strong>args</strong> – Dictionary containing all variables and functions needed to evaluate the expression.</p></li>
-<li><p><strong>lhs</strong> – If True, parser will treat <cite>expr_str</cite> as left-hand side of an equation, if False as right-hand side.</p></li>
-<li><p><strong>solve</strong> – If True, the parser will treat the left hand side as a differential variable that needs to be integrated over
-time.</p></li>
-<li><p><strong>assign_add</strong> – If True, the right hand side will be added to the current value of left hand side. If False, the left hand side
-value will be replaced with the right hand side.</p></li>
+<li><p><strong>backend</strong> – Backend instance in which to parse all variables and operations.</p></li>
 <li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend functions.</p></li>
 </ul>
 </dd>
@@ -865,24 +815,9 @@ of the <cite>ExpressionParser</cite> (e.g. float32, bool, int32).</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="pyrates.backend.parser.ExpressionParser.apply_idx">
-<code class="sig-name descname">apply_idx</code><span class="sig-paren">(</span><em class="sig-param">op: Any</em>, <em class="sig-param">idx: Any</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.apply_idx"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.apply_idx" title="Permalink to this definition">¶</a></dt>
-<dd><p>Apply index idx to operation op.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>op</strong> – Operation to be indexed.</p></li>
-<li><p><strong>idx</strong> – Index to op.</p></li>
-<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the indexing functions.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Result of applying idx to op.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>tp.Any</p>
-</dd>
-</dl>
+<dt id="pyrates.backend.parser.ExpressionParser.clear">
+<code class="sig-name descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clears expression list and stack.</p>
 </dd></dl>
 
 <dl class="method">
@@ -908,22 +843,6 @@ of the <cite>ExpressionParser</cite> (e.g. float32, bool, int32).</p>
 <dd><p>Parses string-based expression.</p>
 </dd></dl>
 
-<dl class="method">
-<dt id="pyrates.backend.parser.ExpressionParser.update">
-<code class="sig-name descname">update</code><span class="sig-paren">(</span><em class="sig-param">var_old</em>, <em class="sig-param">var_delta</em>, <em class="sig-param">dt</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.update"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.update" title="Permalink to this definition">¶</a></dt>
-<dd><p>Solves single step of a differential equation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>var_old</strong> – </p></li>
-<li><p><strong>var_delta</strong> – </p></li>
-<li><p><strong>dt</strong> – </p></li>
-<li><p><strong>kwargs</strong> – </p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 <dl class="function">
@@ -941,31 +860,6 @@ Each value is a dictionary again containing the variable information (needs at l
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>Key-value pairs with the backend variable names and handles.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>dict</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="function">
-<dt id="pyrates.backend.parser.parse_equation">
-<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_equation</code><span class="sig-paren">(</span><em class="sig-param">lhs: str</em>, <em class="sig-param">rhs: str</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">backend: Any</em>, <em class="sig-param">solve: bool = False</em>, <em class="sig-param">assign_add: bool = False</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_equation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_equation" title="Permalink to this definition">¶</a></dt>
-<dd><p>Parses lhs and rhs of an equation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>lhs</strong> – Left hand side of an equation.</p></li>
-<li><p><strong>rhs</strong> – Right hand side of an equation.</p></li>
-<li><p><strong>equation_args</strong> – Dictionary containing all variables and functions needed to evaluate the expression.</p></li>
-<li><p><strong>backend</strong> – Backend instance to parse the equation into.</p></li>
-<li><p><strong>solve</strong> – If true, the left hand side will be treated as a differential variable that needs to be integrated over time.</p></li>
-<li><p><strong>assign_add</strong> – If true, the right hand side will be added to the current value of the left hand side instead of replacing it.</p></li>
-<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>The updated equation_args dictionary (variables were manipulated in place during equation parsing).</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>dict</p>
@@ -997,21 +891,21 @@ equation parsing).</p>
 </dd></dl>
 
 <dl class="function">
-<dt id="pyrates.backend.parser.preprocess_equations">
-<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">preprocess_equations</code><span class="sig-paren">(</span><em class="sig-param">eqs: list</em>, <em class="sig-param">solver: str</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#preprocess_equations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.preprocess_equations" title="Permalink to this definition">¶</a></dt>
-<dd><p>Turns differential equations into simple algebraic equations using a certain solver scheme.</p>
-<dl class="field-list simple">
+<dt id="pyrates.backend.parser.parse_equations">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_equations</code><span class="sig-paren">(</span><em class="sig-param">equations</em>, <em class="sig-param">equation_args</em>, <em class="sig-param">backend</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_equations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_equations" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>eqs</strong> – Collection of equations to be pre-processed.</p></li>
-<li><p><strong>solver</strong> – Type of the solver.</p></li>
+<li><p><strong>equations</strong> – </p></li>
+<li><p><strong>equation_args</strong> – </p></li>
+<li><p><strong>backend</strong> – </p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Contains left hand sides, right hand sides and left hand side update modes (= or +=)</p>
+<dd class="field-even"><p></p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>tuple</p>
+<dd class="field-odd"><p>dict</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1033,6 +927,59 @@ equation parsing).</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.split_equation">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">split_equation</code><span class="sig-paren">(</span><em class="sig-param">expr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#split_equation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.split_equation" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>expr</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.update_lhs">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">update_lhs</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">update_num: int</em>, <em class="sig-param">rhs_scalar: str</em>, <em class="sig-param">var_dict: dict</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#update_lhs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.update_lhs" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>equations</strong> – </p></li>
+<li><p><strong>equation_args</strong> – </p></li>
+<li><p><strong>update_num</strong> – </p></li>
+<li><p><strong>rhs_scalar</strong> – </p></li>
+<li><p><strong>var_dict</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.update_rhs">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">update_rhs</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">update_num: int</em>, <em class="sig-param">update_str: str</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#update_rhs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.update_rhs" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>equations</strong> – </p></li>
+<li><p><strong>equation_args</strong> – </p></li>
+<li><p><strong>update_num</strong> – </p></li>
+<li><p><strong>update_str</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1190,28 +1137,112 @@ provided via <cite>ops</cite>. Will be added to the top of each generated code f
 </div>
 
 
-          <footer>
-  
-
-  <hr/>
-
-  <p style="font-size: 85%">
-      Copyright &copy; 2019, Richard Gast, Daniel Rose, Christoph Salomon
-    <br/>
-    <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a>
-    <br/>
-    These works by <a xmlns:cc="http://creativecommons.org/ns#" href="http://open.edx.org" property="cc:attributionName" rel="cc:attributionURL">edX Inc.</a>
-    are licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
-  </p>
-
- 
-</footer>
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+        <li>
+          &larr;
+          <a href="pyrates.frontend.template.edge.html" title="Previous document">pyrates.frontend.template.edge package</a>
+        </li>
+        <li>
+          <a href="pyrates.ir.html" title="Next document">pyrates.ir package</a>
+          &rarr;
+        </li>
+    </ul>
+  </nav>
+              </div>
+          
         </div>
       </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
 
-    </section>
 
-  </div>
-  
-</body>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">pyrates.backend package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.computegraph">pyrates.backend.computegraph module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.funcs">pyrates.backend.funcs module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.numpy_backend">pyrates.backend.numpy_backend module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.parser">pyrates.backend.parser module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend.tensorflow_backend">pyrates.backend.tensorflow_backend module</a></li>
+<li><a class="reference internal" href="#module-pyrates.backend">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/pyrates.backend.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/pyrates.backend.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
 </html>

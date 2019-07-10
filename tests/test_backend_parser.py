@@ -7,7 +7,7 @@ import tensorflow as tf
 import pytest
 
 # pyrates internal imports
-from pyrates.backend.parser import parse_equation_list, parse_dict
+from pyrates.backend.parser import parse_equation_system, parse_dict
 from pyrates.backend.parser import ExpressionParser
 from pyrates.backend.numpy_backend import NumpyBackend
 from pyrates.backend.tensorflow_backend import TensorflowBackend
@@ -430,15 +430,15 @@ def test_1_7_equation_parsing():
 
     # define backend
     b = TensorflowBackend()
-    args = {'a': {'vtype': 'state_var', 'value': a, 'shape': a.shape, 'dtype': a.dtype},
-            'dt': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
+    args = {'node/op/a': {'vtype': 'state_var', 'value': a, 'shape': a.shape, 'dtype': a.dtype},
+            'all/all/dt': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
     arguments = [parse_dict(args, backend=b), parse_dict(args, backend=b)]
 
     # test equation parser on different test equations
     for eq, args, target in zip(equations, arguments, results):
 
         # tensorflow-based parsing
-        result_tmp = parse_equation_list(equations=[eq], equation_args=args, backend=b)['a']
+        result_tmp = parse_equation_system(equations=[[(eq, 'node/op')]], equation_args=args, backend=b)['node/op/a']
         result = result_tmp.numpy() if hasattr(result_tmp, 'numpy') else result_tmp.eval().numpy()
         #assert result == pytest.approx(target, rel=1e-6)
 
@@ -447,12 +447,12 @@ def test_1_7_equation_parsing():
 
     # define backend
     b = NumpyBackend()
-    args = {'a': {'vtype': 'state_var', 'value': a, 'shape': a.shape, 'dtype': a.dtype},
-            'dt': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
+    args = {'node/op/a': {'vtype': 'state_var', 'value': a, 'shape': a.shape, 'dtype': a.dtype},
+            'all/all/dt': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
     arguments = [parse_dict(args, backend=b), parse_dict(args, backend=b)]
 
     # test equation parser on different test equations
     for eq, args, target in zip(equations, arguments, results):
         # tensorflow-based parsing
-        result = parse_equation_list(equations=[eq], equation_args=args, backend=b)['a']
+        result = parse_equation_system(equations=[[(eq, 'node/op')]], equation_args=args, backend=b)['node/op/a']
         #assert result == pytest.approx(target, rel=1e-6)

@@ -27,8 +27,8 @@ op1:
 op2:
   base: OperatorTemplate
   equations:
-    - "b = sigmoid(a)"
     - "d/dt * a = b - a"
+    - "b = sigmoid(a)"
   variables:
     a:
       default: output

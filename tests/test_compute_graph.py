@@ -77,8 +77,8 @@ def test_2_1_operator():
 
         # simulate operator behavior
         sim_time = 10.0
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op0.0', 'a')})
-        net.clear()
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op0.0/a'})
+        #net.clear()
 
         # generate target values
         sim_steps = int(sim_time/dt)
@@ -104,7 +104,7 @@ def test_2_1_operator():
         inp = np.zeros((sim_steps, 1)) + 0.5
 
         # simulate operator behavior
-        results = net.run(sim_time, inputs={('pop0.0', 'op1.0', 'u'): inp}, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+        results = net.run(sim_time, inputs={'pop0.0/op1.0/u': inp}, outputs={'a': 'pop0.0/op1.0/a'})
         net.clear()
 
         # calculate operator behavior from hand
@@ -121,15 +121,15 @@ def test_2_1_operator():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net2").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op2.0', 'a')})
-        net.clear()
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op2.0/a'})
+        #net.clear()
 
         # calculate operator behavior from hand
         update2 = lambda x: 1./(1. + np.exp(-x))
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1, 1] = update2(targets[i, 0])
             targets[i+1, 0] = update1(targets[i, 0], targets[i, 1])
+            targets[i+1, 1] = update2(targets[i, 0])
 
         diff = results['a'].values[:, 0] - targets[:-1, 0]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
@@ -140,8 +140,8 @@ def test_2_1_operator():
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net3").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
         results = net.run(sim_time,
-                          outputs={'b': ('pop0.0', 'op3.0', 'b')},
-                          inputs={('pop0.0', 'op3.0', 'u'): inp},
+                          outputs={'b': 'pop0.0/op3.0/b'},
+                          inputs={'pop0.0/op3.0/u': inp},
                           out_dir="/tmp/log")
         net.clear()
 
@@ -180,7 +180,7 @@ def test_2_2_node():
         net = ComputeGraph(net_config=net_config, name='net0', vectorization='none', dt=dt, backend=b)
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -201,7 +201,7 @@ def test_2_2_node():
         net = ComputeGraph(net_config=net_config, name='net1', vectorization='none', dt=dt, backend=b)
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op5.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op5.0/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -218,7 +218,7 @@ def test_2_2_node():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net6").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -237,7 +237,7 @@ def test_2_2_node():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net7").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'), 'b': ('pop0.0', 'op3.0', 'b')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a', 'b': 'pop0.0/op3.0/b'})
         net.clear()
 
         # calculate node behavior from hand
@@ -290,10 +290,10 @@ def test_2_3_edge():
             targets[i + 1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
 
         # simulate edge behavior
-        results = net.run(sim_time, outputs={'a': ('pop1.0', 'op1.0', 'a'), 'b': ('pop2.0', 'op1.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop1.0/op1.0/a', 'b': 'pop2.0/op1.0/a'})
 
-        diff = np.mean(np.abs(results['a']['pop1.0/op1.0'].values - targets[:-1, 2])) + \
-               np.mean(np.abs(results['b']['pop2.0/op1.0'].values - targets[:-1, 3]))
+        diff = np.mean(np.abs(results['a']['pop1.0/op1.0'].values - targets[1:, 2])) + \
+               np.mean(np.abs(results['b']['pop2.0/op1.0'].values - targets[1:, 3]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
@@ -304,9 +304,9 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
         net = ComputeGraph(net_config=net_config, name='net1', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
-                                             'b': ('pop1.0', 'op7.0', 'a')},
-                          inputs={('pop1.0', 'op7.0', 'inp'): inp})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a',
+                                             'b': 'pop1.0/op7.0/a'},
+                          inputs={'pop1.0/op7.0/inp': inp})
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -324,8 +324,8 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net10").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op8.0', 'a'),
-                                             'b': ('pop1.0', 'op8.0', 'a')})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op8.0/a',
+                                             'b': 'pop1.0/op8.0/a'})
 
         # calculate edge behavior from hand
         delay0 = int(0.5/dt)
@@ -350,9 +350,9 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': ('pop0.0', 'op1.0', 'a'),
-                                             'b': ('pop1.0', 'op7.0', 'a')},
-                          inputs={('pop1.0', 'op7.0', 'inp'): inp})
+        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a',
+                                             'b': 'pop1.0/op7.0/a'},
+                          inputs={'pop1.0/op7.0/inp': inp})
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -392,20 +392,14 @@ def test_2_4_vectorization():
                             backend=b)
         net1 = ComputeGraph(net_config=net_config0, name='net1', vectorization='nodes', dt=dt, build_in_place=False,
                             backend=b)
-        #net2 = ComputeGraph(net_config=net_config0, name='net.2', vectorization='full', dt=dt, build_in_place=False,
-        #                    backend='numpy')
 
         # simulate network behaviors
-        results0 = net0.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-                            inputs={('all', 'op7.0', 'inp'): inp})
-        results1 = net1.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-                            inputs={('all', 'op7.0', 'inp'): inp}, out_dir='/tmp/log')
-        #results2 = net2.run(sim_time, outputs={'a': ('pop0.0', 'op7.0', 'a'), 'b': ('pop1.0', 'op7.0', 'a')},
-        #                    inputs={('all', 'op7.0', 'inp'): inp})
+        results0 = net0.run(sim_time, outputs={'a': 'pop0.0/op7.0/a', 'b': 'pop1.0/op7.0/a'},
+                            inputs={'all/op7.0/inp': inp})
+        results1 = net1.run(sim_time, outputs={'a': 'pop0.0/op7.0/a', 'b': 'pop1.0/op7.0/a'},
+                            inputs={'all/op7.0/inp': inp}, out_dir='/tmp/log')
 
         error1 = nmrse(results0.values, results1.values)
-        #error2 = nmrse(results0.values, results2.values)
 
         assert np.sum(results1.values) > 0.
         assert np.mean(error1) == pytest.approx(0., rel=1e-6, abs=1e-6)
-        #assert np.mean(error2) == pytest.approx(0., rel=1e-6)

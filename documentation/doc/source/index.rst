@@ -16,12 +16,8 @@ Among its core features are:
 * Output are easily visualized via _seaborn and _mnepython
 * Functionalities for multi-dimensional parameter sweeps on single machines and clusters are provided
 
-Examples
-========
-
-Minimal example
----------------
-
+Example
+-------
 Building a model and simulating its behavior via PyRates can look as simple as in the cell below::
 
 	from pyrates.backend import ComputeGraph
@@ -31,8 +27,6 @@ Building a model and simulating its behavior via PyRates can look as simple as i
 			   dt=dt) 
 	results = net.run(simulation_time=10.0, outputs={'r': 'Pop1.0/Op_e.0/r'})
 	results.plot()
-
-In the cell above, we simply provided the path to the YAML-based model configuration to the `ComputeGraph` along with the simulation step size `dt` and the choice of the backend. Then, we called the `run` method to perform a numerical simulation over 10 s while recording the average firing rate `r`.
 
 Installation
 ------------
@@ -51,8 +45,8 @@ Contents
    :maxdepth: 4
    
    pyrates.frontend
-   pyrates.ir
    pyrates.backend
+   pyrates.ir
    pyrates.utility
 
 Indices and tables

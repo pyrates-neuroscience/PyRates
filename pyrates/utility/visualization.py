@@ -179,6 +179,7 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
             data.iloc[:, i] -= np.mean(data.iloc[:, i])
             data.iloc[:, i] /= np.std(data.iloc[:, i])
     title = kwargs.pop('title', '')
+    xlim, ylim = kwargs.pop('xlim', None), kwargs.pop('ylim', None)
 
     # Convert the dataframe to long-form or "tidy" format if necessary
     if type(data) is pd.Series:
@@ -198,12 +199,10 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
         cmap = kwargs.pop('cmap')
     else:
         col_pal_args = ['start', 'rot', 'gamma', 'hue', 'light', 'dark', 'reverse', 'n_colors']
+        col_pal_defs = [0., 0.4, 1.0, 0.8, 0.85, 0.15, True, data_tmp.shape[1] - 1]
         kwargs_tmp = {}
-        for key in kwargs.copy().keys():
-            if key in col_pal_args:
-                kwargs_tmp[key] = kwargs.pop(key)
-        if 'n_colors' not in kwargs_tmp:
-            kwargs_tmp['n_colors'] = data_tmp.shape[1] - 1
+        for arg, default in zip(col_pal_args, col_pal_defs):
+            kwargs_tmp[arg] = kwargs.pop(arg, default)
         cmap = sb.cubehelix_palette(**kwargs_tmp)
 
     if 'ax' not in kwargs.keys():
@@ -221,6 +220,10 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
         ax.set_title(title)
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
+        if xlim:
+            ax.set_xlim(xlim)
+        if ylim:
+            ax.set_ylim(ylim)
 
     elif plot_style == 'ridge_plot':
 
@@ -365,6 +368,7 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
             ax = sb.clustermap(data=fc, row_colors=node_colors, col_colors=node_colors, **kwargs)
         else:
             ax = sb.heatmap(fc, **kwargs)
+        ax.invert_yaxis()
 
     elif plot_style == 'circular_graph':
 
@@ -787,30 +791,35 @@ class Interactive2DParamPlot(object):
         -------
 
         """
-        self.data = data_series.loc[tmin:, :]
+        dt = kwargs.pop('dt', data_series.index[1] - data_series.index[0])
+        tmin = int(tmin/dt)
+        self.data = data_series.iloc[tmin:, :]
         self.x_values = x_values
         self.y_values = y_values
         self.kwargs = kwargs
 
         # Create canvas
-        self.fig, self.ax = plt.subplots(ncols=2, nrows=1, figsize=(12, 6), gridspec_kw={})
+        if 'subplots' in kwargs:
+            self.fig, self.ax = kwargs.pop('subplots')
+        else:
+            self.fig, self.ax = plt.subplots(ncols=2, nrows=1, figsize=(12, 6), gridspec_kw={})
 
         # Initiate marker
         self.marker = self.ax[0].plot(0, 0, 'x', color='white', markersize='10')
 
         # Plot 2D data in left subplot
         plot_connectivity(data_map, ax=self.ax[0], yticklabels=list(np.round(y_values, decimals=2)),
-                          xticklabels=list(np.round(x_values, decimals=2)), cmap='magma')
+                          xticklabels=list(np.round(x_values, decimals=2)), **kwargs)
         set_num_axis_ticks(ax=self.ax[0], num_x_ticks_old=data_map.shape[1], num_y_ticks_old=data_map.shape[0])
-        self.ax[0].invert_yaxis()
-
-        # self.ax[0].grid(visible=True, color="white")
 
         # set up grid in right subplot
         self.ax[1].grid(visible=True, color="silver")
         x, y = self.x_values[0], self.y_values[0]
         time_series = self.get_data(x, y)
-        plot_timeseries(time_series, ax=self.ax[1])
+        data_min, data_max = np.min(self.data.values), np.max(self.data.values)
+        data_margin = (data_max - data_min) * 0.1
+        cmap = create_cmap('pyrates_purple', as_cmap=False, n_colors=1, reverse=True)
+        plot_timeseries(time_series, ax=self.ax[1], ylim=[data_min-data_margin, data_max+data_margin], cmap=cmap)
         self.ax[1].set_title(f'x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}')
 
         # Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot
@@ -835,10 +844,10 @@ class Interactive2DParamPlot(object):
         self.marker[0].remove()
 
         # Transform cursor coordinates in x and y values
-        x_sample = int(event.xdata)
-        y_sample = int(event.ydata)
-        x_value = self.x_values[x_sample]
-        y_value = self.y_values[y_sample]
+        x_sample = event.xdata
+        y_sample = event.ydata
+        x_value = self.x_values[int(x_sample)]
+        y_value = self.y_values[int(y_sample)]
 
         # Add marker at event coordinates
         self.marker = self.ax[0].plot(x_sample, y_sample, 'x', color='white', markersize='10')
@@ -854,7 +863,6 @@ class Interactive2DParamPlot(object):
         data = self.get_data(x, y)
         line.set_data(data.index, data.values)
         self.ax[1].set_title(f'x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}')
-        self.ax[1].relim()
         self.ax[1].autoscale_view()
 
     def set_map_xlabel(self, label):
