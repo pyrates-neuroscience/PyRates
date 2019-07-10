@@ -25,6 +25,26 @@ PRO:
     V_thr:
       default: 6e-3
 
+RPO:
+  base: OperatorTemplate
+  equations:
+    - 'd/dt * PSP = PSP_t'
+    - 'd/dt * PSP_t =  h/tau * (sigmoid(V_in, m_max, r, V_thr) + u) - (1./tau)^2. * PSP - 2. * 1./tau * PSP_t'
+  variables:
+    h:
+      default: 3.25e-3
+    tau:
+      default: 10e-3
+    u:
+      default: placeholder
+    V_in:
+      default: input
+      in_var: PSP
+    PSP:
+      default: output
+    PSP_t:
+      default: variable
+
 RPO_e_pc:
   base: OperatorTemplate
   equations:

@@ -41,8 +41,8 @@ __status__ = "development"
 # function definitions
 ######################
 
-def pr_sigmoid(x):
-    return 1./(1. + np.exp(-x))
+def pr_sigmoid(x, scaling=1., steepness=1.0, offset=0.):
+    return scaling/(1. + np.exp(steepness*(offset-x)))
 
 
 def pr_softmax(x, axis=0):

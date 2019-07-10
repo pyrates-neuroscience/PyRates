@@ -187,7 +187,7 @@ class ComputeGraph(object):
             args[tvar] = tval
 
             # add edge operator to target node
-            op_name = f'{source_node}_{edge_idx}'
+            op_name = f'edge_from_{source_node}_{edge_idx}'
             target_graph.add_node(op_name,
                                   operator={'inputs': {svar: {'sources': [sop],
                                                               'reduce_dim': True,
@@ -207,17 +207,23 @@ class ComputeGraph(object):
                 inputs[tvar] = {'sources': [op_name],
                                 'reduce_dim': True}
 
-        # parse node operations
-        #######################
+        # collect node and edge operators
+        #################################
 
         variables = {'all/all/dt': self._dt}
-        edge_equations, variables_tmp = self._extract_op_layers(layers=[0])
+
+        # edge operators
+        equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
         variables.update(variables_tmp)
-        node_equations, variables_tmp = self._extract_op_layers(layers=[0], exclude=True)
+
+        # node operators
+        equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
         variables.update(variables_tmp)
-        if not node_equations:
-            node_equations = edge_equations
-            edge_equations = []
+        if equations_tmp:
+            equations = equations_tmp + equations
+        for i, layer in enumerate(equations.copy()):
+            if not layer:
+                equations.pop(i)
 
         # parse all equations and variables into the backend
         ####################################################
@@ -225,8 +231,8 @@ class ComputeGraph(object):
         self.backend.bottom_layer()
 
         # parse mapping
-        variables = parse_equation_system(edge_equations=edge_equations, node_equations=node_equations,
-                                          equation_args=variables, backend=self.backend, solver=self.solver)
+        variables = parse_equation_system(equations=equations, equation_args=variables, backend=self.backend,
+                                          solver=self.solver)
 
         # save parsed variables in net config
         for key, val in variables.items():
@@ -557,7 +563,7 @@ class ComputeGraph(object):
         """
         self.backend.clear()
 
-    def _add_ops(self, ops: List[str], node_name: str) -> tuple:
+    def _collect_ops(self, ops: List[str], node_name: str) -> tuple:
         """Adds a number of operations to the backend graph.
 
         Parameters
@@ -588,6 +594,9 @@ class ComputeGraph(object):
             op_args['inputs'] = {}
             op_info = self._get_op_attr(node_name, op_name, 'operator')
 
+            if getattr(op_info, 'collected', False):
+                break
+
             # handle operator inputs
             in_ops = {}
             for var_name, inp in op_info['inputs'].items():
@@ -600,26 +609,6 @@ class ComputeGraph(object):
                     in_node = inp['node'] if 'node' in inp else node_name
 
                     for i, in_op in enumerate(inp['sources']):
-
-                        # if type(in_op) is list and len(in_op) > 1:
-                        #
-                        #     reduce_dim = inp['reduce_dim'][i]
-                        #
-                        #     # collect multiple inputs to op
-                        #     in_ops_tmp = {}
-                        #     for op in in_op:
-                        #         in_var = self._get_op_attr(in_node, op, 'output', retrieve=False)
-                        #         val = self._get_op_attr(in_node, op, 'output', retrieve=True)
-                        #         in_ops_tmp[f"{in_node}/{op}/{in_var}"] = val
-                        #
-                        #     # map those inputs correctly
-                        #     inp, inp_map = self._map_multiple_inputs(in_ops_tmp, reduce_dim)
-                        #     in_ops_col[var_name] = (inp, inp_map)
-                        #
-                        # else:
-                        #
-                        #if type(in_op) is list and len(in_op) == 1:
-                        #    in_op = in_op[0]
 
                         # collect single input to op
                         in_var = self._get_op_attr(in_node, in_op, 'output', retrieve=False)
@@ -652,6 +641,10 @@ class ComputeGraph(object):
                     variables[f"{scope}/inputs"].update(var)
                 elif full_key not in variables:
                     variables[full_key] = var
+            try:
+                setattr(op_info, 'collected', True)
+            except AttributeError:
+                op_info['collected'] = True
 
         return equations, variables
 
@@ -869,8 +862,15 @@ class ComputeGraph(object):
             except KeyError:
                 return None
 
-    def _extract_op_layers(self, layers, exclude=False):
-        """Extracts
+    def _collect_op_layers(self, layers: list, exclude: Optional[bool] = False, op_identifier: Optional[str] = None
+                           ) -> tuple:
+        """
+
+        Parameters
+        ----------
+        layers
+        exclude
+        op_identifier
 
         Returns
         -------
@@ -895,10 +895,18 @@ class ComputeGraph(object):
 
                 if (i in layers and not exclude) or (i not in layers and exclude):
 
-                    op_eqs, op_vars = self._add_ops(ops, node_name=node_name)
+                    if op_identifier:
+                        ops_tmp = [op for op in ops if op_identifier not in op] if exclude else \
+                            [op for op in ops if op_identifier in op]
+                    else:
+                        ops_tmp = ops
+                    op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
                     # collect primary operator equations and variables
-                    equations += op_eqs
+                    if i == len(equations):
+                        equations.append(op_eqs)
+                    else:
+                        equations[i] += op_eqs
                     for key, var in op_vars.items():
                         if key not in variables:
                             variables[key] = var

@@ -181,7 +181,7 @@ def analytic_signal(data: pd.DataFrame, fmin: float, fmax: float, nodes: List[st
     return data
 
 
-def psd(data, tmin=0., tmax=None, **kwargs):
+def welch(data, tmin=0., tmax=None, **kwargs):
 
     # prepare data frame
     dt = data.index[1] - data.index[0]
