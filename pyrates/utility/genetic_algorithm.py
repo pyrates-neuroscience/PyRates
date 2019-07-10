@@ -142,7 +142,12 @@ class GeneticAlgorithmTemplate:
             # undefined value (e.g. np.NaN)
             print(f'Currently fittest genes:')
             self.plot_genes(new_candidate)
-            target_tmp = [np.round(tar[0], decimals=2) for tar in target]
+            target_tmp = []
+            for tar in target:
+                if isinstance(tar, list):
+                    target_tmp.append(np.round(tar[0], decimals=2))
+                else:
+                    target_tmp.append(np.round(tar, decimals=2))
             print(f'Target: {target_tmp}')
 
             # Check for fitness stagnation
@@ -352,18 +357,24 @@ class GeneticAlgorithmTemplate:
         """Create n_parent_pairs parent combinations. The occurrence probability for each parent is based on that
         parent's fitness"""
         parents = []
-        parent_repro = self.pop['fitness'].to_numpy()
-        parent_repro = np.nan_to_num(parent_repro, copy=True)
+        # Reproduction probability for each parent is based on its relative fitness
+        parent_repro = self.pop['fitness'].copy()
+
+        # Set -inf to 0 since it would be replaced by very small numbers during nan_to_num
+        parent_repro[parent_repro == -np.inf] = 0.
+        parent_repro = parent_repro.to_numpy()
+        # parent_repro = np.nan_to_num(parent_repro, copy=True)
         parent_repro /= parent_repro.sum()
 
+        # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values
         for n in range(n_parent_pairs):
-            p_idx = list(np.random.choice(parent_indices, size=(2,), replace=False, p=parent_repro))
+            p_idx = np.random.choice(parent_indices, size=(2,), replace=False, p=parent_repro)
             parents.append((self.pop.iloc[p_idx[0], :], self.pop.iloc[p_idx[1], :]))
         return parents
 
     def __crossover(self, parent_pairs, n_tries=5):
-        """Create a child from each parent pair. Each child gene is uniformly chosen from its parents
+        """Create a child from each parent pair. Each child gene is uniformly chosen from one of its parents
 
         If the child already exists in the current population, new genes are chosen, but maximal n_tries times before a
         ValueError is raised.
