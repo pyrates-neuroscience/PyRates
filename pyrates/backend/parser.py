@@ -878,7 +878,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             #######################
 
             for key, var in parser.vars.items():
-                if key != "inputs" and key != "rhs" and key != "dt" and key not in inputs:
+                if key != "inputs" and key != "rhs" and key != "dt":
                     equation_args[f"{scope}/{key}"] = var
 
             for key, inp in inputs.items():
