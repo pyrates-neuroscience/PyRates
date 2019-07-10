@@ -142,7 +142,12 @@ class GeneticAlgorithmTemplate:
             # undefined value (e.g. np.NaN)
             print(f'Currently fittest genes:')
             self.plot_genes(new_candidate)
-            target_tmp = [np.round(tar[0], decimals=2) for tar in target]
+            target_tmp = []
+            for tar in target:
+                if isinstance(tar, list):
+                    target_tmp.append(np.round(tar[0], decimals=2))
+                else:
+                    target_tmp.append(np.round(tar, decimals=2))
             print(f'Target: {target_tmp}')
 
             # Check for fitness stagnation
@@ -353,8 +358,12 @@ class GeneticAlgorithmTemplate:
         parent's fitness"""
         parents = []
         # Reproduction probability for each parent is based on its relative fitness
-        parent_repro = self.pop['fitness'].to_numpy()
-        parent_repro = np.nan_to_num(parent_repro, copy=True)
+        parent_repro = self.pop['fitness'].copy()
+
+        # Set -inf to 0 since it would be replaced by very small numbers during nan_to_num
+        parent_repro[parent_repro == -np.inf] = 0.
+        parent_repro = parent_repro.to_numpy()
+        # parent_repro = np.nan_to_num(parent_repro, copy=True)
         parent_repro /= parent_repro.sum()
 
         # Get a list containing the indices of all population members
