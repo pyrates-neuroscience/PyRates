@@ -1086,7 +1086,10 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
                         circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var_name]['value'] = float(val)
                 else:
                     for op in circuit.nodes[node]['node'].op_graph.nodes:
-                        op['variables'][var]['value'] = float(val)
+                        try:
+                            circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var]['value'] = float(val)
+                        except KeyError:
+                            pass
 
             # change variable values on edges
             edges = param_map[key]['edges'] if 'edges' in param_map[key] else []
