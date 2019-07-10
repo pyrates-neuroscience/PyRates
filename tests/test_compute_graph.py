@@ -292,8 +292,8 @@ def test_2_3_edge():
         # simulate edge behavior
         results = net.run(sim_time, outputs={'a': 'pop1.0/op1.0/a', 'b': 'pop2.0/op1.0/a'})
 
-        diff = np.mean(np.abs(results['a']['pop1.0/op1.0'].values - targets[:-1, 2])) + \
-               np.mean(np.abs(results['b']['pop2.0/op1.0'].values - targets[:-1, 3]))
+        diff = np.mean(np.abs(results['a']['pop1.0/op1.0'].values - targets[1:, 2])) + \
+               np.mean(np.abs(results['b']['pop2.0/op1.0'].values - targets[1:, 3]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
