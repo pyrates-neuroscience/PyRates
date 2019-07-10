@@ -90,3 +90,6 @@ class EdgeIR(NodeIR):
     def output_var(self):
         return self.output
 
+    def __hash__(self):
+        raise NotImplementedError
+

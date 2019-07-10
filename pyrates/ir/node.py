@@ -39,21 +39,17 @@ __status__ = "Development"
 
 class NodeIR(AbstractBaseIR):
 
-    __slots__ = ["_op_graph", "_values"]
+    __slots__ = ["_op_graph", "values"]
 
     def __init__(self, operators: list = None, values: dict = None, template: str=None):
 
         super().__init__(template)
         self._op_graph = OperatorGraph(operators)
-        self._values = values
+        self.values = values
 
     @property
     def op_graph(self):
         return self._op_graph
-
-    @property
-    def values(self):
-        return self._values
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """Alias for self.op_graph.getitem_from_iterator"""
@@ -75,11 +71,37 @@ class NodeIR(AbstractBaseIR):
 class VectorizedNodeIR(AbstractBaseIR):
     """Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it."""
 
-    __slots__ = ["_op_graph", "_values"]
+    __slots__ = ["_op_graph", "values"]
 
     def __init__(self, node_ir: NodeIR):
 
         super().__init__(node_ir.template)
         self._op_graph = node_ir.op_graph
+        values = {}
+        # reformat all values to be lists of themselves (adding an outer vector dimension)
+        for op_key, value_dict in node_ir.values.items():
+            op_values = {}
+            for var_key, value in value_dict.items():
+                op_values[var_key] = [value]
+            values[op_key] = op_values
+        self.values = values
 
+    @property
+    def op_graph(self):
+        return self._op_graph
 
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
+        """Alias for self.op_graph.getitem_from_iterator"""
+
+        return self.op_graph.getitem_from_iterator(key, key_iter)
+
+    def __iter__(self):
+        """Return an iterator containing all operator labels in the operator graph."""
+        return iter(self.op_graph)
+
+    @property
+    def operators(self):
+        return self.op_graph.operators
+
+    def __hash__(self):
+        raise NotImplementedError

@@ -27,12 +27,10 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-import re
-from copy import deepcopy
-from typing import List, Iterator, Tuple, Dict, Union
 
-from pyrates import PyRatesException
-# from pyrates.frontend.utility import deep_freeze
+from typing import List, Iterator
+
+
 from pyrates.ir.abc import AbstractBaseIR
 
 __author__ = "Daniel Rose"

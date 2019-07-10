@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -36,7 +35,7 @@ from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGrap
 from pandas import DataFrame
 
 from pyrates import PyRatesException
-from pyrates.ir.node import NodeIR
+from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
 
@@ -437,172 +436,196 @@ class CircuitIR(AbstractBaseIR):
             # target_var = data.pop("target_var")
             self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
 
-    def optimize_graph_in_place(self):
+    def optimize_graph_in_place(self, max_node_idx: int = 100000):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
+
+        old_nodes = self._vectorize_nodes_in_place(max_node_idx)
+
+        self._vectorize_edges_in_place(max_node_idx)
+
+        nodes = (node for node, data in old_nodes)
+        self.graph.remove_nodes_from(nodes)
+
+        return self
+
+    def _vectorize_nodes_in_place(self, max_node_idx):
 
         # 1: collapse all nodes that use the same operator graph into one node
         ######################################################################
 
-        # a: create new node with generic name that contains common operator graph
-
         node_op_graph_map = {}  # maps each unique op_graph to a collapsed node
-        node_counter = 1  # counts different unique types of nodes
+        # node_counter = 1  # counts different unique types of nodes
+        node_size = {}  # counts current size of vectorized nodes
+        name_idx = 0  # this is a safeguard to prevent overlap of newly created node names with previous nodes
 
-        # need to copy info because networkx changes node views whenever the graph changes
-        old_nodes = [(key, data["node"]) for key, data in self.nodes(data=True)]
+        # collect all node data, because networkx' node views update when the graph is changed.
 
-        for key, node in old_nodes:
+        old_nodes = [(node_key, data["node"]) for node_key, data in self.nodes(data=True)]
+
+        for node_key, node in old_nodes:
             op_graph = node.op_graph
             try:
-                collapsed_node = node_op_graph_map[node.op_graph]
-            except KeyError:
-                collapsed_node = NodeIR()
-        # b: initialize all variables as empty lists
-        # node by node:
-        #   c: append all variable values to respective lists
-        #   d: note reference to collapsed node in `self.label_map` as f'{generic_name}[{index}]'
-        #   e: delete reference for node in operator graph reference collection
-        #
-        # d: re-reference all edges accordingly (add new ones and remove old ones)
-        # - rename source/target nodes in edges
-        # - add index to source_var/target_var
+                # get reference to a previously created node
+                new_name, collapsed_node = node_op_graph_map[op_graph]
+                # add values to respective lists in collapsed node
+                for op_key, value_dict in node.values.items():
+                    for var_key, value in value_dict.items():
+                        collapsed_node.values[op_key][var_key].append(value)
 
+                # refer node key to new node and respective list index of its values
+                # format: "nodeX[Z]" with X = node index and Z = list index for values
+                self.label_map[node_key] = f"{new_name}[{node_size[op_graph]}]"
+                # increment op_graph size counter
+                node_size[op_graph] += 1
+
+            except KeyError:
+                # if it does not exist, create a new one and save its reference in the map
+                collapsed_node = VectorizedNodeIR(node)
+
+                # create unique name and add node to local graph
+                while name_idx <= max_node_idx:
+                    new_name = f"vector_node{name_idx}"
+                    if new_name in self.nodes:
+                        name_idx += 1
+                        continue
+                    else:
+                        break
+                else:
+                    raise PyRatesException(
+                        "Too many nodes with generic name 'node{counter}' exist. Aborting vectorization."
+                        "Consider not using this naming scheme for your own nodes as it is used for "
+                        "vectorization. This problem will also occur, when more unique operator graphs "
+                        "exist than the maximum number of iterations allows (default: 100k). You can "
+                        "increase this number by setting `max_node_idx` to a larger number.")
+
+                # add new node directly to node graph, bypassing external interface
+                # this is the "in_place" way to do this. Otherwise we would create an entirely new CircuitIR instance
+                self.graph.add_node(new_name, node=collapsed_node)
+                node_op_graph_map[op_graph] = (new_name, collapsed_node)
+
+                # now save the reference to the new node name with index number to label_map
+                self.label_map[node_key] = f"{new_name}[0]"
+                # and set size of this node to 1
+                node_size[op_graph] = 1
+
+            # TODO: decide, whether reference collecting for operator_graphs in `_reference_map` is actually necessary
+            #   and if why thus need to remove these reference again after vectorization.
+
+        return old_nodes
+
+    def _vectorize_edges_in_place(self, max_node_idx):
+        """
+
+        Parameters
+        ----------
+        max_node_idx
+        """
         # 2: move all operators from edges to respective coupling nodes and reference labels accordingly
         ################################################################################################
 
-        # a: create coupling nodes: graph by graph
-        # - find all operator graphs referenced by edges (all that still have references?)
-        # - create corresponding coupling node
-        # - add some counter for coupling nodes, e.g. coupling1, coupling2
-        # - initialize all variables as empty lists
-        # edge by edge
-        #   b: get new reference for source/target nodes
-        #   c: get respective index for source/target variables
-        #   d: append all variable values to respective lists
-        #   e: add two new edges
-        #   - nodeN->couplingM: weight=1, delay=0
-        #   - couplingN->nodeN: weight=weight, delay=delay, additional data
-        #   f: delete old edge and op_graph reference
-        # g: delete all old nodes
-        # - verify that nodes do not have incoming or outgoing edges (are isolated)
+        # we shall assume that there is no overlap between operator_graphs in edges and nodes that is supposed to be
+        # accounted for in vectorization.
 
-        pass
+        node_op_graph_map = {}  # maps each unique op_graph to a collapsed node
+        # node_counter = 1  # counts different unique types of nodes
+        node_sizes = {}  # counts current size of vectorized nodes
+        name_idx = 0  # this is a safeguard to prevent overlap of newly created node names with previous nodes
 
-    def move_edge_operators_to_nodes(self, copy_data=True, in_place=True):
-        """Returns a new CircuitIR instance, where all operators that were previously in edges are moved to their
-        respective target nodes."""
-        # if copy_data:
-        #    nodes = {key: deepcopy(data) for key, data in self.nodes(data=True)}
-        # else:
-        #    nodes = {key: data for key, data in self.nodes(data=True)}
+        # collect all node data, because networkx' node views update when the graph is changed.
 
-        # this does not preserve additional node attributes
-        # node_attrs = {}
-        # for key, data in nodes.items():
-        #    nodes[key] = data["node"]
-        # node_attrs.update(**data)
+        old_edges = [(source, target, key, data) for source, target, key, data in self.edges(data=True, keys=True)]
 
-        # node_attrs.pop("node")
-
-        op_label_counter = {}
-
-        # edges = []
-        for source, target, data in self.edges(data=True):
-
-            if "edge_ir" in data and data["edge_ir"] and data["edge_ir"].op_graph:
-                source_var = data["source_var"]
-                target_var = data["target_var"]
-                weight = data["weight"]
-                delay = data["delay"]
-
-                edge_ir = data["edge_ir"]  # type: EdgeIR
-                op_graph = edge_ir.op_graph
-                if copy_data:
-                    op_graph = deepcopy(op_graph)
-                input_var = edge_ir.input
-                output_var = edge_ir.output
-                if len(op_graph) > 0:
-                    target_var = self._move_ops_to_target(target, input_var, output_var, target_var, op_graph,
-                                                          op_label_counter, self.nodes)
-                    # side effect: changes op_label_counter and nodes dictionary
-
-                data.update({'source_var': source_var, 'target_var': target_var, 'edge_ir': EdgeIR(), 'weight': weight,
-                             'delay': delay})
-            # edges.append((source, target, data))
-
-        # circuit = CircuitIR()
-        # circuit.sub_circuits = self.sub_circuits
-        # circuit.add_nodes_from(nodes)
-        # circuit.add_edges_from(edges)
-        # return circuit
-
-        return self
-
-    @staticmethod
-    def _move_ops_to_target(target, input_var, output_var, target_var, op_graph: DiGraph, op_label_counter, nodes):
-        # check, if cycles are present in operator graph (which would be problematic)
-        try:
-            find_cycle(op_graph)
-        except NetworkXNoCycle:
-            pass
-        else:
-            raise PyRatesException("Found cyclic operator graph. Cycles are not allowed for operators within one node.")
-
-        target_node = nodes[target]["node"]
-        if target not in op_label_counter:
-            op_label_counter[target] = {}
-
-        key_map = {}
-        # first pass: get all labels right
-        for key in op_graph.nodes:
-            # rename operator key by appending another counter
-            if key in op_label_counter[target]:
-                # already renamed it previously --> increase counter
-                op_label_counter[target][key] += 1
-                key_map[key] = f"{key}.{op_label_counter[target][key]}"
-
+        for source, target, edge_key, data in old_edges:
+            specifier = (source, target, edge_key)
+            weight = data["weight"]
+            delay = data["delay"]
+            edge_ir = data["edge_ir"]
+            source_var = data["source_var"]
+            target_var = data["target_var"]
+            if edge_ir is None:
+                op_graph = None
             else:
-                # not renamed previously --> initialize counter to 0
-                op_label_counter[target][key] = 0
-                key_map[key] = f"{key}.0"
+                op_graph = edge_ir.op_graph
 
-        # second pass: add operators to target op graph and rename sources according to key_map
-        for key, data in op_graph.nodes(data=True):
-            op = data["operator"]
-            inputs = deepcopy(data["inputs"])
-            # go through all input variables and rename source operators
-            for var, var_data in inputs.items():
-                sources = set()
-                for source_op in var_data["sources"]:
-                    sources.add(key_map[source_op])
-                inputs[var]["sources"] = sources
+            try:
+                # get reference to a previously created node
+                new_name, collapsed_node = node_op_graph_map[op_graph]
+                # add values to respective lists in collapsed node
+                for op_key, value_dict in edge_ir.values.items():
+                    for var_key, value in value_dict.items():
+                        collapsed_node.values[op_key][var_key].append(value)
 
-            # add operator to target_node's operator graph
-            # TODO: implement add_node method on OperatorGraph class
-            target_node.op_graph.add_node(key_map[key], operator=op, inputs=inputs, label=key_map[key])
+                # note current index of node
+                coupling_vec_idx = node_sizes[op_graph]
+                # increment op_graph size counter
+                node_sizes[op_graph] += 1
 
-        # add edges that previously existed
-        for source_op, target_op in op_graph.edges:
-            # rename edge keys accordingly
-            source_op = key_map[source_op]
-            target_op = key_map[target_op]
+            except KeyError:
+                # if it does not exist, create a new one and save its reference in the map
+                collapsed_node = VectorizedNodeIR(edge_ir)
 
-            target.op_graph.add_edge(source_op, target_op)
+                # create unique name and add node to local graph
+                while name_idx <= max_node_idx:
+                    new_name = f"vector_coupling{name_idx}"
+                    if new_name in self.nodes:
+                        name_idx += 1
+                        continue
+                    else:
+                        break
+                else:
+                    raise PyRatesException(
+                        "Too many nodes with generic name 'node{counter}' exist. Aborting vectorization."
+                        "Consider not using this naming scheme for your own nodes as it is used for "
+                        "vectorization. This problem will also occur, when more unique operator graphs "
+                        "exist than the maximum number of iterations allows (default: 100k). You can "
+                        "increase this number by setting `max_node_idx` to a larger number.")
 
-        # add new edges based on output and target of edge
-        target_op, target_var = target_var.split("/")
-        output_op, output_var = output_var.split("/")
-        output_op = key_map[output_op]
+                # add new node directly to node graph, bypassing external interface
+                # this is the "in_place" way to do this. Otherwise we would create an entirely new CircuitIR instance
+                self.graph.add_node(new_name, node=collapsed_node)
+                node_op_graph_map[op_graph] = (new_name, collapsed_node)
 
-        target_node.op_graph.node[target_op]["inputs"][target_var]["sources"].add(output_op)
+                # set current index to 0
+                coupling_vec_idx = 0
+                # and set size of this node to 1
+                node_sizes[op_graph] = 1
 
-        # make sure the changes are saved (might not be necessary)
-        # nodes[target] = target_node
+            # TODO: decide, whether reference collecting for operator_graphs in `_reference_map` is actually necessary
+            #   and if we thus need to remove these reference again after vectorization.
 
-        # reassign target variable of edge
-        target_op, target_var = input_var.split("/")
-        return f"{key_map[target_op]}/{target_var}"
+            # refer node key to new node and respective list index of its values
+            # format: "nodeX[Z]" with X = node index and Z = list index for values
+            self.label_map[specifier] = f"{new_name}[{coupling_vec_idx}]"
+
+            # get new reference for source/target nodes
+            # new references should have format "vector_node{node_idx}[{vector_idx}]"
+            # the follow raises an error, if the format is wrong for some reason
+            source = self.label_map[source]
+            source, source_idx = source.split("[")
+            source_idx = int(source_idx[:-1])
+            target = self.label_map[target]
+            target, target_idx = target.split("[")
+            target_idx = int(target_idx[:-1])
+
+            # add edge from source to the new node
+            self.graph.add_edge(source, new_name,
+                                source_var=source_var, source_idx=source_idx,
+                                target_var=edge_ir.input_var, target_idx=coupling_vec_idx,
+                                weight=1, delay=0
+                                )
+
+            # add edge from new node to target
+            self.graph.add_edge(new_name, target,
+                                source_var=edge_ir.output_var, source_idx=coupling_vec_idx,
+                                target_var=target_var, target_idx=target_idx,
+                                weight=weight, delay=delay
+                                )
+
+            # remove old edge
+            self.graph.remove_edge(*specifier)
+
+    # def _vectorize_common_in_place(self, max_node_idx, old_name, node_op_graph_map, node_sizes, name_idx):
 
 
 class SubCircuitView(AbstractBaseIR):
