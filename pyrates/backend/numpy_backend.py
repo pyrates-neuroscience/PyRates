@@ -101,7 +101,7 @@ class NumpyVar(np.ndarray):
 
         # get shape
         if not shape:
-            shape = value.shape if hasattr(value, 'shape') else ()
+            shape = value.shape if hasattr(value, 'shape') else (1,)
 
         # get data type
         if not dtype:
@@ -217,7 +217,7 @@ class PyRatesOp:
         self._callable = func_dict.pop(self.short_name)
 
         # test function
-        self.args = deepcopy(op_dict['args'])
+        self.args = self._deepcopy(op_dict['args'])
         result = self.eval()
         self.args = op_dict['args'].copy()
 
@@ -415,6 +415,10 @@ class PyRatesOp:
         func_dict = {}
         exec(func_str, globals(), func_dict)
         return func_dict
+
+    @staticmethod
+    def _deepcopy(x):
+        return deepcopy(x)
 
 
 class PyRatesAssignOp(PyRatesOp):
@@ -853,6 +857,7 @@ class NumpyBackend(object):
         self.name = name
         self._rt_optimization = jit_compile
         self._base_layer = 0
+        self._output_layer_added = False
         self._imports = ["import numpy as np", "from pyrates.backend.funcs import *"]
         if imports:
             for imp in imports:
@@ -1147,7 +1152,11 @@ class NumpyBackend(object):
                                scope="output_collection")
 
         # add output storage layer to the graph
-        self.add_layer()
+        if self._output_layer_added:
+            self.top_layer()
+        else:
+            self.add_layer()
+            self._output_layer_added = True
 
         # add collector variables to the graph
         for i, (var_col) in enumerate(outputs):
@@ -1182,6 +1191,22 @@ class NumpyBackend(object):
             self.add_layer(to_beginning=True)
         else:
             self.layer -= 1
+
+    def goto_layer(self, idx: int) -> None:
+        """Jump to layer indicated by index.
+
+        Parameters
+        ----------
+        idx
+            Position of layer to jump towards.
+
+
+        Returns
+        -------
+        None
+
+        """
+        self.layer = self._base_layer + idx
 
     def remove_layer(self, idx) -> None:
         """Removes layer at index from stack.
@@ -1432,7 +1457,7 @@ class NumpyBackend(object):
 
         return op1, op2
 
-    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, *args) -> Any:
+    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, update_type: str = None, *args) -> Any:
         """Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.
 
         Parameters
@@ -1443,6 +1468,8 @@ class NumpyBackend(object):
             Index to variable
         update
             Update to variable entries
+        update_type
+            Type of lhs update (e.g. `=` or `+=`)
 
         Returns
         -------
@@ -1450,9 +1477,10 @@ class NumpyBackend(object):
             Updated/indexed variable.
 
         """
-
-        if update:
-            return self.add_op('=', var, update, idx, *args)
+        if update is not None:
+            if not update_type:
+                update_type = '='
+            return self.add_op(update_type, var, update, idx, *args)
         else:
             return self.add_op('index', var, idx, *args)
 
@@ -1600,7 +1628,7 @@ class NumpyBackend(object):
             for i, func in enumerate(layer_ops):
                 try:
                     func_decorated = decorator(func, **kwargs)
-                    func_decorated(*deepcopy(op_args[i]))
+                    func_decorated(*self._deepcopy(op_args[i]))
                     layer_ops[i] = func_decorated
                 except Exception:
                     continue
@@ -1613,7 +1641,7 @@ class NumpyBackend(object):
         if decorator:
             try:
                 layer_run_new = decorator(layer_run, **kwargs)
-                layer_run_new(layer_ops, deepcopy(op_args))
+                layer_run_new(layer_ops, self._deepcopy(op_args))
                 layer_run = layer_run_new
             except Exception:
                 pass
@@ -1745,12 +1773,16 @@ class NumpyBackend(object):
                 return True
             elif len(op1.shape) > 1 and len(op2.shape) > 1:
                 return True
-            elif len(op1.shape) == 0 or len(op2.shape) == 0:
+            elif len(op1.shape) == 0 and len(op2.shape) == 0:
                 return True
             else:
                 return False
         else:
             return True
+
+    @staticmethod
+    def _deepcopy(x):
+        return deepcopy(x)
 
 
 class CodeGen:

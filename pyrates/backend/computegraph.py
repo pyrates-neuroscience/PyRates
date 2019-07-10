@@ -35,11 +35,13 @@ from pandas import DataFrame, MultiIndex
 import numpy as np
 from networkx import find_cycle, NetworkXNoCycle, DiGraph
 from copy import deepcopy
+from warnings import filterwarnings
 
 # pyrates imports
 from pyrates.backend.parser import parse_equation_list, parse_dict
 from pyrates import PyRatesException
 from pyrates.ir.circuit import CircuitIR
+from pyrates.frontend import CircuitTemplate
 
 # meta infos
 __author__ = "Richard Gast"
@@ -65,23 +67,28 @@ class ComputeGraph(object):
     build_in_place
         If False, a copy of the `net_config``will be made before compute graph creation. Should be used, if the
         `net_config` will be re-used for multiple compute graphs.
-    use_device
-        Can be either `cpu` or `gpu`. Device placement will be soft.
+    backend
+        Backend in which to build the compute graph.
+    solver
+        Numerical solver to use for differential equations.
 
     """
 
     def __init__(self,
-                 net_config: CircuitIR,
+                 net_config: Union[str, CircuitIR],
                  dt: float = 1e-3,
                  vectorization: str = 'none',
                  name: Optional[str] = 'net0',
                  build_in_place: bool = True,
                  backend: str = 'numpy',
+                 solver: str = 'euler',
                  float_precision: str = 'float32',
                  **kwargs
                  ) -> None:
         """Instantiates operator.
         """
+
+        filterwarnings("ignore", category=FutureWarning)
 
         # set basic attributes
         ######################
@@ -90,6 +97,8 @@ class ComputeGraph(object):
         self.name = name
         self._float_precision = float_precision
         self._first_run = True
+        if type(net_config) is str:
+            net_config = CircuitTemplate.from_yaml(net_config).apply()
         net_config = net_config.move_edge_operators_to_nodes(copy_data=False)
 
         # instantiate the backend and set the backend default_device
@@ -104,6 +113,7 @@ class ComputeGraph(object):
         kwargs['name'] = self.name
         kwargs['float_default_type'] = self._float_precision
         self.backend = backend(**kwargs)
+        self.solver = solver
 
         # pre-process the network configuration
         self.dt = dt
@@ -119,6 +129,8 @@ class ComputeGraph(object):
 
         # parse node operations
         #######################
+
+        print('building the compute graph...')
 
         self.node_updates = []
 
@@ -142,7 +154,7 @@ class ComputeGraph(object):
             # noinspection PyTypeChecker
             primary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
             self.node_updates.append(self.backend.layer)
-            op_updates = self._add_ops(primary_ops, node_name=node_name, primary_ops=True)
+            self._add_ops(primary_ops, node_name=node_name, primary_ops=True)
             self.backend.next_layer()
 
             # remove parsed operators from graph
@@ -155,52 +167,14 @@ class ComputeGraph(object):
                 # noinspection PyTypeChecker
                 secondary_ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
                 self.node_updates.append(self.backend.layer)
-                op_updates = self._add_ops(secondary_ops, node_name=node_name, updates=op_updates, primary_ops=False)
+                self._add_ops(secondary_ops, node_name=node_name, primary_ops=False)
                 self.backend.next_layer()
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(secondary_ops)
 
-        # add layer that contains left-hand side equation updates
-        ########################################################
-
-        self.backend.top_layer()
-        node_names, op_names, var_names, var_updates = [], [], [], []
-
-        for node_name in self.net_config.nodes:
-            op_graph = self._get_node_attr(node_name, 'op_graph')
-            for op_name, op in op_graph.nodes.items():
-                for key_old, var in op['variables'].items():
-
-                    # check if variable is a state variable updated via a differential equation
-                    if '_old' in key_old:
-                        # extract variable name and values
-                        key_new = key_old.replace('_old', '')
-                        var_new = op['variables'][key_new]
-                        var_old = op['variables'][key_old]
-
-                        # define mapping equation and its arguments
-                        eq = f'{key_old} = {key_new}'
-                        args = {'inputs': {key_new: var_new}, 'vars': {key_old: var_old}}
-
-                        # parse mapping
-                        args = parse_equation_list([eq], args, backend=self.backend,
-                                                   scope=f"{self.name}/{node_name}/{op_name}")
-
-                        args.pop('lhs_evals')
-
-                        # add info to lists
-                        node_names.append(node_name)
-                        op_names.append(op_name)
-                        var_names.append(key_old)
-                        var_updates.append(args['vars'][key_old])
-
         # add layer to node updates
         self.node_updates.append(self.backend.layer)
-
-        # save control dependencies to network config
-        for node_name, op_name, var_name, var in zip(node_names, op_names, var_names, var_updates):
-            self._set_op_attr(node_name, op_name, var_name, var)
 
         # parse edges
         #############
@@ -213,7 +187,6 @@ class ComputeGraph(object):
         for source_node, target_node, edge_idx in self.net_config.edges:
             svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
             op, var = svar.split('/')
-            svar = self._get_op_attr(source_node, op, var)
             op_names.append(op)
             var_names.append(var)
             source_nodes.append(source_node)
@@ -255,30 +228,27 @@ class ComputeGraph(object):
             idx = "[source_idx]" if sidx else ""
             assign = '+=' if add_project else '='
             eq = f"target_var{d} {assign} source_var{idx} * weight"
-            args = {'vars': {}, 'inputs': {}}
-            args['vars']['weight'] = {'vtype': 'constant', 'dtype': svar.dtype, 'value': weight}
+            args = {}
+            dtype = svar.dtype if hasattr(svar, 'dtype') else svar['dtype']
+            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
             if tidx:
-                args['vars']['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                               'value': np.array(tidx, dtype=np.int32)}
             if sidx:
-                args['vars']['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                               'value': np.array(sidx, dtype=np.int32)}
-            args['inputs']['target_var'] = tvar
-            args['inputs']['source_var'] = svar
+            args['target_var'] = tvar
+            args['source_var'] = svar
 
             # parse mapping
-            args = parse_equation_list([eq], args, backend=self.backend,
+            args = parse_equation_list([eq], args, backend=self.backend, solver=self.solver,
                                        scope=f"{self.name}/{source_node}/{target_node}/{edge_idx}")
-
-            args.pop('lhs_evals')
 
             # store information in network config
             edge = self.net_config.edges[source_node, target_node, edge_idx]
 
             # update edge attributes
-            edge.update(args['inputs'])
-            edge.update(args['vars'])
-            edge.update(args['updates'])
+            edge.update(args)
 
         self.edge_updates = [self.backend.layer] if self.backend.layers[self.backend.layer] else []
 
@@ -326,11 +296,13 @@ class ComputeGraph(object):
 
         """
 
+        filterwarnings("ignore", category=FutureWarning)
+
         # prepare simulation
         ####################
 
         if verbose:
-            print("Preparing simulation...")
+            print("Preparing the simulation...")
 
         if not self._first_run:
             self.backend.remove_layer(0)
@@ -357,21 +329,23 @@ class ComputeGraph(object):
         output_shapes = []
         if outputs:
             for key, val in outputs.items():
-                var_key, var_val = self.get_var(node=val[0], op=val[1], var=val[2], var_name=f"{key}_col").popitem()
-                var_shape = tuple(var_val.shape)
-                if var_shape in output_shapes:
-                    idx = output_shapes.index(var_shape)
-                    output_cols[idx].append(var_val)
-                    output_keys[idx].append(var_key)
-                else:
-                    output_cols.append([var_val])
-                    output_keys.append([var_key])
-                    output_shapes.append(var_shape)
+                val_split = val.split('/')
+                node, op, var = "/".join(val_split[:-2]), val_split[-2], val_split[-1]
+                for var_key, var_val in self.get_var(node=node, op=op, var=var, var_name=f"{key}_col").items():
+                    var_shape = tuple(var_val.shape)
+                    if var_shape in output_shapes:
+                        idx = output_shapes.index(var_shape)
+                        output_cols[idx].append(var_val)
+                        output_keys[idx].append(var_key)
+                    else:
+                        output_cols.append([var_val])
+                        output_keys.append([var_key])
+                        output_shapes.append(var_shape)
 
-            # create counting index for collector variables
-            output_col.update(self.backend.add_output_layer(outputs=output_cols,
-                                                            sampling_steps=int(sim_steps/sampling_steps),
-                                                            out_shapes=output_shapes))
+                # create counting index for collector variables
+                output_col.update(self.backend.add_output_layer(outputs=output_cols,
+                                                                sampling_steps=int(sim_steps/sampling_steps),
+                                                                out_shapes=output_shapes))
 
         # add input variables to the backend
         ####################################
@@ -383,60 +357,63 @@ class ComputeGraph(object):
             # linearize input dictionary
             for key, val in inputs.items():
 
+                key_split = key.split('/')
+                node, op, attr = "/".join(key_split[:-2]), key_split[-2], key_split[-1]
+
                 if '_combined' in list(self.net_config.nodes.keys())[0]:
 
                     # fully vectorized case: add vectorized placeholder variable to input dictionary
-                    var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=key[1], attr=key[2])
+                    var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=op, attr=attr)
                     inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
                 elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
                     # node-vectorized case
-                    if key[0] == 'all':
+                    if node == 'all':
 
                         # go through all nodes, extract the variable and add it to input dict
                         i = 0
-                        for node in self.net_config.nodes:
-                            var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        for node_tmp in self.net_config.nodes:
+                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
                             i_new = var.shape[0] if len(var.shape) > 0 else 1
                             inp_dict[var.name] = np.reshape(val[:, i:i_new], (sim_steps,) + tuple(var.shape))
                             i += i_new
 
-                    elif key[0] in self.net_config.nodes.keys():
+                    elif node in self.net_config.nodes.keys():
 
                         # add placeholder variable of node(s) to input dictionary
-                        var = self._get_node_attr(node=key[0], op=key[1], attr=key[2])
+                        var = self._get_node_attr(node=node, op=op, attr=attr)
                         inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
-                    elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]) or \
-                            any([key[0].split('.')[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                    elif any([node in key_tmp for key_tmp in self.net_config.nodes.keys()]) or \
+                            any([node.split('.')[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
-                        key_tmp = key[0].split('.')[0] if '.' in key[0] else key[0]
+                        node_tmp = node.split('.')[0] if '.' in node else node
 
                         # add vectorized placeholder variable of specified node type to input dictionary
-                        for node in list(self.net_config.nodes.keys()):
-                            if key_tmp in node:
+                        for node_tmp2 in list(self.net_config.nodes.keys()):
+                            if node_tmp in node_tmp2:
                                 break
-                        var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        var = self._get_node_attr(node=node_tmp2, op=op, attr=attr)
                         inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
                 else:
 
                     # non-vectorized case
-                    if key[0] == 'all':
+                    if node == 'all':
 
                         # go through all nodes, extract the variable and add it to input dict
-                        for i, node in enumerate(self.net_config.nodes.keys()):
-                            var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        for i, node_tmp in enumerate(self.net_config.nodes.keys()):
+                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
                             inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
 
-                    elif any([key[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                    elif any([node in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
                         # extract variables from nodes of specified type
                         i = 0
-                        for node in self.net_config.nodes.keys():
-                            if key[0] in node:
-                                var = self._get_node_attr(node=node, op=key[1], attr=key[2])
+                        for node_tmp in self.net_config.nodes.keys():
+                            if node in node_tmp:
+                                var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
                                 inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
                                 i += 1
 
@@ -460,7 +437,7 @@ class ComputeGraph(object):
         ################
 
         if verbose:
-            print("Running simulation...")
+            print("Running the simulation...")
 
         if profile is None:
             output_col = self.backend.run(steps=sim_steps, outputs=output_col, sampling_steps=sampling_steps,
@@ -475,6 +452,8 @@ class ComputeGraph(object):
                       f"simulation resolution of {self.dt} s.")
             else:
                 print(f"ComputeGraph computations finished after {time} seconds.")
+        elif verbose:
+            print('finished!')
 
         # store output variables in data frame
         ######################################
@@ -500,9 +479,7 @@ class ComputeGraph(object):
                     key_split = key.split('/')
                     var_name = key_split[-1]
                     var_name = var_name[:var_name.find('_col')]
-                    node_name = ""
-                    for key_tmp in key_split[:-1]:
-                        node_name += key_tmp
+                    node_name = "/".join(key_split[:-1])
                     out_var_names.append((var_name, f'{node_name}_{i}'))
             else:
                 if len(var.shape) > 1:
@@ -511,9 +488,7 @@ class ComputeGraph(object):
                 key_split = key.split('/')
                 var_name = key_split[-1]
                 var_name = var_name[:var_name.find('_col')]
-                node_name = ""
-                for key_tmp in key_split[:-1]:
-                    node_name += key_tmp
+                node_name = "/".join(key_split[:-1])
                 out_var_names.append((var_name, node_name))
 
         # create multi-index
@@ -570,25 +545,28 @@ class ComputeGraph(object):
 
             # collect output variable from every node in backend
             for node in self.net_config.nodes.keys():
-                var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
+                var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
 
         elif node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
 
             # get output variable of specific backend node
-            var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
+            var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
 
         elif any([node in key for key in self.net_config.nodes.keys()]):
 
             # get output variable from backend nodes of a certain type
             for node_tmp in self.net_config.nodes.keys():
                 if node in node_tmp:
-                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
+                    var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
         else:
 
             # get output variable of specific, vectorized backend node
+            i = 0
             for node_tmp in self._net_config_map.keys():
-                if node in node_tmp and '_all' in node_tmp:
-                    var_col[f'{node}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
+                if node in node_tmp:
+                    var_col[f'{node}/{op}/{var_name}_{i}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
+                                                                                 **kwargs)
+                    i += 1
 
         return var_col
 
@@ -597,8 +575,7 @@ class ComputeGraph(object):
         """
         self.backend.clear()
 
-    def _add_ops(self, ops: List[str], node_name: str, updates: Optional[dict] = None, primary_ops: bool = False
-                 ) -> dict:
+    def _add_ops(self, ops: List[str], node_name: str, primary_ops: bool = False) -> None:
         """Adds a number of operations to the backend graph.
 
         Parameters
@@ -614,28 +591,23 @@ class ComputeGraph(object):
 
         Returns
         -------
-        dict
-            Key-value pairs of all operations currently parsed into the backend graph.
+        None
 
         """
 
         # set up update operation collector variable
-        if updates is None:
-            updates = {}
-        updates_new = {}
+        updates = {}
 
         # add operations of same hierarchical lvl to compute graph
         ############################################################
 
         for op_name in ops:
 
-            updates_new[op_name] = {}
+            updates[op_name] = {}
 
             # retrieve operator and operator args
-            op_args = dict()
-            op_args['vars'] = self._get_op_attr(node_name, op_name, 'variables')
-            op_args['vars']['dt'] = self._dt
-            op_args['inputs'] = {}
+            op_args = self._get_op_attr(node_name, op_name, 'variables')
+            op_args['dt'] = self._dt
             op_info = self._get_op_attr(node_name, op_name, 'operator')
 
             # handle operator inputs
@@ -700,23 +672,24 @@ class ComputeGraph(object):
                         in_ops = in_ops_col[0]
 
                     # add input variable to dictionary
-                    op_args['inputs'][var_name] = in_ops
+                    op_args[var_name] = in_ops
 
             # parse equations into tensorflow
-            op_args = parse_equation_list(op_info['equations'], op_args, backend=self.backend,
+            op_args = parse_equation_list(op_info['equations'], op_args, backend=self.backend, solver=self.solver,
                                           scope=f"{self.name}/{node_name}/{op_name}")
 
-            # store operator variables in net config
+            # store variables updates
+            for var_key, var_val in op_args.items():
+                updates[op_name][var_key] = var_val
+
+        # store variables updates in net_config
+        for op_name in updates:
             op_vars = self._get_op_attr(node_name, op_name, 'variables')
-            for var_key, var_val in op_args['vars'].items():
-                if var_key not in op_vars:
-                    op_vars[var_key] = var_val
+            for var_key, var_val in updates[op_name].items():
+                op_vars[var_key] = var_val
 
-            # store update ops in node update collector
-            for var in list(set(op_args['lhs_evals'])):
-                updates_new[op_name][var] = op_args['updates'][var]
-
-        return updates
+        # advance in backend layer
+        self.backend.next_layer()
 
     def _get_op_input(self, node: str, op: str, in_op: str, primary_ops: bool = False
                       ) -> Any:
@@ -1578,6 +1551,8 @@ class ComputeGraph(object):
         None
 
         """
+
+        print('vectorizing the graph nodes...')
 
         # First stage: Vectorize over nodes
         ###################################

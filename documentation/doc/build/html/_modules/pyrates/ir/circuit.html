@@ -1,0 +1,781 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyrates.ir.circuit &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for pyrates.ir.circuit</h1><div class="highlight"><pre>
+<span></span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># PyRates software framework for flexible implementation of neural </span>
+<span class="c1"># network model_templates and simulations. See also:</span>
+<span class="c1"># https://github.com/pyrates-neuroscience/PyRates</span>
+<span class="c1"># </span>
+<span class="c1"># Copyright (C) 2017-2018 the original authors (Richard Gast and </span>
+<span class="c1"># Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain </span>
+<span class="c1"># Sciences (&quot;MPI CBS&quot;) and contributors</span>
+<span class="c1"># </span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1"># </span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1"># </span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;</span>
+<span class="c1"># </span>
+<span class="c1"># CITATION:</span>
+<span class="c1"># </span>
+<span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Iterator</span>
+
+<span class="kn">from</span> <span class="nn">pyparsing</span> <span class="k">import</span> <span class="n">Word</span><span class="p">,</span> <span class="n">ParseException</span><span class="p">,</span> <span class="n">nums</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">LineEnd</span><span class="p">,</span> <span class="n">Suppress</span><span class="p">,</span> <span class="n">alphanums</span>
+<span class="kn">from</span> <span class="nn">networkx</span> <span class="k">import</span> <span class="n">MultiDiGraph</span><span class="p">,</span> <span class="n">subgraph</span><span class="p">,</span> <span class="n">find_cycle</span><span class="p">,</span> <span class="n">NetworkXNoCycle</span><span class="p">,</span> <span class="n">DiGraph</span>
+<span class="kn">from</span> <span class="nn">pandas</span> <span class="k">import</span> <span class="n">DataFrame</span>
+
+<span class="kn">from</span> <span class="nn">pyrates</span> <span class="k">import</span> <span class="n">PyRatesException</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.node</span> <span class="k">import</span> <span class="n">NodeIR</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.edge</span> <span class="k">import</span> <span class="n">EdgeIR</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.abc</span> <span class="k">import</span> <span class="n">AbstractBaseIR</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
+
+
+<div class="viewcode-block" id="CircuitIR"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR">[docs]</a><span class="k">class</span> <span class="nc">CircuitIR</span><span class="p">(</span><span class="n">AbstractBaseIR</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Custom graph data structure that represents a backend of nodes and edges with associated equations</span>
+<span class="sd">    and variables.&quot;&quot;&quot;</span>
+
+    <span class="c1"># _node_label_grammar = Word(alphanums+&quot;_&quot;) + Suppress(&quot;.&quot;) + Word(nums)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;circuit&quot;</span><span class="p">,</span> <span class="n">circuits</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">nodes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">NodeIR</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">edges</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
+<span class="sd">        label</span>
+<span class="sd">            String label, could be used as fallback when subcircuiting this circuit. Currently not used, though.</span>
+<span class="sd">        circuits</span>
+<span class="sd">            Dictionary of sub-circuits to be added. Keys are string labels for circuits that serve as namespaces for the</span>
+<span class="sd">            subcircuits. Items must be `CircuitIR` instances.</span>
+<span class="sd">        nodes</span>
+<span class="sd">            Dictionary of nodes of form {node_label: `NodeIR` instance}.</span>
+<span class="sd">        edges</span>
+<span class="sd">            List of tuples (source:str, target:str, edge_dict). `edge_dict` should contain the key &quot;edge_ir&quot; with an</span>
+<span class="sd">            `EdgeIR` instance as item and optionally entries for &quot;weight&quot; and &quot;delay&quot;. `source` and `target` should be</span>
+<span class="sd">            formatted as &quot;node/op/var&quot; (with optionally prepended circuits).</span>
+<span class="sd">        template</span>
+<span class="sd">            optional string reference to path to template that this circuit was loaded from. Leave empty, if no template</span>
+<span class="sd">            was used.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">template</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">label</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span> <span class="o">=</span> <span class="n">MultiDiGraph</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sub_circuits</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">circuits</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">temp</span> <span class="ow">in</span> <span class="n">circuits</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">add_circuit</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">temp</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">nodes</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span><span class="n">nodes</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">edges</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">(</span><span class="n">edges</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CircuitIR.add_nodes_from"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR.add_nodes_from">[docs]</a>    <span class="k">def</span> <span class="nf">add_nodes_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nodes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">NodeIR</span><span class="p">],</span> <span class="o">**</span><span class="n">attr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Add multiple nodes to circuit. Allows networkx-style adding if from_templates is set to False.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        nodes</span>
+<span class="sd">            Dictionary with node label as key. The item is a NodeIR instance. Note that the item type is not tested</span>
+<span class="sd">            here, but passing anything that does not behave like a `NodeIR` may cause problems later.</span>
+<span class="sd">        attr</span>
+<span class="sd">            additional keyword attributes that can be added to the node data. (default `networkx` syntax.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># get unique labels for nodes</span>
+        <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_unique_label</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+
+        <span class="c1"># rename node keys</span>
+        <span class="c1"># assign NodeIR instances as &quot;node&quot; keys in a separate dictionary, because networkx saves node attributes into</span>
+        <span class="c1"># a dictionary</span>
+        <span class="c1"># reformat dictionary to tuple/generator, since networkx does not parse dictionary correctly in add_nodes_from</span>
+        <span class="n">nodes</span> <span class="o">=</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">label_map</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="p">{</span><span class="s2">&quot;node&quot;</span><span class="p">:</span> <span class="n">node</span><span class="p">})</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="o">**</span><span class="n">attr</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CircuitIR.add_node"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR.add_node">[docs]</a>    <span class="k">def</span> <span class="nf">add_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">NodeIR</span><span class="p">,</span> <span class="o">**</span><span class="n">attr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Add single node</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        label</span>
+<span class="sd">            String to identify node by. Is tested for uniqueness internally, and renamed if necessary. Renamed labels</span>
+<span class="sd">            are stored in the `CircuitIR` instance attribute `label_map`.</span>
+<span class="sd">        node</span>
+<span class="sd">            Instance of `NodeIR`. Will be added with the key &quot;node&quot; to the node dictionary.</span>
+<span class="sd">        attr</span>
+<span class="sd">            Additional attributes (keyword arguments) that can be added to the node data. (Default `networkx` syntax.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">new_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_unique_label</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">new_label</span><span class="p">,</span> <span class="n">node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">attr</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_label</span></div>
+
+<div class="viewcode-block" id="CircuitIR.add_edges_from"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR.add_edges_from">[docs]</a>    <span class="k">def</span> <span class="nf">add_edges_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">edges</span><span class="p">,</span> <span class="o">**</span><span class="n">attr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Add multiple edges. This method explicitly assumes, that edges are given in edge_templates instead of</span>
+<span class="sd">        existing instances of `EdgeIR`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        edges</span>
+<span class="sd">            List of edges, each of shape [source/op/var, target/op/var, edge_dict]. The edge_dict must contain the</span>
+<span class="sd">            keys &quot;edge_ir&quot;, and optionally &quot;weight&quot; and &quot;delay&quot;.</span>
+<span class="sd">        attr</span>
+<span class="sd">            Additional attributes (keyword arguments) that can be added to the edge data. (Default `networkx` syntax.)</span>
+
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">edge_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge_dict</span><span class="p">)</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">:</span>
+            <span class="c1"># get weight</span>
+            <span class="n">weight</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;weight&quot;</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
+            <span class="c1"># get delay</span>
+            <span class="n">delay</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;delay&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+            <span class="c1"># get edge_ir or (if not included) default to an empty edge</span>
+            <span class="n">edge_ir</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;edge_ir&quot;</span><span class="p">,</span> <span class="n">EdgeIR</span><span class="p">())</span>
+
+            <span class="k">if</span> <span class="s2">&quot;target_var&quot;</span> <span class="ow">in</span> <span class="n">edge_dict</span><span class="p">:</span>
+                <span class="n">target_var</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="p">[</span><span class="s2">&quot;target_var&quot;</span><span class="p">]</span>
+                <span class="n">target</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{target}</span><span class="s2">/</span><span class="si">{target_var}</span><span class="s2">&quot;</span>
+
+            <span class="k">if</span> <span class="s2">&quot;source_var&quot;</span> <span class="ow">in</span> <span class="n">edge_dict</span><span class="p">:</span>
+                <span class="n">source_var</span> <span class="o">=</span> <span class="n">edge_dict</span><span class="p">[</span><span class="s2">&quot;source_var&quot;</span><span class="p">]</span>
+                <span class="n">source</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{source}</span><span class="s2">/</span><span class="si">{source_var}</span><span class="s2">&quot;</span>
+
+            <span class="c1"># test, if variables at source and target exist and reference them properly</span>
+            <span class="n">source</span><span class="p">,</span> <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_validate_separate_key_path</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+
+            <span class="n">edge_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">source</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">target</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>  <span class="c1"># edge_unique_key,</span>
+                              <span class="p">{</span><span class="s2">&quot;edge_ir&quot;</span><span class="p">:</span> <span class="n">edge_ir</span><span class="p">,</span>
+                               <span class="s2">&quot;weight&quot;</span><span class="p">:</span> <span class="n">weight</span><span class="p">,</span>
+                               <span class="s2">&quot;delay&quot;</span><span class="p">:</span> <span class="n">delay</span><span class="p">,</span>
+                               <span class="s2">&quot;source_var&quot;</span><span class="p">:</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">:]),</span>
+                               <span class="s2">&quot;target_var&quot;</span><span class="p">:</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">target</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">:])</span>
+                               <span class="p">}))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">(</span><span class="n">edge_list</span><span class="p">,</span> <span class="o">**</span><span class="n">attr</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CircuitIR.add_edge"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR.add_edge">[docs]</a>    <span class="k">def</span> <span class="nf">add_edge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">edge_ir</span><span class="p">:</span> <span class="n">EdgeIR</span><span class="p">,</span> <span class="n">weight</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.</span><span class="p">,</span> <span class="n">delay</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">identify_relations</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                 <span class="o">**</span><span class="n">data</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        source</span>
+<span class="sd">        target</span>
+<span class="sd">        edge_ir</span>
+<span class="sd">        weight</span>
+<span class="sd">        delay</span>
+<span class="sd">        data</span>
+<span class="sd">            If no template is given, `data` is assumed to conform to the format that is needed to add an edge. I.e.,</span>
+<span class="sd">            `data` needs to contain fields for `weight`, `delay`, `edge_ir`, `source_var`, `target_var`.</span>
+<span class="sd">        identify_relations</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">source_var</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">target_var</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">identify_relations</span><span class="p">:</span>
+            <span class="c1"># test, if variables at source and target exist and reference them properly</span>
+            <span class="n">source</span><span class="p">,</span> <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_validate_separate_key_path</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># assume that source and target strings are already consistent. This should be the case,</span>
+            <span class="c1"># if the given strings were coming from existing circuits (instances of `CircuitIR`)</span>
+            <span class="c1"># or in general, if operators are not renamed.</span>
+            <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Failed to add edge, because referenced node `</span><span class="si">{path}</span><span class="s2">` does not exist in &quot;</span>
+                                           <span class="n">f</span><span class="s2">&quot;network graph. Edges can only be added to existing nodes.&quot;</span><span class="p">)</span>
+
+            <span class="n">source_var</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;source_var&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">target_var</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;target_var&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+            <span class="n">target</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+
+        <span class="c1"># temporary workaround to make sure source/target variable/operator and nodes are defined properly</span>
+        <span class="k">if</span> <span class="n">source_var</span><span class="p">:</span>
+            <span class="n">source_node</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">source_node</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">source</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">])</span>
+            <span class="n">source_var</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">:])</span>
+
+        <span class="k">if</span> <span class="n">target_var</span><span class="p">:</span>
+            <span class="n">target_node</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">target_node</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">target</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">])</span>
+            <span class="n">target_var</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">target</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">:])</span>
+
+        <span class="n">attr_dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">edge_ir</span><span class="o">=</span><span class="n">edge_ir</span><span class="p">,</span>
+                         <span class="n">weight</span><span class="o">=</span><span class="n">weight</span><span class="p">,</span>
+                         <span class="n">delay</span><span class="o">=</span><span class="n">delay</span><span class="p">,</span>
+                         <span class="n">source_var</span><span class="o">=</span><span class="n">source_var</span><span class="p">,</span>
+                         <span class="n">target_var</span><span class="o">=</span><span class="n">target_var</span><span class="p">,</span>
+                         <span class="o">**</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">source_node</span><span class="p">,</span> <span class="n">target_node</span><span class="p">,</span> <span class="o">**</span><span class="n">attr_dict</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_get_unique_label</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Tests, if a given node `label` already exists in the circuit and renames it uniquely, if necessary.</span>
+<span class="sd">        Uniqueness is generally ensure by appending a counter of the form &quot;.0&quot; . If the given label already has a</span>
+<span class="sd">        counter, it will be detected ond potentially altered if uniqueness requires it. The resulting (new) label is</span>
+<span class="sd">        returned.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        label</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        unique_label</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># test, if label already has a counter and separate it, if necessary</span>
+        <span class="c1"># could use pyparsing instead of regex, but actually seems more robust and simple enough in this case</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s2">&quot;(.+)[.]([\d]+$)&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+            <span class="c1"># see if label already exists, just continue if it doesn&#39;t</span>
+            <span class="k">if</span> <span class="n">label</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+                <span class="c1"># create new label</span>
+                <span class="c1"># separate base label and counter</span>
+                <span class="n">label</span><span class="p">,</span> <span class="n">counter</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">groups</span><span class="p">()</span>
+                <span class="n">counter</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">counter</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">label</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="n">counter</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">elif</span> <span class="n">counter</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span><span class="p">[</span><span class="n">label</span><span class="p">]:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="n">counter</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="c1"># set label</span>
+                <span class="n">unique_label</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{label}</span><span class="s2">.</span><span class="si">{self.label_counter[label]}</span><span class="s2">&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># pass original label</span>
+                <span class="n">unique_label</span> <span class="o">=</span> <span class="n">label</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># define counter</span>
+            <span class="k">if</span> <span class="n">label</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">label_counter</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+            <span class="c1"># set label</span>
+            <span class="n">unique_label</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{label}</span><span class="s2">.</span><span class="si">{self.label_counter[label]}</span><span class="s2">&quot;</span>
+
+        <span class="k">return</span> <span class="n">unique_label</span>
+
+    <span class="k">def</span> <span class="nf">_validate_separate_key_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">paths</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">:</span>
+
+            <span class="c1"># (circuits), node, operator and variable specifiers</span>
+
+            <span class="o">*</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+
+            <span class="n">node</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+            <span class="c1"># re-reference node labels, if necessary</span>
+            <span class="c1"># this syntax yields &quot;node&quot; back as default if it is not in label_map</span>
+            <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
+            <span class="c1"># re_reference operator labels, if necessary</span>
+            <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_validate_rename_op_label</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">node</span><span class="p">],</span> <span class="n">op</span><span class="p">)</span>
+            <span class="c1"># ignore circuits for now</span>
+            <span class="c1"># note: current implementation assumes, that this method is only called, if an edge is added</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">((</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span><span class="p">))</span>
+            <span class="c1"># check if path is valid</span>
+            <span class="k">if</span> <span class="n">path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Could not find object with key path `</span><span class="si">{path}</span><span class="s2">`.&quot;</span><span class="p">)</span>
+
+            <span class="n">separated</span> <span class="o">=</span> <span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">separated</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_validate_rename_op_label</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">NodeIR</span><span class="p">,</span> <span class="n">op_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        References to operators in source/target references may mismatch actual operator labels, due to internal renaming</span>
+<span class="sd">        that can not be accounted for in the YAML templates. This method looks for the first instance of an operator in</span>
+<span class="sd">        a specific node, assuming it exists at all. Additionally, this assumes, that only one variation of an operator</span>
+<span class="sd">        template (of same name) can exist in any single node.</span>
+<span class="sd">        Note: The latter assumption becomes invalid, if edge operators are moved to nodes, because in that case multiple</span>
+<span class="sd">        variations of the same operator can exist in one node.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        node</span>
+<span class="sd">        op_label</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        new_op_label</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># variant 1: label already has a counter --&gt; might actually already exist.</span>
+
+        <span class="k">if</span> <span class="s2">&quot;.&quot;</span> <span class="ow">in</span> <span class="n">op_label</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">_</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="n">op_label</span><span class="p">]</span>
+            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                <span class="n">op_label</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span> <span class="o">=</span> <span class="n">op_label</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">op_label</span>
+
+        <span class="c1"># build grammar for pyparsing</span>
+        <span class="n">grammar</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">(</span><span class="n">op_label</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">Word</span><span class="p">(</span><span class="n">nums</span><span class="p">)</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># count how many matching operators were found</span>
+        <span class="k">for</span> <span class="n">op_key</span> <span class="ow">in</span> <span class="n">node</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">grammar</span><span class="o">.</span><span class="n">parseString</span><span class="p">(</span><span class="n">op_key</span><span class="p">,</span> <span class="n">parseAll</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ParseException</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">op_label</span> <span class="o">=</span> <span class="n">op_key</span>
+                <span class="n">found</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="n">found</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">op_label</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Could not identify operator with base name &#39;</span><span class="si">{op_label}</span><span class="s2">&#39; &quot;</span>
+                                   <span class="n">f</span><span class="s2">&quot;in node `</span><span class="si">{node}</span><span class="s2">`.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Unable to uniquely identify operator key. &quot;</span>
+                                   <span class="n">f</span><span class="s2">&quot;Found multiple occurrences for operator with base name &#39;</span><span class="si">{op_label}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CircuitIR.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_circuits</span><span class="p">:</span>
+            <span class="n">item</span> <span class="o">=</span> <span class="n">SubCircuitView</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s2">&quot;node&quot;</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">item</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Shortcut to self.graph.nodes. See documentation of `networkx.MultiDiGraph.nodes`.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">edges</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Shortcut to self.graph.edges. See documentation of `networkx.MultiDiGraph.edges`.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">edges</span>
+
+<div class="viewcode-block" id="CircuitIR.from_circuits"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR.from_circuits">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_circuits</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">circuits</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">connectivity</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">DataFrame</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Circuit creation method that takes multiple circuits (templates or instances of `CircuitIR`) as inputs to</span>
+<span class="sd">        create one larger circuit out of these. With additional `connectivity` information, these circuit can directly</span>
+<span class="sd">        be interlinked.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        label</span>
+<span class="sd">            Name of new circuit. Should not collide with any circuit label given in `circuits`.</span>
+<span class="sd">        circuits</span>
+<span class="sd">            Dictionary with unique circuit labels as keys and circuits as items. Circuits may either be instances of</span>
+<span class="sd">            `CircuitTemplate` or `CircuitIR`. Alternatively, a circuit template may also be given via a sub-dictionary</span>
+<span class="sd">            with keys `template` and `values`, where `values` is a dictionary of variable value updates for the given</span>
+<span class="sd">            template.</span>
+<span class="sd">        connectivity</span>
+<span class="sd">            Optional `list`, `tuple` or `pandas.DataFrame&#39; with connectivity information to create edges between the</span>
+<span class="sd">            given circuits. If `list` or `tuple`, then each item must be formatted the same way as `edges` in</span>
+<span class="sd">            `add_edges_from`: (&#39;circuit/source_node/op/var&#39;, &#39;circuit/target_node/op/var&#39;, edge_template, variables).</span>
+<span class="sd">            If given as a `DataFrame`, keys (indices and column names) must refer to sources and targets, respectively,</span>
+<span class="sd">            as column name/index (string of form &#39;circuit/node/op/var&#39;) and items may then be edge templates and</span>
+<span class="sd">            associated variables.</span>
+<span class="sd">            Empty cells in the DataFrame should be filled with something &#39;falsy&#39; (as in evaluates to `False` in Python).</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        circuit</span>
+<span class="sd">            instance of `CircuitIR`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># ToDo: Rewrite doc to account for assumption, that only CircuitIR instances are allowed</span>
+
+        <span class="n">circuit</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">nodes</span><span class="o">=</span><span class="p">{},</span> <span class="n">edges</span><span class="o">=</span><span class="p">[])</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">circ</span> <span class="ow">in</span> <span class="n">circuits</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">circuit</span><span class="o">.</span><span class="n">add_circuit</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">circ</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">connectivity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">connectivity</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">connectivity</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                <span class="n">circuit</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">(</span><span class="n">connectivity</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">connectivity</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                        <span class="n">key</span><span class="p">,</span> <span class="n">conn_info</span> <span class="o">=</span> <span class="n">connectivity</span><span class="o">.</span><span class="n">popitem</span><span class="p">()</span>
+                        <span class="k">for</span> <span class="n">target</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">conn_info</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+                            <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">content</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                                <span class="n">snode</span><span class="p">,</span> <span class="n">tnode</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">target</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span>
+                                <span class="n">svar</span><span class="p">,</span> <span class="n">tvar</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">:],</span> <span class="n">target</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">:]</span>
+                                <span class="n">snode</span><span class="p">,</span> <span class="n">tnode</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">snode</span><span class="p">),</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tnode</span><span class="p">)</span>
+                                <span class="n">svar</span><span class="p">,</span> <span class="n">tvar</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">svar</span><span class="p">),</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tvar</span><span class="p">)</span>
+                                <span class="n">content</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">content</span><span class="p">}</span> <span class="k">if</span> <span class="n">content</span> <span class="k">else</span> <span class="p">{}</span>
+                                <span class="k">for</span> <span class="n">key_tmp</span><span class="p">,</span> <span class="n">conn_info_tmp</span> <span class="ow">in</span> <span class="n">connectivity</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                                    <span class="n">content_tmp</span> <span class="o">=</span> <span class="n">conn_info_tmp</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">target</span><span class="p">,</span> <span class="n">source</span><span class="p">]</span>
+                                    <span class="k">if</span> <span class="n">content_tmp</span><span class="p">:</span>
+                                        <span class="n">content</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">key_tmp</span><span class="p">:</span> <span class="n">content_tmp</span><span class="p">})</span>
+                                <span class="n">content</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s1">&#39;source_var&#39;</span><span class="p">:</span> <span class="n">svar</span><span class="p">,</span> <span class="s1">&#39;target_var&#39;</span><span class="p">:</span> <span class="n">tvar</span><span class="p">})</span>
+                                <span class="k">if</span> <span class="s1">&#39;weight&#39;</span> <span class="ow">in</span> <span class="n">content</span> <span class="ow">and</span> <span class="n">content</span><span class="p">[</span><span class="s1">&#39;weight&#39;</span><span class="p">]:</span>
+                                    <span class="n">circuit</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">snode</span><span class="p">,</span> <span class="n">tnode</span><span class="p">,</span> <span class="n">edge_ir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">identify_relations</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                                                     <span class="o">**</span><span class="n">content</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">for</span> <span class="n">target</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">connectivity</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+                            <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">content</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                                <span class="k">if</span> <span class="n">content</span><span class="p">:</span>  <span class="c1"># assumes, empty entries evaluate to `False`</span>
+                                    <span class="n">snode</span><span class="p">,</span> <span class="n">tnode</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">target</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span>
+                                    <span class="n">svar</span><span class="p">,</span> <span class="n">tvar</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">:],</span> <span class="n">target</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">:]</span>
+                                    <span class="n">snode</span><span class="p">,</span> <span class="n">tnode</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">snode</span><span class="p">),</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tnode</span><span class="p">)</span>
+                                    <span class="n">svar</span><span class="p">,</span> <span class="n">tvar</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">svar</span><span class="p">),</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tvar</span><span class="p">)</span>
+                                    <span class="k">if</span> <span class="s2">&quot;float&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">content</span><span class="p">)):</span>
+                                        <span class="n">content</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="n">content</span><span class="p">,</span> <span class="s1">&#39;delay&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span>
+                                    <span class="n">content</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s1">&#39;source_var&#39;</span><span class="p">:</span> <span class="n">svar</span><span class="p">,</span> <span class="s1">&#39;target_var&#39;</span><span class="p">:</span> <span class="n">tvar</span><span class="p">})</span>
+                                    <span class="n">circuit</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">snode</span><span class="p">,</span> <span class="n">tnode</span><span class="p">,</span> <span class="n">edge_ir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">identify_relations</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">content</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Invalid data type of variable `connectivity` (type: {type(connectivity)}).&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">circuit</span></div>
+
+<div class="viewcode-block" id="CircuitIR.add_circuit"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR.add_circuit">[docs]</a>    <span class="k">def</span> <span class="nf">add_circuit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">circuit</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Add a single circuit (with its own nodes and edges) to this circuit (like a subgraph in a graph).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        label</span>
+<span class="sd">            Assigned name of the circuit. If this name is already in use, the label will be renamed in the form</span>
+<span class="sd">            `label.idx`.</span>
+<span class="sd">        circuit</span>
+<span class="sd">            Instance of `CircuitIR` or `CircuitTemplate` or a dictionary, where the key &#39;template&#39; refers to a</span>
+<span class="sd">            `CircuitTemplate` instance and &#39;values&#39; refers to updates that should be applied to the template.</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># ToDo: disallow usage of templates here</span>
+
+        <span class="c1"># parse data type of circuit</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">circuit</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">circuit</span> <span class="o">=</span> <span class="n">circuit</span><span class="p">[</span><span class="s2">&quot;template&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">circuit</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">])</span>  <span class="c1"># type: CircuitIR</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c1"># if it is a template, apply it</span>
+                <span class="n">circuit</span> <span class="o">=</span> <span class="n">circuit</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span>  <span class="c1"># type: CircuitIR</span>
+            <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+                <span class="c1"># assume circuit already is a circuitIR or similarly structured construct</span>
+                <span class="k">pass</span>
+
+        <span class="c1"># check if given circuit label already exists in this circuit</span>
+        <span class="k">if</span> <span class="n">label</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_circuits</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Circuit label </span><span class="si">{label}</span><span class="s2"> already exists in this circuit. Please specify a unique &quot;</span>
+                                   <span class="n">f</span><span class="s2">&quot;circuit label.&quot;</span><span class="p">)</span>
+            <span class="c1"># may change to a rule to rename circuits (like circuit.0, circuit.1, circuit.2...) with label map and</span>
+            <span class="c1"># counter</span>
+
+        <span class="c1"># add circuit nodes, node by node, appending circuit label to node name</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{label}</span><span class="s2">/</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="c1"># add circuit reference to sub_circuits set. Needs to be done before adding edges</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sub_circuits</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">sc</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">sub_circuits</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sub_circuits</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{label}</span><span class="s2">/</span><span class="si">{sc}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># add sub circuit label map items to local label map</span>
+        <span class="k">for</span> <span class="n">old</span><span class="p">,</span> <span class="n">new</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">label_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span><span class="p">[</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{label}</span><span class="s2">/</span><span class="si">{old}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{label}</span><span class="s2">/</span><span class="si">{new}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># add edges</span>
+        <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="c1"># source_var = data.pop(&quot;source_var&quot;)</span>
+            <span class="c1"># target_var = data.pop(&quot;target_var&quot;)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{label}</span><span class="s2">/</span><span class="si">{source}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{label}</span><span class="s2">/</span><span class="si">{target}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">identify_relations</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">data</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CircuitIR.move_edge_operators_to_nodes"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.CircuitIR.move_edge_operators_to_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">move_edge_operators_to_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy_data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a new CircuitIR instance, where all operators that were previously in edges are moved to their</span>
+<span class="sd">        respective target nodes.&quot;&quot;&quot;</span>
+        <span class="c1"># if copy_data:</span>
+        <span class="c1">#    nodes = {key: deepcopy(data) for key, data in self.nodes(data=True)}</span>
+        <span class="c1"># else:</span>
+        <span class="c1">#    nodes = {key: data for key, data in self.nodes(data=True)}</span>
+
+        <span class="c1"># this does not preserve additional node attributes</span>
+        <span class="c1"># node_attrs = {}</span>
+        <span class="c1"># for key, data in nodes.items():</span>
+        <span class="c1">#    nodes[key] = data[&quot;node&quot;]</span>
+        <span class="c1"># node_attrs.update(**data)</span>
+
+        <span class="c1"># node_attrs.pop(&quot;node&quot;)</span>
+
+        <span class="n">op_label_counter</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="c1"># edges = []</span>
+        <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">edges</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+            <span class="k">if</span> <span class="s2">&quot;edge_ir&quot;</span> <span class="ow">in</span> <span class="n">data</span> <span class="ow">and</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;edge_ir&quot;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;edge_ir&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">op_graph</span><span class="p">:</span>
+                <span class="n">source_var</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;source_var&quot;</span><span class="p">]</span>
+                <span class="n">target_var</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;target_var&quot;</span><span class="p">]</span>
+                <span class="n">weight</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;weight&quot;</span><span class="p">]</span>
+                <span class="n">delay</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;delay&quot;</span><span class="p">]</span>
+
+                <span class="n">edge_ir</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;edge_ir&quot;</span><span class="p">]</span>  <span class="c1"># type: EdgeIR</span>
+                <span class="n">op_graph</span> <span class="o">=</span> <span class="n">edge_ir</span><span class="o">.</span><span class="n">op_graph</span>
+                <span class="k">if</span> <span class="n">copy_data</span><span class="p">:</span>
+                    <span class="n">op_graph</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">op_graph</span><span class="p">)</span>
+                <span class="n">input_var</span> <span class="o">=</span> <span class="n">edge_ir</span><span class="o">.</span><span class="n">input</span>
+                <span class="n">output_var</span> <span class="o">=</span> <span class="n">edge_ir</span><span class="o">.</span><span class="n">output</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">op_graph</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">target_var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_move_ops_to_target</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">input_var</span><span class="p">,</span> <span class="n">output_var</span><span class="p">,</span> <span class="n">target_var</span><span class="p">,</span> <span class="n">op_graph</span><span class="p">,</span>
+                                                          <span class="n">op_label_counter</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
+                    <span class="c1"># side effect: changes op_label_counter and nodes dictionary</span>
+
+                <span class="n">data</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s1">&#39;source_var&#39;</span><span class="p">:</span> <span class="n">source_var</span><span class="p">,</span> <span class="s1">&#39;target_var&#39;</span><span class="p">:</span> <span class="n">target_var</span><span class="p">,</span> <span class="s1">&#39;edge_ir&#39;</span><span class="p">:</span> <span class="n">EdgeIR</span><span class="p">(),</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="n">weight</span><span class="p">,</span>
+                             <span class="s1">&#39;delay&#39;</span><span class="p">:</span> <span class="n">delay</span><span class="p">})</span>
+            <span class="c1"># edges.append((source, target, data))</span>
+
+        <span class="c1"># circuit = CircuitIR()</span>
+        <span class="c1"># circuit.sub_circuits = self.sub_circuits</span>
+        <span class="c1"># circuit.add_nodes_from(nodes)</span>
+        <span class="c1"># circuit.add_edges_from(edges)</span>
+        <span class="c1"># return circuit</span>
+
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_move_ops_to_target</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">input_var</span><span class="p">,</span> <span class="n">output_var</span><span class="p">,</span> <span class="n">target_var</span><span class="p">,</span> <span class="n">op_graph</span><span class="p">:</span> <span class="n">DiGraph</span><span class="p">,</span> <span class="n">op_label_counter</span><span class="p">,</span> <span class="n">nodes</span><span class="p">):</span>
+        <span class="c1"># check, if cycles are present in operator graph (which would be problematic</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">find_cycle</span><span class="p">(</span><span class="n">op_graph</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">NetworkXNoCycle</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="s2">&quot;Found cyclic operator graph. Cycles are not allowed for operators within one node.&quot;</span><span class="p">)</span>
+
+        <span class="n">target_node</span> <span class="o">=</span> <span class="n">nodes</span><span class="p">[</span><span class="n">target</span><span class="p">][</span><span class="s2">&quot;node&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">target</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">op_label_counter</span><span class="p">:</span>
+            <span class="n">op_label_counter</span><span class="p">[</span><span class="n">target</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="n">key_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># first pass: get all labels right</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">op_graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
+            <span class="c1"># rename operator key by appending another counter</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">op_label_counter</span><span class="p">[</span><span class="n">target</span><span class="p">]:</span>
+                <span class="c1"># already renamed it previously --&gt; increase counter</span>
+                <span class="n">op_label_counter</span><span class="p">[</span><span class="n">target</span><span class="p">][</span><span class="n">key</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">key_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{key}</span><span class="s2">.</span><span class="si">{op_label_counter[target][key]}</span><span class="s2">&quot;</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># not renamed previously --&gt; initialize counter to 0</span>
+                <span class="n">op_label_counter</span><span class="p">[</span><span class="n">target</span><span class="p">][</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">key_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{key}</span><span class="s2">.0&quot;</span>
+
+        <span class="c1"># second pass: add operators to target op graph and rename sources according to key_map</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">op_graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">op</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span>
+            <span class="n">variables</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;variables&quot;</span><span class="p">]</span>
+            <span class="c1"># go through all input variables and rename source operators</span>
+            <span class="k">for</span> <span class="n">var</span><span class="p">,</span> <span class="n">var_data</span> <span class="ow">in</span> <span class="n">op</span><span class="o">.</span><span class="n">inputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">sources</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">source_op</span> <span class="ow">in</span> <span class="n">var_data</span><span class="p">[</span><span class="s2">&quot;sources&quot;</span><span class="p">]:</span>
+                    <span class="n">sources</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key_map</span><span class="p">[</span><span class="n">source_op</span><span class="p">])</span>
+                <span class="n">op</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="n">var</span><span class="p">][</span><span class="s2">&quot;sources&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sources</span>
+
+            <span class="c1"># add operator to target_node&#39;s operator graph</span>
+            <span class="c1"># TODO: implement add_node method on OperatorGraph class</span>
+            <span class="n">target_node</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">key_map</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="n">operator</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">variables</span><span class="o">=</span><span class="n">variables</span><span class="p">)</span>
+
+        <span class="c1"># add edges that previously existed</span>
+        <span class="k">for</span> <span class="n">source_op</span><span class="p">,</span> <span class="n">target_op</span> <span class="ow">in</span> <span class="n">op_graph</span><span class="o">.</span><span class="n">edges</span><span class="p">:</span>
+            <span class="c1"># rename edge keys accordingly</span>
+            <span class="n">source_op</span> <span class="o">=</span> <span class="n">key_map</span><span class="p">[</span><span class="n">source_op</span><span class="p">]</span>
+            <span class="n">target_op</span> <span class="o">=</span> <span class="n">key_map</span><span class="p">[</span><span class="n">target_op</span><span class="p">]</span>
+
+            <span class="n">target</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">source_op</span><span class="p">,</span> <span class="n">target_op</span><span class="p">)</span>
+
+        <span class="c1"># add new edges based on output and target of edge</span>
+        <span class="n">target_op</span><span class="p">,</span> <span class="n">target_var</span> <span class="o">=</span> <span class="n">target_var</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="n">output_op</span><span class="p">,</span> <span class="n">output_var</span> <span class="o">=</span> <span class="n">output_var</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="n">output_op</span> <span class="o">=</span> <span class="n">key_map</span><span class="p">[</span><span class="n">output_op</span><span class="p">]</span>
+
+        <span class="n">target_node</span><span class="p">[</span><span class="n">target_op</span><span class="p">]</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="n">target_var</span><span class="p">][</span><span class="s2">&quot;sources&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output_op</span><span class="p">)</span>
+
+        <span class="c1"># make sure the changes are saved (might not be necessary)</span>
+        <span class="c1"># nodes[target] = target_node</span>
+
+        <span class="c1"># reassign target variable of edge</span>
+        <span class="n">target_op</span><span class="p">,</span> <span class="n">target_var</span> <span class="o">=</span> <span class="n">input_var</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{key_map[target_op]}</span><span class="s2">/</span><span class="si">{target_var}</span><span class="s2">&quot;</span></div>
+
+
+<div class="viewcode-block" id="SubCircuitView"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.SubCircuitView">[docs]</a><span class="k">class</span> <span class="nc">SubCircuitView</span><span class="p">(</span><span class="n">AbstractBaseIR</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top</span>
+<span class="sd">    lvl) circuit is referenced locally as &#39;top_level_circuit&#39; and all subgraph-related information is computed only</span>
+<span class="sd">    when needed.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">top_level_circuit</span><span class="p">:</span> <span class="n">CircuitIR</span><span class="p">,</span> <span class="n">subgraph_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">top_level_circuit</span> <span class="o">=</span> <span class="n">top_level_circuit</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">subgraph_key</span> <span class="o">=</span> <span class="n">subgraph_key</span>
+
+<div class="viewcode-block" id="SubCircuitView.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.circuit.circuit.SubCircuitView.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+
+        <span class="n">key</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{self.subgraph_key}</span><span class="s2">/</span><span class="si">{key}</span><span class="s2">&quot;</span>
+
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">top_level_circuit</span><span class="o">.</span><span class="n">sub_circuits</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">SubCircuitView</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">top_level_circuit</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">top_level_circuit</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s2">&quot;node&quot;</span><span class="p">]</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">induced_graph</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return the subgraph specified by `subgraph_key`.&quot;&quot;&quot;</span>
+
+        <span class="n">nodes</span> <span class="o">=</span> <span class="p">(</span><span class="n">node</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">top_level_circuit</span><span class="o">.</span><span class="n">nodes</span> <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">subgraph_key</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">subgraph</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">top_level_circuit</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">nodes</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="k">return</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{self.__class__.__name__}</span><span class="s2"> on &#39;</span><span class="si">{self.subgraph_key}</span><span class="s2">&#39; in </span><span class="si">{self.top_level_circuit}</span><span class="s2">&quot;</span></div>
+</pre></div>
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../../../index.html">
+    <img class="logo" src="../../../_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

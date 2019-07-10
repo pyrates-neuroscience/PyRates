@@ -1,6 +1,7 @@
 [![](https://img.shields.io/github/license/pyrates-neuroscience/PyRates.svg)](https://github.com/pyrates-neuroscience/PyRates) 
 [![Build Status](https://travis-ci.com/pyrates-neuroscience/PyRates.svg?branch=master)](https://travis-ci.com/pyrates-neuroscience/PyRates)
 <img src="https://github.com/pyrates-neuroscience/PyRates/blob/master/PyRates_logo_color.svg" width="20%" heigth="20%" align="right">
+[![PyPI version](https://badge.fury.io/py/pyrates.svg)](https://badge.fury.io/py/pyrates)
  
 # PyRates
 PyRates is a framework for neural modeling and simulations, developed by Richard Gast and Daniel Rose at the Max Planck Institute of Human Cognitive and Brain Sciences, Leipzig, Germany. 
@@ -28,8 +29,8 @@ python setup.py install
 
 Documentation
 -------------
-For a full API of PyRates, see READTHEDOCSLINK.
-For examplary simulations and model configurations, please have a look at the jupyter notebooks in the documenation folder.
+For a full API of PyRates, see https://pyrates.readthedocs.io/en/latest/.
+For examplary simulations and model configurations, please have a look at the jupyter notebooks provided in the documenation folder.
 
 Reference
 ---------

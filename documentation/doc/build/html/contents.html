@@ -1,0 +1,253 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Welcome to PyRates’s documentation! &#8212; PyRates 0.7.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+              <div class="related top">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="welcome-to-pyrates-s-documentation">
+<h1>Welcome to PyRates’s documentation!<a class="headerlink" href="#welcome-to-pyrates-s-documentation" title="Permalink to this headline">¶</a></h1>
+<p>PyRates is a Python 3 tool for building rate-based neural models and performing numerical simulations of their dynamic behavior.</p>
+<p>Among its core features are:</p>
+<ul class="simple">
+<li><p>Models can be configured via YAML files or Python dictionaries</p></li>
+<li><p>You can choose between _numpy and _tensorflow as your backend for simulations</p></li>
+<li><p>Every network comes with a _networkx graph representation</p></li>
+<li><p>Output are easily visualized via _seaborn and _mnepython</p></li>
+<li><p>Functionalities for multi-dimensional parameter sweeps on single machines and clusters are provided</p></li>
+</ul>
+</div>
+<div class="section" id="examples">
+<h1>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="minimal-example">
+<h2>Minimal example<a class="headerlink" href="#minimal-example" title="Permalink to this headline">¶</a></h2>
+<p>Building a model and simulating its behavior via PyRates can look as simple as in the cell below:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyrates.backend</span> <span class="k">import</span> <span class="n">ComputeGraph</span>
+
+<span class="n">net</span> <span class="o">=</span> <span class="n">ComputeGraph</span><span class="p">(</span><span class="s1">&#39;model_templates.montbrio.simple_montbrio.Net1&#39;</span><span class="p">,</span>
+                   <span class="n">backend</span><span class="o">=</span><span class="s1">&#39;numpy&#39;</span><span class="p">,</span>
+                   <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">net</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">simulation_time</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;r&#39;</span><span class="p">:</span> <span class="s1">&#39;Pop1.0/Op_e.0/r&#39;</span><span class="p">})</span>
+<span class="n">results</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>In the cell above, we simply provided the path to the YAML-based model configuration to the <cite>ComputeGraph</cite> along with the simulation step size <cite>dt</cite> and the choice of the backend. Then, we called the <cite>run</cite> method to perform a numerical simulation over 10 s while recording the average firing rate <cite>r</cite>.</p>
+</div>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>PyRates can either be installed via <cite>pip</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">pyrates</span>
+</pre></div>
+</div>
+<p>Or via the <cite>setup.py</cite> provided on <cite>GitHub &lt;https://github.com/pyrates-neuroscience/PyRates&gt;</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">install</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="contents">
+<h2>Contents<a class="headerlink" href="#contents" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="pyrates.frontend.html">pyrates.frontend package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="pyrates.frontend.template.html">pyrates.frontend.template package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#subpackages">Subpackages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template.abc">pyrates.frontend.template.abc module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template.node">pyrates.frontend.template.node module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template.operator">pyrates.frontend.template.operator module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template.operator_graph">pyrates.frontend.template.operator_graph module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.dict">pyrates.frontend.dict module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.file">pyrates.frontend.file module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.nxgraph">pyrates.frontend.nxgraph module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.utility">pyrates.frontend.utility module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.yaml">pyrates.frontend.yaml module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pyrates.ir.html">pyrates.ir package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.abc">pyrates.ir.abc module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.circuit">pyrates.ir.circuit module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.edge">pyrates.ir.edge module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.node">pyrates.ir.node module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.operator">pyrates.ir.operator module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.operator_graph">pyrates.ir.operator_graph module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pyrates.backend.html">pyrates.backend package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.computegraph">pyrates.backend.computegraph module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.funcs">pyrates.backend.funcs module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.numpy_backend">pyrates.backend.numpy_backend module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.parser">pyrates.backend.parser module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.tensorflow_backend">pyrates.backend.tensorflow_backend module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pyrates.utility.html">pyrates.utility package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.annarchy_wrapper">pyrates.utility.annarchy_wrapper module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.data_analysis">pyrates.utility.data_analysis module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.filestorage">pyrates.utility.filestorage module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.genetic_algorithm">pyrates.utility.genetic_algorithm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.grid_search">pyrates.utility.grid_search module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.mne_wrapper">pyrates.utility.mne_wrapper module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.visualization">pyrates.utility.visualization module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.worker_template">pyrates.utility.worker_template module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</div>
+
+
+          </div>
+              <div class="related bottom">
+                &nbsp;
+  <nav id="rellinks">
+    <ul>
+    </ul>
+  </nav>
+              </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/PyRates_logo_color.png" alt="Logo"/>
+    
+    <h1 class="logo logo-name">PyRates</h1>
+    
+  </a>
+</p>
+
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+    
+
+<p>
+<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
+    <img
+        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
+    />
+</a>
+</p>
+
+
+
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Welcome to PyRates’s documentation!</a></li>
+<li><a class="reference internal" href="#examples">Examples</a><ul>
+<li><a class="reference internal" href="#minimal-example">Minimal example</a></li>
+<li><a class="reference internal" href="#installation">Installation</a></li>
+<li><a class="reference internal" href="#contents">Contents</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/contents.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/contents.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
