@@ -41,7 +41,7 @@ __status__ = "development"
 # function definitions
 ######################
 
-def pr_sigmoid(x, scaling=1., steepness=1.0, offset=0.):
+def pr_sigmoid(x, scaling=1.0, steepness=1.0, offset=0.0):
     return scaling/(1. + np.exp(steepness*(offset-x)))
 
 
