@@ -140,9 +140,9 @@ def test_cluster_compute(tmp_path):
         worker_file='/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py',
         add_template_info=False,
         config_kwargs={
-            'init_kwargs': {
-                'vectorization': 'nodes',
+            "init_kwargs": {
                 'backend': 'numpy',
+                'vectorization': 'nodes',
                 'solver': 'euler'
             }
         })
