@@ -14,7 +14,8 @@ INSTALL_REQUIREMENTS = ['numpy',
                         'mne',
                         'pydot',
                         'paramiko',
-                        'numba']
+                        'numba',
+                        'edx-sphinx-theme']
 
 CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Programming Language :: Python :: 3.6",

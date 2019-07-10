@@ -273,22 +273,22 @@ def test_2_3_edge():
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net8").apply()
         net = ComputeGraph(net_config=net_config, name='net0', vectorization='none', dt=dt, backend=b)
 
-        # simulate edge behavior
-        results = net.run(sim_time, outputs={'a': ('pop1.0', 'op1.0', 'a'), 'b': ('pop2.0', 'op1.0', 'a')})
-
         # calculate edge behavior from hand
         update0 = lambda x: x * 0.5
         update1 = lambda x: x + 2.0
         update2 = lambda x, y: x + dt * (y - x)
         targets = np.zeros((sim_steps + 1, 4), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1, 0] = update0(targets[i, 1])
-            targets[i+1, 1] = update1(targets[i, 0])
-            targets[i+1, 2] = update2(targets[i, 2], targets[i, 0] * 2.0)
-            targets[i+1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
+            targets[i + 1, 0] = update0(targets[i, 1])
+            targets[i + 1, 1] = update1(targets[i, 0])
+            targets[i + 1, 2] = update2(targets[i, 2], targets[i, 0] * 2.0)
+            targets[i + 1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
 
-        diff = np.mean(np.abs(results['a']['pop1.0'].values - targets[:-1, 2])) + \
-               np.mean(np.abs(results['b']['pop2.0'].values - targets[:-1, 3]))
+        # simulate edge behavior
+        results = net.run(sim_time, outputs={'a': ('pop1.0', 'op1.0', 'a'), 'b': ('pop2.0', 'op1.0', 'a')})
+
+        diff = np.mean(np.abs(results['a']['pop1.0/op1.0'].values - targets[:-1, 2])) + \
+               np.mean(np.abs(results['b']['pop2.0/op1.0'].values - targets[:-1, 3]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
@@ -310,8 +310,8 @@ def test_2_3_edge():
             targets[i + 1, 0] = update2(targets[i, 0], targets[i, 1] * 0.5)
             targets[i + 1, 1] = update3(targets[i, 1], targets[i, 0] * 2.0, inp[i])
 
-        diff = np.mean(np.abs(results['a']['pop0.0'].values - targets[:-1, 0])) + \
-               np.mean(np.abs(results['b']['pop1.0'].values - targets[:-1, 1]))
+        diff = np.mean(np.abs(results['a']['pop0.0/op1.0'].values - targets[:-1, 0])) + \
+               np.mean(np.abs(results['b']['pop1.0/op7.0'].values - targets[:-1, 1]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes
@@ -333,8 +333,8 @@ def test_2_3_edge():
             targets[i + 1, 0] = update4(inp0 * 0.5)
             targets[i + 1, 1] = update4(inp1 * 2.0)
 
-        diff = np.mean(np.abs(results['a']['pop0.0'].values - targets[:-1, 0])) + \
-               np.mean(np.abs(results['b']['pop1.0'].values - targets[:-1, 1]))
+        diff = np.mean(np.abs(results['a']['pop0.0/op8.0'].values - targets[:-1, 0])) + \
+               np.mean(np.abs(results['b']['pop1.0/op8.0'].values - targets[:-1, 1]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 unidirectionally, multi-delay-coupled nodes
@@ -356,8 +356,8 @@ def test_2_3_edge():
             targets[i + 1, 0] = update2(targets[i, 0], targets[i, 1] * 0.5)
             targets[i + 1, 1] = update3(targets[i, 1], targets[i, 0] * 2.0, inp[i])
 
-        diff = np.mean(np.abs(results['a']['pop0.0'].values - targets[:-1, 0])) + \
-               np.mean(np.abs(results['b']['pop1.0'].values - targets[:-1, 1]))
+        diff = np.mean(np.abs(results['a']['pop0.0/op1.0'].values - targets[:-1, 0])) + \
+               np.mean(np.abs(results['b']['pop1.0/op7.0'].values - targets[:-1, 1]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
