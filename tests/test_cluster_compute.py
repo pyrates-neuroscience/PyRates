@@ -116,7 +116,7 @@ def test_cluster_compute(tmp_path):
     circuit_template = "model_templates.jansen_rit.simple_jansenrit.JRC"
     dt = 1e-3
     sim_time = 1.0
-    param_map = {'u': {'var': ['RPO_e_pc.0/u'],
+    param_map = {'u': {'vars': ['RPO_e_pc.0/u'],
                        'nodes': ['PC.0']}}
 
     # Create param_grid file
