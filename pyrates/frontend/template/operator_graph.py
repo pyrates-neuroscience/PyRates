@@ -121,11 +121,13 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
 
             if values_to_update is None:
                 values_to_update = {}
+            # if a value for this particular variation has been passed, overwrite the previous value
             if template.name in value_updates:
                 values_to_update.update(value_updates.pop(template.name))
+            # apply operator tempalte to get OperatorIR and associated default values and label
             operator, op_values, key = template.apply(return_key=True, values=values_to_update)
             operators[key] = operator
-            all_values[operator] = values
+            all_values[key] = op_values
 
         # fail gracefully, if any variables remain in `values` which means, that there is some typo
         if value_updates:

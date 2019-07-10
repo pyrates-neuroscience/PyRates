@@ -34,7 +34,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 """
 
 # external packages
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Optional
 from copy import deepcopy
 
 # pyrates internal imports
@@ -116,17 +116,14 @@ class CircuitTemplate(AbstractBaseTemplate):
                               label=label, circuits=circuits, nodes=nodes,
                               edges=edges)
 
-    def apply(self, label: str = None, in_place: bool = True):
+    def apply(self, label: str = None):
         """Create a Circuit graph instance based on the template"""
 
         if not label:
             label = self.label
 
         # reformat node templates to NodeIR instances
-        if in_place:
-            nodes = {key: temp.apply() for key, temp in self.nodes.items()}
-        else:
-            nodes = {key: deepcopy(temp).apply() for key, temp in self.nodes.items()}
+        nodes = {key: temp.apply() for key, temp in self.nodes.items()}
 
         # reformat edge templates to EdgeIR instances
         edges = []
@@ -140,12 +137,13 @@ class CircuitTemplate(AbstractBaseTemplate):
             delay = values.pop("delay", None)
 
             if template is None:
-                edge_ir = EdgeIR()
+                edge_ir = None
+                if values:
+                    # should not happen. Putting this just in case.
+                    raise PyRatesException("An empty edge IR was provided with additional values. "
+                                           "This must be a bug.")
             else:
-                if in_place:
-                    edge_ir = template.apply(values=values)  # type: EdgeIR # edge spec
-                else:
-                    edge_ir = deepcopy(template).apply(values=values)  # type: EdgeIR # edge spec
+                edge_ir = template.apply(values=values)  # type: Optional[EdgeIR] # edge spec
 
             edges.append((source, target,  # edge_unique_key,
                           {"edge_ir": edge_ir,

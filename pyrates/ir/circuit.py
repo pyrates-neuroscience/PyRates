@@ -177,7 +177,7 @@ class CircuitIR(AbstractBaseIR):
             delay = edge_dict.get("delay", None)
 
             # get edge_ir or (if not included) default to an empty edge
-            edge_ir = edge_dict.get("edge_ir", EdgeIR())
+            edge_ir = edge_dict.get("edge_ir", None)
 
             if "target_var" in edge_dict:
                 target_var = edge_dict["target_var"]
@@ -203,7 +203,7 @@ class CircuitIR(AbstractBaseIR):
 
         self.graph.add_edges_from(edge_list, **attr)
 
-    def add_edge(self, source: str, target: str, edge_ir: EdgeIR, weight: float = 1., delay: float = None,
+    def add_edge(self, source: str, target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
                  identify_relations=True,
                  **data):
         """
@@ -438,13 +438,26 @@ class CircuitIR(AbstractBaseIR):
             self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
 
     def optimize_graph_in_place(self):
+        """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
+        get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
         # 1: collapse all nodes that use the same operator graph into one node
         ######################################################################
 
         # a: create new node with generic name that contains common operator graph
-        # - do not add back-ref for now
-        # - add some counter for the generic name, e.g. node1, node2...
+
+        node_op_graph_map = {}  # maps each unique op_graph to a collapsed node
+        node_counter = 1  # counts different unique types of nodes
+
+        # need to copy info because networkx changes node views whenever the graph changes
+        old_nodes = [(key, data["node"]) for key, data in self.nodes(data=True)]
+
+        for key, node in old_nodes:
+            op_graph = node.op_graph
+            try:
+                collapsed_node = node_op_graph_map[node.op_graph]
+            except KeyError:
+                collapsed_node = NodeIR()
         # b: initialize all variables as empty lists
         # node by node:
         #   c: append all variable values to respective lists

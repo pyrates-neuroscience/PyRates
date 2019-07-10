@@ -70,3 +70,16 @@ class NodeIR(AbstractBaseIR):
 
     def __hash__(self):
         raise NotImplementedError
+
+
+class VectorizedNodeIR(AbstractBaseIR):
+    """Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it."""
+
+    __slots__ = ["_op_graph", "_values"]
+
+    def __init__(self, node_ir: NodeIR):
+
+        super().__init__(node_ir.template)
+        self._op_graph = node_ir.op_graph
+
+
