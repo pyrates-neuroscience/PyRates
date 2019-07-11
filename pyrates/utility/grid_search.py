@@ -41,8 +41,6 @@ import json
 import time as t
 import glob
 import getpass
-import h5py
-import paramiko
 from shutil import copy2
 from pathlib import Path
 from datetime import datetime
@@ -418,6 +416,7 @@ class ClusterCompute:
             Is None if connection fails. For detailed information of the thrown exception see Paramiko documentation
 
         """
+        import paramiko
         client = paramiko.SSHClient()
         try:
             # Using kerberos authentication
@@ -516,6 +515,7 @@ class ClusterGridSearch(ClusterCompute):
             .hdf5 file containing the computation results as DataFrame in dataset '/Results/...'
         """
 
+        import h5py
         t_total = t.time()
 
         print("")
@@ -706,6 +706,9 @@ class ClusterGridSearch(ClusterCompute):
         -------
 
         """
+
+        import paramiko
+
         thread_name = currentThread().getName()
         connection_lost = False
         connection_lost_counter = 0
