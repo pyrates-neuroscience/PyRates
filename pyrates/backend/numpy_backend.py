@@ -858,6 +858,7 @@ class NumpyBackend(object):
         self._rt_optimization = jit_compile
         self._base_layer = 0
         self._output_layer_added = False
+        self._input_layer_added = False
         self._imports = ["import numpy as np", "from pyrates.backend.funcs import *"]
         if imports:
             for imp in imports:
@@ -1146,23 +1147,48 @@ class NumpyBackend(object):
             self.layer = len(self.layers) - self._base_layer
             self.layers.append([])
 
-    def add_output_layer(self, outputs, sampling_steps, out_shapes):
+    def add_output_layer(self, outputs, sampling_steps, out_shapes) -> dict:
+        """
+
+        Parameters
+        ----------
+        outputs
+        sampling_steps
+        out_shapes
+
+        Returns
+        -------
+
+        """
 
         output_col = {}
 
-        # create counting index for collector variables
-        out_idx = self.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
-                               scope="output_collection")
-
         # add output storage layer to the graph
         if self._output_layer_added:
+
+            out_idx = self.get_var("output_collection/out_var_idx")
+
+            # jump to output layer
             self.top_layer()
+
         else:
+
+            # add output layer
             self.add_layer()
             self._output_layer_added = True
 
+            # create counting index for collector variables
+            out_idx = self.add_var(vtype='state_var', name='out_var_idx', dtype='int32', shape=(1,), value=0,
+                                   scope="output_collection")
+
+            # create increment operator for counting index
+            self.next_layer()
+            self.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
+            self.previous_layer()
+
         # add collector variables to the graph
         for i, (var_col) in enumerate(outputs):
+
             shape = (sampling_steps + 1, len(var_col)) + out_shapes[i]
             key = f"output_col_{i}"
             output_col[key] = self.add_var(vtype='state_var', name=f"out_col_{i}", scope="output_collection",
@@ -1172,10 +1198,38 @@ class NumpyBackend(object):
             # add collect operation to the graph
             self.add_op('=', output_col[key], var_stack, out_idx, scope="output_collection")
 
-        # create increment operator for counting index
-        self.add_op('+=', out_idx, np.ones((1,), dtype='int32'), scope="output_collection")
-
         return output_col
+
+    def add_input_layer(self, inputs: dict) -> None:
+        """
+
+        Parameters
+        ----------
+        inputs
+
+        Returns
+        -------
+
+        """
+
+        # add inputs to graph
+        if self._input_layer_added:
+            self.bottom_layer()
+        else:
+            self.add_layer(to_beginning=True)
+
+        # create counting index for input variables
+        in_idx = self.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
+                              scope="network_inputs")
+
+        for key, var in inputs.items():
+            var_name = f"{var.short_name}_inp" if hasattr(var, 'short_name') else "var_inp"
+            in_var = self.add_var(vtype='state_var', name=var_name, scope="network_inputs", value=var)
+            in_var_idx = self.add_op('index', in_var, in_idx, scope="network_inputs")
+            self.add_op('=', self.vars[key], in_var_idx, scope="network_inputs")
+
+        # create increment operator for counting index
+        self.add_op('+=', in_idx, np.ones((1,), dtype='int32'), scope="network_inputs")
 
     def next_layer(self) -> None:
         """Jump to next layer in stack. If we are already at end of layer stack, add new layer to the stack and jump to
@@ -1251,31 +1305,6 @@ class NumpyBackend(object):
         self.layer = 0
         rmtree(self._build_dir)
 
-    def get_var(self, name, updated=True) -> NumpyVar:
-        """Retrieve variable from graph.
-
-        Parameters
-        ----------
-        name
-            Identifier of the variable.
-        updated
-            If true, return updated value of a state-variable. Else, return the old, non-updated variable of a
-            state-variable.
-
-        Returns
-        -------
-        NumpyVar
-            Variable from graph.
-
-        """
-        if updated:
-            return self.vars[name]
-        else:
-            try:
-                return self.vars[f'{name}_old']
-            except KeyError:
-                return self.vars[name]
-
     def get_layer(self, idx) -> list:
         """Retrieve layer from graph.
 
@@ -1286,6 +1315,22 @@ class NumpyBackend(object):
 
         """
         return self.layers[self._base_layer + idx]
+
+    def get_var(self, name):
+        """Retrieve variable from graph.
+
+        Parameters
+        ----------
+        name
+            Identifier of the variable.
+
+        Returns
+        -------
+        NumpyVar
+            Variable from graph.
+
+        """
+        return self.vars[name]
 
     def eval_var(self, var) -> np.ndarray:
         """Get value of variable.

@@ -233,7 +233,7 @@ class ExpressionParser(ParserElement):
         if self.lhs_key in self.vars and not self._instantaneous:
 
             # create new variable for lhs update
-            name = f"{self.lhs_key}_update"
+            name = f"{self.lhs_key}_delta"
             i = 0
             name = f"{name}_{i}"
             while name in self.vars:
@@ -728,7 +728,8 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         update_num += 1
         state_vars = {key: var for key, var in equation_args.items()
                       if (type(var) is dict) and ('vtype' in var) and (var['vtype'] == 'state_var')}
-        equations_tmp, state_vars = update_lhs(deepcopy(equations), state_vars, update_num, {})
+        state_vars_orig = dict(state_vars.items())
+        equations_tmp, state_vars = update_lhs(deepcopy(equations), state_vars, update_num, state_vars_orig)
         equation_args.update(state_vars)
         updates, equation_args = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend,
                                                  **kwargs)
@@ -736,9 +737,7 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
 
         # second rhs evaluation + combination of the two
         updates.update({key: arg for key, arg in equation_args.items() if 'inputs' in key})
-        equations, updates = update_rhs(equations, updates, update_num,
-                                        "(var_placeholder + 0.5*update_placeholder)")
-        equation_args = update_equation_args(equation_args, updates)
+        equations, _ = update_rhs(equations, updates, update_num, "(var_placeholder + 0.5*update_placeholder)")
         _, equation_args = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
 
     elif solver == 'rk23':
@@ -751,7 +750,7 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         state_vars = {key: var for key, var in equation_args.items()
                       if (type(var) is dict) and ('vtype' in var) and (var['vtype'] == 'state_var')}
         state_vars_orig = dict(state_vars.items())
-        equations_tmp, state_vars = update_lhs(deepcopy(equations), state_vars, update_num, {})
+        equations_tmp, state_vars = update_lhs(deepcopy(equations), state_vars, update_num, state_vars_orig)
         for var_orig in state_vars_orig.copy().keys():
             if not any([var_orig in var for var in state_vars]):
                 state_vars_orig.pop(var_orig)
@@ -762,10 +761,9 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
 
         # second rhs evaluation
         updates.update({key: arg for key, arg in equation_args.items() if 'inputs' in key})
-        equations_tmp, updates = update_rhs(deepcopy(equations),
-                                                                       updates, update_num,
+        equations_tmp, updates = update_rhs(deepcopy(equations), updates, update_num,
                                                                        "(var_placeholder + 0.5*update_placeholder)")
-        equation_args = update_equation_args(equation_args, updates)
+        #equation_args = update_equation_args(equation_args, updates)
         state_vars = {key: var for key, var in equation_args.items()
                       if any([orig_key in key for orig_key in state_vars_orig])}
         update_num += 1
@@ -780,7 +778,7 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         updates.update(updates_new)
         equations, updates = update_rhs(equations, updates, update_num,
                                         "(var_placeholder - var_placeholder_1 + 2*update_placeholder)")
-        equation_args = update_equation_args(equation_args, updates)
+        #equation_args = update_equation_args(equation_args, updates)
         state_vars = {key: var for key, var in equation_args.items()
                       if any([orig_key in key for orig_key in state_vars_orig])}
         update_num += 1
@@ -791,7 +789,7 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         backend.add_layer()
 
         # combination of 3 rhs evaluations a'la rk23
-        equation_args = update_equation_args(equation_args, updates)
+        #equation_args = update_equation_args(equation_args, updates)
         equations = []
         for var_info in state_vars_orig:
             node, op, var = var_info.split('/')
@@ -847,7 +845,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             for key, inp in inputs.items():
                 inp_tmp = equation_args[inp]
                 op_args[key] = inp_tmp
-                if type(inp_tmp) is dict:
+                if type(inp_tmp) is dict and 'vtype' in inp_tmp:
                     unprocessed_inputs.append(key)
 
             # parse operator variables in backend
@@ -884,7 +882,8 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                     equation_args[f"{scope}/{key}"] = var
 
             for key, inp in inputs.items():
-                equation_args[inp] = parser.vars[key]
+                if key in unprocessed_inputs:
+                    equation_args[inp] = parser.vars[key]
 
         backend.add_layer()
 
@@ -1029,7 +1028,7 @@ def update_lhs(equations: list, equation_args: dict, update_num: int, var_dict: 
                                 equations[i][j] = (f"{lhs} = dt * ({rhs})", scope)
             if add_to_args:
                 for var_key, var in var_dict.copy().items():
-                    if var_key in key:
+                    if var_key == key or f"{var_key}_upd_" in key:
                         arg = var
                         break
                 updated_args[f"{node}/{op}/{new_var}"] = arg
@@ -1043,21 +1042,29 @@ def update_equation_args(args: dict, updates: dict) -> dict:
     Parameters
     ----------
     args
-    udpates
+    updates
 
     Returns
     -------
 
     """
-    args.update(updates)
+    args_new = {}
+
+    for key, arg in args.items():
+        if key in updates:
+            args_new[key] = updates[key]
+        else:
+            args_new[key] = arg
+
     inputs = [key for key in args if 'inputs' in key]
     for inp in inputs:
         for in_key, in_map in args[inp].copy().items():
             for upd in updates:
                 if in_map in upd:
-                    args[inp].update({upd.split('/')[-1]: upd})
+                    args_new[inp].update({upd.split('/')[-1]: upd})
                     break
-    return args
+
+    return args_new
 
 
 def parse_dict(var_dict: dict, backend, **kwargs) -> dict:

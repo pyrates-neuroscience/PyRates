@@ -182,6 +182,19 @@ def analytic_signal(data: pd.DataFrame, fmin: float, fmax: float, nodes: List[st
 
 
 def welch(data, tmin=0., tmax=None, **kwargs):
+    """
+
+    Parameters
+    ----------
+    data
+    tmin
+    tmax
+    kwargs
+
+    Returns
+    -------
+
+    """
 
     # prepare data frame
     dt = data.index[1] - data.index[0]
@@ -196,6 +209,40 @@ def welch(data, tmin=0., tmax=None, **kwargs):
     try:
         from scipy.signal import welch
         return welch(data.values, fs=1/dt, axis=0, **kwargs)
+    except IndexError:
+        return np.NaN, np.NaN
+
+
+def fft(data, tmin=0.):
+    """
+
+    Parameters
+    ----------
+    data
+    tmin
+
+    Returns
+    -------
+
+    """
+    # Compute spectrum
+    try:
+        dt = data.index[1] - data.index[0]
+        n = data.shape[0]
+
+        # Get closest power of 2 that includes n for zero padding
+        n_two = 1 if n == 0 else 2 ** (n - 1).bit_length()
+
+        data_tmp = data.loc[tmin:, :]
+        data_tmp = data_tmp - np.mean(data_tmp)
+
+        freqs = np.linspace(0, 1 / dt, n_two)
+        spec = np.fft.fft(data_tmp, n=n_two, axis=0)
+
+        # Cut of PSD and frequency arrays since its mirrored at N/2
+        spec = np.abs(spec[:int(len(spec) / 2)])
+        freqs = freqs[:int(len(freqs) / 2)]
+        return freqs, spec
     except IndexError:
         return np.NaN, np.NaN
 

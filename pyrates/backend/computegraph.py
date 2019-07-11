@@ -133,20 +133,8 @@ class ComputeGraph(object):
 
         print('building the compute graph...')
 
-        # collect output variables
-        source_nodes, target_nodes, edge_indices = [], [], []
-        op_names, var_names = [], []
-        for source_node, target_node, edge_idx in self.net_config.edges:
-            svar = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var', retrieve_from_node=False)
-            op, var = svar.split('/')
-            op_names.append(op)
-            var_names.append(var)
-            source_nodes.append(source_node)
-            target_nodes.append(target_node)
-            edge_indices.append(edge_idx)
-
         # create equations and variables for each edge
-        for source_node, target_node, edge_idx in zip(source_nodes, target_nodes, edge_indices):
+        for source_node, target_node, edge_idx in self.net_config.edges:
 
             # extract edge information
             weight = self._get_edge_attr(source_node, target_node, edge_idx, 'weight')
@@ -215,15 +203,15 @@ class ComputeGraph(object):
         # edge operators
         equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
         variables.update(variables_tmp)
+        if equations:
+            self.backend._input_layer_added = True
 
         # node operators
         equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
         variables.update(variables_tmp)
-        if equations_tmp:
-            equations = equations_tmp + equations
-        for i, layer in enumerate(equations.copy()):
-            if not layer:
-                equations.pop(i)
+
+        # bring equations into correct order
+        equations = sort_equations(edge_eqs=equations, node_eqs=equations_tmp)
 
         # parse all equations and variables into the backend
         ####################################################
@@ -405,21 +393,7 @@ class ComputeGraph(object):
                                 inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
                                 i += 1
 
-            # add inputs to graph
-            self.backend.add_layer(to_beginning=True)
-
-            # create counting index for input variables
-            in_idx = self.backend.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
-                                          scope="network_inputs")
-
-            for key, var in inp_dict.items():
-                var_name = f"{var.short_name}_inp" if hasattr(var, 'short_name') else "var_inp"
-                in_var = self.backend.add_var(vtype='state_var', name=var_name, scope="network_inputs", value=var)
-                in_var_idx = self.backend.add_op('index', in_var, in_idx, scope="network_inputs")
-                self.backend.add_op('=', self.backend.vars[key], in_var_idx, scope="network_inputs")
-
-            # create increment operator for counting index
-            self.backend.add_op('+=', in_idx, np.ones((1,), dtype='int32'), scope="network_inputs")
+            self.backend.add_input_layer(inputs=inp_dict)
 
         # run simulation
         ################
@@ -882,7 +856,7 @@ class ComputeGraph(object):
 
         for node_name, node in self.net_config.nodes.items():
 
-            op_graph = self._get_node_attr(node_name, 'op_graph')
+            op_graph = node['node'].op_graph
             graph = op_graph.copy()  # type: DiGraph
 
             # go through all operators on node and pre-process + extract equations and variables
@@ -2121,3 +2095,39 @@ class ComputeGraph(object):
             else:
                 inputs_unique = f"stack({','.join(inputs_unique)})"
         return inputs_unique, input_mapping
+
+
+def sort_equations(edge_eqs: list, node_eqs: list) -> list:
+    """
+
+    Parameters
+    ----------
+    edge_eqs
+    node_eqs
+
+    Returns
+    -------
+
+    """
+
+    from .parser import is_diff_eq
+
+    # clean up equations
+    for i, layer in enumerate(edge_eqs.copy()):
+        if not layer:
+            edge_eqs.pop(i)
+    for i, layer in enumerate(node_eqs.copy()):
+        if not layer:
+            node_eqs.pop(i)
+
+    # re-order node equations
+    eqs_new = []
+    for node_layer in node_eqs.copy():
+        if not any([is_diff_eq(eq) for eq, _ in node_layer]):
+            eqs_new.append(node_layer)
+            node_eqs.pop(node_eqs.index(node_layer))
+
+    eqs_new += edge_eqs
+    eqs_new += node_eqs
+
+    return eqs_new

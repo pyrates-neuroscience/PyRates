@@ -1072,18 +1072,35 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
     """
 
     for key in params.keys():
+
         val = params[key]
-        for op, var in param_map[key]['var']:
+
+        for var in param_map[key]['vars']:
+
+            # change variable values on nodes
             nodes = param_map[key]['nodes'] if 'nodes' in param_map[key] else []
-            edges = param_map[key]['edges'] if 'edges' in param_map[key] else []
             for node in nodes:
-                if op in circuit.nodes[node]['node'].op_graph.nodes:
-                    circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var]['value'] = float(val)
-            for source, target, edge in edges:
-                if op in circuit.edges[source, target, edge]:
-                    circuit.edges[source, target, edge][op][var] = float(val)
-                elif var in circuit.edges[source, target, edge]:
-                    circuit.edges[source, target, edge][var] = float(val)
+                if "/" in var:
+                    op, var_name = var.split("/")
+                    if op in circuit.nodes[node]['node'].op_graph.nodes:
+                        circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var_name]['value'] = float(val)
+                else:
+                    for op in circuit.nodes[node]['node'].op_graph.nodes:
+                        try:
+                            circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var]['value'] = float(val)
+                        except KeyError:
+                            pass
+
+            # change variable values on edges
+            edges = param_map[key]['edges'] if 'edges' in param_map[key] else []
+            if edges and len(edges[0]) < 3:
+                for source, target in edges:
+                    if var in circuit.edges[source, target, 0]:
+                        circuit.edges[source, target, 0][var] = float(val)
+            else:
+                for source, target, edge in edges:
+                    if var in circuit.edges[source, target, edge]:
+                        circuit.edges[source, target, edge][var] = float(val)
 
     return circuit
 
