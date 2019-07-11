@@ -914,37 +914,61 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
 
 def update_rhs(equations: list, equation_args: dict, update_num: int, update_str: str) -> tuple:
-    """
+    """Update the right-hand side of all equations according to `update_str` and `update_num`. All state-variable
+    occurrences will be replaced with the expression in the `update_str` template. Convenience function for differential
+    equation solver that involve multiple partial updates of the state variables.
 
     Parameters
     ----------
     equations
+        List of equations to be updated.
     equation_args
+        Key-argument pairs of all relevant variables which occur in the equations.
     update_num
+        Number of the partial update step for which the equations should be updated.
     update_str
+        Template for the state variable replacement procedure. Should contain the following character strings:
+        - `var_placeholder` will be replaced with the name of the state variables.
+        - `var_placeholder_i` for partial updates of the state variables with `i` being a counter that needs to be
+           replaced with the appropriate number of the partial update. Should be included for each partial update from
+           i=1 to i=`update_num`.
+        - `update_placeholder` for the position of the new, updated variable.
 
     Returns
     -------
     tuple
+        List of the updated equations and dictionary with the equation arguments.
 
     """
 
     # collect variable updates from earlier rhs evaluations
+    #######################################################
+
     var_updates = {}
     if update_num > 1:
+
         for key, arg in equation_args.items():
+
+            # extraction of variable name
             node, op, var = key.split('/')
             if f"_upd_{update_num}" in var:
                 var = var.replace(f"_upd_{update_num}", "")
+
             if "_upd_" in var:
+
+                # find variable update number and cut of variable update identifier from variable name
                 idx = int(var[-1])
                 var_tmp = var[:-6]
+
+                # indicate which variable placeholder to replace with this variable update below
                 if var_tmp in var_updates:
                     var_updates[var_tmp].append((f'var_placeholder_{idx}', var))
                 else:
                     var_updates[var_tmp] = [(f'var_placeholder_{idx}', var)]
 
     # integrate previous rhs evaluations into rhs equations
+    #######################################################
+
     updated_args = {}
     while equation_args:
 
@@ -952,16 +976,27 @@ def update_rhs(equations: list, equation_args: dict, update_num: int, update_str
 
         if 'inputs' in key:
 
+            # process input variables
             for var, arg_tmp in arg.copy().items():
+
+                # extract variable name
                 if f"_upd_{update_num}" in var:
                     var = var.replace(f"_upd_{update_num}", "")
+
                 if "_upd_" not in var:
+
+                    # create new variable name with update identifier
                     new_var = f"{var}_upd_{update_num}"
                     arg_tmp = arg_tmp.split('/')
                     arg_tmp[-1] = f"{arg_tmp[-1]}_upd_{update_num}"
                     arg_tmp = "/".join(arg_tmp)
+
                     if arg_tmp in equation_args or arg_tmp in updated_args:
+
+                        # add variable update to inputs field
                         arg[new_var] = arg_tmp
+
+                        # individualize the replacement template with variable name infos
                         replace_str = update_str.replace('update_placeholder', new_var)
                         if var in var_updates:
                             for placeholder, var_tmp in var_updates[var]:
@@ -970,6 +1005,8 @@ def update_rhs(equations: list, equation_args: dict, update_num: int, update_str
                             for i in range(1, update_num):
                                 replace_str = replace_str.replace(f'var_placeholder_{i}', f'{var}_upd_{i}')
                         replace_str = replace_str.replace('var_placeholder', var)
+
+                        # go through equations and replace variable names with the individualized replacement template
                         for i, layer in enumerate(equations.copy()):
                             for j, (eq, scope) in enumerate(layer):
                                 lhs, rhs, assign = split_equation(eq)
@@ -979,19 +1016,30 @@ def update_rhs(equations: list, equation_args: dict, update_num: int, update_str
 
         else:
 
+            # extract variable name
             node, op, var = key.split('/')
             if f"_upd_{update_num}" in var:
                 var = var.replace(f"_upd_{update_num}", "")
+
             if "_upd_" in var:
+
+                # save the variable to the arguments dictionary
                 updated_args[f"{node}/{op}/{var}"] = arg
+
             else:
+
+                # create new variable name and save the variable to the arguments dictionary
                 new_var = f"{var}_upd_{update_num}"
                 updated_args[f"{node}/{op}/{new_var}"] = arg
+
+                # individualize the replacement template
                 replace_str = update_str.replace('update_placeholder', new_var)
                 if var in var_updates:
                     for placeholder, var_tmp in var_updates[var]:
                         replace_str = replace_str.replace(placeholder, var_tmp)
                 replace_str = replace_str.replace('var_placeholder', var)
+
+                # go through equations and replace variable occurences with the individualized replacement template
                 for i, layer in enumerate(equations.copy()):
                     for j, (eq, scope) in enumerate(layer):
                         lhs, rhs, assign = split_equation(eq)
@@ -1003,15 +1051,20 @@ def update_rhs(equations: list, equation_args: dict, update_num: int, update_str
 
 
 def update_lhs(equations: list, equation_args: dict, update_num: int, var_dict: dict) -> tuple:
-    """
+    """Update the left-hand side of all equations according to `update_num`. An update identifier will be added to all
+    left-hand side state-variable occurences. Convenience function for differential equation solver that involve
+    multiple partial updates of the state variables.
 
     Parameters
     ----------
     equations
+        Equations, whose left-hand sides should be updated.
     equation_args
+        Key-argument pairs including all relevant left-hand side variables.
     update_num
-    rhs_scalar
+        Number of the partial udpate of the left-hand side variables.
     var_dict
+        Key-argument pairs including the configurations of all state variables (like shape, dtype, vtype and value).
 
     Returns
     -------
