@@ -27,7 +27,6 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from copy import deepcopy
 from typing import Union, Dict, Iterator
 from warnings import filterwarnings
 
@@ -36,7 +35,7 @@ from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGrap
 from pandas import DataFrame
 
 from pyrates import PyRatesException
-from pyrates.backend import parse_dict
+# from pyrates.backend import parse_dict
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
@@ -654,11 +653,12 @@ class CircuitIR(AbstractBaseIR):
         ######################
 
         # self._float_precision = float_precision
-        # self._first_run = True
+        self._first_run = True
         # if type(net_config) is str:
         #     net_config = CircuitTemplate.from_yaml(net_config).apply()
         if not self._vectorized:
-            net_config = self.optimize_graph_in_place()
+            self.optimize_graph_in_place()
+
 
         # instantiate the backend and set the backend default_device
         if backend == 'tensorflow':
@@ -671,23 +671,12 @@ class CircuitIR(AbstractBaseIR):
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
         kwargs['name'] = self.label
         kwargs['float_default_type'] = float_precision
+        backend = backend(**kwargs)
 
-        self._compile_info["backend"] = backend(**kwargs)
-        self._compile_info["solver"] = solver
-
-        # pre-process the network configuration
-        self._compile_info["dt"] = dt
-        self._compile_info["_net_config_map"] = {}
-        # self.net_config = self._net_config_consistency_check(net_config) if build_in_place \
-        #     else self._net_config_consistency_check(deepcopy(net_config))
-        # self._vectorize(vectorization_mode=vectorization)
-
-        # set time constant of the network
-        self._compile_info["_dt"] = parse_dict({'dt': {'vtype': 'constant', 'dtype': float_precision, 'shape': (),
-                                                       'value': dt}},
-                                               backend=backend)['dt']
-
-        # move edge operations to nodes
+        from pyrates.ir._compiler import Compiler
+        compiler = Compiler(dt, backend, solver, float_precision)
+        compiler.go_through_nodes_and_create_mapping_for_their_inputs(self)
+        # xxxxxxxxxxxxxxxxxxxxxxxxxxxxx <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         ###############################
 
         print('building the compute graph...')
@@ -709,90 +698,91 @@ class CircuitIR(AbstractBaseIR):
             tval = self.nodes[target_node]["node"].values[top][tvar]
 
             add_project = False
-            # TODO: add thirds stage of vectorization, s.th. the add_project argument is set.
-            target_graph = self._get_node_attr(target_node, 'op_graph')
+        #     # TODO: add thirds stage of vectorization, s.th. the add_project argument is set.
+        #     target_graph = self._get_node_attr(target_node, 'op_graph')
+        #
+        #     # define target index
+        #     if delay is not None and tidx:
+        #         tidx_tmp = []
+        #         for idx, d in zip(tidx, delay):
+        #             if type(idx) is list:
+        #                 tidx_tmp.append(idx + [d])
+        #             else:
+        #                 tidx_tmp.append([idx, d])
+        #         tidx = tidx_tmp
+        #     elif not tidx and delay is not None:
+        #         tidx = list(delay)
+        #
+        #     # create mapping equation and its arguments
+        #     d = "[target_idx]" if tidx else ""
+        #     idx = "[source_idx]" if sidx else ""
+        #     assign = '+=' if add_project else '='
+        #     eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
+        #     args = {}
+        #     dtype = sval['dtype']
+        #     args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
+        #     if tidx:
+        #         args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+        #                               'value': np.array(tidx, dtype=np.int32)}
+        #     if sidx:
+        #         args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+        #                               'value': np.array(sidx, dtype=np.int32)}
+        #     args[tvar] = tval
+        #
+        #     # add edge operator to target node
+        #     op_name = f'edge_from_{source_node}_{edge_idx}'
+        #     target_graph.add_node(op_name,
+        #                           operator={'inputs': {svar: {'sources': [sop],
+        #                                                       'reduce_dim': True,
+        #                                                       'node': source_node}},
+        #                                     'output': tvar,
+        #                                     'equations': [eq]},
+        #                           variables=args)
+        #
+        #     # connect edge operator to target operator
+        #     target_graph.add_edge(op_name, top)
+        #
+        #     # add input information to target operator
+        #     inputs = self._get_op_attr(target_node, top, 'inputs')
+        #     if tvar in inputs.keys():
+        #         inputs[tvar]['sources'].append(op_name)
+        #     else:
+        #         inputs[tvar] = {'sources': [op_name],
+        #                         'reduce_dim': True}
+        #
+        # # collect node and edge operators
+        # #################################
+        #
+        # variables = {'all/all/dt': self._dt}
+        #
+        # # edge operators
+        # equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
+        # variables.update(variables_tmp)
+        #
+        # # node operators
+        # equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
+        # variables.update(variables_tmp)
+        # if equations_tmp:
+        #     equations = equations_tmp + equations
+        # for i, layer in enumerate(equations.copy()):
+        #     if not layer:
+        #         equations.pop(i)
+        #
+        # # parse all equations and variables into the backend
+        # ####################################################
+        #
+        # self.backend.bottom_layer()
+        #
+        # # parse mapping
+        # variables = parse_equation_system(equations=equations, equation_args=variables, backend=self.backend,
+        #                                   solver=self.solver)
+        #
+        # # save parsed variables in net config
+        # for key, val in variables.items():
+        #     node, op, var = key.split('/')
+        #     if "inputs" not in var and var != "dt":
+        #         self._set_node_attr(node, var, val, op=op)
 
-            # define target index
-            if delay is not None and tidx:
-                tidx_tmp = []
-                for idx, d in zip(tidx, delay):
-                    if type(idx) is list:
-                        tidx_tmp.append(idx + [d])
-                    else:
-                        tidx_tmp.append([idx, d])
-                tidx = tidx_tmp
-            elif not tidx and delay is not None:
-                tidx = list(delay)
-
-            # create mapping equation and its arguments
-            d = "[target_idx]" if tidx else ""
-            idx = "[source_idx]" if sidx else ""
-            assign = '+=' if add_project else '='
-            eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
-            args = {}
-            dtype = sval['dtype']
-            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
-            if tidx:
-                args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                      'value': np.array(tidx, dtype=np.int32)}
-            if sidx:
-                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                      'value': np.array(sidx, dtype=np.int32)}
-            args[tvar] = tval
-
-            # add edge operator to target node
-            op_name = f'edge_from_{source_node}_{edge_idx}'
-            target_graph.add_node(op_name,
-                                  operator={'inputs': {svar: {'sources': [sop],
-                                                              'reduce_dim': True,
-                                                              'node': source_node}},
-                                            'output': tvar,
-                                            'equations': [eq]},
-                                  variables=args)
-
-            # connect edge operator to target operator
-            target_graph.add_edge(op_name, top)
-
-            # add input information to target operator
-            inputs = self._get_op_attr(target_node, top, 'inputs')
-            if tvar in inputs.keys():
-                inputs[tvar]['sources'].append(op_name)
-            else:
-                inputs[tvar] = {'sources': [op_name],
-                                'reduce_dim': True}
-
-        # collect node and edge operators
-        #################################
-
-        variables = {'all/all/dt': self._dt}
-
-        # edge operators
-        equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
-        variables.update(variables_tmp)
-
-        # node operators
-        equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
-        variables.update(variables_tmp)
-        if equations_tmp:
-            equations = equations_tmp + equations
-        for i, layer in enumerate(equations.copy()):
-            if not layer:
-                equations.pop(i)
-
-        # parse all equations and variables into the backend
-        ####################################################
-
-        self.backend.bottom_layer()
-
-        # parse mapping
-        variables = parse_equation_system(equations=equations, equation_args=variables, backend=self.backend,
-                                          solver=self.solver)
-
-        # save parsed variables in net config
-        for key, val in variables.items():
-            node, op, var = key.split('/')
-            if "inputs" not in var and var != "dt":
-                self._set_node_attr(node, var, val, op=op)
 
 class SubCircuitView(AbstractBaseIR):
     """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
