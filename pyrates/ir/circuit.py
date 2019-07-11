@@ -33,6 +33,7 @@ from warnings import filterwarnings
 from pyparsing import Word, ParseException, nums, Literal
 from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGraph
 from pandas import DataFrame
+import numpy as np
 
 from pyrates import PyRatesException
 # from pyrates.backend import parse_dict
@@ -659,7 +660,6 @@ class CircuitIR(AbstractBaseIR):
         if not self._vectorized:
             self.optimize_graph_in_place()
 
-
         # instantiate the backend and set the backend default_device
         if backend == 'tensorflow':
             from pyrates.backend.tensorflow_backend import TensorflowBackend
@@ -675,13 +675,18 @@ class CircuitIR(AbstractBaseIR):
 
         from pyrates.ir._compiler import Compiler
         compiler = Compiler(dt, backend, solver, float_precision)
+        compiler._net_config_consistency_check(self)
+        # this adds the "add_project" attribute to edges, if necessary.
         compiler.go_through_nodes_and_create_mapping_for_their_inputs(self)
+
         # xxxxxxxxxxxxxxxxxxxxxxxxxxxxx <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         ###############################
 
         print('building the compute graph...')
 
         # create equations and variables for each edge
+        from pyrates.backend import parse_equation_system
+
         for source_node, target_node, edge_idx, data in self.edges(data=True, keys=True):
 
             # extract edge information
@@ -691,97 +696,103 @@ class CircuitIR(AbstractBaseIR):
             tidx = data['target_idx']
             svar = data['source_var']
             sop, svar = svar.split("/")
-            sval = self.nodes[source_node]["node"].values[sop][svar]
+            sval = self[source_node].values[sop][svar]
 
             tvar = data['target_var']
             top, tvar = tvar.split("/")
-            tval = self.nodes[target_node]["node"].values[top][tvar]
+            try:
+                tval = self[target_node].values[top][tvar]
+            except KeyError:
+                # dirty hack
+                tval = self[target_node].op_graph.nodes[top]["variables"][tvar]["value"]
 
-            add_project = False
-        #     # TODO: add thirds stage of vectorization, s.th. the add_project argument is set.
-        #     target_graph = self._get_node_attr(target_node, 'op_graph')
-        #
-        #     # define target index
-        #     if delay is not None and tidx:
-        #         tidx_tmp = []
-        #         for idx, d in zip(tidx, delay):
-        #             if type(idx) is list:
-        #                 tidx_tmp.append(idx + [d])
-        #             else:
-        #                 tidx_tmp.append([idx, d])
-        #         tidx = tidx_tmp
-        #     elif not tidx and delay is not None:
-        #         tidx = list(delay)
-        #
-        #     # create mapping equation and its arguments
-        #     d = "[target_idx]" if tidx else ""
-        #     idx = "[source_idx]" if sidx else ""
-        #     assign = '+=' if add_project else '='
-        #     eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
-        #     args = {}
-        #     dtype = sval['dtype']
-        #     args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
-        #     if tidx:
-        #         args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-        #                               'value': np.array(tidx, dtype=np.int32)}
-        #     if sidx:
-        #         args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-        #                               'value': np.array(sidx, dtype=np.int32)}
-        #     args[tvar] = tval
-        #
-        #     # add edge operator to target node
-        #     op_name = f'edge_from_{source_node}_{edge_idx}'
-        #     target_graph.add_node(op_name,
-        #                           operator={'inputs': {svar: {'sources': [sop],
-        #                                                       'reduce_dim': True,
-        #                                                       'node': source_node}},
-        #                                     'output': tvar,
-        #                                     'equations': [eq]},
-        #                           variables=args)
-        #
-        #     # connect edge operator to target operator
-        #     target_graph.add_edge(op_name, top)
-        #
-        #     # add input information to target operator
-        #     inputs = self._get_op_attr(target_node, top, 'inputs')
-        #     if tvar in inputs.keys():
-        #         inputs[tvar]['sources'].append(op_name)
-        #     else:
-        #         inputs[tvar] = {'sources': [op_name],
-        #                         'reduce_dim': True}
-        #
-        # # collect node and edge operators
-        # #################################
-        #
-        # variables = {'all/all/dt': self._dt}
-        #
-        # # edge operators
-        # equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
-        # variables.update(variables_tmp)
-        #
-        # # node operators
-        # equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
-        # variables.update(variables_tmp)
-        # if equations_tmp:
-        #     equations = equations_tmp + equations
-        # for i, layer in enumerate(equations.copy()):
-        #     if not layer:
-        #         equations.pop(i)
-        #
-        # # parse all equations and variables into the backend
-        # ####################################################
-        #
-        # self.backend.bottom_layer()
-        #
-        # # parse mapping
-        # variables = parse_equation_system(equations=equations, equation_args=variables, backend=self.backend,
-        #                                   solver=self.solver)
-        #
-        # # save parsed variables in net config
-        # for key, val in variables.items():
-        #     node, op, var = key.split('/')
-        #     if "inputs" not in var and var != "dt":
-        #         self._set_node_attr(node, var, val, op=op)
+            add_project = data.get('add_project', False)  # get a False, in case it is not defined
+            target_graph = self[target_node].op_graph
+
+            # define target index
+            if delay is not None and tidx:
+                tidx_tmp = []
+                for idx, d in zip(tidx, delay):
+                    if type(idx) is list:
+                        tidx_tmp.append(idx + [d])
+                    else:
+                        tidx_tmp.append([idx, d])
+                tidx = tidx_tmp
+            elif not tidx and delay is not None:
+                tidx = list(delay)
+
+            # create mapping equation and its arguments
+            d = "[target_idx]" if tidx else ""
+            idx = "[source_idx]" if sidx else ""
+            assign = '+=' if add_project else '='
+            eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
+            args = {}
+            dtype = sval.dtype
+            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
+            if tidx:
+                args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                      'value': np.array(tidx, dtype=np.int32)}
+            if sidx:
+                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                      'value': np.array(sidx, dtype=np.int32)}
+            args[tvar] = tval
+
+            # add edge operator to target node
+            op_name = f'edge_from_{source_node}_{edge_idx}'
+            target_graph.add_node(op_name,
+                                  operator={'inputs': {svar: {'sources': [sop],
+                                                              'reduce_dim': True,
+                                                              'node': source_node}},
+                                            'output': tvar,
+                                            'equations': [eq]},
+                                  variables=args)
+
+            # connect edge operator to target operator
+            target_graph.add_edge(op_name, top)
+
+            # add input information to target operator
+            inputs = self[f"{target_node}/{top}"].inputs
+            if tvar in inputs.keys():
+                inputs[tvar]['sources'].append(op_name)
+            else:
+                inputs[tvar] = {'sources': [op_name],
+                                'reduce_dim': True}
+
+        # collect node and edge operators
+        #################################
+
+        variables = {'all/all/dt': compiler.dt_parsed}
+
+        # edge operators
+        equations, variables_tmp = compiler._collect_op_layers(circuit=self, layers=[0], exclude=False,
+                                                               op_identifier="edge_from_")
+        variables.update(variables_tmp)
+
+        # node operators
+        equations_tmp, variables_tmp = compiler._collect_op_layers(circuit=self, layers=[], exclude=True,
+                                                                   op_identifier="edge_from_")
+        variables.update(variables_tmp)
+        if equations_tmp:
+            equations = equations_tmp + equations
+        for i, layer in enumerate(equations.copy()):
+            if not layer:
+                equations.pop(i)
+
+        # parse all equations and variables into the backend
+        ####################################################
+
+        compiler.backend.bottom_layer()
+
+        # parse mapping
+        variables = parse_equation_system(equations=equations, equation_args=variables, backend=compiler.backend,
+                                          solver=compiler.solver)
+
+        # save parsed variables in net config
+        for key, val in variables.items():
+            node, op, var = key.split('/')
+            if "inputs" not in var and var != "dt":
+                variable = self[key]
+                variable.add_parsed_variable(var, val)
 
 
 class SubCircuitView(AbstractBaseIR):

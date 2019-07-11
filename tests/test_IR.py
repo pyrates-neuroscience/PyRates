@@ -68,3 +68,12 @@ def test_ir_vectorization():
         # original_edge = circuit.edges[(source, target, 0)]["edge_ir"]
         # original_op = list(original_edge.op_graph.nodes)[0]
         # assert f"{original_op}.0" in circuit2[target]
+
+
+def test_ir_compilation():
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    from pyrates.ir.circuit import CircuitIR
+
+    circuit = CircuitIR.from_yaml(path)
+
+    circuit.compile()

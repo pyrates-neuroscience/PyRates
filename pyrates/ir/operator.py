@@ -43,11 +43,18 @@ class ProtectedVariableDict:
     creation, but is strictly speaking not immutable. There may also be faster implementations, but this works for
     now."""
 
+    __slots__ = ["_hash", "_d", "_parsed"]
+
     def __init__(self, variables: List[tuple]):
         variables = tuple(variables)
         self._hash = hash(variables)
         self._d = {vname: Variable(vtype, dtype, shape)
                    for vname, vtype, dtype, shape in variables}
+        self._parsed = {}
+
+    def add_parsed_variable(self, key, props):
+        """Add parsed representation to a variable from compilation."""
+        self._parsed[key] = props
 
     def __iter__(self):
         return iter(self._d)
@@ -56,11 +63,24 @@ class ProtectedVariableDict:
         return len(self._d)
 
     def __getitem__(self, key):
-        return self._d[key]
+        try:
+            # quick and dirty workaround for compilation.
+            # ToDo: find a more efficient solution to allow parsed variable properties.
+            return self._parsed[key]
+        except KeyError:
+            return self._d[key]
 
     def __hash__(self):
         return self._hash
 
+    def items(self):
+        return self._d.items()
+
+    def keys(self):
+        return self._d.keys()
+
+    def values(self):
+        return self._d.values()
 
 # class ProtectedVariableDict(dict):
 #     """This is an unsafe hack to provide an immutable and hashable dict. Unsafe means, that checks against isinstance
