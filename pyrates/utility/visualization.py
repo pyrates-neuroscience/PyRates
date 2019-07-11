@@ -30,12 +30,9 @@
 """
 
 # external imports
-import seaborn as sb
-import networkx.drawing.nx_pydot as pydot
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from typing import Union, Optional
 
 # pyrates internal imports
@@ -169,6 +166,7 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
         Handle of the figure axes the time-series were plotted into.
 
     """
+    import seaborn as sb
 
     sb.set_style(bg_style)
 
@@ -307,6 +305,8 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
 
     """
 
+    import seaborn as sb
+
     # turn fc into dataframe if necessary
     if type(fc) is np.ndarray:
         rows = kwargs.pop('yticklabels') if 'yticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
@@ -407,7 +407,7 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
     return ax
 
 
-def plot_phase(data: pd.DataFrame, bg_style: str = 'whitegrid', **kwargs) -> sb.FacetGrid:
+def plot_phase(data: pd.DataFrame, bg_style: str = 'whitegrid', **kwargs):
     """Plot phase of populations in a polar plot.
 
     Parameters
@@ -426,6 +426,7 @@ def plot_phase(data: pd.DataFrame, bg_style: str = 'whitegrid', **kwargs) -> sb.
 
     """
 
+    import seaborn as sb
     sb.set(style=bg_style)
 
     # create facet grid
@@ -549,6 +550,8 @@ def plot_tfr(data: np.ndarray, freqs: list, nodes: Optional[list] = None, separa
         Handle of the created plot.
 
     """
+
+    import seaborn as sb
 
     if not nodes:
         nodes = [i for i in range(data.shape[0])]
@@ -760,6 +763,8 @@ def show_graph(dot_graph, _format, prog, **pydot_args):
 def _draw_heatmap(*args, **kwargs):
     """Wraps seaborn.heatmap to work with long, tidy format dataframes.
     """
+    import seaborn as sb
+
     data = kwargs.pop('data')
     d = data.pivot(index=args[1], columns=args[0], values=args[2])
     return sb.heatmap(d, **kwargs)
