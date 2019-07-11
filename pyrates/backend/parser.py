@@ -607,7 +607,7 @@ class ExpressionParser(ParserElement):
             self.expr_stack.append('-one')
 
     def _push_neg_or_first(self, strg, loc, toks):
-        """Push all tokens to expression stack at once (first-to-last).
+        """Push neg one multipler to expression stack if on first position in toks, else push toks from first-to-last.
         """
         if toks and toks[0] == '-':
             self.expr_stack.append('-one')
@@ -672,7 +672,7 @@ class ExpressionParser(ParserElement):
 
         return self.backend.apply_idx(op, idx, update, update_type, *tuple(args))
 
-    def _check_parsed_expr(self, expr_str) -> None:
+    def _check_parsed_expr(self, expr_str: str) -> None:
         """check whether parsing of expression string was successful.
 
         Parameters
@@ -680,7 +680,7 @@ class ExpressionParser(ParserElement):
         expr_str
             Expression that has been attempted to be parsed.
         """
-        expr_str
+
         for sub_str in sorted(self.expr_stack, key=len)[::-1]:
             if sub_str == 'E':
                 sub_str = 'e'
@@ -693,7 +693,7 @@ class ExpressionParser(ParserElement):
             raise ValueError(f"Error while parsing expression: {self.expr_str}. {expr_str} could not be parsed.")
 
     @staticmethod
-    def _compare(x, y):
+    def _compare(x: tp.Any, y: tp.Any) -> bool:
         """Checks whether x and y are equal or not.
         """
         test = x == y
@@ -702,8 +702,9 @@ class ExpressionParser(ParserElement):
         return test
 
 
-def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
-    """Parses a list of equations into the backend.
+def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any, solver='euler', **kwargs) -> dict:
+    """Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
+    of algebraic equations (depends on the chosen solver).
 
     Parameters
     ----------
@@ -713,8 +714,13 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         Key-value pairs of arguments needed for parsing the equations.
     backend
         Backend instance to parse the equations into.
+    solver
+        Type of solving algorithm to be applied to the differential equations in the system. Available solvers are:
+        - `euler` for the explicit euler method
+        - `midpoint` for the midpoint method
+        - `rk23` for the Runge-Kutta algorithm of 2nd (3rd) order
     kwargs
-        Additional keyword arguments to be passed to the backend.
+        Additional keyword arguments to be passed to the backend methods.
 
     Returns
     -------
@@ -819,7 +825,7 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
 
 def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs
                     ) -> tuple:
-    """
+    """Parses list of equations into the backend.
 
     Parameters
     ----------
@@ -828,12 +834,14 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
     equation_args
         Dictionary with arguments needed for the equations.
     backend
-        Backend instance.
+        Backend instance that the equations should be parsed into.
 
     Returns
     -------
     tuple
-
+        Two dictionaries. The first one contains all left-hand side variables for which update operations were created
+        according to their right-hand sides. The second one is the updated `equation_args` dictionary that was
+        passed to this function.
     """
     updates = {}
 
@@ -872,10 +880,14 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
             if not diff_eq and not coupled:
 
+                # apply update to lhs variable of equation instantaneously
                 parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=True,
                                           **kwargs.copy())
                 parser.parse_expr()
+
             else:
+
+                # apply save, non-instantaneous update to lhs variable
                 parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=False,
                                           **kwargs.copy())
                 parser.parse_expr()
@@ -885,14 +897,17 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             # udpate equations args
             #######################
 
+            # save backend variables to equation args
             for key, var in parser.vars.items():
                 if key != "inputs" and key != "rhs" and key != "dt":
                     equation_args[f"{scope}/{key}"] = var
 
+            # save previously unprocessed input variables to equation args
             for key, inp in inputs.items():
                 if key in unprocessed_inputs:
                     equation_args[inp] = parser.vars[key]
 
+        # go to next layer in backend
         backend.add_layer()
 
     return updates, equation_args
