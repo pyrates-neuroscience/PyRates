@@ -30,6 +30,7 @@
 """
 
 # external imports
+import os
 import seaborn as sb
 import networkx.drawing.nx_pydot as pydot
 import pandas as pd
@@ -916,7 +917,7 @@ def save_fig_as_pickle(fp, fig):
     pickle_out.close()
 
 
-def load_fig_from_pickle():
+def load_fig_from_pickle(initial_dir=os.getcwd()):
     """Opens a file dialog to select and load a *.pickle file.
 
     If the pickle file contains a figure object it will automatically be plotted
@@ -930,7 +931,7 @@ def load_fig_from_pickle():
 
     root = Tk()
     root.withdraw()
-    file_path = filedialog.askopenfilename(filetypes=(("pickle files", "*.pickle"), ("all files", "*.*")))
+    file_path = filedialog.askopenfilename(initialdir=initial_dir, filetypes=(("pickle files", "*.pickle"), ("all files", "*.*")))
 
     try:
         pickle_in = open(file_path, "rb")
