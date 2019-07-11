@@ -60,6 +60,8 @@ class ExpressionParser(ParserElement):
         Dictionary containing all variables and functions needed to evaluate the expression.
     backend
         Backend instance in which to parse all variables and operations.
+        See `pyrates.backend.numpy_backend.NumpyBackend` for a full documentation of the backends methods and
+        attributes.
     kwargs
         Additional keyword arguments to be passed to the backend functions.
 
@@ -219,8 +221,13 @@ class ExpressionParser(ParserElement):
             factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self._push_first))
             self.expr << factor + ZeroOrMore((op_add + factor).setParseAction(self._push_first))
 
-    def parse_expr(self):
-        """Parses string-based expression.
+    def parse_expr(self) -> tuple:
+        """Parses string-based mathematical expression/equation.
+
+        Returns
+        -------
+        tuple
+            left-hand side, right-hand side and variables of the parsed equation.
         """
 
         # extract symbols and operations from equations right-hand side
@@ -251,6 +258,7 @@ class ExpressionParser(ParserElement):
 
             self.rhs = rhs
 
+        # post rhs parsing steps
         self.rhs_eval = rhs
         self.clear()
         self._finished_rhs = True
@@ -265,12 +273,12 @@ class ExpressionParser(ParserElement):
         return self.lhs, self.rhs, self.vars
 
     def parse(self, expr_stack: list) -> tp.Any:
-        """Parse elements in expression stack to operation.
+        """Parse elements in expression stack into the backend.
 
         Parameters
         ----------
         expr_stack
-            Ordered list with expression variables and operations.
+            Ordered list with expression variables and operations. Needs to be processed from last to first item.
 
         Returns
         -------
