@@ -77,7 +77,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         sim_time = 10.0
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op0.0/a'})
+        results = net.run(sim_time, outputs={'a': 'pop0/op0/a'})
         #net.clear()
 
         # generate target values
@@ -104,7 +104,7 @@ def test_2_1_operator():
         inp = np.zeros((sim_steps, 1)) + 0.5
 
         # simulate operator behavior
-        results = net.run(sim_time, inputs={'pop0.0/op1.0/u': inp}, outputs={'a': 'pop0.0/op1.0/a'})
+        results = net.run(sim_time, inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'})
 
         # calculate operator behavior from hand
         update1 = lambda x, y: x + dt*(y-x)
@@ -121,7 +121,7 @@ def test_2_1_operator():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net2").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op2.0/a'})
+        results = net.run(sim_time, outputs={'a': 'pop0/op2/a'})
 
         # calculate operator behavior from hand
         update2 = lambda x: 1./(1. + np.exp(-x))
@@ -140,8 +140,8 @@ def test_2_1_operator():
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net3").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
         results = net.run(sim_time,
-                          outputs={'b': 'pop0.0/op3.0/b'},
-                          inputs={'pop0.0/op3.0/u': inp},
+                          outputs={'b': 'pop0/op3/b'},
+                          inputs={'pop0/op3/u': inp},
                           out_dir="/tmp/log")
 
         # calculate operator behavior from hand

@@ -335,6 +335,8 @@ class ComputeGraph(object):
 
                 key_split = key.split('/')
                 node, op, attr = "/".join(key_split[:-2]), key_split[-2], key_split[-1]
+                # rename node if necessary
+                node, node_idx = self.net_config.label_map.get(node, node)
 
                 if '_combined' in list(self.net_config.nodes.keys())[0]:
 
@@ -508,27 +510,29 @@ class ComputeGraph(object):
             # collect output variable from every node in backend
             for node in self.net_config.nodes.keys():
                 var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
-
-        elif node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
-
-            # get output variable of specific backend node
-            var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
-
-        elif any([node in key for key in self.net_config.nodes.keys()]):
-
-            # get output variable from backend nodes of a certain type
-            for node_tmp in self.net_config.nodes.keys():
-                if node in node_tmp:
-                    var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
         else:
+            node, node_idx = self.net_config.label_map.get(node, node)
 
-            # get output variable of specific, vectorized backend node
-            i = 0
-            for node_tmp in self._net_config_map.keys():
-                if node in node_tmp:
-                    var_col[f'{node}/{op}/{var_name}_{i}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
-                                                                                 **kwargs)
-                    i += 1
+            if node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
+
+                # get output variable of specific backend node
+                var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
+
+            elif any([node in key for key in self.net_config.nodes.keys()]):
+
+                # get output variable from backend nodes of a certain type
+                for node_tmp in self.net_config.nodes.keys():
+                    if node in node_tmp:
+                        var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
+            else:
+
+                # get output variable of specific, vectorized backend node
+                i = 0
+                for node_tmp in self._net_config_map.keys():
+                    if node in node_tmp:
+                        var_col[f'{node}/{op}/{var_name}_{i}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
+                                                                                     **kwargs)
+                        i += 1
 
         return var_col
 
