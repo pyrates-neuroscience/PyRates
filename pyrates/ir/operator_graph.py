@@ -169,3 +169,11 @@ class OperatorGraph(DiGraph):
             return ((data["label"], data["values"]) for op, data in self.nodes(data=True))
         else:
             return self.nodes
+
+    def copy(self):
+        """Wrapper for networkx' copy method that copies the hash of the OP graph as well."""
+        g = super().copy()
+        g._h = self._h
+
+        return g
+

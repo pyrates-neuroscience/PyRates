@@ -28,6 +28,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
+from copy import copy
 from typing import Iterator
 
 from pyrates.ir.abc import AbstractBaseIR
@@ -76,14 +77,14 @@ class VectorizedNodeIR(AbstractBaseIR):
     def __init__(self, node_ir: NodeIR):
 
         super().__init__(node_ir.template)
-        self._op_graph = node_ir.op_graph
+        self._op_graph = node_ir.op_graph.copy()
         values = {}
         # reformat all values to be lists of themselves (adding an outer vector dimension)
         for op_key, value_dict in node_ir.values.items():
             op_values = {}
             for var_key, value in value_dict.items():
                 op_values[var_key] = [value]
-            values[op_key] = op_values
+            values[op_key] = copy(op_values)
         self.values = values
 
     @property

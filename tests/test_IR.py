@@ -29,7 +29,7 @@
 """
 """
 
-# import pytest
+import pytest
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -69,7 +69,7 @@ def test_ir_vectorization():
         # original_op = list(original_edge.op_graph.nodes)[0]
         # assert f"{original_op}.0" in circuit2[target]
 
-
+# @pytest.mark.skip
 def test_ir_compilation():
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.ir.circuit import CircuitIR
