@@ -180,7 +180,21 @@ class VectorizedOperatorGraph(DiGraph):
 
         super().__init__()
 
-        if op_graph is not None:
+        if op_graph is None:
+            pass
+        # elif len(op_graph) == 0:
+        #     self.add_node("identity_operator",
+        #                   inputs=dict(in_var=dict(source=set(),
+        #                                           reduce_dim=True)),
+        #                   equations=["out_var = in_var"],
+        #                   variables=dict(in_var=dict(dtype="float32",
+        #                                              vtype="state_var",
+        #                                              shape=(1,)),
+        #                                  out_var=dict(dtype="float32",
+        #                                               vtype="state_var",
+        #                                               shape=(1,))),
+        #                   output="out_var")
+        else:
             for node_key, data in op_graph:
                 try:
                     op = data["operator"]

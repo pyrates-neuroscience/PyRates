@@ -32,6 +32,7 @@ from typing import List
 
 from pyrates import PyRatesException
 from pyrates.ir.node import NodeIR
+from pyrates.ir.operator import OperatorIR
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -40,6 +41,16 @@ __status__ = "Development"
 class EdgeIR(NodeIR):
 
     def __init__(self, operators: dict = None, values: dict = None, template: str = None):
+
+        if not operators:
+            # treat the special case of an empty operator graph
+            operators = dict(identity_operator=OperatorIR(equations=["out_var = in_var"],
+                                                          variables=[("in_var", "state_var", "float32", (1,)),
+                                                                     ("out_var", "state_var", "float32", (1,))],
+                                                          inputs=["in_var"],
+                                                          output="out_var"))
+            values = dict(identity_operator=dict(in_var=0.,
+                                                 out_var=0.))
 
         super().__init__(operators, values, template)
 

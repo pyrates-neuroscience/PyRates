@@ -119,8 +119,12 @@ class ComputeGraph(object):
         # pre-process the network configuration
         self.dt = dt
         self._net_config_map = {}
-        self.net_config = self._net_config_consistency_check(net_config) if build_in_place \
-            else self._net_config_consistency_check(deepcopy(net_config))
+
+        if build_in_place:
+            self.net_config = self._net_config_consistency_check(net_config)
+        else:
+            self.net_config = self._net_config_consistency_check(deepcopy(net_config))
+
         self._vectorize(vectorization_mode=vectorization)
 
         # set time constant of the network
@@ -134,17 +138,26 @@ class ComputeGraph(object):
         print('building the compute graph...')
 
         # create equations and variables for each edge
-        for source_node, target_node, edge_idx in self.net_config.edges:
-
+        for source_node, target_node, edge_idx, data in self.net_config.edges(data=True, keys=True):
             # extract edge information
-            weight = self._get_edge_attr(source_node, target_node, edge_idx, 'weight')
-            delay = self._get_edge_attr(source_node, target_node, edge_idx, 'delay')
-            sidx = self._get_edge_attr(source_node, target_node, edge_idx, 'source_idx')
-            tidx = self._get_edge_attr(source_node, target_node, edge_idx, 'target_idx')
-            sop, svar, sval = self._get_edge_attr(source_node, target_node, edge_idx, 'source_var')
-            top, tvar, tval = self._get_edge_attr(source_node, target_node, edge_idx, 'target_var')
-            add_project = self._get_edge_attr(source_node, target_node, edge_idx, 'add_project')
-            target_graph = self._get_node_attr(target_node, 'op_graph')
+            weight = data['weight']
+            delay = data['delay']
+            sidx = data['source_idx']
+            tidx = data['target_idx']
+            svar = data['source_var']
+            sop, svar = svar.split("/")
+            sval = self.net_config[source_node].values[sop][svar]
+
+            tvar = data['target_var']
+            top, tvar = tvar.split("/")
+            try:
+                tval = self.net_config[target_node].values[top][tvar]
+            except KeyError:
+                # dirty hack
+                tval = self.net_config[target_node].op_graph.nodes[top]["variables"][tvar]["value"]
+
+            add_project = data.get('add_project', False)  # get a False, in case it is not defined
+            target_graph = self.net_config[target_node].op_graph
 
             # define target index
             if delay is not None and tidx:
@@ -164,7 +177,7 @@ class ComputeGraph(object):
             assign = '+=' if add_project else '='
             eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
             args = {}
-            dtype = sval['dtype']
+            dtype = sval.dtype
             args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
             if tidx:
                 args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
@@ -177,11 +190,11 @@ class ComputeGraph(object):
             # add edge operator to target node
             op_name = f'edge_from_{source_node}_{edge_idx}'
             target_graph.add_node(op_name,
-                                  operator={'inputs': {svar: {'sources': [sop],
-                                                              'reduce_dim': True,
-                                                              'node': source_node}},
-                                            'output': tvar,
-                                            'equations': [eq]},
+                                  **{'inputs': {svar: {'sources': [sop],
+                                                       'reduce_dim': True,
+                                                       'node': source_node}},
+                                     'output': tvar,
+                                     'equations': [eq]},
                                   variables=args)
 
             # connect edge operator to target operator
@@ -320,7 +333,7 @@ class ComputeGraph(object):
 
                 # create counting index for collector variables
                 output_col.update(self.backend.add_output_layer(outputs=output_cols,
-                                                                sampling_steps=int(sim_steps/sampling_steps),
+                                                                sampling_steps=int(sim_steps / sampling_steps),
                                                                 out_shapes=output_shapes))
 
         # add input variables to the backend
@@ -523,7 +536,8 @@ class ComputeGraph(object):
                 # get output variable from backend nodes of a certain type
                 for node_tmp in self.net_config.nodes.keys():
                     if node in node_tmp:
-                        var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var, **kwargs)
+                        var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
+                                                                                 **kwargs)
             else:
 
                 # get output variable of specific, vectorized backend node
@@ -613,7 +627,7 @@ class ComputeGraph(object):
             scope = f"{node_name}/{op_name}"
             variables[f"{scope}/inputs"] = {}
             equations += [(eq, scope) for eq in op_info['equations']]
-            for key,  var in op_args.items():
+            for key, var in op_args.items():
                 full_key = f"{scope}/{key}"
                 if key == 'inputs':
                     variables[f"{scope}/inputs"].update(var)
@@ -1204,15 +1218,15 @@ class ComputeGraph(object):
 
         # add buffer operators to operator graph
         op_graph.add_node(f'{op}_{var}_buffer_rotate_{idx}',
-                          operator={'inputs': {},
-                                    'output': f'{var}_buffer_{idx}',
-                                    'equations': eqs_op_rotate},
+                          inputs={},
+                          output=f'{var}_buffer_{idx}',
+                          equations=eqs_op_rotate,
                           variables=var_dict)
         op_graph.add_node(f'{op}_{var}_buffer_read_{idx}',
-                          operator={'inputs': {f'{var}_buffer_{idx}': {'sources': [f'{op}_{var}_buffer_rotate_{idx}'],
-                                                                       'reduce_dim': False}},
-                                    'output': var,
-                                    'equations': eqs_op_read},
+                          **{'inputs': {f'{var}_buffer_{idx}': {'sources': [f'{op}_{var}_buffer_rotate_{idx}'],
+                                                                'reduce_dim': False}},
+                             'output': var,
+                             'equations': eqs_op_read},
                           variables={})
 
         # connect operators to rest of the graph
@@ -1222,9 +1236,9 @@ class ComputeGraph(object):
         # add input information to target operator
         inputs = self._get_op_attr(node, op, 'inputs')
         if var in inputs.keys():
-            inputs[var]['sources'].append(f'{op}_{var}_buffer_read_{idx}')
+            inputs[var]['sources'].add(f'{op}_{var}_buffer_read_{idx}')
         else:
-            inputs[var] = {'sources': [f'{op}_{var}_buffer_read_{idx}'],
+            inputs[var] = {'sources': {f'{op}_{var}_buffer_read_{idx}'},
                            'reduce_dim': True}
 
         # update edge information
@@ -1269,9 +1283,9 @@ class ComputeGraph(object):
 
         # add collector operator to operator graph
         op_graph.add_node(f'{op}_{var}_col_{idx}',
-                          operator={'inputs': {},
-                                    'output': var,
-                                    'equations': eqs},
+                          **{'inputs': {},
+                             'output': var,
+                             'equations': eqs},
                           variables=var_dict)
         op_graph.add_edge(f'{op}_{var}_col_{idx}', op)
 
@@ -1308,13 +1322,13 @@ class ComputeGraph(object):
         # define which fields an operator should have
         op_fields = ['equations', 'inputs', 'output']
 
-
         # go through each node in the network  config
-        for node_name, node in net_config.nodes.items():
+        for node_name, data in net_config.nodes(data=True):
+            node = data["node"]
 
             # check whether an operation graph exists
             try:
-                op_graph = node['node'].op_graph
+                op_graph = node.op_graph
             except KeyError:
                 raise KeyError(f'Key `node` not found on node {node_name}. Every node in the network configuration '
                                f'needs a field with the key `node` under which '
@@ -1388,8 +1402,9 @@ class ComputeGraph(object):
                     except KeyError:
                         var['dtype'] = var_defs['dtype']
 
-                    if 'value' in var.keys() and not hasattr(var['value'], 'shape'):
-                        var['value'] = np.zeros(var['shape'], dtype=var['dtype']) + var['value']
+                    val = node.values[op_name][var_name]
+                    if not hasattr(val, "shape"):
+                        node.values[op_name][var_name] = np.zeros(var['shape'], dtype=var['dtype']) + val
 
                 # check whether the equations, inputs and output fields exist on the operator field
                 if "equations" not in op_info:
@@ -1698,7 +1713,7 @@ class ComputeGraph(object):
 
         # define new node's name
         node_idx = 0
-        node_ref_tmp = node_ref.split('/')[-1] if '/'in node_ref else node_ref
+        node_ref_tmp = node_ref.split('/')[-1] if '/' in node_ref else node_ref
         node_ref_tmp = node_ref_tmp.split('.')[0] if '.' in node_ref_tmp else node_ref_tmp
         if all([node_ref_tmp in node_name for node_name in nodes]):
             node_name = f'{node_ref_tmp}_all'

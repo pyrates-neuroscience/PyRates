@@ -31,6 +31,8 @@
 from copy import copy
 from typing import Iterator
 
+import numpy as np
+
 from pyrates.ir.abc import AbstractBaseIR
 from pyrates.ir.operator_graph import OperatorGraph, VectorizedOperatorGraph
 
@@ -42,7 +44,7 @@ class NodeIR(AbstractBaseIR):
 
     __slots__ = ["_op_graph", "values"]
 
-    def __init__(self, operators: list = None, values: dict = None, template: str=None):
+    def __init__(self, operators: dict = None, values: dict = None, template: str=None):
 
         super().__init__(template)
         self._op_graph = OperatorGraph(operators)
@@ -80,6 +82,11 @@ class VectorizedNodeIR(AbstractBaseIR):
         self.op_graph = VectorizedOperatorGraph(node_ir.op_graph)
         values = {}
         # reformat all values to be lists of themselves (adding an outer vector dimension)
+        # if len(node_ir.op_graph) == 0:
+        #     op_key, data = next(iter(self.op_graph.node(data=True)))
+        #     for var in data["variables"]:
+        #         values[op_key] = {var: [0.]}
+        # else:
         for op_key, value_dict in node_ir.values.items():
             op_values = {}
             for var_key, value in value_dict.items():

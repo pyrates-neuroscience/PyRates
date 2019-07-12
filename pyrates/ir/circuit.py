@@ -615,20 +615,18 @@ class CircuitIR(AbstractBaseIR):
             # the follow raises an error, if the format is wrong for some reason
             source, source_idx = self.label_map[source]
             target, target_idx = self.label_map[target]
-            if target_var is None or edge_ir.input_var is None:
-                raise ValueError
 
             # add edge from source to the new node
             self.graph.add_edge(source, new_name,
-                                source_var=source_var, source_idx=source_idx,
-                                target_var=edge_ir.input_var, target_idx=coupling_vec_idx,
+                                source_var=source_var, source_idx=[source_idx],
+                                target_var=edge_ir.input_var, target_idx=[coupling_vec_idx],
                                 weight=1, delay=0
                                 )
 
             # add edge from new node to target
             self.graph.add_edge(new_name, target,
-                                source_var=edge_ir.output_var, source_idx=coupling_vec_idx,
-                                target_var=target_var, target_idx=target_idx,
+                                source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                                target_var=target_var, target_idx=[target_idx],
                                 weight=weight, delay=delay
                                 )
 
