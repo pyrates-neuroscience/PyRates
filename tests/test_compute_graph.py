@@ -180,7 +180,7 @@ def test_2_2_node():
         net = ComputeGraph(net_config=net_config, name='net0', vectorization='none', dt=dt, backend=b)
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a'})
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -201,7 +201,7 @@ def test_2_2_node():
         net = ComputeGraph(net_config=net_config, name='net1', vectorization='none', dt=dt, backend=b)
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op5.0/a'})
+        results = net.run(sim_time, outputs={'a': 'pop0/op5/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -218,7 +218,7 @@ def test_2_2_node():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net6").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a'})
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'})
         net.clear()
 
         # calculate node behavior from hand
@@ -237,7 +237,7 @@ def test_2_2_node():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net7").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a', 'b': 'pop0.0/op3.0/b'})
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'})
         net.clear()
 
         # calculate node behavior from hand

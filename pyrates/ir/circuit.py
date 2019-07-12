@@ -615,6 +615,8 @@ class CircuitIR(AbstractBaseIR):
             # the follow raises an error, if the format is wrong for some reason
             source, source_idx = self.label_map[source]
             target, target_idx = self.label_map[target]
+            if target_var is None or edge_ir.input_var is None:
+                raise ValueError
 
             # add edge from source to the new node
             self.graph.add_edge(source, new_name,

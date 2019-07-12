@@ -511,7 +511,7 @@ class ComputeGraph(object):
             for node in self.net_config.nodes.keys():
                 var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
         else:
-            node, node_idx = self.net_config.label_map.get(node, node)
+            node, node_idx = self.net_config.label_map.get(node, (node, 0))
 
             if node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
 
@@ -818,16 +818,13 @@ class ComputeGraph(object):
 
         """
 
-        op = self.net_config[node]['op_graph'].nodes[op]
+        op = self.net_config[f"{node}/{op}"]
         if attr in op['variables'].keys():
             op['variables'][attr] = val
             return op['variables'][attr]
         elif attr == 'output':
             op['variables'][op[attr]] = val
             return op['variables'][op[attr]]
-        elif hasattr(op['operator'], attr):
-            setattr(op['operator'], attr, val)
-            return getattr(op['operator'], attr)
         else:
             try:
                 op[attr] = val
@@ -1139,11 +1136,15 @@ class ComputeGraph(object):
                     edge_idx[(source, target)] = 0
                 edge = edge_idx[(source, target)]
                 edge_idx[(source, target)] += 1
-            edge_info = self.net_config.edges[source, target, edge]
-            if edge_info[attr] not in edges_new.keys():
-                edges_new[edge_info[attr]] = [(source, target, edge)]
+            value = self.net_config.edges[source, target, edge][attr]
+            if value is None:
+                raise ValueError
+                # TODO: found a problem with empty coupling nodes, because their input/output variables are None
+                #   need to fix!
+            if value not in edges_new.keys():
+                edges_new[value] = [(source, target, edge)]
             else:
-                edges_new[edge_info[attr]].append((source, target, edge))
+                edges_new[value].append((source, target, edge))
 
         return edges_new
 
@@ -1277,9 +1278,9 @@ class ComputeGraph(object):
         # add input information to target operator
         op_inputs = self._get_op_attr(node, op, 'inputs')
         if var in op_inputs.keys():
-            op_inputs[var]['sources'].append(f'{op}_{var}_col_{idx}')
+            op_inputs[var]['sources'].add(f'{op}_{var}_col_{idx}')
         else:
-            op_inputs[var] = {'sources': [f'{op}_{var}_col_{idx}'],
+            op_inputs[var] = {'sources': {f'{op}_{var}_col_{idx}'},
                               'reduce_dim': True}
 
         # update edge target information
