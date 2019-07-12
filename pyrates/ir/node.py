@@ -32,7 +32,7 @@ from copy import copy
 from typing import Iterator
 
 from pyrates.ir.abc import AbstractBaseIR
-from pyrates.ir.operator_graph import OperatorGraph
+from pyrates.ir.operator_graph import OperatorGraph, VectorizedOperatorGraph
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -72,12 +72,12 @@ class NodeIR(AbstractBaseIR):
 class VectorizedNodeIR(AbstractBaseIR):
     """Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it."""
 
-    __slots__ = ["_op_graph", "values"]
+    __slots__ = ["op_graph", "values"]
 
     def __init__(self, node_ir: NodeIR):
 
         super().__init__(node_ir.template)
-        self._op_graph = node_ir.op_graph.copy()
+        self.op_graph = VectorizedOperatorGraph(node_ir.op_graph)
         values = {}
         # reformat all values to be lists of themselves (adding an outer vector dimension)
         for op_key, value_dict in node_ir.values.items():
@@ -86,10 +86,6 @@ class VectorizedNodeIR(AbstractBaseIR):
                 op_values[var_key] = [value]
             values[op_key] = copy(op_values)
         self.values = values
-
-    @property
-    def op_graph(self):
-        return self._op_graph
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """Alias for self.op_graph.getitem_from_iterator"""

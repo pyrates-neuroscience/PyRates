@@ -27,6 +27,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
+from copy import deepcopy
 from typing import Iterator, Dict, List
 from networkx import DiGraph, find_cycle, NetworkXNoCycle
 
@@ -170,10 +171,60 @@ class OperatorGraph(DiGraph):
         else:
             return self.nodes
 
-    def copy(self):
-        """Wrapper for networkx' copy method that copies the hash of the OP graph as well."""
-        g = super().copy()
-        g._h = self._h
 
-        return g
+class VectorizedOperatorGraph(DiGraph):
+    """Alternate version of `OperatorGraph` that is produced during vectorization. Contents of this version are not
+    particularly protected and the instance is not cached."""
 
+    def __init__(self, op_graph: OperatorGraph):
+
+        super().__init__()
+
+        for node_key, data in op_graph:
+            op = data["operator"]
+
+            self.add_node(node_key,
+                          inputs=deepcopy(data["inputs"]),
+                          equations=list(op.equations),
+                          variables=op.variables.to_dict(),
+                          output=op.output)
+
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
+        """
+        Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If `key_iter`
+        contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of
+        a variable that belong to an operator is returned.
+
+        Parameters
+        ----------
+        key
+        key_iter
+
+        Returns
+        -------
+        item
+            operator or variable properties
+        """
+
+        try:
+            var = next(key_iter)
+        except StopIteration:
+            # no variable specified, so we return an operator
+            item = self.nodes[key]
+        else:
+            # variable specified, so we return variable properties instead
+            item = self.nodes[key]["variables"][var]
+
+        return item
+
+    def operators(self, get_ops=False, get_vals=False):
+        """Alias for self.nodes"""
+
+        if get_ops and get_vals:
+            return ((data["label"], op, data["values"]) for op, data in self.nodes(data=True))
+        elif get_ops:
+            return ((data["label"], op) for op, data in self.nodes(data=True))
+        elif get_vals:
+            return ((data["label"], data["values"]) for op, data in self.nodes(data=True))
+        else:
+            return self.nodes

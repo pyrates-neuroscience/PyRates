@@ -458,8 +458,6 @@ class CircuitIR(AbstractBaseIR):
 
         nodes = (node for node, data in old_nodes)
         self.graph.remove_nodes_from(nodes)
-        from pyrates.ir.operator_graph import op_graph_cache
-
 
         return self
 

@@ -28,6 +28,7 @@
 """
 """
 from collections import namedtuple as _namedtuple
+from copy import deepcopy
 from typing import List, Iterator
 
 from pyrates.ir.abc import AbstractBaseIR
@@ -48,9 +49,8 @@ class ProtectedVariableDict:
     def __init__(self, variables: List[tuple]):
         variables = tuple(variables)
         self._hash = hash(variables)
-        self._d = {vname: Variable(vtype, dtype, shape)
+        self._d = {vname: dict(vtype=vtype, dtype=dtype, shape=shape)
                    for vname, vtype, dtype, shape in variables}
-        self._parsed = {}
 
     def add_parsed_variable(self, key, props):
         """Add parsed representation to a variable from compilation."""
@@ -63,12 +63,7 @@ class ProtectedVariableDict:
         return len(self._d)
 
     def __getitem__(self, key):
-        try:
-            # quick and dirty workaround for compilation.
-            # ToDo: find a more efficient solution to allow parsed variable properties.
-            return self._parsed[key]
-        except KeyError:
-            return self._d[key]
+        return self._d[key]
 
     def __hash__(self):
         return self._hash
@@ -81,6 +76,9 @@ class ProtectedVariableDict:
 
     def values(self):
         return self._d.values()
+
+    def to_dict(self):
+        return deepcopy(self._d)
 
 # class ProtectedVariableDict(dict):
 #     """This is an unsafe hack to provide an immutable and hashable dict. Unsafe means, that checks against isinstance
