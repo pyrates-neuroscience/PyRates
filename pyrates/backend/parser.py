@@ -730,7 +730,6 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
 
     """
 
-    solver = kwargs.pop('solver', 'euler')
     update_num = 0
 
     if solver == 'midpoint':
