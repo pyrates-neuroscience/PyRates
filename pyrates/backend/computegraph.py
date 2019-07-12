@@ -566,7 +566,7 @@ class ComputeGraph(object):
             # retrieve operator and operator args
             op_args = self._get_op_attr(node_name, op_name, 'variables')
             op_args['inputs'] = {}
-            op_info = self._get_op_attr(node_name, op_name, 'operator')
+            op_info = self.net_config[f"{node_name}/{op_name}"]
 
             if getattr(op_info, 'collected', False):
                 break
@@ -779,14 +779,9 @@ class ComputeGraph(object):
             raise ValueError(f'Node with name {node} is not part of this network.')
 
         if attr == 'output' and retrieve:
-            attr = op['operator']['output']
-
-        if attr in op['variables'].keys():
+            attr = op['output']
+        if attr in op['variables']:
             attr_val = op['variables'][attr]
-        elif hasattr(op['operator'], 'keys') and attr in op['operator'].keys():
-            attr_val = op['operator'][attr]
-        elif hasattr(op['operator'], attr):
-            attr_val = getattr(op['operator'], attr)
         else:
             try:
                 attr_val = op[attr]
@@ -1305,6 +1300,10 @@ class ComputeGraph(object):
         # check node attributes
         #######################
 
+        # define which fields an operator should have
+        op_fields = ['equations', 'inputs', 'output']
+
+
         # go through each node in the network  config
         for node_name, node in net_config.nodes.items():
 
@@ -1322,23 +1321,15 @@ class ComputeGraph(object):
                                      f'and input-output relationships.')
 
             # go through the operations on the node
-            for op_name, op in op_graph.nodes.items():
+            for op_name, op_info in op_graph.nodes.items():
 
                 # check whether the variable field exists on the operator
                 try:
-                    variables = op['operator'].variables
+                    variables = op_info['variables']
                 except KeyError:
                     raise KeyError(f'Key `variables` not found in operator {op_name} of node {node_name}. Every '
                                    f'operator on a node needs a field `variables` under which all necessary '
                                    'variables are defined via key-value pairs.')
-
-                # check whether the operator field exists on the operator
-                try:
-                    op_info = op['operator']
-                except KeyError:
-                    raise KeyError(f'Key `operator` not found in operator {op_name} of node {node_name}. Every '
-                                   f'operator on a node needs a field `operator` under which all the equations, '
-                                   'inputs and output are defined.')
 
                 # go through the variables
                 for var_name, var in variables.items():
@@ -1396,21 +1387,18 @@ class ComputeGraph(object):
                         var['value'] = np.zeros(var['shape'], dtype=var['dtype']) + var['value']
 
                 # check whether the equations, inputs and output fields exist on the operator field
-                op_fields = ['equations', 'inputs', 'output']
-                for field in op_fields:
-                    try:
-                        _ = getattr(op_info, field)
-                    except KeyError:
-                        if field == 'equations':
-                            raise KeyError(f'Field {field} not found in `operators` field of operator {op_name} on '
-                                           f'node {node_name}. Each operator should follow a list of equations that '
-                                           f'needs to be provided at this position.')
-                        elif field == 'inputs':
-                            op_info['inputs'] = {}
-                        else:
-                            raise KeyError(f'Field {field} not found in `operators` field of operator {op_name} on '
-                                           f'node {node_name}. Each operator should have an output, the name of which '
-                                           f'needs to be provided at this position.')
+                if "equations" not in op_info:
+                    raise KeyError(f'Field `equations` not found in operator {op_name} on '
+                                   f'node {node_name}. Each operator should follow a list of equations that '
+                                   f'needs to be provided at this position.')
+
+                if "inputs" not in op_info:
+                    op_info['inputs'] = {}
+
+                if "output" not in op_info:
+                    raise KeyError(f'Field `output` not found in operator {op_name} on '
+                                   f'node {node_name}. Each operator should have an output, the name of which '
+                                   f'needs to be provided at this position.')
 
         # check edge attributes
         #######################
