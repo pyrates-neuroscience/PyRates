@@ -34,7 +34,6 @@ and read/construct circuit from JSON.
 from collections import OrderedDict
 from typing import Generator, Tuple, Any, Union, List, Dict
 from networkx import node_link_data
-# from typing import Union, List
 from inspect import getsource
 import numpy as np
 import json

@@ -31,9 +31,8 @@ objects.
 """
 
 # external packages
-import mne
 import numpy as np
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Any
 from pandas import DataFrame
 
 # pyrates internal imports
@@ -57,7 +56,7 @@ def mne_from_dataframe(sim_results: DataFrame,
                        epoch_end: Optional[float] = None,
                        epoch_duration: Optional[float] = None,
                        epoch_averaging: bool = False,
-                       ) -> Union[mne.io.Raw, mne.Epochs, mne.Evoked]:
+                       ) -> Any:
     """Uses the data stored on a circuit to create a raw/epoch/evoked mne object.
 
     Parameters
@@ -90,10 +89,12 @@ def mne_from_dataframe(sim_results: DataFrame,
 
     Returns
     -------
-    Union[mne.io.Raw, mne.Epochs, mne.Evoked]
+    Any
         MNE object that contains either the raw, epoched, or averaged (over epochs) data.
 
     """
+
+    import mne
 
     # extract information from arguments
     ####################################
@@ -177,7 +178,7 @@ def mne_from_csv(csv_dir: str,
                  epoch_end: Optional[float] = None,
                  epoch_duration: Optional[float] = None,
                  epoch_averaging: bool = False,
-                 ) -> Union[mne.io.Raw, mne.Epochs, mne.Evoked]:
+                 ) -> Any:
     """Uses the data stored on circuit to create a raw/epoch/evoked mne object.
 
     Parameters
@@ -211,10 +212,12 @@ def mne_from_csv(csv_dir: str,
 
     Returns
     -------
-    Union[mne.io.Raw, mne.Epochs, mne.Evoked]
+    Any
         MNE object that contains either the raw, epoched, or averaged (over epochs) data.
 
     """
+
+    import mne
 
     # extract information from arguments
     ####################################
