@@ -719,6 +719,11 @@ class ClusterGridSearch(ClusterCompute):
         -------
 
         """
+
+        # This lock makes sure, that parameter chunks are fetched by workers in the same order as they were defined
+        # in the node list
+        self.lock.acquire()
+
         thread_name = currentThread().getName()
         connection_lost = False
         connection_lost_counter = 0
@@ -751,64 +756,77 @@ class ClusterGridSearch(ClusterCompute):
         # Start scheduler
         #################
         while True:
+            # Disable thread switching
+            self.lock.acquire()
 
-            # Temporarily disable thread switching
-            with self.lock:
+            # Fetch grid chunks
+            ####################
+            # Get all parameters that haven't been successfully computed yet
+            remaining_params = working_grid.loc[working_grid["status"] == "unsolved"]
+            if remaining_params.empty:
+                print(f'[T]\'{thread_name}\': No more parameter combinations available!')
+                # Enable thread switching
+                self.lock.release()
+                # Release the initial lock in the first iteration
+                try:
+                    self.lock.release()
+                except RuntimeError:
+                    pass
+                break
 
-                # Fetch grid chunks
-                ####################
+            else:
+                # Find chunk index of first value in remaining params and fetch all parameter combinations with the
+                # same chunk index
+                param_idx, chunk_idx = self._fetch_index(remaining_params, chunk_size, working_grid)
+                working_grid.loc[param_idx, "status"] = "pending"
 
-                # Get all parameters that haven't been successfully computed yet
-                remaining_params = working_grid.loc[working_grid["status"] == "unsolved"]
-                if remaining_params.empty:
-                    print(f'[T]\'{thread_name}\': No more parameter combinations available!')
-                    break
-                else:
-                    # Find chunk index of first value in remaining params and fetch all parameter combinations with the
-                    # same chunk index
-                    param_idx, chunk_idx = self._fetch_index(remaining_params, chunk_size, working_grid)
-                    working_grid.loc[param_idx, "status"] = "pending"
+                print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
+                print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
 
-                    print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
-                    print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
+                # Create parameter sub-grid
+                ###########################
+                subgrid_fp = f'{subgrid_dir}/{thread_name}_Subgrid_{subgrid_idx}.h5'
+                subgrid_df = working_grid.iloc[param_idx]
+                subgrid_df.to_hdf(subgrid_fp, key="subgrid")
+                subgrid_idx += 1
 
-                    # Create parameter sub-grid
-                    ###########################
-                    subgrid_fp = f'{subgrid_dir}/{thread_name}_Subgrid_{subgrid_idx}.h5'
-                    subgrid_df = working_grid.iloc[param_idx]
-                    subgrid_df.to_hdf(subgrid_fp, key="subgrid")
-                    subgrid_idx += 1
+                # TODO: Copy subgrid to worker if necessary
 
-                    # TODO: Copy subgrid to worker if necessary
+                # Temporary result file for current subgrid
+                ###########################################
+                local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_' \
+                    f'chunk_{chunk_idx:02}_idx_{param_idx[0]}-{param_idx[-1]}_temp.h5'
+                self.res_file_collection[chunk_idx] = local_res_file
 
-                    # Temporary result file for current subgrid
-                    ###########################################
-                    local_res_file = f'{grid_res_dir}/CGS_result_{grid_name}_' \
-                        f'chunk_{chunk_idx:02}_idx_{param_idx[0]}-{param_idx[-1]}_temp.h5'
-                    self.res_file_collection[chunk_idx] = local_res_file
+                # Execute worker script on the remote host
+                ##########################################
+                t0 = t.time()
 
-                    # Execute worker script on the remote host
-                    ##########################################
-                    t0 = t.time()
+                try:
+                    print(f'[T]\'{thread_name}\': Starting remote computation...')
+                    stdin, stdout, stderr = pm_client.exec_command(command +
+                                                                   f' --config_file={config_file}'
+                                                                   f' --subgrid={subgrid_fp}'
+                                                                   f' --local_res_file={local_res_file}'
+                                                                   f' --build_dir={local_build_dir}'
+                                                                   f' &>> {logfile}',  # redirect and append stdout
+                                                                                       # and stderr to logfile
+                                                                   get_pty=True)       # execute in pseudoterminal
+                except paramiko.ssh_exception.SSHException as e:
+                    # SSH connection has been lost
+                    # (remote machine shut down, ssh connection has been killed manually, ...)
+                    print(f'[T]\'{thread_name}\': ERROR: {e}')
+                    working_grid.at[param_idx, "status"] = "unsolved"
+                    connection_lost = True
 
-                    try:
-                        print(f'[T]\'{thread_name}\': Starting remote computation...')
-                        stdin, stdout, stderr = pm_client.exec_command(command +
-                                                                       f' --config_file={config_file}'
-                                                                       f' --subgrid={subgrid_fp}'
-                                                                       f' --local_res_file={local_res_file}'
-                                                                       f' --build_dir={local_build_dir}'
-                                                                       f' &>> {logfile}',  # redirect and append stdout
-                                                                                           # and stderr to logfile
-                                                                       get_pty=True)       # execute in pseudoterminal
-                    except paramiko.ssh_exception.SSHException as e:
-                        # SSH connection has been lost
-                        # (remote machine shut down, ssh connection has been killed manually, ...)
-                        print(f'[T]\'{thread_name}\': ERROR: {e}')
-                        working_grid.at[param_idx, "status"] = "unsolved"
-                        connection_lost = True
+            # Enable thread switching
+            self.lock.release()
 
-            # Lock released, thread switching enabled
+            # Release the second lock if its still acquired from the very beginning
+            try:
+                self.lock.release()
+            except RuntimeError:
+                pass
 
             # Try to reconnect to host if connection has been lost
             ######################################################

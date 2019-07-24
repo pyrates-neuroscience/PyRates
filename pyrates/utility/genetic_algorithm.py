@@ -33,6 +33,7 @@ from typing import Optional, Union
 
 # system imports
 import os
+import h5py
 import random
 from itertools import cycle
 
@@ -169,6 +170,8 @@ class GeneticAlgorithmTemplate:
                                 if drop_save:
                                     os.makedirs(drop_save, exist_ok=True)
                                     new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
+                                    with h5py.File(f'{drop_save}/PopulationDrop_{self.drop_count}.h5') as file:
+                                        file['target'] = target
                                 self.drop_count += 1
                                 if new_pop_on_drop:
                                     self.__create_pop(sampling_func=gene_sampling_func)
@@ -363,8 +366,8 @@ class GeneticAlgorithmTemplate:
         # Set -inf to 0 since it would be replaced by very small numbers during nan_to_num
         parent_repro[parent_repro == -np.inf] = 0.
         parent_repro = parent_repro.to_numpy()
-        # parent_repro = np.nan_to_num(parent_repro, copy=True)
         parent_repro /= parent_repro.sum()
+        parent_repro = np.abs(parent_repro)
 
         # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values
