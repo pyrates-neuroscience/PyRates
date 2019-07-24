@@ -133,7 +133,9 @@ def main(_):
         outputs=outputs,
         init_kwargs=init_kwargs,
         profile='t',
-        build_dir=build_dir)
+        build_dir=build_dir,
+        decorator=njit,
+        parallel=False)
 
     out_vars = results.columns.levels[-1]
 
@@ -145,7 +147,8 @@ def main(_):
     print("***POSTPROCESSING AND CREATING RESULT FILES***")
     t0 = time.time()
 
-    with pd.HDFStore(local_res_file, "w") as store:
+    with pd.HDFStore(local_res_file, "a") as store:
+
         for out_var in out_vars:
             res_lst = []
 
@@ -153,18 +156,21 @@ def main(_):
             ###################################################
             # Iterate over rows in param_grid and use its values to index columns in results
             for i, column_values in enumerate(param_grid.values):
-                result = results.loc[:, tuple([column_values, out_var])]
-                result.columns.names = results.columns.names
+                result = results.loc[:, tuple([*column_values, out_var])].to_frame()
+
+                # Postprocess ordered results (optional)
+                ########################################
+
                 res_lst.append(result)
 
             # Concatenate all DataFrame in res_lst to one global ordered DataFrame
             result_ordered = pd.concat(res_lst, axis=1)
 
-            # Postprocess ordered results (optional)
-            ########################################
+            result_ordered.columns.names = results.columns.names
 
             # Write DataFrames to local result file
-            ######################################
+            #######################################
+
             store.put(key=out_var, value=result_ordered)
 
     # TODO: Copy local result file back to master if needed
@@ -180,14 +186,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_config.json',
+        default=f'/nobackup/spanien1/salomon/CGS/Benchmark/Config/DefaultConfig_0.json',
         help="File to load grid_search configuration parameter from"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_grid.h5',
+        default=f'/nobackup/spanien1/salomon/CGS/Benchmark/Grids/Subgrids/DefaultGrid_0/animals/animals_Subgrid_0.h5',
         help="File to load parameter grid from"
     )
 
