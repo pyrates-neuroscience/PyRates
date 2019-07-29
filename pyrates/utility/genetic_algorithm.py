@@ -169,6 +169,10 @@ class GeneticAlgorithmTemplate:
                                 print("Dropping fittest from population!")
                                 if drop_save:
                                     os.makedirs(drop_save, exist_ok=True)
+                                    drop_file = f'{drop_save}/PopulationDrop_{self.drop_count}.h5'
+                                    # Ensure that a new drop file is created when one already exists in the drop dir
+                                    while os.path.isfile(drop_file):
+                                        self.drop_count += 1
                                     new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                                     with h5py.File(f'{drop_save}/PopulationDrop_{self.drop_count}.h5') as file:
                                         file['target'] = target
@@ -363,8 +367,11 @@ class GeneticAlgorithmTemplate:
         # Reproduction probability for each parent is based on its relative fitness
         parent_repro = self.pop['fitness'].copy()
 
-        # Set -inf to 0 since it would be replaced by very small numbers during nan_to_num
+        # Set -inf and NaN to 0 since it would be replaced by very small numbers during nan_to_num
+        parent_repro[np.isnan(parent_repro)] = 0.
         parent_repro[parent_repro == -np.inf] = 0.
+        parent_repro = np.nan_to_num(parent_repro)
+
         parent_repro = parent_repro.to_numpy()
         parent_repro /= parent_repro.sum()
         parent_repro = np.abs(parent_repro)
