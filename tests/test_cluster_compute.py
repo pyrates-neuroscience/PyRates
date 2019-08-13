@@ -1,8 +1,5 @@
 """Test suite for cluster computation functionality.
 """
-
-
-
 import pytest
 
 # meta infos
@@ -76,7 +73,7 @@ def test_worker_template(tmp_path):
             'vectorization': 'nodes',
             'solver': 'euler'
         },
-        "target": [[0,0], [0,0], [0,0], [0,0], [0,0], [0,0], [0,0], [0,0]]
+        "target": [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]
     }
 
     # Create test configuration file for worker template
