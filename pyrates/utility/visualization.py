@@ -340,8 +340,11 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
 
     elif node_order:
 
-        idx_c = [node_order.index(n) for n in fc.columns.values]
-        idx_r = [i for i in range(fc.shape[0])]
+        idx_c = [int(np.where(fc.columns.values==n)[0]) for n in node_order]
+        idx_r = [int(np.where(fc.columns.values==n)[0]) for n in node_order]
+        # idx_c = [node_order.index(n) for n in fc.columns.values]
+        # idx_r = [node_order.index(n) for n in fc.columns.values]
+        # idx_r = [i for i in range(fc.shape[0])]
 
     else:
 
@@ -368,7 +371,7 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
             ax = sb.clustermap(data=fc, row_colors=node_colors, col_colors=node_colors, **kwargs)
         else:
             ax = sb.heatmap(fc, **kwargs)
-            ax.invert_yaxis()
+            # ax.invert_yaxis()
 
     elif plot_style == 'circular_graph':
 

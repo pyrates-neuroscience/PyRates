@@ -115,6 +115,8 @@ class GeneticAlgorithmTemplate:
         self.initial_gene_pool = initial_gene_pool
         self.num_genes = len(initial_gene_pool)
         self.sigma_adapt = sigma_adapt
+
+        # Counts how many members have already been droped out from a population due to fitness stagnation
         self.drop_count = 0
 
         # Create starting population
@@ -170,15 +172,21 @@ class GeneticAlgorithmTemplate:
                                 if drop_save:
                                     os.makedirs(drop_save, exist_ok=True)
                                     drop_file = f'{drop_save}/PopulationDrop_{self.drop_count}.h5'
+                                    # TODO: Dynamically change the drop file name if a file with the current name
+                                    #  already exists
+
                                     # Ensure that a new drop file is created when one already exists in the drop dir
-                                    while os.path.isfile(drop_file):
-                                        self.drop_count += 1
+                                    # while os.path.isfile(drop_file):
+                                    #     self.drop_count += 1
                                     new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                                     with h5py.File(f'{drop_save}/PopulationDrop_{self.drop_count}.h5') as file:
                                         file['target'] = target
+
                                 self.drop_count += 1
+
                                 if new_pop_on_drop:
                                     self.__create_pop(sampling_func=gene_sampling_func)
+                                    continue
                                 else:
                                     self.pop = self.pop.drop(new_candidate.index)
                             else:
@@ -225,7 +233,7 @@ class GeneticAlgorithmTemplate:
 
             # Create offspring from current population
             ##########################################
-            if self.current_max_fitness == -np.inf:
+            if self.current_max_fitness == -0.0:
                 print(f'No candidate available for the current gene set')
                 print(f'Generating new population')
                 self.__create_pop(sampling_func=gene_sampling_func)
@@ -320,7 +328,7 @@ class GeneticAlgorithmTemplate:
 
         sigmas = [self.initial_gene_pool[gene]['sigma'] for gene in self.initial_gene_pool.keys()]
 
-        self.pop['fitness'] = -np.inf
+        self.pop['fitness'] = 0.0
         self.pop['sigma'] = [sigmas for _ in range(self.pop_size)]
 
     def __select_winners(self, n_winners):
@@ -367,14 +375,16 @@ class GeneticAlgorithmTemplate:
         # Reproduction probability for each parent is based on its relative fitness
         parent_repro = self.pop['fitness'].copy()
 
-        # Set -inf and NaN to 0 since it would be replaced by very small numbers during nan_to_num
-        parent_repro[np.isnan(parent_repro)] = 0.
-        parent_repro[parent_repro == -np.inf] = 0.
-        parent_repro = np.nan_to_num(parent_repro)
+        # Set -inf and NaN to 0 since np.choice can only handle positive floats or ints
+        # Safety measure, should not occur in the first place
+        parent_repro[parent_repro == -np.inf] = 0.0
+        parent_repro[parent_repro == -np.Inf] = 0.0
+        parent_repro[parent_repro == np.NaN] = 0.0
+        parent_repro[parent_repro == np.nan] = 0.0
 
+        # Convert fitness to list of normalized choice probabilities
         parent_repro = parent_repro.to_numpy()
-        parent_repro /= parent_repro.sum()
-        parent_repro = np.abs(parent_repro)
+        parent_repro /= np.abs(parent_repro.sum())
 
         # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values
