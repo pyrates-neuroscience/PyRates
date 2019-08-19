@@ -65,11 +65,12 @@ class GeneticAlgorithmTemplate:
             stagnation_decimals: Optional[int] = 8, max_stagnation_drops: Optional[Union[int, float]] = np.Inf,
             enforce_max_iter: Optional[bool] = False, new_pop_on_drop: Optional[bool] = False,
             candidate_save: Optional[str] = "", drop_save: Optional[str] = "", gene_sampling_func=np.linspace, **kwargs):
-        """Run a genetic algorithm to fit genes of a population in respect to a given target vector
+        """Run a genetic algorithm to optimize genes of a population in respect to a given target vector
 
         Parameters
         ----------
         initial_gene_pool
+            Dictionary containing ranges for each gene to sample from
         target
             Target values that are used to determine the fitness of a population member
         max_iter
@@ -95,8 +96,8 @@ class GeneticAlgorithmTemplate:
         enforce_max_iter
             If True, all iterations will performed, even if another convergence criterion is reached before
         new_pop_on_drop
-            If True, a whole new population is created once the fitness stagnates. If False, only the fittest member of
-            the population is dropped
+            If True, a new population is created once the fitness stagnates. If False, only the fittest member of
+            the population is replaced by a new member and the computation continues
         candidate_save
             If set, the strongest member of a population will be saved to an hdf5 file, before the population is updated
         drop_save
@@ -306,6 +307,17 @@ class GeneticAlgorithmTemplate:
             new_sigs.append(new_member[1])
 
         offspring = pd.DataFrame(offspring)
+
+        # 5. Swap possible duplicates in the offspring with new members
+        ###############################################################
+        while any(offspring.duplicated()):
+            dupl_idx = offspring.loc[offspring.duplicated()].index.to_numpy()
+            for i in dupl_idx:
+                # Replace every duplicate with a new chromosome, fitness 0.0 and respective sigmas
+                new_member = self.__create_new_member()
+                offspring.iloc[i] = new_member[0]
+                new_sigs[i] = new_member[1]
+
         offspring['fitness'] = 0.0
         offspring['sigma'] = new_sigs
         offspring.columns = self.pop.columns
