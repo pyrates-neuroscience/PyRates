@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to PyRates's documentation!
-===================================
+Welcome to the PyRates documentation!
+=====================================
 
 PyRates is a Python 3 tool for building rate-based neural models and performing numerical simulations of their dynamic behavior.
 
