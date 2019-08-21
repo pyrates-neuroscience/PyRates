@@ -18,11 +18,11 @@ Op_e:
     tau:
       default: 1.0
     delta:
-      default: 1.0
+      default: 2.0
     eta:
-      default: -2.5
+      default: -5.0
     J_e:
-      default: 12.0
+      default: 21.2132
     J_i:
       default: 2.0
     inp:
@@ -89,3 +89,12 @@ Net3:
   edges:
     - [PC/Op_e/r, IIN/Op_i/r_e, DummyEdge, {weight: 5.0}]
     - [IIN/Op_i/r, PC/Op_e/r_i, DummyEdge, {weight: 5.0}]
+
+Net4:
+  base: CircuitTemplate
+  nodes:
+    E1: Pop_e
+    E2: Pop_e
+  edges:
+    - [E1/Op_e/r, E2/Op_e/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [E2/Op_e/r, E1/Op_e/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]

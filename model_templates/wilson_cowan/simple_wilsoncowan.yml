@@ -1,0 +1,39 @@
+%YAML 1.2
+---
+
+Op_rate:
+  base: OperatorTemplate
+  equations:
+    - "v' = (I_syn+I_ext-v)/tau"
+    - "r = r_max / (1 + exp(s*(v-v_th)))"
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    tau:
+      default: 1.0
+    r_max:
+      default: 1.0
+    s:
+      default: 200.0
+    v_th:
+      default: 0.0
+    I_ext:
+      default: input
+    I_syn:
+      default: input
+
+Pop_rate:
+  base: PopulationTemplate
+  operators:
+    - Op_rate
+
+WC:
+  base: CircuitTemplate
+  nodes:
+    E: Pop_rate
+    I: Pop_rate
+  edges:
+    - [E/Op_rate/r, I/Op_rate/I_syn, null, {weight: 1.0}]
+    - [I/Op_rate/r, E/Op_rate/I_syn, null, {weight: 1.0}]
