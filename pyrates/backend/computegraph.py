@@ -150,11 +150,13 @@ class ComputeGraph(object):
 
             tvar = data['target_var']
             top, tvar = tvar.split("/")
+            # get variable properties
+            # tval --> variable properties
             try:
                 tval = self.net_config[target_node].values[top][tvar]
             except KeyError:
-                # dirty hack
-                tval = self.net_config[target_node].op_graph.nodes[top]["variables"][tvar]["value"]
+                # dirty hack to accomodate operators that have been added after the "optimize" step
+                tval = self.net_config[target_node].op_graph.nodes[top]["variables"][tvar]
 
             add_project = data.get('add_project', False)  # get a False, in case it is not defined
             target_graph = self.net_config[target_node].op_graph

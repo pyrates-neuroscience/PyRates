@@ -620,7 +620,7 @@ class CircuitIR(AbstractBaseIR):
             self.graph.add_edge(source, new_name,
                                 source_var=source_var, source_idx=[source_idx],
                                 target_var=edge_ir.input_var, target_idx=[coupling_vec_idx],
-                                weight=1, delay=0
+                                weight=1, delay=None
                                 )
 
             # add edge from new node to target
