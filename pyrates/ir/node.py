@@ -27,7 +27,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from copy import copy
+from copy import copy, deepcopy
 from typing import Iterator
 
 import numpy as np
@@ -137,3 +137,52 @@ class VectorizedNodeIR(AbstractBaseIR):
         self._length
         """
         return self._length
+
+    def add_op(self, op_key: str, inputs: dict, output: str, equations: list, variables: dict):
+        """Wrapper for internal `op_graph.add_operator` that adds any values to node-level values dictionary for quick
+        access
+
+        Parameters
+        ----------
+        op_key
+            Name of operator to be added
+        inputs
+            dictionary definining input variables of the operator
+        output
+            string defining name of single output variable
+        equations
+            list of equations (strings)
+        variables
+            dictionary describing variables
+
+        Returns
+        -------
+
+        """
+
+        # collect all values in variable dictionary
+        values = {}
+        for var_key, var_dict in variables.items():
+            values[var_key] = var_dict.pop("value")
+
+        # add operator to op_graph
+        self.op_graph.add_operator(op_key, inputs=inputs, output=output, equations=equations, variables=variables)
+
+        # add values to node-wide values dict
+        self.values[op_key] = values
+
+    def add_op_edge(self, source_op_key: str, target_op_key: str, **attr):
+        """ Alias to `self.op_graph.add_edge`
+
+        Parameters
+        ----------
+        source_op_key
+        target_op_key
+        attr
+
+        Returns
+        -------
+
+        """
+
+        self.op_graph.add_edge(source_op_key, target_op_key, **attr)

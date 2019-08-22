@@ -153,13 +153,16 @@ class ComputeGraph(object):
             # get variable properties
             # tval --> variable properties
             try:
-                tval = self.net_config[target_node].values[top][tvar]
-            except KeyError:
+                # fetch both values and variable definitions of target variable
+                tval = dict(value=self.net_config[target_node].values[top][tvar],
+                            **self.net_config[target_node].operators[top]["variables"][tvar])
+            except KeyError as e:
                 # dirty hack to accomodate operators that have been added after the "optimize" step
-                tval = self.net_config[target_node].op_graph.nodes[top]["variables"][tvar]
+                # tval = self.net_config[target_node].op_graph.nodes[top]["variables"][tvar]
+                raise e
 
             add_project = data.get('add_project', False)  # get a False, in case it is not defined
-            target_graph = self.net_config[target_node].op_graph
+            target_node_ir = self.net_config[target_node]
 
             # define target index
             if delay is not None and tidx:
@@ -191,16 +194,16 @@ class ComputeGraph(object):
 
             # add edge operator to target node
             op_name = f'edge_from_{source_node}_{edge_idx}'
-            target_graph.add_node(op_name,
-                                  **{'inputs': {svar: {'sources': [sop],
-                                                       'reduce_dim': True,
-                                                       'node': source_node}},
-                                     'output': tvar,
-                                     'equations': [eq]},
+            target_node_ir.add_op(op_name,
+                                  inputs={svar: {'sources': [sop],
+                                                 'reduce_dim': True,
+                                                 'node': source_node}},
+                                  output=tvar,
+                                  equations=[eq],
                                   variables=args)
 
             # connect edge operator to target operator
-            target_graph.add_edge(op_name, top)
+            target_node_ir.add_op_edge(op_name, top)
 
             # add input information to target operator
             inputs = self._get_op_attr(target_node, top, 'inputs')
@@ -1189,7 +1192,7 @@ class ComputeGraph(object):
         """
 
         target_shape = self._get_op_attr(node, op, var)['shape']
-        op_graph = self._get_node_attr(node, 'op_graph')
+        node_ir = self.net_config[node]
 
         # create buffer variable definitions
         if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
@@ -1219,21 +1222,21 @@ class ComputeGraph(object):
             eqs_op_rotate = [f"{var}_buffer_{idx} = concat(({var}_buffer_{idx}[:, 1:], {var}_buffer_{idx}_reset), 1)"]
 
         # add buffer operators to operator graph
-        op_graph.add_node(f'{op}_{var}_buffer_rotate_{idx}',
-                          inputs={},
-                          output=f'{var}_buffer_{idx}',
-                          equations=eqs_op_rotate,
-                          variables=var_dict)
-        op_graph.add_node(f'{op}_{var}_buffer_read_{idx}',
-                          **{'inputs': {f'{var}_buffer_{idx}': {'sources': [f'{op}_{var}_buffer_rotate_{idx}'],
-                                                                'reduce_dim': False}},
-                             'output': var,
-                             'equations': eqs_op_read},
-                          variables={})
+        node_ir.add_op(f'{op}_{var}_buffer_rotate_{idx}',
+                       inputs={},
+                       output=f'{var}_buffer_{idx}',
+                       equations=eqs_op_rotate,
+                       variables=var_dict)
+        node_ir.add_op(f'{op}_{var}_buffer_read_{idx}',
+                       inputs={f'{var}_buffer_{idx}': {'sources': [f'{op}_{var}_buffer_rotate_{idx}'],
+                                                       'reduce_dim': False}},
+                       output=var,
+                       equations=eqs_op_read,
+                       variables={})
 
         # connect operators to rest of the graph
-        op_graph.add_edge(f'{op}_{var}_buffer_rotate_{idx}', f'{op}_{var}_buffer_read_{idx}')
-        op_graph.add_edge(f'{op}_{var}_buffer_read_{idx}', op)
+        node_ir.add_op_edge(f'{op}_{var}_buffer_rotate_{idx}', f'{op}_{var}_buffer_read_{idx}')
+        node_ir.add_op_edge(f'{op}_{var}_buffer_read_{idx}', op)
 
         # add input information to target operator
         inputs = self._get_op_attr(node, op, 'inputs')
@@ -1271,7 +1274,8 @@ class ComputeGraph(object):
         """
 
         target_shape = self._get_op_attr(node, op, var)['shape']
-        op_graph = self._get_node_attr(node, 'op_graph')
+        # op_graph = self._get_node_attr(node, 'op_graph')
+        node_ir = self.net_config[node]
 
         # create collector equation
         eqs = [f"{var} = {var}_col_{idx}"]
@@ -1284,12 +1288,12 @@ class ComputeGraph(object):
                                          }}
 
         # add collector operator to operator graph
-        op_graph.add_node(f'{op}_{var}_col_{idx}',
-                          **{'inputs': {},
-                             'output': var,
-                             'equations': eqs},
-                          variables=var_dict)
-        op_graph.add_edge(f'{op}_{var}_col_{idx}', op)
+        node_ir.add_op(f'{op}_{var}_col_{idx}',
+                       inputs={},
+                       output=var,
+                       equations=eqs,
+                       variables=var_dict)
+        node_ir.add_op_edge(f'{op}_{var}_col_{idx}', op)
 
         # add input information to target operator
         op_inputs = self._get_op_attr(node, op, 'inputs')
@@ -1913,148 +1917,148 @@ class ComputeGraph(object):
             for edge in edges_tmp:
                 edges.pop(edges.index(edge))
 
-    def _vectorize_ops(self,
-                       op_key: str,
-                       nodes: list,
-                       new_node: DiGraph,
-                       new_node_name: str
-                       ) -> None:
-        """Vectorize all instances of an operation across nodes and put them into a single-node backend.
-
-        Parameters
-        ----------
-        op_key
-            Name of the operator that should be vectorized.
-        nodes
-            Collection of node names on which the operator exists.
-        new_node
-            Name of the new node that should be added to the graph.
-
-        Returns
-        -------
-        None
-
-        """
-
-        # extract operation in question
-        node_name_tmp = nodes.pop(0)
-        op_inputs = self._get_node_attr(node_name_tmp, 'inputs', op_key)
-
-        if node_name_tmp not in self._net_config_map:
-            self._net_config_map[node_name_tmp] = {}
-        if op_key not in self._net_config_map[node_name_tmp]:
-            self._net_config_map[node_name_tmp][op_key] = {}
-
-        # collect input dependencies of all nodes
-        #########################################
-
-        nodes_tmp = [node_name_tmp] + nodes
-        if len(nodes_tmp) > 1:
-            for node in nodes_tmp:
-                op_inputs_tmp = self._get_node_attr(node, 'inputs', op_key)
-                for key, arg in op_inputs_tmp.items():
-                    if type(op_inputs[key]['reduce_dim']) is bool:
-                        op_inputs[key]['reduce_dim'] = [arg['reduce_dim']]
-                        op_inputs[key]['sources'] = [arg['sources']]
-                    else:
-                        if arg['sources'] not in op_inputs[key]['sources']:
-                            op_inputs[key]['sources'].append(arg['sources'])
-                            op_inputs[key]['reduce_dim'].append(arg['reduce_dim'])
-
-        # extract operator-specific arguments and change their shape and value
-        ######################################################################
-
-        op_args = {}
-        for key, arg in self._get_op_attr(node_name_tmp, op_key, 'variables').items():
-
-            arg = deepcopy(arg)
-
-            if arg['vtype'] == 'raw':
-
-                if type(arg['value']) is list:
-
-                    self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
-                                                                        (0, len(arg['value']))]
-
-                    for node_name in nodes:
-
-                        if node_name not in self._net_config_map:
-                            self._net_config_map[node_name] = {}
-                        if op_key not in self._net_config_map[node_name]:
-                            self._net_config_map[node_name][op_key] = {}
-
-                        new_val = self._get_op_attr(node_name, op_key, key)['value']
-                        old_idx = len(arg['value'])
-                        arg['value'].append(new_val)
-
-                        self._net_config_map[node_name][op_key][key] = [new_node_name, op_key, key,
-                                                                        (old_idx, arg['value'].shape[0])]
-
-                else:
-
-                    # add information to _net_config_map
-                    self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key, None]
-
-            else:
-
-                if not hasattr(arg['value'], 'shape'):
-                    arg['value'] = np.array(arg['value'])
-                if arg['value'].shape != arg['shape']:
-                    try:
-                        arg['value'] = np.reshape(arg['value'], arg['shape'])
-                    except ValueError:
-                        arg['value'] = np.zeros(arg['shape'], dtype=self._float_precision) + arg['value']
-
-                # go through nodes and extract shape and value information for arg
-                if nodes:
-
-                    self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
-                                                                        (0, arg['value'].shape[0])]
-
-                    for node_name in nodes:
-
-                        if node_name not in self._net_config_map:
-                            self._net_config_map[node_name] = {}
-                        if op_key not in self._net_config_map[node_name]:
-                            self._net_config_map[node_name][op_key] = {}
-
-                        # extract node arg value and shape
-                        arg_tmp = self._get_op_attr(node_name, op_key, key)
-                        val = arg_tmp['value']
-                        dims = tuple(arg_tmp['shape'])
-
-                        # append value to argument dictionary
-                        if len(dims) > 0 and type(val) is float:
-                            val = np.zeros(dims, dtype=self._float_precision) + val
-                        else:
-                            val = np.reshape(np.array(val), dims)
-                        if len(dims) == 0:
-                            idx_old = 0
-                        else:
-                            idx_old = arg['value'].shape[0]
-                        arg['value'] = np.append(arg['value'], val, axis=0)
-                        idx_new = arg['value'].shape[0]
-                        idx = (idx_old, idx_new)
-
-                        # add information to _net_config_map
-                        self._net_config_map[node_name][op_key][key] = [new_node_name, op_key, key, idx]
-
-                else:
-
-                    # add information to _net_config_map
-                    self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
-                                                                        (0, arg['value'].shape[0])]
-
-                # change shape of argument
-                arg['shape'] = arg['value'].shape
-
-                # add argument to new node's argument dictionary
-                op_args[key] = arg
-
-        # add operator to node
-        new_node.add_node(op_key,
-                          operator=self._get_op_attr(node_name_tmp, op_key, 'operator'),
-                          variables=op_args)
+    # def _vectorize_ops(self,
+    #                    op_key: str,
+    #                    nodes: list,
+    #                    new_node: DiGraph,
+    #                    new_node_name: str
+    #                    ) -> None:
+    #     """Vectorize all instances of an operation across nodes and put them into a single-node backend.
+    #
+    #     Parameters
+    #     ----------
+    #     op_key
+    #         Name of the operator that should be vectorized.
+    #     nodes
+    #         Collection of node names on which the operator exists.
+    #     new_node
+    #         Name of the new node that should be added to the graph.
+    #
+    #     Returns
+    #     -------
+    #     None
+    #
+    #     """
+    #
+    #     # extract operation in question
+    #     node_name_tmp = nodes.pop(0)
+    #     op_inputs = self._get_node_attr(node_name_tmp, 'inputs', op_key)
+    #
+    #     if node_name_tmp not in self._net_config_map:
+    #         self._net_config_map[node_name_tmp] = {}
+    #     if op_key not in self._net_config_map[node_name_tmp]:
+    #         self._net_config_map[node_name_tmp][op_key] = {}
+    #
+    #     # collect input dependencies of all nodes
+    #     #########################################
+    #
+    #     nodes_tmp = [node_name_tmp] + nodes
+    #     if len(nodes_tmp) > 1:
+    #         for node in nodes_tmp:
+    #             op_inputs_tmp = self._get_node_attr(node, 'inputs', op_key)
+    #             for key, arg in op_inputs_tmp.items():
+    #                 if type(op_inputs[key]['reduce_dim']) is bool:
+    #                     op_inputs[key]['reduce_dim'] = [arg['reduce_dim']]
+    #                     op_inputs[key]['sources'] = [arg['sources']]
+    #                 else:
+    #                     if arg['sources'] not in op_inputs[key]['sources']:
+    #                         op_inputs[key]['sources'].append(arg['sources'])
+    #                         op_inputs[key]['reduce_dim'].append(arg['reduce_dim'])
+    #
+    #     # extract operator-specific arguments and change their shape and value
+    #     ######################################################################
+    #
+    #     op_args = {}
+    #     for key, arg in self._get_op_attr(node_name_tmp, op_key, 'variables').items():
+    #
+    #         arg = deepcopy(arg)
+    #
+    #         if arg['vtype'] == 'raw':
+    #
+    #             if type(arg['value']) is list:
+    #
+    #                 self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
+    #                                                                     (0, len(arg['value']))]
+    #
+    #                 for node_name in nodes:
+    #
+    #                     if node_name not in self._net_config_map:
+    #                         self._net_config_map[node_name] = {}
+    #                     if op_key not in self._net_config_map[node_name]:
+    #                         self._net_config_map[node_name][op_key] = {}
+    #
+    #                     new_val = self._get_op_attr(node_name, op_key, key)['value']
+    #                     old_idx = len(arg['value'])
+    #                     arg['value'].append(new_val)
+    #
+    #                     self._net_config_map[node_name][op_key][key] = [new_node_name, op_key, key,
+    #                                                                     (old_idx, arg['value'].shape[0])]
+    #
+    #             else:
+    #
+    #                 # add information to _net_config_map
+    #                 self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key, None]
+    #
+    #         else:
+    #
+    #             if not hasattr(arg['value'], 'shape'):
+    #                 arg['value'] = np.array(arg['value'])
+    #             if arg['value'].shape != arg['shape']:
+    #                 try:
+    #                     arg['value'] = np.reshape(arg['value'], arg['shape'])
+    #                 except ValueError:
+    #                     arg['value'] = np.zeros(arg['shape'], dtype=self._float_precision) + arg['value']
+    #
+    #             # go through nodes and extract shape and value information for arg
+    #             if nodes:
+    #
+    #                 self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
+    #                                                                     (0, arg['value'].shape[0])]
+    #
+    #                 for node_name in nodes:
+    #
+    #                     if node_name not in self._net_config_map:
+    #                         self._net_config_map[node_name] = {}
+    #                     if op_key not in self._net_config_map[node_name]:
+    #                         self._net_config_map[node_name][op_key] = {}
+    #
+    #                     # extract node arg value and shape
+    #                     arg_tmp = self._get_op_attr(node_name, op_key, key)
+    #                     val = arg_tmp['value']
+    #                     dims = tuple(arg_tmp['shape'])
+    #
+    #                     # append value to argument dictionary
+    #                     if len(dims) > 0 and type(val) is float:
+    #                         val = np.zeros(dims, dtype=self._float_precision) + val
+    #                     else:
+    #                         val = np.reshape(np.array(val), dims)
+    #                     if len(dims) == 0:
+    #                         idx_old = 0
+    #                     else:
+    #                         idx_old = arg['value'].shape[0]
+    #                     arg['value'] = np.append(arg['value'], val, axis=0)
+    #                     idx_new = arg['value'].shape[0]
+    #                     idx = (idx_old, idx_new)
+    #
+    #                     # add information to _net_config_map
+    #                     self._net_config_map[node_name][op_key][key] = [new_node_name, op_key, key, idx]
+    #
+    #             else:
+    #
+    #                 # add information to _net_config_map
+    #                 self._net_config_map[node_name_tmp][op_key][key] = [new_node_name, op_key, key,
+    #                                                                     (0, arg['value'].shape[0])]
+    #
+    #             # change shape of argument
+    #             arg['shape'] = arg['value'].shape
+    #
+    #             # add argument to new node's argument dictionary
+    #             op_args[key] = arg
+    #
+    #     # add operator to node
+    #     new_node.add_op(op_key,
+    #                     operator=self._get_op_attr(node_name_tmp, op_key, 'operator'),
+    #                     variables=op_args)
 
     @staticmethod
     def _map_multiple_inputs(inputs: dict, reduce_dim: bool) -> tuple:

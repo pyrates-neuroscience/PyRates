@@ -242,14 +242,15 @@ class VectorizedOperatorGraph(DiGraph):
 
         return item
 
-    def operators(self, get_ops=False, get_vals=False):
+    @property
+    def operators(self):  # , get_ops=False, get_vals=False):
         """Alias for self.nodes"""
 
-        if get_ops and get_vals:
-            return ((data["label"], op, data["values"]) for op, data in self.nodes(data=True))
-        elif get_ops:
-            return ((data["label"], op) for op, data in self.nodes(data=True))
-        elif get_vals:
-            return ((data["label"], data["values"]) for op, data in self.nodes(data=True))
-        else:
-            return self.nodes
+        # if get_ops and get_vals:
+        #     return ((data["label"], op, data["values"]) for op, data in self.nodes(data=True))
+        # elif get_ops:
+        #     return ((data["label"], op) for op, data in self.nodes(data=True))
+        # elif get_vals:
+        #     return ((data["label"], data["values"]) for op, data in self.nodes(data=True))
+        # else:
+        return self.nodes

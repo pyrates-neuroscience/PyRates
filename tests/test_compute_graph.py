@@ -290,10 +290,10 @@ def test_2_3_edge():
             targets[i + 1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
 
         # simulate edge behavior
-        results = net.run(sim_time, outputs={'a': 'pop1.0/op1.0/a', 'b': 'pop2.0/op1.0/a'})
+        results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'})
 
-        diff = np.mean(np.abs(results['a']['pop1.0/op1.0'].values - targets[:-1, 2])) + \
-               np.mean(np.abs(results['b']['pop2.0/op1.0'].values - targets[:-1, 3]))
+        diff = np.mean(np.abs(results['a']['pop1/op1'].values - targets[:-1, 2])) + \
+               np.mean(np.abs(results['b']['pop2/op1'].values - targets[:-1, 3]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
@@ -304,9 +304,9 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
         net = ComputeGraph(net_config=net_config, name='net1', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a',
-                                             'b': 'pop1.0/op7.0/a'},
-                          inputs={'pop1.0/op7.0/inp': inp})
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a',
+                                             'b': 'pop1/op7/a'},
+                          inputs={'pop1/op7/inp': inp})
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -315,8 +315,8 @@ def test_2_3_edge():
             targets[i + 1, 0] = update2(targets[i, 0], targets[i, 1] * 0.5)
             targets[i + 1, 1] = update3(targets[i, 1], targets[i, 0] * 2.0, inp[i])
 
-        diff = np.mean(np.abs(results['a']['pop0.0/op1.0'].values[1:] - targets[:-2, 0])) + \
-               np.mean(np.abs(results['b']['pop1.0/op7.0'].values[1:] - targets[:-2, 1]))
+        diff = np.mean(np.abs(results['a']['pop0/op1'].values[1:] - targets[:-2, 0])) + \
+               np.mean(np.abs(results['b']['pop1/op7'].values[1:] - targets[:-2, 1]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes
@@ -324,8 +324,8 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net10").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op8.0/a',
-                                             'b': 'pop1.0/op8.0/a'})
+        results = net.run(sim_time, outputs={'a': 'pop0/op8/a',
+                                             'b': 'pop1/op8/a'})
 
         # calculate edge behavior from hand
         delay0 = int(0.5/dt)
@@ -338,8 +338,8 @@ def test_2_3_edge():
             targets[i + 1, 0] = update4(inp0 * 0.5)
             targets[i + 1, 1] = update4(inp1 * 2.0)
 
-        diff = np.mean(np.abs(results['a']['pop0.0/op8.0'].values[1:] - targets[:-2, 0])) + \
-               np.mean(np.abs(results['b']['pop1.0/op8.0'].values[1:] - targets[:-2, 1]))
+        diff = np.mean(np.abs(results['a']['pop0/op8'].values[1:] - targets[:-2, 0])) + \
+               np.mean(np.abs(results['b']['pop1/op8'].values[1:] - targets[:-2, 1]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 unidirectionally, multi-delay-coupled nodes
@@ -350,9 +350,9 @@ def test_2_3_edge():
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net9").apply()
         net = ComputeGraph(net_config=net_config, name='net3', vectorization='none', dt=dt, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0.0/op1.0/a',
-                                             'b': 'pop1.0/op7.0/a'},
-                          inputs={'pop1.0/op7.0/inp': inp})
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a',
+                                             'b': 'pop1/op7/a'},
+                          inputs={'pop1/op7/inp': inp})
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -361,8 +361,8 @@ def test_2_3_edge():
             targets[i + 1, 0] = update2(targets[i, 0], targets[i, 1] * 0.5)
             targets[i + 1, 1] = update3(targets[i, 1], targets[i, 0] * 2.0, inp[i])
 
-        diff = np.mean(np.abs(results['a']['pop0.0/op1.0'].values[1:] - targets[:-2, 0])) + \
-               np.mean(np.abs(results['b']['pop1.0/op7.0'].values[1:] - targets[:-2, 1]))
+        diff = np.mean(np.abs(results['a']['pop0/op1'].values[1:] - targets[:-2, 0])) + \
+               np.mean(np.abs(results['b']['pop1/op7'].values[1:] - targets[:-2, 1]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
@@ -394,10 +394,10 @@ def test_2_4_vectorization():
                             backend=b)
 
         # simulate network behaviors
-        results0 = net0.run(sim_time, outputs={'a': 'pop0.0/op7.0/a', 'b': 'pop1.0/op7.0/a'},
-                            inputs={'all/op7.0/inp': inp})
-        results1 = net1.run(sim_time, outputs={'a': 'pop0.0/op7.0/a', 'b': 'pop1.0/op7.0/a'},
-                            inputs={'all/op7.0/inp': inp}, out_dir='/tmp/log')
+        results0 = net0.run(sim_time, outputs={'a': 'pop0/op7/a', 'b': 'pop1/op7/a'},
+                            inputs={'all/op7/inp': inp})
+        results1 = net1.run(sim_time, outputs={'a': 'pop0/op7/a', 'b': 'pop1/op7/a'},
+                            inputs={'all/op7/inp': inp}, out_dir='/tmp/log')
 
         error1 = nmrse(results0.values, results1.values)
 
