@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -41,11 +40,9 @@ __status__ = "Development"
 
 
 class NodeIR(AbstractBaseIR):
-
     __slots__ = ["_op_graph", "values"]
 
-    def __init__(self, operators: dict = None, values: dict = None, template: str=None):
-
+    def __init__(self, operators: dict = None, values: dict = None, template: str = None):
         super().__init__(template)
         self._op_graph = OperatorGraph(operators)
         self.values = values
@@ -74,7 +71,7 @@ class NodeIR(AbstractBaseIR):
 class VectorizedNodeIR(AbstractBaseIR):
     """Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it."""
 
-    __slots__ = ["op_graph", "values"]
+    __slots__ = ["op_graph", "values", "_length"]
 
     def __init__(self, node_ir: NodeIR):
 
@@ -94,6 +91,9 @@ class VectorizedNodeIR(AbstractBaseIR):
             values[op_key] = copy(op_values)
         self.values = values
 
+        # save current length of this node vector.
+        self._length = 1
+
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """Alias for self.op_graph.getitem_from_iterator"""
 
@@ -109,3 +109,31 @@ class VectorizedNodeIR(AbstractBaseIR):
 
     def __hash__(self):
         raise NotImplementedError
+
+    def extend(self, node: NodeIR):
+        """ Extend variables vectors by values from one additional node.
+
+        Parameters
+        ----------
+        node
+            A node whose values are used to extend the vector dimension of this vectorized node.
+
+        Returns
+        -------
+        """
+
+        # add values to respective lists in collapsed node
+        for op_key, value_dict in node.values.items():
+            for var_key, value in value_dict.items():
+                self.values[op_key][var_key].append(value)
+
+        self._length += 1
+
+    def __len__(self):
+        """Returns size of this vector node as recorded in self._length.
+
+        Returns
+        -------
+        self._length
+        """
+        return self._length

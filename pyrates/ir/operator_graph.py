@@ -200,15 +200,19 @@ class VectorizedOperatorGraph(DiGraph):
                     op = data["operator"]
                 except KeyError:
                     # need to add this for the copy capability
-                    self.add_node(node_key, **deepcopy(data))
+                    self.add_operator(node_key, **deepcopy(data))
                 else:
-                    self.add_node(node_key,
-                                  inputs=deepcopy(data["inputs"]),
-                                  equations=list(op.equations),
-                                  variables=op.variables.to_dict(),
-                                  output=op.output)
+                    self.add_operator(node_key,
+                                      inputs=deepcopy(data["inputs"]),
+                                      equations=list(op.equations),
+                                      variables=op.variables.to_dict(),
+                                      output=op.output)
 
             self.add_edges_from(op_graph.edges)
+
+    def add_operator(self, *args, **kwargs):
+        """Alias for `self.add_node`"""
+        self.add_node(*args, **kwargs)
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """

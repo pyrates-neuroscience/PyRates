@@ -468,7 +468,6 @@ class CircuitIR(AbstractBaseIR):
 
         node_op_graph_map = {}  # maps each unique op_graph to a collapsed node
         # node_counter = 1  # counts different unique types of nodes
-        node_size = {}  # counts current size of vectorized nodes
         name_idx = 0  # this is a safeguard to prevent overlap of newly created node names with previous nodes
 
         # collect all node data, because networkx' node views update when the graph is changed.
@@ -480,16 +479,13 @@ class CircuitIR(AbstractBaseIR):
             try:
                 # get reference to a previously created node
                 new_name, collapsed_node = node_op_graph_map[op_graph]
-                # add values to respective lists in collapsed node
-                for op_key, value_dict in node.values.items():
-                    for var_key, value in value_dict.items():
-                        collapsed_node.values[op_key][var_key].append(value)
+
+                # extend vectorized node by this node
+                collapsed_node.extend(node)
 
                 # refer node key to new node and respective list index of its values
-                # format: "nodeX[Z]" with X = node index and Z = list index for values
-                self.label_map[node_key] = (new_name, node_size[op_graph])
-                # increment op_graph size counter
-                node_size[op_graph] += 1
+                # format: (nodeX, Z) with X = node index and Z = list index for values
+                self.label_map[node_key] = (new_name, len(collapsed_node)-1)
 
             except KeyError:
                 # if it does not exist, create a new one and save its reference in the map
@@ -518,11 +514,9 @@ class CircuitIR(AbstractBaseIR):
 
                 # now save the reference to the new node name with index number to label_map
                 self.label_map[node_key] = (new_name, 0)
-                # and set size of this node to 1
-                node_size[op_graph] = 1
 
             # TODO: decide, whether reference collecting for operator_graphs in `_reference_map` is actually necessary
-            #   and if why thus need to remove these reference again after vectorization.
+            #   and if we thus need to remove these reference again after vectorization.
 
         return old_nodes
 
@@ -612,7 +606,7 @@ class CircuitIR(AbstractBaseIR):
 
             # get new reference for source/target nodes
             # new references should have format "vector_node{node_idx}[{vector_idx}]"
-            # the follow raises an error, if the format is wrong for some reason
+            # the following raises an error, if the format is wrong for some reason
             source, source_idx = self.label_map[source]
             target, target_idx = self.label_map[target]
 
