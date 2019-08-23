@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -64,12 +63,13 @@ def test_ir_vectorization():
     #     # check that no operators are left in the edges of the rearranged circuit
     #     assert len(data["edge_ir"].op_graph) == 0
 
-        # check that operator from previous edges is indeed in target nodes
-        # original_edge = circuit.edges[(source, target, 0)]["edge_ir"]
-        # original_op = list(original_edge.op_graph.nodes)[0]
-        # assert f"{original_op}.0" in circuit2[target]
+    # check that operator from previous edges is indeed in target nodes
+    # original_edge = circuit.edges[(source, target, 0)]["edge_ir"]
+    # original_op = list(original_edge.op_graph.nodes)[0]
+    # assert f"{original_op}.0" in circuit2[target]
 
-# @pytest.mark.skip
+
+@pytest.mark.xfail
 def test_ir_compilation():
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.ir.circuit import CircuitIR

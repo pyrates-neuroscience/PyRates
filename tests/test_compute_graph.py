@@ -294,6 +294,7 @@ def test_2_3_edge():
 
         # TODO: Problem here: the run method seems to find the correct variables, but assigns their new names rather
         #   than the old names. This should be fixed.
+
         diff = np.mean(np.abs(results['a']['pop1/op1'].values - targets[:-1, 2])) + \
                np.mean(np.abs(results['b']['pop2/op1'].values - targets[:-1, 3]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
