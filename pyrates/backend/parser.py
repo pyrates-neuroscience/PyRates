@@ -858,7 +858,10 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             inputs = op_args['inputs'] if 'inputs' in op_args else {}
             unprocessed_inputs = []
             for key, inp in inputs.items():
+                if inp not in equation_args:
+                    raise KeyError(inp)
                 inp_tmp = equation_args[inp]
+                # TODO: For some reason, some equation args are added after this point that I do not understand.
                 op_args[key] = inp_tmp
                 if type(inp_tmp) is dict and 'vtype' in inp_tmp:
                     unprocessed_inputs.append(key)
@@ -899,6 +902,8 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             # save backend variables to equation args
             for key, var in parser.vars.items():
                 if key != "inputs" and key != "rhs" and key != "dt":
+                    #  TODO: this step adds newly created variabls to the equation args like the output variable to a
+                    #   collection variable
                     equation_args[f"{scope}/{key}"] = var
 
             # save previously unprocessed input variables to equation args

@@ -157,7 +157,6 @@ class VectorizedNodeIR(AbstractBaseIR):
         # add operator to op_graph
         self.op_graph.add_operator(op_key, inputs=inputs, output=output, equations=equations, variables=variables)
 
-
     def add_op_edge(self, source_op_key: str, target_op_key: str, **attr):
         """ Alias to `self.op_graph.add_edge`
 

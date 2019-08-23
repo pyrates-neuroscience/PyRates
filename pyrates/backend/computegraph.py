@@ -524,7 +524,7 @@ class ComputeGraph(object):
                 var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
         else:
 
-            #node, node_idx = self.net_config.label_map.get(node, (node, 0))
+            # node, node_idx = self.net_config.label_map.get(node, (node, 0))
 
             if node in self.net_config.nodes.keys() or node in self.net_config.label_map:
 
@@ -1281,11 +1281,14 @@ class ComputeGraph(object):
         eqs = [f"{var} = {var}_col_{idx}"]
 
         # create collector variable definition
-        var_dict = {f'{var}_col_{idx}': {'vtype': 'state_var',
-                                         'dtype': self._float_precision,
-                                         'shape': target_shape,
-                                         'value': 0.
-                                         }}
+        val_dict = {'vtype': 'state_var',
+                    'dtype': self._float_precision,
+                    'shape': target_shape,
+                    'value': 0.
+                    }
+        var_dict = {f'{var}_col_{idx}': val_dict,
+                    var: val_dict}
+        # added the actual output variable as well.
 
         # add collector operator to operator graph
         node_ir.add_op(f'{op}_{var}_col_{idx}',

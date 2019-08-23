@@ -15,6 +15,7 @@ from pyrates.frontend import CircuitTemplate
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
+
 ###########
 # Utility #
 ###########
@@ -48,6 +49,7 @@ def nmrse(x: np.ndarray,
 
     return np.sqrt(np.sum(diff ** 2, axis=0)) / (max_val - min_val)
 
+
 #########
 # Tests #
 #########
@@ -78,16 +80,16 @@ def test_2_1_operator():
         # simulate operator behavior
         sim_time = 10.0
         results = net.run(sim_time, outputs={'a': 'pop0/op0/a'})
-        #net.clear()
+        # net.clear()
 
         # generate target values
-        sim_steps = int(sim_time/dt)
-        update0_1 = lambda x: x*0.5
+        sim_steps = int(sim_time / dt)
+        update0_1 = lambda x: x * 0.5
         update0_0 = lambda x: x + 2.0
-        targets = np.zeros((sim_steps+1, 2), dtype=np.float32)
+        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1, 0] = update0_0(targets[i, 1])
-            targets[i+1, 1] = update0_1(targets[i, 0])
+            targets[i + 1, 0] = update0_0(targets[i, 1])
+            targets[i + 1, 1] = update0_1(targets[i, 0])
 
         # compare results with target values
         diff = results['a'].values[:, 0] - targets[:-1, 1]
@@ -107,10 +109,10 @@ def test_2_1_operator():
         results = net.run(sim_time, inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'})
 
         # calculate operator behavior from hand
-        update1 = lambda x, y: x + dt*(y-x)
+        update1 = lambda x, y: x + dt * (y - x)
         targets = np.zeros((sim_steps + 1, 1), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1] = update1(targets[i], inp[i])
+            targets[i + 1] = update1(targets[i], inp[i])
 
         diff = results['a'].values[1:] - targets[:-2]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
@@ -124,11 +126,11 @@ def test_2_1_operator():
         results = net.run(sim_time, outputs={'a': 'pop0/op2/a'})
 
         # calculate operator behavior from hand
-        update2 = lambda x: 1./(1. + np.exp(-x))
+        update2 = lambda x: 1. / (1. + np.exp(-x))
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1, 0] = update1(targets[i, 0], targets[i, 1])
-            targets[i+1, 1] = update2(targets[i, 0])
+            targets[i + 1, 0] = update1(targets[i, 0], targets[i, 1])
+            targets[i + 1, 1] = update2(targets[i, 0])
 
         diff = results['a'].values[:, 0] - targets[:-1, 0]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
@@ -145,12 +147,12 @@ def test_2_1_operator():
                           out_dir="/tmp/log")
 
         # calculate operator behavior from hand
-        update3_0 = lambda a, b, u: a + dt*(-10.*a + b**2 + u)
-        update3_1 = lambda b, a: b + dt*0.1*a
+        update3_0 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)
+        update3_1 = lambda b, a: b + dt * 0.1 * a
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1, 0] = update3_0(targets[i, 0], targets[i, 1], inp[i])
-            targets[i+1, 1] = update3_1(targets[i, 1], targets[i, 0])
+            targets[i + 1, 0] = update3_0(targets[i, 0], targets[i, 1], inp[i])
+            targets[i + 1, 1] = update3_1(targets[i, 1], targets[i, 0])
 
         diff = results['b'].values[1:, 0] - targets[:-2, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
@@ -175,7 +177,7 @@ def test_2_2_node():
         # set up node in pyrates
         dt = 1e-1
         sim_time = 10.
-        sim_steps = int(sim_time/dt)
+        sim_steps = int(sim_time / dt)
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net4").apply()
         net = ComputeGraph(net_config=net_config, name='net0', vectorization='none', dt=dt, backend=b)
 
@@ -188,8 +190,8 @@ def test_2_2_node():
         update1 = lambda x, y: x + dt * (y - x)
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1, 0] = update0(targets[i, 0])
-            targets[i+1, 1] = update1(targets[i, 1], targets[i+1, 0])
+            targets[i + 1, 0] = update0(targets[i, 0])
+            targets[i + 1, 1] = update1(targets[i, 1], targets[i + 1, 0])
 
         diff = results['a'].values[:, 0] - targets[:-1, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-4, abs=1e-4)
@@ -207,8 +209,8 @@ def test_2_2_node():
         # calculate node behavior from hand
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i+1, 0] = update0(targets[i, 0])
-            targets[i+1, 1] = update1(targets[i, 1], 0.)
+            targets[i + 1, 0] = update0(targets[i, 0])
+            targets[i + 1, 1] = update1(targets[i, 1], 0.)
 
         diff = results['a'].values[:, 0] - targets[:-1, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-4, abs=1e-4)
@@ -223,11 +225,11 @@ def test_2_2_node():
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps + 1, 3), dtype=np.float32)
-        update2 = lambda x: x + dt*(4. + np.tanh(0.5))
+        update2 = lambda x: x + dt * (4. + np.tanh(0.5))
         for i in range(sim_steps):
-            targets[i+1, 0] = update0(targets[i, 0])
-            targets[i+1, 1] = update2(targets[i, 1])
-            targets[i+1, 2] = update1(targets[i, 2], targets[i+1, 0] + targets[i+1, 1])
+            targets[i + 1, 0] = update0(targets[i, 0])
+            targets[i + 1, 1] = update2(targets[i, 1])
+            targets[i + 1, 2] = update1(targets[i, 2], targets[i + 1, 0] + targets[i + 1, 1])
 
         diff = results['a'].values[:, 0] - targets[:-1, 2]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-4, abs=1e-4)
@@ -242,13 +244,13 @@ def test_2_2_node():
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps + 1, 4), dtype=np.float32)
-        update3 = lambda a, b, u: a + dt * (-10. * a + b**2 + u)
-        update4 = lambda x, y: x + dt*0.1*y
+        update3 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)
+        update4 = lambda x, y: x + dt * 0.1 * y
         for i in range(sim_steps):
-            targets[i+1, 0] = update0(targets[i, 0])
-            targets[i+1, 1] = update1(targets[i, 1], targets[i+1, 0])
-            targets[i+1, 2] = update3(targets[i, 2], targets[i, 3], targets[i+1, 0])
-            targets[i+1, 3] = update4(targets[i, 3], targets[i, 2])
+            targets[i + 1, 0] = update0(targets[i, 0])
+            targets[i + 1, 1] = update1(targets[i, 1], targets[i + 1, 0])
+            targets[i + 1, 2] = update3(targets[i, 2], targets[i, 3], targets[i + 1, 0])
+            targets[i + 1, 3] = update4(targets[i, 3], targets[i, 2])
 
         diff = np.mean(np.abs(results['a'].values[1:, 0] - targets[:-2, 1])) + \
                np.mean(np.abs(results['b'].values[1:, 0] - targets[:-2, 3]))
@@ -331,8 +333,8 @@ def test_2_3_edge():
                                              'b': 'pop1/op8/a'})
 
         # calculate edge behavior from hand
-        delay0 = int(0.5/dt)
-        delay1 = int(1./dt)
+        delay0 = int(0.5 / dt)
+        delay1 = int(1. / dt)
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         update4 = lambda y: 2.0 + y
         for i in range(sim_steps):
@@ -379,7 +381,6 @@ def test_2_4_vectorization():
 
     backends = ['tensorflow', 'numpy']
     for b in backends:
-
         # test whether vectorized networks produce same output as non-vectorized backend
         ################################################################################
 
