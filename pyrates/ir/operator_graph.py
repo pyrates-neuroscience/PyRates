@@ -176,7 +176,7 @@ class VectorizedOperatorGraph(DiGraph):
     """Alternate version of `OperatorGraph` that is produced during vectorization. Contents of this version are not
     particularly protected and the instance is not cached."""
 
-    def __init__(self, op_graph: OperatorGraph = None):
+    def __init__(self, op_graph: OperatorGraph = None, values: dict = None):
 
         super().__init__()
 
@@ -195,18 +195,24 @@ class VectorizedOperatorGraph(DiGraph):
         #                                               shape=(1,))),
         #                   output="out_var")
         else:
-            for node_key, data in op_graph:
+            for op_key, data in op_graph:
                 try:
                     op = data["operator"]
                 except KeyError:
                     # need to add this for the copy capability
-                    self.add_operator(node_key, **deepcopy(data))
+                    self.add_operator(op_key, **deepcopy(data))
                 else:
-                    self.add_operator(node_key,
+                    self.add_operator(op_key,
                                       inputs=deepcopy(data["inputs"]),
                                       equations=list(op.equations),
                                       variables=op.variables.to_dict(),
                                       output=op.output)
+
+                # retrieve values from value dict and pass them into variable dictionary of operator
+                op_values = values[op_key]
+                op_vars = self.operators[op_key]["variables"]
+                for var_key, value in op_values.items():
+                    op_vars[var_key]["value"] = [value]
 
             self.add_edges_from(op_graph.edges)
 
