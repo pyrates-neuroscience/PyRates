@@ -146,20 +146,14 @@ class ComputeGraph(object):
             tidx = data['target_idx']
             svar = data['source_var']
             sop, svar = svar.split("/")
-            sval = self.net_config[source_node].values[sop][svar]
+            sval = self.net_config[f"{source_node}/{sop}/{svar}"]["value"]
 
             tvar = data['target_var']
             top, tvar = tvar.split("/")
             # get variable properties
             # tval --> variable properties
-            try:
-                # fetch both values and variable definitions of target variable
-                tval = dict(value=self.net_config[target_node].values[top][tvar],
-                            **self.net_config[target_node].operators[top]["variables"][tvar])
-            except KeyError as e:
-                # dirty hack to accomodate operators that have been added after the "optimize" step
-                # tval = self.net_config[target_node].op_graph.nodes[top]["variables"][tvar]
-                raise e
+            # fetch both values and variable definitions of target variable
+            tval = self.net_config[f"{target_node}/{top}/{tvar}"]
 
             add_project = data.get('add_project', False)  # get a False, in case it is not defined
             target_node_ir = self.net_config[target_node]
@@ -208,7 +202,7 @@ class ComputeGraph(object):
             # add input information to target operator
             inputs = self._get_op_attr(target_node, top, 'inputs')
             if tvar in inputs.keys():
-                inputs[tvar]['sources'].append(op_name)
+                inputs[tvar]['sources'].add(op_name)
             else:
                 inputs[tvar] = {'sources': [op_name],
                                 'reduce_dim': True}
@@ -1277,6 +1271,11 @@ class ComputeGraph(object):
         target_shape = self._get_op_attr(node, op, var)['shape']
         # op_graph = self._get_node_attr(node, 'op_graph')
         node_ir = self.net_config[node]
+        if target_shape == (1,):
+            target_shape = (len(node_ir),)
+        else:
+            # won't work for a matrix in the base equation
+            target_shape = (len(node_ir), target_shape[0])
 
         # create collector equation
         eqs = [f"{var} = {var}_col_{idx}"]
@@ -1409,9 +1408,9 @@ class ComputeGraph(object):
                     except KeyError:
                         var['dtype'] = var_defs['dtype']
 
-                    val = node.values[op_name][var_name]
+                    val = node[f"{op_name}/{var_name}"]["value"]
                     if not hasattr(val, "shape"):
-                        node.values[op_name][var_name] = np.zeros(var['shape'], dtype=var['dtype']) + val
+                        node[f"{op_name}/{var_name}"]["value"] = np.zeros(var['shape'], dtype=var['dtype']) + val
 
                 # check whether the equations, inputs and output fields exist on the operator field
                 if "equations" not in op_info:
@@ -1497,6 +1496,8 @@ class ComputeGraph(object):
 
         if vectorization_mode in 'nodesfull':
 
+            # TODO: Consider removing this part
+
             nodes = list(self.net_config.nodes.keys())
 
             # go through each node in net config and vectorize it with nodes that have the same operator structure
@@ -1532,128 +1533,128 @@ class ComputeGraph(object):
         # Second stage: Vectorize over operators
         ########################################
 
-        if vectorization_mode == 'full':
-
-            # create dictionary of operators of each node that will be used to check whether they have been vectorized
-            vec_info = {}
-            for node in self.net_config.nodes:
-                vec_info[node] = {}
-                for op in self._get_node_attr(node, 'op_graph').nodes:
-                    vec_info[node][op] = False
-
-            # add new node to net config
-            new_node = DiGraph()
-            new_node_name = f'{self.name}_combined'
-            self.net_config.add_node(new_node_name, node={'op_graph': new_node})
-            new_node_name += '.0'
-
-            # go through nodes and vectorize over their operators
-            node_keys = list(vec_info)
-            node_idx = 0
-            node_key = node_keys[node_idx]
-            while not all([all(node.values()) for node in vec_info.values()]):
-
-                changed_node = False
-                op_graph = self._get_node_attr(node_key, 'op_graph').copy()
-
-                # vectorize nodes on the operator in their hierarchical order
-                while op_graph.nodes:
-
-                    # get all operators that have no dependencies on other operators on node
-                    # noinspection PyTypeChecker
-                    primary_ops = [op for op, in_degree in op_graph.in_degree if in_degree == 0]
-
-                    for op_key in primary_ops:
-
-                        if not vec_info[node_key][op_key]:
-
-                            # check whether operator exists at other nodes
-                            nodes_to_vec = []
-
-                            for node_key_tmp in vec_info:
-
-                                if node_key_tmp != node_key and op_key in vec_info[node_key_tmp]:
-
-                                    # check if operator dependencies are vectorized already
-                                    deps_vectorized = True
-                                    op_graph_tmp = self._get_node_attr(node_key_tmp, 'op_graph')
-                                    for op_key_tmp in op_graph_tmp.nodes:
-                                        if op_key_tmp == op_key:
-                                            for edge in op_graph_tmp.in_edges(op_key_tmp):
-                                                if not vec_info[node_key_tmp][edge[0]]:
-                                                    node_key = node_key_tmp
-                                                    deps_vectorized = False
-
-                                    if deps_vectorized:
-                                        nodes_to_vec.append(node_key_tmp)
-                                    else:
-                                        changed_node = True
-                                        break
-
-                            if nodes_to_vec and not changed_node:
-
-                                # vectorize op
-                                nodes_to_vec.append(node_key)
-                                self._vectorize_ops(op_key=op_key,
-                                                    nodes=nodes_to_vec.copy(),
-                                                    new_node=new_node,
-                                                    new_node_name=new_node_name)
-
-                                # indicate where vectorization was performed
-                                for node_key_tmp in nodes_to_vec:
-                                    vec_info[node_key_tmp][op_key] = True
-
-                                # remove vectorized operation from graph
-                                op_graph.remove_node(op_key)
-
-                            elif changed_node:
-                                break
-                            else:
-
-                                # add operation to new net configuration
-                                self._vectorize_ops(op_key=op_key,
-                                                    nodes=[node_key],
-                                                    new_node=new_node,
-                                                    new_node_name=new_node_name)
-
-                                # mark operation on node as checked
-                                vec_info[node_key][op_key] = True
-
-                                # remove vectorized operation from graph
-                                op_graph.remove_node(op_key)
-
-                        else:
-
-                            # remove operation from graph
-                            op_graph.remove_node(op_key)
-
-                    if changed_node:
-                        break
-
-                # increment node
-                node_idx = node_idx + 1 if node_idx < len(vec_info) - 1 else 0
-                node_key = node_keys[node_idx]
-
-            # add dependencies between operators
-            for target_op in self._get_node_attr(new_node_name, 'op_graph'):
-                op = self._get_node_attr(new_node_name, 'operator', target_op)
-                for inp in op['inputs'].values():
-                    for source_op in inp['sources']:
-                        if type(source_op) is list:
-                            for sop in source_op:
-                                new_node.add_edge(sop, target_op)
-                        else:
-                            new_node.add_edge(source_op, target_op)
-
-            # adjust edges accordingly
-            ##########################
-
-            self._vectorize_edges(new_node_name, new_node_name)
-
-            # delete vectorized nodes from graph
-            for n in list(self.net_config.nodes):
-                if new_node_name not in n:
-                    self.net_config.graph.remove_node(n)
+        # if vectorization_mode == 'full':
+        #
+        #     # create dictionary of operators of each node that will be used to check whether they have been vectorized
+        #     vec_info = {}
+        #     for node in self.net_config.nodes:
+        #         vec_info[node] = {}
+        #         for op in self._get_node_attr(node, 'op_graph').nodes:
+        #             vec_info[node][op] = False
+        #
+        #     # add new node to net config
+        #     new_node = DiGraph()
+        #     new_node_name = f'{self.name}_combined'
+        #     self.net_config.add_node(new_node_name, node={'op_graph': new_node})
+        #     new_node_name += '.0'
+        #
+        #     # go through nodes and vectorize over their operators
+        #     node_keys = list(vec_info)
+        #     node_idx = 0
+        #     node_key = node_keys[node_idx]
+        #     while not all([all(node.values()) for node in vec_info.values()]):
+        #
+        #         changed_node = False
+        #         op_graph = self._get_node_attr(node_key, 'op_graph').copy()
+        #
+        #         # vectorize nodes on the operator in their hierarchical order
+        #         while op_graph.nodes:
+        #
+        #             # get all operators that have no dependencies on other operators on node
+        #             # noinspection PyTypeChecker
+        #             primary_ops = [op for op, in_degree in op_graph.in_degree if in_degree == 0]
+        #
+        #             for op_key in primary_ops:
+        #
+        #                 if not vec_info[node_key][op_key]:
+        #
+        #                     # check whether operator exists at other nodes
+        #                     nodes_to_vec = []
+        #
+        #                     for node_key_tmp in vec_info:
+        #
+        #                         if node_key_tmp != node_key and op_key in vec_info[node_key_tmp]:
+        #
+        #                             # check if operator dependencies are vectorized already
+        #                             deps_vectorized = True
+        #                             op_graph_tmp = self._get_node_attr(node_key_tmp, 'op_graph')
+        #                             for op_key_tmp in op_graph_tmp.nodes:
+        #                                 if op_key_tmp == op_key:
+        #                                     for edge in op_graph_tmp.in_edges(op_key_tmp):
+        #                                         if not vec_info[node_key_tmp][edge[0]]:
+        #                                             node_key = node_key_tmp
+        #                                             deps_vectorized = False
+        #
+        #                             if deps_vectorized:
+        #                                 nodes_to_vec.append(node_key_tmp)
+        #                             else:
+        #                                 changed_node = True
+        #                                 break
+        #
+        #                     if nodes_to_vec and not changed_node:
+        #
+        #                         # vectorize op
+        #                         nodes_to_vec.append(node_key)
+        #                         self._vectorize_ops(op_key=op_key,
+        #                                             nodes=nodes_to_vec.copy(),
+        #                                             new_node=new_node,
+        #                                             new_node_name=new_node_name)
+        #
+        #                         # indicate where vectorization was performed
+        #                         for node_key_tmp in nodes_to_vec:
+        #                             vec_info[node_key_tmp][op_key] = True
+        #
+        #                         # remove vectorized operation from graph
+        #                         op_graph.remove_node(op_key)
+        #
+        #                     elif changed_node:
+        #                         break
+        #                     else:
+        #
+        #                         # add operation to new net configuration
+        #                         self._vectorize_ops(op_key=op_key,
+        #                                             nodes=[node_key],
+        #                                             new_node=new_node,
+        #                                             new_node_name=new_node_name)
+        #
+        #                         # mark operation on node as checked
+        #                         vec_info[node_key][op_key] = True
+        #
+        #                         # remove vectorized operation from graph
+        #                         op_graph.remove_node(op_key)
+        #
+        #                 else:
+        #
+        #                     # remove operation from graph
+        #                     op_graph.remove_node(op_key)
+        #
+        #             if changed_node:
+        #                 break
+        #
+        #         # increment node
+        #         node_idx = node_idx + 1 if node_idx < len(vec_info) - 1 else 0
+        #         node_key = node_keys[node_idx]
+        #
+        #     # add dependencies between operators
+        #     for target_op in self._get_node_attr(new_node_name, 'op_graph'):
+        #         op = self._get_node_attr(new_node_name, 'operator', target_op)
+        #         for inp in op['inputs'].values():
+        #             for source_op in inp['sources']:
+        #                 if type(source_op) is list:
+        #                     for sop in source_op:
+        #                         new_node.add_edge(sop, target_op)
+        #                 else:
+        #                     new_node.add_edge(source_op, target_op)
+        #
+        #     # adjust edges accordingly
+        #     ##########################
+        #
+        #     self._vectorize_edges(new_node_name, new_node_name)
+        #
+        #     # delete vectorized nodes from graph
+        #     for n in list(self.net_config.nodes):
+        #         if new_node_name not in n:
+        #             self.net_config.graph.remove_node(n)
 
         # Third Stage: Finalize edge vectorization
         ##########################################

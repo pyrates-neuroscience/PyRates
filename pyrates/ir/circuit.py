@@ -558,9 +558,10 @@ class CircuitIR(AbstractBaseIR):
                 # get reference to a previously created node
                 new_name, collapsed_node = node_op_graph_map[op_graph]
                 # add values to respective lists in collapsed node
-                for op_key, value_dict in edge_ir.values.items():
-                    for var_key, value in value_dict.items():
-                        collapsed_node.values[op_key][var_key].append(value)
+                collapsed_node.extend(edge_ir)
+                # for op_key, value_dict in edge_ir.values.items():
+                #     for var_key, value in value_dict.items():
+                #         collapsed_node.extend([f"{op_key}/{var_key}"]["value"].append(value)
 
                 # note current index of node
                 coupling_vec_idx = node_sizes[op_graph]

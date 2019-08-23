@@ -71,12 +71,12 @@ class NodeIR(AbstractBaseIR):
 class VectorizedNodeIR(AbstractBaseIR):
     """Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it."""
 
-    __slots__ = ["op_graph", "values", "_length"]
+    __slots__ = ["op_graph", "_length"]
 
     def __init__(self, node_ir: NodeIR):
 
         super().__init__(node_ir.template)
-        self.op_graph = VectorizedOperatorGraph(node_ir.op_graph)
+        self.op_graph = VectorizedOperatorGraph(node_ir.op_graph, node_ir.values)
         values = {}
         # reformat all values to be lists of themselves (adding an outer vector dimension)
         # if len(node_ir.op_graph) == 0:
@@ -84,12 +84,6 @@ class VectorizedNodeIR(AbstractBaseIR):
         #     for var in data["variables"]:
         #         values[op_key] = {var: [0.]}
         # else:
-        for op_key, value_dict in node_ir.values.items():
-            op_values = {}
-            for var_key, value in value_dict.items():
-                op_values[var_key] = [value]
-            values[op_key] = copy(op_values)
-        self.values = values
 
         # save current length of this node vector.
         self._length = 1
@@ -125,7 +119,7 @@ class VectorizedNodeIR(AbstractBaseIR):
         # add values to respective lists in collapsed node
         for op_key, value_dict in node.values.items():
             for var_key, value in value_dict.items():
-                self.values[op_key][var_key].append(value)
+                self[f"{op_key}/{var_key}"]["value"].append(value)
 
         self._length += 1
 
@@ -160,16 +154,9 @@ class VectorizedNodeIR(AbstractBaseIR):
 
         """
 
-        # collect all values in variable dictionary
-        values = {}
-        for var_key, var_dict in variables.items():
-            values[var_key] = var_dict.pop("value")
-
         # add operator to op_graph
         self.op_graph.add_operator(op_key, inputs=inputs, output=output, equations=equations, variables=variables)
 
-        # add values to node-wide values dict
-        self.values[op_key] = values
 
     def add_op_edge(self, source_op_key: str, target_op_key: str, **attr):
         """ Alias to `self.op_graph.add_edge`
