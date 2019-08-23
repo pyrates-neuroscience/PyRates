@@ -136,12 +136,15 @@ class CircuitTemplate(AbstractBaseTemplate):
             # get delay
             delay = values.pop("delay", None)
 
+            # treat empty dummy edge templates as not existent templates
+            if len(template.operators) == 0:
+                template = None
             if template is None:
                 edge_ir = None
                 if values:
                     # should not happen. Putting this just in case.
                     raise PyRatesException("An empty edge IR was provided with additional values. "
-                                           "This must be a bug.")
+                                           "No way to figure out where to apply those values.")
             else:
                 edge_ir = template.apply(values=values)  # type: Optional[EdgeIR] # edge spec
 

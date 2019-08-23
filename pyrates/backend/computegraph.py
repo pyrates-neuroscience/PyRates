@@ -1151,10 +1151,10 @@ class ComputeGraph(object):
                 edge = edge_idx[(source, target)]
                 edge_idx[(source, target)] += 1
             value = self.net_config.edges[source, target, edge][attr]
-            if value is None:
-                raise ValueError
-                # TODO: found a problem with empty coupling nodes, because their input/output variables are None
-                #   need to fix!
+            # if value is None:
+            #     raise ValueError
+            #     # TODO: found a problem with empty coupling nodes, because their input/output variables are None
+            #     #   need to fix!
             if value not in edges_new.keys():
                 edges_new[value] = [(source, target, edge)]
             else:

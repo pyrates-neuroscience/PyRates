@@ -297,8 +297,8 @@ def test_2_3_edge():
         # TODO: For some reason the network computes additional time steps in the beginning before the inputs are
         #  applied. This leads to additional zeros in the beginning. Might be caused by additional edge operators from
         #  edge optimization. Needs to be solved.
-        diff = np.mean(np.abs(results['a']['pop1/op1'].values[3:] - targets[:-4, 2])) + \
-               np.mean(np.abs(results['b']['pop2/op1'].values[3:] - targets[:-4, 3]))
+        diff = np.mean(np.abs(results['a']['pop1/op1'].values[1:] - targets[:-2, 2])) + \
+               np.mean(np.abs(results['b']['pop2/op1'].values[1:] - targets[:-2, 3]))
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes

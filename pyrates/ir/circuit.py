@@ -101,7 +101,10 @@ class CircuitIR(AbstractBaseIR):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
         References are collected as a list, because nodes and edges are (currently) not hashable."""
 
-        op_graph = edge_or_node.op_graph
+        try:
+            op_graph = edge_or_node.op_graph
+        except AttributeError:
+            op_graph = None
         try:
             self._reference_map[op_graph].append(edge_or_node)
         except KeyError:
@@ -550,80 +553,89 @@ class CircuitIR(AbstractBaseIR):
             source_var = data["source_var"]
             target_var = data["target_var"]
             if edge_ir is None:
-                op_graph = None
+                # if the edge is empty, just add one with remapped names
+                source, source_idx = self.label_map[source]
+                target, target_idx = self.label_map[target]
+
+                # add edge from source to the new node
+                self.graph.add_edge(source, target,
+                                    source_var=source_var, source_idx=[source_idx],
+                                    target_var=target_var, target_idx=[target_idx],
+                                    weight=weight, delay=delay
+                                    )
             else:
                 op_graph = edge_ir.op_graph
 
-            try:
-                # get reference to a previously created node
-                new_name, collapsed_node = node_op_graph_map[op_graph]
-                # add values to respective lists in collapsed node
-                collapsed_node.extend(edge_ir)
-                # for op_key, value_dict in edge_ir.values.items():
-                #     for var_key, value in value_dict.items():
-                #         collapsed_node.extend([f"{op_key}/{var_key}"]["value"].append(value)
+                try:
+                    # get reference to a previously created node
+                    new_name, collapsed_node = node_op_graph_map[op_graph]
+                    # add values to respective lists in collapsed node
+                    collapsed_node.extend(edge_ir)
+                    # for op_key, value_dict in edge_ir.values.items():
+                    #     for var_key, value in value_dict.items():
+                    #         collapsed_node.extend([f"{op_key}/{var_key}"]["value"].append(value)
 
-                # note current index of node
-                coupling_vec_idx = node_sizes[op_graph]
-                # increment op_graph size counter
-                node_sizes[op_graph] += 1
+                    # note current index of node
+                    coupling_vec_idx = node_sizes[op_graph]
+                    # increment op_graph size counter
+                    node_sizes[op_graph] += 1
 
-            except KeyError:
-                # if it does not exist, create a new one and save its reference in the map
-                collapsed_node = VectorizedNodeIR(edge_ir)
+                except KeyError:
+                    # if it does not exist, create a new one and save its reference in the map
+                    collapsed_node = VectorizedNodeIR(edge_ir)
 
-                # create unique name and add node to local graph
-                while name_idx <= max_node_idx:
-                    new_name = f"vector_coupling{name_idx}"
-                    if new_name in self.nodes:
-                        name_idx += 1
-                        continue
+                    # create unique name and add node to local graph
+                    while name_idx <= max_node_idx:
+                        new_name = f"vector_coupling{name_idx}"
+                        if new_name in self.nodes:
+                            name_idx += 1
+                            continue
+                        else:
+                            break
                     else:
-                        break
-                else:
-                    raise PyRatesException(
-                        "Too many nodes with generic name 'node{counter}' exist. Aborting vectorization."
-                        "Consider not using this naming scheme for your own nodes as it is used for "
-                        "vectorization. This problem will also occur, when more unique operator graphs "
-                        "exist than the maximum number of iterations allows (default: 100k). You can "
-                        "increase this number by setting `max_node_idx` to a larger number.")
+                        raise PyRatesException(
+                            "Too many nodes with generic name 'node{counter}' exist. Aborting vectorization."
+                            "Consider not using this naming scheme for your own nodes as it is used for "
+                            "vectorization. This problem will also occur, when more unique operator graphs "
+                            "exist than the maximum number of iterations allows (default: 100k). You can "
+                            "increase this number by setting `max_node_idx` to a larger number.")
 
-                # add new node directly to node graph, bypassing external interface
-                # this is the "in_place" way to do this. Otherwise we would create an entirely new CircuitIR instance
-                self.graph.add_node(new_name, node=collapsed_node)
-                node_op_graph_map[op_graph] = (new_name, collapsed_node)
+                    # add new node directly to node graph, bypassing external interface
+                    # this is the "in_place" way to do this. Otherwise we would create an entirely new CircuitIR instance
+                    self.graph.add_node(new_name, node=collapsed_node)
+                    node_op_graph_map[op_graph] = (new_name, collapsed_node)
 
-                # set current index to 0
-                coupling_vec_idx = 0
-                # and set size of this node to 1
-                node_sizes[op_graph] = 1
+                    # set current index to 0
+                    coupling_vec_idx = 0
+                    # and set size of this node to 1
+                    node_sizes[op_graph] = 1
 
-            # TODO: decide, whether reference collecting for operator_graphs in `_reference_map` is actually necessary
-            #   and if we thus need to remove these reference again after vectorization.
+                # TODO: decide, whether reference collecting for operator_graphs in `_reference_map` is actually necessary
+                #   and if we thus need to remove these reference again after vectorization.
 
-            # refer node key to new node and respective list index of its values
-            # format: "nodeX[Z]" with X = node index and Z = list index for values
-            self.label_map[specifier] = f"{new_name}[{coupling_vec_idx}]"
+                # refer node key to new node and respective list index of its values
+                # format: "nodeX[Z]" with X = node index and Z = list index for values
+                self.label_map[specifier] = f"{new_name}[{coupling_vec_idx}]"
 
-            # get new reference for source/target nodes
-            # new references should have format "vector_node{node_idx}[{vector_idx}]"
-            # the following raises an error, if the format is wrong for some reason
-            source, source_idx = self.label_map[source]
-            target, target_idx = self.label_map[target]
+                # get new reference for source/target nodes
+                # new references should have format "vector_node{node_idx}[{vector_idx}]"
+                # the following raises an error, if the format is wrong for some reason
+                source, source_idx = self.label_map[source]
+                target, target_idx = self.label_map[target]
 
-            # add edge from source to the new node
-            self.graph.add_edge(source, new_name,
-                                source_var=source_var, source_idx=[source_idx],
-                                target_var=edge_ir.input_var, target_idx=[coupling_vec_idx],
-                                weight=1, delay=None
-                                )
+                # add edge from source to the new node
+                self.graph.add_edge(source, new_name,
+                                    source_var=source_var, source_idx=[source_idx],
+                                    target_var=edge_ir.input_var, target_idx=[coupling_vec_idx],
+                                    weight=1, delay=None
+                                    )
 
-            # add edge from new node to target
-            self.graph.add_edge(new_name, target,
-                                source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
-                                target_var=target_var, target_idx=[target_idx],
-                                weight=weight, delay=delay
-                                )
+                # add edge from new node to target
+                self.graph.add_edge(new_name, target,
+                                    source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                                    target_var=target_var, target_idx=[target_idx],
+                                    weight=weight, delay=delay
+                                    )
 
             # remove old edge
             self.graph.remove_edge(*specifier)
