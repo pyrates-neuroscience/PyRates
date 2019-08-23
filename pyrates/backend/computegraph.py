@@ -529,9 +529,10 @@ class ComputeGraph(object):
             for node in self.net_config.nodes.keys():
                 var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
         else:
-            node, node_idx = self.net_config.label_map.get(node, (node, 0))
 
-            if node in self.net_config.nodes.keys() or node in self._net_config_map.keys():
+            #node, node_idx = self.net_config.label_map.get(node, (node, 0))
+
+            if node in self.net_config.nodes.keys() or node in self.net_config.label_map:
 
                 # get output variable of specific backend node
                 var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
@@ -792,8 +793,8 @@ class ComputeGraph(object):
 
         """
 
-        if node in self._net_config_map and op in self._net_config_map[node] and attr in self._net_config_map[node][op]:
-            node, op, attr, attr_idx = self._net_config_map[node][op][attr]
+        if node in self.net_config.label_map:
+            node, attr_idx = self.net_config.label_map[node]
             idx = f"{list(attr_idx)}" if type(attr_idx) is tuple else attr_idx
             return self.backend.apply_idx(self._get_op_attr(node, op, attr), idx) if retrieve else attr_idx
         elif node in self.net_config:
