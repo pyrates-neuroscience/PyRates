@@ -159,7 +159,7 @@ class ComputeGraph(object):
             target_node_ir = self.net_config[target_node]
 
             # define target index
-            if delay is not None and tidx:
+            if delay is not None and tidx and sum(tidx) > 0:
                 tidx_tmp = []
                 for idx, d in zip(tidx, delay):
                     if type(idx) is list:
@@ -167,7 +167,7 @@ class ComputeGraph(object):
                     else:
                         tidx_tmp.append([idx, d])
                 tidx = tidx_tmp
-            elif not tidx and delay is not None:
+            elif delay is not None:
                 tidx = list(delay)
 
             # create mapping equation and its arguments
