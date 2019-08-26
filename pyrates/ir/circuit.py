@@ -677,7 +677,7 @@ class CircuitIR(AbstractBaseIR):
         #                 edges += [(source_tmp, target_tmp, edge) for edge
         #                           in range(self.net_config.graph.number_of_edges(source_tmp, target_tmp))]
         # else:
-        edges = [(source, target, edge) for edge in range(self.graph.number_of_edges(source, target))]
+        edges = [(s, t, e) for s, t, e, _ in self.edges(source, target, keys=True)]
 
         # extract edges that connect the same variables on source and target
         ####################################################################
