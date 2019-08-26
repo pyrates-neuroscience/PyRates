@@ -215,6 +215,7 @@ class VectorizedOperatorGraph(DiGraph):
                 op_vars = self.operators[op_key]["variables"]
                 for var_key, value in op_values.items():
                     op_vars[var_key]["value"] = [value]
+                # self.operators[op_key]["variables"] = op_vars
 
             self.add_edges_from(op_graph.edges)
 
@@ -275,22 +276,23 @@ class VectorizedOperatorGraph(DiGraph):
 
         """
 
-        for op_key, variables in value_dict.items():
-            var_dict = self.nodes[op_key]["variables"]
-            for var_key, var_updates in var_dict.items():
-                value = var_updates["value"]
-                var = var_dict[var_key]
+        for op_key, variables_updates in value_dict.items():
+            original_variables = self.nodes[op_key]["variables"]
+            for var_key, value in variables_updates.items():
+                var = original_variables[var_key]
                 shape = _np.shape(value)
-                if _np.sum(shape) > 1:
+                shape_sum = _np.sum(shape)
+                if shape_sum > 1:
                     if _np.all(shape == _np.shape(var["value"])[1:]):
                         raise ValueError(f"Inconsistent dimensions of variable {var}. Dimension of value to add: "
                                          f"{shape} Internal dimension of vectorized value array: "
                                          f"{_np.shape(var['value'])[1:]}")
                     var["value"].append(value)
+                elif shape_sum == 0:
+                    # case, if shape == ()
+                    var["value"].append(value)
                 else:
                     var["value"].extend(value)
 
                 # also recompute shape
-                if var_key == "m_in":
-                    print(var_key)
                 var["shape"] = _np.shape(var["value"])
