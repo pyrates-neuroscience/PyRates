@@ -212,7 +212,7 @@ class VectorizedOperatorGraph(DiGraph):
 
                 # retrieve values from value dict and pass them into variable dictionary of operator
                 op_values = deepcopy(values[op_key])
-                op_vars = deepcopy(self.operators[op_key]["variables"])
+                op_vars = self.operators[op_key]["variables"]
                 for var_key, value in op_values.items():
                     op_vars[var_key]["value"] = [value]
 

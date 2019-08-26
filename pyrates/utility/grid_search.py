@@ -1086,11 +1086,11 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
                 if "/" in var:
                     op, var_name = var.split("/")
                     if op in circuit.nodes[node]['node'].op_graph.nodes:
-                        circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var_name]['value'] = float(val)
+                        circuit[node].values[op][var_name] = float(val)
                 else:
                     for op in circuit.nodes[node]['node'].op_graph.nodes:
                         try:
-                            circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var]['value'] = float(val)
+                            circuit[node].values[op][var] =float(val)
                         except KeyError:
                             pass
 
