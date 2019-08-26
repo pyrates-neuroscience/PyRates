@@ -75,168 +75,22 @@ class ComputeGraph(object):
 
     """
 
-    def __init__(self,
-                 net_config: Any,
-                 dt: float = 1e-3,
-                 vectorization: bool = True,
-                 name: Optional[str] = 'net0',
-                 build_in_place: bool = True,
-                 backend: str = 'numpy',
-                 solver: str = 'euler',
-                 float_precision: str = 'float32',
-                 **kwargs
-                 ) -> None:
+    def __new__(cls,
+                net_config: Any,
+                dt: float = 1e-3,
+                vectorization: bool = True,
+                name: Optional[str] = 'net0',
+                build_in_place: bool = True,
+                backend: str = 'numpy',
+                solver: str = 'euler',
+                float_precision: str = 'float32',
+                **kwargs
+                ) -> Any:
         """Instantiates operator.
         """
 
-        filterwarnings("ignore", category=FutureWarning)
-
-        # set basic attributes
-        ######################
-
-        super().__init__()
-        self.name = name
-        self._float_precision = float_precision
-        self._first_run = True
-        #if type(net_config) is str:
-        #    net_config = CircuitTemplate.from_yaml(net_config).apply()
-        net_config = net_config.optimize_graph_in_place(vectorize=vectorization)
-
-        # instantiate the backend and set the backend default_device
-        if backend == 'tensorflow':
-            from .tensorflow_backend import TensorflowBackend
-            backend = TensorflowBackend
-        elif backend == 'numpy':
-            from .numpy_backend import NumpyBackend
-            backend = NumpyBackend
-        else:
-            raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
-        kwargs['name'] = self.name
-        kwargs['float_default_type'] = self._float_precision
-        self.backend = backend(**kwargs)
-        self.solver = solver
-
-        # pre-process the network configuration
-        self.dt = dt
-        self._net_config_map = {}
-
-        if build_in_place:
-            self.net_config = self._net_config_consistency_check(net_config)
-        else:
-            self.net_config = self._net_config_consistency_check(deepcopy(net_config))
-
-        # set time constant of the network
-        self._dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': self._float_precision, 'shape': (),
-                                      'value': self.dt}},
-                              backend=self.backend)['dt']
-
-        # move edge operations to nodes
-        ###############################
-
-        print('building the compute graph...')
-
-        # create equations and variables for each edge
-        for source_node, target_node, edge_idx, data in self.net_config.edges(data=True, keys=True):
-            # extract edge information
-            weight = data['weight']
-            delay = data['delay']
-            sidx = data['source_idx']
-            tidx = data['target_idx']
-            svar = data['source_var']
-            sop, svar = svar.split("/")
-            sval = self.net_config[f"{source_node}/{sop}/{svar}"]["value"]
-
-            tvar = data['target_var']
-            top, tvar = tvar.split("/")
-            # get variable properties
-            # tval --> variable properties
-            # fetch both values and variable definitions of target variable
-            tval = self.net_config[f"{target_node}/{top}/{tvar}"]
-
-            add_project = data.get('add_project', False)  # get a False, in case it is not defined
-            target_node_ir = self.net_config[target_node]
-
-            # define target index
-            if delay is not None and tidx:
-                tidx_tmp = []
-                for idx, d in zip(tidx, delay):
-                    if type(idx) is list:
-                        tidx_tmp.append(idx + [d])
-                    else:
-                        tidx_tmp.append([idx, d])
-                tidx = tidx_tmp
-            elif delay is not None:
-                tidx = list(delay)
-
-            # create mapping equation and its arguments
-            d = "[target_idx]" if tidx else ""
-            idx = "[source_idx]" if sidx else ""
-            assign = '+=' if add_project else '='
-            eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
-            args = {}
-            dtype = sval.dtype
-            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
-            if tidx:
-                args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                      'value': np.array(tidx, dtype=np.int32)}
-            if sidx:
-                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                      'value': np.array(sidx, dtype=np.int32)}
-            args[tvar] = tval
-
-            # add edge operator to target node
-            op_name = f'edge_from_{source_node}_{edge_idx}'
-            target_node_ir.add_op(op_name,
-                                  inputs={svar: {'sources': [sop],
-                                                 'reduce_dim': True,
-                                                 'node': source_node}},
-                                  output=tvar,
-                                  equations=[eq],
-                                  variables=args)
-
-            # connect edge operator to target operator
-            target_node_ir.add_op_edge(op_name, top)
-
-            # add input information to target operator
-            inputs = self._get_op_attr(target_node, top, 'inputs')
-            if tvar in inputs.keys():
-                inputs[tvar]['sources'].add(op_name)
-            else:
-                inputs[tvar] = {'sources': [op_name],
-                                'reduce_dim': True}
-
-        # collect node and edge operators
-        #################################
-
-        variables = {'all/all/dt': self._dt}
-
-        # edge operators
-        equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
-        variables.update(variables_tmp)
-        if equations:
-            self.backend._input_layer_added = True
-
-        # node operators
-        equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
-        variables.update(variables_tmp)
-
-        # bring equations into correct order
-        equations = sort_equations(edge_eqs=equations, node_eqs=equations_tmp)
-
-        # parse all equations and variables into the backend
-        ####################################################
-
-        self.backend.bottom_layer()
-
-        # parse mapping
-        variables = parse_equation_system(equations=equations, equation_args=variables, backend=self.backend,
-                                          solver=self.solver)
-
-        # save parsed variables in net config
-        for key, val in variables.items():
-            node, op, var = key.split('/')
-            if "inputs" not in var and var != "dt":
-                self._set_node_attr(node, var, val, op=op)
+        return net_config.compile(dt=dt, vectorization=vectorization, backend=backend, solver=solver,
+                                  float_precision=float_precision, **kwargs)
 
     def run(self,
             simulation_time: Optional[float] = None,

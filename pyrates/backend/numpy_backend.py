@@ -101,11 +101,11 @@ class NumpyVar(np.ndarray):
 
         # get shape
         if not shape:
-            shape = value.shape if hasattr(value, 'shape') else (1,)
+            shape = value.shape if hasattr(value, 'shape') else np.shape(value)
 
         # get data type
         if not dtype:
-            dtype = value.dtype if hasattr(value, 'dtype') else type(value)
+            dtype = value.dtype if hasattr(value, 'dtype') else np.dtype(value)
         dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
         if dtype in backend.dtypes:
             dtype = backend.dtypes[dtype]

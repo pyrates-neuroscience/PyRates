@@ -471,6 +471,40 @@ class CircuitIR(AbstractBaseIR):
             for source in self.nodes.keys():
                 for target in self.nodes.keys():
                     self._vectorize_edges(source, target)
+                # go through nodes and create mapping for their inputs
+                for node_name, node in self.nodes.items():
+
+                    node_inputs = self.graph.in_edges(node_name, keys=True)
+                    node_inputs = self._sort_edges(node_inputs, 'target_var')
+
+                    # loop over input variables of node
+                    for i, (in_var, edges) in enumerate(node_inputs.items()):
+
+                        # extract info for input variable connections
+                        n_inputs = len(edges)
+                        op_name, var_name = in_var.split('/')
+                        delays = []
+                        for s, t, e in edges:
+                            d = self.edges[s, t, e]['delay']
+                            if d is not None:
+                                d = [int(d_tmp/self._dt)+1 for d_tmp in d] if type(d) is list else int(d/self._dt)+1
+                                delays.append(d)
+                                self.edges[s, t, e]['delay'] = d
+                        max_delay = np.max(delays) if delays else None
+
+                        # loop over different input sources
+                        for j in range(n_inputs):
+
+                            if max_delay is not None:
+
+                                # add synaptic buffer to the input variable
+                                self._add_edge_buffer(node_name, op_name, var_name, idx=j,
+                                                      buffer_length=max_delay, edge=edges[j])
+
+                            elif n_inputs > 1:
+
+                                # add synaptic input collector to the input variable
+                                self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
 
         return self
 
@@ -1013,7 +1047,7 @@ class CircuitIR(AbstractBaseIR):
                         # go through all nodes, extract the variable and add it to input dict
                         i = 0
                         for node_tmp in self.nodes:
-                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
+                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
                             i_new = var.shape[0] if len(var.shape) > 0 else 1
                             inp_dict[var.name] = np.reshape(val[:, i:i_new], (sim_steps,) + tuple(var.shape))
                             i += i_new
@@ -1153,7 +1187,7 @@ class CircuitIR(AbstractBaseIR):
                 solver: str = 'euler',
                 float_precision: str = 'float32',
                 **kwargs
-                ) -> None:
+                ) -> AbstractBaseIR:
         """Parses IR into the backend.
         """
 
@@ -1161,9 +1195,6 @@ class CircuitIR(AbstractBaseIR):
 
         # set basic attributes
         ######################
-
-        self._first_run = True
-        self.optimize_graph_in_place(vectorize=vectorization)
 
         # instantiate the backend and set the backend default_device
         if backend == 'tensorflow':
@@ -1178,16 +1209,14 @@ class CircuitIR(AbstractBaseIR):
         kwargs['float_default_type'] = float_precision
         self._backend = backend(**kwargs)
 
-        # pre-process the network configuration
-        #if build_in_place:
-        #    self.net_config = self._net_config_consistency_check(net_config)
-        #else:
-        #    self.net_config = self._net_config_consistency_check(deepcopy(net_config))
-
         # set time constant of the network
         self._dt = dt
         dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': float_precision, 'shape': (), 'value': self._dt}},
                         backend=self._backend)['dt']
+
+        # run graph optimization and vectorization
+        self._first_run = True
+        self.optimize_graph_in_place(vectorize=vectorization)
 
         # move edge operations to nodes
         ###############################
@@ -1196,6 +1225,7 @@ class CircuitIR(AbstractBaseIR):
 
         # create equations and variables for each edge
         for source_node, target_node, edge_idx, data in self.edges(data=True, keys=True):
+
             # extract edge information
             weight = data['weight']
             delay = data['delay']
@@ -1203,7 +1233,7 @@ class CircuitIR(AbstractBaseIR):
             tidx = data['target_idx']
             svar = data['source_var']
             sop, svar = svar.split("/")
-            sval = self[f"{source_node}/{sop}/{svar}"]["value"]
+            sval = self[f"{source_node}/{sop}/{svar}"]
 
             tvar = data['target_var']
             top, tvar = tvar.split("/")
@@ -1233,7 +1263,7 @@ class CircuitIR(AbstractBaseIR):
             assign = '+=' if add_project else '='
             eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
             args = {}
-            dtype = sval.dtype
+            dtype = sval["dtype"]
             args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
             if tidx:
                 args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
@@ -1257,7 +1287,7 @@ class CircuitIR(AbstractBaseIR):
             target_node_ir.add_op_edge(op_name, top)
 
             # add input information to target operator
-            inputs = self.nodes[target_node][top]['inputs']
+            inputs = self[target_node][top]['inputs']
             if tvar in inputs.keys():
                 inputs[tvar]['sources'].add(op_name)
             else:
@@ -1295,7 +1325,10 @@ class CircuitIR(AbstractBaseIR):
         for key, val in variables.items():
             node, op, var = key.split('/')
             if "inputs" not in var and var != "dt":
-                self[f"{node}/{op}/{var}"]['value'] = val
+                try:
+                    self[f"{node}/{op}/{var}"]['value'] = val
+                except KeyError as e:
+                    pass
 
         return self
 
@@ -1486,6 +1519,182 @@ class CircuitIR(AbstractBaseIR):
             else:
                 inputs_unique = f"stack({','.join(inputs_unique)})"
         return inputs_unique, input_mapping
+
+    def _sort_edges(self, edges: List[tuple], attr: str) -> dict:
+        """Sorts edges according to the given edge attribute.
+
+        Parameters
+        ----------
+        edges
+            Collection of edges of interest.
+        attr
+            Name of the edge attribute.
+
+        Returns
+        -------
+        dict
+            Key-value pairs of the different values the attribute can take on (keys) and the list of edges for which
+            the attribute takes on that value (value).
+
+        """
+
+        edges_new = {}
+        for edge in edges:
+            if len(edge) == 3:
+                source, target, edge = edge
+            else:
+                raise ValueError("Missing edge index. This error message should not occur.")
+            value = self.edges[source, target, edge][attr]
+
+            if value not in edges_new.keys():
+                edges_new[value] = [(source, target, edge)]
+            else:
+                edges_new[value].append((source, target, edge))
+
+        return edges_new
+
+    def _add_edge_buffer(self, node: str, op: str, var: str, idx: int, buffer_length: int, edge: tuple) -> None:
+        """Adds a buffer variable to an edge.
+
+        Parameters
+        ----------
+        node
+            Name of the target node of the edge.
+        op
+            Name of the target operator of the edge.
+        var
+            Name of the target variable of the edge.
+        idx
+            Index of the buffer variable for that specific edge.
+        buffer_length
+            Length of the time-buffer that should be added to realize edge delays.
+        edge
+            Edge identifier (source_name, target_name, edge_idx).
+
+        Returns
+        -------
+        None
+
+        """
+
+        target_shape = self._get_op_attr(node, op, var)['shape']
+        node_ir = self[node]
+
+        # create buffer variable definitions
+        if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+            buffer_shape = (buffer_length + 1,)
+            buffer_shape_reset = (1,)
+        else:
+            buffer_shape = (target_shape[0], buffer_length + 1)
+            buffer_shape_reset = (target_shape[0], 1)
+        var_dict = {f'{var}_buffer_{idx}': {'vtype': 'state_var',
+                                            'dtype': self._backend._float_def,
+                                            'shape': buffer_shape,
+                                            'value': 0.
+                                            },
+                    f'{var}_buffer_{idx}_reset': {'vtype': 'constant',
+                                                  'dtype': self._backend._float_def,
+                                                  'shape': buffer_shape_reset,
+                                                  'value': 0.
+                                                  }
+                    }
+
+        # create buffer equations
+        if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+            eqs_op_read = [f"{var} = {var}_buffer_{idx}[0]"]
+            eqs_op_rotate = [f"{var}_buffer_{idx} = concat(({var}_buffer_{idx}[1:], {var}_buffer_{idx}_reset), 0)"]
+        else:
+            eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, 0]"]
+            eqs_op_rotate = [f"{var}_buffer_{idx} = concat(({var}_buffer_{idx}[:, 1:], {var}_buffer_{idx}_reset), 1)"]
+
+        # add buffer operators to operator graph
+        node_ir.add_op(f'{op}_{var}_buffer_rotate_{idx}',
+                       inputs={},
+                       output=f'{var}_buffer_{idx}',
+                       equations=eqs_op_rotate,
+                       variables=var_dict)
+        node_ir.add_op(f'{op}_{var}_buffer_read_{idx}',
+                       inputs={f'{var}_buffer_{idx}': {'sources': [f'{op}_{var}_buffer_rotate_{idx}'],
+                                                       'reduce_dim': False}},
+                       output=var,
+                       equations=eqs_op_read,
+                       variables={})
+
+        # connect operators to rest of the graph
+        node_ir.add_op_edge(f'{op}_{var}_buffer_rotate_{idx}', f'{op}_{var}_buffer_read_{idx}')
+        node_ir.add_op_edge(f'{op}_{var}_buffer_read_{idx}', op)
+
+        # add input information to target operator
+        inputs = self._get_op_attr(node, op, 'inputs')
+        if var in inputs.keys():
+            inputs[var]['sources'].add(f'{op}_{var}_buffer_read_{idx}')
+        else:
+            inputs[var] = {'sources': {f'{op}_{var}_buffer_read_{idx}'},
+                           'reduce_dim': True}
+
+        # update edge information
+        s, t, e = edge
+        self.edges[s, t, e]['target_var'] = f'{op}_{var}_buffer_rotate_{idx}/{var}_buffer_{idx}'
+        self.edges[s, t, e]['add_project'] = True
+
+    def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
+        """Adds an input collector variable to an edge.
+
+        Parameters
+        ----------
+        node
+            Name of the target node of the edge.
+        op
+            Name of the target operator of the edge.
+        var
+            Name of the target variable of the edge.
+        idx
+            Index of the input collector variable on that edge.
+        edge
+            Edge identifier (source_name, target_name, edge_idx).
+
+        Returns
+        -------
+        None
+
+        """
+
+        target_shape = self._get_op_attr(node, op, var)['shape']
+        # op_graph = self._get_node_attr(node, 'op_graph')
+        node_ir = self[node]
+
+        # create collector equation
+        eqs = [f"{var} = {var}_col_{idx}"]
+
+        # create collector variable definition
+        val_dict = {'vtype': 'state_var',
+                    'dtype': self._backend._float_def if self._backend is not None else float,
+                    'shape': target_shape,
+                    'value': 0.
+                    }
+        var_dict = {f'{var}_col_{idx}': val_dict,
+                    var: val_dict}
+        # added the actual output variable as well.
+
+        # add collector operator to operator graph
+        node_ir.add_op(f'{op}_{var}_col_{idx}',
+                       inputs={},
+                       output=var,
+                       equations=eqs,
+                       variables=var_dict)
+        node_ir.add_op_edge(f'{op}_{var}_col_{idx}', op)
+
+        # add input information to target operator
+        op_inputs = self._get_op_attr(node, op, 'inputs')
+        if var in op_inputs.keys():
+            op_inputs[var]['sources'].add(f'{op}_{var}_col_{idx}')
+        else:
+            op_inputs[var] = {'sources': {f'{op}_{var}_col_{idx}'},
+                              'reduce_dim': True}
+
+        # update edge target information
+        s, t, e = edge
+        self.edges[s, t, e]['target_var'] = f'{op}_{var}_col_{idx}/{var}_col_{idx}'
 
 
 class SubCircuitView(AbstractBaseIR):
