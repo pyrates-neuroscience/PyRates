@@ -157,6 +157,13 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
             op, var = out[-2], out[-1]
             node = node.split('.')[0]
             outputs[out_key] = "/".join((node, op, var))
+        else:
+            for node_tmp in nodes:
+                if node in node_tmp:
+                    op, var = out[-2], out[-1]
+                    node = node_tmp.split('.')[0]
+                    outputs[out_key] = "/".join((node, op, var))
+                    break
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,

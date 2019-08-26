@@ -200,3 +200,24 @@ JRC_delaycoupled:
   edges:
     - [JRC1/PC/PRO/m_out, JRC2/PC/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
     - [JRC2/PC/PRO/m_out, JRC1/PC/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
+
+JRC_dc:
+  base: CircuitTemplate
+  nodes:
+    PC1: PC
+    EIN1: EIN
+    IIN1: IIN
+    PC2: PC
+    EIN2: EIN
+    IIN2: IIN
+  edges:
+    - [PC1/PRO/m_out, IIN1/RPO_e/m_in, DummyEdge, {weight: 33.75}]
+    - [PC1/PRO/m_out, EIN1/RPO_e/m_in, DummyEdge, {weight: 135.}]
+    - [EIN1/PRO/m_out, PC1/RPO_e_pc/m_in, DummyEdge, {weight: 108.}]
+    - [IIN1/PRO/m_out, PC1/RPO_i/m_in, DummyEdge, {weight: 33.75}]
+    - [PC2/PRO/m_out, IIN2/RPO_e/m_in, DummyEdge, {weight: 33.75}]
+    - [PC2/PRO/m_out, EIN2/RPO_e/m_in, DummyEdge, {weight: 135.}]
+    - [EIN2/PRO/m_out, PC2/RPO_e_pc/m_in, DummyEdge, {weight: 108.}]
+    - [IIN2/PRO/m_out, PC2/RPO_i/m_in, DummyEdge, {weight: 33.75}]
+    - [PC1/PRO/m_out, PC2/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [PC2/PRO/m_out, PC1/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
