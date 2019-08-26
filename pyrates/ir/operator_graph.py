@@ -27,7 +27,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from copy import deepcopy
+from copy import deepcopy, copy
 from typing import Iterator, Dict, List
 
 import numpy as _np
@@ -211,8 +211,8 @@ class VectorizedOperatorGraph(DiGraph):
                                       output=op.output)
 
                 # retrieve values from value dict and pass them into variable dictionary of operator
-                op_values = values[op_key]
-                op_vars = self.operators[op_key]["variables"]
+                op_values = deepcopy(values[op_key])
+                op_vars = deepcopy(self.operators[op_key]["variables"])
                 for var_key, value in op_values.items():
                     op_vars[var_key]["value"] = [value]
 
@@ -291,4 +291,6 @@ class VectorizedOperatorGraph(DiGraph):
                     var["value"].extend(value)
 
                 # also recompute shape
+                if var_key == "m_in":
+                    print(var_key)
                 var["shape"] = _np.shape(var["value"])
