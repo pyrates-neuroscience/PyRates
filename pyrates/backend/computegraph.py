@@ -1096,33 +1096,33 @@ class ComputeGraph(object):
             raise ValueError('Wrong `idx_type`. Please, choose either `source` or `target`.')
 
         var_idx = self._get_edge_attr(source, target, edge, var)
-        if var_idx:
-            op, var = self.net_config.edges[source, target, edge][node_var].split('/')
-            _, _, _, idx = self._net_config_map[node_to_idx][op][var]
-            if type(idx) is tuple:
-                idx = range(idx[0], idx[1])
-                idx_new = []
-                for i in var_idx:
-                    if type(i) is tuple:
-                        idx_new.append([idx[i[0]:i[1]]])
-                    elif type(i) is list:
-                        idx_new.append([idx[i[0]]])
-                    else:
-                        idx_new.append([idx[i]])
-            else:
-                idx_new = [[idx]]
+        # if var_idx:
+        #     op, var = self.net_config.edges[source, target, edge][node_var].split('/')
+        #     _, _, _, idx = self.net_config.label_map[node_to_idx]
+        #     if type(idx) is tuple:
+        #         idx = range(idx[0], idx[1])
+        #         idx_new = []
+        #         for i in var_idx:
+        #             if type(i) is tuple:
+        #                 idx_new.append([idx[i[0]:i[1]]])
+        #             elif type(i) is list:
+        #                 idx_new.append([idx[i[0]]])
+        #             else:
+        #                 idx_new.append([idx[i]])
+        #     else:
+        #         idx_new = [[idx]]
+        # else:
+        #     try:
+        #         op, var = self.net_config.edges[source, target, edge][node_var].split('/')
+        #         _, _, _, idx_new = self._net_config_map[node_to_idx][op][var]
+        if type(var_idx) is int:
+            var_idx = [var_idx]
         else:
-            try:
-                op, var = self.net_config.edges[source, target, edge][node_var].split('/')
-                _, _, _, idx_new = self._net_config_map[node_to_idx][op][var]
-                if type(idx_new) is int:
-                    idx_new = [idx_new]
-                else:
-                    idx_new = list(idx_new)
-            except KeyError:
-                idx_new = None
+            var_idx = list(var_idx)
+            # except KeyError:
+            #     idx_new = None
 
-        return idx_new
+        return var_idx
 
     def _sort_edges(self, edges: List[tuple], attr: str) -> dict:
         """Sorts edges according to the given edge attribute.
@@ -1148,16 +1148,14 @@ class ComputeGraph(object):
             if len(edge) == 3:
                 source, target, edge = edge
             else:
-                source, target = edge
-                if (source, target) not in edge_idx:
-                    edge_idx[(source, target)] = 0
-                edge = edge_idx[(source, target)]
-                edge_idx[(source, target)] += 1
+                raise ValueError("Missing edge index. This error message should not occur.")
+                # source, target = edge
+                # if (source, target) not in edge_idx:
+                #     edge_idx[(source, target)] = 0
+                # edge = edge_idx[(source, target)]
+                # edge_idx[(source, target)] += 1
             value = self.net_config.edges[source, target, edge][attr]
-            # if value is None:
-            #     raise ValueError
-            #     # TODO: found a problem with empty coupling nodes, because their input/output variables are None
-            #     #   need to fix!
+
             if value not in edges_new.keys():
                 edges_new[value] = [(source, target, edge)]
             else:
@@ -1498,36 +1496,35 @@ class ComputeGraph(object):
         # First stage: Vectorize over nodes
         ###################################
 
-        # if vectorization_mode in 'nodesfull':
-        #
-        #     # TODO: Consider removing this part
-        #
-        #     nodes = list(self.net_config.nodes.keys())
-        #
-        #     # go through each node in net config and vectorize it with nodes that have the same operator structure
-        #     ######################################################################################################
-        #
-        #     while nodes:
-        #
-        #         # get nodes with same operators
-        #         op_graph = self._get_node_attr(nodes[0], 'op_graph')
-        #         nodes_tmp = self._get_nodes_with_attr('op_graph', op_graph)
-        #
-        #         # vectorize those nodes
-        #         self._vectorize_nodes(list(nodes_tmp))
-        #
-        #         # delete vectorized nodes from list
-        #         for n in nodes_tmp:
-        #             nodes.pop(nodes.index(n))
-        #
-        #     # adjust edges accordingly
-        #     ##########################
-        #
-        #     # go through new nodes
-        #     for source in self.net_config.nodes.keys():
-        #         for target in self.net_config.nodes.keys():
-        #             if '_all' in source and '_all' in target:
-        #                 self._vectorize_edges(source, target)
+        if vectorization_mode in 'nodesfull':
+            #
+            # # TODO: Consider removing this part
+            #
+            # nodes = list(self.net_config.nodes.keys())
+            #
+            # # go through each node in net config and vectorize it with nodes that have the same operator structure
+            # ######################################################################################################
+            #
+            # while nodes:
+            #
+            #     # get nodes with same operators
+            #     op_graph = self._get_node_attr(nodes[0], 'op_graph')
+            #     nodes_tmp = self._get_nodes_with_attr('op_graph', op_graph)
+            #
+            #     # vectorize those nodes
+            #     self._vectorize_nodes(list(nodes_tmp))
+            #
+            #     # delete vectorized nodes from list
+            #     for n in nodes_tmp:
+            #         nodes.pop(nodes.index(n))
+
+            # adjust edges accordingly
+            ##########################
+
+            # go through new nodes
+            for source in self.net_config.nodes.keys():
+                for target in self.net_config.nodes.keys():
+                    self._vectorize_edges(source, target)
         #
         #     # save changes to net config
         #     for node in list(self.net_config.nodes):
@@ -1666,7 +1663,7 @@ class ComputeGraph(object):
         # go through nodes and create mapping for their inputs
         for node_name, node in self.net_config.nodes.items():
 
-            node_inputs = self.net_config.graph.in_edges(node_name)
+            node_inputs = self.net_config.graph.in_edges(node_name, keys=True)
             node_inputs = self._sort_edges(node_inputs, 'target_var')
 
             # loop over input variables of node
@@ -1920,6 +1917,7 @@ class ComputeGraph(object):
                 self.net_config.graph.add_edge(source_name, target_name, **new_edge)
 
             # delete vectorized edges from list
+            self.net_config.graph.remove_edges_from(edges_tmp)
             for edge in edges_tmp:
                 edges.pop(edges.index(edge))
 

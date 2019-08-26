@@ -371,7 +371,7 @@ def test_2_3_edge():
         assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_2_4_vectorization():
     """Testing vectorization functionality of ComputeGraph class.
 
