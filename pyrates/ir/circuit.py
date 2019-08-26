@@ -27,12 +27,12 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from typing import Union, Dict, Iterator
+from typing import Union, Dict, Iterator, Optional, List, Tuple, Any
 from warnings import filterwarnings
 
 from pyparsing import Word, ParseException, nums, Literal
 from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGraph
-from pandas import DataFrame
+from pandas import DataFrame, MultiIndex
 import numpy as np
 
 from pyrates import PyRatesException
@@ -40,6 +40,7 @@ from pyrates import PyRatesException
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
+from pyrates.backend.parser import parse_dict, parse_equation_system, is_diff_eq, replace
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -51,7 +52,7 @@ class CircuitIR(AbstractBaseIR):
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
     __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map",
-                 "_first_run", "_vectorized", "_compile_info"]
+                 "_first_run", "_vectorized", "_compile_info", "_backend", "_dt"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -96,6 +97,8 @@ class CircuitIR(AbstractBaseIR):
         self._first_run = True
         self._vectorized = False
         self._compile_info = {}
+        self._backend = None
+        self._dt = 0.0
 
     def _collect_references(self, edge_or_node):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
@@ -451,7 +454,7 @@ class CircuitIR(AbstractBaseIR):
         from pyrates.frontend import circuit_from_yaml
         return circuit_from_yaml(path)
 
-    def optimize_graph_in_place(self, max_node_idx: int = 100000):
+    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
@@ -461,6 +464,13 @@ class CircuitIR(AbstractBaseIR):
 
         nodes = (node for node, data in old_nodes)
         self.graph.remove_nodes_from(nodes)
+
+        if vectorize:
+
+            # go through new nodes
+            for source in self.nodes.keys():
+                for target in self.nodes.keys():
+                    self._vectorize_edges(source, target)
 
         return self
 
@@ -642,17 +652,509 @@ class CircuitIR(AbstractBaseIR):
 
     # def _vectorize_common_in_place(self, max_node_idx, old_name, node_op_graph_map, node_sizes, name_idx):
 
+    def _vectorize_edges(self, source: str, target: str) -> None:
+        """Combines edges in list and adds a new edge to the new net config.
+
+        Parameters
+        ----------
+        source
+            Name of the source node
+        target
+            Name of the target node
+
+        Returns
+        -------
+        None
+
+        """
+
+        # get edges between source and target
+        # if ('_all' in source and '_all' in target) or ('_combined' in source and '_combined' in target):
+        #     edges = []
+        #     for source_tmp in self._net_config_map:
+        #         for target_tmp in self._net_config_map:
+        #             if self._contains_node(source, source_tmp) and self._contains_node(target, target_tmp):
+        #                 edges += [(source_tmp, target_tmp, edge) for edge
+        #                           in range(self.net_config.graph.number_of_edges(source_tmp, target_tmp))]
+        # else:
+        edges = [(source, target, edge) for edge in range(self.graph.number_of_edges(source, target))]
+
+        # extract edges that connect the same variables on source and target
+        ####################################################################
+
+        while edges:
+
+            source_tmp, target_tmp, edge_tmp = edges[0]
+
+            # get source and target variable
+            source_var = self.edges[source_tmp, target_tmp, edge_tmp]['source_var']
+            target_var = self.edges[source_tmp, target_tmp, edge_tmp]['target_var']
+
+            # get edges with equal source and target variables between source and target node
+            edges_tmp = []
+            for n, (source_tmp, target_tmp, edge_tmp) in enumerate(edges):
+                if self.edges[source_tmp, target_tmp, edge_tmp]['source_var'] == source_var and \
+                        self.edges[source_tmp, target_tmp, edge_tmp]['target_var'] == target_var:
+                    edges_tmp.append(edges[n])
+
+            # vectorize those edges
+            #######################
+
+            n_edges = len(edges_tmp)
+
+            if n_edges > 0:
+
+                # go through edges and extract weight and delay
+                weight_col = []
+                delay_col = []
+                old_svar_idx = []
+                old_tvar_idx = []
+
+                for source, target, idx in edges_tmp:
+
+                    weight = self.edges[source, target, idx]['weight']
+                    delay = self.edges[source, target, idx]['delay']
+
+                    # add weight, delay and variable indices to collector lists
+                    if delay is not None:
+                        delay_col.append(delay)
+                    if weight is not None:
+                        weight_col.append(weight)
+                    idx_tmp = self.edges[source, target, idx]['source_idx']
+                    idx_tmp = [idx_tmp] if type(idx_tmp) is int else list(idx_tmp)
+                    if idx_tmp:
+                        old_svar_idx += idx_tmp
+                    idx_tmp = self.edges[source, target, idx]['target_idx']
+                    idx_tmp = [idx_tmp] if type(idx_tmp) is int else list(idx_tmp)
+                    if idx_tmp:
+                        old_tvar_idx += idx_tmp
+
+                # create new, vectorized edge
+                #############################
+
+                # extract edge
+                edge_ref = edges_tmp[0]
+                new_edge = self.edges[edge_ref]
+
+                # change delay and weight attributes
+                new_edge['delay'] = delay_col if delay_col else None
+                new_edge['weight'] = weight_col if weight_col else None
+                new_edge['source_idx'] = old_svar_idx
+                new_edge['target_idx'] = old_tvar_idx
+
+                # add new edge to new net config
+                self.graph.add_edge(source, target, **new_edge)
+
+            # delete vectorized edges from list
+            self.graph.remove_edges_from(edges_tmp)
+            for edge in edges_tmp:
+                edges.pop(edges.index(edge))
+
+    def get_var(self, node: str, op: str, var: str, var_name: Optional[str] = None, **kwargs) -> dict:
+        """Extracts a variable from the graph.
+
+        Parameters
+        ----------
+        node
+            Name of the node(s), the variable exists on. Can be 'all' for all nodes, or a sub-string that defines a
+            class of nodes or a specific node name.
+        op
+            Name of the operator the variable belongs to.
+        var
+            Name of the variable.
+        var_name
+            Name under which the variable should be returned
+        kwargs
+            Additional keyword arguments that may be used to pass arguments for the backend like name scopes.
+
+        Returns
+        -------
+        dict
+            Dictionary with all variables found in the network that match the provided signature.
+
+        """
+
+        if not var_name:
+            var_name = var
+        var_col = {}
+
+        if node == 'all':
+
+            # collect output variable from every node in backend
+            for node in self.nodes:
+                var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
+        else:
+
+            # node, node_idx = self.net_config.label_map.get(node, (node, 0))
+
+            if node in self.nodes or node in self.label_map:
+
+                # get output variable of specific backend node
+                var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
+
+            elif any([node in key for key in self.nodes]):
+
+                # get output variable from backend nodes of a certain type
+                for node_tmp in self.nodes:
+                    if node in node_tmp:
+                        var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
+                                                                                 **kwargs)
+            else:
+
+                # get output variable of specific, vectorized backend node
+                i = 0
+                for node_tmp in self.label_map:
+                    if node in node_tmp:
+                        var_col[f'{node}/{op}/{var_name}_{i}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
+                                                                                     **kwargs)
+                        i += 1
+
+        return var_col
+
+    def _get_node_attr(self, node: str, attr: str, op: Optional[str] = None, **kwargs) -> Any:
+        """Extract attribute from node of the network.
+
+        Parameters
+        ----------
+        node
+            Name of the node.
+        attr
+            Name of the attribute on the node.
+        op
+            Name of the operator. Only needs to be provided for operator variables.
+
+        Returns
+        -------
+        Any
+            Node attribute.
+
+        """
+
+        if op:
+            return self._get_op_attr(node, op, attr, **kwargs)
+        try:
+            return self[node][attr]
+        except KeyError:
+            vals = []
+            for op in self[node]:
+                vals.append(self._get_op_attr(node, op, attr, **kwargs))
+            return vals
+
+    def _get_op_attr(self, node: str, op: str, attr: str, retrieve: bool = True, **kwargs) -> Any:
+        """Extracts attribute of an operator.
+
+        Parameters
+        ----------
+        node
+            Name of the node.
+        op
+            Name of the operator on the node.
+        attr
+            Name of the attribute of the operator on the node.
+        retrieve
+            If attribute is output, this can be set to True to receive the handle to the output variable, or to false
+            to receive the name of the output variable.
+
+        Returns
+        -------
+        Any
+            Operator attribute.
+
+        """
+
+        if node in self.label_map:
+            node, attr_idx = self.label_map[node]
+            idx = f"{list(attr_idx)}" if type(attr_idx) is tuple else attr_idx
+            return self._backend.apply_idx(self._get_op_attr(node, op, attr)['value'], idx) if retrieve else attr_idx
+        elif node in self.nodes:
+            op = self[node]['op_graph'].nodes[op]
+        else:
+            raise ValueError(f'Node with name {node} is not part of this network.')
+
+        if attr == 'output' and retrieve:
+            attr = op['output']
+        if attr in op['variables']:
+            attr_val = op['variables'][attr]
+        else:
+            try:
+                attr_val = op[attr]
+            except KeyError as e:
+                try:
+                    attr_val = getattr(op, attr)
+                except AttributeError:
+                    raise e
+
+        return attr_val
+
+    def run(self,
+            simulation_time: Optional[float] = None,
+            inputs: Optional[dict] = None,
+            outputs: Optional[dict] = None,
+            sampling_step_size: Optional[float] = None,
+            out_dir: Optional[str] = None,
+            verbose: bool = True,
+            profile: Optional[str] = None,
+            **kwargs
+            ) -> Union[DataFrame, Tuple[DataFrame, float, float]]:
+        """Simulate the backend behavior over time via a tensorflow session.
+
+        Parameters
+        ----------
+        simulation_time
+            Simulation time in seconds.
+        inputs
+            Inputs for placeholder variables. Each key is a tuple that specifies a placeholder variable in the graph
+            in the following format: (node_name, op_name, var_name). Each value is an array that defines the input for
+            the placeholder variable over time (first dimension).
+        outputs
+            Output variables that will be returned. Each key is the desired name of an output variable and each value is
+            a tuple that specifies a variable in the graph in the following format: (node_name, op_name, var_name).
+        sampling_step_size
+            Time in seconds between sampling points of the output variables.
+        out_dir
+            Directory in which to store outputs.
+        verbose
+            If true, status updates will be printed to the console.
+        profile
+            Can be used to extract information about graph execution time and memory load. Can be:
+            - `t` for returning the total graph execution time.
+            - `m` for returning the peak memory consumption during graph excecution.
+            - `mt` or `tm` for both
+
+        Returns
+        -------
+        Union[DataFrame, Tuple[DataFrame, float, float]]
+            First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
+            simulation time in seconds and the third the peak memory consumption. If profiling was not chosen during
+            call of the function, only the dataframe will be returned.
+
+        """
+
+        filterwarnings("ignore", category=FutureWarning)
+
+        # prepare simulation
+        ####################
+
+        if verbose:
+            print("Preparing the simulation...")
+
+        if not self._first_run:
+            self._backend.remove_layer(0)
+            self._backend.remove_layer(self._backend.top_layer())
+        else:
+            self._first_run = False
+
+        # basic simulation parameters initialization
+        if not simulation_time:
+            simulation_time = self._backend.dt
+        sim_steps = int(simulation_time / self._dt)
+
+        if not sampling_step_size:
+            sampling_step_size = self._dt
+        sampling_steps = int(sampling_step_size / self._dt)
+
+        # add output variables to the backend
+        #####################################
+
+        # define output variables
+        output_col = {}
+        output_cols = []
+        output_keys = []
+        output_shapes = []
+        if outputs:
+            for key, val in outputs.items():
+                val_split = val.split('/')
+                node, op, var = "/".join(val_split[:-2]), val_split[-2], val_split[-1]
+                for var_key, var_val in self.get_var(node=node, op=op, var=var, var_name=f"{key}_col").items():
+                    var_shape = tuple(var_val.shape)
+                    if var_shape in output_shapes:
+                        idx = output_shapes.index(var_shape)
+                        output_cols[idx].append(var_val)
+                        output_keys[idx].append(var_key)
+                    else:
+                        output_cols.append([var_val])
+                        output_keys.append([var_key])
+                        output_shapes.append(var_shape)
+
+                # create counting index for collector variables
+                output_col.update(self._backend.add_output_layer(outputs=output_cols,
+                                                                 sampling_steps=int(sim_steps / sampling_steps),
+                                                                 out_shapes=output_shapes))
+
+        # add input variables to the backend
+        ####################################
+
+        if inputs:
+
+            inp_dict = dict()
+
+            # linearize input dictionary
+            for key, val in inputs.items():
+
+                key_split = key.split('/')
+                node, op, attr = "/".join(key_split[:-2]), key_split[-2], key_split[-1]
+                # rename node if necessary
+                try:
+                    node, _ = self.label_map[node]
+                except KeyError:
+                    pass
+
+                if '_combined' in list(self.nodes)[0]:
+
+                    # fully vectorized case: add vectorized placeholder variable to input dictionary
+                    var = self._get_node_attr(node=list(self.nodes)[0], op=op, attr=attr)
+                    inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
+
+                elif any(['vector_' in key_tmp for key_tmp in self.nodes]):
+
+                    # node-vectorized case
+                    if node == 'all':
+
+                        # go through all nodes, extract the variable and add it to input dict
+                        i = 0
+                        for node_tmp in self.nodes:
+                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
+                            i_new = var.shape[0] if len(var.shape) > 0 else 1
+                            inp_dict[var.name] = np.reshape(val[:, i:i_new], (sim_steps,) + tuple(var.shape))
+                            i += i_new
+
+                    elif node in self.nodes:
+
+                        # add placeholder variable of node(s) to input dictionary
+                        var = self._get_node_attr(node=node, op=op, attr=attr)['value']
+                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
+
+                    elif any([node in key_tmp for key_tmp in self.nodes]):
+
+                        # add vectorized placeholder variable of specified node type to input dictionary
+                        for node_tmp in list(self.nodes):
+                            if node in node_tmp:
+                                break
+                        var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
+                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
+
+                    elif any([node in key_tmp for key_tmp in self.label_map]):
+
+                        # add vectorized placeholder variable of specified node type to input dictionary
+                        for node_tmp in list(self.label_map):
+                            if node in node_tmp:
+                                break
+
+                        var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
+                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
+
+                else:
+
+                    # non-vectorized case
+                    if node == 'all':
+
+                        # go through all nodes, extract the variable and add it to input dict
+                        for i, node_tmp in enumerate(self.nodes):
+                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
+                            inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
+
+                    elif any([node in key_tmp for key_tmp in self.nodes]):
+
+                        # extract variables from nodes of specified type
+                        i = 0
+                        for node_tmp in self.nodes:
+                            if node in node_tmp:
+                                var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
+                                inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
+                                i += 1
+
+            self._backend.add_input_layer(inputs=inp_dict)
+
+        # run simulation
+        ################
+
+        if verbose:
+            print("Running the simulation...")
+
+        if profile is None:
+            output_col = self._backend.run(steps=sim_steps, outputs=output_col, sampling_steps=sampling_steps,
+                                           out_dir=out_dir, profile=profile, **kwargs)
+        else:
+            output_col, time, memory = self._backend.run(steps=sim_steps, outputs=output_col, out_dir=out_dir,
+                                                         profile=profile, sampling_steps=sampling_steps, **kwargs)
+
+        if verbose and profile:
+            if simulation_time:
+                print(f"{simulation_time}s of backend behavior were simulated in {time} s given a "
+                      f"simulation resolution of {self._dt} s.")
+            else:
+                print(f"ComputeGraph computations finished after {time} seconds.")
+        elif verbose:
+            print('finished!')
+
+        # store output variables in data frame
+        ######################################
+
+        # ungroup grouped output variables
+        outputs = {}
+        for names, group_key in zip(output_keys, output_col.keys()):
+            out_group = output_col[group_key]
+            for i, key in enumerate(names):
+                outputs[key] = out_group[:, i]
+
+        out_var_vals = []
+        out_var_names = []
+        for key in list(outputs):
+
+            var = outputs.pop(key)
+            if len(var.shape) > 1 and var.shape[1] > 1:
+                for i in range(var.shape[1]):
+                    var_tmp = var[:, i]
+                    if len(var.shape) > 1:
+                        var_tmp = np.squeeze(var_tmp)
+                    out_var_vals.append(var_tmp)
+                    key_split = key.split('/')
+                    var_name = key_split[-1]
+                    var_name = var_name[:var_name.find('_col')]
+                    node_name = "/".join(key_split[:-1])
+                    out_var_names.append((var_name, f'{node_name}_{i}'))
+            else:
+                if len(var.shape) > 1:
+                    var = np.squeeze(var)
+                out_var_vals.append(var)
+                key_split = key.split('/')
+                var_name = key_split[-1]
+                var_name = var_name[:var_name.find('_col')]
+                node_name = "/".join(key_split[:-1])
+                out_var_names.append((var_name, node_name))
+
+        # create multi-index
+        index = MultiIndex.from_tuples(out_var_names, names=['var', 'node'])
+
+        # create dataframe
+        if out_var_vals:
+            data = np.asarray(out_var_vals).T
+            if len(data.shape) > 2:
+                data = data.squeeze()
+            idx = np.arange(0., simulation_time, sampling_step_size)[-data.shape[0]:]
+            out_vars = DataFrame(data=data[0:len(idx), :],
+                                 index=idx,
+                                 columns=index)
+        else:
+            out_vars = DataFrame()
+
+        # return results
+        ################
+
+        if profile:
+            return out_vars, time, memory
+        return out_vars
+
     def compile(self,
                 dt: float = 1e-3,
-                # vectorization: str = 'none',
-                # name: Optional[str] = 'net0',
-                # build_in_place: bool = True,
+                vectorization: bool = True,
+                build_in_place: bool = True,
                 backend: str = 'numpy',
                 solver: str = 'euler',
                 float_precision: str = 'float32',
                 **kwargs
                 ) -> None:
-        """Instantiates operator.
+        """Parses IR into the backend.
         """
 
         filterwarnings("ignore", category=FutureWarning)
@@ -660,12 +1162,8 @@ class CircuitIR(AbstractBaseIR):
         # set basic attributes
         ######################
 
-        # self._float_precision = float_precision
         self._first_run = True
-        # if type(net_config) is str:
-        #     net_config = CircuitTemplate.from_yaml(net_config).apply()
-        if not self._vectorized:
-            self.optimize_graph_in_place()
+        self.optimize_graph_in_place(vectorize=vectorization)
 
         # instantiate the backend and set the backend default_device
         if backend == 'tensorflow':
@@ -678,24 +1176,26 @@ class CircuitIR(AbstractBaseIR):
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
         kwargs['name'] = self.label
         kwargs['float_default_type'] = float_precision
-        backend = backend(**kwargs)
+        self._backend = backend(**kwargs)
 
-        from pyrates.ir._compiler import Compiler
-        compiler = Compiler(dt, backend, solver, float_precision)
-        compiler._net_config_consistency_check(self)
-        # this adds the "add_project" attribute to edges, if necessary.
-        compiler.go_through_nodes_and_create_mapping_for_their_inputs(self)
+        # pre-process the network configuration
+        #if build_in_place:
+        #    self.net_config = self._net_config_consistency_check(net_config)
+        #else:
+        #    self.net_config = self._net_config_consistency_check(deepcopy(net_config))
 
-        # xxxxxxxxxxxxxxxxxxxxxxxxxxxxx <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        # set time constant of the network
+        self._dt = dt
+        dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': float_precision, 'shape': (), 'value': self._dt}},
+                        backend=self._backend)['dt']
+
+        # move edge operations to nodes
         ###############################
 
         print('building the compute graph...')
 
         # create equations and variables for each edge
-        from pyrates.backend import parse_equation_system
-
         for source_node, target_node, edge_idx, data in self.edges(data=True, keys=True):
-
             # extract edge information
             weight = data['weight']
             delay = data['delay']
@@ -703,18 +1203,17 @@ class CircuitIR(AbstractBaseIR):
             tidx = data['target_idx']
             svar = data['source_var']
             sop, svar = svar.split("/")
-            sval = self[source_node].values[sop][svar]
+            sval = self[f"{source_node}/{sop}/{svar}"]["value"]
 
             tvar = data['target_var']
             top, tvar = tvar.split("/")
-            try:
-                tval = self[target_node].values[top][tvar]
-            except KeyError:
-                # dirty hack
-                tval = self[target_node].op_graph.nodes[top]["variables"][tvar]["value"]
+            # get variable properties
+            # tval --> variable properties
+            # fetch both values and variable definitions of target variable
+            tval = self[f"{target_node}/{top}/{tvar}"]
 
             add_project = data.get('add_project', False)  # get a False, in case it is not defined
-            target_graph = self[target_node].op_graph
+            target_node_ir = self[target_node]
 
             # define target index
             if delay is not None and tidx:
@@ -725,7 +1224,7 @@ class CircuitIR(AbstractBaseIR):
                     else:
                         tidx_tmp.append([idx, d])
                 tidx = tidx_tmp
-            elif not tidx and delay is not None:
+            elif delay is not None:
                 tidx = list(delay)
 
             # create mapping equation and its arguments
@@ -746,21 +1245,21 @@ class CircuitIR(AbstractBaseIR):
 
             # add edge operator to target node
             op_name = f'edge_from_{source_node}_{edge_idx}'
-            target_graph.add_node(op_name,
-                                  operator={'inputs': {svar: {'sources': [sop],
-                                                              'reduce_dim': True,
-                                                              'node': source_node}},
-                                            'output': tvar,
-                                            'equations': [eq]},
+            target_node_ir.add_op(op_name,
+                                  inputs={svar: {'sources': [sop],
+                                                 'reduce_dim': True,
+                                                 'node': source_node}},
+                                  output=tvar,
+                                  equations=[eq],
                                   variables=args)
 
             # connect edge operator to target operator
-            target_graph.add_edge(op_name, top)
+            target_node_ir.add_op_edge(op_name, top)
 
             # add input information to target operator
-            inputs = self[f"{target_node}/{top}"].inputs
+            inputs = self.nodes[target_node][top]['inputs']
             if tvar in inputs.keys():
-                inputs[tvar]['sources'].append(op_name)
+                inputs[tvar]['sources'].add(op_name)
             else:
                 inputs[tvar] = {'sources': [op_name],
                                 'reduce_dim': True}
@@ -768,38 +1267,225 @@ class CircuitIR(AbstractBaseIR):
         # collect node and edge operators
         #################################
 
-        variables = {'all/all/dt': compiler.dt_parsed}
+        variables = {'all/all/dt': dt}
 
         # edge operators
-        equations, variables_tmp = compiler._collect_op_layers(circuit=self, layers=[0], exclude=False,
-                                                               op_identifier="edge_from_")
+        equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
         variables.update(variables_tmp)
+        if equations:
+            self._backend._input_layer_added = True
 
         # node operators
-        equations_tmp, variables_tmp = compiler._collect_op_layers(circuit=self, layers=[], exclude=True,
-                                                                   op_identifier="edge_from_")
+        equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
         variables.update(variables_tmp)
-        if equations_tmp:
-            equations = equations_tmp + equations
-        for i, layer in enumerate(equations.copy()):
-            if not layer:
-                equations.pop(i)
+
+        # bring equations into correct order
+        equations = sort_equations(edge_eqs=equations, node_eqs=equations_tmp)
 
         # parse all equations and variables into the backend
         ####################################################
 
-        compiler.backend.bottom_layer()
+        self._backend.bottom_layer()
 
         # parse mapping
-        variables = parse_equation_system(equations=equations, equation_args=variables, backend=compiler.backend,
-                                          solver=compiler.solver)
+        variables = parse_equation_system(equations=equations, equation_args=variables, backend=self._backend,
+                                          solver=solver)
 
         # save parsed variables in net config
         for key, val in variables.items():
             node, op, var = key.split('/')
             if "inputs" not in var and var != "dt":
-                variable = self[key]
-                variable.add_parsed_variable(var, val)
+                self[f"{node}/{op}/{var}"]['value'] = val
+
+        return self
+
+    def _collect_op_layers(self, layers: list, exclude: bool = False, op_identifier: Optional[str] = None
+                           ) -> tuple:
+        """
+
+        Parameters
+        ----------
+        layers
+        exclude
+        op_identifier
+
+        Returns
+        -------
+
+        """
+
+        equations = []
+        variables = {}
+
+        for node_name, node in self.nodes.items():
+
+            op_graph = node['node'].op_graph
+            graph = op_graph.copy()  # type: DiGraph
+
+            # go through all operators on node and pre-process + extract equations and variables
+            i = 0
+            while graph.nodes:
+
+                # get all operators that have no dependencies on other operators
+                # noinspection PyTypeChecker
+                ops = [op for op, in_degree in graph.in_degree if in_degree == 0]
+
+                if (i in layers and not exclude) or (i not in layers and exclude):
+
+                    if op_identifier:
+                        ops_tmp = [op for op in ops if op_identifier not in op] if exclude else \
+                            [op for op in ops if op_identifier in op]
+                    else:
+                        ops_tmp = ops
+                    op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
+
+                    # collect primary operator equations and variables
+                    if i == len(equations):
+                        equations.append(op_eqs)
+                    else:
+                        equations[i] += op_eqs
+                    for key, var in op_vars.items():
+                        if key not in variables:
+                            variables[key] = var
+
+                # remove parsed operators from graph
+                graph.remove_nodes_from(ops)
+                i += 1
+
+        return equations, variables
+
+    def _collect_ops(self, ops: List[str], node_name: str) -> tuple:
+        """Adds a number of operations to the backend graph.
+
+        Parameters
+        ----------
+        ops
+            Names of the operators that should be parsed into the graph.
+        node_name
+            Name of the node that the operators belong to.
+
+        Returns
+        -------
+        tuple
+            Collected and updated operator equations and variables
+
+        """
+
+        # set up update operation collector variable
+        equations = []
+        variables = {}
+
+        # add operations of same hierarchical lvl to compute graph
+        ############################################################
+
+        for op_name in ops:
+
+            # retrieve operator and operator args
+            op_info = self[f"{node_name}/{op_name}"]
+            op_args = op_info['variables']
+            op_args['inputs'] = {}
+
+            if getattr(op_info, 'collected', False):
+                break
+
+            # handle operator inputs
+            in_ops = {}
+            for var_name, inp in op_info['inputs'].items():
+
+                # go through inputs to variable
+                if inp['sources']:
+
+                    in_ops_col = {}
+                    reduce_inputs = inp['reduce_dim'] if type(inp['reduce_dim']) is bool else False
+                    in_node = inp['node'] if 'node' in inp else node_name
+
+                    for i, in_op in enumerate(inp['sources']):
+
+                        # collect single input to op
+                        in_var = self[f"{in_node}/{in_op}"]['output']
+                        try:
+                            in_val = self[f"{in_node}/{in_op}/{in_var}"]
+                        except KeyError:
+                            in_val = None
+                        in_ops_col[f"{in_node}/{in_op}/{in_var}"] = in_val
+
+                    if len(in_ops_col) > 1:
+                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, reduce_inputs)
+                    else:
+                        key, _ = in_ops_col.popitem()
+                        in_node, in_op, in_var = key.split("/")
+                        in_ops[var_name] = (in_var, {in_var: key})
+
+            # replace input variables with input in operator equations
+            for var, inp in in_ops.items():
+                for i, eq in enumerate(op_info['equations']):
+                    op_info['equations'][i] = replace(eq, var, inp[0], rhs_only=True)
+                op_args['inputs'].update(inp[1])
+
+            # collect operator variables and equations
+            scope = f"{node_name}/{op_name}"
+            variables[f"{scope}/inputs"] = {}
+            equations += [(eq, scope) for eq in op_info['equations']]
+            for key, var in op_args.items():
+                full_key = f"{scope}/{key}"
+                if key == 'inputs':
+                    variables[f"{scope}/inputs"].update(var)
+                elif full_key not in variables:
+                    variables[full_key] = var
+            try:
+                setattr(op_info, 'collected', True)
+            except AttributeError:
+                op_info['collected'] = True
+
+        return equations, variables
+
+    @staticmethod
+    def _map_multiple_inputs(inputs: dict, reduce_dim: bool) -> tuple:
+        """Creates mapping between multiple input variables and a single output variable.
+
+        Parameters
+        ----------
+        inputs
+            Input variables.
+        reduce_dim
+            If true, input variables will be summed up, if false, they will be concatenated.
+
+        Returns
+        -------
+        tuple
+            Summed up or concatenated input variables and the mapping to the respective input variables
+
+        """
+
+        inputs_unique = []
+        input_mapping = {}
+        for key, var in inputs.items():
+            node, in_op, in_var = key.split('/')
+            i = 0
+            inp = in_var
+            while inp in inputs_unique:
+                i += 1
+                if inp[-2:] == f"_{i - 1}":
+                    inp = inp[:-2] + f"_{i}"
+                else:
+                    inp = f"{inp}_{i}"
+            inputs_unique.append(inp)
+            input_mapping[inp] = key
+
+        if reduce_dim:
+            inputs_unique = f"sum(({','.join(inputs_unique)}), 0)"
+        else:
+            idx = 0
+            var = inputs[input_mapping[inputs_unique[idx]]]
+            while not hasattr(var, 'shape'):
+                idx += 1
+                var = inputs[input_mapping[inputs_unique[idx]]]
+            shape = var['shape']
+            if len(shape) > 0:
+                inputs_unique = f"reshape(({','.join(inputs_unique)}), ({len(inputs_unique) * shape[0],}))"
+            else:
+                inputs_unique = f"stack({','.join(inputs_unique)})"
+        return inputs_unique, input_mapping
 
 
 class SubCircuitView(AbstractBaseIR):
@@ -832,3 +1518,37 @@ class SubCircuitView(AbstractBaseIR):
     def __str__(self):
 
         return f"{self.__class__.__name__} on '{self.subgraph_key}' in {self.top_level_circuit}"
+
+
+def sort_equations(edge_eqs: list, node_eqs: list) -> list:
+    """
+
+    Parameters
+    ----------
+    edge_eqs
+    node_eqs
+
+    Returns
+    -------
+
+    """
+
+    # clean up equations
+    for i, layer in enumerate(edge_eqs.copy()):
+        if not layer:
+            edge_eqs.pop(i)
+    for i, layer in enumerate(node_eqs.copy()):
+        if not layer:
+            node_eqs.pop(i)
+
+    # re-order node equations
+    eqs_new = []
+    for node_layer in node_eqs.copy():
+        if not any([is_diff_eq(eq) for eq, _ in node_layer]):
+            eqs_new.append(node_layer)
+            node_eqs.pop(node_eqs.index(node_layer))
+
+    eqs_new += edge_eqs
+    eqs_new += node_eqs
+
+    return eqs_new

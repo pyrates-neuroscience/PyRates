@@ -40,8 +40,8 @@ from warnings import filterwarnings
 # pyrates imports
 from pyrates.backend.parser import parse_equation_system, parse_dict
 from pyrates import PyRatesException
-from pyrates.ir.circuit import CircuitIR
-from pyrates.frontend import CircuitTemplate
+#from pyrates.ir.circuit import CircuitIR
+#from pyrates.frontend import CircuitTemplate
 from .parser import replace
 
 # meta infos
@@ -76,9 +76,9 @@ class ComputeGraph(object):
     """
 
     def __init__(self,
-                 net_config: Union[str, CircuitIR],
+                 net_config: Any,
                  dt: float = 1e-3,
-                 vectorization: str = 'none',
+                 vectorization: bool = True,
                  name: Optional[str] = 'net0',
                  build_in_place: bool = True,
                  backend: str = 'numpy',
@@ -98,8 +98,8 @@ class ComputeGraph(object):
         self.name = name
         self._float_precision = float_precision
         self._first_run = True
-        if type(net_config) is str:
-            net_config = CircuitTemplate.from_yaml(net_config).apply()
+        #if type(net_config) is str:
+        #    net_config = CircuitTemplate.from_yaml(net_config).apply()
         net_config = net_config.optimize_graph_in_place()
 
         # instantiate the backend and set the backend default_device
@@ -125,7 +125,7 @@ class ComputeGraph(object):
         else:
             self.net_config = self._net_config_consistency_check(deepcopy(net_config))
 
-        self._vectorize(vectorization_mode=vectorization)
+        self._vectorize(vectorize=vectorization)
 
         # set time constant of the network
         self._dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': self._float_precision, 'shape': (),
@@ -353,13 +353,13 @@ class ComputeGraph(object):
                 except KeyError:
                     pass
 
-                if '_combined' in list(self.net_config.nodes.keys())[0]:
+                if '_combined' in list(self.net_config.nodes)[0]:
 
                     # fully vectorized case: add vectorized placeholder variable to input dictionary
-                    var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=op, attr=attr)
+                    var = self._get_node_attr(node=list(self.net_config.nodes)[0], op=op, attr=attr)
                     inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
-                elif any(['vector_' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                elif any(['vector_' in key_tmp for key_tmp in self.net_config.nodes]):
 
                     # node-vectorized case
                     if node == 'all':
@@ -372,22 +372,29 @@ class ComputeGraph(object):
                             inp_dict[var.name] = np.reshape(val[:, i:i_new], (sim_steps,) + tuple(var.shape))
                             i += i_new
 
-                    elif node in self.net_config.nodes.keys():
+                    elif node in self.net_config.nodes:
 
                         # add placeholder variable of node(s) to input dictionary
                         var = self._get_node_attr(node=node, op=op, attr=attr)
                         inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
-                    elif any([node in key_tmp for key_tmp in self.net_config.nodes.keys()]) or \
-                            any([node.split('.')[0] in key_tmp for key_tmp in self.net_config.nodes.keys()]):
-
-                        node_tmp = node.split('.')[0] if '.' in node else node
+                    elif any([node in key_tmp for key_tmp in self.net_config.nodes]):
 
                         # add vectorized placeholder variable of specified node type to input dictionary
-                        for node_tmp2 in list(self.net_config.nodes.keys()):
-                            if node_tmp in node_tmp2:
+                        for node_tmp in list(self.net_config.nodes.keys()):
+                            if node in node_tmp:
                                 break
-                        var = self._get_node_attr(node=node_tmp2, op=op, attr=attr)
+                        var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
+                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
+
+                    elif any([node in key_tmp for key_tmp in self.net_config.label_map]):
+
+                        # add vectorized placeholder variable of specified node type to input dictionary
+                        for node_tmp in list(self.net_config.label_map):
+                            if node in node_tmp:
+                                break
+
+                        var = self._get_node_attr(node=node_tmp, op=op, attr=attr)
                         inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
                 else:
@@ -545,7 +552,7 @@ class ComputeGraph(object):
 
                 # get output variable of specific, vectorized backend node
                 i = 0
-                for node_tmp in self._net_config_map.keys():
+                for node_tmp in self.net_config.label_map:
                     if node in node_tmp:
                         var_col[f'{node}/{op}/{var_name}_{i}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
                                                                                      **kwargs)
@@ -1095,6 +1102,7 @@ class ComputeGraph(object):
         else:
             raise ValueError('Wrong `idx_type`. Please, choose either `source` or `target`.')
 
+        var_idx = self.net_config.edges[source, target, edge][var]
         var_idx = self._get_edge_attr(source, target, edge, var)
         # if var_idx:
         #     op, var = self.net_config.edges[source, target, edge][node_var].split('/')
@@ -1306,7 +1314,7 @@ class ComputeGraph(object):
         s, t, e = edge
         self._set_edge_attr(s, t, e, 'target_var', f'{op}_{var}_col_{idx}/{var}_col_{idx}')
 
-    def _net_config_consistency_check(self, net_config: CircuitIR) -> CircuitIR:
+    def _net_config_consistency_check(self, net_config: Any) -> Any:
         """Checks whether the passed network configuration follows the expected intermediate representation structure.
 
         Parameters
@@ -1475,15 +1483,14 @@ class ComputeGraph(object):
 
         return net_config
 
-    def _vectorize(self, vectorization_mode: Optional[str] = 'nodes') -> None:
+    def _vectorize(self, vectorize: bool = True) -> None:
         """Method that goes through the nodes and edges dicts and vectorizes those that are governed by the same
         operators/equations.
 
         Parameters
         ----------
-        vectorization_mode
-            Can be 'none' for no vectorization, 'nodes' for vectorization over nodes and 'ops' for vectorization over
-            nodes and operations.
+        vectorize
+            Can be False for no vectorization or True for vectorization over nodes.
 
         Returns
         -------
@@ -1496,7 +1503,7 @@ class ComputeGraph(object):
         # First stage: Vectorize over nodes
         ###################################
 
-        if vectorization_mode in 'nodesfull':
+        if vectorize:
             #
             # # TODO: Consider removing this part
             #
@@ -2093,7 +2100,7 @@ class ComputeGraph(object):
             while inp in inputs_unique:
                 i += 1
                 if inp[-2:] == f"_{i - 1}":
-                    inp[:-2] = f"_{i}"
+                    inp = inp[:-2] + f"_{i}"
                 else:
                     inp = f"{inp}_{i}"
             inputs_unique.append(inp)

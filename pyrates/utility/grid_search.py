@@ -95,22 +95,42 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
     """
 
-    # load template if necessary
+    # argument pre-processing
+    #########################
+
+    if not init_kwargs:
+        init_kwargs = {}
+    vectorization = init_kwargs.pop('vectorization', 'nodes')
     if type(circuit_template) is str:
         circuit_template = CircuitTemplate.from_yaml(circuit_template)
+
+    # set up dummy network instance for access to variable properties
+    net_tmp = ComputeGraph(circuit_template.apply(), dt=dt, vectorization=vectorization, **init_kwargs)
 
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
         param_grid = linearize_grid(param_grid, permute_grid)
 
-    # create multi-index for later results storage
+    # create grid-structure of network
+    ##################################
+
+    # create multi-index levels
     param_keys = list(param_grid.keys())
     multi_idx = [param_grid[key].values for key in param_keys]
+
+    # get output shapes and names
     n_iters = len(multi_idx[0])
     outs = []
-    out_names = list(outputs.keys())
-    for out_name in out_names:
-        outs += [out_name] * n_iters
+    out_names = []
+    for out_name, out_info in outputs.items():
+        node, op, var = out_info.split('/')
+        out_shape = net_tmp.get_var(node, op, var)[out_info].shape
+        out_len = int(sum(out_shape)) if out_shape else 1
+        for i in range(out_len):
+            outs += [f"{out_name}_{i}"] * n_iters
+            out_names.append(f"{out_name}_{i}")
+
+    # finalize multi-index
     multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
     multi_idx = multi_idx + [outs]
     index = pd.MultiIndex.from_arrays(multi_idx, names=param_keys + ["out_var"])
@@ -136,9 +156,6 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
             i += 1
 
     # create backend graph
-    if not init_kwargs:
-        init_kwargs = {}
-    vectorization = init_kwargs.pop('vectorization', 'nodes')
     net = ComputeGraph(circuit, dt=dt, vectorization=vectorization, **init_kwargs)
 
     # adjust input of simulation to combined network
@@ -146,17 +163,17 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         inputs[inp_key] = np.tile(inp, (1, len(circuit_names)))
 
     # adjust output of simulation to combined network
-    nodes = list(circuit_template.apply().nodes)
-    out_nodes = []
-    for out_key in out_names:
-        out = outputs.pop(out_key)
-        out = out.split('/')
-        out_nodes.append(out)
-        node = "/".join(out[:-2])
-        if node in nodes:
-            op, var = out[-2], out[-1]
-            node = node.split('.')[0]
-            outputs[out_key] = "/".join((node, op, var))
+    # nodes = list(net_tmp.net_config.nodes)
+    # out_nodes = []
+    # for out_key in list(outputs.keys()):
+    #     out = outputs.pop(out_key)
+    #     out = out.split('/')
+    #     out_nodes.append(out)
+    #     node = "/".join(out[:-2])
+    #     if node in nodes:
+    #         op, var = out[-2], out[-1]
+    #         node = node.split('.')[0]
+    #         outputs[out_key] = "/".join((node, op, var))
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
