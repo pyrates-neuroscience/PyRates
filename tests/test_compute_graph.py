@@ -269,6 +269,7 @@ def test_2_3_edge():
     """
 
     backends = ['numpy', 'tensorflow']
+    accuracy = 1e-4
 
     for b in backends:
 
@@ -296,12 +297,9 @@ def test_2_3_edge():
         # simulate edge behavior
         results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'})
 
-        # TODO: For some reason the network computes additional time steps in the beginning before the inputs are
-        #  applied. This leads to additional zeros in the beginning. Might be caused by additional edge operators from
-        #  edge optimization. Needs to be solved.
-        diff = np.mean(np.abs(results['a']['pop1/op1'].values[1:] - targets[:-2, 2])) + \
-               np.mean(np.abs(results['b']['pop2/op1'].values[1:] - targets[:-2, 3]))
-        assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
+        diff = np.mean(np.abs(results['a']['pop1/op1'].values[:] - targets[:-1, 2])) + \
+               np.mean(np.abs(results['b']['pop2/op1'].values[:] - targets[:-1, 3]))
+        assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
         ################################################################################
@@ -324,7 +322,7 @@ def test_2_3_edge():
 
         diff = np.mean(np.abs(results['a']['pop0/op1'].values[1:] - targets[:-2, 0])) + \
                np.mean(np.abs(results['b']['pop1/op7'].values[1:] - targets[:-2, 1]))
-        assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
+        assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes
         #######################################################################################
@@ -347,7 +345,7 @@ def test_2_3_edge():
 
         diff = np.mean(np.abs(results['a']['pop0/op8'].values[1:] - targets[:-2, 0])) + \
                np.mean(np.abs(results['b']['pop1/op8'].values[1:] - targets[:-2, 1]))
-        assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
+        assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of graph with 2 unidirectionally, multi-delay-coupled nodes
         ###############################################################################################
@@ -370,7 +368,7 @@ def test_2_3_edge():
 
         diff = np.mean(np.abs(results['a']['pop0/op1'].values[1:] - targets[:-2, 0])) + \
                np.mean(np.abs(results['b']['pop1/op7'].values[1:] - targets[:-2, 1]))
-        assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
+        assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
 @pytest.mark.skip
