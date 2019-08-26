@@ -207,7 +207,7 @@ class VectorizedOperatorGraph(DiGraph):
                     self.add_operator(op_key,
                                       inputs=deepcopy(data["inputs"]),
                                       equations=list(op.equations),
-                                      variables=op.variables.to_dict(),
+                                      variables=deepcopy(op.variables.to_dict()),
                                       output=op.output)
 
                 # retrieve values from value dict and pass them into variable dictionary of operator
