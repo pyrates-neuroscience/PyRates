@@ -117,9 +117,7 @@ class VectorizedNodeIR(AbstractBaseIR):
         """
 
         # add values to respective lists in collapsed node
-        for op_key, value_dict in node.values.items():
-            for var_key, value in value_dict.items():
-                self[f"{op_key}/{var_key}"]["value"].append(value)
+        self.op_graph.append_values(node.values)
 
         self._length += 1
 

@@ -348,7 +348,10 @@ class ComputeGraph(object):
                 key_split = key.split('/')
                 node, op, attr = "/".join(key_split[:-2]), key_split[-2], key_split[-1]
                 # rename node if necessary
-                node, node_idx = self.net_config.label_map.get(node, node)
+                try:
+                    node, _ = self.net_config.label_map[node]
+                except KeyError:
+                    pass
 
                 if '_combined' in list(self.net_config.nodes.keys())[0]:
 
@@ -356,7 +359,7 @@ class ComputeGraph(object):
                     var = self._get_node_attr(node=list(self.net_config.nodes.keys())[0], op=op, attr=attr)
                     inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
 
-                elif any(['_all' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
+                elif any(['vector_' in key_tmp for key_tmp in self.net_config.nodes.keys()]):
 
                     # node-vectorized case
                     if node == 'all':
@@ -1271,11 +1274,6 @@ class ComputeGraph(object):
         target_shape = self._get_op_attr(node, op, var)['shape']
         # op_graph = self._get_node_attr(node, 'op_graph')
         node_ir = self.net_config[node]
-        if target_shape == (1,):
-            target_shape = (len(node_ir),)
-        else:
-            # won't work for a matrix in the base equation
-            target_shape = (len(node_ir), target_shape[0])
 
         # create collector equation
         eqs = [f"{var} = {var}_col_{idx}"]
@@ -1402,6 +1400,9 @@ class ComputeGraph(object):
                         shape = var['shape']
                         if len(shape) == 0:
                             var['shape'] = (1,)
+                        elif shape[0] != len(node):
+                            raise ValueError(f"Mismatch between first dimension of variable {var_name} {shape} and"
+                                             f"vector dimension as indicated by node {node_name} {len(node)}")
                     except KeyError:
                         var['shape'] = var_defs['shape']
 
@@ -1497,41 +1498,41 @@ class ComputeGraph(object):
         # First stage: Vectorize over nodes
         ###################################
 
-        if vectorization_mode in 'nodesfull':
-
-            # TODO: Consider removing this part
-
-            nodes = list(self.net_config.nodes.keys())
-
-            # go through each node in net config and vectorize it with nodes that have the same operator structure
-            ######################################################################################################
-
-            while nodes:
-
-                # get nodes with same operators
-                op_graph = self._get_node_attr(nodes[0], 'op_graph')
-                nodes_tmp = self._get_nodes_with_attr('op_graph', op_graph)
-
-                # vectorize those nodes
-                self._vectorize_nodes(list(nodes_tmp))
-
-                # delete vectorized nodes from list
-                for n in nodes_tmp:
-                    nodes.pop(nodes.index(n))
-
-            # adjust edges accordingly
-            ##########################
-
-            # go through new nodes
-            for source in self.net_config.nodes.keys():
-                for target in self.net_config.nodes.keys():
-                    if '_all' in source and '_all' in target:
-                        self._vectorize_edges(source, target)
-
-            # save changes to net config
-            for node in list(self.net_config.nodes):
-                if '_all' not in node:
-                    self.net_config.graph.remove_node(node)
+        # if vectorization_mode in 'nodesfull':
+        #
+        #     # TODO: Consider removing this part
+        #
+        #     nodes = list(self.net_config.nodes.keys())
+        #
+        #     # go through each node in net config and vectorize it with nodes that have the same operator structure
+        #     ######################################################################################################
+        #
+        #     while nodes:
+        #
+        #         # get nodes with same operators
+        #         op_graph = self._get_node_attr(nodes[0], 'op_graph')
+        #         nodes_tmp = self._get_nodes_with_attr('op_graph', op_graph)
+        #
+        #         # vectorize those nodes
+        #         self._vectorize_nodes(list(nodes_tmp))
+        #
+        #         # delete vectorized nodes from list
+        #         for n in nodes_tmp:
+        #             nodes.pop(nodes.index(n))
+        #
+        #     # adjust edges accordingly
+        #     ##########################
+        #
+        #     # go through new nodes
+        #     for source in self.net_config.nodes.keys():
+        #         for target in self.net_config.nodes.keys():
+        #             if '_all' in source and '_all' in target:
+        #                 self._vectorize_edges(source, target)
+        #
+        #     # save changes to net config
+        #     for node in list(self.net_config.nodes):
+        #         if '_all' not in node:
+        #             self.net_config.graph.remove_node(node)
 
         # Second stage: Vectorize over operators
         ########################################

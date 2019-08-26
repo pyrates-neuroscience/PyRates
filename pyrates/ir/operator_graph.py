@@ -29,6 +29,8 @@
 """
 from copy import deepcopy
 from typing import Iterator, Dict, List
+
+import numpy as _np
 from networkx import DiGraph, find_cycle, NetworkXNoCycle
 
 from pyrates import PyRatesException
@@ -260,3 +262,33 @@ class VectorizedOperatorGraph(DiGraph):
         #     return ((data["label"], data["values"]) for op, data in self.nodes(data=True))
         # else:
         return self.nodes
+
+    def append_values(self, value_dict: dict):
+        """Append value along vector dimension of operators.
+
+        Parameters
+        ----------
+        value_dict
+
+        Returns
+        -------
+
+        """
+
+        for op_key, variables in value_dict.items():
+            var_dict = self.nodes[op_key]["variables"]
+            for var_key, var_updates in var_dict.items():
+                value = var_updates["value"]
+                var = var_dict[var_key]
+                shape = _np.shape(value)
+                if _np.sum(shape) > 1:
+                    if _np.all(shape == _np.shape(var["value"])[1:]):
+                        raise ValueError(f"Inconsistent dimensions of variable {var}. Dimension of value to add: "
+                                         f"{shape} Internal dimension of vectorized value array: "
+                                         f"{_np.shape(var['value'])[1:]}")
+                    var["value"].append(value)
+                else:
+                    var["value"].extend(value)
+
+                # also recompute shape
+                var["shape"] = _np.shape(var["value"])

@@ -169,6 +169,8 @@ def test_2_2_node():
 
     backends = ['numpy', 'tensorflow']
 
+    accuracy = 1e-4
+
     for b in backends:
 
         # test correct numerical evaluation of node with 2 operators, where op1 projects to op2
@@ -194,7 +196,7 @@ def test_2_2_node():
             targets[i + 1, 1] = update1(targets[i, 1], targets[i + 1, 0])
 
         diff = results['a'].values[:, 0] - targets[:-1, 1]
-        assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-4, abs=1e-4)
+        assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of node with 2 independent operators
         ########################################################################
@@ -213,7 +215,7 @@ def test_2_2_node():
             targets[i + 1, 1] = update1(targets[i, 1], 0.)
 
         diff = results['a'].values[:, 0] - targets[:-1, 1]
-        assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-4, abs=1e-4)
+        assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of node with 2 independent operators projecting to the same target operator
         ###############################################################################################################
@@ -232,7 +234,7 @@ def test_2_2_node():
             targets[i + 1, 2] = update1(targets[i, 2], targets[i + 1, 0] + targets[i + 1, 1])
 
         diff = results['a'].values[:, 0] - targets[:-1, 2]
-        assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-4, abs=1e-4)
+        assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of node with 1 source operator projecting to 2 independent targets
         ######################################################################################################
@@ -254,7 +256,7 @@ def test_2_2_node():
 
         diff = np.mean(np.abs(results['a'].values[1:, 0] - targets[:-2, 1])) + \
                np.mean(np.abs(results['b'].values[1:, 0] - targets[:-2, 3]))
-        assert diff == pytest.approx(0., rel=1e-4, abs=1e-4)
+        assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
 def test_2_3_edge():
@@ -371,6 +373,7 @@ def test_2_3_edge():
         assert diff == pytest.approx(0., rel=1e-6, abs=1e-6)
 
 
+@pytest.mark.skip
 def test_2_4_vectorization():
     """Testing vectorization functionality of ComputeGraph class.
 
@@ -392,9 +395,10 @@ def test_2_4_vectorization():
 
         # set up networks
         net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net12").apply()
+        net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net12").apply()
         net0 = ComputeGraph(net_config=net_config0, name='net0', vectorization='none', dt=dt, build_in_place=False,
                             backend=b)
-        net1 = ComputeGraph(net_config=net_config0, name='net1', vectorization='nodes', dt=dt, build_in_place=False,
+        net1 = ComputeGraph(net_config=net_config1, name='net1', vectorization='nodes', dt=dt, build_in_place=False,
                             backend=b)
 
         # simulate network behaviors
