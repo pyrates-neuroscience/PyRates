@@ -468,43 +468,56 @@ class CircuitIR(AbstractBaseIR):
         if vectorize:
 
             # go through new nodes
-            for source in self.nodes.keys():
-                for target in self.nodes.keys():
+            for source in self.nodes:
+                for target in self.nodes:
                     self._vectorize_edges(source, target)
-                # go through nodes and create mapping for their inputs
-                for node_name, node in self.nodes.items():
 
-                    node_inputs = self.graph.in_edges(node_name, keys=True)
-                    node_inputs = self._sort_edges(node_inputs, 'target_var')
+        # go through nodes and create mapping for their inputs
+        for node_name in self.nodes:
 
-                    # loop over input variables of node
-                    for i, (in_var, edges) in enumerate(node_inputs.items()):
+            node_inputs = self.graph.in_edges(node_name, keys=True)
+            node_inputs = self._sort_edges(node_inputs, 'target_var')
 
-                        # extract info for input variable connections
-                        n_inputs = len(edges)
-                        op_name, var_name = in_var.split('/')
-                        delays = []
-                        for s, t, e in edges:
-                            d = self.edges[s, t, e]['delay']
-                            if d is not None:
-                                d = [int(d_tmp/self._dt)+1 for d_tmp in d] if type(d) is list else int(d/self._dt)+1
-                                delays.append(d)
-                                self.edges[s, t, e]['delay'] = d
-                        max_delay = np.max(delays) if delays else None
+            # loop over input variables of node
+            for i, (in_var, edges) in enumerate(node_inputs.items()):
 
-                        # loop over different input sources
-                        for j in range(n_inputs):
+                # extract delay info from input variable connections
+                n_inputs = len(edges)
+                op_name, var_name = in_var.split('/')
+                delays = []
+                for s, t, e in edges:
+                    d = self.edges[s, t, e]['delay']
+                    if d is None or np.sum(d) == 0:
+                        d = 0
+                    else:
+                        if type(d) is list:
+                            d_tmp = np.asarray(d)
+                            d = np.asarray((d_tmp/self._dt) + 1, dtype=np.int32).tolist()
+                        else:
+                            d = int(d/self._dt)+1
+                    self.edges[s, t, e]['delay'] = d
+                    delays.append(d)
 
-                            if max_delay is not None:
+                max_delay = np.max(delays)
 
-                                # add synaptic buffer to the input variable
-                                self._add_edge_buffer(node_name, op_name, var_name, idx=j,
-                                                      buffer_length=max_delay, edge=edges[j])
+                # set delays to None of max_delay is 0
+                if max_delay == 0:
+                    for s, t, e in edges:
+                        self.edges[s, t, e]['delay'] = None
 
-                            elif n_inputs > 1:
+                # loop over different input sources
+                for j in range(n_inputs):
 
-                                # add synaptic input collector to the input variable
-                                self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
+                    if max_delay > 0:
+
+                        # add synaptic buffer to the input variable
+                        self._add_edge_buffer(node_name, op_name, var_name, idx=j,
+                                              buffer_length=max_delay, edge=edges[j])
+
+                    elif n_inputs > 1:
+
+                        # add synaptic input collector to the input variable
+                        self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
 
         return self
 
@@ -702,15 +715,7 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        # get edges between source and target
-        # if ('_all' in source and '_all' in target) or ('_combined' in source and '_combined' in target):
-        #     edges = []
-        #     for source_tmp in self._net_config_map:
-        #         for target_tmp in self._net_config_map:
-        #             if self._contains_node(source, source_tmp) and self._contains_node(target, target_tmp):
-        #                 edges += [(source_tmp, target_tmp, edge) for edge
-        #                           in range(self.net_config.graph.number_of_edges(source_tmp, target_tmp))]
-        # else:
+        # extract edges between source and target
         edges = [(s, t, e) for s, t, e, _ in self.edges(source, target, keys=True)]
 
         # extract edges that connect the same variables on source and target
@@ -750,10 +755,9 @@ class CircuitIR(AbstractBaseIR):
                     delay = self.edges[source, target, idx]['delay']
 
                     # add weight, delay and variable indices to collector lists
-                    if delay is not None:
-                        delay_col.append(delay)
                     if weight is not None:
                         weight_col.append(weight)
+                        delay_col.append(0. if delay is None else delay)
                     idx_tmp = self.edges[source, target, idx]['source_idx']
                     idx_tmp = [idx_tmp] if type(idx_tmp) is int else list(idx_tmp)
                     if idx_tmp:
@@ -771,8 +775,14 @@ class CircuitIR(AbstractBaseIR):
                 new_edge = self.edges[edge_ref]
 
                 # change delay and weight attributes
-                new_edge['delay'] = delay_col if delay_col else None
-                new_edge['weight'] = weight_col if weight_col else None
+                if weight_col:
+                    weight_col = np.squeeze(weight_col).tolist()
+                    delay_col = np.squeeze(delay_col).tolist()
+                else:
+                    weight_col = None
+                    delay_col = None
+                new_edge['delay'] = delay_col
+                new_edge['weight'] = weight_col
                 new_edge['source_idx'] = old_svar_idx
                 new_edge['target_idx'] = old_tvar_idx
 
@@ -814,10 +824,11 @@ class CircuitIR(AbstractBaseIR):
             # remove all nodes from original node keys that are not referred to
             for i, node_lvl in enumerate(node):
                 n_popped = 0
-                for j, net_node in enumerate(node_keys.copy()):
-                    if net_node[i] != 'all' and net_node[i] != node_lvl:
-                        node_keys.pop(j-n_popped)
-                        n_popped += 1
+                if node_lvl != 'all':
+                    for j, net_node in enumerate(node_keys.copy()):
+                        if net_node[i] != node_lvl:
+                            node_keys.pop(j-n_popped)
+                            n_popped += 1
 
             # collect variable indices for the remaining nodes
             vnode_indices = {}
@@ -833,70 +844,10 @@ class CircuitIR(AbstractBaseIR):
             # apply the indices to the vectorized node variables
             for vnode_key in vnode_indices:
                 idx = vnode_indices[vnode_key]['var']
+                idx = f"{idx[0]}:{idx[-1]+1}" if all(np.diff(idx) == 1) else [idx]
                 vnode_indices[vnode_key]['var'] = self._backend.apply_idx(self[f"{vnode_key}/{op}/{var}"]['value'], idx)
 
             return vnode_indices
-
-    def get_var(self, node: str, op: str, var: str, var_name: Optional[str] = None, **kwargs) -> dict:
-        """Extracts a variable from the graph.
-
-        Parameters
-        ----------
-        node
-            Name of the node(s), the variable exists on. Can be 'all' for all nodes, or a sub-string that defines a
-            class of nodes or a specific node name.
-        op
-            Name of the operator the variable belongs to.
-        var
-            Name of the variable.
-        var_name
-            Name under which the variable should be returned
-        kwargs
-            Additional keyword arguments that may be used to pass arguments for the backend like name scopes.
-
-        Returns
-        -------
-        dict
-            Dictionary with all variables found in the network that match the provided signature.
-
-        """
-
-        if not var_name:
-            var_name = var
-        var_col = {}
-
-        if node == 'all':
-
-            # collect output variable from every node in backend
-            for node in self.nodes:
-                var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var)
-        else:
-
-            # node, node_idx = self.net_config.label_map.get(node, (node, 0))
-
-            if node in self.nodes or node in self.label_map:
-
-                # get output variable of specific backend node
-                var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node, op=op, attr=var, **kwargs)
-
-            elif any([node in key for key in self.nodes]):
-
-                # get output variable from backend nodes of a certain type
-                for node_tmp in self.nodes:
-                    if node in node_tmp:
-                        var_col[f'{node}/{op}/{var_name}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
-                                                                                 **kwargs)
-            else:
-
-                # get output variable of specific, vectorized backend node
-                i = 0
-                for node_tmp in self.label_map:
-                    if node in node_tmp:
-                        var_col[f'{node}/{op}/{var_name}_{i}'] = self._get_node_attr(node=node_tmp, op=op, attr=var,
-                                                                                     **kwargs)
-                        i += 1
-
-        return var_col
 
     def _get_node_attr(self, node: str, attr: str, op: Optional[str] = None, **kwargs) -> Any:
         """Extract attribute from node of the network.
@@ -1043,14 +994,18 @@ class CircuitIR(AbstractBaseIR):
         # add output variables to the backend
         #####################################
 
-        # define output variables
         output_col = {}
         output_cols = []
         output_keys = []
         output_nodes = []
         output_shapes = []
+
         if outputs:
+
+            # go through passed output names
             for key, val in outputs.items():
+
+                # extract respective output variables from the network and store their information
                 for var_key, var_info in self.get_node_var(val).items():
                     var_shape = tuple(var_info['var'].shape)
                     if var_shape in output_shapes:
@@ -1064,7 +1019,7 @@ class CircuitIR(AbstractBaseIR):
                         output_nodes.append([var_info['nodes']])
                         output_shapes.append(var_shape)
 
-                # create counting index for collector variables
+                # parse output storage operation into backend
                 output_col.update(self._backend.add_output_layer(outputs=output_cols,
                                                                  sampling_steps=int(sim_steps / sampling_steps),
                                                                  out_shapes=output_shapes))
@@ -1074,84 +1029,29 @@ class CircuitIR(AbstractBaseIR):
 
         if inputs:
 
-            inp_dict = dict()
+            input_col = dict()
 
-            # linearize input dictionary
+            # go through passed inputs
             for key, val in inputs.items():
 
+                in_shape = val.shape[1:]
                 key_split = key.split('/')
-                node, op, attr = "/".join(key_split[:-2]), key_split[-2], key_split[-1]
-                # rename node if necessary
-                try:
-                    node, _ = self.label_map[node]
-                except KeyError:
-                    pass
+                op, var = key_split[-2], key_split[-1]
 
-                if '_combined' in list(self.nodes)[0]:
+                # extract respective input variable from the network
+                # TODO: this needs to be adjusted such that the backend knows which parts of the backend variables to
+                # TODO: project to
+                for var_key, var_info in self.get_node_var(key).items():
+                    var_shape = tuple(var_info['var'].shape)
+                    in_name = f"{var_key}/{op}/{var}"
+                    if var_shape == in_shape:
+                        input_col[in_name] = val
+                    elif (var_shape[0] % in_shape[0]) == 0:
+                        input_col[in_name] = np.tile(val, (1, var_shape[0]))
+                    else:
+                        input_col[in_name] = np.reshape(val, (sim_steps,) + var_shape)
 
-                    # fully vectorized case: add vectorized placeholder variable to input dictionary
-                    var = self._get_node_attr(node=list(self.nodes)[0], op=op, attr=attr)
-                    inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
-
-                elif any(['vector_' in key_tmp for key_tmp in self.nodes]):
-
-                    # node-vectorized case
-                    if node == 'all':
-
-                        # go through all nodes, extract the variable and add it to input dict
-                        i = 0
-                        for node_tmp in self.nodes:
-                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
-                            i_new = var.shape[0] if len(var.shape) > 0 else 1
-                            inp_dict[var.name] = np.reshape(val[:, i:i_new], (sim_steps,) + tuple(var.shape))
-                            i += i_new
-
-                    elif node in self.nodes:
-
-                        # add placeholder variable of node(s) to input dictionary
-                        var = self._get_node_attr(node=node, op=op, attr=attr)['value']
-                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
-
-                    elif any([node in key_tmp for key_tmp in self.nodes]):
-
-                        # add vectorized placeholder variable of specified node type to input dictionary
-                        for node_tmp in list(self.nodes):
-                            if node in node_tmp:
-                                break
-                        var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
-                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
-
-                    elif any([node in key_tmp for key_tmp in self.label_map]):
-
-                        # add vectorized placeholder variable of specified node type to input dictionary
-                        for node_tmp in list(self.label_map):
-                            if node in node_tmp:
-                                break
-
-                        var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
-                        inp_dict[var.name] = np.reshape(val, (sim_steps,) + tuple(var.shape))
-
-                else:
-
-                    # non-vectorized case
-                    if node == 'all':
-
-                        # go through all nodes, extract the variable and add it to input dict
-                        for i, node_tmp in enumerate(self.nodes):
-                            var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
-                            inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
-
-                    elif any([node in key_tmp for key_tmp in self.nodes]):
-
-                        # extract variables from nodes of specified type
-                        i = 0
-                        for node_tmp in self.nodes:
-                            if node in node_tmp:
-                                var = self._get_node_attr(node=node_tmp, op=op, attr=attr)['value']
-                                inp_dict[var.name] = np.reshape(val[:, i], (sim_steps,) + tuple(var.shape))
-                                i += 1
-
-            self._backend.add_input_layer(inputs=inp_dict)
+            self._backend.add_input_layer(inputs=input_col)
 
         # run simulation
         ################

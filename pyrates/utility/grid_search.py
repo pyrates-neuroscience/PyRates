@@ -141,9 +141,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         inputs.pop(inp_key)
 
     # adjust output of simulation to combined network
-    for out_key, out in outputs.copy().items():
-        outputs[f"all/{out_key}"] = out
-        outputs.pop(out_key)
+    for out_key, out in outputs.items():
+        outputs[out_key] = f"all/{out}"
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,

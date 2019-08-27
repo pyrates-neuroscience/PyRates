@@ -269,7 +269,10 @@ class TensorflowBackend(NumpyBackend):
         return self.add_op('stack', vars)
 
     def _create_var(self, vtype, dtype, shape, value, name):
-        return TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
+        var, name = TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
+        if ':' in name:
+            name = name.split(':')[0]
+        return var, name
 
     def _create_op(self, op, *args, decorator=None):
         if op in ["=", "+=", "-=", "*=", "/="]:
