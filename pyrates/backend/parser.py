@@ -197,7 +197,7 @@ class ExpressionParser(ParserElement):
             index_end = idx_r.setParseAction(self._push_first)
             index_comb = colon.setParseAction(self._push_first)
             arg_comb = comma.setParseAction(self._push_first)
-            arg_tuple = par_l + ZeroOrMore(self.expr.suppress() + arg_comb + Optional(self.expr.suppress())) + par_r
+            arg_tuple = par_l + ZeroOrMore(self.expr.suppress() + Optional(arg_comb)) + par_r
             func_arg = arg_tuple | self.expr.suppress()
 
             # basic computation unit
