@@ -191,7 +191,7 @@ def test_2_2_node():
             targets[i + 1, 1] = update1(targets[i, 1], targets[i + 1, 0])
 
         diff = results['a'].values[:, 0] - targets[:-1, 1]
-        #assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
+        assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of node with 2 independent operators
         ########################################################################

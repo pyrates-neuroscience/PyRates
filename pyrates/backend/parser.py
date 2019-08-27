@@ -237,7 +237,7 @@ class ExpressionParser(ParserElement):
         # parse rhs into backend
         rhs = self.parse(self.expr_stack[:])
 
-        if self.lhs_key in self.vars and not self._instantaneous:
+        if self.lhs_key in self.vars and not self._instantaneous and hasattr(rhs, 'short_name'):
 
             # create new variable for lhs update
             name = f"{self.lhs_key}_delta"
@@ -902,7 +902,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             # save backend variables to equation args
             for key, var in parser.vars.items():
                 if key != "inputs" and key != "rhs" and key != "dt":
-                    #  TODO: this step adds newly created variabls to the equation args like the output variable to a
+                    #  TODO: this step adds newly created variables to the equation args like the output variable to a
                     #   collection variable
                     equation_args[f"{scope}/{key}"] = var
 
