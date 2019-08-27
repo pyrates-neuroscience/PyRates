@@ -815,7 +815,7 @@ class CircuitIR(AbstractBaseIR):
             for i, node_lvl in enumerate(node):
                 n_popped = 0
                 for j, net_node in enumerate(node_keys.copy()):
-                    if net_node[i] != node_lvl:
+                    if net_node[i] != 'all' and net_node[i] != node_lvl:
                         node_keys.pop(j-n_popped)
                         n_popped += 1
 
@@ -1206,46 +1206,8 @@ class CircuitIR(AbstractBaseIR):
                                 outputs[(key, node_key, str(k))] = np.squeeze(out_val_tmp[:, k])
                                 levels = 2
 
-        # out_var_vals = []
-        # out_var_names = []
-        # for key in list(outputs):
-        #
-        #     var = outputs.pop(key)
-        #     if len(var.shape) > 1 and var.shape[1] > 1:
-        #         for i in range(var.shape[1]):
-        #             var_tmp = var[:, i]
-        #             if len(var.shape) > 1:
-        #                 var_tmp = np.squeeze(var_tmp)
-        #             out_var_vals.append(var_tmp)
-        #             key_split = key.split('/')
-        #             var_name = key_split[-1]
-        #             var_name = var_name[:var_name.find('_col')]
-        #             node_name = "/".join(key_split[:-1])
-        #             out_var_names.append((var_name, f'{node_name}_{i}'))
-        #     else:
-        #         if len(var.shape) > 1:
-        #             var = np.squeeze(var)
-        #         out_var_vals.append(var)
-        #         key_split = key.split('/')
-        #         var_name = key_split[-1]
-        #         var_name = var_name[:var_name.find('_col')]
-        #         node_name = "/".join(key_split[:-1])
-        #         out_var_names.append((var_name, node_name))
-
-        # create multi-index
+        # create data frame
         out_vars = DataFrame(outputs)
-
-        # create dataframe
-        # if out_var_vals:
-        #     data = np.asarray(out_var_vals).T
-        #     if len(data.shape) > 2:
-        #         data = data.squeeze()
-        #     idx = np.arange(0., simulation_time, sampling_step_size)[-data.shape[0]:]
-        #     out_vars = DataFrame(data=data[0:len(idx), :],
-        #                          index=idx,
-        #                          columns=index)
-        # else:
-        #     out_vars = DataFrame()
 
         # return results
         ################

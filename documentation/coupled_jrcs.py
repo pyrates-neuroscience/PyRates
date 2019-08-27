@@ -21,11 +21,11 @@ param_map = {'C': {'vars': ['weight'],
              'D': {'vars': ['delay'],
                    'edges': [('PC', 'EIN'), ('EIN', 'PC')]}}
 
-results = grid_search(circuit_template="model_templates.jansen_rit.simple_jansenrit.JRC",
-                      param_grid=params, param_map=param_map,
-                      inputs={"PC/RPO_e_pc/u": inp1},
-                      outputs={"v": "PC/OBS/V"},
-                      dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3)
+results, param_map = grid_search(circuit_template="model_templates.jansen_rit.simple_jansenrit.JRC",
+                                 param_grid=params, param_map=param_map,
+                                 inputs={"PC/RPO_e_pc/u": inp1},
+                                 outputs={"v": "PC/OBS/V"},
+                                 dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3)
 
 results.plot()
 plt.show()
