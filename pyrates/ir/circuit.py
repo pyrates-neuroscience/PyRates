@@ -784,6 +784,59 @@ class CircuitIR(AbstractBaseIR):
             for edge in edges_tmp:
                 edges.pop(edges.index(edge))
 
+    def get_node_var(self, key: str) -> dict:
+        """
+
+        Parameters
+        ----------
+        key
+
+        Returns
+        -------
+
+        """
+
+        # extract node, op and var name
+        key_split = key.split('/')
+        node, op, var = key_split[:-2], key_split[-2], key_split[-1]
+
+        # if node refers to vectorized network version, return variable from vectorized network
+        try:
+            return self[key]
+        except KeyError:
+
+            # get mapping from original network nodes to vectorized network nodes
+            #####################################################################
+
+            # split original node keys
+            node_keys = [key.split('/') for key in self.label_map]
+
+            # remove all nodes from original node keys that are not referred to
+            for i, node_lvl in enumerate(node):
+                n_popped = 0
+                for j, net_node in enumerate(node_keys.copy()):
+                    if net_node[i] != node_lvl:
+                        node_keys.pop(j-n_popped)
+                        n_popped += 1
+
+            # collect variable indices for the remaining nodes
+            vnode_indices = {}
+            for node in node_keys:
+                node_name_orig = "/".join(node)
+                vnode_key, vnode_idx = self.label_map[node_name_orig]
+                if vnode_key not in vnode_indices:
+                    vnode_indices[vnode_key] = {'var': [vnode_idx], 'nodes': [node_name_orig]}
+                else:
+                    vnode_indices[vnode_key]['var'].append(vnode_idx)
+                    vnode_indices[vnode_key]['nodes'].append(node_name_orig)
+
+            # apply the indices to the vectorized node variables
+            for vnode_key in vnode_indices:
+                idx = vnode_indices[vnode_key]['var']
+                vnode_indices[vnode_key]['var'] = self._backend.apply_idx(self[f"{vnode_key}/{op}/{var}"]['value'], idx)
+
+            return vnode_indices
+
     def get_var(self, node: str, op: str, var: str, var_name: Optional[str] = None, **kwargs) -> dict:
         """Extracts a variable from the graph.
 
@@ -994,20 +1047,21 @@ class CircuitIR(AbstractBaseIR):
         output_col = {}
         output_cols = []
         output_keys = []
+        output_nodes = []
         output_shapes = []
         if outputs:
             for key, val in outputs.items():
-                val_split = val.split('/')
-                node, op, var = "/".join(val_split[:-2]), val_split[-2], val_split[-1]
-                for var_key, var_val in self.get_var(node=node, op=op, var=var, var_name=f"{key}_col").items():
-                    var_shape = tuple(var_val.shape)
+                for var_key, var_info in self.get_node_var(val).items():
+                    var_shape = tuple(var_info['var'].shape)
                     if var_shape in output_shapes:
                         idx = output_shapes.index(var_shape)
-                        output_cols[idx].append(var_val)
-                        output_keys[idx].append(var_key)
+                        output_cols[idx].append(var_info['var'])
+                        output_keys[idx].append(key)
+                        output_nodes[idx].append(var_info['nodes'])
                     else:
-                        output_cols.append([var_val])
-                        output_keys.append([var_key])
+                        output_cols.append([var_info['var']])
+                        output_keys.append([key])
+                        output_nodes.append([var_info['nodes']])
                         output_shapes.append(var_shape)
 
                 # create counting index for collector variables
@@ -1126,51 +1180,72 @@ class CircuitIR(AbstractBaseIR):
 
         # ungroup grouped output variables
         outputs = {}
-        for names, group_key in zip(output_keys, output_col.keys()):
+        levels = 0
+        for names, group_key, nodes in zip(output_keys, output_col, output_nodes):
             out_group = output_col[group_key]
-            for i, key in enumerate(names):
-                outputs[key] = out_group[:, i]
+            for i, (key, node_keys) in enumerate(zip(names, nodes)):
+                out_val = np.squeeze(out_group[:, i])
+                if len(out_val.shape) == 1:
+                    if levels > 0:
+                        nulls = tuple([None for _ in range(levels)])
+                        outputs[(key,) + nulls] = out_val
+                    else:
+                        outputs[key] = out_val
+                else:
 
-        out_var_vals = []
-        out_var_names = []
-        for key in list(outputs):
+                    for j, node_key in enumerate(node_keys):
+                        out_val_tmp = np.squeeze(out_val[:, j])
+                        if len(out_val_tmp.shape) == 1:
+                            if levels > 1:
+                                outputs[(key, node_key, None)] = out_val
+                            else:
+                                outputs[(key, node_key)] = out_val_tmp
+                                levels = 1
+                        else:
+                            for k in range(out_val_tmp.shape[1]):
+                                outputs[(key, node_key, str(k))] = np.squeeze(out_val_tmp[:, k])
+                                levels = 2
 
-            var = outputs.pop(key)
-            if len(var.shape) > 1 and var.shape[1] > 1:
-                for i in range(var.shape[1]):
-                    var_tmp = var[:, i]
-                    if len(var.shape) > 1:
-                        var_tmp = np.squeeze(var_tmp)
-                    out_var_vals.append(var_tmp)
-                    key_split = key.split('/')
-                    var_name = key_split[-1]
-                    var_name = var_name[:var_name.find('_col')]
-                    node_name = "/".join(key_split[:-1])
-                    out_var_names.append((var_name, f'{node_name}_{i}'))
-            else:
-                if len(var.shape) > 1:
-                    var = np.squeeze(var)
-                out_var_vals.append(var)
-                key_split = key.split('/')
-                var_name = key_split[-1]
-                var_name = var_name[:var_name.find('_col')]
-                node_name = "/".join(key_split[:-1])
-                out_var_names.append((var_name, node_name))
+        # out_var_vals = []
+        # out_var_names = []
+        # for key in list(outputs):
+        #
+        #     var = outputs.pop(key)
+        #     if len(var.shape) > 1 and var.shape[1] > 1:
+        #         for i in range(var.shape[1]):
+        #             var_tmp = var[:, i]
+        #             if len(var.shape) > 1:
+        #                 var_tmp = np.squeeze(var_tmp)
+        #             out_var_vals.append(var_tmp)
+        #             key_split = key.split('/')
+        #             var_name = key_split[-1]
+        #             var_name = var_name[:var_name.find('_col')]
+        #             node_name = "/".join(key_split[:-1])
+        #             out_var_names.append((var_name, f'{node_name}_{i}'))
+        #     else:
+        #         if len(var.shape) > 1:
+        #             var = np.squeeze(var)
+        #         out_var_vals.append(var)
+        #         key_split = key.split('/')
+        #         var_name = key_split[-1]
+        #         var_name = var_name[:var_name.find('_col')]
+        #         node_name = "/".join(key_split[:-1])
+        #         out_var_names.append((var_name, node_name))
 
         # create multi-index
-        index = MultiIndex.from_tuples(out_var_names, names=['var', 'node'])
+        out_vars = DataFrame(outputs)
 
         # create dataframe
-        if out_var_vals:
-            data = np.asarray(out_var_vals).T
-            if len(data.shape) > 2:
-                data = data.squeeze()
-            idx = np.arange(0., simulation_time, sampling_step_size)[-data.shape[0]:]
-            out_vars = DataFrame(data=data[0:len(idx), :],
-                                 index=idx,
-                                 columns=index)
-        else:
-            out_vars = DataFrame()
+        # if out_var_vals:
+        #     data = np.asarray(out_var_vals).T
+        #     if len(data.shape) > 2:
+        #         data = data.squeeze()
+        #     idx = np.arange(0., simulation_time, sampling_step_size)[-data.shape[0]:]
+        #     out_vars = DataFrame(data=data[0:len(idx), :],
+        #                          index=idx,
+        #                          columns=index)
+        # else:
+        #     out_vars = DataFrame()
 
         # return results
         ################
@@ -1660,7 +1735,6 @@ class CircuitIR(AbstractBaseIR):
         """
 
         target_shape = self._get_op_attr(node, op, var)['shape']
-        # op_graph = self._get_node_attr(node, 'op_graph')
         node_ir = self[node]
 
         # create collector equation
@@ -1695,6 +1769,11 @@ class CircuitIR(AbstractBaseIR):
         # update edge target information
         s, t, e = edge
         self.edges[s, t, e]['target_var'] = f'{op}_{var}_col_{idx}/{var}_col_{idx}'
+
+    def clear(self):
+        """Clears the backend graph from all operations and variables.
+        """
+        self._backend.clear()
 
 
 class SubCircuitView(AbstractBaseIR):
