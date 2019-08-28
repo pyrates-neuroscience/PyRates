@@ -282,7 +282,7 @@ class PyRatesOp:
                     return_gen.add_code_line(f"{arg}")
                 else:
                     return_gen.add_code_line(f"{arg},")
-                idx = results['args'].index(arg)
+                idx = cls._index(results['args'], arg)
                 results['args'].pop(idx)
                 results['arg_names'].pop(idx)
             elif type(arg) is dict:
@@ -425,6 +425,10 @@ class PyRatesOp:
     @staticmethod
     def _deepcopy(x):
         return deepcopy(x)
+
+    @staticmethod
+    def _index(x, y):
+        return x.index(y)
 
 
 class PyRatesAssignOp(PyRatesOp):
@@ -1228,7 +1232,7 @@ class NumpyBackend(object):
         time_step_idx = self.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
                                      scope="network_inputs")
 
-        for target_var, (inp, idx) in inputs.items():
+        for (inp, target_var, idx) in inputs:
             in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
             in_var = self.add_var(vtype='state_var', name=in_name, scope="network_inputs", value=inp)
             in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
@@ -1734,6 +1738,9 @@ class NumpyBackend(object):
                 idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
             elif idx.shape[0] == 1:
                 update = self.add_op('reshape', update, (1,) + tuple(update.shape))
+            elif len(update.shape) > len(idx.shape) and 1 in update.shape:
+                singleton = list(update.shape).index(1)
+                update = self.add_op('squeeze', update, singleton)
             else:
                 raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
                                  f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')

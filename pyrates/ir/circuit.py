@@ -844,52 +844,6 @@ class CircuitIR(AbstractBaseIR):
 
             return vnode_indices
 
-    def _get_op_attr(self, node: str, op: str, attr: str, retrieve: bool = True, **kwargs) -> Any:
-        """Extracts attribute of an operator.
-
-        Parameters
-        ----------
-        node
-            Name of the node.
-        op
-            Name of the operator on the node.
-        attr
-            Name of the attribute of the operator on the node.
-        retrieve
-            If attribute is output, this can be set to True to receive the handle to the output variable, or to false
-            to receive the name of the output variable.
-
-        Returns
-        -------
-        Any
-            Operator attribute.
-
-        """
-
-        if node in self.label_map:
-            node, attr_idx = self.label_map[node]
-            idx = f"{list(attr_idx)}" if type(attr_idx) is tuple else attr_idx
-            return self._backend.apply_idx(self._get_op_attr(node, op, attr)['value'], idx) if retrieve else attr_idx
-        elif node in self.nodes:
-            op = self[node]['op_graph'].nodes[op]
-        else:
-            raise ValueError(f'Node with name {node} is not part of this network.')
-
-        if attr == 'output' and retrieve:
-            attr = op['output']
-        if attr in op['variables']:
-            attr_val = op['variables'][attr]
-        else:
-            try:
-                attr_val = op[attr]
-            except KeyError as e:
-                try:
-                    attr_val = getattr(op, attr)
-                except AttributeError:
-                    raise e
-
-        return attr_val
-
     def run(self,
             simulation_time: Optional[float] = None,
             inputs: Optional[dict] = None,
@@ -995,7 +949,7 @@ class CircuitIR(AbstractBaseIR):
 
         if inputs:
 
-            input_col = dict()
+            input_col = []
 
             # go through passed inputs
             for key, val in inputs.items():
@@ -1011,11 +965,11 @@ class CircuitIR(AbstractBaseIR):
                     var_shape = len(var_info['idx'])
                     var_idx = var_info['idx'] if np.sum(var_shape) > 1 else None
                     if var_shape == in_shape:
-                        input_col[var_info['var']] = (val, var_idx)
+                        input_col.append((val, var_info['var'], var_idx))
                     elif (var_shape % in_shape) == 0:
-                        input_col[var_info['var']] = (np.tile(val, (1, var_shape)), var_idx)
+                        input_col.append((np.tile(val, (1, var_shape)), var_info['var'], var_idx))
                     else:
-                        input_col[var_info['var']] = (np.reshape(val, (sim_steps,) + var_shape), var_idx)
+                        input_col.append((np.reshape(val, (sim_steps,) + var_shape), var_info['var'], var_idx))
 
             self._backend.add_input_layer(inputs=input_col)
 
@@ -1048,15 +1002,21 @@ class CircuitIR(AbstractBaseIR):
         outputs = {}
         levels = 0
         for names, group_key, nodes in zip(output_keys, output_col, output_nodes):
+
             out_group = output_col[group_key]
+
             for i, (key, node_keys) in enumerate(zip(names, nodes)):
+
                 out_val = np.squeeze(out_group[:, i])
+
                 if len(out_val.shape) == 1:
+
                     if levels > 0:
                         nulls = tuple([None for _ in range(levels)])
                         outputs[(key,) + nulls] = out_val
                     else:
                         outputs[key] = out_val
+
                 else:
 
                     for j, node_key in enumerate(node_keys):
