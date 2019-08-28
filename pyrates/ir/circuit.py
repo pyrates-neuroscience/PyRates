@@ -1000,7 +1000,6 @@ class CircuitIR(AbstractBaseIR):
 
         # ungroup grouped output variables
         outputs = {}
-        levels = 0
         for names, group_key, nodes in zip(output_keys, output_col, output_nodes):
 
             out_group = output_col[group_key]
@@ -1011,26 +1010,17 @@ class CircuitIR(AbstractBaseIR):
 
                 if len(out_val.shape) == 1:
 
-                    if levels > 0:
-                        nulls = tuple([None for _ in range(levels)])
-                        outputs[(key,) + nulls] = out_val
-                    else:
-                        outputs[key] = out_val
+                    outputs[key] = out_val
 
                 else:
 
                     for j, node_key in enumerate(node_keys):
                         out_val_tmp = np.squeeze(out_val[:, j])
                         if len(out_val_tmp.shape) == 1:
-                            if levels > 1:
-                                outputs[(key, node_key, None)] = out_val
-                            else:
-                                outputs[(key, node_key)] = out_val_tmp
-                                levels = 1
+                            outputs[tuple(node_key.split('/')) + (key,)] = out_val_tmp
                         else:
                             for k in range(out_val_tmp.shape[1]):
-                                outputs[(key, node_key, str(k))] = np.squeeze(out_val_tmp[:, k])
-                                levels = 2
+                                outputs[(node_key, key, str(k))] = np.squeeze(out_val_tmp[:, k])
 
         # create data frame
         out_vars = DataFrame(outputs)
