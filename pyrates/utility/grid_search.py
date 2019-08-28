@@ -105,9 +105,6 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     if type(circuit_template) is str:
         circuit_template = CircuitTemplate.from_yaml(circuit_template)
 
-    # set up dummy network instance for access to variable properties
-    net_tmp = ComputeGraph(circuit_template.apply(), dt=dt, vectorization=vectorization, **init_kwargs)
-
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
         param_grid = linearize_grid(param_grid, permute_grid)

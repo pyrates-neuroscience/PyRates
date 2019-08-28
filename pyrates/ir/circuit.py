@@ -488,27 +488,27 @@ class CircuitIR(AbstractBaseIR):
                 for s, t, e in edges:
                     d = self.edges[s, t, e]['delay']
                     if d is None or np.sum(d) == 0:
-                        d = 0
+                        d = [1] * len(self.edges[s, t, e]['target_idx'])
                     else:
                         if type(d) is list:
-                            d_tmp = np.asarray(d)
+                            d_tmp = np.asarray(d).squeeze()
                             d = np.asarray((d_tmp/self._dt) + 1, dtype=np.int32).tolist()
                         else:
-                            d = int(d/self._dt)+1
+                            d = [int(d/self._dt)+1]
                     self.edges[s, t, e]['delay'] = d
-                    delays.append(d)
+                    delays += d
 
                 max_delay = np.max(delays)
 
                 # set delays to None of max_delay is 0
-                if max_delay == 0:
+                if max_delay <= 1:
                     for s, t, e in edges:
                         self.edges[s, t, e]['delay'] = None
 
                 # loop over different input sources
                 for j in range(n_inputs):
 
-                    if max_delay > 0:
+                    if max_delay > 1:
 
                         # add synaptic buffer to the input variable
                         self._add_edge_buffer(node_name, op_name, var_name, idx=j,
@@ -697,8 +697,6 @@ class CircuitIR(AbstractBaseIR):
             # remove old edge
             self.graph.remove_edge(*specifier)
 
-    # def _vectorize_common_in_place(self, max_node_idx, old_name, node_op_graph_map, node_sizes, name_idx):
-
     def _vectorize_edges(self, source: str, target: str) -> None:
         """Combines edges in list and adds a new edge to the new net config.
 
@@ -755,15 +753,12 @@ class CircuitIR(AbstractBaseIR):
                     delay = self.edges[source, target, idx]['delay']
 
                     # add weight, delay and variable indices to collector lists
-                    if weight is not None:
-                        weight_col.append(weight)
-                        delay_col.append(0. if delay is None else delay)
+                    weight_col.append(1. if weight is None else weight)
+                    delay_col.append(0. if delay is None else delay)
                     idx_tmp = self.edges[source, target, idx]['source_idx']
-                    idx_tmp = [idx_tmp] if type(idx_tmp) is int else list(idx_tmp)
                     if idx_tmp:
                         old_svar_idx += idx_tmp
                     idx_tmp = self.edges[source, target, idx]['target_idx']
-                    idx_tmp = [idx_tmp] if type(idx_tmp) is int else list(idx_tmp)
                     if idx_tmp:
                         old_tvar_idx += idx_tmp
 
@@ -771,23 +766,17 @@ class CircuitIR(AbstractBaseIR):
                 #############################
 
                 # extract edge
-                edge_ref = edges_tmp[0]
+                edge_ref = edges_tmp.pop(0)
                 new_edge = self.edges[edge_ref]
+                edges.pop(edges.index(edge_ref))
 
                 # change delay and weight attributes
-                if weight_col:
-                    weight_col = np.squeeze(weight_col).tolist()
-                    delay_col = np.squeeze(delay_col).tolist()
-                else:
-                    weight_col = None
-                    delay_col = None
+                weight_col = np.squeeze(weight_col).tolist()
+                delay_col = np.squeeze(delay_col).tolist()
                 new_edge['delay'] = delay_col
                 new_edge['weight'] = weight_col
                 new_edge['source_idx'] = old_svar_idx
                 new_edge['target_idx'] = old_tvar_idx
-
-                # add new edge to new net config
-                self.graph.add_edge(source, target, **new_edge)
 
             # delete vectorized edges from list
             self.graph.remove_edges_from(edges_tmp)
@@ -854,35 +843,6 @@ class CircuitIR(AbstractBaseIR):
                     vnode_indices[vnode_key]['idx'] = idx
 
             return vnode_indices
-
-    def _get_node_attr(self, node: str, attr: str, op: Optional[str] = None, **kwargs) -> Any:
-        """Extract attribute from node of the network.
-
-        Parameters
-        ----------
-        node
-            Name of the node.
-        attr
-            Name of the attribute on the node.
-        op
-            Name of the operator. Only needs to be provided for operator variables.
-
-        Returns
-        -------
-        Any
-            Node attribute.
-
-        """
-
-        if op:
-            return self._get_op_attr(node, op, attr, **kwargs)
-        try:
-            return self[node][attr]
-        except KeyError:
-            vals = []
-            for op in self[node]:
-                vals.append(self._get_op_attr(node, op, attr, **kwargs))
-            return vals
 
     def _get_op_attr(self, node: str, op: str, attr: str, retrieve: bool = True, **kwargs) -> Any:
         """Extracts attribute of an operator.
@@ -1180,12 +1140,9 @@ class CircuitIR(AbstractBaseIR):
 
             tvar = data['target_var']
             top, tvar = tvar.split("/")
-            # get variable properties
-            # tval --> variable properties
-            # fetch both values and variable definitions of target variable
             tval = self[f"{target_node}/{top}/{tvar}"]
 
-            add_project = data.get('add_project', False)  # get a False, in case it is not defined
+            add_project = data.get('add_project', False)
             target_node_ir = self[target_node]
 
             # define target index
@@ -1243,17 +1200,17 @@ class CircuitIR(AbstractBaseIR):
         variables = {'all/all/dt': dt}
 
         # edge operators
-        equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
+        edge_equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
         variables.update(variables_tmp)
-        if equations:
+        if edge_equations:
             self._backend._input_layer_added = True
 
         # node operators
-        equations_tmp, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
+        node_equations, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
         variables.update(variables_tmp)
 
         # bring equations into correct order
-        equations = sort_equations(edge_eqs=equations, node_eqs=equations_tmp)
+        equations = sort_equations(edge_eqs=edge_equations, node_eqs=node_equations)
 
         # parse all equations and variables into the backend
         ####################################################
@@ -1520,7 +1477,7 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        target_shape = self._get_op_attr(node, op, var)['shape']
+        target_shape = self.get_node_var(f"{node}/{op}/{var}")['shape']
         node_ir = self[node]
 
         # create buffer variable definitions
@@ -1568,7 +1525,7 @@ class CircuitIR(AbstractBaseIR):
         node_ir.add_op_edge(f'{op}_{var}_buffer_read_{idx}', op)
 
         # add input information to target operator
-        inputs = self._get_op_attr(node, op, 'inputs')
+        inputs = self.get_node_var(f"{node}/{op}")['inputs']
         if var in inputs.keys():
             inputs[var]['sources'].add(f'{op}_{var}_buffer_read_{idx}')
         else:
@@ -1602,7 +1559,7 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        target_shape = self._get_op_attr(node, op, var)['shape']
+        target_shape = self.get_node_var(f"{node}/{op}/{var}")['shape']
         node_ir = self[node]
 
         # create collector equation
@@ -1627,7 +1584,7 @@ class CircuitIR(AbstractBaseIR):
         node_ir.add_op_edge(f'{op}_{var}_col_{idx}', op)
 
         # add input information to target operator
-        op_inputs = self._get_op_attr(node, op, 'inputs')
+        op_inputs = self.get_node_var(f"{node}/{op}")['inputs']
         if var in op_inputs.keys():
             op_inputs[var]['sources'].add(f'{op}_{var}_col_{idx}')
         else:
@@ -1699,10 +1656,26 @@ def sort_equations(edge_eqs: list, node_eqs: list) -> list:
 
     # re-order node equations
     eqs_new = []
-    for node_layer in node_eqs.copy():
-        if not any([is_diff_eq(eq) for eq, _ in node_layer]):
-            eqs_new.append(node_layer)
-            node_eqs.pop(node_eqs.index(node_layer))
+    n_popped = 0
+    for i, node_layer in enumerate(node_eqs.copy()):
+
+        # collect non-differential equations from node layer
+        layer_eqs = []
+        for eq, scope in node_layer.copy():
+            if not is_diff_eq(eq):
+                layer_eqs.append((eq, scope))
+                node_layer.pop(node_layer.index((eq, scope)))
+
+        # add non-differential equations to new equations
+        if layer_eqs:
+            eqs_new.append(layer_eqs)
+
+        # clean-up already added equations from node equations
+        if node_layer:
+            node_eqs[i-n_popped] = node_layer
+        else:
+            node_eqs.pop(i-n_popped)
+            n_popped += 1
 
     eqs_new += edge_eqs
     eqs_new += node_eqs

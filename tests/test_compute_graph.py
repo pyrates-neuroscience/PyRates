@@ -127,8 +127,8 @@ def test_2_1_operator():
         update2 = lambda x: 1. / (1. + np.exp(-x))
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i + 1, 0] = update1(targets[i, 0], targets[i, 1])
             targets[i + 1, 1] = update2(targets[i, 0])
+            targets[i + 1, 0] = update1(targets[i, 0], targets[i + 1, 1])
 
         diff = results['a'].values[:] - targets[:, 0]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)

@@ -15,11 +15,11 @@ N = 10                                                           # grid-size
 C = np.linspace(0., 200., N)                                    # bi-directional connection strength
 D = np.linspace(0., 1e-3, N)                                    # bi-directional coupling delay
 
-params = {'C': C}
+params = {'C': C, 'D': D}
 param_map = {'C': {'vars': ['weight'],
                    'edges': [('JRC1/PC', 'JRC2/PC'), ('JRC2/PC', 'JRC1/PC')]},
              'D': {'vars': ['delay'],
-                   'edges': [('PC', 'EIN'), ('EIN', 'PC')]}}
+                   'edges': [('JRC1/PC', 'JRC2/PC'), ('JRC2/PC', 'JRC1/PC')]}}
 
 results, param_map = grid_search(circuit_template="model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled",
                                  param_grid=params, param_map=param_map,
