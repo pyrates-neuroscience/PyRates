@@ -794,12 +794,13 @@ class CircuitIR(AbstractBaseIR):
             for edge in edges_tmp:
                 edges.pop(edges.index(edge))
 
-    def get_node_var(self, key: str) -> dict:
+    def get_node_var(self, key: str, apply_idx: bool = True) -> dict:
         """
 
         Parameters
         ----------
         key
+        apply_idx
 
         Returns
         -------
@@ -844,8 +845,13 @@ class CircuitIR(AbstractBaseIR):
             # apply the indices to the vectorized node variables
             for vnode_key in vnode_indices:
                 idx = vnode_indices[vnode_key]['var']
-                idx = f"{idx[0]}:{idx[-1]+1}" if all(np.diff(idx) == 1) else [idx]
-                vnode_indices[vnode_key]['var'] = self._backend.apply_idx(self[f"{vnode_key}/{op}/{var}"]['value'], idx)
+                if apply_idx:
+                    idx = f"{idx[0]}:{idx[-1] + 1}" if all(np.diff(idx) == 1) else [idx]
+                    vnode_indices[vnode_key]['var'] = self._backend.apply_idx(self[f"{vnode_key}/{op}/{var}"]['value'],
+                                                                              idx)
+                else:
+                    vnode_indices[vnode_key]['var'] = self[f"{vnode_key}/{op}/{var}"]['value']
+                    vnode_indices[vnode_key]['idx'] = idx
 
             return vnode_indices
 
@@ -1034,22 +1040,22 @@ class CircuitIR(AbstractBaseIR):
             # go through passed inputs
             for key, val in inputs.items():
 
-                in_shape = val.shape[1:]
+                in_shape = val.shape[1]
                 key_split = key.split('/')
                 op, var = key_split[-2], key_split[-1]
 
                 # extract respective input variable from the network
                 # TODO: this needs to be adjusted such that the backend knows which parts of the backend variables to
                 # TODO: project to
-                for var_key, var_info in self.get_node_var(key).items():
-                    var_shape = tuple(var_info['var'].shape)
-                    in_name = f"{var_key}/{op}/{var}"
+                for var_key, var_info in self.get_node_var(key, apply_idx=False).items():
+                    var_shape = len(var_info['idx'])
+                    var_idx = var_info['idx'] if np.sum(var_shape) > 1 else None
                     if var_shape == in_shape:
-                        input_col[in_name] = val
-                    elif (var_shape[0] % in_shape[0]) == 0:
-                        input_col[in_name] = np.tile(val, (1, var_shape[0]))
+                        input_col[var_info['var']] = (val, var_idx)
+                    elif (var_shape % in_shape) == 0:
+                        input_col[var_info['var']] = (np.tile(val, (1, var_shape)), var_idx)
                     else:
-                        input_col[in_name] = np.reshape(val, (sim_steps,) + var_shape)
+                        input_col[var_info['var']] = (np.reshape(val, (sim_steps,) + var_shape), var_idx)
 
             self._backend.add_input_layer(inputs=input_col)
 

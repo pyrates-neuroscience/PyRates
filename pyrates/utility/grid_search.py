@@ -153,15 +153,6 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     if 'profile' in kwargs:
         results, duration, memory = results
 
-    # transform results into long-form dataframe with changed parameters as columns
-    # results_final = pd.DataFrame(columns=index, data=np.zeros_like(results.values), index=results.index)
-    # for out_name, out_info in zip(out_names, out_nodes):
-    #     node, op, var = out_info
-    #     for node_name, params in zip(circuit_names, results_indices):
-    #         key = params + (out_name,)
-    #         idx = list(net.get_var(f"{node_name}/{node}", op, var, retrieve=False).values())
-    #         results_final[key] = results[out_name].iloc[:, idx]
-
     if 'profile' in kwargs:
         return results, param_mapping, duration, memory
     return results, param_mapping
