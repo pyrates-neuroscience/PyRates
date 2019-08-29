@@ -35,9 +35,9 @@
 
 # template-based interface
 from pyrates.frontend import template
-from pyrates.frontend import dict as dict_
+# from pyrates.frontend import dict as dict_
 from pyrates.frontend import yaml
-from pyrates.frontend import nxgraph
+# from pyrates.frontend import nxgraph
 from pyrates.frontend.template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
 
 # By importing the above, all transformation functions (starting with `to_` or `from_`) are registered

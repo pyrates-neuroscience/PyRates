@@ -50,7 +50,7 @@ op3:
 
 op4:
   base: OperatorTemplate
-  equations: "d/dt * u = 2."
+  equations: "d/dt * u = 2.0"
   variables:
     u:
       default: output

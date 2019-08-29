@@ -197,17 +197,13 @@ class ExpressionParser(ParserElement):
             index_end = idx_r.setParseAction(self._push_first)
             index_comb = colon.setParseAction(self._push_first)
             arg_comb = comma.setParseAction(self._push_first)
+            arg_tuple = par_l + ZeroOrMore(self.expr.suppress() + Optional(arg_comb)) + par_r
+            func_arg = arg_tuple | self.expr.suppress()
 
             # basic computation unit
-            atom = (func_name + Optional(par_l.suppress() + self.expr.suppress() +
-                                         ZeroOrMore((arg_comb.suppress() + self.expr.suppress() +
-                                                     Optional(arg_comb.suppress()))) +
-                                         par_r.suppress() + Optional(arg_comb)) +
-                    Optional(self.expr.suppress() + ZeroOrMore((arg_comb.suppress() + self.expr.suppress())))
-                    + par_r.suppress() | name | pi | e | num_float | num_int
-                    ).setParseAction(self._push_neg_or_first) | \
-                   (par_l.setParseAction(self._push_last) + self.expr.suppress() + par_r
-                    ).setParseAction(self._push_neg)
+            atom = (func_name + Optional(func_arg.suppress()) + ZeroOrMore(arg_comb.suppress() + func_arg.suppress()) +
+                    par_r.suppress() | name | pi | e | num_float | num_int).setParseAction(self._push_neg_or_first) | \
+                   (par_l.setParseAction(self._push_last) + self.expr.suppress() + par_r).setParseAction(self._push_neg)
 
             # apply indexing to atoms
             indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
@@ -237,7 +233,7 @@ class ExpressionParser(ParserElement):
         # parse rhs into backend
         rhs = self.parse(self.expr_stack[:])
 
-        if self.lhs_key in self.vars and not self._instantaneous:
+        if self.lhs_key in self.vars and not self._instantaneous and hasattr(rhs, 'short_name'):
 
             # create new variable for lhs update
             name = f"{self.lhs_key}_delta"
@@ -858,7 +854,10 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             inputs = op_args['inputs'] if 'inputs' in op_args else {}
             unprocessed_inputs = []
             for key, inp in inputs.items():
+                if inp not in equation_args:
+                    raise KeyError(inp)
                 inp_tmp = equation_args[inp]
+                # TODO: For some reason, some equation args are added after this point that I do not understand.
                 op_args[key] = inp_tmp
                 if type(inp_tmp) is dict and 'vtype' in inp_tmp:
                     unprocessed_inputs.append(key)
@@ -899,6 +898,8 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             # save backend variables to equation args
             for key, var in parser.vars.items():
                 if key != "inputs" and key != "rhs" and key != "dt":
+                    #  TODO: this step adds newly created variables to the equation args like the output variable to a
+                    #   collection variable
                     equation_args[f"{scope}/{key}"] = var
 
             # save previously unprocessed input variables to equation args

@@ -28,6 +28,7 @@
 # external imports
 import re
 from copy import deepcopy
+from sys import intern
 from typing import Union
 
 # pyrates internal imports
@@ -61,9 +62,9 @@ class OperatorTemplate(AbstractBaseTemplate):
         super().__init__(name, path, description)
 
         if isinstance(equations, str):
-            self.equations = [equations]
+            self.equations = [intern(equations)]
         else:
-            self.equations = equations
+            self.equations = [intern(eq) for eq in equations]
         self.variables = variables
 
     def update_template(self, name: str, path: str, equations: Union[str, list, dict] = None,
@@ -115,35 +116,45 @@ class OperatorTemplate(AbstractBaseTemplate):
     def apply(self, return_key=False, values: dict = None):
         """Returns the non-editable but unique, cashed definition of the operator."""
 
-        # figure out key name of given combination of template and assigned values
-        name = self.name
-        if values:
-            # if values are given, figure out, whether combination is known
-            frozen_values = deep_freeze(values)
-            try:
-                key = self.key_map[(name, frozen_values)]
-            except KeyError:
-                # not known, need to assign new key and register key in key_map
-                if name in self.key_counter:
-                    key = f"{name}.{self.key_counter[name] + 1}"
-                    self.key_counter[name] += 1
-                else:
-                    key = f"{name}.1"
-                    self.key_counter[name] = 1
-                self.key_map[(name, frozen_values)] = key
-
-        else:  # without additional values specified, default name is op_name.0
-            key = f"{name}.0"
+        # key for global operator cache is template name.
+        # ToDo: Consider replacing this cache with a separate by-circuit cache.
+        key = self.name
+        if values is None:
+            values = {}
 
         try:
-            instance, variables = self.cache[key]
-            # instance = defrost(instance)
-            # variables = defrost(variables)
-            # instance, variables = dict(instance), dict(variables)
+            instance, default_values = self.cache[key]
+
+            for vname, value in default_values.items():
+                if vname not in values:
+                    values[vname] = value
+
         except KeyError:
             # get variable definitions and specified default values
-            # ToDo: remove variable separation: instead pass variables detached from equations?
-            variables, inputs, output = self._separate_variables(self)
+            variables = []
+            default_values = dict()
+            inputs = []
+            output = None
+            for vname, vtype, dtype, shape, value in _separate_variables(self.variables):
+
+                # if no new value is given for a variable, get the default
+                if vname not in values:
+                    values[vname] = value
+
+                default_values[vname] = value
+
+                if vtype == "input":
+                    inputs.append(vname)  # = dict(sources=[], reduce_dim=True)  # default to True for now
+                    vtype = "state_var"
+                elif vtype == "output":
+                    if output is None:
+                        output = vname  # for now assume maximum one output is present
+                    else:
+                        raise PyRatesException("More than one output specification found in operator. "
+                                               "Only one output per operator is supported.")
+                    vtype = "state_var"
+                # pack variable defining properties into tuple
+                variables.append((vname, vtype, dtype, shape))
 
             # reduce order of ODE if necessary
             # this step is currently skipped to streamline equation interface
@@ -152,129 +163,15 @@ class OperatorTemplate(AbstractBaseTemplate):
             # *equations, variables = cls._reduce_ode_order(template.equations, variables)
             equations = self.equations
 
-            # operator instance is invoked as a dictionary of equations and variable definition
-            # this may be subject to change
-
-            if values:
-                for vname, update in values.items():
-                    # if isinstance(update, dict):
-                    #     if "value" in update:
-                    #         variables[vname["value"]] = update["value"]
-                    #     if "vtype" in
-                    # only values are updated, assuming all other specs remain the same
-                    variables[vname]["value"] = values[vname]
-                    # should fail, if variable is unknown
-
-            instance = self.target_ir(equations=equations, inputs=inputs, output=output)
-            self.cache[key] = (instance, variables)
+            instance = self.target_ir(equations=equations, variables=variables,
+                                      inputs=inputs, output=output,
+                                      template=self)
+            self.cache[key] = (instance, default_values)
 
         if return_key:
-            return instance.copy(), deepcopy(variables), key
+            return instance, values, key
         else:
-            return instance.copy(), deepcopy(variables)
-
-    @classmethod
-    def _separate_variables(cls, template):
-        """
-        Return variable definitions and the respective values.
-
-        Returns
-        -------
-        variables
-        inputs
-        output
-        """
-        # this part can be improved a lot with a proper expression parser
-
-        variables = {}
-        inputs = {}
-        output = None
-        for variable, properties in template.variables.items():
-            var_dict = deepcopy(properties)
-            # default shape is scalar
-            if "shape" not in var_dict:
-                var_dict["shape"] = (1,)
-
-            # identify variable type and data type
-            # note: this assume that a "default" must be given for every variable
-            try:
-                var_dict.update(cls._parse_vprops(var_dict.pop("default")))
-            except KeyError:
-                raise PyRatesException("Variables need to have a 'default' (variable type, data type and/or value) "
-                                       "specified.")
-
-            # separate in/out specification from variable type specification
-            if var_dict["vtype"] == "input":
-                inputs[variable] = dict(sources=[], reduce_dim=True)  # default to True for now
-                var_dict["vtype"] = "state_var"
-            elif var_dict["vtype"] == "output":
-                if output is None:
-                    output = variable  # for now assume maximum one output is present
-                else:
-                    raise PyRatesException("More than one output specification found in operator. "
-                                           "Only one output per operator is supported.")
-                var_dict["vtype"] = "state_var"
-
-            variables[variable] = var_dict
-
-        return variables, inputs, output
-
-    @staticmethod
-    def _parse_vprops(expr: Union[str, int, float]):
-        """Naive version of a parser for the default key of variables in a template. Returns data type,
-        variable type and default value of the variable."""
-
-        value = 0.  # Setting initial conditions for undefined variables to 0. Is that reasonable?
-        if isinstance(expr, int):
-            vtype = "constant"
-            value = expr
-            # dtype = "int32"
-            dtype = "float32"  # default to float for maximum compatibility
-        elif isinstance(expr, float):
-            vtype = "constant"
-            value = expr
-            dtype = "float32"
-            # restriction to 32bit float for consistency. May not be reasonable at all times.
-        else:
-            # set vtype
-            if expr.startswith("input"):
-                vtype = "input"
-            elif expr.startswith("output"):
-                vtype = "output"
-            elif expr.startswith("variable"):
-                vtype = "state_var"
-            elif expr.startswith("constant"):
-                vtype = "constant"
-            elif expr.startswith("placeholder"):
-                vtype = "placeholder"
-            else:
-                try:
-                    # if "." in expr:
-                    value = float(expr)  # default to float
-                    # else:
-                    #     value = int(expr)
-                    vtype = "constant"
-                except ValueError:
-                    raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
-
-            # set dtype and value
-            if expr.endswith("(float)"):
-                dtype = "float32"  # why float32 and not float64?
-            elif expr.endswith("(int)"):
-                # dtype = "int32"
-                dtype = "float32"  # default to float for maximum compatibility
-            elif "." in expr:
-                dtype = "float32"
-                value = float(re.search("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)", expr).group())
-                # see https://stackoverflow.com/questions/12643009/regular-expression-for-floating-point-numbers
-            elif re.search("[0-9]+", expr):
-                # dtype = "int32"
-                dtype = "float32"  # default to float for maximum compatibility
-                value = float(re.search("[0-9]+", expr).group())
-            else:
-                dtype = "float32"  # base assumption
-
-        return dict(vtype=vtype, dtype=dtype, value=value)
+            return instance, values
 
 
 def _update_variables(variables: dict, updates: dict):
@@ -300,26 +197,111 @@ def _update_equation(equation: str,  # original equation
     # replace existing terms by new ones
     if replace:
         for old, new in replace.items():
-            equation = equation.replace(old, new)
+            equation = intern(equation.replace(old, new))
             # this might fail, if multiple replacements refer or contain the same variables
             # is it possible to call str.replace with tuples?
 
     # remove terms
     if remove:
         if isinstance(remove, str):
-            equation = equation.replace(remove, "")
+            equation = intern(equation.replace(remove, ""))
         else:
             for old in remove:
-                equation = equation.replace(old, "")
+                equation = intern(equation.replace(old, ""))
 
     # append terms at the end of the equation string
     if append:
         # only allowing single append per update
-        equation = f"{equation} {append}"
+        equation = intern(f"{equation} {append}")
 
         # prepend terms at the beginning of the equation string
     if prepend:
         # only allowing single prepend per update
-        equation = f"{prepend} {equation}"
+        equation = intern(f"{prepend} {equation}")
 
     return equation
+
+
+def _parse_defaults(expr: Union[str, int, float]):
+    """Naive version of a parser for the default key of variables in a template. Returns data type,
+    variable type and default value of the variable."""
+
+    value = 0.  # Setting initial conditions for undefined variables to 0. Is that reasonable?
+    if isinstance(expr, int):
+        vtype = "constant"
+        value = expr
+        # dtype = "int32"
+        dtype = "float32"  # default to float for maximum compatibility
+    elif isinstance(expr, float):
+        vtype = "constant"
+        value = expr
+        dtype = "float32"
+        # restriction to 32bit float for consistency. May not be reasonable at all times.
+    else:
+        # set vtype
+        if expr.startswith("input"):
+            vtype = "input"
+        elif expr.startswith("output"):
+            vtype = "output"
+        elif expr.startswith("variable"):
+            vtype = "state_var"
+        elif expr.startswith("constant"):
+            vtype = "constant"
+        elif expr.startswith("placeholder"):
+            vtype = "placeholder"
+        else:
+            try:
+                # if "." in expr:
+                value = float(expr)  # default to float
+                # else:
+                #     value = int(expr)
+                vtype = "constant"
+            except ValueError:
+                raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
+
+        # set dtype and value
+        if expr.endswith("(float)"):
+            dtype = "float32"  # why float32 and not float64?
+        elif expr.endswith("(int)"):
+            # dtype = "int32"
+            dtype = "float32"  # default to float for maximum compatibility
+        elif "." in expr:
+            dtype = "float32"
+            value = float(re.search("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)", expr).group())
+            # see https://stackoverflow.com/questions/12643009/regular-expression-for-floating-point-numbers
+        elif re.search("[0-9]+", expr):
+            # dtype = "int32"
+            dtype = "float32"  # default to float for maximum compatibility
+            value = float(re.search("[0-9]+", expr).group())
+        else:
+            dtype = "float32"  # base assumption
+
+    return vtype, dtype, value
+
+
+def _separate_variables(variables: dict):
+    """
+    Return variable definitions and the respective values.
+
+    Returns
+    -------
+    variables
+    inputs
+    output
+    """
+    # this part can be improved a lot with a proper expression parser
+
+    for vname, properties in variables.items():
+
+        # get shape parameter, default shape is scalar
+        shape = properties.get("shape", (1,))
+
+        # identify variable type and data type
+        # note: this assume that a "default" must be given for every variable
+        try:
+            vtype, dtype, value = _parse_defaults(properties["default"])
+        except KeyError:
+            raise PyRatesException("Variables need to have a 'default' (variable type, data type and/or value) "
+                                   "specified.")
+
+        yield vname, vtype, dtype, shape, value

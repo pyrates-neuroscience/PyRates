@@ -32,7 +32,7 @@
 # external imports
 import pandas as pd
 import numpy as np
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 
 # system imports
 import os
@@ -56,9 +56,10 @@ __author__ = "Christoph Salomon, Richard Gast"
 __status__ = "development"
 
 
-def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union[dict, pd.DataFrame], param_map: dict, dt: float, simulation_time: float,
-                inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None,
-                permute_grid: bool = False, init_kwargs: dict = None, **kwargs) -> pd.DataFrame:
+def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union[dict, pd.DataFrame], param_map: dict,
+                dt: float, simulation_time: float, inputs: dict, outputs: dict,
+                sampling_step_size: Optional[float] = None, permute_grid: bool = False, init_kwargs: dict = None,
+                **kwargs) -> tuple:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
     Parameters
@@ -89,13 +90,18 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
     Returns
     -------
-    pd.DataFrame
-        Simulation results stored in a multi-index data frame where each index lvl refers to one of the parameters of
-        param_grid.
+    tuple
+        Simulation results stored in a multi-index data frame, the mapping between the data frame column names and the
+        parameter grid, the simulation time, and the memory consumption.
 
     """
 
-    # load template if necessary
+    # argument pre-processing
+    #########################
+
+    if not init_kwargs:
+        init_kwargs = {}
+    vectorization = init_kwargs.pop('vectorization', 'nodes')
     if type(circuit_template) is str:
         circuit_template = CircuitTemplate.from_yaml(circuit_template)
 
@@ -103,67 +109,37 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     if type(param_grid) is dict:
         param_grid = linearize_grid(param_grid, permute_grid)
 
-    # create multi-index for later results storage
-    param_keys = list(param_grid.keys())
-    multi_idx = [param_grid[key].values for key in param_keys]
-    n_iters = len(multi_idx[0])
-    outs = []
-    out_names = list(outputs.keys())
-    for out_name in out_names:
-        outs += [out_name] * n_iters
-    multi_idx = [list(idx) * len(out_names) for idx in multi_idx]
-    multi_idx = multi_idx + [outs]
-    index = pd.MultiIndex.from_arrays(multi_idx, names=param_keys + ["out_var"])
-    index = pd.MultiIndex.from_tuples(list(set(index)), names=param_keys + ["out_var"])
+    # create grid-structure of network
+    ##################################
 
-    # assign parameter updates to each circuit and combine them to unconnected network
+    # get parameter names and grid length
+    param_keys = list(param_grid.keys())
+    N = param_grid.shape[0]
+
+    # assign parameter updates to each circuit, combine them to unconnected network and remember their parameters
     circuit = CircuitIR()
-    circuit_names = []
-    param_keys = index.names
-    results_indices = []
-    i = 0
-    for idx in index.values:
-        if idx[:-1] not in results_indices:
-            results_indices.append(idx[:-1])
+    param_mapping = {}
+    for idx in range(N):
             new_params = {}
-            for key, val in zip(param_keys, idx):
-                if key in param_grid:
-                    new_params[key] = val
+            for key in param_keys:
+                new_params[key] = param_grid[key][idx]
             circuit_tmp = circuit_template.apply()
-            circuit_names.append(f'{circuit_tmp.label}_{i}')
+            circuit_key = f'{circuit_tmp.label}_{idx}'
             circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
-            circuit.add_circuit(circuit_names[-1], circuit_tmp)
-            i += 1
+            circuit.add_circuit(circuit_key, circuit_tmp)
+            param_mapping[circuit_key] = new_params.copy()
 
     # create backend graph
-    if not init_kwargs:
-        init_kwargs = {}
-    vectorization = init_kwargs.pop('vectorization', 'nodes')
     net = ComputeGraph(circuit, dt=dt, vectorization=vectorization, **init_kwargs)
 
     # adjust input of simulation to combined network
-    for inp_key, inp in inputs.items():
-        inputs[inp_key] = np.tile(inp, (1, len(circuit_names)))
+    for inp_key, inp in inputs.copy().items():
+        inputs[f"all/{inp_key}"] = np.tile(inp, (1, N))
+        inputs.pop(inp_key)
 
     # adjust output of simulation to combined network
-    nodes = list(circuit_template.apply().nodes)
-    out_nodes = []
-    for out_key in out_names:
-        out = outputs.pop(out_key)
-        out = out.split('/')
-        out_nodes.append(out)
-        node = "/".join(out[:-2])
-        if node in nodes:
-            op, var = out[-2], out[-1]
-            node = node.split('.')[0]
-            outputs[out_key] = "/".join((node, op, var))
-        else:
-            for node_tmp in nodes:
-                if node in node_tmp:
-                    op, var = out[-2], out[-1]
-                    node = node_tmp.split('.')[0]
-                    outputs[out_key] = "/".join((node, op, var))
-                    break
+    for out_key, out in outputs.items():
+        outputs[out_key] = f"all/{out}"
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
@@ -174,18 +150,9 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     if 'profile' in kwargs:
         results, duration, memory = results
 
-    # transform results into long-form dataframe with changed parameters as columns
-    results_final = pd.DataFrame(columns=index, data=np.zeros_like(results.values), index=results.index)
-    for out_name, out_info in zip(out_names, out_nodes):
-        node, op, var = out_info
-        for node_name, params in zip(circuit_names, results_indices):
-            key = params + (out_name,)
-            idx = list(net.get_var(f"{node_name}/{node}", op, var, retrieve=False).values())
-            results_final[key] = results[out_name].iloc[:, idx]
-
     if 'profile' in kwargs:
-        return results_final, duration, memory
-    return results_final
+        return results, param_mapping, duration, memory
+    return results, param_mapping
 
 
 class ClusterCompute:
@@ -1093,11 +1060,11 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
                 if "/" in var:
                     op, var_name = var.split("/")
                     if op in circuit.nodes[node]['node'].op_graph.nodes:
-                        circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var_name]['value'] = float(val)
+                        circuit[node].values[op][var_name] = float(val)
                 else:
                     for op in circuit.nodes[node]['node'].op_graph.nodes:
                         try:
-                            circuit.nodes[node]['node'].op_graph.nodes[op]['variables'][var]['value'] = float(val)
+                            circuit[node].values[op][var] =float(val)
                         except KeyError:
                             pass
 
