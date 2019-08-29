@@ -150,12 +150,6 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     if 'profile' in kwargs:
         results, duration, memory = results
 
-    # update the parameter mapping to match the new column names
-    # param_mapping_final = {}
-    # for col in results.columns:
-    #     for circuit_key in param_mapping:
-    #         if circuit_key in col:
-
     if 'profile' in kwargs:
         return results, param_mapping, duration, memory
     return results, param_mapping

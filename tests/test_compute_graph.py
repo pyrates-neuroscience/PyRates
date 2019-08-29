@@ -116,7 +116,7 @@ def test_2_1_operator():
         diff = results['a'].values[1:] - targets[:-1, 0]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=1e-6, abs=1e-6)
 
-        # test correct numerical evaluation of operator with two coupled equations (1 ODE, 1 linear eq.)
+        # test correct numerical evaluation of operator with two coupled equations (1 ODE, 1 non-DE eq.)
         ################################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net2").apply()

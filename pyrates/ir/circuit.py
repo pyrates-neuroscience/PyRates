@@ -797,8 +797,7 @@ class CircuitIR(AbstractBaseIR):
         """
 
         # extract node, op and var name
-        key_split = key.split('/')
-        node, op, var = key_split[:-2], key_split[-2], key_split[-1]
+        *node, op, var = key.split('/')
 
         # if node refers to vectorized network version, return variable from vectorized network
         try:
@@ -955,12 +954,8 @@ class CircuitIR(AbstractBaseIR):
             for key, val in inputs.items():
 
                 in_shape = val.shape[1]
-                key_split = key.split('/')
-                op, var = key_split[-2], key_split[-1]
 
                 # extract respective input variable from the network
-                # TODO: this needs to be adjusted such that the backend knows which parts of the backend variables to
-                # TODO: project to
                 for var_key, var_info in self.get_node_var(key, apply_idx=False).items():
                     var_shape = len(var_info['idx'])
                     var_idx = var_info['idx'] if np.sum(var_shape) > 1 else None
