@@ -18,11 +18,11 @@ Op_e:
     tau:
       default: 1.0
     delta:
-      default: 2.0
+      default: 1.0
     eta:
       default: -5.0
     J_e:
-      default: 21.2132
+      default: 15.0
     J_i:
       default: 2.0
     inp:

@@ -27,22 +27,20 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from typing import Union, Dict, Iterator, Optional, List, Tuple, Any
+from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
 
-from pyparsing import Word, ParseException, nums, Literal
-from networkx import MultiDiGraph, subgraph, find_cycle, NetworkXNoCycle, DiGraph
-from pandas import DataFrame, MultiIndex
+from networkx import MultiDiGraph, subgraph, DiGraph
+from pandas import DataFrame
 import numpy as np
 
 from pyrates import PyRatesException
-# from pyrates.backend import parse_dict
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
 from pyrates.backend.parser import parse_dict, parse_equation_system, is_diff_eq, replace
 
-__author__ = "Daniel Rose"
+__author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
 
 
@@ -852,7 +850,7 @@ class CircuitIR(AbstractBaseIR):
             verbose: bool = True,
             profile: Optional[str] = None,
             **kwargs
-            ) -> Union[DataFrame, Tuple[DataFrame, float, float]]:
+            ) -> Union[DataFrame, Tuple[DataFrame, float]]:
         """Simulate the backend behavior over time via a tensorflow session.
 
         Parameters
@@ -1018,13 +1016,13 @@ class CircuitIR(AbstractBaseIR):
                                 outputs[(node_key, key, str(k))] = np.squeeze(out_val_tmp[:, k])
 
         # create data frame
-        out_vars = DataFrame(outputs)
+        out_vars = DataFrame(outputs, index=np.arange(0, int(sim_steps/sampling_steps)+1)*sampling_step_size)
 
         # return results
         ################
 
         if profile:
-            return out_vars, time, memory
+            return out_vars, time
         return out_vars
 
     def compile(self,

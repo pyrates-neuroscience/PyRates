@@ -120,17 +120,17 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     circuit = CircuitIR()
     param_mapping = {}
     for idx in range(N):
-            new_params = {}
-            for key in param_keys:
-                new_params[key] = param_grid[key][idx]
-            circuit_tmp = circuit_template.apply()
-            circuit_key = f'{circuit_tmp.label}_{idx}'
-            circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
-            circuit.add_circuit(circuit_key, circuit_tmp)
-            param_mapping[circuit_key] = new_params.copy()
+        new_params = {}
+        for key in param_keys:
+            new_params[key] = param_grid[key][idx]
+        circuit_tmp = circuit_template.apply()
+        circuit_key = f'{circuit_tmp.label}_{idx}'
+        circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
+        circuit.add_circuit(circuit_key, circuit_tmp)
+        param_mapping[circuit_key] = new_params.copy()
 
     # create backend graph
-    net = ComputeGraph(circuit, dt=dt, vectorization=vectorization, **init_kwargs)
+    net = circuit.compile(dt=dt, vectorization=vectorization, **init_kwargs)
 
     # adjust input of simulation to combined network
     for inp_key, inp in inputs.copy().items():
@@ -148,10 +148,10 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
                       sampling_step_size=sampling_step_size,
                       **kwargs)    # type: pd.DataFrame
     if 'profile' in kwargs:
-        results, duration, memory = results
+        results, duration = results
 
     if 'profile' in kwargs:
-        return results, param_mapping, duration, memory
+        return results, param_mapping, duration
     return results, param_mapping
 
 
@@ -1059,12 +1059,12 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
             for node in nodes:
                 if "/" in var:
                     op, var_name = var.split("/")
-                    if op in circuit.nodes[node]['node'].op_graph.nodes:
+                    if op in circuit[node]:
                         circuit[node].values[op][var_name] = float(val)
                 else:
-                    for op in circuit.nodes[node]['node'].op_graph.nodes:
+                    for op in circuit[node]:
                         try:
-                            circuit[node].values[op][var] =float(val)
+                            circuit[node].values[op][var] = float(val)
                         except KeyError:
                             pass
 

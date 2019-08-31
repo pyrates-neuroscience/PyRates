@@ -77,5 +77,8 @@ class ComputeGraph(object):
         """Instantiates operator.
         """
 
+        if type(net_config) is str:
+            net_config = net_config.apply()
+
         return net_config.compile(dt=dt, vectorization=vectorization, backend=backend, solver=solver,
                                   float_precision=float_precision, build_in_place=build_in_place, **kwargs)

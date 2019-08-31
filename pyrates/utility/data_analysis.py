@@ -208,7 +208,7 @@ def welch(data, tmin=0., tmax=None, **kwargs):
     # Compute power spectral density
     try:
         from scipy.signal import welch
-        return welch(data.values, fs=1/dt, axis=0, **kwargs)
+        return welch(data.values, fs=1./dt, axis=0, **kwargs)
     except IndexError:
         return np.NaN, np.NaN
 
