@@ -1,0 +1,56 @@
+%YAML 1.2
+---
+
+Op_phase:
+  base: OperatorTemplate
+  equations:
+    - "theta' = omega + noise_in + K*net_in"
+    - "r = r_max / (1 + exp(s*(v-v_th)))"
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    tau:
+      default: 1.0
+    r_max:
+      default: 1.0
+    s:
+      default: 200.0
+    v_th:
+      default: 0.0
+    I_ext:
+      default: input
+    I_syn:
+      default: input
+
+Op_coupling:
+  base: OperatorTemplate
+  equations:
+    - "net_in = sin(source_var-target_var)"
+  variables:
+    net_in:
+      default: output
+    source_var:
+      default: input
+    target_var:
+      default: input
+
+Sin_edge:
+  base: EdgeTemplate
+  operators:
+    - Op_coupling
+
+KM_node:
+  base: PopulationTemplate
+  operators:
+    - Op_phase
+
+2KM:
+  base: CircuitTemplate
+  nodes:
+    O1: KM_node
+    O2: KM_node
+  edges:
+    - [O1/Op_phase/theta, O2/Op_phase/net_in, Sin_edge, {weight: 1.0}]
+    - [O2/Op_phase/theta, O2/Op_phase/net_in, Sin_edge, {weight: 1.0}]

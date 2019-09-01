@@ -28,6 +28,8 @@ PRO:
 JRC_op:
   base: OperatorTemplate
   equations:
+    - 'd/dt * time = 1.0'
+    - 'I_ext = alpha*sin(2.0*PI*omega*time)'
     - 'd/dt * PSP_ein = PSP_t_ein'
     - 'd/dt * PSP_t_ein =  h_e*c_pc_ein/tau_e * sigmoid((PSP_pc_e + PSP_pc_i), m_max, r, V_thr) - (1./tau_e)^2. * PSP_ein - (2./tau_e) * PSP_t_ein'
     - 'd/dt * PSP_iin = PSP_t_iin'
@@ -36,8 +38,12 @@ JRC_op:
     - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c_ein_pc*sigmoid(PSP_ein, m_max, r, V_thr) + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
     - 'd/dt * PSP_pc_i = PSP_t_pc_i'
     - 'd/dt * PSP_t_pc_i =  h_i*c_iin_pc/tau_i * sigmoid(PSP_iin, m_max, r, V_thr) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
-    - 'PSP_pc = PSP_pc_e + PSP_pc_i'
+    - 'PSP_pc = PSP_pc_e + PSP_pc_i + I_ext'
   variables:
+    alpha:
+      default: 0.0
+    omega:
+      default: 10.0
     h_e:
       default: 3.25e-3
     tau_e:
@@ -46,8 +52,6 @@ JRC_op:
       default: -22e-3
     tau_i:
       default: 20e-3
-    u:
-      default: placeholder
     PSP_ein:
       default: variable
     PSP_t_ein:
@@ -66,6 +70,12 @@ JRC_op:
       default: variable
     PSP_t_pc_i:
       default: variable
+    time:
+      default: variable
+    I_ext:
+      default: variable
+    u:
+      default: input
     m_max:
       default: 5.
     r:
@@ -181,3 +191,33 @@ JRC_simple:
   nodes:
     JRC: JRC_pop
   edges:
+
+JRC_delaycoupled:
+  base: CircuitTemplate
+  circuits:
+    JRC1: JRC
+    JRC2: JRC
+  edges:
+    - [JRC1/PC/PRO/m_out, JRC2/PC/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [JRC2/PC/PRO/m_out, JRC1/PC/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
+
+JRC_dc:
+  base: CircuitTemplate
+  nodes:
+    PC1: PC
+    EIN1: EIN
+    IIN1: IIN
+    PC2: PC
+    EIN2: EIN
+    IIN2: IIN
+  edges:
+    - [PC1/PRO/m_out, IIN1/RPO_e/m_in, DummyEdge, {weight: 33.75}]
+    - [PC1/PRO/m_out, EIN1/RPO_e/m_in, DummyEdge, {weight: 135.}]
+    - [EIN1/PRO/m_out, PC1/RPO_e_pc/m_in, DummyEdge, {weight: 108.}]
+    - [IIN1/PRO/m_out, PC1/RPO_i/m_in, DummyEdge, {weight: 33.75}]
+    - [PC2/PRO/m_out, IIN2/RPO_e/m_in, DummyEdge, {weight: 33.75}]
+    - [PC2/PRO/m_out, EIN2/RPO_e/m_in, DummyEdge, {weight: 135.}]
+    - [EIN2/PRO/m_out, PC2/RPO_e_pc/m_in, DummyEdge, {weight: 108.}]
+    - [IIN2/PRO/m_out, PC2/RPO_i/m_in, DummyEdge, {weight: 33.75}]
+    - [PC1/PRO/m_out, PC2/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [PC2/PRO/m_out, PC1/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]

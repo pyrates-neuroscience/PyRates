@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -29,11 +28,13 @@
 """
 """
 
+import pytest
+
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-def test_move_edge_ops_to_nodes():
+def test_ir_vectorization():
     """Test, if apply() functions all work properly"""
 
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
@@ -43,13 +44,36 @@ def test_move_edge_ops_to_nodes():
     template = CircuitTemplate.from_yaml(path)
 
     circuit = template.apply()  # type: CircuitIR
-    circuit2 = circuit.move_edge_operators_to_nodes()
+    circuit2 = circuit.optimize_graph_in_place()
 
-    for source, target, data in circuit2.edges(data=True):
-        # check that no operators are left in the edges of the rearranged circuit
-        assert len(data["edge_ir"].op_graph) == 0
+    # these should actually be the same
+    assert circuit is circuit2
 
-        # check that operator from previous edges is indeed in target nodes
-        # original_edge = circuit.edges[(source, target, 0)]["edge_ir"]
-        # original_op = list(original_edge.op_graph.nodes)[0]
-        # assert f"{original_op}.0" in circuit2[target]
+    # ensure only vector nodes exist
+    for node in circuit.nodes:
+        assert node.startswith("vector_")
+
+    # for source, target, key in circuit.edges:
+    #     if "node" in source:
+    #         assert "coupling" in target
+    #     else:
+    #         assert "coupling" in source and "node" in target
+
+    # for source, target, data in circuit2.edges(data=True):
+    #     # check that no operators are left in the edges of the rearranged circuit
+    #     assert len(data["edge_ir"].op_graph) == 0
+
+    # check that operator from previous edges is indeed in target nodes
+    # original_edge = circuit.edges[(source, target, 0)]["edge_ir"]
+    # original_op = list(original_edge.op_graph.nodes)[0]
+    # assert f"{original_op}.0" in circuit2[target]
+
+
+@pytest.mark.xfail
+def test_ir_compilation():
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    from pyrates.ir.circuit import CircuitIR
+
+    circuit = CircuitIR.from_yaml(path)
+
+    circuit.compile()

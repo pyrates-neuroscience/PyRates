@@ -31,7 +31,6 @@ objects.
 """
 
 # external packages
-import mne
 import numpy as np
 from typing import Union, Optional, List
 from pandas import DataFrame, MultiIndex

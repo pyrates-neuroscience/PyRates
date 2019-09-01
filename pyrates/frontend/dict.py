@@ -41,26 +41,42 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-@register_interface
-def to_node(node_dict: dict):
-    operators = {}
-    operator_args = node_dict["operator_args"]
-
-    for key, item in node_dict["operators"].items():
-        operators[key] = {"operator": to_operator(item),
-                          "variables": {}}
-
-    for key, item in operator_args.items():
-        op_name, var_name = key.split("/")
-        operators[op_name]["variables"][var_name] = item
-
-    return NodeIR(operators=operators)
-
-
-@register_interface
-def to_operator(op_dict: dict):
-    return OperatorIR(equations=op_dict["equations"], inputs=op_dict["inputs"], output=op_dict["output"])
-
+# @register_interface
+# def to_node(node_dict: dict):
+#
+#     order = node_dict["operator_order"]
+#     variables = {}
+#     # collect all information about variables and separate operator and variable keys
+#     for key, var_dict in node_dict["operator_args"].items():
+#         op_key, var_key = key.split("/")  # split key as 'op_key/var_key'
+#         if op_key not in variables:
+#             variables[op_key] = {}
+#
+#         variables[op_key][var_key] = var_dict
+#
+#     operators = []
+#     for op_key in order:
+#         op_dict = node_dict["operators"][op_key]
+#         op_dict["name"] = op_key
+#         op_dict["path"] = f"custom/{op_key}"
+#         op_dict["variables"] = variables[op_key]
+#         inputs = op_dict.pop("inputs")
+#         for var in inputs:
+#             op_dict["variables"][var]["vtype"] = "input"
+#         outvar = op_dict.pop("output")
+#         op_dict["variables"][outvar]["vtype"] = "output"
+#         operators.append(to_operator(op_dict))
+#
+#     return NodeIR(operators=operators)
+#
+#
+# @register_interface
+# def to_operator(op_dict: dict):
+#     from pyrates.frontend import OperatorTemplate
+#     template = OperatorTemplate(**op_dict)
+#
+#     return template.apply()
+#
 
 @register_interface
 def from_circuit(circuit: CircuitIR):

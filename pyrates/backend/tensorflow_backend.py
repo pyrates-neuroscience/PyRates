@@ -77,6 +77,20 @@ class TensorflowOp(PyRatesOp):
         exec(func_str, globals(), func_dict)
         return func_dict
 
+    @staticmethod
+    def _index(x, y):
+        found, idx, n = False, 0, len(x)
+        while not found and idx < n:
+            elem = x[idx]
+            if str(type(elem)) == str(type(y)):
+                found = elem == y
+            else:
+                pass
+            if found:
+                break
+            idx += 1
+        return idx
+
 
 class TensorflowAssignOp(PyRatesAssignOp):
 
@@ -235,6 +249,29 @@ class TensorflowBackend(NumpyBackend):
 
         return super().broadcast(op1, op2, **kwargs)
 
+    def get_var(self, name):
+        """Retrieve variable from graph.
+
+        Parameters
+        ----------
+        name
+            Identifier of the variable.
+
+        Returns
+        -------
+        NumpyVar
+            Variable from graph.
+
+        """
+        try:
+            return self.vars[name]
+        except KeyError as e:
+            for var in self.vars:
+                if f"{name}:" in var:
+                    return self.vars[var]
+            else:
+                raise e
+
     def stack_vars(self, vars, **kwargs):
         var_count = {}
         for var in vars:
@@ -246,11 +283,14 @@ class TensorflowBackend(NumpyBackend):
         return self.add_op('stack', vars)
 
     def _create_var(self, vtype, dtype, shape, value, name):
-        return TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
+        var, name = TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
+        if ':' in name:
+            name = name.split(':')[0]
+        return var, name
 
     def _create_op(self, op, *args, decorator=None):
         if op in ["=", "+=", "-=", "*=", "/="]:
-            if len(args) > 2 and hasattr(args[2], 'shape'):
+            if len(args) > 2 and (hasattr(args[2], 'shape') or type(args[2]) is list):
                 if op == "=":
                     op = "update"
                 elif op == "+=":
@@ -277,6 +317,26 @@ class TensorflowBackend(NumpyBackend):
                     break
             args = tuple(args)
         return TensorflowOp(self.ops[op]['call'], self.ops[op]['name'], *args)
+
+    def _process_update_args_old(self, var, update, idx):
+        """Preprocesses the index and a variable update to match the variable shape.
+
+        Parameters
+        ----------
+        var
+        update
+        idx
+
+        Returns
+        -------
+        tuple
+            Preprocessed index and re-shaped update.
+
+        """
+
+        if type(idx) is list:
+            idx = tf.constant(idx)
+        return super()._process_update_args_old(var, update, idx)
 
     def _process_idx_args(self, var, idx):
         """Preprocesses the index to a variable.

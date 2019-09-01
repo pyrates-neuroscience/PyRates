@@ -7,17 +7,20 @@ import numpy as np
 from pandas import DataFrame
 from copy import deepcopy
 import os
-import gc
-import tracemalloc
+import tensorflow as tf
+from numba import njit, config
 
-# define parameters and functions
-dt = 1e-4                                       # integration step-size of the forward euler solver in s
-T = 10.0                                        # simulation time in s
-c = 1.                                          # global connection strength scaling
-N = np.round(2**np.arange(12))[::-1]            # network sizes, each of which will be run a benchmark for
-p = np.linspace(0.0, 1.0, 5)                    # global coupling probabilities to run benchmarks for
-use_gpu = False                                 # if false, benchmarks will be run on CPU
-n_reps = 5                                      # number of trials per benchmark
+# threading configs
+config.THREADING_LAYER = 'tbb'
+os.environ["KMP_BLOCKTIME"] = '0'
+os.environ["KMP_SETTINGS"] = 'true'
+os.environ["KMP_AFFINITY"] = 'granularity=fine,verbose,compact,1,0'
+os.environ["OMP_NUM_THREADS"] = '1'
+tf.config.threading.set_inter_op_parallelism_threads(7)
+tf.config.threading.set_intra_op_parallelism_threads(1)
+tf.config.optimizer.set_jit(True)
+tf.config.experimental.set_synchronous_execution(False)
+#tf.debugging.set_log_device_placement(True)
 
 
 def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
@@ -53,10 +56,8 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
     else:
         os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-    from pyrates.backend import ComputeGraph
 
     times = np.zeros((len(Ns), len(Ps)))
-    peak_mem = np.zeros_like(times)
 
     for i, n in enumerate(Ns):
         for j, p in enumerate(Ps):
@@ -71,14 +72,14 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
             for k in range(C.shape[0]):
                 if c_sum[k] != 0.:
                     C[k, :] /= c_sum[k]
-            conns = DataFrame(C, columns=[f'jrc_{idx}/PC.0/PRO.0/m_out' for idx in range(n)])
-            conns.index = [f'jrc_{idx}/PC.0/RPO_e_pc.0/m_in' for idx in range(n)]
+            conns = DataFrame(C, columns=[f'jrc_{idx}/PC/PRO/m_out' for idx in range(n)])
+            conns.index = [f'jrc_{idx}/PC/RPO_e_pc/m_in' for idx in range(n)]
 
             # define input
             inp = 220 + np.random.randn(int(T / dt), n) * 22.
 
             # set up template
-            template = CircuitTemplate.from_yaml("../model_templates/jansen_rit/simple_jansenrit.JRC")
+            template = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC")
 
             # set up intermediate representation
             circuits = {}
@@ -87,47 +88,42 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
             circuit = CircuitIR.from_circuits(label='net', circuits=circuits, connectivity=conns)
 
             # set up compute graph
-            net = ComputeGraph(circuit, dt=dt, **init_kwargs)
+            net = circuit.compile(dt=dt, **init_kwargs)
 
             print("Starting the benchmark simulation...")
 
             # run simulations
-            if i == 0 and j == 0:
-                net.run(T, inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, outputs={'V': ('PC', 'PRO.0', 'PSP')},
-                        verbose=False, sampling_step_size=1e-3)
-            tracemalloc.start()
-            m_start = tracemalloc.get_traced_memory()[1]
-            _, t, _ = net.run(T, inputs={('PC', 'RPO_e_pc.0', 'u'): inp}, outputs={'V': ('PC', 'PRO.0', 'PSP')},
-                              verbose=False, **run_kwargs)
-            m_stop = tracemalloc.get_traced_memory()[1]
-            m = (m_stop - m_start) / 1e6
-            tracemalloc.stop()
-            net.clear()
-            gc.collect()
+            _, t = net.run(T, inputs={'all/PC/RPO_e_pc/u': inp}, outputs={'V': 'all/PC/PRO/PSP'}, verbose=False,
+                           **run_kwargs)
             times[i, j] = t
-            peak_mem[i, j] = m
 
             print("Finished!")
             print(f'simulation time: {t} s.')
-            print(f'peak memory: {m} MB.')
 
-    return times, peak_mem
+    return times
 
+
+# define parameters and functions
+dt = 1e-4                                       # integration step-size of the forward euler solver in s
+T = 1.0                                         # simulation time in s
+c = 1.                                          # global connection strength scaling
+N = np.round(2**np.arange(8))[::-1]             # network sizes, each of which will be run a benchmark for
+p = np.linspace(0.0, 1.0, 5)                    # global coupling probabilities to run benchmarks for
+use_gpu = False                                 # if false, benchmarks will be run on CPU
+n_reps = 1                                      # number of trials per benchmark
 
 # simulate benchmarks
-results = np.zeros((len(N), len(p), 2, n_reps))                                # array in which results will be stored
+results = np.zeros((len(N), len(p), n_reps))                                # array in which results will be stored
 for i in range(n_reps):
     print(f'Starting benchmark simulation run # {i}...')
-    t, m = benchmark(N, p, T, dt,
-                     init_kwargs={'vectorization': 'full',
-                                  'use_device': 'gpu' if use_gpu else 'cpu'},
-                     run_kwargs={'profile': 't',
-                                 'sampling_step_size': 1e-3},
-                     disable_gpu=False if use_gpu else True)                   # benchmarks simulation times and memory
-    results[:, :, 0, i] = t
-    results[:, :, 1, i] = m
+    t = benchmark(N, p, T, dt,
+                  init_kwargs={'vectorization': True, 'backend': 'tensorflow', 'solver': 'euler'},
+                  run_kwargs={'profile': 't',
+                              'sampling_step_size': 1e-3},
+                  disable_gpu=False if use_gpu else True)                   # benchmarks simulation times and memory
+    results[:, :, i] = t
     print(f'Finished benchmark simulation run # {i}!')
 
-np.save(f"{'gpu' if use_gpu else 'cpu'}_benchmarks", results)
-np.save('n_jrcs', N)
-np.save('conn_prob', p)
+#np.save(f"{'gpu' if use_gpu else 'cpu'}_benchmarks", results)
+#np.save('n_jrcs', N)
+#np.save('conn_prob', p)

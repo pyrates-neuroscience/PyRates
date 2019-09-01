@@ -26,7 +26,7 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-from typing import Union, List, Type
+from typing import Union, List, Type, Dict
 
 from pyrates import PyRatesException
 from pyrates.frontend.template.abc import AbstractBaseTemplate
@@ -35,7 +35,7 @@ from pyrates.frontend.template.operator import OperatorTemplate
 
 
 class OperatorGraphTemplate(AbstractBaseTemplate):
-    target_ir = OperatorGraph
+    target_ir = None
 
     def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
                  description: str = "A node or an edge.", label: str = None):
@@ -114,18 +114,20 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
                 value_updates[op_name][var_name] = value
 
         operators = {}
+        all_values = {}  # # type: Dict[OperatorIR, Dict]
 
         for template, variations in self.operators.items():
             values_to_update = variations
 
             if values_to_update is None:
                 values_to_update = {}
+            # if a value for this particular variation has been passed, overwrite the previous value
             if template.name in value_updates:
                 values_to_update.update(value_updates.pop(template.name))
-            op_instance, op_variables, key = template.apply(return_key=True,
-                                                            values=values_to_update)
-            operators[key] = {"operator": op_instance,
-                              "variables": op_variables}
+            # apply operator tempalte to get OperatorIR and associated default values and label
+            operator, op_values, key = template.apply(return_key=True, values=values_to_update)
+            operators[key] = operator
+            all_values[key] = op_values
 
         # fail gracefully, if any variables remain in `values` which means, that there is some typo
         if value_updates:
@@ -133,7 +135,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
                 "Found value updates that did not fit any operator by name. This may be due to a "
                 "typo in specifying the operator or variable to update. Remaining variables:"
                 f"{value_updates}")
-        return self.target_ir(operators=operators, template=self.path)
+        return self.target_ir(operators=operators, values=all_values, template=self.path)
 
 
 def _update_operators(base_operators: dict, updates: Union[str, List[str], dict]):
