@@ -1,10 +1,11 @@
 # pyrates imports
 from pyrates.utility import grid_search
+from pyrates.utility.grid_search import linearize_grid
 
 # additional imports
 import numpy as np
 from numba import njit, config
-# import tensorflow as tf
+import tensorflow as tf
 import os
 import matplotlib.pyplot as plt
 
@@ -14,10 +15,10 @@ os.environ["KMP_BLOCKTIME"] = '0'
 os.environ["KMP_SETTINGS"] = 'true'
 os.environ["KMP_AFFINITY"] = 'granularity=fine,verbose,compact,1,0'
 os.environ["OMP_NUM_THREADS"] = '2'
-# tf.config.threading.set_inter_op_parallelism_threads(4)
-# tf.config.threading.set_intra_op_parallelism_threads(2)
-# tf.config.optimizer.set_jit(True)
-# tf.config.experimental.set_synchronous_execution(False)
+tf.config.threading.set_inter_op_parallelism_threads(4)
+tf.config.threading.set_intra_op_parallelism_threads(2)
+tf.config.optimizer.set_jit(True)
+tf.config.experimental.set_synchronous_execution(False)
 #tf.debugging.set_log_device_placement(True)
 
 # parameters
@@ -29,7 +30,7 @@ T = 1.0                                                         # overall simula
 inp1 = np.random.uniform(120., 320., (int(T/dt), 1))            # white noise input to the pyramidal cells in Hz.
 inp2 = np.random.uniform(120., 320., (int(T/dt), 1))
 
-N = 10                                                         # grid-size
+N = 10                                                          # grid-size
 C = np.linspace(0., 200., N)                                    # bi-directional connection strength
 D = np.linspace(0., 1e-2, N)                                    # bi-directional coupling delay
 
@@ -39,7 +40,6 @@ param_map = {'C': {'vars': ['weight'],
                    'edges': [('JRC1/PC', 'JRC2/PC'), ('JRC2/PC', 'JRC1/PC')]},
              'D': {'vars': ['delay'],
                    'edges': [('JRC1/PC', 'JRC2/PC'), ('JRC2/PC', 'JRC1/PC')]}}
-
 
 # grid searches
 ###############
@@ -65,5 +65,5 @@ results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit
 #                                     init_kwargs={'solver': 'euler', 'backend': 'tensorflow'}, profile='t',
 #                                     )
 
-#results.plot()
-#plt.show()
+results.plot()
+plt.show()
