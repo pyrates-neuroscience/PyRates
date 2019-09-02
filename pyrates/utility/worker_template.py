@@ -121,7 +121,7 @@ def main(_):
     t0 = time.time()
 
     # grid_search returns an unsorted DataFrame yielding results for all parameter combinations in param_grid
-    results, _t, _ = grid_search(
+    results, param_dict, t_ = grid_search(
         circuit_template=circuit_template,
         param_grid=param_grid,
         param_map=param_map,
@@ -134,7 +134,7 @@ def main(_):
         init_kwargs=init_kwargs,
         profile='t',
         build_dir=build_dir,
-        decorator=njit,
+        njit=True,
         parallel=False)
 
     out_vars = results.columns.levels[-1]

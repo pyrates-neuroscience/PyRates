@@ -113,15 +113,15 @@ def test_cluster_compute(tmp_path):
     circuit_template = "model_templates.jansen_rit.simple_jansenrit.JRC"
     dt = 1e-3
     sim_time = 1.0
-    param_map = {'u': {'vars': ['RPO_e_pc.0/u'],
-                       'nodes': ['PC.0']}}
+    param_map = {'u': {'vars': ['RPO_e_pc/u'],
+                       'nodes': ['PC']}}
 
     # Create param_grid file
     u = np.linspace(100, 400, 10)
     param_grid = {'u': u}
     param_grid = linearize_grid(param_grid, permute=False)
 
-    output = {'r': 'PC.0/PRO.0/m_out'}
+    output = {'r': 'PC/PRO/m_out'}
     cgs = ClusterGridSearch(nodes=nodes, compute_dir=tmp_path)
     res_file = cgs.run(
         circuit_template=circuit_template,
@@ -139,7 +139,6 @@ def test_cluster_compute(tmp_path):
         config_kwargs={
             "init_kwargs": {
                 'backend': 'numpy',
-                'vectorization': 'nodes',
                 'solver': 'euler'
             }
         })

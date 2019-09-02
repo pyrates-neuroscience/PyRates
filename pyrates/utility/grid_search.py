@@ -1099,7 +1099,7 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
                     if op in circuit[node]:
                         circuit[node].values[op][var_name] = float(val)
                 else:
-                    for op in circuit[node]:
+                    for op, _ in circuit[node]:
                         try:
                             circuit[node].values[op][var] = float(val)
                         except KeyError:
