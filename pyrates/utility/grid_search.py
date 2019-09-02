@@ -118,8 +118,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
     # assign parameter updates to each circuit, combine them to unconnected network and remember their parameters
     circuit = CircuitIR()
-    param_mapping = {}
-    for idx in range(N):
+    circuit_names = []
+    for idx in param_grid.index:
         new_params = {}
         for key in param_keys:
             new_params[key] = param_grid[key][idx]
@@ -127,7 +127,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         circuit_key = f'{circuit_tmp.label}_{idx}'
         circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
         circuit.add_circuit(circuit_key, circuit_tmp)
-        param_mapping[circuit_key] = new_params.copy()
+        circuit_names.append(circuit_key)
+    param_grid.index = circuit_names
 
     # create backend graph
     net = circuit.compile(dt=dt, vectorization=vectorization, **init_kwargs)
@@ -151,8 +152,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         results, duration = results
 
     if 'profile' in kwargs:
-        return results, param_mapping, duration
-    return results, param_mapping
+        return results, param_grid, duration
+    return results, param_grid
 
 
 class ClusterCompute:
@@ -1062,7 +1063,7 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
                     if op in circuit[node]:
                         circuit[node].values[op][var_name] = float(val)
                 else:
-                    for op in circuit[node]:
+                    for op, _ in circuit[node]:
                         try:
                             circuit[node].values[op][var] = float(val)
                         except KeyError:

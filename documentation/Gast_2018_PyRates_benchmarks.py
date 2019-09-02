@@ -72,11 +72,11 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
             for k in range(C.shape[0]):
                 if c_sum[k] != 0.:
                     C[k, :] /= c_sum[k]
-            conns = DataFrame(C, columns=[f'jrc_{idx}/PC/PRO/m_out' for idx in range(n)])
+            conns = DataFrame(np.round(C, 3), columns=[f'jrc_{idx}/PC/PRO/m_out' for idx in range(n)])
             conns.index = [f'jrc_{idx}/PC/RPO_e_pc/m_in' for idx in range(n)]
 
             # define input
-            inp = 220 + np.random.randn(int(T / dt), n) * 22.
+            inp = 220 + np.asarray(np.random.randn(int(T / dt), n), dtype=np.float32) * 22.
 
             # set up template
             template = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC")
@@ -93,7 +93,7 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
             print("Starting the benchmark simulation...")
 
             # run simulations
-            _, t = net.run(T, inputs={'all/PC/RPO_e_pc/u': inp}, outputs={'V': 'all/PC/PRO/PSP'}, verbose=False,
+            _, t = net.run(T, inputs={'all/PC/RPO_e_pc/u': inp}, outputs={'V': 'all/PC/OBS/V'}, verbose=False,
                            **run_kwargs)
             times[i, j] = t
 
@@ -108,7 +108,7 @@ dt = 1e-4                                       # integration step-size of the f
 T = 1.0                                         # simulation time in s
 c = 1.                                          # global connection strength scaling
 N = np.round(2**np.arange(8))[::-1]             # network sizes, each of which will be run a benchmark for
-p = np.linspace(0.0, 1.0, 5)                    # global coupling probabilities to run benchmarks for
+p = np.linspace(0.1, 1.0, 5)                    # global coupling probabilities to run benchmarks for
 use_gpu = False                                 # if false, benchmarks will be run on CPU
 n_reps = 1                                      # number of trials per benchmark
 
