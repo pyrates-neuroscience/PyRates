@@ -11,7 +11,7 @@ import tensorflow as tf
 from numba import njit, config
 
 # threading configs
-# config.THREADING_LAYER = 'tbb'
+config.THREADING_LAYER = 'tbb'
 # os.environ["KMP_BLOCKTIME"] = '0'
 # os.environ["KMP_SETTINGS"] = 'true'
 # os.environ["KMP_AFFINITY"] = 'granularity=fine,verbose,compact,1,0'
@@ -72,8 +72,6 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
             for k in range(C.shape[0]):
                 if c_sum[k] != 0.:
                     C[k, :] /= c_sum[k]
-            conns = DataFrame(np.round(C, 3), columns=[f'jrc_{idx}/PC/PRO/m_out' for idx in range(n)])
-            conns.index = [f'jrc_{idx}/PC/RPO_e_pc/m_in' for idx in range(n)]
 
             # define input
             inp = 220 + np.random.randn(int(T / dt), n) * 22.
@@ -85,7 +83,9 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
             circuits = {}
             for idx in range(n):
                 circuits[f'jrc_{idx}'] = deepcopy(template)
-            circuit = CircuitIR.from_circuits(label='net', circuits=circuits, connectivity=conns)
+            circuit = CircuitIR.from_circuits(label='net', circuits=circuits)
+            circuit.add_edges_from_matrix(source_var="PRO/m_out", target_var="RPO_e_pc/m_in",
+                                          nodes=[f'jrc_{idx}/PC' for idx in range(n)], weight=C)
 
             # set up compute graph
             net = circuit.compile(dt=dt, **init_kwargs)
@@ -107,8 +107,8 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
 dt = 1e-4                                       # integration step-size of the forward euler solver in s
 T = 1.0                                         # simulation time in s
 c = 1.                                          # global connection strength scaling
-N = np.round(2**np.arange(10))[::-1]            # network sizes, each of which will be run a benchmark for
-p = np.linspace(0.0, 1.0, 5)                    # global coupling probabilities to run benchmarks for
+N = np.round(2**np.arange(10))[::-1]             # network sizes, each of which will be run a benchmark for
+p = np.linspace(0.9, 1.0, 3)                    # global coupling probabilities to run benchmarks for
 use_gpu = False                                 # if false, benchmarks will be run on CPU
 n_reps = 1                                      # number of trials per benchmark
 
@@ -117,7 +117,7 @@ results = np.zeros((len(N), len(p), n_reps))                                # ar
 for i in range(n_reps):
     print(f'Starting benchmark simulation run # {i}...')
     t = benchmark(N, p, T, dt,
-                  init_kwargs={'vectorization': True, 'backend': 'tensorflow', 'solver': 'euler'},
+                  init_kwargs={'vectorization': True, 'backend': 'numpy', 'solver': 'euler'},
                   run_kwargs={'profile': 't',
                               'sampling_step_size': 1e-3},
                   disable_gpu=False if use_gpu else True)                   # benchmarks simulation times and memory

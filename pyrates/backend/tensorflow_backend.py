@@ -171,7 +171,7 @@ class TensorflowBackend(NumpyBackend):
                          "%": {'name': "tensorflow_modulo", 'call': "tf.mod"},
                          "^": {'name': "tensorflow_power", 'call': "tf.pow"},
                          "**": {'name': "tensorflow_power", 'call': "tf.pow"},
-                         "@": {'name': "tensorflow_dot", 'call': "tf.dot"},
+                         "@": {'name': "tensorflow_dot", 'call': "tf.matmul"},
                          ".T": {'name': "tensorflow_transpose", 'call': "tf.transpose"},
                          ".I": {'name': "tensorflow_invert", 'call': "tf.invert"},
                          ">": {'name': "tensorflow_greater", 'call': "tf.greater"},
@@ -397,7 +397,14 @@ class TensorflowBackend(NumpyBackend):
     def _compare_shapes(op1: Any, op2: Any) -> bool:
 
         if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
-            return tuple(op1.shape) == tuple(op2.shape)
+            if tuple(op1.shape) == tuple(op2.shape):
+                return True
+            elif len(op1.shape) > 1 and len(op2.shape) > 1 and tuple(op1.shape)[0] == tuple(op2.shape)[0]:
+                return True
+            elif len(op1.shape) == 0 and len(op2.shape) == 0:
+                return True
+            else:
+                return False
         if hasattr(op1, 'shape'):
             return len(tuple(op1.shape)) == 0
         if hasattr(op2, 'shape'):

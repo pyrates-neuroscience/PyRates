@@ -162,7 +162,7 @@ class CircuitIR(AbstractBaseIR):
         # collect references to op_graph in node
         self._collect_references(node)
 
-    def add_edges_from(self, edges, **attr):
+    def add_edges_from(self, edges: list, **attr):
         """ Add multiple edges. This method explicitly assumes, that edges are given in edge_templates instead of
         existing instances of `EdgeIR`.
 
@@ -212,6 +212,66 @@ class CircuitIR(AbstractBaseIR):
             self._collect_references(edge_ir)
 
         self.graph.add_edges_from(edge_list, **attr)
+
+    def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None, **attr
+                              ):
+        """
+
+        Parameters
+        ----------
+        source_var
+        target_var
+        nodes
+        weight
+        delay
+        attr
+
+        Returns
+        -------
+
+        """
+
+        # construct edge attribute dictionary from arguments
+        ####################################################
+
+        # weights and delays
+        if weight is None:
+            weight = 1.0
+        edge_attributes = {'weight': weight, 'delay': delay}
+
+        # add rest of the attributes
+        edge_attributes.update(attr)
+
+        # construct edges list
+        ######################
+
+        # find out which edge attributes have been passed as matrices
+        matrix_attributes = {}
+        for key, attr in edge_attributes.copy().items():
+            if hasattr(attr, 'shape') and len(attr.shape) >= 2:
+                matrix_attributes[key] = edge_attributes.pop(key)
+
+        # create edge list
+        edges = []
+
+        for i, source in enumerate(nodes):
+            for j, target in enumerate(nodes):
+
+                edge_attributes_tmp = {}
+
+                # extract edge attribute value from matrices
+                for key, attr in matrix_attributes.items():
+                    edge_attributes_tmp[key] = attr[i, j]
+
+                # add remaining attributes
+                edge_attributes_tmp.update(edge_attributes.copy())
+
+                # add edge to list
+                if edge_attributes_tmp['weight']:
+                    edges.append((f"{source}/{source_var}", f"{target}/{target_var}", edge_attributes_tmp))
+
+        # add edges to network
+        self.add_edges_from(edges)
 
     def add_edge(self, source: str, target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
                  identify_relations=True,
@@ -320,7 +380,7 @@ class CircuitIR(AbstractBaseIR):
         return self.graph.edges
 
     @classmethod
-    def from_circuits(cls, label: str, circuits: dict, connectivity: Union[list, tuple, DataFrame] = None):
+    def from_circuits(cls, label: str, circuits: dict):
         """Circuit creation method that takes multiple circuits (templates or instances of `CircuitIR`) as inputs to
         create one larger circuit out of these. With additional `connectivity` information, these circuit can directly
         be interlinked.
@@ -334,14 +394,6 @@ class CircuitIR(AbstractBaseIR):
             `CircuitTemplate` or `CircuitIR`. Alternatively, a circuit template may also be given via a sub-dictionary
             with keys `template` and `values`, where `values` is a dictionary of variable value updates for the given
             template.
-        connectivity
-            Optional `list`, `tuple` or `pandas.DataFrame' with connectivity information to create edges between the
-            given circuits. If `list` or `tuple`, then each item must be formatted the same way as `edges` in
-            `add_edges_from`: ('circuit/source_node/op/var', 'circuit/target_node/op/var', edge_template, variables).
-            If given as a `DataFrame`, keys (indices and column names) must refer to sources and targets, respectively,
-            as column name/index (string of form 'circuit/node/op/var') and items may then be edge templates and
-            associated variables.
-            Empty cells in the DataFrame should be filled with something 'falsy' (as in evaluates to `False` in Python).
 
         Returns
         -------
@@ -353,44 +405,6 @@ class CircuitIR(AbstractBaseIR):
         circuit = cls(label, nodes={}, edges=[])
         for name, circ in circuits.items():
             circuit.add_circuit(name, circ)
-
-        if connectivity is not None:
-            if isinstance(connectivity, list) or isinstance(connectivity, tuple):
-                circuit.add_edges_from(connectivity)
-            else:
-                try:
-                    if isinstance(connectivity, dict):
-                        key, conn_info = connectivity.popitem()
-                        for target, row in conn_info.iterrows():
-                            for source, content in row.iteritems():
-                                snode, tnode = source.split('/')[:-2], target.split('/')[:-2]
-                                svar, tvar = source.split('/')[-2:], target.split('/')[-2:]
-                                snode, tnode = "/".join(snode), "/".join(tnode)
-                                svar, tvar = "/".join(svar), "/".join(tvar)
-                                content = {key: content} if content else {}
-                                for key_tmp, conn_info_tmp in connectivity.items():
-                                    content_tmp = conn_info_tmp.loc[target, source]
-                                    if content_tmp:
-                                        content.update({key_tmp: content_tmp})
-                                content.update({'source_var': svar, 'target_var': tvar})
-                                if 'weight' in content and content['weight']:
-                                    circuit.add_edge(snode, tnode, edge_ir=None, identify_relations=False,
-                                                     **content)
-                    else:
-                        for target, row in connectivity.iterrows():
-                            for source, content in row.iteritems():
-                                if content:  # assumes, empty entries evaluate to `False`
-                                    snode, tnode = source.split('/')[:-2], target.split('/')[:-2]
-                                    svar, tvar = source.split('/')[-2:], target.split('/')[-2:]
-                                    snode, tnode = "/".join(snode), "/".join(tnode)
-                                    svar, tvar = "/".join(svar), "/".join(tvar)
-                                    if "float" in str(type(content)):
-                                        content = {'weight': content, 'delay': None}
-                                    content.update({'source_var': svar, 'target_var': tvar})
-                                    circuit.add_edge(snode, tnode, edge_ir=None, identify_relations=False, **content)
-                except AttributeError:
-                    raise TypeError(f"Invalid data type of variable `connectivity` (type: {type(connectivity)}).")
-
         return circuit
 
     def add_circuit(self, label: str, circuit):
@@ -1032,6 +1046,7 @@ class CircuitIR(AbstractBaseIR):
                 backend: str = 'numpy',
                 solver: str = 'euler',
                 float_precision: str = 'float32',
+                matrix_sparseness: float = 0.5,
                 **kwargs
                 ) -> AbstractBaseIR:
         """Parses IR into the backend.
@@ -1101,19 +1116,32 @@ class CircuitIR(AbstractBaseIR):
                 tidx = list(delay)
 
             # create mapping equation and its arguments
+            args = {}
+            dtype = sval["dtype"]
             d = "[target_idx]" if tidx else ""
             idx = "[source_idx]" if sidx else ""
             assign = '+=' if add_project else '='
-            eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
-            args = {}
-            dtype = sval["dtype"]
+
+            dot_weights = False
+            if delay is None and len(tval['shape']) < 2 and len(sval['shape']) < 2 and sval['shape'][0] > 1:
+                weight_mat = np.zeros((tval['shape'][0], sval['shape'][0]), dtype=np.float32)
+                if not tidx:
+                    tidx = [0 for _ in range(len(sidx))]
+                for row, col, w in zip(tidx, sidx, weight):
+                    weight_mat[row, col] = w
+                if np.mean(weight_mat.flatten() == 0.0) < matrix_sparseness:
+                    eq = f"{tvar} {assign} weight @ {svar}"
+                    weight = weight_mat
+                    dot_weights = True
+            if not dot_weights:
+                eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
+                if tidx:
+                    args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                          'value': np.array(tidx, dtype=np.int32)}
+                if sidx:
+                    args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                          'value': np.array(sidx, dtype=np.int32)}
             args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
-            if tidx:
-                args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                      'value': np.array(tidx, dtype=np.int32)}
-            if sidx:
-                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                      'value': np.array(sidx, dtype=np.int32)}
             args[tvar] = tval
 
             # add edge operator to target node

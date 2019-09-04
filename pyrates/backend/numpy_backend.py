@@ -1634,11 +1634,11 @@ class NumpyBackend(object):
             op_adjust = op1
             op_target = op2
 
-        if len(op_target.shape) > len(op_adjust.shape) and 1 in op_target.shape:
+        if len(op_target.shape) > len(op_adjust.shape):
 
             # add axis to op_adjust
             target_shape = op_target.shape
-            idx = list(target_shape).index(1)
+            idx = list(target_shape).index(1) if 1 in op_target.shape else len(target_shape) - 1
             op_adjust = self.add_op('expand', op_adjust, idx)
 
         elif (len(op_adjust.shape) > len(op_target.shape) and 1 in op_adjust.shape) or \

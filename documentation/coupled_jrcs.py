@@ -26,12 +26,12 @@ import matplotlib.pyplot as plt
 
 # general parameters
 dt = 1e-4                                                       # integration step-size of the forward euler solver in s
-T = 20.0                                                        # overall simulation time in s
+T = 1.0                                                        # overall simulation time in s
 inp1 = np.random.uniform(120., 320., (int(T/dt), 1))            # white noise input to the pyramidal cells in Hz.
 inp2 = np.random.uniform(120., 320., (int(T/dt), 1))
 
 N = 10                                                          # grid-size
-C = np.linspace(0., 1., N)                                      # bi-directional connection strength
+C = np.linspace(0., 100., N)                                      # bi-directional connection strength
 D = np.linspace(0., 5e-2, N)                                    # bi-directional coupling delay
 
 # parameter grid
@@ -64,18 +64,20 @@ results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit
 #                                     init_kwargs={'solver': 'euler', 'backend': 'tensorflow'}, profile='t',
 #                                     )
 
+results.plot()
+
 # coherence evaluation
 ######################
 
-coherences = np.zeros((len(C), len(D)))
-for circuit_name in param_map.index:
-
-    results_tmp = results[circuit_name]
-    fc = functional_connectivity(results_tmp, metric='coh', fmin=8.0, fmax=12.0, faverage=True, tmin=1.0, verbose=False)
-    row = np.argwhere(C == param_map.loc[circuit_name, 'C'])
-    col = np.argwhere(D == param_map.loc[circuit_name, 'D'])
-    coherences[row, col] = fc[1, 0]
-
-plt.matshow(coherences)
-plt.tight_layout()
+# coherences = np.zeros((len(C), len(D)))
+# for circuit_name in param_map.index:
+#
+#     results_tmp = results[circuit_name]
+#     fc = functional_connectivity(results_tmp, metric='coh', fmin=8.0, fmax=12.0, faverage=True, tmin=1.0, verbose=False)
+#     row = np.argwhere(C == param_map.loc[circuit_name, 'C'])
+#     col = np.argwhere(D == param_map.loc[circuit_name, 'D'])
+#     coherences[row, col] = fc[1, 0]
+#
+# plt.matshow(coherences)
+# plt.tight_layout()
 plt.show()

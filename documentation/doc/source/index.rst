@@ -16,21 +16,18 @@ Among its core features are:
 * Output are easily visualized via _seaborn and _mnepython
 * Functionalities for multi-dimensional parameter sweeps on single machines and clusters are provided
 
-Example
--------
-Building a model and simulating its behavior via PyRates can look as simple as in the cell below::
-
-	from pyrates.backend import ComputeGraph
-	
-	net = ComputeGraph('model_templates.montbrio.simple_montbrio.Net1', 
-			   backend='numpy',
-			   dt=dt) 
-	results = net.run(simulation_time=10.0, outputs={'r': 'Pop1.0/Op_e.0/r'})
-	results.plot()
-
 Installation
 ------------
 
+PyRates requires an installation of Python >=3.6.1. We recommend to install PyRates into a separate virtual environment.
+If using `Anaconda`, such a virtual environment can be set up via the command line::
+
+	conda create -n pyrates python>=3.6.1
+
+And activated by calling::
+
+	conda activate pyrates
+  
 PyRates can either be installed via `pip`::
 
 	pip install pyrates
@@ -38,6 +35,36 @@ PyRates can either be installed via `pip`::
 Or via the `setup.py` provided on `GitHub <https://github.com/pyrates-neuroscience/PyRates>`::
 
 	python setup.py install
+
+This installation contains merely the minimum of required Python packages to build and run models in PyRates. 
+Additional packages that may be installed include:
+
+* matplotlib (for visualization)
+* seaborn (for visualization)
+* mne (for visualization and post-processing)
+* tensorflow2.0 (for an alternative backend with GPU support)
+* paramiko and h5py (for cluster computation support)
+* numba (for CPU parallelization and just-in-time compilation of simulations via the NumPy backend)
+
+All of these packages are available at `PyPI` and can thus be installed via::
+
+	pip install <name>
+
+HowTo
+-----
+
+Here, we provide examples of how to use the major user interfaces and links to instructive jupyter notebooks on our github repository.
+
+.. toctree::
+   :maxdepth: 4
+
+   minimal_example
+   model_setup
+   simulations
+   parameter_sweeps
+   model_optimization
+   visualization
+   post_processing
 
 Contents
 --------
