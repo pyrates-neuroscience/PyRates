@@ -32,7 +32,8 @@
 # external imports
 import pandas as pd
 import numpy as np
-from typing import Optional, Union, Tuple
+from typing import Optional, Union
+from copy import deepcopy
 
 # system imports
 import os
@@ -41,7 +42,6 @@ import json
 import time as t
 import glob
 import getpass
-from shutil import copy2
 from pathlib import Path
 from datetime import datetime
 from threading import Thread, currentThread, RLock
@@ -123,7 +123,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         new_params = {}
         for key in param_keys:
             new_params[key] = param_grid[key][idx]
-        circuit_tmp = circuit_template.apply()
+        circuit_tmp = deepcopy(circuit_template).apply()
         circuit_key = f'{circuit_tmp.label}_{idx}'
         circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
         circuit.add_circuit(circuit_key, circuit_tmp)

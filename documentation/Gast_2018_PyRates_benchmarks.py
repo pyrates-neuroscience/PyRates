@@ -11,15 +11,15 @@ import tensorflow as tf
 from numba import njit, config
 
 # threading configs
-config.THREADING_LAYER = 'tbb'
-os.environ["KMP_BLOCKTIME"] = '0'
-os.environ["KMP_SETTINGS"] = 'true'
-os.environ["KMP_AFFINITY"] = 'granularity=fine,verbose,compact,1,0'
-os.environ["OMP_NUM_THREADS"] = '1'
-tf.config.threading.set_inter_op_parallelism_threads(7)
-tf.config.threading.set_intra_op_parallelism_threads(1)
-tf.config.optimizer.set_jit(True)
-tf.config.experimental.set_synchronous_execution(False)
+# config.THREADING_LAYER = 'tbb'
+# os.environ["KMP_BLOCKTIME"] = '0'
+# os.environ["KMP_SETTINGS"] = 'true'
+# os.environ["KMP_AFFINITY"] = 'granularity=fine,verbose,compact,1,0'
+# os.environ["OMP_NUM_THREADS"] = '1'
+# tf.config.threading.set_inter_op_parallelism_threads(7)
+# tf.config.threading.set_intra_op_parallelism_threads(1)
+# tf.config.optimizer.set_jit(True)
+# tf.config.experimental.set_synchronous_execution(False)
 #tf.debugging.set_log_device_placement(True)
 
 
@@ -76,7 +76,7 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
             conns.index = [f'jrc_{idx}/PC/RPO_e_pc/m_in' for idx in range(n)]
 
             # define input
-            inp = 220 + np.asarray(np.random.randn(int(T / dt), n), dtype=np.float32) * 22.
+            inp = 220 + np.random.randn(int(T / dt), n) * 22.
 
             # set up template
             template = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC")
@@ -107,8 +107,8 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
 dt = 1e-4                                       # integration step-size of the forward euler solver in s
 T = 1.0                                         # simulation time in s
 c = 1.                                          # global connection strength scaling
-N = np.round(2**np.arange(8))[::-1]             # network sizes, each of which will be run a benchmark for
-p = np.linspace(0.1, 1.0, 5)                    # global coupling probabilities to run benchmarks for
+N = np.round(2**np.arange(10))[::-1]            # network sizes, each of which will be run a benchmark for
+p = np.linspace(0.0, 1.0, 5)                    # global coupling probabilities to run benchmarks for
 use_gpu = False                                 # if false, benchmarks will be run on CPU
 n_reps = 1                                      # number of trials per benchmark
 
