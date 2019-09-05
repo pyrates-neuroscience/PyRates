@@ -752,8 +752,6 @@ class NumpyBackend(object):
         Name of the backend instance. Used during code generation to create a recognizable file structure.
     float_default_type
         Default float precision. If no data-type is indicated for a particular variable, this will be used.
-    jit_compile
-        If true, all backend functions will be attempted to be build with optimized `jit` decorators.
     imports
         Can be used to pass additional import statements that are needed for code generation of the custom functions
         provided via `ops`. Will be added to the top of each generated code file.
@@ -766,9 +764,8 @@ class NumpyBackend(object):
                  name: str = 'net_0',
                  float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
-                 jit_compile: bool = False,
                  ) -> None:
-        """Instantiates tensorflow backend, i.e. a tensorflow graph.
+        """Instantiates numpy backend, i.e. a compute graph with numpy operations.
         """
 
         super().__init__()
@@ -865,7 +862,6 @@ class NumpyBackend(object):
         self._build_dir = ""
         self._float_def = self.dtypes[float_default_type]
         self.name = name
-        self._rt_optimization = jit_compile
         self._base_layer = 0
         self._output_layer_added = False
         self._input_layer_added = False
@@ -880,9 +876,9 @@ class NumpyBackend(object):
             outputs: dict,
             sampling_steps: Optional[int] = None,
             out_dir: Optional[str] = None,
-            profile: Optional[str] = None,
+            profile: bool = False,
             **kwargs
-            ) -> Union[dict, Tuple[dict, float, float]]:
+            ) -> tuple:
         """Executes all operations in the backend graph for a given number of steps.
 
         Parameters
@@ -896,20 +892,17 @@ class NumpyBackend(object):
         out_dir
             Directory to write the session log into.
         profile
-            Can be used to extract information about graph execution time and memory load. Can be:
-            - `t` for returning the total graph execution time.
-            - `m` for returning the peak memory consumption during graph excecution.
-            - `mt` or `tm` for both
+            If true, the total graph execution time will be printed and returned.
 
         Returns
         -------
-        Union[Dict[str, tf.Variable], Tuple[dict, float, float]]
+        Union[Tuple[Dict[str, tf.Variable]], Tuple[dict, float]]
             If `profile` was requested, a tuple is returned that contains
                 1) the results dictionary
-                2) the simulation time if `t` was requested, else None.
-                3) the peak memory consumption if `m` was requested, else None.
-            If not, only the results dictionary is returned which contains a numpy array with results for each
-            output key that was provided via `outputs`.
+                2) the simulation time.
+            If not, a tuple containing only the results dictionary is returned which contains a numpy array with results
+             for each output key that was provided via `outputs`. This allows to call the run functioon like this:
+             `output, *time = run(*args, **kwargs)`
 
         """
 
@@ -925,12 +918,7 @@ class NumpyBackend(object):
             pass
 
         # initialize profiler
-        if profile is None:
-            profile = ''
-        if 'm' in profile:
-            # TODO: implement memory tracker
-            time_and_memory = None
-        if 't' in profile:
+        if profile:
             t0 = t.time()
 
         # graph execution
@@ -952,18 +940,11 @@ class NumpyBackend(object):
             outputs[key] = var.numpy() if hasattr(var, 'numpy') else var.eval()
 
         # store profiling results
-        if 't' in profile:
-            sim_time = t.time() - t0
-        else:
-            sim_time = 0.
-        if 'm' in profile:
-            peak_memory = 'much'
-        else:
-            peak_memory = 0.
-
         if profile:
-            return outputs, sim_time, peak_memory
-        return outputs
+            sim_time = t.time() - t0
+            return outputs, sim_time
+
+        return (outputs,)
 
     def add_var(self,
                 vtype: str,

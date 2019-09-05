@@ -53,9 +53,6 @@ class ComputeGraph(object):
         nodes together in a vector, `full` for full vectorization of the network, or `None` for no vectorization.
     name
         Name of the network.
-    build_in_place
-        If False, a copy of the `net_config``will be made before compute graph creation. Should be used, if the
-        `net_config` will be re-used for multiple compute graphs.
     backend
         Backend in which to build the compute graph.
     solver
@@ -68,7 +65,6 @@ class ComputeGraph(object):
                 dt: float = 1e-3,
                 vectorization: bool = True,
                 name: Optional[str] = 'net0',
-                build_in_place: bool = True,
                 backend: str = 'numpy',
                 solver: str = 'euler',
                 float_precision: str = 'float32',
@@ -81,4 +77,4 @@ class ComputeGraph(object):
             net_config = net_config.apply()
 
         return net_config.compile(dt=dt, vectorization=vectorization, backend=backend, solver=solver,
-                                  float_precision=float_precision, build_in_place=build_in_place, **kwargs)
+                                  float_precision=float_precision, **kwargs)
