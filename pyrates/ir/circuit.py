@@ -997,7 +997,7 @@ class CircuitIR(AbstractBaseIR):
                     elif (var_shape % in_shape) == 0:
                         input_col.append((np.tile(val, (1, var_shape)), var_info['var'], var_idx))
                     else:
-                        input_col.append((np.reshape(val, (sim_steps,) + var_shape), var_info['var'], var_idx))
+                        input_col.append((np.reshape(val, (sim_steps, var_shape)), var_info['var'], var_idx))
 
             self._backend.add_input_layer(inputs=input_col)
 
@@ -1172,7 +1172,7 @@ class CircuitIR(AbstractBaseIR):
             # check whether edge projection can be solved by a simple inner product between a weight matrix and the
             # source variables
             dot_edge = False
-            if delay is None and len(tval['shape']) < 2 and len(sval['shape']) < 2 and sval['shape'][0] > 1:
+            if delay is None and len(tval['shape']) < 2 and len(sval['shape']) < 2 and len(sidx) > 1:
 
                 weight_mat = np.zeros((tval['shape'][0], sval['shape'][0]), dtype=np.float32)
                 if not tidx:
