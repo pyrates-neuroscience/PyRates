@@ -213,7 +213,7 @@ def welch(data, tmin=0., tmax=None, **kwargs):
         return np.NaN, np.NaN
 
 
-def fft(data, tmin=0.):
+def fft(data, tmin=0., **kwargs):
     """
 
     Parameters
@@ -237,7 +237,7 @@ def fft(data, tmin=0.):
         data_tmp = data_tmp - np.mean(data_tmp)
 
         freqs = np.linspace(0, 1 / dt, n_two)
-        spec = np.fft.fft(data_tmp, n=n_two, axis=0)
+        spec = np.fft.fft(data_tmp, n=n_two, axis=0, **kwargs)
 
         # Cut of PSD and frequency arrays since its mirrored at N/2
         spec = np.abs(spec[:int(len(spec) / 2)])

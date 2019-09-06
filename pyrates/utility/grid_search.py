@@ -42,7 +42,6 @@ import json
 import time as t
 import glob
 import getpass
-from shutil import copy2
 from pathlib import Path
 from datetime import datetime
 from threading import Thread, currentThread, RLock
@@ -149,10 +148,10 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
                       outputs=outputs,
                       sampling_step_size=sampling_step_size,
                       **kwargs)    # type: pd.DataFrame
+
+    # return results
     if 'profile' in kwargs:
         results, duration = results
-
-    if 'profile' in kwargs:
         return results, param_grid, duration
     return results, param_grid
 

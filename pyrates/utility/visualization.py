@@ -340,11 +340,8 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
 
     elif node_order:
 
-        idx_c = [int(np.where(fc.columns.values==n)[0]) for n in node_order]
-        idx_r = [int(np.where(fc.columns.values==n)[0]) for n in node_order]
-        # idx_c = [node_order.index(n) for n in fc.columns.values]
-        # idx_r = [node_order.index(n) for n in fc.columns.values]
-        # idx_r = [i for i in range(fc.shape[0])]
+        idx_c = [node_order.index(n) for n in fc.columns.values]
+        idx_r = [i for i in range(fc.shape[0])]
 
     else:
 
@@ -371,7 +368,7 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
             ax = sb.clustermap(data=fc, row_colors=node_colors, col_colors=node_colors, **kwargs)
         else:
             ax = sb.heatmap(fc, **kwargs)
-            # ax.invert_yaxis()
+        ax.invert_yaxis()
 
     elif plot_style == 'circular_graph':
 
@@ -774,8 +771,8 @@ def _draw_heatmap(*args, **kwargs):
 
 
 class Interactive2DParamPlot(object):
-    def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array, tmin=0.,
-                 **kwargs):
+    def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array,
+                 param_map: pd.DataFrame, tmin=0., **kwargs):
         """Creates an interactive 2D plot that allows visualization of time series using button press events
 
         Derive child class and change get_data() respectively to utilize this plotting method
@@ -787,9 +784,12 @@ class Interactive2DParamPlot(object):
         data_series
             DataFrame containing all data series used to crate the data map
         x_values
-            ndarray containing values used to access a column in data_series
+            ndarray containing values of data-map columns.
         y_values
-            ndarray containing values used to access a column in data_series
+            ndarray containing values of data-map rows.
+        param_map
+            Dataframe containing the mapping between data-series columns (index) and x/y value pairs (columns)
+            (as returned by `grid_search`).
         tmin
             Starting point for time-series plots in time units (float).
         kwargs
@@ -806,6 +806,14 @@ class Interactive2DParamPlot(object):
         self.y_values = y_values
         self.kwargs = kwargs
 
+        # set up param map matrix
+        self.map = np.zeros(shape=data_map.shape, dtype=np.int32)
+        for i in range(param_map.shape[0]):
+            x, y = param_map.iloc[i, 0], param_map.iloc[i, 1]
+            x_idx = np.argwhere(self.x_values == x)[0]
+            y_idx = np.argwhere(self.y_values == y)[0]
+            self.map[y_idx, x_idx] = i
+
         # Create canvas
         if 'subplots' in kwargs:
             self.fig, self.ax = kwargs.pop('subplots')
@@ -816,14 +824,17 @@ class Interactive2DParamPlot(object):
         self.marker = self.ax[0].plot(0, 0, 'x', color='white', markersize='10')
 
         # Plot 2D data in left subplot
+        num_x_ticks = kwargs.pop('num_x_ticks', 10)
+        num_y_ticks = kwargs.pop('num_y_ticks', 10)
         plot_connectivity(data_map, ax=self.ax[0], yticklabels=list(np.round(y_values, decimals=2)),
                           xticklabels=list(np.round(x_values, decimals=2)), **kwargs)
-        set_num_axis_ticks(ax=self.ax[0], num_x_ticks_old=data_map.shape[1], num_y_ticks_old=data_map.shape[0])
+        set_num_axis_ticks(ax=self.ax[0], num_x_ticks_old=data_map.shape[1], num_y_ticks_old=data_map.shape[0],
+                           num_x_ticks_new=num_x_ticks, num_y_ticks_new=num_y_ticks)
 
         # set up grid in right subplot
         self.ax[1].grid(visible=True, color="silver")
         x, y = self.x_values[0], self.y_values[0]
-        time_series = self.get_data(x, y)
+        time_series = self.get_data(0, 0)
         data_min, data_max = np.min(self.data.values), np.max(self.data.values)
         data_margin = (data_max - data_min) * 0.1
         cmap = create_cmap('pyrates_purple', as_cmap=False, n_colors=1, reverse=True)
@@ -854,14 +865,12 @@ class Interactive2DParamPlot(object):
         # Transform cursor coordinates in x and y values
         x_sample = event.xdata
         y_sample = event.ydata
-        x_value = self.x_values[int(x_sample)]
-        y_value = self.y_values[int(y_sample)]
 
         # Add marker at event coordinates
         self.marker = self.ax[0].plot(x_sample, y_sample, 'x', color='white', markersize='10')
 
         # Update serial plot
-        self.update_lineplot(x_value, y_value)
+        self.update_lineplot(int(x_sample), int(y_sample))
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
 
@@ -870,7 +879,7 @@ class Interactive2DParamPlot(object):
         line = self.ax[1].get_lines()[0]
         data = self.get_data(x, y)
         line.set_data(data.index, data.values)
-        self.ax[1].set_title(f'x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}')
+        self.ax[1].set_title(f'x: {np.round(self.x_values[x],decimals=2)}, y: {np.round(self.y_values[y],decimals=2)}')
         self.ax[1].autoscale_view()
 
     def set_map_xlabel(self, label):
@@ -888,20 +897,8 @@ class Interactive2DParamPlot(object):
     def set_series_ylabel(self, label):
         self.ax[1].set_ylabel(label)
 
-    def get_data(self, x_value, y_value, *argv, **kwargs):
-        """Virtual method
-
-        Derive a child class from Interactive2DParamPlotTemplate and rewrite this function to access data using
-        x_value, y_value und kwargs (accessible using self.kwargs[])
-
-        Example:
-            class Interactive2DParamPlot(Interactive2DParamPlotTemplate):
-
-                def get_data(self, x_value, y_value):
-                    return self.data[y_value][x_value][self.kwargs["param_1"]][self.kwargs["param_2"]]
-
-        """
-        return self.data[y_value][x_value]
+    def get_data(self, x, y, *argv, **kwargs):
+        return self.data.iloc[:, self.map[y, x]]
 
 
 def save_fig_as_pickle(fp, fig):
