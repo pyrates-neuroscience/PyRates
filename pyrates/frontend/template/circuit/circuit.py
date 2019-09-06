@@ -137,7 +137,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             delay = values.pop("delay", None)
 
             # treat empty dummy edge templates as not existent templates
-            if len(template.operators) == 0:
+            if template and len(template.operators) == 0:
                 template = None
             if template is None:
                 edge_ir = None

@@ -171,7 +171,7 @@ class TensorflowBackend(NumpyBackend):
                          "%": {'name': "tensorflow_modulo", 'call': "tf.mod"},
                          "^": {'name': "tensorflow_power", 'call': "tf.pow"},
                          "**": {'name': "tensorflow_power", 'call': "tf.pow"},
-                         "@": {'name': "tensorflow_dot", 'call': "tf.dot"},
+                         "@": {'name': "tensorflow_dot", 'call': "tf.matmul"},
                          ".T": {'name': "tensorflow_transpose", 'call': "tf.transpose"},
                          ".I": {'name': "tensorflow_invert", 'call': "tf.invert"},
                          ">": {'name': "tensorflow_greater", 'call': "tf.greater"},
@@ -247,6 +247,7 @@ class TensorflowBackend(NumpyBackend):
         if not self._compare_dtypes(op1, op2):
             op1, op2 = self._match_dtypes(op1, op2)
 
+        # broadcast shapes
         return super().broadcast(op1, op2, **kwargs)
 
     def get_var(self, name):
@@ -369,21 +370,45 @@ class TensorflowBackend(NumpyBackend):
         """Match data types of two operators/variables.
         """
 
+        # TODO: account for cases where one of the variables is simple integer or float.
         if issubclass(type(op1), tf.Variable):
+
             if issubclass(type(op2), tf.Variable):
+
+                # cast both variables to lowest precision
                 for acc in ["16", "32", "64", "128"]:
                     if acc in op1.dtype.name:
                         return op1, self.add_op('cast', op2, op1.dtype)
                     elif acc in op2.dtype.name:
                         return self.add_op('cast', op1, op2.dtype), op2
+
+            if type(op2) is int or type(op2) is float:
+
+                # transform op2 into constant tensor with dtype of op1
+                return op1, self.add_op('cast', tf.constant(op2), op1.dtype)
+
             return op1, self.add_op('cast', op2, op1.dtype)
+
         elif issubclass(type(op2), tf.Variable):
+
+            # transform op1 into constant tensor with dtype of op2
+            if type(op1) is int or type(op2) is float:
+                return self.add_op('cast', tf.constant(op1), op2.dtype), op2
+
             return self.add_op('cast', op1, op2.dtype), op2
+
         elif hasattr(op1, 'numpy') or type(op1) is np.ndarray:
+
+            # cast op2 to numpy dtype of op1
             return op1, self.add_op('cast', op2, op1.dtype)
+
         elif hasattr(op2, 'numpy') or type(op2) is np.ndarray:
+
+            # cast op1 to numpy dtype of op2
             return self.add_op('cast', op1, op2.dtype), op2
         else:
+
+            # cast op2 to dtype of op1 referred from its type string
             return op1, self.add_op('cast', op2, str(type(op1)).split('\'')[-2])
 
     def _run(self, layers, sampling_layer, steps, sampling_steps):
@@ -397,7 +422,14 @@ class TensorflowBackend(NumpyBackend):
     def _compare_shapes(op1: Any, op2: Any) -> bool:
 
         if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
-            return tuple(op1.shape) == tuple(op2.shape)
+            if tuple(op1.shape) == tuple(op2.shape):
+                return True
+            elif len(op1.shape) > 1 and len(op2.shape) > 1 and tuple(op1.shape)[1] == tuple(op2.shape)[0]:
+                return True
+            elif len(op1.shape) == 0 and len(op2.shape) == 0:
+                return True
+            else:
+                return False
         if hasattr(op1, 'shape'):
             return len(tuple(op1.shape)) == 0
         if hasattr(op2, 'shape'):
@@ -428,7 +460,9 @@ class TensorflowBackend(NumpyBackend):
             return True
         except (TypeError, ValueError, Exception):
             if hasattr(op1, 'dtype') and hasattr(op2, 'dtype'):
-                return op1.dtype == op2.dtype
+                dtype1 = op1.dtype.as_numpy_dtype if hasattr(op1.dtype, 'as_numpy_dtype') else op1.dtype
+                dtype2 = op2.dtype.as_numpy_dtype if hasattr(op2.dtype, 'as_numpy_dtype') else op2.dtype
+                return dtype1 == dtype2
             else:
                 return False
 
