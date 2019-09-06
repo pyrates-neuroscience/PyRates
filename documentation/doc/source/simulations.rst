@@ -102,3 +102,12 @@ When using the tensorflow backend, decorators are used in the backend automatica
 	config.threading.set_intra_op_parallelism_threads(2)
 
 Optimal settings depend strongly on the running system. For further tensorflow internal optimization options see https://www.tensorflow.org/guide/performance/overview.
+
+Finally, densely connected networks can benefit from their edge operations being realized via a vector product between an edge weight matrix and the source variables.
+This is done automatically in PyRates. However, it is only allowed for if the edge weight matrix is dense enough.
+The criterion for how much sparseness is allowed in edge weight matrices can be controlled via the `matrix_sparseness` keyword argument
+of the `CircuitIR.compile` method::
+
+    compute_graph = circuit.compile(backend='tensorflow', dt=dt, matrix_sparseness=0.8)
+
+Note, however, that this only affects edges with zero delays.
