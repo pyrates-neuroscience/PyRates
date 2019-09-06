@@ -31,21 +31,21 @@ for idx, C in enumerate(Cs):
             n += 1
 
     params = {'J_e': J_e, 'J_i': J_i, 'k_ei': k_ei, 'k_ie': k_ie}
-    param_map = {'J_e': {'var': [('Op_e.0', 'J')],
-                         'nodes': ['PC.0']},
-                 'J_i': {'var': [('Op_i.0', 'J')],
-                         'nodes': ['IIN.0']},
+    param_map = {'J_e': {'var': ['Op_e/J'],
+                         'nodes': ['PC']},
+                 'J_i': {'var': ['Op_i/J'],
+                         'nodes': ['IIN']},
                  'k_ei': {'var': [(None, 'weight')],
-                          'edges': [('PC.0', 'IIN.0', 0)]},
+                          'edges': [('PC/IIN', 0)]},
                  'k_ie': {'var': [(None, 'weight')],
-                          'edges': [('IIN.0', 'PC.0', 0)]}
+                          'edges': [('IIN', 'PC', 0)]}
                  }
 
     # perform simulation
-    results = grid_search(circuit_template="EI_circuit.Net",
-                          param_grid=params, param_map=param_map,
-                          inputs={("PC", "Op_e.0", "i_in"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
-                          dt=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
+    results, result_map = grid_search(circuit_template="EI_circuit.Net",
+                                      param_grid=params, param_map=param_map,
+                                      inputs={("PC", "Op_e", "i_in"): inp}, outputs={"r": ("PC", "Op_e", "r")},
+                                      dt=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
 
     # plotting
     cut_off = 1.

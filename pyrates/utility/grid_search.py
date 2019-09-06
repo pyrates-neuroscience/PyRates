@@ -33,6 +33,7 @@
 import pandas as pd
 import numpy as np
 from typing import Optional, Union, Tuple
+from copy import deepcopy
 
 # system imports
 import os
@@ -123,7 +124,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         new_params = {}
         for key in param_keys:
             new_params[key] = param_grid[key][idx]
-        circuit_tmp = circuit_template.apply()
+        circuit_tmp = deepcopy(circuit_template).apply()
         circuit_key = f'{circuit_tmp.label}_{idx}'
         circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
         circuit.add_circuit(circuit_key, circuit_tmp)
@@ -664,9 +665,11 @@ class ClusterGridSearch(ClusterCompute):
         # Create DataFrame for each output variable and write to global result file
         with pd.HDFStore(global_res_file, "a") as store:
             for key, value in res_dict.items():
-                if len(value) > 0:
+                if key != '/result_map' and len(value) > 0:
                     df = pd.concat(value, axis=1)
                     store.put(key=f'/Results/{key}', value=df)
+            result_map = pd.concat(res_dict['/result_map'], axis=0)
+            store.put(key=f'/Results/result_map', value=result_map)
 
         # Delete temporary local result files
         for file in temp_res_files:
@@ -972,7 +975,8 @@ class ClusterGridSearch(ClusterCompute):
 
     @staticmethod
     def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float,
-                          inputs: dict, outputs: dict, sampling_step_size: float, add_kwargs: dict):
+                          sampling_step_size: Optional[float], inputs: Optional[dict] = {},
+                          outputs: Optional[dict] = {},  add_kwargs: Optional[dict] = {}):
         """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
 
         Parameters
@@ -991,6 +995,9 @@ class ClusterGridSearch(ClusterCompute):
         -------
 
         """
+        if not sampling_step_size:
+            sampling_step_size = dt
+
         config_dict = {
             "circuit_template": circuit_template,
             "param_map": param_map,
@@ -999,8 +1006,14 @@ class ClusterGridSearch(ClusterCompute):
             "outputs": outputs,
             "sampling_step_size": sampling_step_size,
         }
-        if inputs:
-            config_dict["inputs"] = {str(*inputs.keys()): list(*inputs.values())}
+
+        # Check type of input since numpy arrays are not json serializable
+        config_dict['inputs'] = {}
+        for key, value in inputs.items():
+            if isinstance(value, np.ndarray):
+                config_dict["inputs"][key] = value.tolist()
+            else:
+                config_dict["inputs"][key] = value
         for key, value in add_kwargs.items():
             config_dict[key] = value
         with open(fp, "w") as f:

@@ -86,6 +86,8 @@ def main(_):
 
         try:
             inputs = global_config_dict['inputs']
+            for key, value in inputs.items():
+                inputs[key] = np.array(value)
         except KeyError:
             inputs = {}
 
@@ -121,7 +123,7 @@ def main(_):
     t0 = time.time()
 
     # grid_search returns an unsorted DataFrame yielding results for all parameter combinations in param_grid
-    results, param_dict, t_ = grid_search(
+    results, result_map, t_ = grid_search(
         circuit_template=circuit_template,
         param_grid=param_grid,
         param_map=param_map,
@@ -148,32 +150,30 @@ def main(_):
     t0 = time.time()
 
     with pd.HDFStore(local_res_file, "a") as store:
-
-        for out_var in out_vars:
-            res_lst = []
-
-            # Order results according to rows in parameter grid
-            ###################################################
-            # Iterate over rows in param_grid and use its values to index columns in results
-            for i, column_values in enumerate(param_grid.values):
-                result = results.loc[:, tuple([*column_values, out_var])].to_frame()
-
-                # Postprocess ordered results (optional)
-                ########################################
-
-                res_lst.append(result)
-
-            # Concatenate all DataFrame in res_lst to one global ordered DataFrame
-            result_ordered = pd.concat(res_lst, axis=1)
-
-            result_ordered.columns.names = results.columns.names
-
-            # Write DataFrames to local result file
-            #######################################
-
-            store.put(key=out_var, value=result_ordered)
-
-    # TODO: Copy local result file back to master if needed
+        store.put(key='results', value=results)
+        store.put(key='result_map', value=result_map)
+        # for out_var in out_vars:
+        #     res_lst = []
+        #
+        #     # Order results according to rows in parameter grid
+        #     ###################################################
+        #     # Iterate over rows in param_grid and use its values to index columns in results
+        #     for i, column in enumerate(result_map.index):
+        #         # TODO How to access the node names
+        #         result = results.loc[:, (column, 'PC')][out_var]
+        #
+        #         # Postprocess ordered results (optional)
+        #         ########################################
+        #         res_lst.append(result)
+        #
+        #     # Concatenate all DataFrame in res_lst to one global ordered DataFrame
+        #     result_ordered = pd.concat(res_lst, axis=1)
+        #     result_ordered.columns = result_map.index
+        #
+        #     # Write DataFrames to local result file
+        #     #######################################
+        #     store.put(key=out_var, value=result_ordered)
+        # store.put(key='result_map', value=result_map)
 
     print(f'Result files created. Elapsed time: {time.time()-t0:.3f} seconds')
     print("")
@@ -186,21 +186,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default=f'/nobackup/spanien1/salomon/CGS/Benchmark/Config/DefaultConfig_0.json',
+        default=f'/nobackup/spanien1/salomon/CGS/Holgado/Diseased_new_22/Config/DefaultConfig_0.json',
         help="File to load grid_search configuration parameter from"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default=f'/nobackup/spanien1/salomon/CGS/Benchmark/Grids/Subgrids/DefaultGrid_0/animals/animals_Subgrid_0.h5',
+        default=f'/nobackup/spanien1/salomon/CGS/Holgado/Diseased_new_22/Grids/Subgrids/DefaultGrid_0/animals/animals_Subgrid_0.h5',
         help="File to load parameter grid from"
     )
 
     parser.add_argument(
         "--local_res_file",
         type=str,
-        default=f'/nobackup/spanien1/salomon/WorkerTestData/simple_test_model/test_result.h5',
+        default=f'/data/hu_salomon/Documents/worker_test/test_result.h5',
         help="File to save results to"
     )
 

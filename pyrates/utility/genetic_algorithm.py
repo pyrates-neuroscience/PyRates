@@ -471,19 +471,24 @@ class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
     def eval_fitness(self, target: list, **kwargs):
         param_grid = self.pop.drop(['fitness', 'sigma'], axis=1)
 
-        results = grid_search(circuit_template=self.gs_config['circuit_template'],
-                              param_grid=param_grid,
-                              param_map=self.gs_config['param_map'],
-                              simulation_time=self.gs_config['simulation_time'],
-                              dt=self.gs_config['dt'],
-                              sampling_step_size=self.gs_config['sampling_step_size'],
-                              permute_grid=False,
-                              inputs=self.gs_config['inputs'],
-                              outputs=self.gs_config['outputs'].copy()
-                              )
+        results, result_map, _ = grid_search(circuit_template=self.gs_config['circuit_template'],
+                                             param_grid=param_grid.copy(),
+                                             param_map=self.gs_config['param_map'],
+                                             simulation_time=self.gs_config['simulation_time'],
+                                             dt=self.gs_config['dt'],
+                                             sampling_step_size=self.gs_config['sampling_step_size'],
+                                             permute_grid=False,
+                                             inputs=self.gs_config['inputs'].copy(),
+                                             outputs=self.gs_config['outputs'].copy(),
+                                             init_kwargs={
+                                                 'solver': 'euler',
+                                                 'backend': 'numpy'},
+                                             profile='t',
+                                             njit=True
+                                             )
 
-        for i, candidate_genes in enumerate(param_grid.values):
-            candidate_out = results.loc[:, tuple(candidate_genes)].values.T
+        for i, candidate_genes in enumerate(result_map.index):
+            candidate_out = results.loc[:, candidate_genes].values.T
             target_reshaped = np.array(target)[None, :]
             dist = self.fitness_measure(candidate_out, target_reshaped)
             self.pop.at[i, 'fitness'] = float(1 / dist)
