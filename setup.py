@@ -21,6 +21,14 @@ CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Topic :: Scientific/Engineering",
                ]
 
+EXTRAS = {"tf": ["tensorflow==2.0.0-rc0"],
+          "plot": ["seaborn", "pydot"],
+          "proc": ["mne", "scipy"],
+          "cluster": ["paramiko", "h5py"],
+          "numba": ["numba"]}
+
+EXTRAS["all"] = [item for sublist in EXTRAS.values() for item in sublist]
+
 with open("README.md", "r", encoding="utf8") as fh:
     DESCRIPTION = fh.read()
 
@@ -35,6 +43,7 @@ setup(name='pyrates',
       zip_safe=False,
       python_requires='>=3.6',
       install_requires=INSTALL_REQUIREMENTS,
+      extras_require=EXTRAS,
       classifiers=CLASSIFIERS,
       include_package_data=True  # include additional non-python files specified in MANIFEST.in
       )
