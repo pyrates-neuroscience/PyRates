@@ -30,12 +30,12 @@ T = 1.0                                                        # overall simulat
 inp1 = np.random.uniform(120., 320., (int(T/dt), 1))            # white noise input to the pyramidal cells in Hz.
 inp2 = np.random.uniform(120., 320., (int(T/dt), 1))
 
-N = 100                                                          # grid-size
+N = 110                                                          # grid-size
 C = np.linspace(0., 100., N)                                      # bi-directional connection strength
 D = np.linspace(0., 5e-2, N)                                    # bi-directional coupling delay
 
 # parameter grid
-params = {'C': C}
+params = {'C': C, 'D': D}
 param_map = {'C': {'vars': ['weight'],
                    'edges': [('JRC1/PC', 'JRC2/PC'), ('JRC2/PC', 'JRC1/PC')]},
              'D': {'vars': ['delay'],
@@ -51,7 +51,7 @@ results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit
                                             "JRC2/PC/RPO_e_pc/u": np.asarray(inp2, dtype=np.float32)},
                                     outputs={"v": "all/PC/OBS/V"},
                                     dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3,
-                                    init_kwargs={'solver': 'euler', 'backend': 'tensorflow', 'matrix_sparseness': 1.0},
+                                    init_kwargs={'solver': 'euler', 'backend': 'tensorflow', 'matrix_sparseness': 0.5},
                                     profile=True)
 
 # tensorflow backend grid-search

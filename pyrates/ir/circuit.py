@@ -1174,14 +1174,16 @@ class CircuitIR(AbstractBaseIR):
             dot_edge = False
             if delay is None and len(tval['shape']) < 2 and len(sval['shape']) < 2 and len(sidx) > 1:
 
-                weight_mat = np.zeros((tval['shape'][0], sval['shape'][0]), dtype=np.float32)
-                if not tidx:
-                    tidx = [0 for _ in range(len(sidx))]
-                for row, col, w in zip(tidx, sidx, weight):
-                    weight_mat[row, col] = w
+                n, m = tval['shape'][0], sval['shape'][0]
 
                 # check whether the weight matrix is dense enough for this edge realization to be efficient
-                if np.mean(weight_mat.flatten() == 0.0) < matrix_sparseness:
+                if len(weight)/(n*m) < matrix_sparseness:
+
+                    weight_mat = np.zeros((n, m), dtype=np.float32)
+                    if not tidx:
+                        tidx = [0 for _ in range(len(sidx))]
+                    for row, col, w in zip(tidx, sidx, weight):
+                        weight_mat[row, col] = w
 
                     # set up weights and edge projection equation
                     eq = f"{tvar} {assign} weight @ {svar}"
