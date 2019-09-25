@@ -625,7 +625,7 @@ def plot_network_graph(circuit, _format: str = "png", path: str = None, prog="do
 
     # check and format given path
     if path:
-        return write_graph(path, dot_graph, prog, **pydot_args)
+        return write_graph(path, dot_graph, _format, prog, **pydot_args)
 
     else:
         return show_graph(dot_graph, _format, prog, **pydot_args)
@@ -686,19 +686,20 @@ def plot_graph_with_subgraphs(circuit, _format: str = "png", path: str = None, p
     #
     # # check and format given path
     if path:
-        return write_graph(path, graph, prog, **pydot_args)
+        return write_graph(path, graph, _format, prog, **pydot_args)
 
     else:
         return show_graph(graph, _format, prog, **pydot_args)
 
 
-def write_graph(path, dot_graph, prog, **pydot_args):
+def write_graph(path, dot_graph, _format, prog, **pydot_args):
     """Write DOT graph to file.
 
     Parameters
     ----------
     path
     dot_graph
+    _format
     prog
     pydot_args
 
@@ -710,7 +711,7 @@ def write_graph(path, dot_graph, prog, **pydot_args):
     path = os.path.normpath(path)
 
     # draw graph and write to file, given the format
-    return dot_graph.write(path, format=format, prog=prog, **pydot_args)
+    return dot_graph.write(path, format=_format, prog=prog, **pydot_args)
 
 
 def show_graph(dot_graph, _format, prog, **pydot_args):
