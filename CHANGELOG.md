@@ -16,6 +16,4 @@
   get all nodes within that particular level. For example `mysubcircuit1/all/mynode` will get all nodes with label 
   `mynode` that are in one level of sub-circuits below `mysubcircuit`.
 - Tensorflow support now relies on the current 2.0 release candidate `tensorflow-2.0-rc`
-
-#### Further planned changes for this release
-- create light-weight version of `ComputeGraph` that only has the `run` method and get/set methods to adapt values.
+- Added optional install requirements via `extras_require` in setup.py 

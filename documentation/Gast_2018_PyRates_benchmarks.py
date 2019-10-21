@@ -104,8 +104,8 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
 dt = 1e-4                                       # integration step-size of the forward euler solver in s
 T = 1.0                                         # simulation time in s
 c = 1.                                          # global connection strength scaling
-N = np.round(2**np.arange(5))[::-1]             # network sizes, each of which will be run a benchmark for
-p = np.linspace(0.9, 1.0, 3)                    # global coupling probabilities to run benchmarks for
+N = np.round(2**np.arange(12))[::-1]            # network sizes, each of which will be run a benchmark for
+p = np.linspace(0.64, 0.65, 2)                  # global coupling probabilities to run benchmarks for
 use_gpu = False                                 # if false, benchmarks will be run on CPU
 n_reps = 1                                      # number of trials per benchmark
 
@@ -115,7 +115,7 @@ for i in range(n_reps):
     print(f'Starting benchmark simulation run # {i}...')
     t = benchmark(N, p, T, dt,
                   init_kwargs={'vectorization': True, 'backend': 'numpy', 'solver': 'euler',
-                               'matrix_sparseness': 1.0},
+                               'matrix_sparseness': 0.5},
                   run_kwargs={'profile': 't',
                               'sampling_step_size': 1e-3},
                   disable_gpu=False if use_gpu else True)                   # benchmarks simulation times and memory
