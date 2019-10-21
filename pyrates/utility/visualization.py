@@ -368,7 +368,7 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
             ax = sb.clustermap(data=fc, row_colors=node_colors, col_colors=node_colors, **kwargs)
         else:
             ax = sb.heatmap(fc, **kwargs)
-        ax.invert_yaxis()
+            # ax.invert_yaxis()
 
     elif plot_style == 'circular_graph':
 
