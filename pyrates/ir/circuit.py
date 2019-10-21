@@ -738,25 +738,28 @@ class CircuitIR(AbstractBaseIR):
         """
 
         # extract edges between source and target
-        edges = [(s, t, e) for s, t, e, _ in self.edges(source, target, keys=True)]
+        edges = [(s, t, e, d) for s, t, e, d in self.edges(source, keys=True, data=True) if t == target]
 
         # extract edges that connect the same variables on source and target
         ####################################################################
 
-        while edges:
+        idx = 0
+        while edges and idx < len(edges):
 
-            source_tmp, target_tmp, edge_tmp = edges[0]
+            source_tmp, target_tmp, edge_tmp, edge_data_tmp = edges.pop(idx)
 
             # get source and target variable
-            source_var = self.edges[source_tmp, target_tmp, edge_tmp]['source_var']
-            target_var = self.edges[source_tmp, target_tmp, edge_tmp]['target_var']
+            source_var = edge_data_tmp['source_var']
+            target_var = edge_data_tmp['target_var']
 
             # get edges with equal source and target variables between source and target node
-            edges_tmp = []
-            for n, (source_tmp, target_tmp, edge_tmp) in enumerate(edges):
-                if self.edges[source_tmp, target_tmp, edge_tmp]['source_var'] == source_var and \
-                        self.edges[source_tmp, target_tmp, edge_tmp]['target_var'] == target_var:
-                    edges_tmp.append(edges[n])
+            edges_tmp = [(source_tmp, target_tmp, edge_tmp, edge_data_tmp)]
+            i, n_edges = 0, len(edges)
+            for _ in range(n_edges):
+                if edges[i][3]['source_var'] == source_var and edges[i][3]['target_var'] == target_var:
+                    edges_tmp.append(edges.pop(i))
+                else:
+                    i += 1
 
             # vectorize those edges
             #######################
@@ -771,18 +774,18 @@ class CircuitIR(AbstractBaseIR):
                 old_svar_idx = []
                 old_tvar_idx = []
 
-                for source, target, idx in edges_tmp:
+                for *_, edge_data in edges_tmp:
 
-                    weight = self.edges[source, target, idx]['weight']
-                    delay = self.edges[source, target, idx]['delay']
+                    weight = edge_data['weight']
+                    delay = edge_data['delay']
 
                     # add weight, delay and variable indices to collector lists
                     weight_col.append(1. if weight is None else weight)
                     delay_col.append(0. if delay is None else delay)
-                    idx_tmp = self.edges[source, target, idx]['source_idx']
+                    idx_tmp = edge_data['source_idx']
                     if idx_tmp:
                         old_svar_idx += idx_tmp
-                    idx_tmp = self.edges[source, target, idx]['target_idx']
+                    idx_tmp = edge_data['target_idx']
                     if idx_tmp:
                         old_tvar_idx += idx_tmp
 
@@ -790,9 +793,8 @@ class CircuitIR(AbstractBaseIR):
                 #############################
 
                 # extract edge
-                edge_ref = edges_tmp.pop(0)
-                new_edge = self.edges[edge_ref]
-                edges.pop(edges.index(edge_ref))
+
+                new_edge = self.edges[edges_tmp.pop(0)[:3]]
 
                 # change delay and weight attributes
                 weight_col = np.squeeze(weight_col).tolist()
@@ -802,10 +804,15 @@ class CircuitIR(AbstractBaseIR):
                 new_edge['source_idx'] = old_svar_idx
                 new_edge['target_idx'] = old_tvar_idx
 
-            # delete vectorized edges from list
-            self.graph.remove_edges_from(edges_tmp)
-            for edge in edges_tmp:
-                edges.pop(edges.index(edge))
+                # delete vectorized edges from list
+                self.graph.remove_edges_from(edges_tmp)
+
+            else:
+
+                # advance in edge list
+                print(f'WARNING: Vectorization of edges between {source}/{source_var} and {target}/{target_var} '
+                      f'failed.')
+                idx += 1
 
     def get_node_var(self, key: str, apply_idx: bool = True) -> dict:
         """This function extracts and returns variables from nodes of the network graph.
@@ -1174,14 +1181,16 @@ class CircuitIR(AbstractBaseIR):
             dot_edge = False
             if delay is None and len(tval['shape']) < 2 and len(sval['shape']) < 2 and len(sidx) > 1:
 
-                weight_mat = np.zeros((tval['shape'][0], sval['shape'][0]), dtype=np.float32)
-                if not tidx:
-                    tidx = [0 for _ in range(len(sidx))]
-                for row, col, w in zip(tidx, sidx, weight):
-                    weight_mat[row, col] = w
+                n, m = tval['shape'][0], sval['shape'][0]
 
                 # check whether the weight matrix is dense enough for this edge realization to be efficient
-                if np.mean(weight_mat.flatten() == 0.0) < matrix_sparseness:
+                if 1-len(weight)/(n*m) < matrix_sparseness:
+
+                    weight_mat = np.zeros((n, m), dtype=np.float32)
+                    if not tidx:
+                        tidx = [0 for _ in range(len(sidx))]
+                    for row, col, w in zip(tidx, sidx, weight):
+                        weight_mat[row, col] = w
 
                     # set up weights and edge projection equation
                     eq = f"{tvar} {assign} weight @ {svar}"
