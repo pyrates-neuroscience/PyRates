@@ -453,7 +453,7 @@ class ClusterGridSearch(ClusterCompute):
             simulation_time: float, chunk_size: (int, list), worker_env: str, worker_file: str,
             inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None, result_kwargs: Optional[dict] = {},
             config_kwargs: Optional[dict] = {}, add_template_info: Optional[bool] = False,
-            permute: Optional[bool] = False, **kwargs) -> str:
+            permute_grid: Optional[bool] = False, **kwargs) -> str:
 
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
@@ -482,7 +482,7 @@ class ClusterGridSearch(ClusterCompute):
             Outputs as provided to the `run` method of `:class:ComputeGraph`.
         sampling_step_size
             Sampling step-size as provided to the `run` method of `:class:ComputeGraph`.
-        permute
+        permute_grid
             If true, all combinations of the parameter values in params will be created.
         chunk_size
             Number of parameter combinations computed simultaneously on one worker
@@ -516,7 +516,7 @@ class ClusterGridSearch(ClusterCompute):
 
         # Create DataFrame from param dictionary
         if isinstance(params, dict):
-            param_grid = linearize_grid(params, permute=permute)
+            param_grid = linearize_grid(params, permute=permute_grid)
         else:
             param_grid = params
 
@@ -700,8 +700,7 @@ class ClusterGridSearch(ClusterCompute):
 
         import paramiko
 
-
-        # This lock makes sure, that parameter chunks are fetched by workers in the same order as they were defined
+        # This lock ensures that parameter chunks are fetched by workers in the same order as they are defined
         # in the node list
         self.lock.acquire()
 
@@ -723,7 +722,9 @@ class ClusterGridSearch(ClusterCompute):
         worker_file = thread_kwargs["worker_file"]
 
         # Prepare worker command
-        command = f'{worker_env} {worker_file}'
+        # command = f'{worker_env} {os.path.abspath(__file__)}'
+        # command = f'{worker_env} {worker_file}'
+        command = f'{worker_env} {os.getcwd()}/worker_template.py'
 
         # Create folder to save local subgrids to
         subgrid_dir = f'{self.grid_dir}/Subgrids/{grid_name}/{thread_name}'

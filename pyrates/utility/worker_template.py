@@ -38,10 +38,45 @@ import warnings
 from numba import njit, config
 import numpy as np
 import pandas as pd
+import scipy.signal as sp
 from pyrates.utility.grid_search import grid_search
 
 
+def cgs_postprocessing(data: np.array):
+    """Post processing function that is applied to every model parametrization output.
+
+    Parameters
+    ----------
+    data
+        Simulated model output for a single model parametrization
+
+    Returns
+    -------
+    np.array
+        Post processed model output
+
+    """
+
+    # Add customized post processing here
+    # e.g. Computation of power spectral density of the time signal:
+    #
+    # from scipy.signal import welch
+    # dt = data[1] - data[0]
+    # f, p  = welch(data.values, fs=1 / dt, axis=0, **kwargs)
+    # processed_data = p
+
+    # Placeholder
+    processed_data = data
+
+    return processed_data
+
+
+# Don't make any changes below #
+################################
+
 def main(_):
+    # tf.config.set_soft_device_placement(True)
+
     config.THREADING_LAYER = 'omp'
 
     # Disable general warnings
@@ -49,6 +84,7 @@ def main(_):
 
     # disable TF-gpu warnings
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
     t_total = time.time()
 
     # Load command line arguments and create logfile
@@ -62,10 +98,10 @@ def main(_):
     local_res_file = FLAGS.local_res_file
     build_dir = FLAGS.build_dir
 
-    print(f'Elapsed time: {time.time()-t0:.3f} seconds')
+    print(f'Elapsed time: {time.time() - t0:.3f} seconds')
 
-    # Load grid search configuration parameters from config file
-    ############################################################
+    # Load global config file
+    #########################
     print("")
     print("***LOADING GLOBAL CONFIG FILE***")
     t0 = time.time()
@@ -86,8 +122,6 @@ def main(_):
 
         try:
             inputs = global_config_dict['inputs']
-            for key, value in inputs.items():
-                inputs[key] = np.array(value)
         except KeyError:
             inputs = {}
 
@@ -101,45 +135,43 @@ def main(_):
         except KeyError:
             init_kwargs = {}
 
-    print(f'Elapsed time: {time.time()-t0:.3f} seconds')
+        print(f'Elapsed time: {time.time() - t0:.3f} seconds')
 
-    # Load parameter subgrid from subgrid file
-    ##########################################
-    print("")
-    print("***PREPARING PARAMETER GRID***")
-    t0 = time.time()
+        # LOAD PARAMETER GRID
+        #####################
+        print("")
+        print("***PREPARING PARAMETER GRID***")
+        t0 = time.time()
 
-    param_grid = pd.read_hdf(subgrid, key="subgrid")
+        # Load subgrid into DataFrame
+        param_grid = pd.read_hdf(subgrid, key="subgrid")
 
-    # Drop all columns that don't contain a parameter map value (e.g. status, chunk_idx, err_count) since grid_search()
-    # can't handle additional columns
-    param_grid = param_grid[list(global_config_dict['param_map'].keys())]
-    print(f'Elapsed time: {time.time()-t0:.3f} seconds')
+        # Drop all columns that don't contain a parameter map value (e.g. status, chunk_idx, err_count) since
+        # grid_search() can't handle additional columns
+        param_grid = param_grid[list(param_map.keys())]
+        print(f'Elapsed time: {time.time() - t0:.3f} seconds')
 
-    # Compute parameter subgrid using grid_search
-    #############################################
-    print("")
-    print("***COMPUTING PARAMETER GRID***")
-    t0 = time.time()
+        # COMPUTE PARAMETER GRID
+        ########################
+        print("")
+        print("***COMPUTING PARAMETER GRID***")
+        t0 = time.time()
 
-    # grid_search returns an unsorted DataFrame yielding results for all parameter combinations in param_grid
-    results, result_map, t_ = grid_search(
-        circuit_template=circuit_template,
-        param_grid=param_grid,
-        param_map=param_map,
-        simulation_time=simulation_time,
-        dt=dt,
-        sampling_step_size=sampling_step_size,
-        permute_grid=False,
-        inputs=inputs,
-        outputs=outputs,
-        init_kwargs=init_kwargs,
-        profile='t',
-        build_dir=build_dir,
-        njit=True,
-        parallel=False)
-
-    out_vars = results.columns.levels[-1]
+        results, result_map, t_ = grid_search(
+            circuit_template=circuit_template,
+            param_grid=param_grid,
+            param_map=param_map,
+            simulation_time=simulation_time,
+            dt=dt,
+            sampling_step_size=sampling_step_size,
+            permute_grid=False,
+            inputs=inputs,
+            outputs=outputs.copy(),
+            init_kwargs=init_kwargs,
+            profile='t',
+            build_dir=build_dir,
+            njit=True,
+            parallel=False)
 
     print(f'Total parameter grid computation time: {time.time()-t0:.3f} seconds')
 
@@ -149,31 +181,16 @@ def main(_):
     print("***POSTPROCESSING AND CREATING RESULT FILES***")
     t0 = time.time()
 
-    with pd.HDFStore(local_res_file, "a") as store:
+    processed_results = pd.DataFrame(data=None, columns=results.columns, index=results.index)
+    for idx, circuit in enumerate(result_map.iterrows()):
+        circ_idx = result_map.loc[(result_map == tuple(circuit[1].values)).all(1), :].index
+        processed_results[circ_idx] = cgs_postprocessing(results[circ_idx].to_numpy())
+
+    with pd.HDFStore(local_res_file, "w") as store:
         store.put(key='results', value=results)
         store.put(key='result_map', value=result_map)
-        # for out_var in out_vars:
-        #     res_lst = []
-        #
-        #     # Order results according to rows in parameter grid
-        #     ###################################################
-        #     # Iterate over rows in param_grid and use its values to index columns in results
-        #     for i, column in enumerate(result_map.index):
-        #         # TODO How to access the node names
-        #         result = results.loc[:, (column, 'PC')][out_var]
-        #
-        #         # Postprocess ordered results (optional)
-        #         ########################################
-        #         res_lst.append(result)
-        #
-        #     # Concatenate all DataFrame in res_lst to one global ordered DataFrame
-        #     result_ordered = pd.concat(res_lst, axis=1)
-        #     result_ordered.columns = result_map.index
-        #
-        #     # Write DataFrames to local result file
-        #     #######################################
-        #     store.put(key=out_var, value=result_ordered)
-        # store.put(key='result_map', value=result_map)
+
+    # TODO: Copy local result file back to master if needed
 
     print(f'Result files created. Elapsed time: {time.time()-t0:.3f} seconds')
     print("")
@@ -186,21 +203,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_file",
         type=str,
-        default=f'/nobackup/spanien1/salomon/CGS/Holgado/Diseased_new_22/Config/DefaultConfig_0.json',
-        help="File to load grid_search configuration parameter from"
+        default="/nobackup/spanien1/salomon/CGS/Benchmark_jup/Config/DefaultConfig_5.json",
+        help="File to load grid_search configuration parameters from"
     )
 
     parser.add_argument(
         "--subgrid",
         type=str,
-        default=f'/nobackup/spanien1/salomon/CGS/Holgado/Diseased_new_22/Grids/Subgrids/DefaultGrid_0/animals/animals_Subgrid_0.h5',
+        default="/nobackup/spanien1/salomon/CGS/Benchmark_jup/Grids/Subgrids/DefaultGrid_0/animals/animals_Subgrid_0.h5",
         help="File to load parameter grid from"
     )
 
     parser.add_argument(
         "--local_res_file",
         type=str,
-        default=f'/data/hu_salomon/Documents/worker_test/test_result.h5',
+        default="/nobackup/spanien1/salomon/WorkerTestData/holgado_subgrid/test_result.h5",
         help="File to save results to"
     )
 
@@ -274,3 +291,4 @@ def postprocessing_3(data, dt):
     diff = np.diff(peaks[0])
     diff = np.mean(diff) * dt
     return 1 / diff
+
