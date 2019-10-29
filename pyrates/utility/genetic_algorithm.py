@@ -101,7 +101,7 @@ class GeneticAlgorithmTemplate:
         candidate_save
             If set, the strongest member of a population will be saved to an hdf5 file, before the population is updated
         drop_save
-            If set, all members that are droped from a population due to stagnation or other criteria will be saved to
+            If set, all members that are dropped from a population due to stagnation or other criteria will be saved to
             this folder in hdf5 format
         gene_sampling_func
         kwargs

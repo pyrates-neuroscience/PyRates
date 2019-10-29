@@ -156,7 +156,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
 
 class ClusterCompute:
-    def __init__(self, nodes: list, compute_dir=None):
+    def __init__(self, nodes: list, compute_dir=None, verbose: Optional[bool] = True):
         """Create new ClusterCompute instance object with unique compute ID
 
         Creates a compute directory for the ClusterCompute instance, either in the specified path or as a default
@@ -172,6 +172,7 @@ class ClusterCompute:
         compute_dir:
             Full path to a directory that will be used as compute directory.
             If none is given, a default compute directory is created in the current working directory
+        verbose:
 
         Returns
         -------
@@ -209,8 +210,12 @@ class ClusterCompute:
         ####################################
         # Tee stdout and stderr to logfile #
         ####################################
-        sys.stdout = StreamTee(sys.stdout, self.global_logfile)
-        sys.stderr = StreamTee(sys.stderr, self.global_logfile)
+        if verbose:
+            sys.stdout = StreamTee(sys.stdout, self.global_logfile)
+            sys.stderr = StreamTee(sys.stderr, self.global_logfile)
+        else:
+            sys.stdout = open(self.global_logfile, 'a')
+            sys.stderr = StreamTee(sys.stdout, self.global_logfile)
 
         ###########################
         # Write header to logfile #
@@ -425,8 +430,8 @@ class ClusterCompute:
 
 
 class ClusterGridSearch(ClusterCompute):
-    def __init__(self, nodes, compute_dir=None):
-        super().__init__(nodes, compute_dir)
+    def __init__(self, nodes, compute_dir=None, verbose: Optional[bool] = True):
+        super().__init__(nodes, compute_dir, verbose)
 
         self.chunk_idx = 0
         self.res_file_collection = {}
@@ -452,7 +457,8 @@ class ClusterGridSearch(ClusterCompute):
             simulation_time: float, chunk_size: (int, list), worker_env: str, inputs: dict, outputs: dict,
             worker_file: Optional[str] = "", sampling_step_size: Optional[float] = None,
             result_kwargs: Optional[dict] = {}, config_kwargs: Optional[dict] = {},
-            add_template_info: Optional[bool] = False, permute_grid: Optional[bool] = False, **kwargs) -> str:
+            add_template_info: Optional[bool] = False, permute_grid: Optional[bool] = False,
+            verbose: Optional[bool] = True, **kwargs) -> str:
 
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
@@ -504,6 +510,14 @@ class ClusterGridSearch(ClusterCompute):
         """
 
         import h5py
+
+        if verbose:
+            sys.stdout = StreamTee(sys.stdout, self.global_logfile)
+            sys.stderr = StreamTee(sys.stderr, self.global_logfile)
+        else:
+            sys.stdout = open(self.global_logfile, 'a')
+            sys.stderr = StreamTee(sys.stderr, self.global_logfile)
+
         t_total = t.time()
 
         print("")
