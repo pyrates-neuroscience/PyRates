@@ -42,12 +42,12 @@ import json
 import time as t
 import glob
 import getpass
+import argparse
 from pathlib import Path
 from datetime import datetime
 from threading import Thread, currentThread, RLock
 
 # pyrates internal imports
-from pyrates.backend import ComputeGraph
 from pyrates.frontend import CircuitTemplate
 from pyrates.ir.circuit import CircuitIR
 
@@ -85,7 +85,6 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         will be traversed pairwise.
     kwargs
         Additional keyword arguments passed to the `:class:ComputeGraph` initialization.
-
 
 
     Returns
@@ -450,10 +449,10 @@ class ClusterGridSearch(ClusterCompute):
         os.makedirs(self.build_dir, exist_ok=True)
 
     def run(self, circuit_template: str, params: Union[dict, pd.DataFrame], param_map: dict, dt: float,
-            simulation_time: float, chunk_size: (int, list), worker_env: str, worker_file: str,
-            inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None, result_kwargs: Optional[dict] = {},
-            config_kwargs: Optional[dict] = {}, add_template_info: Optional[bool] = False,
-            permute_grid: Optional[bool] = False, **kwargs) -> str:
+            simulation_time: float, chunk_size: (int, list), worker_env: str, inputs: dict, outputs: dict,
+            worker_file: Optional[str] = "", sampling_step_size: Optional[float] = None,
+            result_kwargs: Optional[dict] = {}, config_kwargs: Optional[dict] = {},
+            add_template_info: Optional[bool] = False, permute_grid: Optional[bool] = False, **kwargs) -> str:
 
         """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
@@ -519,6 +518,10 @@ class ClusterGridSearch(ClusterCompute):
             param_grid = linearize_grid(params, permute=permute_grid)
         else:
             param_grid = params
+
+        # If no worker file is specified, the current file is passed as worker script to each node
+        if not worker_file:
+            worker_file = os.path.abspath(__file__)
 
         # Create default parameter grid csv-file
         grid_idx = 0
@@ -619,7 +622,7 @@ class ClusterGridSearch(ClusterCompute):
             "global_res_file": global_res_file
         }
 
-        # TODO: Copy worker environment, worker file and configuration file to the worker, if necessary
+        # TODO: Copy configuration file to the worker, if necessary
 
         # Start cluster computation
         ###########################
@@ -651,9 +654,13 @@ class ClusterGridSearch(ClusterCompute):
 
         # Read number of different circuit outputs and prepare lists to concatenate results
         res_dict = {}
-        with pd.HDFStore(temp_res_files[0], "r") as store:
-            for key in store.keys():
-                res_dict[key] = []
+        try:
+            with pd.HDFStore(temp_res_files[0], "r") as store:
+                for key in store.keys():
+                    res_dict[key] = []
+        except IndexError:
+            print("No result file created. Check local log files for worker script errors.")
+            return ""
 
         # Concatenate results from each temporary result file
         for file in temp_res_files:
@@ -678,9 +685,6 @@ class ClusterGridSearch(ClusterCompute):
         print(f'Find results in: {grid_res_dir}')
         print("")
 
-        working_grid.to_csv(f'{os.path.dirname(grid_file)}/{grid_name}_{self.compute_id}_ResultStatus.csv', index=True)
-
-        # self.__del__()
         return global_res_file
 
     def thread_master(self, client: dict, thread_kwargs: dict):
@@ -722,9 +726,7 @@ class ClusterGridSearch(ClusterCompute):
         worker_file = thread_kwargs["worker_file"]
 
         # Prepare worker command
-        # command = f'{worker_env} {os.path.abspath(__file__)}'
-        # command = f'{worker_env} {worker_file}'
-        command = f'{worker_env} {os.getcwd()}/worker_template.py'
+        command = f'{worker_env} {worker_file}'
 
         # Create folder to save local subgrids to
         subgrid_dir = f'{self.grid_dir}/Subgrids/{grid_name}/{thread_name}'
@@ -1156,3 +1158,183 @@ class StreamTee(object):
         # Emit method call to stdout (stream 1)
         callable1 = getattr(self.stream1, self.__missing_method_name)
         return callable1(*args, **kwargs)
+
+
+##################
+# Cluster worker #
+##################
+
+
+class ClusterWorkerTemplate(object):
+
+    def __init__(self):
+        self.FLAGS = argparse.Namespace
+        self.results = pd.DataFrame
+        self.result_map = pd.DataFrame
+        self.processed_results = pd.DataFrame
+
+    def worker_init(self):
+        parser = argparse.ArgumentParser()
+
+        parser.add_argument(
+            "--config_file",
+            type=str,
+            default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_config.json',
+            help="File to load grid_search configuration parameters from"
+        )
+
+        parser.add_argument(
+            "--subgrid",
+            type=str,
+            default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_grid.h5',
+            help="File to load parameter grid from"
+        )
+
+        parser.add_argument(
+            "--local_res_file",
+            type=str,
+            default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_results.h5',
+            help="File to save results to"
+        )
+
+        parser.add_argument(
+            "--build_dir",
+            type=str,
+            default=os.getcwd(),
+            help="Custom PyRates build directory"
+        )
+
+        self.FLAGS = parser.parse_args()
+        self.worker_exec(sys.argv)
+
+    def worker_exec(self, _):
+        import warnings
+        # external imports
+        from numba import config
+
+        # tf.config.set_soft_device_placement(True)
+
+        config.THREADING_LAYER = 'omp'
+
+        # Disable general warnings
+        warnings.filterwarnings("ignore")
+
+        # disable TF-gpu warnings
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+        t_total = t.time()
+
+        # Load command line arguments and create logfile
+        ################################################
+        print("")
+        print("***LOADING COMMAND LINE ARGUMENTS***")
+        t0 = t.time()
+
+        config_file = self.FLAGS.config_file
+        subgrid = self.FLAGS.subgrid
+        local_res_file = self.FLAGS.local_res_file
+        build_dir = self.FLAGS.build_dir
+
+        print(f'Elapsed time: {t.time() - t0:.3f} seconds')
+
+        # Load global config file
+        #########################
+        print("")
+        print("***LOADING GLOBAL CONFIG FILE***")
+        t0 = t.time()
+
+        with open(config_file) as g_conf:
+            global_config_dict = json.load(g_conf)
+            circuit_template = global_config_dict['circuit_template']
+            param_map = global_config_dict['param_map']
+            dt = global_config_dict['dt']
+            simulation_time = global_config_dict['simulation_time']
+
+            # Optional parameters
+            #####################
+            try:
+                sampling_step_size = global_config_dict['sampling_step_size']
+            except KeyError:
+                sampling_step_size = dt
+
+            try:
+                inputs = global_config_dict['inputs']
+            except KeyError:
+                inputs = {}
+
+            try:
+                outputs = global_config_dict['outputs']
+            except KeyError:
+                outputs = {}
+
+            try:
+                init_kwargs = global_config_dict['init_kwargs']
+            except KeyError:
+                init_kwargs = {}
+
+        print(f'Elapsed time: {t.time() - t0:.3f} seconds')
+
+        # LOAD PARAMETER GRID
+        #####################
+        print("")
+        print("***PREPARING PARAMETER GRID***")
+        t0 = t.time()
+
+        # Load subgrid into DataFrame
+        param_grid = pd.read_hdf(subgrid, key="subgrid")
+
+        # Drop all columns that don't contain a parameter map value (e.g. status, chunk_idx, err_count) since
+        # grid_search() can't handle additional columns
+        param_grid = param_grid[list(param_map.keys())]
+        print(f'Elapsed time: {t.time() - t0:.3f} seconds')
+
+        # COMPUTE PARAMETER GRID
+        ########################
+        print("")
+        print("***COMPUTING PARAMETER GRID***")
+        t0 = t.time()
+
+        self.results, self.result_map, t_ = grid_search(
+            circuit_template=circuit_template,
+            param_grid=param_grid,
+            param_map=param_map,
+            simulation_time=simulation_time,
+            dt=dt,
+            sampling_step_size=sampling_step_size,
+            permute_grid=False,
+            inputs=inputs,
+            outputs=outputs.copy(),
+            init_kwargs=init_kwargs,
+            profile='t',
+            build_dir=build_dir,
+            njit=True,
+            parallel=False)
+
+        print(f'Total parameter grid computation time: {t.time() - t0:.3f} seconds')
+
+        # Post process results and write data to local result file
+        ##########################################################
+        print("")
+        print("***POSTPROCESSING AND CREATING RESULT FILES***")
+        t0 = t.time()
+
+        self.processed_results = pd.DataFrame(data=None, columns=self.results.columns)
+        self.worker_postprocessing()
+
+        with pd.HDFStore(local_res_file, "w") as store:
+            store.put(key='results', value=self.processed_results)
+            store.put(key='result_map', value=self.result_map)
+
+        # TODO: Copy local result file back to master if needed
+
+        print(f'Result files created. Elapsed time: {t.time() - t0:.3f} seconds')
+        print("")
+        print(f'Total elapsed time: {t.time() - t_total:.3f} seconds')
+
+    def worker_postprocessing(self, **kwargs):
+        self.processed_results = self.results
+
+
+if __name__ == "__main__":
+    cgs_worker = ClusterWorkerTemplate()
+    cgs_worker.worker_init()
