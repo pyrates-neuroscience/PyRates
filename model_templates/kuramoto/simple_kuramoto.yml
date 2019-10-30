@@ -4,37 +4,31 @@
 Op_phase:
   base: OperatorTemplate
   equations:
-    - "theta' = omega + noise_in + K*net_in"
-    - "r = r_max / (1 + exp(s*(v-v_th)))"
+    - "d/dt * theta = omega + noise_in*sqrt(dt) + K*net_in"
+    - "theta_wrapped = theta % (2*PI)"
   variables:
-    r:
+    theta:
       default: output
-    v:
+    theta_wrapped:
       default: variable
-    tau:
+    omega:
+      default: 10.0
+    K:
       default: 1.0
-    r_max:
-      default: 1.0
-    s:
-      default: 200.0
-    v_th:
-      default: 0.0
-    I_ext:
+    noise_in:
       default: input
-    I_syn:
+    net_in:
       default: input
 
 Op_coupling:
   base: OperatorTemplate
   equations:
-    - "net_in = sin(source_var-target_var)"
+    - "target_var = sin(source_var-target_var)"
   variables:
-    net_in:
-      default: output
     source_var:
       default: input
     target_var:
-      default: input
+      default: output
 
 Sin_edge:
   base: EdgeTemplate
@@ -42,7 +36,7 @@ Sin_edge:
     - Op_coupling
 
 KM_node:
-  base: PopulationTemplate
+  base: NodeTemplate
   operators:
     - Op_phase
 
@@ -53,4 +47,4 @@ KM_node:
     O2: KM_node
   edges:
     - [O1/Op_phase/theta, O2/Op_phase/net_in, Sin_edge, {weight: 1.0}]
-    - [O2/Op_phase/theta, O2/Op_phase/net_in, Sin_edge, {weight: 1.0}]
+    - [O2/Op_phase/theta, O1/Op_phase/net_in, Sin_edge, {weight: 1.0}]
