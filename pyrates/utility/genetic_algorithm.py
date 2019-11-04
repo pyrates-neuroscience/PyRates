@@ -255,12 +255,12 @@ class GeneticAlgorithmTemplate:
 
         Offspring contains:
         - n_winners strongest members of the current population (winners)
-        - n_parent_pairs Children of current parent pairings (crossover)
-        - N Mutations of winners and children (mutations)
+        - n_parent_pairs children of current parent pairings (crossover)
+        - n_mut Mutations of winners and children (mutations)
         - n_new Fresh members based on the initial gene pool (new)
 
         The number of mutations is chosen dynamically to resize the offspring to the size of the current population
-        with N = population_size - n_winners - n_parent_pairs - n_new
+        with n_mut = population_size - n_winners - n_parent_pairs - n_new
         """
         print('Updating population')
 
@@ -459,76 +459,15 @@ class GeneticAlgorithmTemplate:
         raise NotImplementedError
 
 
-class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
-    from scipy.spatial.distance import cdist
-
-    def __init__(self, gs_config, fitness_measure=cdist):
+class CGSGeneticAlgorithmTemplate(GeneticAlgorithmTemplate):
+    def __init__(self, nodes, compute_dir=None, verbose: Optional[bool] = True):
         super().__init__()
 
-        self.fitness_measure = fitness_measure
-        self.gs_config = gs_config
+        self.cgs = ClusterGridSearch(nodes=nodes, compute_dir=compute_dir, verbose=verbose)
 
-    def eval_fitness(self, target: list, **kwargs):
-        param_grid = self.pop.drop(['fitness', 'sigma'], axis=1)
+    def eval_fitness(self, target: list, *argv, **kwargs):
 
-        results, result_map, _ = grid_search(circuit_template=self.gs_config['circuit_template'],
-                                             param_grid=param_grid.copy(),
-                                             param_map=self.gs_config['param_map'],
-                                             simulation_time=self.gs_config['simulation_time'],
-                                             dt=self.gs_config['dt'],
-                                             sampling_step_size=self.gs_config['sampling_step_size'],
-                                             permute_grid=False,
-                                             inputs=self.gs_config['inputs'].copy(),
-                                             outputs=self.gs_config['outputs'].copy(),
-                                             init_kwargs={
-                                                 'solver': 'euler',
-                                                 'backend': 'numpy'},
-                                             profile='t',
-                                             njit=True
-                                             )
-
-        for i, candidate_genes in enumerate(result_map.index):
-            candidate_out = results.loc[:, candidate_genes].values.T
-            target_reshaped = np.array(target)[None, :]
-            dist = self.fitness_measure(candidate_out, target_reshaped)
-            self.pop.at[i, 'fitness'] = float(1 / dist)
+        param_grid = self.pop
 
 
-class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
-    def __init__(self, gs_config, cgs_config):
-        super().__init__()
-
-        self.gs_config = gs_config
-        self.cgs_config = cgs_config
-
-        self.cgs = ClusterGridSearch(cgs_config['nodes'], compute_dir=cgs_config['compute_dir'])
-
-    def eval_fitness(self, target: list, **kwargs):
-
-        param_grid = self.pop.drop(['fitness', 'sigma'], axis=1)
-
-        res_file = self.cgs.run(
-            circuit_template=self.gs_config['circuit_template'],
-            params=param_grid,
-            param_map=self.gs_config['param_map'],
-            simulation_time=self.gs_config['simulation_time'],
-            dt=self.gs_config['dt'],
-            inputs=self.gs_config['inputs'],
-            outputs=self.gs_config['outputs'],
-            sampling_step_size=self.gs_config['sampling_step_size'],
-            permute=False,
-            chunk_size=self.cgs_config['chunk_size'],
-            worker_env=self.cgs_config['worker_env'],
-            worker_file=self.cgs_config['worker_file'],
-            config_kwargs={
-                'target': target
-            })
-
-        results = pd.read_hdf(res_file, key=f'/Results/fitness')
-
-        for i, candidate_genes in enumerate(param_grid.values):
-            self.pop.at[i, 'fitness'] = float(results.loc['fitness', tuple(candidate_genes)])
-
-
-
-
+        raise NotImplementedError

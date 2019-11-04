@@ -132,5 +132,5 @@ The ClusterGridSearch class extends PyRates' tools for parameter space investiga
     results.plot()
 
 
-3) CGS postprocessing
+3) CGS individual postprocessing
 

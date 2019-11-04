@@ -173,7 +173,7 @@ class ClusterCompute:
             Full path to a directory that will be used as compute directory.
             If none is given, a default compute directory is created in the current working directory
         verbose:
-
+            If False, all std output will be copied to the log file but will not be shown in the terminal
         Returns
         -------
         ClusterCompute instance object
@@ -502,6 +502,8 @@ class ClusterGridSearch(ClusterCompute):
         add_template_info
             If true, all operator templates and its variables are copied from the yaml file to a dedicated folder in the
             result file
+        verbose
+            If False, all std output will be copied to the log file but will not be shown in the terminal
 
         Returns
         -------
@@ -809,7 +811,7 @@ class ClusterGridSearch(ClusterCompute):
                                                                    f' --build_dir={local_build_dir}'
                                                                    f' &>> {logfile}',  # redirect and append stdout
                                                                                        # and stderr to logfile
-                                                                   get_pty=True)       # execute in pseudoterminal
+                                                                   get_pty=True)       # execute in pseudo terminal
                 except paramiko.ssh_exception.SSHException as e:
                     # SSH connection has been lost
                     # (remote machine shut down, ssh connection has been killed manually, ...)
@@ -1346,7 +1348,76 @@ class ClusterWorkerTemplate(object):
         print(f'Total elapsed time: {t.time() - t_total:.3f} seconds')
 
     def worker_postprocessing(self, **kwargs):
-        self.processed_results = self.results
+        """
+        Post processing that is applied by each worker on their model simulation results
+
+        The ClusterWorkerTemplate class contains three DataFrames that can be used to add customized post processing:
+
+        self.results - DataFrame that contains the grid_search() results for the worker specific parameter sub grid
+        self.result_map - DataFrame that contains the computed parametrizations and their respective identification key
+                          which is used in the column names of the results DataFrame
+        self.processed_results - DataFrame with the same column names as the results DataFrame. Everything that is
+                                 is stored in the processed_results DataFrame will be send back to the master and
+                                 treated as worker output.
+
+        When implementing customized post processing, use the following code to iterate over all parametrization and
+        access their respective model output via the identification key. Make sure to write the processed data to the
+        processed_results DataFrame:
+
+        for idx, circuit in enumerate(self.result_map.iterrows()):
+            circ_idx = self.result_map.loc[(self.result_map == tuple(circuit[1].values)).all(1), :].index
+            data = self.results[circ_idx].to_numpy()
+
+            # add processing of 'data' here
+
+            self.processed_results[circ_idx] = data
+
+        To actually use the customized post processing during a ClusterGridSearch call, a customized worker file has to
+        be created that is passed to the CGS.run() call.
+        For that purpose, execute the following steps
+        1. Create a new python script
+        2. In that script, derive a child class from the ClusterWorkerTemplate class and customize the
+           worker_postprocessing member function to your needs
+        3. Make sure, that if the newly created script is run, an instance of your derived class is created and that
+           this instance calls its 'worker_init()' method
+
+        A full worker template that implements the fourier transform on the simulation results would look like the
+        following:
+
+            custom_worker.py
+
+            from pyrates.utility.grid_search import ClusterWorkerTemplate
+            from scipy.signal import welch
+
+
+            class MyWorker(ClusterWorkerTemplate):
+                def worker_postprocessing(self):
+                    for idx, data in self.results.iteritems():
+                        t = self.results.index.to_list()
+                        dt = t[1] - t[0]
+                        f, p = welch(data.to_numpy(), fs=1/dt, axis=0)
+                        self.processed_results[:, idx] = p
+                    self.processed_results.index = f
+
+
+            if __name__ == "__main__":
+                cgs_worker = MyWorker()
+                cgs_worker.worker_init()
+
+        Parameters
+        ----------
+        kwargs
+
+        Returns
+        -------
+
+        """
+
+        for idx, data in self.results.iteritems():
+
+            # Add post customized post processing of 'data' here
+
+            self.processed_results.loc[:, idx] = data
 
 
 if __name__ == "__main__":
