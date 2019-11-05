@@ -225,13 +225,6 @@ class GeneticAlgorithmTemplate:
                 else:
                     return self.candidate
 
-            # Drop additional information
-            #############################
-            try:
-                self.pop = self.pop.drop("holgado", axis=1)
-            except KeyError:
-                pass
-
             # Create offspring from current population
             ##########################################
             if self.current_max_fitness == -0.0:
@@ -318,9 +311,9 @@ class GeneticAlgorithmTemplate:
                 offspring.iloc[i] = new_member[0]
                 new_sigs[i] = new_member[1]
 
+        offspring.columns = self.pop.loc[:, self.gene_names].columns
         offspring['fitness'] = 0.0
         offspring['sigma'] = new_sigs
-        offspring.columns = self.pop.columns
 
         self.pop = offspring
 
@@ -347,7 +340,8 @@ class GeneticAlgorithmTemplate:
         """Returns the n_winners fittest members from the current population"""
         winners = []
         for idx in self.pop.nlargest(n_winners, 'fitness').index:
-            winner_genes = self.pop.iloc[idx].drop(['fitness', 'sigma']).to_list()
+            # winner_genes = self.pop.iloc[idx].drop(['fitness', 'sigma']).to_list()
+            winner_genes = self.pop.loc[idx, self.gene_names].to_list()
             winner_sigma = self.pop.iloc[idx]['sigma']
             winners.append([winner_genes, winner_sigma])
         return winners
@@ -427,7 +421,7 @@ class GeneticAlgorithmTemplate:
                     else:
                         child_genes.append(parents[1][gene])
                         child_sigma.append(parents[1]['sigma'][g])
-                already_exists = (self.pop.drop(['fitness', 'sigma'], axis=1) == child_genes).all(1).any()
+                already_exists = (self.pop.loc[:, self.gene_names] == child_genes).all(1).any()
                 if not already_exists:
                     break
                 count += 1
