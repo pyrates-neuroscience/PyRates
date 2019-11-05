@@ -375,7 +375,7 @@ class GeneticAlgorithmTemplate:
             genes.append(random.uniform(value['min'], value['max']))
             sigma.append(value['sigma'])
         new_member = [genes, sigma]
-        already_exists = (self.pop.drop(['fitness', 'sigma'], axis=1) == new_member[0]).all(1).any()
+        already_exists = (self.pop.loc[:, self.gene_names] == new_member[0]).all(1).any()
         if already_exists:
             new_member = self.__create_new_member()
         return new_member
@@ -466,8 +466,4 @@ class CGSGeneticAlgorithmTemplate(GeneticAlgorithmTemplate):
         self.cgs = ClusterGridSearch(nodes=nodes, compute_dir=compute_dir, verbose=verbose)
 
     def eval_fitness(self, target: list, *argv, **kwargs):
-
-        param_grid = self.pop
-
-
         raise NotImplementedError
