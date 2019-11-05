@@ -274,6 +274,34 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
     return ax
 
 
+def plot_trajectory(data: pd.DataFrame, x: str, y: str, z: Optional[str] = None, ax: plt.Axes = None, **kwargs):
+    """Creates 2D or 3D plot of trajectory of state variables x, y and possibly z.
+
+    Parameters
+    ----------
+    data
+    x
+    y
+    z
+    ax
+    kwargs
+
+    Returns
+    -------
+
+    """
+    if z:
+        from mpl_toolkits.mplot3d import Axes3D
+        if not ax:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+        ax.plot(xs=data[x], ys=data[y], zs=data[z], **kwargs)
+        return ax
+    else:
+        import seaborn as sb
+        return sb.lineplot(x=x, y=y, data=data, **kwargs)
+
+
 def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[float] = None, plot_style: str = 'heatmap',
                       bg_style: str = 'whitegrid', node_order: Optional[list] = None, auto_cluster: bool = False,
                       **kwargs) -> plt.Axes:

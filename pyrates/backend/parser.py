@@ -309,7 +309,7 @@ class ExpressionParser(ParserElement):
             else:
                 self.op = self.backend.add_op(op, op2, op1, **self.parser_kwargs)
 
-        elif op in "+-/**^@<=>=!==":
+        elif op in "+-/**^@<=>=!==%":
 
             # collect elements to combine
             op2 = self.parse(expr_stack)

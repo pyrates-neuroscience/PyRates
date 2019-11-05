@@ -944,11 +944,12 @@ class CircuitIR(AbstractBaseIR):
         # basic simulation parameters initialization
         if not simulation_time:
             simulation_time = self._backend.dt
-        sim_steps = int(simulation_time / self._dt)
+        sim_steps = int(np.round(simulation_time / self._dt, decimals=0))
 
         if not sampling_step_size:
             sampling_step_size = self._dt
-        sampling_steps = int(sampling_step_size / self._dt)
+        sampling_steps = int(np.round(sampling_step_size / self._dt, decimals=0))
+        store_steps = int(np.round(sim_steps/sampling_steps, decimals=0))
 
         # add output variables to the backend
         #####################################
@@ -980,7 +981,7 @@ class CircuitIR(AbstractBaseIR):
 
                 # parse output storage operation into backend
                 output_col.update(self._backend.add_output_layer(outputs=output_cols,
-                                                                 sampling_steps=int(sim_steps / sampling_steps),
+                                                                 sampling_steps=store_steps,
                                                                  out_shapes=output_shapes))
 
         # add input variables to the backend
