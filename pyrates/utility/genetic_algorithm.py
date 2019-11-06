@@ -169,16 +169,9 @@ class GeneticAlgorithmTemplate:
                             print("Maximum fitness stagnation reached!")
                             # Check if maximum number of population drops is reached
                             if not (self.drop_count == max_stagnation_drops) or enforce_max_iter:
-                                print("Dropping fittest from population!")
                                 if drop_save:
+                                    print("Saving candidate!")
                                     os.makedirs(drop_save, exist_ok=True)
-                                    drop_file = f'{drop_save}/PopulationDrop_{self.drop_count}.h5'
-                                    # TODO: Dynamically change the drop file name if a file with the current name
-                                    #  already exists
-
-                                    # Ensure that a new drop file is created when one already exists in the drop dir
-                                    # while os.path.isfile(drop_file):
-                                    #     self.drop_count += 1
                                     new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                                     with h5py.File(f'{drop_save}/PopulationDrop_{self.drop_count}.h5') as file:
                                         file['target'] = target
@@ -186,9 +179,11 @@ class GeneticAlgorithmTemplate:
                                 self.drop_count += 1
 
                                 if new_pop_on_drop:
+                                    print("Dropping fittest from population!")
                                     self.__create_pop(sampling_func=gene_sampling_func)
                                     continue
                                 else:
+                                    print("Dropping candidate from population!")
                                     self.pop = self.pop.drop(new_candidate.index)
                             else:
                                 print("Returning fittest member!")
@@ -217,14 +212,16 @@ class GeneticAlgorithmTemplate:
             if 0 < min_fit < self.current_max_fitness:
                 print("Minimum fitness criterion reached!")
                 if enforce_max_iter:
-                    print("Dropping fittest from population!")
                     if drop_save:
+                        print("Saving candidate!")
                         new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                     self.drop_count += 1
                     if new_pop_on_drop:
+                        print(f'Generating new population')
                         self.__create_pop(sampling_func=gene_sampling_func)
                         continue
                     else:
+                        print("Dropping candidate from population!")
                         self.pop = self.pop.drop(self.candidate.index)
                 else:
                     return self.candidate
