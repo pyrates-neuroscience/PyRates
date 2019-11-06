@@ -221,7 +221,11 @@ class GeneticAlgorithmTemplate:
                     if drop_save:
                         new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                     self.drop_count += 1
-                    self.pop = self.pop.drop(self.candidate.index)
+                    if new_pop_on_drop:
+                        self.__create_pop(sampling_func=gene_sampling_func)
+                        continue
+                    else:
+                        self.pop = self.pop.drop(self.candidate.index)
                 else:
                     return self.candidate
 
