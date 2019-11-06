@@ -320,7 +320,8 @@ class GeneticAlgorithmTemplate:
     def __create_pop(self, sampling_func=np.linspace):
         """Create new population from the initial gene pool"""
         pop_grid = {}
-
+        # Prevent duplicates if create_pop() is called again if population had no winner
+        self.gene_names = []
         for param, value in self.initial_gene_pool.items():
             self.gene_names.append(param)
             if value['N'] == 1:
