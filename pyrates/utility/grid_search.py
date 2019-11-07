@@ -159,11 +159,11 @@ class ClusterCompute:
     def __init__(self, nodes: list, compute_dir=None, verbose: Optional[bool] = True):
         """Connect to nodes inside the computer network and create a compute directory with a unique compute ID
 
-        Creates a compute directory for the ClusterCompute instance that contains , either in the specified path or as a default
+        Creates a compute directory for the `:class:ClusterCompute` instance in the specified path or as a default
         folder in the current working directory of the executing script.
-        Creates a logfile in ComputeDirectory/Logs and tees all future stdout and stderr of the executing script
+        Creates a logfile in /ComputeDirectory/Logs and tees all future stdout and stderr of the executing script
         to this file
-        Connects to all nodes via SSH and saves the corresponding paramiko client in self.clients
+        Connects to all nodes via SSH and saves the corresponding paramiko client
 
         Parameters
         ----------
@@ -245,8 +245,8 @@ class ClusterCompute:
     def cluster_connect(self, nodes: list):
         """Create SSH connections to all nodes in the list, respectively
 
-        Connect to all nodes in the given list via SSH, using ssh_connect(). Adds a dictionary for each node to the
-        class internal 'clients' list
+        Connect to all nodes in the given list via SSH, using the `ssh_connect` method of `:class:ClusterComoute`.
+        Adds a dictionary for each node to the class internal 'clients' list
         Each dictionary contains:
             - ["paramiko_client"]: A paramiko client that can be used to execute commands on the node
             - ["node_name"]: The computer name of the connected node
@@ -301,25 +301,17 @@ class ClusterCompute:
         return t_
 
     def thread_master(self, client, thread_kwargs_: dict):
-        """Function that is executed by every thread. Every instance of thread_master is bound to a different client
+        """Function that is executed by every thread. Every instance of `thread_master` is bound to a different client
 
-        The thread_master() function can be arbitrarily changed to fit the needs of the user.
-        Commandline commands on the remote node can be executed using client["paramiko_client"].exec_command("")
-        self.lock can be used to ensure that a code snippet is executed without threads being switched in between
-        e.g.
-            with self.lock:
-                some code that is executed without switching to another thread
-        Since thread_master() is called by spawn_threads(), which again is called by run(), **kwargs of
-        spawn_threads() are parsed as a single dict to thread_master(). **kwargs of run() are NOT automatically parsed
-        to spawn_threads() or thread_master().
+        The `thread_master` method of `:class:ClusterCompute` can be arbitrarily changed to fit the needs of the user.
+        Commandline arguments on the remote node can be executed using client["paramiko_client"].exec_command("").
 
         Params
         ------
         client
-            dict containing a paramiko client, name of the connected node, dict with hardware specifications and
+            dict containing a `paramiko` client, the name of the connected node, a dict with hardware specifications and
             a path to a logfile.
-        kwargs_
-            dict containing **kwargs of spawn_threads() as key/value pairs
+        thread_kwargs
 
         Returns
         -------
@@ -387,7 +379,7 @@ class ClusterCompute:
 
     @staticmethod
     def ssh_connect(node, username, password=None, print_status=True):
-        """Connect to a host via SSH and return a respective paramiko.SSHClient
+        """Connect to a host via SSH and return a respective `paramiko.SSHClient`
 
         Parameters
         ----------
@@ -399,7 +391,7 @@ class ClusterCompute:
             network, Paramiko needs a password to create the SSH connection
         Returns
         -------
-        paramiko.SSHClient()
+        paramiko.SSHClient
             Is None if connection fails. For detailed information of the thrown exception see Paramiko documentation
 
         """
@@ -433,21 +425,36 @@ class ClusterGridSearch(ClusterCompute):
     def __init__(self, nodes, compute_dir=None, verbose: Optional[bool] = True):
         """Connect to nodes inside the computer network and create a compute directory with a unique compute ID
 
+        The use of `:class:ClusterGridSearch` requires the utilized computer network to feature two major properties:
+        1. A GSSAPI-based authentication method (e.g. Kerberos).
+           Since no secure password check is implemented in `:class:ClusterGridSearch`, it uses `paramiko's` gssapi
+           module to authenticate users when an SSH connection is established with a worker.
+           This has to be supported by the utilized computer network
+        2. A server-based file system.
+           After an SHH-connection has been established with a worker, all files that reside on the master have to be
+           accessible by the worker using the same absolute file paths.
+           A transfer of the necessary files from the master to the worker is generally possible using paramiko's SFTP
+           module, but has not been implemented in `:class:ClusterGridSearch`.
+
+
         The compute directory contains the following sub folders:
-        /Builds: Contains the build directories that are created by the grid_search() function for each worker
-        /Config: Contains the global log file and the local log files of each worker for each run() call to the CGS
-                 instance.
+        /Builds: Contains the build directories that are created by the `grid_search` function for each worker
+        /Config: Contains configuration files in .json format that yield PyRates simulation parameters for each
+                 simulation that has been performed by the `:class:ClusterGridSearch` instance.
         /Grids: Contains all parameter grids as .csv files that have been computed by the current CGS instance and their
                 respective sub grids that were transferred to the workers as .h5 files.
-        /Config: Contains configuration files in .json format that yield PyRates simulation parameters for each
-                 simulation that has been computed by the CGS instance.
+        /Logs:  Contains the global log file and the local log files of each worker for each call to the `run` method of
+                the current `:class:ClusterGridSearch` instance.
+                The local log files contain the stdout and the stderr of each worker, respectively
+                The global log files contains the stdout and the stderr of the master
+        /Results: Contains all results in .h5 format that have been produced by the `:class:ClusterGridSearch` instance.
+                  During a computation it also contains the intermediate local result files of the workers.
+                  These files are deleted once the global result file created.
 
-        Creates a compute directory for the ClusterCompute instance that contains , either in the specified path or as a default
-        folder in the current working directory of the executing script.
-        Creates a logfile in ComputeDirectory/Logs and tees all future stdout and stderr of the executing script
-        to this file
-        Connects to all nodes via SSH and saves the corresponding paramiko client in self.clients
-
+        Stdout and stderr of the worker will be teed to a global log file that resides in the compute directory.
+        If the verbosity argument is set to False, all future stdout and stderr of the CGS instance will no longer be
+        printed to the terminal, independent of the verbose argument of the call to the `run` method, but still be
+        written to the global log file.
 
         Parameters
         ----------
@@ -485,28 +492,59 @@ class ClusterGridSearch(ClusterCompute):
         self.build_dir = f'{self.compute_dir}/Builds'
         os.makedirs(self.build_dir, exist_ok=True)
 
-    def run(self, circuit_template: str, params: Union[dict, pd.DataFrame], param_map: dict, dt: float,
-            simulation_time: float, chunk_size: (int, list), worker_env: str, inputs: dict, outputs: dict,
-            worker_file: Optional[str] = "", sampling_step_size: Optional[float] = None,
-            result_kwargs: Optional[dict] = {}, config_kwargs: Optional[dict] = {},
-            add_template_info: Optional[bool] = False, permute_grid: Optional[bool] = False,
-            verbose: Optional[bool] = True, **kwargs) -> str:
+    def run(self, circuit_template: str, param_grid: Union[dict, pd.DataFrame], param_map: dict, dt: float,
+            simulation_time: float, chunk_size: (int, list),  inputs: dict, outputs: dict,
+            worker_env: Optional[str] = sys.executable, worker_file: Optional[str] = os.path.abspath(__file__),
+            sampling_step_size: Optional[float] = None, result_kwargs: Optional[dict] = {},
+            config_kwargs: Optional[dict] = {}, add_template_info: Optional[bool] = False,
+            permute_grid: Optional[bool] = False, verbose: Optional[bool] = True, **kwargs) -> str:
+        """Starts multiple threads on the master and distributes a parameter grid among nodes in a compute cluster that
+        concurrently run a grid_search computation on their provided parameter sub grids.
 
-        """Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
+        Intermediate result files will be concatenated to a single result file after all computations have finished.
+        The global result file is a hierarchical data format (hdf5) file that contains the following groups and data
+        sets.
+        All groups that are marked with (df) can be loaded into a pandas.DataFrame, using pandas.read_hdf():
 
-        ClusterGridSearch requires all necessary data (worker script, worker environment, compute directory)
+        |---Config
+            |---circuit_template
+            |---config_file
+            |---dt
+            |---sampling_step_size
+            |---simulation_time
+            |---inputs (if provided)
+        |---ParameterGrid
+            |---Grid_df (df)
+            |---Keys
+                |---Parameter_1
+                |--- ...
+                |---Parameter_p
+        |---Results
+            |---result_map (df)
+            |---results (df)
+        |---AdditionalData
+            |---result_kwargs_key_0
+            |---...
+            |---result_kwargs_key_k
+        |---TemplateInfo (if add_template_info is True)
+
+
+        and performs Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
+
+        `:class:ClusterGridSearch` requires all necessary data (worker script, worker environment, compute directory)
         to be stored on a server. After a connection is established, all data on the remote workers has to be accessible
         in the same way as it would be on the master worker (same root directory, same filepaths, etc.)
         Paths inside the run function have to be adjusted respectively.
 
         FTP implementation is planned in future versions for direct file transfer between the master and the workers.
 
+
         Parameters
         ----------
         circuit_template
-            Path to the circuit template.
-        params
-            Dictionary containing lists of parameters to create the parameter grid from.
+            Path to the circuit template file.
+        param_grid
+            Key-value pairs for each circuit parameter that should be altered over different circuit parametrizations.
         param_map
             Key-value pairs that map the keys of param_grid to circuit variables.
         dt
@@ -520,27 +558,34 @@ class ClusterGridSearch(ClusterCompute):
         sampling_step_size
             Sampling step-size as provided to the `run` method of `:class:ComputeGraph`.
         permute_grid
-            If true, all combinations of the parameter values in params will be created.
+            If true, all combinations of the provided param_grid values will be realized. If false, the param_grid
+            values will be traversed pairwise.
         chunk_size
-            Number of parameter combinations computed simultaneously on one worker
+            int or list that defines how many parametrizations are computed at once by each worker.
+            If int, every worker fetches the specified amount of parametrizations. Worker repeatedly fetch parameter
+            chunks until the whole param_grid has been computed.
+            If list, ever worker fetches an individual amount of parametrizations during each computation.
+            The order of chunk sizes in the chunk_size list is mapped to the order of nodes in the node list.
+            Their lengths have to match.
         worker_env
-            Python executable inside an environment in which the remote worker script is called.
+            Path to python executable inside an environment that will be used to execute the worker file.
+            Can be used if worker file with customized post processing should be executed in different environment than
+            the one the calling script is executed in.
         worker_file
-            Python script that will be executed by each remote worker.
+            Path to a customized worker file.
         result_kwargs
-            Key-value pairs that will be added to the result file's 'AdditionalData' dataset
+            Key-value pairs that will be added to the 'AdditionalData' group inside the result file.
         config_kwargs
             Key-value pairs that will be added to the config file.
         add_template_info
-            If true, all operator templates and its variables are copied from the yaml file to a dedicated folder in the
-            result file
+            If True, all operator templates and its variables are copied from the circuit_template yaml file to the
+            'TemplateInfo' group inside the result file.
         verbose
-            If False, all std output will be copied to the log file but will not be shown in the terminal
+            If False, stdout and stderr will be copied to the log file but not be printed to the terminal
 
         Returns
         -------
-        str
-            .hdf5 file containing the computation results as DataFrame in dataset '/Results/...'
+        String containing location of the result file
         """
 
         import h5py
@@ -562,14 +607,12 @@ class ClusterGridSearch(ClusterCompute):
         t0 = t.time()
 
         # Create DataFrame from param dictionary
-        if isinstance(params, dict):
-            param_grid = linearize_grid(params, permute=permute_grid)
-        else:
-            param_grid = params
+        if isinstance(param_grid, dict):
+            param_grid = linearize_grid(param_grid, permute=permute_grid)
 
-        # If no worker file is specified, the current file is passed as worker script to each node
-        if not worker_file:
-            worker_file = os.path.abspath(__file__)
+        # # If no worker file is specified, the current file is passed as worker script to each node
+        # if not worker_file:
+        #     worker_file = os.path.abspath(__file__)
 
         # Create default parameter grid csv-file
         grid_idx = 0
@@ -601,7 +644,7 @@ class ClusterGridSearch(ClusterCompute):
         #######################
         print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
         t0 = t.time()
-        if not self.check_key_consistency(params, param_map):
+        if not self.check_key_consistency(param_grid, param_map):
             print("Terminating execution!")
             return ""
         print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
@@ -640,7 +683,7 @@ class ClusterGridSearch(ClusterCompute):
 
         # Write grid and config information to global result file
         with h5py.File(global_res_file, 'a') as file:
-            for key, value in params.items():
+            for key, value in param_grid.items():
                 file.create_dataset(f'/ParameterGrid/Keys/{key}', data=value)
             for key, value in result_kwargs.items():
                 file.create_dataset(f'/AdditionalData/{key}', data=value)
@@ -1471,7 +1514,71 @@ class ClusterWorkerTemplate(object):
 
             self.processed_results.loc[:, idx] = data
 
+    def worker_test(self):
+        """
+        Calls the worker_postprocessing script on a dummy result and a dummy result map
+
+        self.result_map dummy looks as follows:
+
+                       param_0  param_1
+            circuit_0        0        9
+            circuit_1        1        8
+            circuit_2        2        7
+            circuit_3        3        6
+            circuit_4        4        5
+            circuit_5        5        4
+            circuit_6        6        3
+            circuit_7        7        2
+            circuit_8        8        1
+            circuit_9        9        0
+
+        self.results dummy looks as follows:
+
+          circuit_0 circuit_1 circuit_2  ... circuit_7 circuit_8 circuit_9
+                pop       pop       pop  ...       pop       pop       pop
+            out_var   out_var   out_var  ...   out_var   out_var   out_var
+        0       0.0       1.0       2.0  ...       7.0       8.0       9.0
+        1      10.0      11.0      12.0  ...      17.0      18.0      19.0
+        2      20.0      21.0      22.0  ...      27.0      28.0      29.0
+        3      30.0      31.0      32.0  ...      37.0      38.0      39.0
+        4      40.0      41.0      42.0  ...      47.0      48.0      49.0
+        5      50.0      51.0      52.0  ...      57.0      58.0      59.0
+        6      60.0      61.0      62.0  ...      67.0      68.0      69.0
+        7      70.0      71.0      72.0  ...      77.0      78.0      79.0
+        8      80.0      81.0      82.0  ...      87.0      88.0      89.0
+        9      90.0      91.0      92.0  ...      97.0      98.0      99.0
+
+        Returns
+        -------
+
+        """
+        # Create Dummies
+        circuit_names = [f'circuit_{i}' for i in range(10)]
+
+        grid = {'param_0': list(range(10)),
+                'param_1': list(range(10))[::-1]}
+
+        dummy_grid = linearize_grid(grid, permute=False)
+        dummy_grid.index = circuit_names
+
+        pop = ['pop'] * 10
+        out_var = ['out_var'] * 10
+
+        dummy_mi = pd.MultiIndex.from_arrays([circuit_names, pop, out_var])
+        dummy_results = pd.DataFrame(np.arange(100.0).reshape((10, 10)), columns=dummy_mi)
+
+        self.result_map = dummy_grid
+        self.results = dummy_results
+        self.processed_results = pd.DataFrame(data=None, columns=self.results.columns)
+
+        # Run post processing method
+        self.worker_postprocessing()
+
+        print('Test successful, no errors occurred!')
+
 
 if __name__ == "__main__":
     cgs_worker = ClusterWorkerTemplate()
+    # cgs_worker.worker_test()
     cgs_worker.worker_init()
+
