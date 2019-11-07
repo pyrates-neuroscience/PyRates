@@ -3,7 +3,7 @@ Parameter Sweeps
 ================
 
 This section demonstrates how to use the `grid_search()` method and the `ClusterGridSearch` class from the `pyrates.utility` module to perform parameter sweeps on models in PyRates.
-Below, you will find the code to run a parameter sweep on the Montbrio model described in detail in "Gast, R. et al. (2018) PyRates - A Python framework for neural modeling and simulations on parallel hardware". The Montbrio model is a mean-field model of a globally coupled population of quadratic integrate-and-fire neurons, initially proposed by Montbrio and colleagues in 2015: "Montbrio et al. (2015) ....". The PyRates model implementation can be found under templates/montbrio.
+Below, you will find the code to run a parameter sweep on the Montbrio model described in more detail in "Gast, R. et al. (2018) PyRates - A Python framework for neural modeling and simulations on parallel hardware". The Montbrio model is a mean-field model of a globally coupled population of quadratic integrate-and-fire neurons, initially proposed by Montbrio and colleagues in 2015: "Montbrio et al. (2015) ....". The PyRates model implementation can be found under templates/montbrio.
 
 grid_search()
 -------------
