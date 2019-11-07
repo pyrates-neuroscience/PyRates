@@ -157,9 +157,9 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
 class ClusterCompute:
     def __init__(self, nodes: list, compute_dir=None, verbose: Optional[bool] = True):
-        """Create new ClusterCompute instance object with unique compute ID
+        """Connect to nodes inside the computer network and create a compute directory with a unique compute ID
 
-        Creates a compute directory for the ClusterCompute instance, either in the specified path or as a default
+        Creates a compute directory for the ClusterCompute instance that contains , either in the specified path or as a default
         folder in the current working directory of the executing script.
         Creates a logfile in ComputeDirectory/Logs and tees all future stdout and stderr of the executing script
         to this file
@@ -170,13 +170,13 @@ class ClusterCompute:
         nodes:
             List of names or IP addresses of working stations/servers in the local network
         compute_dir:
-            Full path to a directory that will be used as compute directory.
-            If none is given, a default compute directory is created in the current working directory
+            Directory that will be used to store the logfiles.
+            If none is provided, a default compute directory is created in the current working directory
         verbose:
-            If False, all std output will be copied to the log file but will not be shown in the terminal
+            If False, all std output will still be copied to the log file but won't be shown in the terminal
+
         Returns
         -------
-        ClusterCompute instance object
 
         """
 
@@ -431,6 +431,38 @@ class ClusterCompute:
 
 class ClusterGridSearch(ClusterCompute):
     def __init__(self, nodes, compute_dir=None, verbose: Optional[bool] = True):
+        """Connect to nodes inside the computer network and create a compute directory with a unique compute ID
+
+        The compute directory contains the following sub folders:
+        /Builds: Contains the build directories that are created by the grid_search() function for each worker
+        /Config: Contains the global log file and the local log files of each worker for each run() call to the CGS
+                 instance.
+        /Grids: Contains all parameter grids as .csv files that have been computed by the current CGS instance and their
+                respective sub grids that were transferred to the workers as .h5 files.
+        /Config: Contains configuration files in .json format that yield PyRates simulation parameters for each
+                 simulation that has been computed by the CGS instance.
+
+        Creates a compute directory for the ClusterCompute instance that contains , either in the specified path or as a default
+        folder in the current working directory of the executing script.
+        Creates a logfile in ComputeDirectory/Logs and tees all future stdout and stderr of the executing script
+        to this file
+        Connects to all nodes via SSH and saves the corresponding paramiko client in self.clients
+
+
+        Parameters
+        ----------
+        nodes
+            List of names or IP addresses of working stations/servers in the local network
+        compute_dir
+            Directory that will be used to store the logfiles.
+            If none is provided, a default compute directory is created in the current working directory
+        verbose
+            If False, all std output will still be copied to the log file but won't be shown in the terminal
+
+        Returns
+        -------
+
+        """
         super().__init__(nodes, compute_dir, verbose)
 
         self.chunk_idx = 0
@@ -1182,7 +1214,9 @@ class StreamTee(object):
 
 
 class ClusterWorkerTemplate(object):
+    """Contains an interface for its methods to be called on a cluster worker by a remote master.
 
+    """
     def __init__(self):
         self.FLAGS = argparse.Namespace
         self.results = pd.DataFrame
@@ -1190,6 +1224,12 @@ class ClusterWorkerTemplate(object):
         self.processed_results = pd.DataFrame
 
     def worker_init(self):
+        """Interface to receive input when run from the console
+
+        Returns
+        -------
+
+        """
         parser = argparse.ArgumentParser()
 
         parser.add_argument(
@@ -1224,6 +1264,17 @@ class ClusterWorkerTemplate(object):
         self.worker_exec(sys.argv)
 
     def worker_exec(self, _):
+        """Reads configurations and sub grid from the respective files and executes a grid_search() call with the
+           provided parameters.
+
+        Parameters
+        ----------
+        _
+
+        Returns
+        -------
+
+        """
         import warnings
         # external imports
         from numba import config
@@ -1349,40 +1400,41 @@ class ClusterWorkerTemplate(object):
 
     def worker_postprocessing(self, **kwargs):
         """
-        Post processing that is applied by each worker on their model simulation results
+        Post processing that is applied by each cluster worker on its computed model output.
 
         The ClusterWorkerTemplate class contains three DataFrames that can be used to add customized post processing:
 
-        self.results - DataFrame that contains the grid_search() results for the worker specific parameter sub grid
-        self.result_map - DataFrame that contains the computed parametrizations and their respective identification key
-                          which is used in the column names of the results DataFrame
-        self.processed_results - DataFrame with the same column names as the results DataFrame. Everything that is
-                                 is stored in the processed_results DataFrame will be send back to the master and
-                                 treated as worker output.
 
-        When implementing customized post processing, use the following code to iterate over all parametrization and
-        access their respective model output via the identification key. Make sure to write the processed data to the
-        processed_results DataFrame:
 
-        for idx, circuit in enumerate(self.result_map.iterrows()):
-            circ_idx = self.result_map.loc[(self.result_map == tuple(circuit[1].values)).all(1), :].index
-            data = self.results[circ_idx].to_numpy()
+        To apply the customized post processing during a ClusterGridSearch call, a customized worker file has to
+        be created that is passed to the CGS.run() call.
+        For that purpose, execute the following steps:
+        1. Create a new python script.
+        2. Derive a child class from the ClusterWorkerTemplate class and customize its worker_postprocessing() method.
+           Use self.results and self.result_map to access simulation data.
+           Safe the post processed data to self.processed_results.
+
+           self.results - DataFrame that contains the worker's grid_search() output for the provided parameter sub grid
+           self.result_map - DataFrame that contains the computed parametrizations and their respective identification
+                             key which is used in the column names of the results DataFrame
+           self.processed_results - DataFrame that will be send back to the master.
+                                    Has the same column structure as self.results, yet the index is unset.
+                                    The processed_results of all workers will be concatenated to a the final result
+
+        3. Ensure that if the worker script is executed, an instance of your customized worker class is invoked and that
+           its 'worker_init()' method is called.
+
+        When implementing customized post processing, use the following code to iterate over all computed results.
+        Make sure to write all final data to self.processed_results:
+
+        for idx, data in self.results.iteritems():
 
             # add processing of 'data' here
 
-            self.processed_results[circ_idx] = data
+            self.processed_results[:, idx] = data
 
-        To actually use the customized post processing during a ClusterGridSearch call, a customized worker file has to
-        be created that is passed to the CGS.run() call.
-        For that purpose, execute the following steps
-        1. Create a new python script
-        2. In that script, derive a child class from the ClusterWorkerTemplate class and customize the
-           worker_postprocessing member function to your needs
-        3. Make sure, that if the newly created script is run, an instance of your derived class is created and that
-           this instance calls its 'worker_init()' method
-
-        A full worker template that implements the fourier transform on the simulation results would look like the
-        following:
+        An example worker template that estimates the power spectral density of each model parametrization results is
+        presented below:
 
             custom_worker.py
 
@@ -1401,8 +1453,8 @@ class ClusterWorkerTemplate(object):
 
 
             if __name__ == "__main__":
-                cgs_worker = MyWorker()
-                cgs_worker.worker_init()
+                my_worker = MyWorker()
+                my_worker.worker_init()
 
         Parameters
         ----------
