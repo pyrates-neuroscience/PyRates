@@ -48,3 +48,7 @@ def pr_sigmoid(x, scaling=1.0, steepness=1.0, offset=0.0):
 def pr_softmax(x, axis=0):
     x_exp = np.exp(x)
     return x_exp/np.sum(x_exp, axis=axis)
+
+
+def pr_identity(x):
+    return x

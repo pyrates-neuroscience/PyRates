@@ -46,12 +46,11 @@ Currently supported backends:
 
 # external imports
 import time as t
-from typing import Optional, Dict, List, Union, Tuple, Any
+from typing import Optional, Dict, List, Union, Any
 import numpy as np
 from copy import deepcopy
 import os
 import sys
-from importlib import import_module, reload
 from shutil import rmtree
 import warnings
 
@@ -191,7 +190,6 @@ class PyRatesOp:
 
     n_consts = 0      # counter for the number of constants in a operation
     arg_names = {}    # used to ensure uniqueness of function arguments
-    op_names = {}     # used to ensure uniqueness of function names
 
     def __init__(self, op: str, name: str, *args) -> None:
         """Instantiates PyRates operator.
@@ -201,31 +199,24 @@ class PyRatesOp:
         self.op = op
         self.short_name = name.split('/')[-1]
         self.name = name
-        if self.short_name in self.op_names:
-            self.op_names[self.short_name] += 1
-            self.short_name = f"{self.short_name}_{self.op_names[self.short_name]}"
-        else:
-            self.op_names[self.short_name] = 0
 
         # generate function string
-        op_dict = self.generate_op(self.short_name, op, args)
+        self._op_dict = self.generate_op(op, args)
 
         # extract information from parsing results
-        self.func = op_dict['func']
-        self.arg_names = op_dict['arg_names'].copy()
-        self.call = op_dict['call']
-        self.return_val = op_dict['return_val']
-        self.input_ops = op_dict['input_ops']
-        self.constant = op_dict['constant']
+        self.value = self._op_dict['eval']
+        self.arg_names = self._op_dict['arg_names'].copy()
+        self.input_ops = self._op_dict['input_ops']
+        self.constant = self._op_dict['constant']
 
         # generate function
-        func_dict = self._generate_func(op_dict['func'])
+        func_dict = self._generate_func()
         self._callable = func_dict.pop(self.short_name)
 
         # test function
-        self.args = self._deepcopy(op_dict['args'])
+        self.args = self._deepcopy(self._op_dict['args'])
         result = self.eval()
-        self.args = op_dict['args'].copy()
+        self.args = self._op_dict['args'].copy()
 
         # remember output shape and data-type
         self.shape = result.shape if hasattr(result, 'shape') else ()
@@ -239,74 +230,55 @@ class PyRatesOp:
         return result
 
     @classmethod
-    def generate_op(cls, name, op, args):
+    def generate_op(cls, op, args):
         """Generates the function string, call signature etc.
         """
 
         # initialization
-        code_gen = CodeGen()
-        results = {'func': None, 'args': [], 'arg_names': [], 'constant': False, 'call': None, 'return_val': None,
-                   'input_ops': []}
+        results = {'eval': None, 'args': [], 'arg_names': [], 'constant': False, 'input_ops': []}
 
         # setup function head
         #####################
 
-        # begin
-        code_gen.add_code_line(f"def {name}(")
-
         # add arguments to function call
-        code_gen, results, results_args, results_arg_names, n_vars = cls._process_args(code_gen, args, results)
-
-        # end function call
-        code_gen.code[-1] = code_gen.code[-1][:-1]
-        code_gen.add_code_line(")")
-        results['call'] = code_gen.generate()
-        code_gen.add_code_line(":")
-        code_gen.add_linebreak()
-        code_gen.add_indent()
+        results, results_args, results_arg_names, n_vars = cls._process_args(args, results)
 
         # setup return line
         ###################
 
         # begin
-        code_gen.add_code_line(f"return ")
-        return_gen = CodeGen()
-        return_gen.add_code_line(f"{op}(")
+        # code_gen.add_code_line(f"return ")
+        eval_gen = CodeGen()
+        eval_gen.add_code_line(f"{op}(")
 
         # add operations on arguments
         for key, arg in zip(results_arg_names, results_args):
             if type(arg) is str:
-                if arg is "[":
-                    return_gen.code[-1] = code_gen.code[-1][:-1]
                 if arg is "(":
-                    return_gen.add_code_line(f"{arg}")
+                    eval_gen.add_code_line(f"{arg}")
                 else:
-                    return_gen.add_code_line(f"{arg},")
+                    eval_gen.add_code_line(f"{arg},")
                 idx = cls._index(results['args'], arg)
                 results['args'].pop(idx)
                 results['arg_names'].pop(idx)
             elif type(arg) is dict:
-                return_gen.add_code_line(f"{arg['call']},")
+                eval_gen.add_code_line(f"{arg['eval']},")
             else:
-                return_gen.add_code_line(f"{key},")
+                eval_gen.add_code_line(f"{key},")
 
         # add function end
-        return_gen.code[-1] = return_gen.code[-1][:-1]
-        return_gen.add_code_line(")")
-        results['return_val'] = return_gen.generate()
-        code_gen.add_code_line(results['return_val'])
+        eval_gen.code[-1] = eval_gen.code[-1][:-1]
+        eval_gen.add_code_line(")")
+        results['eval'] = eval_gen.generate()
 
         # check whether operation arguments contain merely constants
         if n_vars == 0:
             results['constant'] = True
 
-        # generate op
-        results['func'] = code_gen.generate()
-
         return results
 
     @classmethod
-    def _process_args(cls, code_gen, args, results):
+    def _process_args(cls, args, results):
         """Parses arguments to function into argument names that are added to the function call and argument values
         that can used to set up the return line of the function.
         """
@@ -330,9 +302,7 @@ class PyRatesOp:
                 for i, pop_idx in enumerate(pop_indices):
                     new_args.pop(pop_idx - i)
                     new_arg_names.pop(pop_idx - i)
-                for arg_tmp in new_arg_names:
-                    code_gen.add_code_line(f"{arg_tmp},")
-                results_args.append({'args': new_args, 'call': arg.return_val,
+                results_args.append({'args': new_args, 'eval': arg.lhs if 'assign' in arg.short_name else arg.value,
                                      'arg_names': new_arg_names})
                 results_arg_names.append(arg.short_name)
                 results['args'] += new_args
@@ -343,12 +313,11 @@ class PyRatesOp:
 
                 # parse PyRates variable into the function
                 n_vars += 1
-                arg_name = cls._generate_unique_argnames([arg.short_name])[0]
+                arg_name = arg.short_name  #cls._generate_unique_argnames([arg.short_name])[0]
                 results_args.append(arg)
                 results_arg_names.append(arg_name)
                 results['args'].append(arg)
                 results['arg_names'].append(arg_name)
-                code_gen.add_code_line(f"{arg_name},")
 
             elif type(arg) is tuple or type(arg) is list:
 
@@ -358,8 +327,7 @@ class PyRatesOp:
                 results_arg_names.append(tuple_begin)
                 results['args'].append(tuple_begin)
                 results['arg_names'].append(tuple_begin)
-                code_gen, results, results_args_tmp, results_arg_names_tmp, n_vars_tmp = \
-                    cls._process_args(code_gen, arg, results)
+                results, results_args_tmp, results_arg_names_tmp, n_vars_tmp = cls._process_args(arg, results)
                 results_args += results_args_tmp
                 results_arg_names += results_arg_names_tmp
                 n_vars += n_vars_tmp
@@ -373,17 +341,16 @@ class PyRatesOp:
 
                 # parse strings and constant arguments into the function
                 if type(arg) is str:
-                    arg_name = cls._generate_unique_argnames([arg])[0]
+                    arg_name = arg  # cls._generate_unique_argnames([arg])[0]
                 else:
                     cls.n_consts += 1
                     arg_name = f"c_{cls.n_consts}"
-                    code_gen.add_code_line(f"{arg_name},")
                 results_args.append(arg)
                 results_arg_names.append(arg_name)
                 results['args'].append(arg)
                 results['arg_names'].append(arg_name)
 
-        return code_gen, results, results_args, results_arg_names, n_vars
+        return results, results_args, results_arg_names, n_vars
 
     @classmethod
     def _generate_unique_argnames(cls, args: list):
@@ -416,10 +383,18 @@ class PyRatesOp:
         if any(check):
             raise ValueError(f'Result of operation ({name}) contains NaNs or infinite values.')
 
-    @staticmethod
-    def _generate_func(func_str):
+    def _generate_func(self):
         func_dict = {}
-        exec(func_str, globals(), func_dict)
+        func = CodeGen()
+        func.add_code_line(f"def {self.short_name}(")
+        for arg in self._op_dict['arg_names']:
+            func.add_code_line(f"{arg},")
+        func.code[-1] = func.code[-1][:-1]
+        func.add_code_line("):")
+        func.add_linebreak()
+        func.add_indent()
+        func.add_code_line(f"return {self._op_dict['eval']}")
+        exec(func.generate(), globals(), func_dict)
         return func_dict
 
     @staticmethod
@@ -436,15 +411,35 @@ class PyRatesAssignOp(PyRatesOp):
     (1. entry in args). An index can be provided as third argument to target certain entries of the variable.
     """
 
+    def __init__(self, op, name, *args):
+
+        super().__init__(op, name, *args)
+        self.lhs = self._op_dict.pop('lhs')
+        self.rhs = self._op_dict.pop('rhs')
+
+    def _generate_func(self):
+        func_dict = {}
+        func = CodeGen()
+        func.add_code_line(f"def {self.short_name}(")
+        for arg in self._op_dict['arg_names']:
+            func.add_code_line(f"{arg},")
+        func.code[-1] = func.code[-1][:-1]
+        func.add_code_line("):")
+        func.add_linebreak()
+        func.add_indent()
+        func.add_code_line(f"{self._op_dict['eval']}")
+        func.add_linebreak()
+        func.add_code_line(f"return {self._op_dict['lhs']}")
+        exec(func.generate(), globals(), func_dict)
+        return func_dict
+
     @classmethod
-    def generate_op(cls, name, op, args):
+    def generate_op(cls, op, args):
         """Generates the assign function string, call signature etc.
         """
 
         # initialization
-        code_gen = CodeGen()
-        results = {'func': None, 'args': [], 'arg_names': [], 'constant': False, 'call': None, 'input_ops': [],
-                   'return_val': None}
+        results = {'eval': None, 'args': [], 'arg_names': [], 'constant': False, 'input_ops': [], 'lhs': None}
         results_args = []
         results_arg_names = []
 
@@ -460,7 +455,7 @@ class PyRatesAssignOp(PyRatesOp):
 
                 # for tensorflow-like scatter indexing
                 if hasattr(args[2], 'short_name'):
-                    key = cls._generate_unique_argnames([args[2].short_name])[0]
+                    key = args[2].short_name  #cls._generate_unique_argnames([args[2].short_name])[0]
                     if hasattr(args[2], 'return_val'):
                         var_idx = f"{args[2].return_val},"
                     else:
@@ -472,7 +467,7 @@ class PyRatesAssignOp(PyRatesOp):
             elif hasattr(args[2], 'short_name'):
 
                 # for indexing via PyRates variables
-                key = cls._generate_unique_argnames([args[2].short_name])[0]
+                key = args[2].short_name  #cls._generate_unique_argnames([args[2].short_name])[0]
                 if hasattr(args[2], 'return_val'):
                     var_idx = f"[{args[2].return_val}]"
                 else:
@@ -481,7 +476,7 @@ class PyRatesAssignOp(PyRatesOp):
             elif type(args[2]) is str:
 
                 # for indexing via string-based indices
-                key = cls._generate_unique_argnames([args[3].short_name])[0]
+                key = args[3].short_name  #cls._generate_unique_argnames([args[3].short_name])[0]
                 var_idx = f"[{args[2]}]"
                 var_idx = var_idx.replace(args[3].short_name, key)
 
@@ -507,23 +502,19 @@ class PyRatesAssignOp(PyRatesOp):
             var_idx = ""
 
         # add variable to the function arguments
-        var_key = cls._generate_unique_argnames([var.short_name])[0]
+        var_key = var.short_name  #cls._generate_unique_argnames([var.short_name])[0]
         var_pos = len(results_args)
         results_args.append(var)
         results_arg_names.append(var_key)
 
         # add variable update to the function arguments
-        upd_key = cls._generate_unique_argnames([upd.short_name])[0] if hasattr(upd, 'short_name') else \
-            cls._generate_unique_argnames(["upd"])[0]
+        upd_key = upd.short_name if hasattr(upd, 'short_name') else cls._generate_unique_argnames(["upd"])[0]
         upd_pos = len(results_args)
         results_args.append(upd)
         results_arg_names.append(upd_key)
 
         # setup function head
         #####################
-
-        # begin
-        code_gen.add_code_line(f"def {name}(")
 
         # add arguments
         for idx, (key, arg) in enumerate(zip(results_arg_names, results_args)):
@@ -532,50 +523,37 @@ class PyRatesAssignOp(PyRatesOp):
                 for arg_tmp in arg.arg_names:
                     if arg_tmp in results['arg_names']:
                         pop_indices.append(arg.arg_names.index(arg_tmp))
-                    else:
-                        code_gen.add_code_line(f"{arg_tmp},")
                 new_args = arg.args.copy()
                 new_arg_names = arg.arg_names.copy()
                 for i, pop_idx in enumerate(pop_indices):
                     new_args.pop(pop_idx - i)
                     new_arg_names.pop(pop_idx - i)
-                results_args[idx] = {'args': new_args, 'call': arg.return_val, 'arg_names': new_arg_names}
+                results_args[idx] = {'args': new_args, 'eval': arg.value, 'arg_names': new_arg_names}
                 results['input_ops'].append(arg.short_name)
                 results['args'] += new_args
                 results['arg_names'] += new_arg_names
             else:
                 results['args'].append(arg)
                 results['arg_names'].append(key)
-                code_gen.add_code_line(f"{key},")
-
-        # end
-        code_gen.code[-1] = code_gen.code[-1][:-1]
-        code_gen.add_code_line("):")
-        results['call'] = code_gen.generate()
-        code_gen.add_linebreak()
-        code_gen.add_indent()
 
         # assign update to variable and return variable
         ###############################################
 
-        var_str = results_args[var_pos]['call'] if type(results_args[var_pos]) is dict else var_key
-        upd_str = results_args[upd_pos]['call'] if type(results_args[upd_pos]) is dict else upd_key
+        var_str = results_args[var_pos]['eval'] if type(results_args[var_pos]) is dict else var_key
+        upd_str = results_args[upd_pos]['eval'] if type(results_args[upd_pos]) is dict else upd_key
         if op in ["=", "+=", "-=", "*=", "/="]:
-            code_gen.add_code_line(f"{var_str}{var_idx} {op} {upd_str}")
+            assign_line = f"{var_str}{var_idx} {op} {upd_str}"
         elif "scatter" in op:
             scatter_into_first_dim = args[-1]
             if len(args) > 3 and scatter_into_first_dim:
-                code_gen.add_code_line(f"{var_str}.{op}([{var_idx}], [{upd_str}])")
+                assign_line = f"{var_str}.{op}([{var_idx}], [{upd_str}])"
             else:
-                code_gen.add_code_line(f"{var_str}.{op}({var_idx}{upd_str})")
+                assign_line = f"{var_str}.{op}({var_idx}{upd_str})"
         else:
-            code_gen.add_code_line(f"{var_str}{var_idx}.{op}({upd_str})")
-        code_gen.add_linebreak()
-        code_gen.add_code_line(f"return {var_str}")
-        results['return_val'] = var_str
-
-        # generate op
-        results['func'] = code_gen.generate()
+            assign_line = f"{var_str}{var_idx}.{op}({upd_str})"
+        results['eval'] = assign_line
+        results['lhs'] = var_str
+        results['rhs'] = upd_str
 
         return results
 
@@ -586,14 +564,13 @@ class PyRatesIndexOp(PyRatesOp):
     """
 
     @classmethod
-    def generate_op(cls, name, op, args):
+    def generate_op(cls, op, args):
         """Generates the index function string, call signature etc.
         """
 
         # initialization
-        code_gen = CodeGen()
-        results = {'func': None, 'args': [], 'arg_names': [], 'constant': False, 'shape': (), 'dtype': 'float32',
-                   'call': None, 'input_ops': [], 'return_val': None}
+        results = {'eval': None, 'args': [], 'arg_names': [], 'constant': False, 'shape': (), 'dtype': 'float32',
+                   'input_ops': []}
 
         # extract variable
         ##################
@@ -604,7 +581,7 @@ class PyRatesIndexOp(PyRatesOp):
         if PyRatesOp.__subclasscheck__(type(var_tmp)):
 
             # nest pyrates operations and their arguments into the indexing operation
-            var = var_tmp.return_val
+            var = var_tmp.lhs if hasattr(var_tmp, 'lhs') else var_tmp.value
             pop_indices = []
             for arg_tmp in var_tmp.arg_names:
                 if arg_tmp in results['arg_names']:
@@ -622,7 +599,7 @@ class PyRatesIndexOp(PyRatesOp):
         elif hasattr(var_tmp, 'short_name'):
 
             # parse pyrates variables into the indexing operation
-            var = cls._generate_unique_argnames([var_tmp.short_name])[0]
+            var = var_tmp.short_name  #cls._generate_unique_argnames([var_tmp.short_name])[0]
             results['args'].append(var_tmp)
             results['arg_names'].append(var)
             n_vars += 1
@@ -643,13 +620,13 @@ class PyRatesIndexOp(PyRatesOp):
         if PyRatesOp.__subclasscheck__(type(idx)):
 
             # nest pyrates operations and their arguments into the indexing operation
-            var_idx = f"[{idx.return_val}]"
+            var_idx = f"[{idx.lhs if hasattr(idx, 'lhs') else idx.value}]"
             pop_indices = []
             for arg_tmp in idx.arg_names:
                 if arg_tmp in results['arg_names']:
                     pop_indices.append(idx.arg_names.index(arg_tmp))
             new_args = idx.args.copy()
-            new_arg_names = cls._generate_unique_argnames(idx.arg_names.copy())
+            new_arg_names = idx.arg_names.copy()  #cls._generate_unique_argnames(idx.arg_names.copy())
             for i, pop_idx in enumerate(pop_indices):
                 new_args.pop(pop_idx - i)
                 new_arg_names.pop(pop_idx - i)
@@ -661,7 +638,7 @@ class PyRatesIndexOp(PyRatesOp):
         elif hasattr(idx, 'short_name'):
 
             # parse pyrates variables into the indexing operation
-            key = cls._generate_unique_argnames([idx.short_name])[0]
+            key = idx.short_name  #cls._generate_unique_argnames([idx.short_name])[0]
             var_idx = f"[{key}]"
             results['args'].append(idx)
             results['arg_names'].append(key)
@@ -698,33 +675,15 @@ class PyRatesIndexOp(PyRatesOp):
         # setup function head
         #####################
 
-        # beginning
-        code_gen.add_code_line(f"def {name}(")
-
-        # variable and index
-        for arg in results['arg_names']:
-            code_gen.add_code_line(f"{arg},")
-
         # remaining arguments
-        code_gen, results, results_args, results_arg_names, n_vars_tmp = cls._process_args(code_gen, args[2:], results)
+        results, results_args, results_arg_names, n_vars_tmp = cls._process_args(args[2:], results)
         n_vars += n_vars_tmp
-
-        # end of function head
-        code_gen.code[-1] = code_gen.code[-1][:-1]
-        code_gen.add_code_line("):")
-        results['call'] = code_gen.generate()
-        code_gen.add_linebreak()
-        code_gen.add_indent()
 
         # apply index to variable and return variable
         #############################################
 
-        return_line = f"{var}{var_idx}"
-        code_gen.add_code_line(f"return {return_line}")
-        results['return_val'] = return_line
-
         # generate op
-        results['func'] = code_gen.generate()
+        results['eval'] = f"{var}{var_idx}"
 
         # check whether any state variables are part of the indexing operation or not
         if n_vars == 0:
@@ -1099,8 +1058,9 @@ class NumpyBackend(object):
 
         # remove op inputs from layers (need not be evaluated anymore)
         for op_name_tmp in op.input_ops:
-            idx_1, idx_2 = self.op_indices[op_name_tmp]
-            self._set_op(None, idx_1, idx_2)
+            if 'assign' not in op_name_tmp:
+                idx_1, idx_2 = self.op_indices[op_name_tmp]
+                self._set_op(None, idx_1, idx_2)
 
         # for constant ops, add a constant to the graph, containing the op evaluation
         if op.constant:
@@ -1349,10 +1309,6 @@ class NumpyBackend(object):
         ----------
         build_dir
             Directory in which to create the file structure for the simulation.
-        decorator
-            Decorator to add to the python functions.
-        decorator_kwargs
-            Keyword arguments for the function decorator
 
         Returns
         -------
@@ -1372,7 +1328,7 @@ class NumpyBackend(object):
             else:
                 new_layer_idx += 1
 
-        # create directory in which to store layer scripts
+        # create directory in which to store rhs function
         orig_path = os.getcwd()
         if build_dir:
             os.mkdir(build_dir)
@@ -1395,63 +1351,29 @@ class NumpyBackend(object):
         net_dir = os.getcwd()
         self._build_dir = net_dir
 
-        # write layer operations to files
+        # collect state variable and parameter vectors
+        state_vars, params, var_map = self._process_vars()
+
+        # create rhs function
+        func_gen = CodeGen()
+        func_gen.add_code_line("def rhs_eval(")
+        for state_var in state_vars:
+            func_gen.add_code_line(f"{state_var['name']},")
+        for par in params:
+            func_gen.add_code_line(f"{par['name']},")
+        if len(func_gen.code) > 1:
+            func_gen.code.pop(-1)
+        func_gen.add_code_line("):")
+        func_gen.add_linebreak()
+        func_gen.add_indent()
         for i, layer in enumerate(self.layers):
-            l_dir = f"layer_{i}"
-            try:
-                os.mkdir(l_dir)
-            except FileExistsError:
-                pass
-            os.chdir(l_dir)
             for j, op in enumerate(layer):
-                if type(op) is not tuple:
-                    op_fname = f"op_{j}"
-                    with open(f"{op_fname}.py", 'w') as f:
-                        for imp in self._imports:
-                            f.write(f"{imp}\n")
-                        f.write(op.func)
-                        f.close()
-            os.chdir(net_dir)
-
-        # write layer run functions and import them for execution
-        #########################################################
-
-        # preparations
-        sys.path.insert(1, build_dir)
-        sys.path.insert(2, net_dir)
-        with open(f"__init__.py", 'w') as net_init:
-            net_init.close()
-        net_module = import_module(self.name)
-        layer_runs = []
-
-        for i, layer in enumerate(self.layers):
-
-            layer_ops, layer_op_args = [], []
-            os.chdir(f"layer_{i}")
-
-            # write the layer init
-            with open(f"__init__.py", 'w') as layer_init:
-                for j in range(len(layer)):
-                    layer_init.write(f"from .op_{j} import *\n")
-                layer_init.close()
-            os.chdir(net_dir)
-            t.sleep(0.1)
-            reload(net_module)
-
-            # import the layer operations
-            for j, op in enumerate(layer):
-                op_module = import_module(f".op_{j}", package=f"{self.name}.layer_{i}")
-                layer_ops.append(getattr(op_module, op.short_name))
-                layer_op_args.append(op.args)
-
-            # generate the layer run function and write it to file
-            layer_runs.append(self._generate_layer_run(layer_ops, layer_op_args, **kwargs))
-
+                func_gen.add_code_line(op.eval)
+                func_gen.add_linebreak()
+        func_gen.add_code_line(f"return")
         sys.path.pop(2)
         sys.path.pop(1)
         os.chdir(orig_path)
-
-        return layer_runs
 
     def eval(self, ops: list) -> list:
         """Evaluates each operation in list.
@@ -1794,6 +1716,15 @@ class NumpyBackend(object):
             scatter_into_first_dim = True
 
         return var, update, idx, scatter_into_first_dim
+
+    def _process_vars(self):
+        """
+
+        Returns
+        -------
+
+        """
+        return [], [], []
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:

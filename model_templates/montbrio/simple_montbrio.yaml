@@ -1,6 +1,41 @@
 %YAML 1.2
 ---
 
+Op_e_adapt:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - I_a - tau*(PI*r)^2"
+    - "d/dt * I_a = x"
+    - "d/dt * x = (alpha*r - 2.0*x - I_a/tau_a)/tau_a"
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    I_a:
+      default: variable
+    x:
+      default: variable
+    r_e:
+      default: input
+    r_i:
+      default: input
+    tau:
+      default: 1.0
+    delta:
+      default: 2.0
+    eta:
+      default: -12.0
+    J_e:
+      default: 21.2132
+    alpha:
+      default: 1.0
+    tau_a:
+      default: 10.0
+    inp:
+      default: input
+
 Op_e:
   base: OperatorTemplate
   equations:
@@ -60,6 +95,11 @@ Pop_e:
   operators:
     - Op_e
 
+Pop_adapt:
+  base: NodeTemplate
+  operators:
+    - Op_e_adapt
+
 Pop_i:
   base: NodeTemplate
   operators:
@@ -98,3 +138,8 @@ Net4:
   edges:
     - [E1/Op_e/r, E2/Op_e/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
     - [E2/Op_e/r, E1/Op_e/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
+
+Net5:
+  base: CircuitTemplate
+  nodes:
+    E: Pop_adapt

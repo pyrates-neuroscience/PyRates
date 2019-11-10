@@ -49,7 +49,7 @@ def functional_connectivity(data: pd.DataFrame, metric: str = 'cov', **kwargs) -
             - `cov` for covariance (uses `np.cov`)
             - `corr` for pearsson correlation (uses `np.corrcoef`)
             - `csd` for cross-spectral density (uses `mne.time_frequency.csd_array_morlet`)
-            - `coh` for coherenc (uses `mne.connectivtiy.spectral_connectivity`)
+            - `coh` for coherence (uses `mne.connectivtiy.spectral_connectivity`)
             - `cohy` for coherency (uses `mne.connectivtiy.spectral_connectivity`)
             - `imcoh` for imaginary coherence (uses `mne.connectivtiy.spectral_connectivity`)
             - `plv` for phase locking value (uses `mne.connectivtiy.spectral_connectivity`)
@@ -102,7 +102,7 @@ def functional_connectivity(data: pd.DataFrame, metric: str = 'cov', **kwargs) -
                                                method=metric,
                                                sfreq=1./(data.index[1] - data.index[0]),
                                                **kwargs)
-        fc = fc[:, :, 0]
+        fc = fc.squeeze()
 
     else:
 
