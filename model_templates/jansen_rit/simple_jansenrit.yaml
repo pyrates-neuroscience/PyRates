@@ -28,22 +28,19 @@ PRO:
 JRC_op:
   base: OperatorTemplate
   equations:
-    - 'd/dt * time = 1.0'
-    - 'I_ext = alpha*sin(2.0*PI*omega*time)'
     - 'd/dt * PSP_ein = PSP_t_ein'
-    - 'd/dt * PSP_t_ein =  h_e*c_pc_ein/tau_e * sigmoid((PSP_pc_e + PSP_pc_i), m_max, r, V_thr) - (1./tau_e)^2. * PSP_ein - (2./tau_e) * PSP_t_ein'
+    - 'd/dt * PSP_t_ein =  h_e*c/tau_e * m_out - (1./tau_e)^2. * PSP_ein - (2./tau_e) * PSP_t_ein'
     - 'd/dt * PSP_iin = PSP_t_iin'
-    - 'd/dt * PSP_t_iin =  h_e*c_pc_iin/tau_e * sigmoid((PSP_pc_e + PSP_pc_i), m_max, r, V_thr) - (1./tau_e)^2. * PSP_iin - (2./tau_e) * PSP_t_iin'
+    - 'd/dt * PSP_t_iin =  h_e*c/(ei_ratio*tau_e) * m_out - (1./tau_e)^2. * PSP_iin - (2./tau_e) * PSP_t_iin'
     - 'd/dt * PSP_pc_e = PSP_t_pc_e'
-    - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c_ein_pc*sigmoid(PSP_ein, m_max, r, V_thr) + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
+    - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c*0.8*sigmoid(PSP_ein, m_max, r, V_thr) + c*m_in/io_ratio + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
     - 'd/dt * PSP_pc_i = PSP_t_pc_i'
-    - 'd/dt * PSP_t_pc_i =  h_i*c_iin_pc/tau_i * sigmoid(PSP_iin, m_max, r, V_thr) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
-    - 'PSP_pc = PSP_pc_e + PSP_pc_i + I_ext'
+    - 'd/dt * PSP_t_pc_i =  h_i*c/(ei_ratio*tau_i) * sigmoid(PSP_iin, m_max, r, V_thr) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
+    - 'PSP_pc = PSP_pc_e + PSP_pc_i'
+    - 'm_out = sigmoid(PSP_pc, m_max, r, V_thr)'
   variables:
-    alpha:
-      default: 0.0
-    omega:
-      default: 10.0
+    m_out:
+      default: output
     h_e:
       default: 3.25e-3
     tau_e:
@@ -61,7 +58,7 @@ JRC_op:
     PSP_t_iin:
       default: variable
     PSP_pc:
-      default: output
+      default: variable
     PSP_pc_e:
       default: variable
     PSP_t_pc_e:
@@ -70,11 +67,7 @@ JRC_op:
       default: variable
     PSP_t_pc_i:
       default: variable
-    time:
-      default: variable
-    I_ext:
-      default: variable
-    u:
+    m_in:
       default: input
     m_max:
       default: 5.
@@ -82,14 +75,14 @@ JRC_op:
       default: 560.
     V_thr:
       default: 6e-3
-    c_ein_pc:
-      default: 108.0
-    c_iin_pc:
-      default: 33.75
-    c_pc_ein:
+    c:
       default: 135.0
-    c_pc_iin:
-      default: 33.75
+    ei_ratio:
+      default: 4.0
+    io_ratio:
+      default: 3.0
+    u:
+      default: input
 
 
 RPO_e_pc:
@@ -190,16 +183,24 @@ JRC_simple:
   base: CircuitTemplate
   nodes:
     JRC: JRC_pop
+
+JRC_2coupled:
+  base: CircuitTemplate
+  nodes:
+    JRC1: JRC_pop
+    JRC2: JRC_pop
   edges:
+    - [JRC1/JRC_op/m_out, JRC2/JRC_op/m_in, DummyEdge, {weight: 1.0}]
+    - [JRC2/JRC_op/m_out, JRC1/JRC_op/m_in, DummyEdge, {weight: 1.0}]
 
 JRC_delaycoupled:
   base: CircuitTemplate
-  circuits:
-    JRC1: JRC
-    JRC2: JRC
+  nodes:
+    JRC1: JRC_pop
+    JRC2: JRC_pop
   edges:
-    - [JRC1/PC/PRO/m_out, JRC2/PC/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
-    - [JRC2/PC/PRO/m_out, JRC1/PC/RPO_e_pc/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [JRC1/JRC_op/m_out, JRC2/JRC_op/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
+    - [JRC2/JRC_op/m_out, JRC1/JRC_op/m_in, DummyEdge, {weight: 1.0, delay: 0.0}]
 
 JRC_dc:
   base: CircuitTemplate

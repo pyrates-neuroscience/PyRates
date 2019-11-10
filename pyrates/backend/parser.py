@@ -231,31 +231,10 @@ class ExpressionParser(ParserElement):
         self._check_parsed_expr(self.rhs)
 
         # parse rhs into backend
-        rhs = self.parse(self.expr_stack[:])
-
-        if self.lhs_key in self.vars and not self._instantaneous and hasattr(rhs, 'short_name'):
-
-            # create new variable for lhs update
-            name = f"{self.lhs_key}_delta"
-            i = 0
-            name = f"{name}_{i}"
-            while name in self.vars:
-                i += 1
-                name[-1] = i
-            dtype = rhs.dtype if hasattr(rhs, 'dtype') else self.backend._float_def
-            shape = rhs.shape if hasattr(rhs, 'shape') else ()
-
-            # assign rhs to new variable
-            delta = self.backend.add_var('state_var', name=name, dtype=dtype, shape=shape, **self.parser_kwargs)
-            self.backend.add_op('=', delta, rhs)
-            self.rhs = delta
-
-        else:
-
-            self.rhs = rhs
+        self.rhs = self.parse(self.expr_stack[:])
 
         # post rhs parsing steps
-        self.rhs_eval = rhs
+        self.rhs_eval = self.rhs
         self.clear()
         self._finished_rhs = True
 
@@ -264,9 +243,9 @@ class ExpressionParser(ParserElement):
         self._check_parsed_expr(self.lhs)
 
         # parse lhs into backend
-        self.lhs = self._update_lhs()
+        self._update_lhs()
 
-        return self.lhs, self.rhs, self.vars
+        return self.lhs_key, self.rhs, self.vars
 
     def parse(self, expr_stack: list) -> tp.Any:
         """Parse elements in expression stack into the backend.
@@ -390,7 +369,10 @@ class ExpressionParser(ParserElement):
         elif op in self.vars:
 
             # extract constant/variable from args dict
-            self.op = self.vars[op]
+            if op == self.expr_str:
+                self.op = self.backend.add_op('no_op', self.vars[op], **self.parser_kwargs)
+            else:
+                self.op = self.vars[op]
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
@@ -514,31 +496,30 @@ class ExpressionParser(ParserElement):
 
         if diff_eq:
 
-            if solver == 'euler':
-
-                # use explicit forward euler
-                self.backend.next_layer()
-                op = self.parse(self.expr_stack + ['dt', 'rhs', '*', '+='])
-                self.backend.previous_layer()
-
-            else:
-
-                raise ValueError(f'Wrong solver type: {solver}. '
-                                 f'Please check the docstring of this function for available solvers.')
+            # if solver == 'euler':
+            #
+            #     # use explicit forward euler
+            #     self.backend.next_layer()
+            #     op = self.parse(self.expr_stack + ['dt', 'rhs', '*', '+='])
+            #     self.backend.previous_layer()
+            #
+            # else:
+            #
+            #     raise ValueError(f'Wrong solver type: {solver}. '
+            #                      f'Please check the docstring of this function for available solvers.')
+            pass
 
         elif self._instantaneous:
 
             # simple instantaneous update
-            op = self.parse(self.expr_stack + ['rhs', self._assign_type])
+            self.vars[self.lhs_key] = self.parse(self.expr_stack + ['rhs', self._assign_type])
 
         else:
 
             # simple non-instantaneous update
             self.backend.next_layer()
-            op = self.parse(self.expr_stack + ['rhs', self._assign_type])
+            self.vars[self.lhs_key] = self.parse(self.expr_stack + ['rhs', self._assign_type])
             self.backend.previous_layer()
-
-        return op
 
     def _preprocess_expr_str(self, expr: str) -> tuple:
         """Turns differential equations into simple algebraic equations using a certain solver scheme and extracts
@@ -771,8 +752,7 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         # second rhs evaluation
         updates.update({key: arg for key, arg in equation_args.items() if 'inputs' in key})
         equations_tmp, updates = update_rhs(deepcopy(equations), updates, update_num,
-                                                                       "(var_placeholder + 0.5*update_placeholder)")
-        #equation_args = update_equation_args(equation_args, updates)
+                                            "(var_placeholder + 0.5*update_placeholder)")
         state_vars = {key: var for key, var in equation_args.items()
                       if any([orig_key in key for orig_key in state_vars_orig])}
         update_num += 1
@@ -787,7 +767,6 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         updates.update(updates_new)
         equations, updates = update_rhs(equations, updates, update_num,
                                         "(var_placeholder - var_placeholder_1 + 2*update_placeholder)")
-        #equation_args = update_equation_args(equation_args, updates)
         state_vars = {key: var for key, var in equation_args.items()
                       if any([orig_key in key for orig_key in state_vars_orig])}
         update_num += 1
@@ -798,7 +777,6 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         backend.add_layer()
 
         # combination of 3 rhs evaluations a'la rk23
-        #equation_args = update_equation_args(equation_args, updates)
         equations = []
         for var_info in state_vars_orig:
             node, op, var = var_info.split('/')
@@ -838,12 +816,10 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         according to their right-hand sides. The second one is the updated `equation_args` dictionary that was
         passed to this function.
     """
-    updates = {}
+
+    var_updates = {}
 
     for layer in equations:
-
-        coupled = is_coupled(layer)
-
         for eq, scope in layer:
 
             # parse arguments
@@ -857,7 +833,6 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                 if inp not in equation_args:
                     raise KeyError(inp)
                 inp_tmp = equation_args[inp]
-                # TODO: For some reason, some equation args are added after this point that I do not understand.
                 op_args[key] = inp_tmp
                 if type(inp_tmp) is dict and 'vtype' in inp_tmp:
                     unprocessed_inputs.append(key)
@@ -876,31 +851,31 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
             diff_eq = is_diff_eq(eq)
 
-            if not diff_eq and not coupled:
+            if not diff_eq:
 
                 # apply update to lhs variable of equation instantaneously
                 parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=True,
                                           **kwargs.copy())
-                parser.parse_expr()
+                lhs, _, variables = parser.parse_expr()
+                var_updates[f"{scope}/{lhs}"] = variables[lhs]
 
             else:
 
-                # apply save, non-instantaneous update to lhs variable
+                # just calculate rhs variable (differential equations will be solved later)
                 parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=False,
                                           **kwargs.copy())
-                parser.parse_expr()
-                if diff_eq:
-                    updates[f"{scope}/{parser.lhs_key}"] = parser.vars[parser.lhs_key]
+                lhs, rhs, variables = parser.parse_expr()
+                var_updates[f"{scope}/{lhs}"] = {'rhs': rhs, 'lhs': variables[lhs]}
 
-            # udpate equations args
+            # update equations args
             #######################
 
             # save backend variables to equation args
             for key, var in parser.vars.items():
-                if key != "inputs" and key != "rhs" and key != "dt":
-                    #  TODO: this step adds newly created variables to the equation args like the output variable to a
-                    #   collection variable
-                    equation_args[f"{scope}/{key}"] = var
+                if key in equation_args:
+                    equation_args[key] = var
+            for key, var in var_updates.items():
+                equation_args[key] = var['lhs'] if type(var) is dict else var
 
             # save previously unprocessed input variables to equation args
             for key, inp in inputs.items():
@@ -910,7 +885,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         # go to next layer in backend
         backend.add_layer()
 
-    return updates, equation_args
+    return var_updates, equation_args
 
 
 def update_rhs(equations: list, equation_args: dict, update_num: int, update_str: str) -> tuple:
