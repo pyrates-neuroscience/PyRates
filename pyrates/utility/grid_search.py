@@ -38,9 +38,10 @@ from copy import deepcopy
 # system imports
 import os
 import sys
-import json
+import h5py
 import time as t
 import glob
+import ruamel.yaml as yaml
 import getpass
 import argparse
 from pathlib import Path
@@ -496,8 +497,9 @@ class ClusterGridSearch(ClusterCompute):
             simulation_time: float, chunk_size: (int, list),  inputs: dict, outputs: dict,
             worker_env: Optional[str] = sys.executable, worker_file: Optional[str] = os.path.abspath(__file__),
             sampling_step_size: Optional[float] = None, result_kwargs: Optional[dict] = {},
-            config_kwargs: Optional[dict] = {}, add_template_info: Optional[bool] = False,
-            permute_grid: Optional[bool] = False, verbose: Optional[bool] = True, **kwargs) -> str:
+            worker_kwargs: Optional[dict] = {}, gs_kwargs: Optional[dict] = {},
+            add_template_info: Optional[bool] = False, permute_grid: Optional[bool] = False,
+            verbose: Optional[bool] = True, **kwargs) -> str:
         """Starts multiple threads on the master and distributes a parameter grid among nodes in a compute cluster that
         concurrently run a grid_search computation on their provided parameter sub grids.
 
@@ -506,29 +508,29 @@ class ClusterGridSearch(ClusterCompute):
         sets.
         All groups that are marked with (df) can be loaded into a pandas.DataFrame, using pandas.read_hdf():
 
-        |---Config
-            |---circuit_template
-            |---config_file
-            |---dt
-            |---sampling_step_size
-            |---simulation_time
-            |---inputs (if provided)
-        |---ParameterGrid
-            |---Grid_df (df)
-            |---Keys
-                |---Parameter_1
-                |--- ...
-                |---Parameter_p
-        |---Results
-            |---result_map (df)
-            |---results (df)
-        |---AdditionalData
-            |---result_kwargs_key_0
-            |---...
-            |---result_kwargs_key_k
-        |---TemplateInfo (if add_template_info is True)
+        /Config
+            /circuit_template
+            /config_file
+            /dt
+            /sampling_step_size
+            /simulation_time
+            /inputs (if provided)
+        /ParameterGrid
+            /Grid_df (df)
+            /Keys
+                /Parameter_1
+                / ...
+                /Parameter_p
+        /Results
+            /result_map (df)
+            /results (df)
+        /AdditionalData
+            /result_kwargs_key_0
+            /...
+            /result_kwargs_key_k
+        /TemplateInfo (if add_template_info is True)
 
-
+        e.g. to access the stored simzulation you can
         and performs Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
         `:class:ClusterGridSearch` requires all necessary data (worker script, worker environment, compute directory)
@@ -569,10 +571,10 @@ class ClusterGridSearch(ClusterCompute):
             Their lengths have to match.
         worker_env
             Path to python executable inside an environment that will be used to execute the worker file.
-            Can be used if worker file with customized post processing should be executed in different environment than
-            the one the calling script is executed in.
+            Can be used if worker file with customized post processing should be executed in a different environment
+             than the executing script.
         worker_file
-            Path to a customized worker file.
+            Path to customized worker file.
         result_kwargs
             Key-value pairs that will be added to the 'AdditionalData' group inside the result file.
         config_kwargs
@@ -658,7 +660,7 @@ class ClusterGridSearch(ClusterCompute):
         config_idx = 0
         while os.path.exists(f'{self.config_dir}/DefaultConfig_{config_idx}.json'):
             config_idx += 1
-        config_file = f'{self.config_dir}/DefaultConfig_{config_idx}.json'
+        config_file = f'{self.config_dir}/DefaultConfig_{config_idx}.h5'
         self.create_cgs_config(fp=config_file,
                                circuit_template=circuit_template,
                                param_map=param_map,
@@ -667,7 +669,8 @@ class ClusterGridSearch(ClusterCompute):
                                inputs=inputs,
                                outputs=outputs,
                                sampling_step_size=sampling_step_size,
-                               add_kwargs=config_kwargs)
+                               gs_kwargs=gs_kwargs,
+                               worker_kwargs=worker_kwargs)
         print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
@@ -1069,7 +1072,7 @@ class ClusterGridSearch(ClusterCompute):
     @staticmethod
     def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float,
                           sampling_step_size: Optional[float], inputs: Optional[dict] = {},
-                          outputs: Optional[dict] = {},  add_kwargs: Optional[dict] = {}):
+                          outputs: Optional[dict] = {}, gs_kwargs: Optional[dict] = {}, worker_kwargs: Optional[dict] = {}):
         """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
 
         Parameters
@@ -1082,7 +1085,8 @@ class ClusterGridSearch(ClusterCompute):
         inputs
         outputs
         sampling_step_size
-        add_kwargs
+        gs_kwargs
+        worker_kwargs
 
         Returns
         -------
@@ -1096,26 +1100,35 @@ class ClusterGridSearch(ClusterCompute):
             "param_map": param_map,
             "dt": dt,
             "simulation_time": simulation_time,
+            "inputs": inputs,
             "outputs": outputs,
             "sampling_step_size": sampling_step_size,
+            "gs_kwargs": gs_kwargs,
+            "worker_kwargs": worker_kwargs
         }
 
         # Check type of input since numpy arrays are not json serializable
-        config_dict['inputs'] = {}
-        for key, value in inputs.items():
-            if isinstance(value, np.ndarray):
-                config_dict["inputs"][key] = value.tolist()
-            else:
-                config_dict["inputs"][key] = value
-        for key, value in add_kwargs.items():
-            config_dict[key] = value
-        with open(fp, "w") as f:
-            json.dump(config_dict, f, indent=2)
+        # config_dict['inputs'] = {}
+        # for key, value in inputs.items():
+        #     if isinstance(value, np.ndarray):
+        #         config_dict["inputs"][key] = value.tolist()
+        #     else:
+        #         config_dict["inputs"][key] = value
+        # for key, value in worker_kwargs.items():
+        #     if isinstance(value, np.ndarray):
+        #         config_dict["worker_kwargs"][key] = value.tolist()
+        #     else:
+        #         config_dict["worker_kwargs"][key] = value
+
+        with h5py.File(fp, "w") as f:
+            dict_to_h5(f_handle=f, dic=config_dict)
+            # json.dump(config_dict, f, indent=2)
+            # yaml.dump(config_dict, f, default_flow_style=False)
 
     @staticmethod
     def add_template_information(yaml_fp, hdf5_file):
         """Add opearator information of the circuit template to the global result file"""
-        import yaml
+        # import yaml
 
         with open(yaml_fp, 'r') as stream:
             try:
@@ -1226,6 +1239,38 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
     return circuit
 
 
+def dict_to_h5(f_handle, dic, level=""):
+    """Write a dictionoary iteratively to an hdf5 file
+
+    :param f_handle:
+    :param dic:
+    :param level:
+    :return:
+    """
+    for key, value in dic.items():
+        if isinstance(value, dict):
+            dict_to_h5(f_handle, dic=value, level=f'{level}/{key}')
+        else:
+            f_handle.create_dataset(name=f'{level}/{key}', data=value)
+
+
+def dict_from_h5(f_handle, level="/"):
+    """Read a dictionary iteratively froma n hdf5 file
+
+    :param f_handle:
+    :param level:
+    :return:
+    """
+    tmp_dict = {}
+    for key in f_handle[level].keys():
+        data = f_handle[f'{level}{key}']
+        if isinstance(data, h5py.Dataset):
+            tmp_dict[key] = data[()]
+        elif isinstance(data, h5py.Group):
+            tmp_dict[key] = dict_from_h5(f_handle, level=f'{level}{key}/')
+    return tmp_dict
+
+
 class StreamTee(object):
     """Tee all stdout to a specified logfile"""
     def __init__(self, stream1, stream2fp):
@@ -1278,14 +1323,16 @@ class ClusterWorkerTemplate(object):
         parser.add_argument(
             "--config_file",
             type=str,
-            default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_config.json',
+            # default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_config.json',
+            default=f'/nobackup/spanien1/salomon/CGS/Benchmark_jup/Config/DefaultConfig_3.json',
             help="File to load grid_search configuration parameters from"
         )
 
         parser.add_argument(
             "--subgrid",
             type=str,
-            default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_grid.h5',
+            # default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_grid.h5',
+            default=f'/nobackup/spanien1/salomon/CGS/Benchmark_jup/Grids/Subgrids/DefaultGrid_0/animals/animals_Subgrid_0.h5',
             help="File to load parameter grid from"
         )
 
@@ -1353,34 +1400,40 @@ class ClusterWorkerTemplate(object):
         print("***LOADING GLOBAL CONFIG FILE***")
         t0 = t.time()
 
-        with open(config_file) as g_conf:
-            global_config_dict = json.load(g_conf)
-            circuit_template = global_config_dict['circuit_template']
-            param_map = global_config_dict['param_map']
-            dt = global_config_dict['dt']
-            simulation_time = global_config_dict['simulation_time']
+        with h5py.File(config_file, "r") as g_conf:
+            global_config_dict = dict_from_h5(f_handle=g_conf)
 
-            # Optional parameters
-            #####################
-            try:
-                sampling_step_size = global_config_dict['sampling_step_size']
-            except KeyError:
-                sampling_step_size = dt
+        circuit_template = global_config_dict['circuit_template']
+        param_map = global_config_dict['param_map']
+        dt = global_config_dict['dt']
+        simulation_time = global_config_dict['simulation_time']
 
-            try:
-                inputs = global_config_dict['inputs']
-            except KeyError:
-                inputs = {}
+        # Optional parameters
+        #####################
+        try:
+            sampling_step_size = global_config_dict['sampling_step_size']
+        except KeyError:
+            sampling_step_size = dt
 
-            try:
-                outputs = global_config_dict['outputs']
-            except KeyError:
-                outputs = {}
+        try:
+            inputs = global_config_dict['inputs']
+        except KeyError:
+            inputs = {}
 
-            try:
-                init_kwargs = global_config_dict['init_kwargs']
-            except KeyError:
-                init_kwargs = {}
+        try:
+            outputs = global_config_dict['outputs']
+        except KeyError:
+            outputs = {}
+
+        try:
+            worker_kwargs = global_config_dict['worker_kwargs']
+        except KeyError:
+            worker_kwargs = {}
+
+        try:
+            gs_kwargs = global_config_dict['gs_kwargs']
+        except KeyError:
+            gs_kwargs = {}
 
         print(f'Elapsed time: {t.time() - t0:.3f} seconds')
 
@@ -1414,11 +1467,14 @@ class ClusterWorkerTemplate(object):
             permute_grid=False,
             inputs=inputs,
             outputs=outputs.copy(),
-            init_kwargs=init_kwargs,
-            profile='t',
+            profile="t",
             build_dir=build_dir,
-            njit=True,
-            parallel=False)
+            **gs_kwargs)
+            # init_kwargs=init_kwargs,
+            # profile='t',
+            # build_dir=build_dir)
+            # njit=True,
+            # parallel=False)
 
         print(f'Total parameter grid computation time: {t.time() - t0:.3f} seconds')
 
@@ -1429,19 +1485,17 @@ class ClusterWorkerTemplate(object):
         t0 = t.time()
 
         self.processed_results = pd.DataFrame(data=None, columns=self.results.columns)
-        self.worker_postprocessing()
+        self.worker_postprocessing(**worker_kwargs)
 
         with pd.HDFStore(local_res_file, "w") as store:
             store.put(key='results', value=self.processed_results)
             store.put(key='result_map', value=self.result_map)
 
-        # TODO: Copy local result file back to master if needed
-
         print(f'Result files created. Elapsed time: {t.time() - t0:.3f} seconds')
         print("")
         print(f'Total elapsed time: {t.time() - t_total:.3f} seconds')
 
-    def worker_postprocessing(self, **kwargs):
+    def worker_postprocessing(self, **worker_kwargs):
         """
         Post processing that is applied by each cluster worker on its computed model output.
 
