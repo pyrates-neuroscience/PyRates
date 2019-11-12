@@ -65,7 +65,6 @@ class ComputeGraph(object):
                 vectorization: bool = True,
                 name: Optional[str] = 'net0',
                 backend: str = 'numpy',
-                solver: str = 'euler',
                 float_precision: str = 'float32',
                 **kwargs
                 ) -> Any:
@@ -75,5 +74,5 @@ class ComputeGraph(object):
         if type(net_config) is str:
             net_config = net_config.apply()
 
-        return net_config.compile(vectorization=vectorization, backend=backend, solver=solver,
-                                  float_precision=float_precision, **kwargs)
+        return net_config.compile(vectorization=vectorization, backend=backend, float_precision=float_precision,
+                                  **kwargs)

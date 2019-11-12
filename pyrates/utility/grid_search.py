@@ -131,7 +131,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     param_grid.index = circuit_names
 
     # create backend graph
-    net = circuit.compile(dt=dt, vectorization=vectorization, **init_kwargs)
+    net = circuit.compile(vectorization=vectorization, **init_kwargs)
 
     # adjust input of simulation to combined network
     for inp_key, inp in inputs.copy().items():
@@ -144,9 +144,10 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
+                      step_size=dt,
+                      sampling_step_size=sampling_step_size,
                       inputs=inputs,
                       outputs=outputs,
-                      sampling_step_size=sampling_step_size,
                       **kwargs)    # type: pd.DataFrame
 
     # return results

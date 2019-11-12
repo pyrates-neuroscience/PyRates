@@ -183,8 +183,6 @@ class PyRatesOp:
 
     """
 
-    arg_names = {}    # used to ensure uniqueness of function arguments
-
     def __init__(self, op: str, short_name: str, name, *args) -> None:
         """Instantiates PyRates operator.
         """
@@ -309,9 +307,9 @@ class PyRatesOp:
                 # parse PyRates variable into the function
                 if arg.vtype is 'constant' and not arg.shape:
                     arg_name = '__no_name__'
-                    arg_value = arg.value
+                    arg_value = arg.value if hasattr(arg, 'value') else arg
                 else:
-                    arg_name = arg.short_name  #cls._generate_unique_argnames([arg.short_name])[0]
+                    arg_name = arg.short_name
                     arg_value = arg
                     n_vars += 1
                 results_args.append(arg_value)
@@ -341,7 +339,7 @@ class PyRatesOp:
 
                 # parse strings and constant arguments into the function
                 if type(arg) is str:
-                    arg_name = arg  # cls._generate_unique_argnames([arg])[0]
+                    arg_name = arg
                 else:
                     arg_name = "__no_name__"
                 results_args.append(arg)
@@ -350,19 +348,6 @@ class PyRatesOp:
                 results['arg_names'].append(arg_name)
 
         return results, results_args, results_arg_names, n_vars
-
-    @classmethod
-    def _generate_unique_argnames(cls, args: list):
-        """Creates unique name for function argument.
-        """
-        for arg in args:
-            if arg.short_name in cls.arg_names:
-                if arg.name not in cls.arg_names[arg.short_name]:
-                    arg.short_name = f"{arg.short_name}_{len(cls.arg_names[arg.name])}"
-                    cls.arg_names[arg.short_name].append(arg.name)
-            else:
-                cls.arg_names[arg.short_name] = [arg.name]
-        return args
 
     @staticmethod
     def _check_numerics(vals, name):
@@ -453,19 +438,19 @@ class PyRatesAssignOp(PyRatesOp):
 
                 # for tensorflow-like scatter indexing
                 if hasattr(args[2], 'short_name'):
-                    key = args[2].short_name  #cls._generate_unique_argnames([args[2].short_name])[0]
+                    key = args[2].short_name
                     if hasattr(args[2], 'value'):
                         var_idx = f"{args[2].value},"
                     else:
                         var_idx = f"{key},"
                 else:
-                    key = cls._generate_unique_argnames(["idx"])[0]
+                    key = "__no_name__"
                     var_idx = f"{key},"
 
             elif hasattr(args[2], 'vtype'):
 
                 # for indexing via PyRates variables
-                key = args[2].short_name  #cls._generate_unique_argnames([args[2].short_name])[0]
+                key = args[2].short_name
                 if hasattr(args[2], 'value'):
                     var_idx = f"[{args[2].value}]"
                 else:
@@ -474,7 +459,7 @@ class PyRatesAssignOp(PyRatesOp):
             elif type(args[2]) is str:
 
                 # for indexing via string-based indices
-                key = args[3].short_name  #cls._generate_unique_argnames([args[3].short_name])[0]
+                key = args[3].short_name
                 var_idx = f"[{args[2]}]"
                 var_idx = var_idx.replace(args[3].short_name, key)
 
@@ -495,7 +480,7 @@ class PyRatesAssignOp(PyRatesOp):
             var_idx = ""
 
         # add variable to the function arguments
-        var_key = var.short_name  #cls._generate_unique_argnames([var.short_name])[0]
+        var_key = var.short_name
         var_pos = len(results_args)
         results_args.append(var)
         results_arg_names.append(var_key)
@@ -594,7 +579,7 @@ class PyRatesIndexOp(PyRatesOp):
 
             # parse pyrates variables into the indexing operation
             if var_tmp.vtype != 'constant' or var_tmp.shape:
-                var = var_tmp.short_name  #cls._generate_unique_argnames([var_tmp.short_name])[0]
+                var = var_tmp.short_name
                 results['args'].append(var_tmp)
                 results['arg_names'].append(var)
                 n_vars += 1
@@ -620,7 +605,7 @@ class PyRatesIndexOp(PyRatesOp):
                 if arg_tmp in results['arg_names']:
                     pop_indices.append(idx.arg_names.index(arg_tmp))
             new_args = idx.args.copy()
-            new_arg_names = idx.arg_names.copy()  #cls._generate_unique_argnames(idx.arg_names.copy())
+            new_arg_names = idx.arg_names.copy()
             for i, pop_idx in enumerate(pop_indices):
                 new_args.pop(pop_idx - i)
                 new_arg_names.pop(pop_idx - i)
@@ -632,7 +617,7 @@ class PyRatesIndexOp(PyRatesOp):
         elif hasattr(idx, 'vtype'):
 
             # parse pyrates variables into the indexing operation
-            key = idx.short_name  #cls._generate_unique_argnames([idx.short_name])[0]
+            key = idx.short_name
             if idx.vtype != 'constant' or idx.shape:
                 var_idx = f"[{key}]"
                 results['args'].append(idx)
@@ -647,9 +632,6 @@ class PyRatesIndexOp(PyRatesOp):
             for arg in args[2:]:
                 if hasattr(arg, 'short_name') and arg.short_name in idx:
                     name_tmp = arg.short_name
-                    if name_tmp in cls.arg_names:
-                        arg.short_name = f"{name_tmp}_{cls.arg_names[name_tmp]}"
-                        idx = idx.replace(name_tmp, arg.short_name)
                     n_vars += 1
             var_idx = f"[{idx}]"
 
@@ -657,14 +639,6 @@ class PyRatesIndexOp(PyRatesOp):
 
             # parse list of constant indices into the operation
             var_idx = f"{list(idx)}"
-
-        # elif hasattr(idx, 'shape'):
-        #
-        #     # parse constant array into the operation
-        #     key = cls._generate_unique_argnames(["idx"])[0]
-        #     var_idx = f"[{key}]"
-        #     results['args'].append(idx)
-        #     results['arg_names'].append(key)
 
         else:
             raise ValueError(f'Index type not understood: {idx}. Please consider another form of variable indexing.')
@@ -820,7 +794,6 @@ class NumpyBackend(object):
         self._float_def = self.dtypes[float_default_type]
         self.name = name
         self._base_layer = 0
-        self._output_layer_added = False
         self._input_layer_added = False
         self._imports = ["import numpy as np", "from pyrates.backend.funcs import *"]
         if imports:
@@ -833,7 +806,7 @@ class NumpyBackend(object):
             dt: float,
             outputs: Optional[dict] = None,
             dts: Optional[int] = None,
-            solver: str = 'pyrates_euler',
+            solver: str = 'euler',
             out_dir: Optional[str] = None,
             profile: bool = False,
             **kwargs
@@ -900,8 +873,8 @@ class NumpyBackend(object):
 
         # simulate backend behavior for each time-step
         state_vars_tmp = [var for _, var in state_vars]
-        results = self._solve(rhs_func=rhs_func, state_vars=state_vars_tmp, T=T, dt=dt, solver=solver, dts=dts,
-                              output_indices=output_indices, **kwargs)
+        times, results = self._solve(rhs_func=rhs_func, state_vars=state_vars_tmp, T=T, dt=dt, solver=solver, dts=dts,
+                                     output_indices=output_indices, **kwargs)
 
         # output storage and clean-up
         #############################
@@ -916,9 +889,9 @@ class NumpyBackend(object):
         # store profiling results
         if profile:
             sim_time = t.time() - t0
-            return outputs, sim_time
+            return outputs, times, sim_time
 
-        return (outputs,)
+        return outputs, times
 
     def add_var(self,
                 vtype: str,
@@ -959,15 +932,18 @@ class NumpyBackend(object):
         if scope:
             name = f'{scope}/{name}'
 
-        #     if name in self.var_counter:
-        #         name_old = name
-        #         name = f"{name}_{self.var_counter[name]}"
-        #         self.var_counter[name_old] += 1
-        #     else:
-        #         self.var_counter[name] = 1
-
         # create variable
         var, name = self._create_var(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name)
+
+        # ensure uniqueness of variable names
+        if var.short_name in self.var_counter and name not in self.vars:
+            name_old = var.short_name
+            name_new = f"{name_old}_{self.var_counter[name_old]}"
+            var.short_name = name_new
+            self.var_counter[name_old] += 1
+        else:
+            self.var_counter[var.short_name] = 1
+
         self.vars[name] = var
         return var
 
@@ -1379,10 +1355,9 @@ class NumpyBackend(object):
 
         # set up file header
         func_gen = CodeGen()
-        func_gen.add_code_line("import numpy as np")
-        func_gen.add_linebreak()
-        func_gen.add_code_line("from pyrates.backend.funcs import *")
-        func_gen.add_linebreak()
+        for import_line in self._imports:
+            func_gen.add_code_line(import_line)
+            func_gen.add_linebreak()
         func_gen.add_linebreak()
 
         # declare constant variables
@@ -1393,22 +1368,12 @@ class NumpyBackend(object):
                 var = params[idx][1]
                 if sum(var.shape) > 1:
                     val = var.tolist()
-                    func_gen.add_code_line(f"{key.split('/')[-1]} = np.asarray({val})")
+                    func_gen.add_code_line(f"{var.short_name} = np.asarray({val})")
                 else:
                     val = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
-                    func_gen.add_code_line(f"{key.split('/')[-1]} = {val}")
+                    func_gen.add_code_line(f"{var.short_name} = {val}")
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
-
-        # add function decorator if passed
-        decorator = kwargs.pop('decorator', '')
-        if decorator:
-            func_gen.add_code_line(f"@{decorator}(")
-            for key, arg in kwargs.items():
-                func_gen.add_code_line(f"{key}={arg},")
-            func_gen.code[-1] = func_gen.code[-1][:-1]
-            func_gen.add_code_line(")")
-            func_gen.add_linebreak()
 
         # define function
         func_gen.add_code_line("def rhs_eval(t, y):")
@@ -1418,17 +1383,19 @@ class NumpyBackend(object):
         func_gen.add_code_line("# declare constants as global variables")
         func_gen.add_linebreak()
         func_gen.add_code_line("global ")
-        for key, (vtype, _) in var_map.items():
+        for key, (vtype, idx) in var_map.items():
             if vtype == 'constant':
-                func_gen.add_code_line(f"{key.split('/')[-1]},")
+                var = params[idx][1]
+                func_gen.add_code_line(f"{var.short_name},")
         func_gen.code[-1] = func_gen.code[-1][:-1]
         func_gen.add_linebreak()
         func_gen.add_linebreak()
         func_gen.add_code_line("# extract state variables from input vector")
         func_gen.add_linebreak()
         for key, (vtype, idx) in var_map.items():
+            var = self.vars[key]
             if vtype == 'state_var':
-                func_gen.add_code_line(f"{key.split('/')[-1]} = y[{idx}]")
+                func_gen.add_code_line(f"{var.short_name} = y[{idx}]")
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
         func_gen.add_code_line("# calculate right-hand side update of equation system")
@@ -1453,12 +1420,15 @@ class NumpyBackend(object):
             f.close()
 
         # import function from file
-        os.chdir(net_dir)
-
         funcs = {}
         exec("from rhs_func import rhs_eval", globals(), funcs)
         rhs_eval = funcs['rhs_eval']
         os.chdir(orig_path)
+
+        # apply function decorator
+        decorator = kwargs.pop('decorator', None)
+        if decorator:
+            rhs_eval = decorator(rhs_eval, **kwargs)
 
         return rhs_eval, state_vars, params, var_map
 
@@ -1581,27 +1551,76 @@ class NumpyBackend(object):
             self.get_layer(layer).append(op)
 
     def _solve(self, rhs_func, state_vars, solver, T, dt, dts, output_indices, **kwargs):
+        """
+
+        Parameters
+        ----------
+        rhs_func
+        state_vars
+        solver
+        T
+        dt
+        dts
+        output_indices
+        kwargs
+
+        Returns
+        -------
+
+        """
+
+        # initializations
+        sampling_step = int(np.round(dts / dt, decimals=0))
+        sampling_steps = int(np.round(T / dts, decimals=0))
+        t = 0.0
+
+        # track all state variables, if no output is declared
         if not output_indices:
             output_indices = [idx for idx, _ in enumerate(state_vars)]
-        if solver == 'pyrates_euler':
-            steps = int(np.round(T/dt, decimals=0))
-            sampling_step = int(np.round(dts/dt, decimals=0))
-            sampling_steps = int(np.round(T/dts, decimals=0))
+
+        # choose solver
+        ###############
+
+        if solver == 'euler':
+
+            # initialize results storage vectors
             results = []
+
             for idx in output_indices:
-                results.append(np.zeros((sampling_steps,) + (len(state_vars[idx]),)))
+                var_dim = len(state_vars[idx]) if type(state_vars[idx]) is list else 1
+                results.append(np.zeros((sampling_steps, var_dim)))
+
+            # solve via pyrates internal explicit euler algorithm
+            i = 0
             sampling_idx = 0
-            t = 0.0
-            for step in range(steps):
+            while t < T:
                 deltas = rhs_func(t, state_vars)
                 t += dt
-                for i, delta in enumerate(deltas):
-                    state_vars[i] += dt * delta
-                if step % sampling_step == 0:
-                    for i, idx in enumerate(output_indices):
-                        results[i][sampling_idx, :] = state_vars[idx]
+                i += 1
+                for j, delta in enumerate(deltas):
+                    state_vars[j] += dt * delta
+                if i == sampling_step:
+                    for j, idx in enumerate(output_indices):
+                        results[j][sampling_idx, :] = state_vars[idx]
                     sampling_idx += 1
-            return results
+                    i = 0
+
+            times = np.arange(0, T, dts)
+
+        elif solver == 'scipy':
+
+            from scipy.integrate import solve_ivp
+
+            # solve via scipy's ode integration function
+            outputs = solve_ivp(fun=rhs_func, t_span=(t, T), y0=state_vars, first_step=dt, **kwargs)
+            results = [outputs['y'].T[:, idx] for idx in output_indices]
+            times = outputs['t']
+
+        else:
+
+            raise ValueError(f'Invalid solver type: {solver}. See docstring of `CircuitIR.run` for valid solver types.')
+
+        return times, results
 
     def _match_shapes(self, op1: Any, op2: Any, adjust_second: bool = True) -> tuple:
         """Re-shapes op1 and op2 such that they can be combined via mathematical operations.
@@ -1822,61 +1841,17 @@ class NumpyBackend(object):
         -------
 
         """
-
-        # separate backend variables into state variables and constants
-        ###############################################################
-
         state_vars, constants, var_map = [], [], {}
         s_idx, c_idx = 0, 0
         for key, var in self.vars.items():
             if key in self.state_vars:
-                # # group state variables with equal shape and data type
-                # for i, s in enumerate(state_vars):
-                #     if (s and len(s[0][1].shape) == len(var.shape) and s[0][1].dtype == var.dtype) or not s:
-                #         j = len(s)
-                #         s.append((key, var))
-                #         break
-                # else:
-                #     raise ValueError(f'Failed to group variable `{key}` into state variable vectors.')
-                # if state_vars[-1]:
-                #     state_vars.append([])
-                state_vars.append((key, var.tolist()))
+                state_vars.append((key, var.squeeze().tolist()))
                 var_map[key] = ('state_var', s_idx)
                 s_idx += 1
             elif var.vtype == 'constant' or var.vtype == 'state_var':
-                # # group constants with equal shape and data type
-                # for i, s in enumerate(constants):
-                #     if (s and len(s[0][1].shape) == len(var.shape) and s[0][1].dtype == var.dtype) or not s:
-                #         j = len(s)
-                #         s.append((key, var))
-                #         break
-                # else:
-                #     raise ValueError(f'Failed to group variable `{key}` into constants vectors.')
-                # if constants[-1]:
-                #     constants.append([])
                 constants.append((key, var))
                 var_map[key] = ('constant', c_idx)
                 c_idx += 1
-
-        # # group state variables into vectors
-        # ####################################
-        #
-        # for i, state_var in enumerate(state_vars):
-        #
-        #     if state_var:
-        #
-        #         # create vector for state variables with equal shape
-        #         var_values = [var_tmp for _, var_tmp in state_var]
-        #         value = self._create_op('concat', f'concat_state_vars_{i}', var_values, 0) \
-        #             if len(var_values) > 1 else var_values[0]
-        #         state_vars[i] = self.add_var(vtype='variable', name=f'state_vars_{i}',
-        #                                      value=value.eval() if hasattr(value, 'eval') else value)
-        #         j = 0
-        #         for key, var in state_var:
-        #             var_shape = var.shape[0] if var.shape else 1
-        #             var_map[key] = ('state_var', i, f"{j}:{j+var_shape}")
-        #             j += var_shape
-
         return state_vars, constants, var_map
 
     @staticmethod
