@@ -894,13 +894,14 @@ class NumpyBackend(object):
         output_indices = []
         for out_key, out_vars in outputs.items():
             for var_name, out_info in out_vars.items():
-                _, idx1, idx2 = var_map[var_name]
-                output_indices.append((idx1, idx2))
+                _, idx = var_map[var_name]
+                output_indices.append(idx)
                 outputs[out_key][var_name][0] = len(output_indices)-1
 
         # simulate backend behavior for each time-step
-        results = self._solve(rhs_func=rhs_func, state_vars=state_vars, params=constants, T=T, dt=dt, solver=solver,
-                              dts=dts, output_indices=output_indices, **kwargs)
+        state_vars_tmp = [var for _, var in state_vars]
+        results = self._solve(rhs_func=rhs_func, state_vars=state_vars_tmp, T=T, dt=dt, solver=solver, dts=dts,
+                              output_indices=output_indices, **kwargs)
 
         # output storage and clean-up
         #############################
@@ -1333,6 +1334,9 @@ class NumpyBackend(object):
 
         """
 
+        # preparations
+        ##############
+
         # remove empty layers and operators
         new_layer_idx = 0
         for layer_idx, layer in enumerate(self.layers.copy()):
@@ -1365,46 +1369,95 @@ class NumpyBackend(object):
         os.chdir(self.name)
         net_dir = os.getcwd()
         self._build_dir = net_dir
+        sys.path.append(net_dir)
 
         # collect state variable and parameter vectors
         state_vars, params, var_map = self._process_vars()
 
-        # create rhs function
+        # create rhs evaluation function
+        ################################
+
+        # set up file header
         func_gen = CodeGen()
-        func_gen.add_code_line("def rhs_eval(y, theta, y_delta):")
+        func_gen.add_code_line("import numpy as np")
+        func_gen.add_linebreak()
+        func_gen.add_code_line("from pyrates.backend.funcs import *")
+        func_gen.add_linebreak()
+        func_gen.add_linebreak()
+
+        # declare constant variables
+        func_gen.add_code_line("# declare constants")
+        func_gen.add_linebreak()
+        for key, (vtype, idx) in var_map.items():
+            if vtype == 'constant':
+                var = params[idx][1]
+                if sum(var.shape) > 1:
+                    val = var.tolist()
+                    func_gen.add_code_line(f"{key.split('/')[-1]} = np.asarray({val})")
+                else:
+                    val = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
+                    func_gen.add_code_line(f"{key.split('/')[-1]} = {val}")
+                func_gen.add_linebreak()
+        func_gen.add_linebreak()
+
+        # add function decorator if passed
+        decorator = kwargs.pop('decorator', '')
+        if decorator:
+            func_gen.add_code_line(f"@{decorator}(")
+            for key, arg in kwargs.items():
+                func_gen.add_code_line(f"{key}={arg},")
+            func_gen.code[-1] = func_gen.code[-1][:-1]
+            func_gen.add_code_line(")")
+            func_gen.add_linebreak()
+
+        # define function
+        func_gen.add_code_line("def rhs_eval(t, y):")
         func_gen.add_linebreak()
         func_gen.add_indent()
         func_gen.add_linebreak()
-        func_gen.add_code_line("# extract state variables and constants from input vectors")
+        func_gen.add_code_line("# declare constants as global variables")
         func_gen.add_linebreak()
-        for key, (vtype, idx1, idx2) in var_map.items():
-            func_gen.add_code_line(f"{key.split('/')[-1]} = {'theta' if vtype == 'constant' else 'y'}[{idx1}][{idx2}]")
-            func_gen.add_linebreak()
+        func_gen.add_code_line("global ")
+        for key, (vtype, _) in var_map.items():
+            if vtype == 'constant':
+                func_gen.add_code_line(f"{key.split('/')[-1]},")
+        func_gen.code[-1] = func_gen.code[-1][:-1]
+        func_gen.add_linebreak()
+        func_gen.add_linebreak()
+        func_gen.add_code_line("# extract state variables from input vector")
+        func_gen.add_linebreak()
+        for key, (vtype, idx) in var_map.items():
+            if vtype == 'state_var':
+                func_gen.add_code_line(f"{key.split('/')[-1]} = y[{idx}]")
+                func_gen.add_linebreak()
         func_gen.add_linebreak()
         func_gen.add_code_line("# calculate right-hand side update of equation system")
         func_gen.add_linebreak()
         for i, layer in enumerate(self.layers):
             for j, op in enumerate(layer):
                 if hasattr(op, 'state_var'):
-                    _, idx1, idx2 = var_map[op.state_var]
-                    func_gen.add_code_line(f"y_delta[{idx1}][{idx2}] = ")
+                    _, idx = var_map[op.state_var]
+                    func_gen.add_code_line(f"y_delta_{idx} = ")
                 func_gen.add_code_line(op.value)
                 func_gen.add_linebreak()
-        func_gen.add_code_line(f"return y_delta")
+        func_gen.add_code_line(f"return [")
+        for i in range(len(state_vars)):
+            func_gen.add_code_line(f"y_delta_{i},")
+        func_gen.code[-1] = func_gen.code[-1][:-1]
+        func_gen.add_code_line("]")
+        func_gen.add_linebreak()
 
         # save rhs function to file
         with open('rhs_func.py', 'w') as f:
             f.writelines(func_gen.code)
             f.close()
 
-        # generate function
-        func_dict = {}
-        exec(func_gen.generate(), globals(), func_dict)
-        rhs_eval = func_dict['rhs_eval']
-        decorator = kwargs.pop('decorator', None)
-        if decorator:
-            rhs_eval = decorator(rhs_eval, **kwargs)
+        # import function from file
+        os.chdir(net_dir)
 
+        funcs = {}
+        exec("from rhs_func import rhs_eval", globals(), funcs)
+        rhs_eval = funcs['rhs_eval']
         os.chdir(orig_path)
 
         return rhs_eval, state_vars, params, var_map
@@ -1527,25 +1580,26 @@ class NumpyBackend(object):
         else:
             self.get_layer(layer).append(op)
 
-    def _solve(self, rhs_func, state_vars, params, solver, T, dt, dts, output_indices, **kwargs):
+    def _solve(self, rhs_func, state_vars, solver, T, dt, dts, output_indices, **kwargs):
         if not output_indices:
-            output_indices = [(idx1, 0) for idx1, state_var in enumerate(state_vars)]
+            output_indices = [idx for idx, _ in enumerate(state_vars)]
         if solver == 'pyrates_euler':
             steps = int(np.round(T/dt, decimals=0))
             sampling_step = int(np.round(dts/dt, decimals=0))
             sampling_steps = int(np.round(T/dts, decimals=0))
-            deltas = [np.zeros_like(state_var) for state_var in state_vars]
             results = []
-            for idx1, idx2 in output_indices:
-                results.append(np.zeros((sampling_steps,) + eval(f"state_vars[idx1][{idx2}].shape")))
+            for idx in output_indices:
+                results.append(np.zeros((sampling_steps,) + (len(state_vars[idx]),)))
             sampling_idx = 0
+            t = 0.0
             for step in range(steps):
-                deltas = rhs_func(state_vars, params, deltas)
+                deltas = rhs_func(t, state_vars)
+                t += dt
                 for i, delta in enumerate(deltas):
                     state_vars[i] += dt * delta
                 if step % sampling_step == 0:
-                    for i, (idx1, idx2) in enumerate(output_indices):
-                        results[i][sampling_idx, :] = eval(f"state_vars[idx1][{idx2}]")
+                    for i, idx in enumerate(output_indices):
+                        results[i][sampling_idx, :] = state_vars[idx]
                     sampling_idx += 1
             return results
 
@@ -1769,56 +1823,60 @@ class NumpyBackend(object):
 
         """
 
-        state_vars, constants, var_map = [[]], [[]], {}
+        # separate backend variables into state variables and constants
+        ###############################################################
+
+        state_vars, constants, var_map = [], [], {}
+        s_idx, c_idx = 0, 0
         for key, var in self.vars.items():
             if key in self.state_vars:
-                for i, s in enumerate(state_vars):
-                    if s and len(s[0][1].shape) == len(var.shape) and s[0][1].dtype == var.dtype:
-                        s.append((key, var))
-                        j = len(s)
-                        break
-                else:
-                    i, j = len(state_vars), 0
-                    state_vars.append([(key, var)])
-                var_map[key] = (i, j)
+                # # group state variables with equal shape and data type
+                # for i, s in enumerate(state_vars):
+                #     if (s and len(s[0][1].shape) == len(var.shape) and s[0][1].dtype == var.dtype) or not s:
+                #         j = len(s)
+                #         s.append((key, var))
+                #         break
+                # else:
+                #     raise ValueError(f'Failed to group variable `{key}` into state variable vectors.')
+                # if state_vars[-1]:
+                #     state_vars.append([])
+                state_vars.append((key, var.tolist()))
+                var_map[key] = ('state_var', s_idx)
+                s_idx += 1
             elif var.vtype == 'constant' or var.vtype == 'state_var':
-                for i, s in enumerate(constants):
-                    if s and len(s[0][1].shape) == len(var.shape) and s[0][1].dtype == var.dtype:
-                        s.append((key, var))
-                        j = len(s)
-                        break
-                else:
-                    i, j = len(state_vars), 0
-                    constants.append([(key, var)])
-                var_map[key] = (i, j)
+                # # group constants with equal shape and data type
+                # for i, s in enumerate(constants):
+                #     if (s and len(s[0][1].shape) == len(var.shape) and s[0][1].dtype == var.dtype) or not s:
+                #         j = len(s)
+                #         s.append((key, var))
+                #         break
+                # else:
+                #     raise ValueError(f'Failed to group variable `{key}` into constants vectors.')
+                # if constants[-1]:
+                #     constants.append([])
+                constants.append((key, var))
+                var_map[key] = ('constant', c_idx)
+                c_idx += 1
 
-        state_vars = state_vars[1:]
-        constants = constants[1:]
+        # # group state variables into vectors
+        # ####################################
+        #
+        # for i, state_var in enumerate(state_vars):
+        #
+        #     if state_var:
+        #
+        #         # create vector for state variables with equal shape
+        #         var_values = [var_tmp for _, var_tmp in state_var]
+        #         value = self._create_op('concat', f'concat_state_vars_{i}', var_values, 0) \
+        #             if len(var_values) > 1 else var_values[0]
+        #         state_vars[i] = self.add_var(vtype='variable', name=f'state_vars_{i}',
+        #                                      value=value.eval() if hasattr(value, 'eval') else value)
+        #         j = 0
+        #         for key, var in state_var:
+        #             var_shape = var.shape[0] if var.shape else 1
+        #             var_map[key] = ('state_var', i, f"{j}:{j+var_shape}")
+        #             j += var_shape
 
-        for i, state_var in enumerate(state_vars):
-            if state_var:
-                var_values = [var_tmp for _, var_tmp in state_var]
-                value = self._create_op('concat', f'concat_state_vars_{i}', var_values, 0) \
-                    if len(var_values) > 1 else var_values[0]
-                state_vars[i] = self.add_var(vtype='variable', name=f'state_vars_{i}',
-                                             value=value.eval() if hasattr(value, 'eval') else value)
-                j = 0
-                for key, var in state_var:
-                    var_shape = var.shape[0] if var.shape else 1
-                    var_map[key] = ('state_var', i, f"{j}:{j+var_shape}")
-                    j += var_shape
-        for i, const in enumerate(constants):
-            if const:
-                c_values = [c_tmp for _, c_tmp in const]
-                value = self._create_op('concat', f'concat_constants_{i}', c_values, 0) \
-                    if len(c_values) > 1 else c_values[0]
-                constants[i] = self.add_var('constant', f'constants_{i}',
-                                            value=value.eval() if hasattr(value, 'eval') else value)
-                j = 0
-                for key, c in const:
-                    c_shape = c.shape[0] if c.shape else 1
-                    var_map[key] = ('constant', i, f"{j}:{j+c_shape}")
-                    j += c_shape
         return state_vars, constants, var_map
 
     @staticmethod
