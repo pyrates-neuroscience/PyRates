@@ -386,11 +386,11 @@ class Compiler:
             print("Running the simulation...")
 
         if profile is None:
-            output_col = self.backend.run(steps=sim_steps, outputs=output_col, sampling_steps=sampling_steps,
+            output_col = self.backend.run(steps=sim_steps, outputs=output_col, dts=sampling_steps,
                                           out_dir=out_dir, profile=profile, **kwargs)
         else:
             output_col, time, memory = self.backend.run(steps=sim_steps, outputs=output_col, out_dir=out_dir,
-                                                        profile=profile, sampling_steps=sampling_steps, **kwargs)
+                                                        profile=profile, dts=sampling_steps, **kwargs)
 
         if verbose and profile:
             if simulation_time:

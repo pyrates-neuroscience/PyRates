@@ -411,7 +411,7 @@ class TensorflowBackend(NumpyBackend):
             # cast op2 to dtype of op1 referred from its type string
             return op1, self.add_op('cast', op2, str(type(op1)).split('\'')[-2])
 
-    def _run(self, layers, sampling_layer, steps, sampling_steps):
+    def _solve(self, layers, sampling_layer, steps, sampling_steps):
         if sampling_layer is None:
             run_without_sampling(layers, steps)
         else:
