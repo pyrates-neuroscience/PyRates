@@ -38,7 +38,7 @@ from pyrates import PyRatesException
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
-from pyrates.backend.parser import parse_dict, parse_equation_system, is_diff_eq, replace
+from pyrates.backend.parser import parse_dict, parse_equations, is_diff_eq, replace
 
 __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
@@ -888,6 +888,7 @@ class CircuitIR(AbstractBaseIR):
             inputs: Optional[dict] = None,
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
+            solver: str = 'euler',
             out_dir: Optional[str] = None,
             verbose: bool = True,
             profile: bool = False,
@@ -913,12 +914,18 @@ class CircuitIR(AbstractBaseIR):
             'node_name/op_name/var_name'.
         sampling_step_size
             Time in seconds between sampling points of the output variables.
+        solver
+            Numerical solving scheme to use for differential equations. Currently supported ODE solving schemes:
+            - 'euler' for the explicit Euler method
+            - 'scipy' for integration via the `scipy.integrate.solve_ivp` method.
         out_dir
             Directory in which to store outputs.
         verbose
             If true, status updates will be printed to the console.
         profile
             If true, the total graph execution time will be printed and returned.
+        kwargs
+            Keyword arguments that are passed on to the chosen solver.
 
         Returns
         -------
@@ -998,8 +1005,9 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("Running the simulation...")
 
-        output_col, *time = self._backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size, out_dir=out_dir,
-                                              outputs=outputs_tmp, profile=profile, **kwargs)
+        output_col, times, *time = self._backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
+                                                     out_dir=out_dir, outputs=outputs_tmp, solver=solver,
+                                                     profile=profile, **kwargs)
 
         if verbose and profile:
             if simulation_time:
@@ -1017,7 +1025,7 @@ class CircuitIR(AbstractBaseIR):
         outputs = {}
         for outkey, (out_val, node_keys) in output_col.items():
             for i, node_key in enumerate(node_keys):
-                out_val_tmp = np.squeeze(out_val[:, i])
+                out_val_tmp = np.squeeze(out_val[:, i]) if len(out_val.shape) > 1 else out_val
                 if len(out_val_tmp.shape) < 2:
                     outputs[tuple(node_key.split('/')) + (outkey,)] = out_val_tmp
                 else:
@@ -1025,7 +1033,7 @@ class CircuitIR(AbstractBaseIR):
                         outputs[(node_key, outkey, str(k))] = np.squeeze(out_val_tmp[:, k])
 
         # create data frame
-        out_vars = DataFrame(outputs, index=np.arange(0, int(sim_steps/sampling_steps))*sampling_step_size)
+        out_vars = DataFrame(outputs, index=times)
 
         # return results
         ################
@@ -1037,7 +1045,6 @@ class CircuitIR(AbstractBaseIR):
     def compile(self,
                 vectorization: bool = True,
                 backend: str = 'numpy',
-                solver: str = 'euler',
                 float_precision: str = 'float32',
                 matrix_sparseness: float = 0.5,
                 **kwargs
@@ -1057,11 +1064,6 @@ class CircuitIR(AbstractBaseIR):
             Name of the backend in which to load the compute graph. Currently supported backends:
             - 'numpy'
             - 'tensorflow'
-        solver
-            Numerical solving scheme to use for differential equations. Currently supported ODE solving schemes:
-            - 'euler' for the explicit Euler method
-            - 'midpoint' for the midpoint method
-            - 'rk23' for the Runge-Kutta 2(3) algorithm
         float_precision
             Default precision of float variables. This is only used for variables for which no precision was given.
         matrix_sparseness
@@ -1137,8 +1139,8 @@ class CircuitIR(AbstractBaseIR):
             # create mapping equation and its arguments
             args = {}
             dtype = sval["dtype"]
-            d = "[target_idx]" if tidx else ""
-            idx = "[source_idx]" if sidx else ""
+            d = "[target_idx]" if tidx and sum(tval['shape']) > 1 else ""
+            idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
             assign = '+=' if add_project else '='
 
             # check whether edge projection can be solved by a simple inner product between a weight matrix and the
@@ -1221,8 +1223,7 @@ class CircuitIR(AbstractBaseIR):
         self._backend.bottom_layer()
 
         # parse mapping
-        variables = parse_equation_system(equations=equations, equation_args=variables, backend=self._backend,
-                                          solver=solver)
+        variables = parse_equations(equations=equations, equation_args=variables, backend=self._backend)
 
         # save parsed variables in net config
         for key, val in variables.items():

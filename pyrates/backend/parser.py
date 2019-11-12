@@ -487,12 +487,10 @@ class ExpressionParser(ParserElement):
         available.
         """
 
-        # extract update parameters
-        solver = self.parser_kwargs.pop('solver', 'euler')
-        diff_eq = self._diff_eq
-
         # update left-hand side of equation
         ###################################
+
+        diff_eq = self._diff_eq
 
         if diff_eq:
 
@@ -669,9 +667,9 @@ class ExpressionParser(ParserElement):
         return test
 
 
-def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any, solver='euler', **kwargs) -> dict:
+def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
     """Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
-    of algebraic equations (depends on the chosen solver).
+    of right-hand side evaluations that can be solved later on.
 
     Parameters
     ----------
@@ -681,11 +679,6 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         Key-value pairs of arguments needed for parsing the equations.
     backend
         Backend instance to parse the equations into.
-    solver
-        Type of solving algorithm to be applied to the differential equations in the system. Available solvers are:
-        - `euler` for the explicit euler method
-        - `midpoint` for the midpoint method
-        - `rk23` for the Runge-Kutta algorithm of 2nd (3rd) order
     kwargs
         Additional keyword arguments to be passed to the backend methods.
 
@@ -695,114 +688,6 @@ def parse_equation_system(equations: list, equation_args: dict, backend: tp.Any,
         The updated equations args (in-place manipulation of all variables in equation_args happens during
         equation parsing).
 
-    """
-
-    update_num = 0
-
-    if solver == 'midpoint':
-
-        print("EXPERIMENTAL FEATURE WARNING: Using the midpoint method for solving differential equations is not fully "
-              "tested yet and should be used with caution.")
-
-        # first rhs evaluation
-        update_num += 1
-        state_vars = {key: var for key, var in equation_args.items()
-                      if (type(var) is dict) and ('vtype' in var) and (var['vtype'] == 'state_var')}
-        state_vars_orig = dict(state_vars.items())
-        equations_tmp, state_vars = update_lhs(deepcopy(equations), state_vars, update_num, state_vars_orig)
-        equation_args.update(state_vars)
-        updates, equation_args = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend,
-                                                 **kwargs)
-        backend.add_layer()
-
-        # second rhs evaluation + combination of the two
-        updates.update({key: arg for key, arg in equation_args.items() if 'inputs' in key})
-        equations, _ = update_rhs(equations, updates, update_num, "(var_placeholder + 0.5*update_placeholder)")
-        _, equation_args = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
-
-    elif solver == 'rk23':
-
-        print("EXPERIMENTAL FEATURE WARNING: Using the Runge-Kutta 23 algorithm for solving differential equations is "
-              "not fully tested yet and should be used with caution.")
-
-        # first rhs evaluation
-        update_num += 1
-        state_vars = {key: var for key, var in equation_args.items()
-                      if (type(var) is dict) and ('vtype' in var) and (var['vtype'] == 'state_var')}
-        state_vars_orig = dict(state_vars.items())
-        equations_tmp, state_vars = update_lhs(deepcopy(equations), state_vars, update_num, state_vars_orig)
-        for var_orig in state_vars_orig.copy().keys():
-            if not any([var_orig in var for var in state_vars]):
-                state_vars_orig.pop(var_orig)
-        equation_args.update(state_vars)
-        updates, equation_args = parse_equations(equations=equations_tmp, equation_args=equation_args, backend=backend,
-                                                 **kwargs)
-        backend.add_layer()
-
-        # second rhs evaluation
-        updates.update({key: arg for key, arg in equation_args.items() if 'inputs' in key})
-        equations_tmp, updates = update_rhs(deepcopy(equations), updates, update_num,
-                                            "(var_placeholder + 0.5*update_placeholder)")
-        state_vars = {key: var for key, var in equation_args.items()
-                      if any([orig_key in key for orig_key in state_vars_orig])}
-        update_num += 1
-        equations_tmp, state_vars = update_lhs(equations_tmp, state_vars, update_num, state_vars_orig)
-        equation_args.update(state_vars)
-        updates_new, equation_args = parse_equations(equations=equations_tmp, equation_args=equation_args,
-                                                     backend=backend, **kwargs)
-        backend.add_layer()
-
-        # third rhs evaluation
-        updates.update({key: arg for key, arg in equation_args.items() if 'inputs' in key})
-        updates.update(updates_new)
-        equations, updates = update_rhs(equations, updates, update_num,
-                                        "(var_placeholder - var_placeholder_1 + 2*update_placeholder)")
-        state_vars = {key: var for key, var in equation_args.items()
-                      if any([orig_key in key for orig_key in state_vars_orig])}
-        update_num += 1
-        equations, state_vars = update_lhs(equations, state_vars, update_num, state_vars_orig)
-        equation_args.update(state_vars)
-        updates, equation_args = parse_equations(equations=equations, equation_args=equation_args, backend=backend,
-                                                 **kwargs)
-        backend.add_layer()
-
-        # combination of 3 rhs evaluations a'la rk23
-        equations = []
-        for var_info in state_vars_orig:
-            node, op, var = var_info.split('/')
-            equations.append((f'{var} += ({var}_upd_1 + 4.*{var}_upd_2 + {var}_upd_3)/6.', f"{node}/{op}"))
-        _, equation_args = parse_equations(equations=[equations], equation_args=equation_args, backend=backend,
-                                           edge_layer=False, **kwargs)
-
-    elif solver == 'euler':
-
-        equation_args = parse_equations(equations=equations, equation_args=equation_args, backend=backend, **kwargs)
-
-    else:
-
-        valid_solvers = ['euler', 'midpoint', 'rk23']
-        raise ValueError(f'Invalid solver: {solver}. Valid differential equation solvers are: {valid_solvers}.')
-
-    return equation_args
-
-
-def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs
-                    ) -> dict:
-    """Parses list of equations into the backend.
-
-    Parameters
-    ----------
-    equations
-        List of equations to parse into the backend.
-    equation_args
-        Dictionary with arguments needed for the equations.
-    backend
-        Backend instance that the equations should be parsed into.
-
-    Returns
-    -------
-    dict
-        Updated `equation_args` dictionary that was passed to this function.
     """
 
     var_updates = {}
