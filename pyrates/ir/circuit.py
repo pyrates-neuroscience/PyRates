@@ -96,7 +96,6 @@ class CircuitIR(AbstractBaseIR):
         self._vectorized = False
         self._compile_info = {}
         self._backend = None
-        self._dt = 0.0
 
     def _collect_references(self, edge_or_node):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
@@ -872,19 +871,20 @@ class CircuitIR(AbstractBaseIR):
 
             # apply the indices to the vectorized node variables
             for vnode_key in vnode_indices:
+                var_value = self[f"{vnode_key}/{op}/{var}"]['value']
                 idx = vnode_indices[vnode_key]['var']
                 if apply_idx:
                     idx = f"{idx[0]}:{idx[-1] + 1}" if all(np.diff(idx) == 1) else [idx]
-                    vnode_indices[vnode_key]['var'] = self._backend.apply_idx(self[f"{vnode_key}/{op}/{var}"]['value'],
-                                                                              idx)
+                    vnode_indices[vnode_key]['var'] = self._backend.apply_idx(var_value, idx)
                 else:
-                    vnode_indices[vnode_key]['var'] = self[f"{vnode_key}/{op}/{var}"]['value']
+                    vnode_indices[vnode_key]['var'] = var_value
                     vnode_indices[vnode_key]['idx'] = idx
 
             return vnode_indices
 
     def run(self,
             simulation_time: Optional[float] = None,
+            step_size: float = 1e-3,
             inputs: Optional[dict] = None,
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
@@ -899,6 +899,8 @@ class CircuitIR(AbstractBaseIR):
         ----------
         simulation_time
             Simulation time in seconds.
+        step_size
+            Simulation step size in seconds.
         inputs
             Inputs for placeholder variables. Each key is a string that specifies a node variable in the graph
             via the following format: 'node_name/op_name/var_nam'. Thereby, the node name can consist of multiple node
@@ -943,22 +945,17 @@ class CircuitIR(AbstractBaseIR):
 
         # basic simulation parameters initialization
         if not simulation_time:
-            simulation_time = self._backend.dt
-        sim_steps = int(np.round(simulation_time / self._dt, decimals=0))
+            simulation_time = step_size
+        sim_steps = int(np.round(simulation_time/step_size, decimals=0))
 
         if not sampling_step_size:
-            sampling_step_size = self._dt
-        sampling_steps = int(np.round(sampling_step_size / self._dt, decimals=0))
-        store_steps = int(np.round(sim_steps/sampling_steps, decimals=0))
+            sampling_step_size = step_size
+        sampling_steps = int(np.round(sampling_step_size/step_size, decimals=0))
 
         # add output variables to the backend
         #####################################
 
-        output_col = {}
-        output_cols = []
-        output_keys = []
-        output_nodes = []
-        output_shapes = []
+        outputs_tmp = {}
 
         if outputs:
 
@@ -966,23 +963,9 @@ class CircuitIR(AbstractBaseIR):
             for key, val in outputs.items():
 
                 # extract respective output variables from the network and store their information
-                for var_key, var_info in self.get_node_var(val).items():
-                    var_shape = tuple(var_info['var'].shape)
-                    if var_shape in output_shapes:
-                        idx = output_shapes.index(var_shape)
-                        output_cols[idx].append(var_info['var'])
-                        output_keys[idx].append(key)
-                        output_nodes[idx].append(var_info['nodes'])
-                    else:
-                        output_cols.append([var_info['var']])
-                        output_keys.append([key])
-                        output_nodes.append([var_info['nodes']])
-                        output_shapes.append(var_shape)
-
-                # parse output storage operation into backend
-                output_col.update(self._backend.add_output_layer(outputs=output_cols,
-                                                                 sampling_steps=store_steps,
-                                                                 out_shapes=output_shapes))
+                outputs_tmp[key] = {}
+                for var_info in self.get_node_var(val, apply_idx=False).values():
+                    outputs_tmp[key][var_info['var'].name] = [var_info['idx'], var_info['nodes']]
 
         # add input variables to the backend
         ####################################
@@ -1015,13 +998,13 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("Running the simulation...")
 
-        output_col, *time = self._backend.run(steps=sim_steps, outputs=output_col, sampling_steps=sampling_steps,
-                                              out_dir=out_dir, profile=profile, **kwargs)
+        output_col, *time = self._backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size, out_dir=out_dir,
+                                              outputs=outputs_tmp, profile=profile, **kwargs)
 
         if verbose and profile:
             if simulation_time:
                 print(f"{simulation_time}s of backend behavior were simulated in {time[0]} s given a "
-                      f"simulation resolution of {self._dt} s.")
+                      f"simulation resolution of {step_size} s.")
             else:
                 print(f"ComputeGraph computations finished after {time[0]} seconds.")
         elif verbose:
@@ -1032,30 +1015,17 @@ class CircuitIR(AbstractBaseIR):
 
         # ungroup grouped output variables
         outputs = {}
-        for names, group_key, nodes in zip(output_keys, output_col, output_nodes):
-
-            out_group = output_col[group_key]
-
-            for i, (key, node_keys) in enumerate(zip(names, nodes)):
-
-                out_val = np.squeeze(out_group[:, i])
-
-                if len(out_val.shape) == 1:
-
-                    outputs[key] = out_val
-
+        for outkey, (out_val, node_keys) in output_col.items():
+            for i, node_key in enumerate(node_keys):
+                out_val_tmp = np.squeeze(out_val[:, i])
+                if len(out_val_tmp.shape) < 2:
+                    outputs[tuple(node_key.split('/')) + (outkey,)] = out_val_tmp
                 else:
-
-                    for j, node_key in enumerate(node_keys):
-                        out_val_tmp = np.squeeze(out_val[:, j])
-                        if len(out_val_tmp.shape) == 1:
-                            outputs[tuple(node_key.split('/')) + (key,)] = out_val_tmp
-                        else:
-                            for k in range(out_val_tmp.shape[1]):
-                                outputs[(node_key, key, str(k))] = np.squeeze(out_val_tmp[:, k])
+                    for k in range(out_val_tmp.shape[1]):
+                        outputs[(node_key, outkey, str(k))] = np.squeeze(out_val_tmp[:, k])
 
         # create data frame
-        out_vars = DataFrame(outputs, index=np.arange(0, int(sim_steps/sampling_steps)+1)*sampling_step_size)
+        out_vars = DataFrame(outputs, index=np.arange(0, int(sim_steps/sampling_steps))*sampling_step_size)
 
         # return results
         ################
@@ -1065,7 +1035,6 @@ class CircuitIR(AbstractBaseIR):
         return out_vars
 
     def compile(self,
-                dt: float = 1e-3,
                 vectorization: bool = True,
                 backend: str = 'numpy',
                 solver: str = 'euler',
@@ -1124,11 +1093,6 @@ class CircuitIR(AbstractBaseIR):
         kwargs['name'] = self.label
         kwargs['float_default_type'] = float_precision
         self._backend = backend(**kwargs)
-
-        # set time constant of the network
-        self._dt = dt
-        dt = parse_dict({'dt': {'vtype': 'constant', 'dtype': float_precision, 'shape': (), 'value': self._dt}},
-                        backend=self._backend)['dt']
 
         # run graph optimization and vectorization
         self._first_run = True
@@ -1236,12 +1200,12 @@ class CircuitIR(AbstractBaseIR):
         # collect node and edge operators
         #################################
 
-        variables = {'all/all/dt': dt}
+        variables = {}
 
         # edge operators
         edge_equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
         variables.update(variables_tmp)
-        if edge_equations:
+        if any(edge_equations):
             self._backend._input_layer_added = True
 
         # node operators
@@ -1263,7 +1227,7 @@ class CircuitIR(AbstractBaseIR):
         # save parsed variables in net config
         for key, val in variables.items():
             node, op, var = key.split('/')
-            if "inputs" not in var and var != "dt":
+            if "inputs" not in var:
                 try:
                     self[f"{node}/{op}/{var}"]['value'] = val
                 except KeyError as e:

@@ -62,7 +62,6 @@ class ComputeGraph(object):
 
     def __new__(cls,
                 net_config: Any,
-                dt: float = 1e-3,
                 vectorization: bool = True,
                 name: Optional[str] = 'net0',
                 backend: str = 'numpy',
@@ -76,5 +75,5 @@ class ComputeGraph(object):
         if type(net_config) is str:
             net_config = net_config.apply()
 
-        return net_config.compile(dt=dt, vectorization=vectorization, backend=backend, solver=solver,
+        return net_config.compile(vectorization=vectorization, backend=backend, solver=solver,
                                   float_precision=float_precision, **kwargs)
