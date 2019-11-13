@@ -128,7 +128,6 @@ class ExpressionParser(ParserElement):
         self.expr_list = []
         self.op = None
         self._finished_rhs = False
-        self.rhs_eval = None
         self._instantaneous = kwargs.pop('instantaneous', False)
 
         # define algebra
@@ -234,7 +233,6 @@ class ExpressionParser(ParserElement):
         self.rhs = self.parse(self.expr_stack[:])
 
         # post rhs parsing steps
-        self.rhs_eval = self.rhs
         self.clear()
         self._finished_rhs = True
 
@@ -369,7 +367,7 @@ class ExpressionParser(ParserElement):
         elif op in self.vars:
 
             # extract constant/variable from args dict
-            if op == self.expr_str:
+            if op == self.expr_list[0] and len(self.expr_list) == 1 and not self._finished_rhs:
                 self.op = self.backend.add_op('no_op', self.vars[op], **self.parser_kwargs)
             else:
                 self.op = self.vars[op]
@@ -459,10 +457,10 @@ class ExpressionParser(ParserElement):
                 if op == 'rhs':
                     self.op = self.rhs
                 else:
-                    shape = self.rhs_eval.shape if hasattr(self.rhs_eval, 'shape') else ()
-                    dtype = self.rhs_eval.dtype if hasattr(self.rhs_eval, 'dtype') else type(self.rhs_eval)
+                    shape = self.rhs.shape if hasattr(self.rhs, 'shape') else ()
+                    dtype = self.rhs.dtype if hasattr(self.rhs, 'dtype') else type(self.rhs)
                     self.op = self.backend.add_var(vtype='state_var', name=op, shape=shape, dtype=dtype)
-                self.vars[op] = self.op
+                    self.vars[op] = self.op
 
             else:
 
@@ -737,7 +735,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                 parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=False,
                                           **kwargs.copy())
                 lhs, rhs, variables = parser.parse_expr()
-                var_updates[f"{scope}/{lhs}"] = {'rhs': rhs, 'lhs': variables[lhs]}
+                var_updates[f"{scope}/{lhs}"] = variables[lhs]
 
             # update equations args
             #######################
@@ -746,7 +744,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             for key, var in parser.vars.items():
                 equation_args[f"{scope}/{key}"] = var
             for key, var in var_updates.items():
-                equation_args[key] = var['lhs'] if type(var) is dict else var
+                equation_args[key] = var
 
             # save previously unprocessed input variables to equation args
             for key, inp in inputs.items():

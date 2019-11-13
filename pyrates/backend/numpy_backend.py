@@ -872,8 +872,7 @@ class NumpyBackend(object):
                 outputs[out_key][var_name][0] = len(output_indices)-1
 
         # simulate backend behavior for each time-step
-        state_vars_tmp = [var for _, var in state_vars]
-        times, results = self._solve(rhs_func=rhs_func, state_vars=state_vars_tmp, T=T, dt=dt, solver=solver, dts=dts,
+        times, results = self._solve(rhs_func=rhs_func, state_vars=state_vars, T=T, dt=dt, solver=solver, dts=dts,
                                      output_indices=output_indices, **kwargs)
 
         # output storage and clean-up
@@ -1395,7 +1394,10 @@ class NumpyBackend(object):
         for key, (vtype, idx) in var_map.items():
             var = self.vars[key]
             if vtype == 'state_var':
-                func_gen.add_code_line(f"{var.short_name} = y[{idx}]")
+                if len(idx) == 3:
+                    func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}:{idx[2]}]")
+                else:
+                    func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}]")
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
         func_gen.add_code_line("# calculate right-hand side update of equation system")
@@ -1404,14 +1406,14 @@ class NumpyBackend(object):
             for j, op in enumerate(layer):
                 if hasattr(op, 'state_var'):
                     _, idx = var_map[op.state_var]
-                    func_gen.add_code_line(f"y_delta_{idx} = ")
+                    func_gen.add_code_line(f"y_delta_{idx[0]} = ")
                 func_gen.add_code_line(op.value)
                 func_gen.add_linebreak()
-        func_gen.add_code_line(f"return [")
+        func_gen.add_code_line(f"return np.asarray([")
         for i in range(len(state_vars)):
             func_gen.add_code_line(f"y_delta_{i},")
         func_gen.code[-1] = func_gen.code[-1][:-1]
-        func_gen.add_code_line("]")
+        func_gen.add_code_line("]).flatten()")
         func_gen.add_linebreak()
 
         # save rhs function to file
@@ -1578,6 +1580,12 @@ class NumpyBackend(object):
         if not output_indices:
             output_indices = [idx for idx, _ in enumerate(state_vars)]
 
+        # bring state variables into vectorized shape
+        state_vars_tmp = []
+        for (_, state_var) in state_vars:
+            state_vars_tmp += state_var
+        state_vars_tmp = np.asarray(state_vars_tmp)
+
         # choose solver
         ###############
 
@@ -1585,23 +1593,25 @@ class NumpyBackend(object):
 
             # initialize results storage vectors
             results = []
-
             for idx in output_indices:
-                var_dim = len(state_vars[idx]) if type(state_vars[idx]) is list else 1
+                try:
+                    var_dim = len(state_vars[idx[0]][1])
+                except AttributeError:
+                    var_dim = 1
                 results.append(np.zeros((sampling_steps, var_dim)))
 
             # solve via pyrates internal explicit euler algorithm
             i = 0
             sampling_idx = 0
             while t < T:
-                deltas = rhs_func(t, state_vars)
+                deltas = rhs_func(t, state_vars_tmp)
                 t += dt
                 i += 1
-                for j, delta in enumerate(deltas):
-                    state_vars[j] += dt * delta
+                state_vars_tmp += dt * deltas
                 if i == sampling_step:
-                    for j, idx in enumerate(output_indices):
-                        results[j][sampling_idx, :] = state_vars[idx]
+                    for idx in output_indices:
+                        results[idx[0]][sampling_idx, :] = state_vars_tmp[idx[1]] if len(idx) == 2 \
+                            else state_vars_tmp[idx[1]:idx[2]]
                     sampling_idx += 1
                     i = 0
 
@@ -1612,7 +1622,7 @@ class NumpyBackend(object):
             from scipy.integrate import solve_ivp
 
             # solve via scipy's ode integration function
-            outputs = solve_ivp(fun=rhs_func, t_span=(t, T), y0=state_vars, first_step=dt, **kwargs)
+            outputs = solve_ivp(fun=rhs_func, t_span=(t, T), y0=state_vars_tmp, first_step=dt, **kwargs)
             results = [outputs['y'].T[:, idx] for idx in output_indices]
             times = outputs['t']
 
@@ -1842,12 +1852,15 @@ class NumpyBackend(object):
 
         """
         state_vars, constants, var_map = [], [], {}
-        s_idx, c_idx = 0, 0
+        s_idx, c_idx, s_len = 0, 0, 0
         for key, var in self.vars.items():
             if key in self.state_vars:
-                state_vars.append((key, var.squeeze().tolist()))
-                var_map[key] = ('state_var', s_idx)
+                val = var.flatten().tolist()
+                val_len = len(val)
+                state_vars.append((key, val))
+                var_map[key] = ('state_var', (s_idx, s_len, s_len + val_len) if val_len > 1 else (s_idx, s_len))
                 s_idx += 1
+                s_len += len(val)
             elif var.vtype == 'constant' or var.vtype == 'state_var':
                 constants.append((key, var))
                 var_map[key] = ('constant', c_idx)
