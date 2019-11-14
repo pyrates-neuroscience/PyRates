@@ -477,7 +477,7 @@ class CircuitIR(AbstractBaseIR):
         from pyrates.frontend import circuit_from_yaml
         return circuit_from_yaml(path)
 
-    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True):
+    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True, dt: Optional[float] = None):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
@@ -513,11 +513,15 @@ class CircuitIR(AbstractBaseIR):
                     if d is None or np.sum(d) == 0:
                         d = [1] * len(self.edges[s, t, e]['target_idx'])
                     else:
+                        if dt is None:
+                            raise ValueError('Step-size not passed for discretizing delays. If delays are added to any '
+                                             'network edge, please pass the simulation `step-size` to the `compile` '
+                                             'method.')
                         if type(d) is list:
                             d_tmp = np.asarray(d).squeeze()
-                            d = np.asarray((d_tmp/self._dt) + 1, dtype=np.int32).tolist()
+                            d = np.asarray(int(np.round(d_tmp/dt, decimals=0)), dtype=np.int32).tolist()
                         else:
-                            d = [int(d/self._dt)+1]
+                            d = [int(np.round(d/dt, decimals=0))]
                     self.edges[s, t, e]['delay'] = d
                     delays += d
 
@@ -1047,6 +1051,7 @@ class CircuitIR(AbstractBaseIR):
                 backend: str = 'numpy',
                 float_precision: str = 'float32',
                 matrix_sparseness: float = 0.5,
+                step_size: Optional[float] = None,
                 **kwargs
                 ) -> AbstractBaseIR:
         """Parses IR into the backend. Returns an instance of the CircuitIR that allows for numerical simulations via
@@ -1054,9 +1059,6 @@ class CircuitIR(AbstractBaseIR):
 
         Parameters
         ----------
-        dt
-            Step-size with which the network should be simulated later on. Important for discretizing delays,
-            differential equations, ... and can thus not be changed later on.
         vectorization
             Defines the mode of automatic parallelization optimization that should be used. Can be True for lumping all
             nodes together in a vector or False for no vectorization.
@@ -1071,6 +1073,9 @@ class CircuitIR(AbstractBaseIR):
             can be realized internally via inner products between an edge weight matrix and the source variables.
             The matrix sparseness indicated how sparse edge weight matrices are allowed to be. If the sparseness of an
             edge weight matrix for a given projection would be higher, no edge weight matrix will be built/used.
+        step_size
+            Step-size with which the network should be simulated later on. Only needs to be passed here, if the edges of
+            the network contain delays. Will be used to discretize the delays.
         kwargs
             Additional keyword arguments that will be passed on to the backend instance. For a full list of viable
             keyword arguments, see the documentation of the respective backend class (`numpy_backend.NumpyBackend` or
@@ -1098,7 +1103,7 @@ class CircuitIR(AbstractBaseIR):
 
         # run graph optimization and vectorization
         self._first_run = True
-        self.optimize_graph_in_place(vectorize=vectorization)
+        self.optimize_graph_in_place(vectorize=vectorization, dt=step_size)
 
         # move edge operations to nodes
         ###############################
@@ -1125,16 +1130,16 @@ class CircuitIR(AbstractBaseIR):
             target_node_ir = self[target_node]
 
             # define target index
-            if delay is not None and tidx:
+            if delay is not None and tidx and len(tval['shape']) > 1:
                 tidx_tmp = []
                 for idx, d in zip(tidx, delay):
                     if type(idx) is list:
-                        tidx_tmp.append(idx + [d])
+                        tidx_tmp.append(idx + [-d])
                     else:
-                        tidx_tmp.append([idx, d])
+                        tidx_tmp.append([idx, -d])
                 tidx = tidx_tmp
             elif delay is not None:
-                tidx = list(delay)
+                tidx = [-d for d in delay] if type(delay) is list else [-delay]
 
             # create mapping equation and its arguments
             args = {}
@@ -1505,11 +1510,13 @@ class CircuitIR(AbstractBaseIR):
 
         # create buffer equations
         if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-            eqs_op_read = [f"{var} = {var}_buffer_{idx}[0]"]
-            eqs_op_rotate = [f"{var}_buffer_{idx} = concat(({var}_buffer_{idx}[1:], {var}_buffer_{idx}_reset), 0)"]
+            eqs_op_read = [f"{var} = {var}_buffer_{idx}[-1]"]
+            eqs_op_rotate = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 0)",
+                             f"{var}_buffer_{idx}[0] = {var}_buffer_{idx}_reset"]
         else:
-            eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, 0]"]
-            eqs_op_rotate = [f"{var}_buffer_{idx} = concat(({var}_buffer_{idx}[:, 1:], {var}_buffer_{idx}_reset), 1)"]
+            eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, -1]"]
+            eqs_op_rotate = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 1)",
+                             f"{var}_buffer_{idx}[:, 0] = {var}_buffer_{idx}_reset"]
 
         # add buffer operators to operator graph
         node_ir.add_op(f'{op}_{var}_buffer_rotate_{idx}',

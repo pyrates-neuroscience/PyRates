@@ -30,12 +30,15 @@
 """
 
 # external imports
-from typing import Optional, Dict, Callable, List, Any
+from typing import Optional, Dict, Callable, List, Any, Union
 import tensorflow as tf
+import os
+import sys
+from shutil import rmtree
 
 # pyrates internal imports
 from .funcs import *
-from .numpy_backend import NumpyBackend, NumpyVar, PyRatesIndexOp, PyRatesAssignOp, PyRatesOp
+from .numpy_backend import NumpyBackend, NumpyVar, PyRatesIndexOp, PyRatesAssignOp, PyRatesOp, CodeGen
 
 # meta infos
 __author__ = "Richard Gast"
@@ -65,16 +68,21 @@ class TensorflowVar(NumpyVar):
 
 class TensorflowOp(PyRatesOp):
 
-    def eval(self):
-        globals()['tf'] = tf
-        result = self._callable(*self.args)
-        self._check_numerics(result, self.name)
-        return result
-
-    @staticmethod
-    def _generate_func(func_str):
+    def _generate_func(self):
+        """Generates a function from operator value and arguments"""
         func_dict = {}
-        exec(func_str, globals(), func_dict)
+        func = CodeGen()
+        func.add_code_line(f"def {self.short_name}(")
+        for arg in self._op_dict['arg_names']:
+            func.add_code_line(f"{arg},")
+        func.code[-1] = func.code[-1][:-1]
+        func.add_code_line("):")
+        func.add_linebreak()
+        func.add_indent()
+        func.add_code_line("import tensorflow as tf")
+        func.add_linebreak()
+        func.add_code_line(f"return {self._op_dict['value']}")
+        exec(func.generate(), globals(), func_dict)
         return func_dict
 
     @staticmethod
@@ -94,29 +102,63 @@ class TensorflowOp(PyRatesOp):
 
 class TensorflowAssignOp(PyRatesAssignOp):
 
-    def eval(self):
-        result = self._callable(*self.args)
-        self._check_numerics(result, self.name)
-        return result
-
-    @staticmethod
-    def _generate_func(func_str):
+    def _generate_func(self):
+        """Generates a function from operator value and arguments"""
         func_dict = {}
-        exec(func_str, globals(), func_dict)
+        func = CodeGen()
+        func.add_code_line(f"def {self.short_name}(")
+        for arg in self._op_dict['arg_names']:
+            func.add_code_line(f"{arg},")
+        func.code[-1] = func.code[-1][:-1]
+        func.add_code_line("):")
+        func.add_linebreak()
+        func.add_indent()
+        func.add_code_line("import tensorflow as tf")
+        func.add_linebreak()
+        func.add_code_line(f"return {self._op_dict['value']}")
+        exec(func.generate(), globals(), func_dict)
         return func_dict
+
+    @classmethod
+    def _extract_var_idx(cls, op, args, results_args, results_arg_names):
+
+        if "scatter" in op:
+
+            # for tensorflow-like scatter indexing
+            if hasattr(args[2], 'short_name'):
+                key = args[2].short_name
+                if hasattr(args[2], 'value'):
+                    var_idx = f"{args[2].value},"
+                else:
+                    var_idx = f"{key},"
+            else:
+                key = "__no_name__"
+                var_idx = f"{key},"
+
+            return var_idx, results_args, results_arg_names
+
+        else:
+
+            return super()._extract_var_idx(op, args, results_args, results_arg_names)
 
 
 class TensorflowIndexOp(PyRatesIndexOp):
 
-    def eval(self):
-        result = self._callable(*self.args)
-        self._check_numerics(result, self.name)
-        return result
-
-    @staticmethod
-    def _generate_func(func_str):
+    def _generate_func(self):
+        """Generates a function from operator value and arguments"""
         func_dict = {}
-        exec(func_str, globals(), func_dict)
+        func = CodeGen()
+        func.add_code_line(f"def {self.short_name}(")
+        for arg in self._op_dict['arg_names']:
+            func.add_code_line(f"{arg},")
+        func.code[-1] = func.code[-1][:-1]
+        func.add_code_line("):")
+        func.add_linebreak()
+        func.add_indent()
+        func.add_code_line("import tensorflow as tf")
+        func.add_linebreak()
+        func.add_code_line(f"return {self._op_dict['value']}")
+        exec(func.generate(), globals(), func_dict)
         return func_dict
 
 
@@ -241,6 +283,146 @@ class TensorflowBackend(NumpyBackend):
                        "bool": tf.bool
                        }
 
+    def compile(self, build_dir: Optional[str] = None, **kwargs) -> tuple:
+        """Compile the graph layers/operations. Creates python files containing the functions in each layer.
+
+        Parameters
+        ----------
+        build_dir
+            Directory in which to create the file structure for the simulation.
+
+        Returns
+        -------
+        tuple
+            Contains tuples of layer run functions and their respective arguments.
+
+        """
+
+        # preparations
+        ##############
+
+        # remove empty layers and operators
+        new_layer_idx = 0
+        for layer_idx, layer in enumerate(self.layers.copy()):
+            for op in layer.copy():
+                if op is None:
+                    layer.pop(layer.index(op))
+            if len(layer) == 0:
+                self.layers.pop(new_layer_idx)
+            else:
+                new_layer_idx += 1
+
+        # create directory in which to store rhs function
+        orig_path = os.getcwd()
+        if build_dir:
+            os.mkdir(build_dir)
+        dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
+        try:
+            os.mkdir(dir_name)
+        except FileExistsError:
+            pass
+        os.chdir(dir_name)
+        try:
+            os.mkdir(self.name)
+        except FileExistsError:
+            rmtree(self.name)
+            os.mkdir(self.name)
+        for key in sys.modules.copy():
+            if self.name in key:
+                del sys.modules[key]
+        os.chdir(self.name)
+        net_dir = os.getcwd()
+        self._build_dir = net_dir
+        sys.path.append(net_dir)
+
+        # collect state variable and parameter vectors
+        state_vars, params, var_map = self._process_vars()
+
+        # create rhs evaluation function
+        ################################
+
+        # set up file header
+        func_gen = CodeGen()
+        for import_line in self._imports:
+            func_gen.add_code_line(import_line)
+            func_gen.add_linebreak()
+        func_gen.add_linebreak()
+
+        # define function head and collect constant arguments
+        args = []
+        func_gen.add_code_line("def rhs_eval(t, y, ")
+        for key, (vtype, idx) in var_map.items():
+            if vtype == 'constant':
+                var = params[idx][1]
+                func_gen.add_code_line(f"{var.short_name},")
+                args.append(var)
+        func_gen.code[-1] = func_gen.code[-1][:-1]
+        func_gen.add_code_line("):")
+        func_gen.add_linebreak()
+        func_gen.add_indent()
+        func_gen.add_linebreak()
+
+        # # declare remaining constants
+        # func_gen.add_code_line("# declare constants")
+        # func_gen.add_linebreak()
+        # for key, (vtype, idx) in var_map.items():
+        #     if vtype == 'constant':
+        #         var = params[idx][1]
+        #         if sum(var.shape) <= 1:
+        #             val_tmp = self._get_val(var)
+        #             val = val_tmp.squeeze().tolist() if hasattr(val_tmp, 'squeeze') else val_tmp
+        #             func_gen.add_code_line(f"{var.short_name} = {val}")
+        #         func_gen.add_linebreak()
+        # func_gen.add_linebreak()
+
+        # extract state variables from input vector y
+        func_gen.add_code_line("# extract state variables from input vector")
+        func_gen.add_linebreak()
+        for key, (vtype, idx) in var_map.items():
+            var = self.get_var(key)
+            if vtype == 'state_var':
+                func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}]")
+                func_gen.add_linebreak()
+        func_gen.add_linebreak()
+
+        # add equations
+        func_gen.add_code_line("# calculate right-hand side update of equation system")
+        func_gen.add_linebreak()
+        for i, layer in enumerate(self.layers):
+            for j, op in enumerate(layer):
+                if hasattr(op, 'state_var'):
+                    _, idx = var_map[op.state_var]
+                    func_gen.add_code_line(f"y_delta_{idx[0]} = ")
+                func_gen.add_code_line(op.value)
+                func_gen.add_linebreak()
+        func_gen.add_linebreak()
+
+        # add return line
+        func_gen.add_code_line(f"return [")
+        for i in range(len(state_vars)):
+            func_gen.add_code_line(f"y_delta_{i},")
+        func_gen.code[-1] = func_gen.code[-1][:-1]
+        func_gen.add_code_line("]")
+        func_gen.add_linebreak()
+
+        # save rhs function to file
+        with open('rhs_func.py', 'w') as f:
+            f.writelines(func_gen.code)
+            f.close()
+
+        # import function from file
+        funcs = {}
+        exec("from rhs_func import rhs_eval", globals(), funcs)
+        rhs_eval = funcs['rhs_eval']
+        os.chdir(orig_path)
+
+        # apply function decorator
+        decorator = kwargs.pop('decorator', tf.function)
+        if decorator:
+            rhs_eval = decorator(rhs_eval, **kwargs)
+
+        return rhs_eval, args, state_vars, var_map
+
     def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
 
         # match data types
@@ -267,6 +449,9 @@ class TensorflowBackend(NumpyBackend):
         try:
             return self.vars[name]
         except KeyError as e:
+            if ":" in name:
+                idx = name.index(':')
+                return self.vars[name[:idx]]
             for var in self.vars:
                 if f"{name}:" in var:
                     return self.vars[var]
@@ -283,13 +468,60 @@ class TensorflowBackend(NumpyBackend):
                     var_count[var.short_name] = 0
         return self.add_op('stack', vars)
 
+    def _integrate(self, rhs_func, func_args, T, dt, dts, state_vars, state_var_info, output_indices):
+
+        sampling_steps = int(np.round(T / dts, decimals=0))
+
+        # initialize results storage vectors
+        results = []
+        for idx in output_indices:
+            try:
+                var_dim = state_vars[idx[1]].shape
+            except AttributeError:
+                var_dim = (1,)
+            results.append(tf.Variable(np.zeros((sampling_steps,) + var_dim, dtype=self._float_def)))
+
+        # solve via pyrates internal explicit euler algorithm
+        t = tf.Variable(0.0, dtype='float32')
+        results = self._run(rhs_func=rhs_func, func_args=func_args, state_vars=state_vars, t=t,
+                            T=tf.constant(T, dtype='float32'), dt=tf.constant(dt, dtype='float32'),
+                            dts=tf.constant(dts, dtype='float32'), sampling_idx=0,
+                            results=results, output_indices=output_indices)
+
+        results = [r.numpy() for r in results]
+
+        times = np.arange(0, T, dts)
+
+        return times, results
+
+    @tf.function
+    def _run(self, rhs_func, func_args, state_vars, t, T, dt, dts, sampling_idx, results, output_indices):
+
+        threshold = dt*0.1
+
+        while t < T:
+
+            deltas = rhs_func(t, state_vars, *func_args)
+
+            for s, d in zip(state_vars, deltas):
+                s.assign_add(dt * d)
+
+            if (t % dts) < threshold:
+                for r, idx in zip(results, output_indices):
+                    r[sampling_idx, :].assign(state_vars[idx[1]])
+                sampling_idx = sampling_idx + 1
+
+            t.assign_add(dt)
+
+        return results
+
     def _create_var(self, vtype, dtype, shape, value, name):
         var, name = TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
         if ':' in name:
             name = name.split(':')[0]
         return var, name
 
-    def _create_op(self, op, *args, decorator=None):
+    def _create_op(self, op, name, *args):
         if op in ["=", "+=", "-=", "*=", "/="]:
             if len(args) > 2 and (hasattr(args[2], 'shape') or type(args[2]) is list):
                 if op == "=":
@@ -299,25 +531,50 @@ class TensorflowBackend(NumpyBackend):
                 else:
                     op = "update_sub"
                 args = self._process_update_args_old(*args)
-            return TensorflowAssignOp(self.ops[op]['call'], self.ops[op]['name'], *args)
+            return TensorflowAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
         if op is "index":
             if hasattr(args[1], 'dtype') and 'bool' in str(args[1].dtype):
-                return TensorflowOp(self.ops['mask']['call'], self.ops['mask']['name'], *args)
+                return TensorflowOp(self.ops['mask']['call'], self.ops['mask']['name'], name, *args)
             if hasattr(args[1], 'shape') or type(args[1]) in (list, tuple):
                 try:
-                    return TensorflowOp(self.ops['gather']['call'], self.ops['gather']['name'], *args)
+                    return TensorflowOp(self.ops['gather']['call'], self.ops['gather']['name'], name, *args)
                 except (ValueError, IndexError):
                     args = self._process_idx_args(*args)
-                    return TensorflowOp(self.ops['gather_nd']['call'], self.ops['gather_nd']['name'], *args)
-            return TensorflowIndexOp(self.ops[op]['call'], self.ops[op]['name'], *args)
+                    return TensorflowOp(self.ops['gather_nd']['call'], self.ops['gather_nd']['name'], name, *args)
+            return TensorflowIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
         if op is "cast":
             args = list(args)
             for dtype in self.dtypes:
                 if dtype in str(args[1]):
-                    args[1] = self.dtypes[dtype]
+                    args[1] = f"tf.{dtype}"
                     break
             args = tuple(args)
-        return TensorflowOp(self.ops[op]['call'], self.ops[op]['name'], *args)
+        return TensorflowOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
+
+    def _process_vars(self):
+        """
+
+        Returns
+        -------
+
+        """
+        state_vars, constants, var_map = [], [], {}
+        s_idx, c_idx, s_len = 0, 0, 0
+        for key, var in self.vars.items():
+            key, state_var = self._is_state_var(key)
+            if state_var:
+                state_vars.append((key, var))
+                var_map[key] = ('state_var', (s_idx, s_len))
+                s_idx += 1
+                s_len += 1
+            elif var.vtype == 'constant' or var.vtype == 'state_var':
+                constants.append((key, var))
+                var_map[key] = ('constant', c_idx)
+                c_idx += 1
+        return state_vars, constants, var_map
+
+    def _preprocess_state_vars(self, state_vars):
+        return [state_var for _, state_var in state_vars]
 
     def _process_update_args_old(self, var, update, idx):
         """Preprocesses the index and a variable update to match the variable shape.
@@ -378,24 +635,24 @@ class TensorflowBackend(NumpyBackend):
                 # cast both variables to lowest precision
                 for acc in ["16", "32", "64", "128"]:
                     if acc in op1.dtype.name:
-                        return op1, self.add_op('cast', op2, op1.dtype)
+                        return op1, self.add_op('cast', op2, op1.dtype.name)
                     elif acc in op2.dtype.name:
-                        return self.add_op('cast', op1, op2.dtype), op2
+                        return self.add_op('cast', op1, op2.dtype.name), op2
 
             if type(op2) is int or type(op2) is float:
 
                 # transform op2 into constant tensor with dtype of op1
-                return op1, self.add_op('cast', tf.constant(op2), op1.dtype)
+                return op1, self.add_op('cast', tf.constant(op2), op1.dtype.name)
 
-            return op1, self.add_op('cast', op2, op1.dtype)
+            return op1, self.add_op('cast', op2, op1.dtype.name)
 
         elif issubclass(type(op2), tf.Variable):
 
             # transform op1 into constant tensor with dtype of op2
             if type(op1) is int or type(op2) is float:
-                return self.add_op('cast', tf.constant(op1), op2.dtype), op2
+                return self.add_op('cast', tf.constant(op1), op2.dtype.name), op2
 
-            return self.add_op('cast', op1, op2.dtype), op2
+            return self.add_op('cast', op1, op2.dtype.name), op2
 
         elif hasattr(op1, 'numpy') or type(op1) is np.ndarray:
 
@@ -406,17 +663,17 @@ class TensorflowBackend(NumpyBackend):
 
             # cast op1 to numpy dtype of op2
             return self.add_op('cast', op1, op2.dtype), op2
+
         else:
 
             # cast op2 to dtype of op1 referred from its type string
             return op1, self.add_op('cast', op2, str(type(op1)).split('\'')[-2])
 
-    def _solve(self, layers, sampling_layer, steps, sampling_steps):
-        if sampling_layer is None:
-            run_without_sampling(layers, steps)
+    def _is_state_var(self, key):
+        if ':' not in key and f"{key}:0" in self.state_vars:
+            return f"{key}:0", True
         else:
-            sampling_func, sampling_args = sampling_layer
-            run_with_sampling(layers, steps, sampling_func, sampling_args, sampling_steps)
+            return super()._is_state_var(key)
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:
@@ -465,19 +722,3 @@ class TensorflowBackend(NumpyBackend):
                 return dtype1 == dtype2
             else:
                 return False
-
-
-@tf.function
-def run_without_sampling(layers, steps):
-    for _ in tf.range(steps):
-        for func, args in layers:
-            func(*args)
-
-
-@tf.function
-def run_with_sampling(layers, steps, sampling_func, sampling_args, sampling_steps):
-    for step in tf.range(steps):
-        if tf.equal(step % sampling_steps, 0):
-            sampling_func(*sampling_args)
-        for func, args in layers:
-            func(*args)

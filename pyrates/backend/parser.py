@@ -243,7 +243,7 @@ class ExpressionParser(ParserElement):
         # parse lhs into backend
         self._update_lhs()
 
-        return self.lhs_key, self.rhs, self.vars
+        return self.lhs, self.rhs, self.vars
 
     def parse(self, expr_stack: list) -> tp.Any:
         """Parse elements in expression stack into the backend.
@@ -498,13 +498,13 @@ class ExpressionParser(ParserElement):
         elif self._instantaneous:
 
             # simple instantaneous update
-            self.vars[self.lhs_key] = self.parse(self.expr_stack + ['rhs', self._assign_type])
+            self.lhs = self.parse(self.expr_stack + ['rhs', self._assign_type])
 
         else:
 
             # simple non-instantaneous update
             self.backend.next_layer()
-            self.vars[self.lhs_key] = self.parse(self.expr_stack + ['rhs', self._assign_type])
+            self.lhs = self.parse(self.expr_stack + ['rhs', self._assign_type])
             self.backend.previous_layer()
 
     def _preprocess_expr_str(self, expr: str) -> tuple:
@@ -688,8 +688,6 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
     """
 
-    var_updates = {}
-
     for layer in equations:
         for eq, scope in layer:
 
@@ -726,30 +724,26 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                 # apply update to lhs variable of equation instantaneously
                 parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=True,
                                           **kwargs.copy())
-                lhs, _, variables = parser.parse_expr()
-                var_updates[f"{scope}/{lhs}"] = variables[lhs]
+                _, _, variables = parser.parse_expr()
 
             else:
 
                 # just calculate rhs variable (differential equations will be solved later)
                 parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=False,
                                           **kwargs.copy())
-                lhs, rhs, variables = parser.parse_expr()
-                var_updates[f"{scope}/{lhs}"] = variables[lhs]
+                _, _, variables = parser.parse_expr()
 
             # update equations args
             #######################
 
             # save backend variables to equation args
-            for key, var in parser.vars.items():
+            for key, var in variables.items():
                 equation_args[f"{scope}/{key}"] = var
-            for key, var in var_updates.items():
-                equation_args[key] = var
 
             # save previously unprocessed input variables to equation args
             for key, inp in inputs.items():
                 if key in unprocessed_inputs:
-                    equation_args[inp] = parser.vars[key]
+                    equation_args[inp] = variables[key]
 
         # go to next layer in backend
         backend.add_layer()
