@@ -482,14 +482,13 @@ class TensorflowBackend(NumpyBackend):
             results.append(tf.Variable(np.zeros((sampling_steps,) + var_dim, dtype=self._float_def)))
 
         # solve via pyrates internal explicit euler algorithm
-        t = tf.Variable(0.0, dtype='float32')
+        t = tf.Variable(0.0)
+        sampling_idx = tf.Variable(0, dtype='int32')
         results = self._run(rhs_func=rhs_func, func_args=func_args, state_vars=state_vars, t=t,
-                            T=tf.constant(T, dtype='float32'), dt=tf.constant(dt, dtype='float32'),
-                            dts=tf.constant(dts, dtype='float32'), sampling_idx=0,
-                            results=results, output_indices=output_indices)
+                            T=T, dt=dt, dts=dts,
+                            sampling_idx=sampling_idx, results=results, output_indices=output_indices)
 
-        results = [r.numpy() for r in results]
-
+        results = np.asarray([r.numpy() for r in results])
         times = np.arange(0, T, dts)
 
         return times, results
@@ -497,21 +496,24 @@ class TensorflowBackend(NumpyBackend):
     @tf.function
     def _run(self, rhs_func, func_args, state_vars, t, T, dt, dts, sampling_idx, results, output_indices):
 
-        threshold = dt*0.1
+        steps = tf.math.rint(T/dt)
+        sampling_steps = tf.math.rint(dts/dt)
+        zero = tf.constant(0.0)
 
-        while t < T:
+        for step in tf.range(steps):
 
             deltas = rhs_func(t, state_vars, *func_args)
 
             for s, d in zip(state_vars, deltas):
-                s.assign_add(dt * d)
+                s.assign_add(dt*d)
 
-            if (t % dts) < threshold:
+            if tf.equal(tf.math.floormod(step, sampling_steps), zero):
+
                 for r, idx in zip(results, output_indices):
-                    r[sampling_idx, :].assign(state_vars[idx[1]])
-                sampling_idx = sampling_idx + 1
+                    r.scatter_nd_update([[sampling_idx, 0]], state_vars[idx[1]])
 
-            t.assign_add(dt)
+                sampling_idx.assign_add(1)
+                t.assign_add(dt)
 
         return results
 
