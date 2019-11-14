@@ -961,7 +961,6 @@ class CircuitIR(AbstractBaseIR):
 
         if not sampling_step_size:
             sampling_step_size = step_size
-        sampling_steps = int(np.round(sampling_step_size/step_size, decimals=0))
 
         # add output variables to the backend
         #####################################
