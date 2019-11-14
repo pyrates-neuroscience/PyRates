@@ -338,10 +338,7 @@ class PyRatesOp:
             else:
 
                 # parse strings and constant arguments into the function
-                if type(arg) is str:
-                    arg_name = arg
-                else:
-                    arg_name = "__no_name__"
+                arg_name = "__no_name__"
                 results_args.append(arg)
                 results_arg_names.append(arg_name)
                 results['args'].append(arg)
@@ -432,57 +429,14 @@ class PyRatesAssignOp(PyRatesOp):
         var, upd = args[0:2]
 
         if len(args) > 2:
-
-            # extract variable index if provided
-            if "scatter" in op:
-
-                # for tensorflow-like scatter indexing
-                if hasattr(args[2], 'short_name'):
-                    key = args[2].short_name
-                    if hasattr(args[2], 'value'):
-                        var_idx = f"{args[2].value},"
-                    else:
-                        var_idx = f"{key},"
-                else:
-                    key = "__no_name__"
-                    var_idx = f"{key},"
-
-            elif hasattr(args[2], 'vtype'):
-
-                # for indexing via PyRates variables
-                key = args[2].short_name
-                if hasattr(args[2], 'value'):
-                    var_idx = f"[{args[2].value}]"
-                else:
-                    var_idx = f"[{key}]"
-
-            elif type(args[2]) is str:
-
-                # for indexing via string-based indices
-                key = args[3].short_name
-                var_idx = f"[{args[2]}]"
-                var_idx = var_idx.replace(args[3].short_name, key)
-
-            else:
-
-                # for indexing via integers
-                var_idx = f"[{args[2]}]"
-                key = "__no_name__"
-
-            if type(args[2]) is str and len(args) > 3:
-                results_args.append(args[3])
-            else:
-                results_args.append(args[2])
-            results_arg_names.append(key)
-
+            var_idx, results_args, results_arg_names = cls._extract_var_idx(op, args, results_args, results_arg_names)
         else:
-
             var_idx = ""
 
         # add variable to the function arguments
-        var_key = var.short_name
+        var_key = var.short_name if 'assign' not in var.short_name else '__no_name__'
         var_pos = len(results_args)
-        results_args.append(var)
+        results_args.append(var if 'assign' not in var.short_name else {'value': var.lhs})
         results_arg_names.append(var_key)
 
         # add variable update to the function arguments
@@ -535,6 +489,39 @@ class PyRatesAssignOp(PyRatesOp):
         results['rhs'] = upd_str
 
         return results
+
+    @classmethod
+    def _extract_var_idx(cls, op, args, results_args, results_arg_names):
+
+        if hasattr(args[2], 'vtype'):
+
+            # for indexing via PyRates variables
+            key = args[2].short_name
+            if hasattr(args[2], 'value'):
+                var_idx = f"[{args[2].value}]"
+            else:
+                var_idx = f"[{key}]"
+
+        elif type(args[2]) is str and len(args) > 3:
+
+            # for indexing via string-based indices
+            key = args[3].short_name
+            var_idx = f"[{args[2]}]"
+            var_idx = var_idx.replace(args[3].short_name, key)
+
+        else:
+
+            # for indexing via integers
+            var_idx = f"[{args[2]}]"
+            key = "__no_name__"
+
+        if type(args[2]) is str and len(args) > 3:
+            results_args.append(args[3])
+        else:
+            results_args.append(args[2])
+        results_arg_names.append(key)
+
+        return var_idx, results_args, results_arg_names
 
 
 class PyRatesIndexOp(PyRatesOp):
@@ -861,7 +848,7 @@ class NumpyBackend(object):
         #################
 
         # map layers that need to be executed to compiled network structure
-        rhs_func, state_vars, constants, var_map = self.compile(**kwargs)
+        rhs_func, args, state_vars, var_map = self.compile(**kwargs)
 
         # create output indices
         output_indices = []
@@ -872,8 +859,8 @@ class NumpyBackend(object):
                 outputs[out_key][var_name][0] = len(output_indices)-1
 
         # simulate backend behavior for each time-step
-        times, results = self._solve(rhs_func=rhs_func, state_vars=state_vars, T=T, dt=dt, solver=solver, dts=dts,
-                                     output_indices=output_indices, **kwargs)
+        times, results = self._solve(rhs_func=rhs_func, func_args=args, state_vars=state_vars, T=T, dt=dt, dts=dts,
+                                     solver=solver, output_indices=output_indices, **kwargs)
 
         # output storage and clean-up
         #############################
@@ -1167,6 +1154,8 @@ class NumpyBackend(object):
             in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
             in_var = self.add_var(vtype='constant', name=in_name, scope="network_inputs", value=inp)
             in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
+            if 1 in in_var_indexed.shape:
+                in_var_indexed = self.add_op('squeeze', in_var_indexed, scope="network_inputs")
             if idx:
                 self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
             else:
@@ -1359,40 +1348,38 @@ class NumpyBackend(object):
             func_gen.add_linebreak()
         func_gen.add_linebreak()
 
-        # declare constant variables
+        # define function head and collect constant arguments
+        args = []
+        func_gen.add_code_line("def rhs_eval(t, y, ")
+        for key, (vtype, idx) in var_map.items():
+            if vtype == 'constant':
+                var = params[idx][1]
+                if sum(var.shape) > 1:
+                    func_gen.add_code_line(f"{var.short_name},")
+                    args.append(var)
+        func_gen.code[-1] = func_gen.code[-1][:-1]
+        func_gen.add_code_line("):")
+        func_gen.add_linebreak()
+        func_gen.add_indent()
+        func_gen.add_linebreak()
+
+        # declare remaining constants
         func_gen.add_code_line("# declare constants")
         func_gen.add_linebreak()
         for key, (vtype, idx) in var_map.items():
             if vtype == 'constant':
                 var = params[idx][1]
-                if sum(var.shape) > 1:
-                    val = var.tolist()
-                    func_gen.add_code_line(f"{var.short_name} = np.asarray({val})")
-                else:
+                if sum(var.shape) <= 1:
                     val = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
                     func_gen.add_code_line(f"{var.short_name} = {val}")
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
 
-        # define function
-        func_gen.add_code_line("def rhs_eval(t, y):")
-        func_gen.add_linebreak()
-        func_gen.add_indent()
-        func_gen.add_linebreak()
-        func_gen.add_code_line("# declare constants as global variables")
-        func_gen.add_linebreak()
-        func_gen.add_code_line("global ")
-        for key, (vtype, idx) in var_map.items():
-            if vtype == 'constant':
-                var = params[idx][1]
-                func_gen.add_code_line(f"{var.short_name},")
-        func_gen.code[-1] = func_gen.code[-1][:-1]
-        func_gen.add_linebreak()
-        func_gen.add_linebreak()
+        # extract state variables from input vector y
         func_gen.add_code_line("# extract state variables from input vector")
         func_gen.add_linebreak()
         for key, (vtype, idx) in var_map.items():
-            var = self.vars[key]
+            var = self.get_var(key)
             if vtype == 'state_var':
                 if len(idx) == 3:
                     func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}:{idx[2]}]")
@@ -1400,6 +1387,8 @@ class NumpyBackend(object):
                     func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}]")
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
+
+        # add equations
         func_gen.add_code_line("# calculate right-hand side update of equation system")
         func_gen.add_linebreak()
         for i, layer in enumerate(self.layers):
@@ -1409,6 +1398,9 @@ class NumpyBackend(object):
                     func_gen.add_code_line(f"y_delta_{idx[0]} = ")
                 func_gen.add_code_line(op.value)
                 func_gen.add_linebreak()
+        func_gen.add_linebreak()
+
+        # add return line
         func_gen.add_code_line(f"return np.asarray([")
         for i in range(len(state_vars)):
             func_gen.add_code_line(f"y_delta_{i},")
@@ -1432,7 +1424,7 @@ class NumpyBackend(object):
         if decorator:
             rhs_eval = decorator(rhs_eval, **kwargs)
 
-        return rhs_eval, state_vars, params, var_map
+        return rhs_eval, args, state_vars, var_map
 
     def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
         """Tries to match the shapes of op1 and op2 such that op can be applied.
@@ -1552,17 +1544,18 @@ class NumpyBackend(object):
         else:
             self.get_layer(layer).append(op)
 
-    def _solve(self, rhs_func, state_vars, solver, T, dt, dts, output_indices, **kwargs):
+    def _solve(self, rhs_func, func_args, state_vars, T, dt, dts, solver, output_indices, **kwargs):
         """
 
         Parameters
         ----------
         rhs_func
+        func_args
         state_vars
-        solver
         T
         dt
         dts
+        solver
         output_indices
         kwargs
 
@@ -1571,64 +1564,69 @@ class NumpyBackend(object):
 
         """
 
-        # initializations
-        sampling_step = int(np.round(dts / dt, decimals=0))
-        sampling_steps = int(np.round(T / dts, decimals=0))
-        t = 0.0
-
         # track all state variables, if no output is declared
         if not output_indices:
             output_indices = [idx for idx, _ in enumerate(state_vars)]
 
         # bring state variables into vectorized shape
-        state_vars_tmp = []
-        for (_, state_var) in state_vars:
-            state_vars_tmp += state_var
-        state_vars_tmp = np.asarray(state_vars_tmp)
+        state_vars_tmp = self._preprocess_state_vars(state_vars)
 
         # choose solver
         ###############
 
         if solver == 'euler':
 
-            # initialize results storage vectors
-            results = []
-            for idx in output_indices:
-                try:
-                    var_dim = len(state_vars[idx[0]][1])
-                except AttributeError:
-                    var_dim = 1
-                results.append(np.zeros((sampling_steps, var_dim)))
-
-            # solve via pyrates internal explicit euler algorithm
-            i = 0
-            sampling_idx = 0
-            while t < T:
-                deltas = rhs_func(t, state_vars_tmp)
-                t += dt
-                i += 1
-                state_vars_tmp += dt * deltas
-                if i == sampling_step:
-                    for idx in output_indices:
-                        results[idx[0]][sampling_idx, :] = state_vars_tmp[idx[1]] if len(idx) == 2 \
-                            else state_vars_tmp[idx[1]:idx[2]]
-                    sampling_idx += 1
-                    i = 0
-
-            times = np.arange(0, T, dts)
+            times, results = self._integrate(rhs_func=rhs_func, func_args=func_args, T=T, dt=dt, dts=dts,
+                                             state_vars=state_vars_tmp, state_var_info=state_vars,
+                                             output_indices=output_indices)
 
         elif solver == 'scipy':
 
             from scipy.integrate import solve_ivp
 
             # solve via scipy's ode integration function
-            outputs = solve_ivp(fun=rhs_func, t_span=(t, T), y0=state_vars_tmp, first_step=dt, **kwargs)
+            fun = lambda t, y: rhs_func(t, y, *func_args)
+            outputs = solve_ivp(fun=fun, t_span=(0.0, T), y0=state_vars_tmp, first_step=dt, **kwargs)
             results = [outputs['y'].T[:, idx] for idx in output_indices]
             times = outputs['t']
 
         else:
 
             raise ValueError(f'Invalid solver type: {solver}. See docstring of `CircuitIR.run` for valid solver types.')
+
+        return times, results
+
+    def _integrate(self, rhs_func, func_args, T, dt, dts, state_vars, state_var_info, output_indices):
+
+        sampling_step = int(np.round(dts / dt, decimals=0))
+        sampling_steps = int(np.round(T / dts, decimals=0))
+        t = 0.0
+
+        # initialize results storage vectors
+        results = []
+        for idx in output_indices:
+            try:
+                var_dim = len(state_var_info[idx[0]][1])
+            except AttributeError:
+                var_dim = 1
+            results.append(np.zeros((sampling_steps, var_dim)))
+
+        # solve via pyrates internal explicit euler algorithm
+        i = 0
+        sampling_idx = 0
+        while t < T:
+            deltas = rhs_func(t, state_vars, *func_args)
+            t += dt
+            i += 1
+            state_vars += dt * deltas
+            if i == sampling_step:
+                for idx1, idx2 in enumerate(output_indices):
+                    results[idx1][sampling_idx, :] = state_vars[idx2[1]] if len(idx2) == 2 \
+                        else state_vars[idx2[1]:idx2[2]]
+                sampling_idx += 1
+                i = 0
+
+        times = np.arange(0, T, dts)
 
         return times, results
 
@@ -1738,6 +1736,12 @@ class NumpyBackend(object):
                 pass
 
         return layer_run, (layer_ops, op_args)
+
+    def _preprocess_state_vars(self, state_vars):
+        state_vars_tmp = []
+        for (_, state_var) in state_vars:
+            state_vars_tmp += state_var
+        return np.asarray(state_vars_tmp, dtype=self._float_def)
 
     def _process_update_args_old(self, var, update, idx):
         """Preprocesses the index and a variable update to match the variable shape.
@@ -1854,8 +1858,9 @@ class NumpyBackend(object):
         state_vars, constants, var_map = [], [], {}
         s_idx, c_idx, s_len = 0, 0, 0
         for key, var in self.vars.items():
-            if key in self.state_vars:
-                val = var.flatten().tolist()
+            key, state_var = self._is_state_var(key)
+            if state_var:
+                val = var.flatten().tolist() if hasattr(var, 'flatten') else var
                 val_len = len(val)
                 state_vars.append((key, val))
                 var_map[key] = ('state_var', (s_idx, s_len, s_len + val_len) if val_len > 1 else (s_idx, s_len))
@@ -1866,6 +1871,9 @@ class NumpyBackend(object):
                 var_map[key] = ('constant', c_idx)
                 c_idx += 1
         return state_vars, constants, var_map
+
+    def _is_state_var(self, key):
+        return key, key in self.state_vars
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:

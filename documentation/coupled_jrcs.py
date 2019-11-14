@@ -29,8 +29,8 @@ dt = 1e-4                                                       # integration st
 T = 1.0                                                         # overall simulation time in s
 inp = np.random.uniform(120., 320., (int(T/dt)+1, 2))           # white noise input to the pyramidal cells in Hz.
 
-N = 2                                                            # grid-size
-C = np.linspace(0., 100., N)                                      # bi-directional connection strength
+N = 5                                                            # grid-size
+C = np.linspace(0., 200., N)                                      # bi-directional connection strength
 D = np.linspace(0., 5e-2, N)                                    # bi-directional coupling delay
 
 # parameter grid
@@ -53,7 +53,7 @@ results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit
                                     outputs={"v": "all/JRC_op/PSP_ein"},
                                     dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3,
                                     init_kwargs={'backend': 'numpy', 'matrix_sparseness': 0.9, 'vectorization': True},
-                                    profile=True, solver='scipy', vectorization=True, method='RK45')
+                                    profile=True, solver='euler')
 
 # tensorflow backend grid-search
 # results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled",
