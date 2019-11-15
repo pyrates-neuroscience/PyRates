@@ -41,7 +41,7 @@ import sys
 import h5py
 import time as t
 import glob
-import ruamel.yaml as yaml
+import yaml
 import getpass
 import argparse
 from pathlib import Path
@@ -612,10 +612,6 @@ class ClusterGridSearch(ClusterCompute):
         if isinstance(param_grid, dict):
             param_grid = linearize_grid(param_grid, permute=permute_grid)
 
-        # # If no worker file is specified, the current file is passed as worker script to each node
-        # if not worker_file:
-        #     worker_file = os.path.abspath(__file__)
-
         # Create default parameter grid csv-file
         grid_idx = 0
         while os.path.exists(f'{self.grid_dir}/DefaultGrid_{grid_idx}.csv'):
@@ -660,7 +656,7 @@ class ClusterGridSearch(ClusterCompute):
         config_idx = 0
         while os.path.exists(f'{self.config_dir}/DefaultConfig_{config_idx}.json'):
             config_idx += 1
-        config_file = f'{self.config_dir}/DefaultConfig_{config_idx}.h5'
+        config_file = f'{self.config_dir}/DefaultConfig_{config_idx}.yaml'
         self.create_cgs_config(fp=config_file,
                                circuit_template=circuit_template,
                                param_map=param_map,
@@ -1107,28 +1103,12 @@ class ClusterGridSearch(ClusterCompute):
             "worker_kwargs": worker_kwargs
         }
 
-        # Check type of input since numpy arrays are not json serializable
-        # config_dict['inputs'] = {}
-        # for key, value in inputs.items():
-        #     if isinstance(value, np.ndarray):
-        #         config_dict["inputs"][key] = value.tolist()
-        #     else:
-        #         config_dict["inputs"][key] = value
-        # for key, value in worker_kwargs.items():
-        #     if isinstance(value, np.ndarray):
-        #         config_dict["worker_kwargs"][key] = value.tolist()
-        #     else:
-        #         config_dict["worker_kwargs"][key] = value
-
-        with h5py.File(fp, "w") as f:
-            dict_to_h5(f_handle=f, dic=config_dict)
-            # json.dump(config_dict, f, indent=2)
-            # yaml.dump(config_dict, f, default_flow_style=False)
+        with open(fp, "w") as f:
+            yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
     @staticmethod
     def add_template_information(yaml_fp, hdf5_file):
         """Add opearator information of the circuit template to the global result file"""
-        # import yaml
 
         with open(yaml_fp, 'r') as stream:
             try:
@@ -1239,38 +1219,6 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
     return circuit
 
 
-def dict_to_h5(f_handle, dic, level=""):
-    """Write a dictionoary iteratively to an hdf5 file
-
-    :param f_handle:
-    :param dic:
-    :param level:
-    :return:
-    """
-    for key, value in dic.items():
-        if isinstance(value, dict):
-            dict_to_h5(f_handle, dic=value, level=f'{level}/{key}')
-        else:
-            f_handle.create_dataset(name=f'{level}/{key}', data=value)
-
-
-def dict_from_h5(f_handle, level="/"):
-    """Read a dictionary iteratively froma n hdf5 file
-
-    :param f_handle:
-    :param level:
-    :return:
-    """
-    tmp_dict = {}
-    for key in f_handle[level].keys():
-        data = f_handle[f'{level}{key}']
-        if isinstance(data, h5py.Dataset):
-            tmp_dict[key] = data[()]
-        elif isinstance(data, h5py.Group):
-            tmp_dict[key] = dict_from_h5(f_handle, level=f'{level}{key}/')
-    return tmp_dict
-
-
 class StreamTee(object):
     """Tee all stdout to a specified logfile"""
     def __init__(self, stream1, stream2fp):
@@ -1324,7 +1272,7 @@ class ClusterWorkerTemplate(object):
             "--config_file",
             type=str,
             # default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_config.json',
-            default=f'/nobackup/spanien1/salomon/CGS/Benchmark_jup/Config/DefaultConfig_3.json',
+            default=f'/nobackup/spanien1/salomon/CGS/Benchmark_jup/Config/DefaultConfig_6.yaml',
             help="File to load grid_search configuration parameters from"
         )
 
@@ -1332,7 +1280,7 @@ class ClusterWorkerTemplate(object):
             "--subgrid",
             type=str,
             # default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_grid.h5',
-            default=f'/nobackup/spanien1/salomon/CGS/Benchmark_jup/Grids/Subgrids/DefaultGrid_0/animals/animals_Subgrid_0.h5',
+            default=f'/nobackup/spanien1/salomon/CGS/Benchmark_jup/Grids/Subgrids/DefaultGrid_36/animals/animals_Subgrid_0.h5',
             help="File to load parameter grid from"
         )
 
@@ -1400,8 +1348,8 @@ class ClusterWorkerTemplate(object):
         print("***LOADING GLOBAL CONFIG FILE***")
         t0 = t.time()
 
-        with h5py.File(config_file, "r") as g_conf:
-            global_config_dict = dict_from_h5(f_handle=g_conf)
+        with open(config_file, "r") as g_conf:
+            global_config_dict = yaml.load(stream=g_conf, Loader=yaml.UnsafeLoader)
 
         circuit_template = global_config_dict['circuit_template']
         param_map = global_config_dict['param_map']
@@ -1470,11 +1418,6 @@ class ClusterWorkerTemplate(object):
             profile="t",
             build_dir=build_dir,
             **gs_kwargs)
-            # init_kwargs=init_kwargs,
-            # profile='t',
-            # build_dir=build_dir)
-            # njit=True,
-            # parallel=False)
 
         print(f'Total parameter grid computation time: {t.time() - t0:.3f} seconds')
 

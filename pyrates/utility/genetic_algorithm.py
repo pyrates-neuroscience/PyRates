@@ -451,6 +451,9 @@ class GeneticAlgorithmTemplate:
             except KeyError:
                 print("")
 
+    def pop_to_grid(self):
+        return self.pop.loc[:, self.gene_names]
+
     def eval_fitness(self, target: list, *argv, **kwargs):
         raise NotImplementedError
 
