@@ -459,7 +459,8 @@ class ExpressionParser(ParserElement):
                 else:
                     shape = self.rhs.shape if hasattr(self.rhs, 'shape') else ()
                     dtype = self.rhs.dtype if hasattr(self.rhs, 'dtype') else type(self.rhs)
-                    self.op = self.backend.add_var(vtype='state_var', name=op, shape=shape, dtype=dtype)
+                    self.op = self.backend.add_var(vtype='state_var', name=op, shape=shape, dtype=dtype,
+                                                   **self.parser_kwargs)
                     self.vars[op] = self.op
 
             else:
@@ -499,12 +500,14 @@ class ExpressionParser(ParserElement):
 
             # simple instantaneous update
             self.lhs = self.parse(self.expr_stack + ['rhs', self._assign_type])
+            self.backend.lhs_vars.append(self.vars[self.lhs_key].name)
 
         else:
 
             # simple non-instantaneous update
             self.backend.next_layer()
             self.lhs = self.parse(self.expr_stack + ['rhs', self._assign_type])
+            self.backend.lhs_vars.append(self.vars[self.lhs_key].name)
             self.backend.previous_layer()
 
     def _preprocess_expr_str(self, expr: str) -> tuple:

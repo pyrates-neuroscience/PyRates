@@ -45,7 +45,7 @@ Currently supported backends:
 """
 
 # external imports
-import time as t
+import time
 from typing import Optional, Dict, List, Union, Any
 import numpy as np
 from copy import deepcopy
@@ -748,6 +748,7 @@ class NumpyBackend(object):
                     "group": {'name': "pyrates_group", 'call': "pr_group"},
                     "asarray": {'name': "numpy_asarray", 'call': "np.asarray"},
                     "no_op": {'name': "pyrates_identity", 'call': "pr_identity"},
+                    "interpolate": {'name': "numpy_interp", 'call': "np.interp"},
                     }
         if ops:
             self.ops.update(ops)
@@ -773,6 +774,7 @@ class NumpyBackend(object):
         self.vars = dict()
         self.layers = [[]]
         self.state_vars = []
+        self.lhs_vars = []
         self.var_counter = {}
         self.op_counter = {}
         self.layer = 0
@@ -792,6 +794,7 @@ class NumpyBackend(object):
             T: float,
             dt: float,
             outputs: Optional[dict] = None,
+            inputs: Optional[list] = None,
             dts: Optional[int] = None,
             solver: str = 'euler',
             out_dir: Optional[str] = None,
@@ -808,6 +811,8 @@ class NumpyBackend(object):
             Simulation step size.
         outputs
             Variables in the graph to store the history from.
+        inputs
+            Extrinsic, time-dependent inputs to graph input variables.
         dts
             Sampling step-size.
         solver
@@ -829,8 +834,8 @@ class NumpyBackend(object):
 
         """
 
-        # initializations
-        #################
+        # preparations
+        ##############
 
         if not dts:
             dts = dt
@@ -842,7 +847,10 @@ class NumpyBackend(object):
 
         # initialize profiler
         if profile:
-            t0 = t.time()
+            t0 = time.time()
+
+        # add inputs to graph
+        t = self.add_input_layer(inputs=inputs, T=T)
 
         # graph execution
         #################
@@ -859,7 +867,7 @@ class NumpyBackend(object):
                 outputs[out_key][var_name][0] = len(output_indices)-1
 
         # simulate backend behavior for each time-step
-        times, results = self._solve(rhs_func=rhs_func, func_args=args, state_vars=state_vars, T=T, dt=dt, dts=dts,
+        times, results = self._solve(rhs_func=rhs_func, func_args=args, state_vars=state_vars, T=T, dt=dt, dts=dts, t=t,
                                      solver=solver, output_indices=output_indices, **kwargs)
 
         # output storage and clean-up
@@ -874,7 +882,7 @@ class NumpyBackend(object):
 
         # store profiling results
         if profile:
-            sim_time = t.time() - t0
+            sim_time = time.time() - t0
             return outputs, times, sim_time
 
         return outputs, times
@@ -923,10 +931,16 @@ class NumpyBackend(object):
 
         # ensure uniqueness of variable names
         if var.short_name in self.var_counter and name not in self.vars:
-            name_old = var.short_name
-            name_new = f"{name_old}_{self.var_counter[name_old]}"
-            var.short_name = name_new
-            self.var_counter[name_old] += 1
+            rename = True
+            if var.vtype == 'constant':
+                for var_tmp in self.vars.values():
+                    if var.short_name == var_tmp.short_name and var == var_tmp:
+                        rename = False
+            if rename:
+                name_old = var.short_name
+                name_new = f"{name_old}_{self.var_counter[name_old]}"
+                var.short_name = name_new
+                self.var_counter[name_old] += 1
         else:
             self.var_counter[var.short_name] = 1
 
@@ -1128,12 +1142,13 @@ class NumpyBackend(object):
 
         return output_col
 
-    def add_input_layer(self, inputs: dict) -> None:
+    def add_input_layer(self, inputs: list, T: float) -> NumpyVar:
         """
 
         Parameters
         ----------
         inputs
+        T
 
         Returns
         -------
@@ -1146,25 +1161,27 @@ class NumpyBackend(object):
         else:
             self.add_layer(to_beginning=True)
 
-        # create counting index for input variables
-        time_step_idx = self.add_var(vtype='constant', name='in_var_idx', dtype='int32', shape=(1,), value=0,
-                                     scope="network_inputs")
+        # create time-vector
+        t = self.add_var('state_var', name='t', value=0.0, dtype=self._float_def, shape=())
+        self.lhs_vars.append(t.short_name)
 
-        for (inp, target_var, idx) in inputs:
-            in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
-            in_var = self.add_var(vtype='constant', name=in_name, scope="network_inputs", value=inp)
-            in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
-            if 1 in in_var_indexed.shape:
-                in_var_indexed = self.add_op('squeeze', in_var_indexed, scope="network_inputs")
-            if idx:
-                self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
-            else:
-                self.add_op('=', target_var, in_var_indexed, scope="network_inputs")
+        if inputs:
 
-        # create increment operator for counting index
-        increment = self.add_var('constant', name='input_idx_increment', scope="network_inputs",
-                                 value=np.ones((1,), dtype='int32'))
-        self.add_op('+=', time_step_idx, increment, scope="network_inputs")
+            time = self.add_var('constant', name='time_vec', value=np.linspace(0, T, inputs[0][0].shape[0]))
+
+            for (inp, target_var, idx) in inputs:
+                in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
+                in_var = self.add_var(vtype='constant', name=in_name, scope="network_inputs", value=inp)
+                if len(in_var.shape) > 1:
+                    in_var = self.add_op('squeeze', in_var, scope="network_inputs")
+                in_var_interp = self.add_op('interpolate', t, time, in_var, scope="network_inputs")
+                if idx:
+                    self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
+                else:
+                    self.add_op('=', target_var, in_var_interp, scope="network_inputs")
+                self.lhs_vars.append(target_var.short_name)
+
+        return t
 
     def next_layer(self) -> None:
         """Jump to next layer in stack. If we are already at end of layer stack, add new layer to the stack and jump to
@@ -1348,31 +1365,22 @@ class NumpyBackend(object):
             func_gen.add_linebreak()
         func_gen.add_linebreak()
 
-        # define function head and collect constant arguments
-        args = []
-        func_gen.add_code_line("def rhs_eval(t, y, ")
-        for key, (vtype, idx) in var_map.items():
-            if vtype == 'constant':
-                var = params[idx][1]
-                if sum(var.shape) > 1:
-                    func_gen.add_code_line(f"{var.short_name},")
-                    args.append(var)
-        func_gen.code[-1] = func_gen.code[-1][:-1]
-        func_gen.add_code_line("):")
+        # define function head
+        func_gen.add_code_line("def rhs_eval(t, y, params):")
         func_gen.add_linebreak()
         func_gen.add_indent()
         func_gen.add_linebreak()
 
-        # declare remaining constants
+        # declare constants
+        args = [None for _ in range(len(params))]
         func_gen.add_code_line("# declare constants")
         func_gen.add_linebreak()
         for key, (vtype, idx) in var_map.items():
             if vtype == 'constant':
                 var = params[idx][1]
-                if sum(var.shape) <= 1:
-                    val = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
-                    func_gen.add_code_line(f"{var.short_name} = {val}")
+                func_gen.add_code_line(f"{var.short_name} = params[{idx}]")
                 func_gen.add_linebreak()
+                args[idx] = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
         func_gen.add_linebreak()
 
         # extract state variables from input vector y
@@ -1544,7 +1552,7 @@ class NumpyBackend(object):
         else:
             self.get_layer(layer).append(op)
 
-    def _solve(self, rhs_func, func_args, state_vars, T, dt, dts, solver, output_indices, **kwargs):
+    def _solve(self, rhs_func, func_args, state_vars, T, dt, dts, t, solver, output_indices, **kwargs):
         """
 
         Parameters
@@ -1555,6 +1563,7 @@ class NumpyBackend(object):
         T
         dt
         dts
+        t
         solver
         output_indices
         kwargs
@@ -1576,7 +1585,7 @@ class NumpyBackend(object):
 
         if solver == 'euler':
 
-            times, results = self._integrate(rhs_func=rhs_func, func_args=func_args, T=T, dt=dt, dts=dts,
+            times, results = self._integrate(rhs_func=rhs_func, func_args=func_args, T=T, dt=dt, dts=dts, t=t,
                                              state_vars=state_vars_tmp, state_var_info=state_vars,
                                              output_indices=output_indices)
 
@@ -1585,8 +1594,8 @@ class NumpyBackend(object):
             from scipy.integrate import solve_ivp
 
             # solve via scipy's ode integration function
-            fun = lambda t, y: rhs_func(t, y, *func_args)
-            outputs = solve_ivp(fun=fun, t_span=(0.0, T), y0=state_vars_tmp, first_step=dt, **kwargs)
+            fun = lambda t, y: rhs_func(t, y, func_args)
+            outputs = solve_ivp(fun=fun, t_span=(t, T), y0=state_vars_tmp, first_step=dt, **kwargs)
             results = [outputs['y'].T[:, idx] for idx in output_indices]
             times = outputs['t']
 
@@ -1596,11 +1605,10 @@ class NumpyBackend(object):
 
         return times, results
 
-    def _integrate(self, rhs_func, func_args, T, dt, dts, state_vars, state_var_info, output_indices):
+    def _integrate(self, rhs_func, func_args, T, dt, dts, t, state_vars, state_var_info, output_indices):
 
         sampling_step = int(np.round(dts / dt, decimals=0))
         sampling_steps = int(np.round(T / dts, decimals=0))
-        t = 0.0
 
         # initialize results storage vectors
         results = []
@@ -1615,7 +1623,7 @@ class NumpyBackend(object):
         i = 0
         sampling_idx = 0
         while t < T:
-            deltas = rhs_func(t, state_vars, *func_args)
+            deltas = rhs_func(t, state_vars, func_args)
             t += dt
             i += 1
             state_vars += dt * deltas
@@ -1721,21 +1729,6 @@ class NumpyBackend(object):
                     layer_ops[i] = func_decorated
                 except Exception:
                     continue
-
-        # create layer run function
-        def layer_run(funcs, func_args):
-            return [func(*args) for func, args in zip(funcs, func_args)]
-
-        # apply function decorator to layer run function if provided
-        if decorator:
-            try:
-                layer_run_new = decorator(layer_run, **kwargs)
-                layer_run_new(layer_ops, self._deepcopy(op_args))
-                layer_run = layer_run_new
-            except Exception:
-                pass
-
-        return layer_run, (layer_ops, op_args)
 
     def _preprocess_state_vars(self, state_vars):
         state_vars_tmp = []
@@ -1866,10 +1859,11 @@ class NumpyBackend(object):
                 var_map[key] = ('state_var', (s_idx, s_len, s_len + val_len) if val_len > 1 else (s_idx, s_len))
                 s_idx += 1
                 s_len += len(val)
-            elif var.vtype == 'constant' or var.vtype == 'state_var':
+            elif var.vtype == 'constant' or var.short_name not in self.lhs_vars:
                 constants.append((key, var))
                 var_map[key] = ('constant', c_idx)
                 c_idx += 1
+
         return state_vars, constants, var_map
 
     def _is_state_var(self, key):
