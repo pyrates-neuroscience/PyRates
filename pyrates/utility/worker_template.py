@@ -210,7 +210,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--subgrid",
         type=str,
-        default="/nobackup/spanien1/salomon/CGS/Benchmark_jup/Grids/Subgrids/DefaultGrid_0/animals/animals_Subgrid_0.h5",
+        default="/nobackup/spanien1/salomon/CGS/Benchmark_jup/Grids/Subgrids/DefaultGrid_0/animals/cgs_test_grid.h5",
         help="File to load parameter grid from"
     )
 

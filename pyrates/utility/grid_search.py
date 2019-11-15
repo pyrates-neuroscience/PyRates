@@ -1259,7 +1259,7 @@ class ClusterWorkerTemplate(object):
         self.result_map = pd.DataFrame
         self.processed_results = pd.DataFrame
 
-    def worker_init(self):
+    def worker_init(self, config_file="", subgrid="", result_file="", build_dir=os.getcwd()):
         """Interface to receive input when run from the console
 
         Returns
@@ -1271,30 +1271,28 @@ class ClusterWorkerTemplate(object):
         parser.add_argument(
             "--config_file",
             type=str,
-            # default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_config.json',
-            default=f'/nobackup/spanien1/salomon/CGS/Benchmark_jup/Config/DefaultConfig_6.yaml',
+            default=config_file,
             help="File to load grid_search configuration parameters from"
         )
 
         parser.add_argument(
             "--subgrid",
             type=str,
-            # default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_grid.h5',
-            default=f'/nobackup/spanien1/salomon/CGS/Benchmark_jup/Grids/Subgrids/DefaultGrid_36/animals/animals_Subgrid_0.h5',
+            default=subgrid,
             help="File to load parameter grid from"
         )
 
         parser.add_argument(
             "--local_res_file",
             type=str,
-            default=f'{Path(__file__).parent.absolute()}/../../tests/cgs_test_data/cgs_test_results.h5',
+            default=result_file,
             help="File to save results to"
         )
 
         parser.add_argument(
             "--build_dir",
             type=str,
-            default=os.getcwd(),
+            default=build_dir,
             help="Custom PyRates build directory"
         )
 
@@ -1444,8 +1442,6 @@ class ClusterWorkerTemplate(object):
 
         The ClusterWorkerTemplate class contains three DataFrames that can be used to add customized post processing:
 
-
-
         To apply the customized post processing during a ClusterGridSearch call, a customized worker file has to
         be created that is passed to the CGS.run() call.
         For that purpose, execute the following steps:
@@ -1577,5 +1573,10 @@ class ClusterWorkerTemplate(object):
 if __name__ == "__main__":
     cgs_worker = ClusterWorkerTemplate()
     # cgs_worker.worker_test()
-    cgs_worker.worker_init()
+    cgs_worker.worker_init(
+        config_file=f'{os.path.dirname(os.path.realpath(__file__))}/../../tests/cgs_test_data/cgs_test_config.yaml',
+        subgrid=f'{os.path.dirname(os.path.realpath(__file__))}/../../tests/cgs_test_data/cgs_test_grid.h5',
+        result_file=f'{os.path.dirname(os.path.realpath(__file__))}/../../tests/cgs_test_data/cgs_test_results.h5',
+        build_dir=os.getcwd())
+
 
