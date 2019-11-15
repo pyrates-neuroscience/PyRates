@@ -962,10 +962,10 @@ class CircuitIR(AbstractBaseIR):
         if not sampling_step_size:
             sampling_step_size = step_size
 
-        # add output variables to the backend
-        #####################################
+        # collect backend output variables
+        ##################################
 
-        outputs_tmp = {}
+        outputs_col = {}
 
         if outputs:
 
@@ -973,34 +973,32 @@ class CircuitIR(AbstractBaseIR):
             for key, val in outputs.items():
 
                 # extract respective output variables from the network and store their information
-                outputs_tmp[key] = {}
+                outputs_col[key] = {}
                 for var_info in self.get_node_var(val, apply_idx=False).values():
-                    outputs_tmp[key][var_info['var'].name] = [var_info['idx'], var_info['nodes']]
+                    outputs_col[key][var_info['var'].name] = [var_info['idx'], var_info['nodes']]
 
-        # add input variables to the backend
-        ####################################
+        # collect backend input variables
+        #################################
+
+        inputs_col = []
 
         if inputs:
-
-            input_col = []
 
             # go through passed inputs
             for key, val in inputs.items():
 
-                in_shape = val.shape[1]
+                in_shape = val.shape[1] if len(val.shape) > 1 else 1
 
                 # extract respective input variable from the network
                 for var_key, var_info in self.get_node_var(key, apply_idx=False).items():
                     var_shape = len(var_info['idx'])
                     var_idx = var_info['idx'] if np.sum(var_shape) > 1 else None
                     if var_shape == in_shape:
-                        input_col.append((val, var_info['var'], var_idx))
+                        inputs_col.append((val, var_info['var'], var_idx))
                     elif (var_shape % in_shape) == 0:
-                        input_col.append((np.tile(val, (1, var_shape)), var_info['var'], var_idx))
+                        inputs_col.append((np.tile(val, (1, var_shape)), var_info['var'], var_idx))
                     else:
-                        input_col.append((np.reshape(val, (sim_steps, var_shape)), var_info['var'], var_idx))
-
-            self._backend.add_input_layer(inputs=input_col)
+                        inputs_col.append((np.reshape(val, (sim_steps, var_shape)), var_info['var'], var_idx))
 
         # run simulation
         ################
@@ -1009,8 +1007,8 @@ class CircuitIR(AbstractBaseIR):
             print("Running the simulation...")
 
         output_col, times, *time = self._backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
-                                                     out_dir=out_dir, outputs=outputs_tmp, solver=solver,
-                                                     profile=profile, **kwargs)
+                                                     out_dir=out_dir, outputs=outputs_col, inputs=inputs_col,
+                                                     solver=solver, profile=profile, **kwargs)
 
         if verbose and profile:
             if simulation_time:
