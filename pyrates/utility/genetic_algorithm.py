@@ -391,8 +391,9 @@ class GeneticAlgorithmTemplate:
         parent_repro[parent_repro == np.nan] = 0.0
 
         # Convert fitness to list of normalized choice probabilities
-        parent_repro = parent_repro.to_numpy()
+        parent_repro = np.abs(parent_repro.to_numpy())
         parent_repro /= np.abs(parent_repro.sum())
+
 
         # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values
