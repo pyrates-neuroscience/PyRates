@@ -85,7 +85,8 @@ class GeneticAlgorithmTemplate:
         n_new
             Number of members in a population's offspring, that will be created from the initial gene pool
         sigma_adapt
-            Ratio by which the mean derivation of the gene probability distributions will change during a mutation
+            Ratio by which the mean derivation of the gene probability distributions will change during a mutation as
+            suggested by (Beyer1995 - Toward a Theory of Evolution Strategies: Self-Adaptation)
         max_stagnation_steps
             Maximum number of iterations with no change in the fitness, before the strongest member of a population
             will be discarded and not be part of this population's offspring anymore

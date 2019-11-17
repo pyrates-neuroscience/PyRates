@@ -388,8 +388,7 @@ class ClusterCompute:
             Name or IP-address of the host to connect to
         username
         password
-            ssh_connect uses kerberos authentication so no password is required. If kerberos is not available on your
-            network, Paramiko needs a password to create the SSH connection
+
         Returns
         -------
         paramiko.SSHClient
