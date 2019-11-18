@@ -1149,7 +1149,9 @@ def replace(eq: str, term: str, replacement: str, rhs_only: tp.Optional[bool] = 
 
         # if it is an allowed sign, replace term, else not
         replaced = False
-        if (idx_follow_op < len(eq) and eq[idx_follow_op] in allowed_follow_ops) or idx_follow_op == len(eq):
+        if ((idx_follow_op < len(eq) and eq[idx_follow_op] in allowed_follow_ops) and
+           (idx == 0 or eq[idx-1] in allowed_follow_ops)) or \
+                (idx_follow_op == len(eq) and eq[idx-1] in allowed_follow_ops):
             eq_part = eq[:idx]
             if (rhs_only and "=" in eq_part) or (lhs_only and "=" not in eq_part) or (not rhs_only and not lhs_only):
                 eq_new += f"{eq_part} {replacement}"

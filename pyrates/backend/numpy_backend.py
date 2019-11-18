@@ -56,6 +56,7 @@ import warnings
 
 # pyrates internal imports
 from .funcs import *
+from .parser import replace
 
 
 class NumpyVar(np.ndarray):
@@ -127,7 +128,10 @@ class NumpyVar(np.ndarray):
     def eval(self):
         """Returns current value of NumpyVar.
         """
-        return self[:]
+        try:
+            return self[:]
+        except IndexError:
+            return self
 
     @staticmethod
     def _get_value(value, dtype, shape):
@@ -370,7 +374,8 @@ class PyRatesOp:
         func.add_code_line(f"def {self.short_name}(")
         for arg in self._op_dict['arg_names']:
             func.add_code_line(f"{arg},")
-        func.code[-1] = func.code[-1][:-1]
+        if len(self._op_dict['arg_names']) > 0:
+            func.code[-1] = func.code[-1][:-1]
         func.add_code_line("):")
         func.add_linebreak()
         func.add_indent()
@@ -440,8 +445,12 @@ class PyRatesAssignOp(PyRatesOp):
         results_arg_names.append(var_key)
 
         # add variable update to the function arguments
-        upd_key = '__no_name__' if hasattr(upd, 'vtype') and upd.vtype == 'constant' and not upd.shape \
-            else upd.short_name
+        if hasattr(upd, 'vtype') and upd.vtype == 'constant' and not upd.shape:
+            upd_key = '__no_name__'
+            if not PyRatesOp.__subclasscheck__(type(upd)):
+                upd = {'value': upd}
+        else:
+            upd_key = upd.short_name
         upd_pos = len(results_args)
         results_args.append(upd)
         results_arg_names.append(upd_key)
@@ -616,11 +625,17 @@ class PyRatesIndexOp(PyRatesOp):
         elif type(idx) is str or "int" in str(type(idx)) or "float" in str(type(idx)):
 
             # parse constant numpy-like indices into the indexing operation
-            for arg in args[2:]:
+            pop_indices = []
+            for i, arg in enumerate(args[2:]):
                 if hasattr(arg, 'short_name') and arg.short_name in idx:
-                    name_tmp = arg.short_name
-                    n_vars += 1
+                    if arg.vtype == 'constant' and sum(arg.shape) < 2:
+                        idx = replace(idx, arg.short_name, f"{int(arg)}")
+                        pop_indices.append(i+2)
             var_idx = f"[{idx}]"
+            args = list(args)
+            for idx in pop_indices[::-1]:
+                args.pop(idx)
+            args = tuple(args)
 
         elif type(idx) in (list, tuple):
 
@@ -1622,7 +1637,7 @@ class NumpyBackend(object):
         # solve via pyrates internal explicit euler algorithm
         i = 0
         sampling_idx = 0
-        while t < T:
+        while t < T-dt:
             deltas = rhs_func(t, state_vars, func_args)
             t += dt
             i += 1
@@ -1713,7 +1728,7 @@ class NumpyBackend(object):
                 args = list(args)
                 for dtype in self.dtypes:
                     if dtype in str(args[1]):
-                        args[1] = self.dtypes[dtype]
+                        args[1] = f"np.{dtype}"
                         break
                 args = tuple(args)
             return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)

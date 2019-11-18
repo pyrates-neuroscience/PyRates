@@ -7,7 +7,7 @@ import tensorflow as tf
 import pytest
 
 # pyrates internal imports
-from pyrates.backend.parser import parse_equation_system, parse_dict
+from pyrates.backend.parser import parse_equations, parse_dict
 from pyrates.backend.parser import ExpressionParser
 from pyrates.backend.numpy_backend import NumpyBackend
 from pyrates.backend.tensorflow_backend import TensorflowBackend
@@ -141,9 +141,13 @@ def test_1_3_expression_parser_math_ops():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args={}, backend=b)
         p.parse_expr()
-        result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+        result = p.rhs
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         if hasattr(result, 'eval'):
             result = result.eval()
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # test expression parser on expression results using numpy backend
@@ -154,10 +158,11 @@ def test_1_3_expression_parser_math_ops():
 
     # evaluate expressions
     for expr, target in math_expressions:
-        # tensorflow-based parser
+
+        # numpy-based parser
         p = ExpressionParser(expr_str=expr, args={}, backend=b)
         p.parse_expr()
-        result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+        result = p.rhs.numpy() if hasattr(p.rhs, 'numpy') else p.rhs
         if hasattr(result, 'eval'):
             result = result.eval()
         assert result == pytest.approx(target, rel=1e-6)
@@ -193,7 +198,13 @@ def test_1_4_expression_parser_logic_ops():
     for expr in logic_expressions:
         p = ExpressionParser(expr_str=expr, args={}, backend=b)
         p.parse_expr()
-        result = p.op.numpy() if hasattr(p.op, 'numpy') else p.op
+        result = p.rhs
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
+        if hasattr(result, 'eval'):
+            result = result.eval()
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         assert result
 
     # false logical expression
@@ -202,9 +213,13 @@ def test_1_4_expression_parser_logic_ops():
     # tensorflow-based parser
     p = ExpressionParser(expr_str=expr, args={}, backend=b)
     p.parse_expr()
-    result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+    result = p.rhs
+    if hasattr(result, 'numpy'):
+        result = result.numpy()
     if hasattr(result, 'eval'):
         result = result.eval()
+    if hasattr(result, 'numpy'):
+        result = result.numpy()
     assert not result
 
     # test expression parsers on expression results with numpy backend
@@ -219,7 +234,7 @@ def test_1_4_expression_parser_logic_ops():
         # numpy-based parser
         p = ExpressionParser(expr_str=expr, args={}, backend=b)
         p.parse_expr()
-        result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+        result = p.rhs
         if hasattr(result, 'eval'):
             result = result.eval()
         assert result
@@ -227,10 +242,10 @@ def test_1_4_expression_parser_logic_ops():
     # false logical expression
     expr = "5 >= 6"
 
-    # tensorflow-based parser
+    # numpy-based parser
     p = ExpressionParser(expr_str=expr, args={}, backend=b)
     p.parse_expr()
-    result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+    result = p.rhs
     if hasattr(result, 'eval'):
         result = result.eval()
     assert not result
@@ -279,9 +294,13 @@ def test_1_5_expression_parser_indexing():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args=args, backend=b)
         p.parse_expr()
-        result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+        result = p.rhs
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         if hasattr(result, 'eval'):
             result = result.eval()
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # define invalid test cases
@@ -311,7 +330,7 @@ def test_1_5_expression_parser_indexing():
     for expr, target in indexed_expressions:
         p = ExpressionParser(expr_str=expr, args=args, backend=b)
         p.parse_expr()
-        result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+        result = p.rhs
         if hasattr(result, 'eval'):
             result = result.eval()
         assert result == pytest.approx(target, rel=1e-6)
@@ -366,9 +385,13 @@ def test_1_6_expression_parser_funcs():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args=args, backend=b)
         p.parse_expr()
-        result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+        result = p.rhs
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         if hasattr(result, 'eval'):
             result = result.eval()
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # invalid cases
@@ -393,7 +416,7 @@ def test_1_6_expression_parser_funcs():
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args=args, backend=b)
         p.parse_expr()
-        result = p.rhs_eval.numpy() if hasattr(p.rhs_eval, 'numpy') else p.rhs_eval
+        result = p.rhs
         if hasattr(result, 'eval'):
             result = result.eval()
         assert result == pytest.approx(target, rel=1e-6)
@@ -438,7 +461,7 @@ def test_1_7_equation_parsing():
     for eq, args, target in zip(equations, arguments, results):
 
         # tensorflow-based parsing
-        result_tmp = parse_equation_system(equations=[[(eq, 'node/op')]], equation_args=args, backend=b)['node/op/a']
+        result_tmp = parse_equations(equations=[[(eq, 'node/op')]], equation_args=args, backend=b)['node/op/a']
         result = result_tmp.numpy() if hasattr(result_tmp, 'numpy') else result_tmp.eval().numpy()
         #assert result == pytest.approx(target, rel=1e-6)
 
@@ -453,6 +476,7 @@ def test_1_7_equation_parsing():
 
     # test equation parser on different test equations
     for eq, args, target in zip(equations, arguments, results):
-        # tensorflow-based parsing
-        result = parse_equation_system(equations=[[(eq, 'node/op')]], equation_args=args, backend=b)['node/op/a']
+
+        # numpy-based parsing
+        result = parse_equations(equations=[[(eq, 'node/op')]], equation_args=args, backend=b)['node/op/a']
         #assert result == pytest.approx(target, rel=1e-6)

@@ -75,7 +75,8 @@ class TensorflowOp(PyRatesOp):
         func.add_code_line(f"def {self.short_name}(")
         for arg in self._op_dict['arg_names']:
             func.add_code_line(f"{arg},")
-        func.code[-1] = func.code[-1][:-1]
+        if len(self._op_dict['arg_names']) > 0:
+            func.code[-1] = func.code[-1][:-1]
         func.add_code_line("):")
         func.add_linebreak()
         func.add_indent()
@@ -109,7 +110,8 @@ class TensorflowAssignOp(PyRatesAssignOp):
         func.add_code_line(f"def {self.short_name}(")
         for arg in self._op_dict['arg_names']:
             func.add_code_line(f"{arg},")
-        func.code[-1] = func.code[-1][:-1]
+        if len(self._op_dict['arg_names']) > 0:
+            func.code[-1] = func.code[-1][:-1]
         func.add_code_line("):")
         func.add_linebreak()
         func.add_indent()
@@ -151,7 +153,8 @@ class TensorflowIndexOp(PyRatesIndexOp):
         func.add_code_line(f"def {self.short_name}(")
         for arg in self._op_dict['arg_names']:
             func.add_code_line(f"{arg},")
-        func.code[-1] = func.code[-1][:-1]
+        if len(self._op_dict['arg_names']) > 0:
+            func.code[-1] = func.code[-1][:-1]
         func.add_code_line("):")
         func.add_linebreak()
         func.add_indent()
@@ -209,7 +212,7 @@ class TensorflowBackend(NumpyBackend):
         self.ops.update({"+": {'name': "tensorflow_add", 'call': "tf.add"},
                          "-": {'name': "tensorflow_subtract", 'call': "tf.subtract"},
                          "*": {'name': "tensorflow_multiply", 'call': "tf.multiply"},
-                         "/": {'name': "tensorflow_divide", 'call': "tf.divide"},
+                         "/": {'name': "tensorflow_divide", 'call': "tf.math.divide_no_nan"},
                          "%": {'name': "tensorflow_modulo", 'call': "tf.mod"},
                          "^": {'name': "tensorflow_power", 'call': "tf.pow"},
                          "**": {'name': "tensorflow_power", 'call': "tf.pow"},
@@ -361,19 +364,6 @@ class TensorflowBackend(NumpyBackend):
         func_gen.add_linebreak()
         func_gen.add_indent()
         func_gen.add_linebreak()
-
-        # # declare remaining constants
-        # func_gen.add_code_line("# declare constants")
-        # func_gen.add_linebreak()
-        # for key, (vtype, idx) in var_map.items():
-        #     if vtype == 'constant':
-        #         var = params[idx][1]
-        #         if sum(var.shape) <= 1:
-        #             val_tmp = self._get_val(var)
-        #             val = val_tmp.squeeze().tolist() if hasattr(val_tmp, 'squeeze') else val_tmp
-        #             func_gen.add_code_line(f"{var.short_name} = {val}")
-        #         func_gen.add_linebreak()
-        # func_gen.add_linebreak()
 
         # extract state variables from input vector y
         func_gen.add_code_line("# extract state variables from input vector")
@@ -694,7 +684,10 @@ class TensorflowBackend(NumpyBackend):
         if hasattr(op2, 'shape'):
             return len(tuple(op2.shape)) == 0
         else:
-            return len(op1) == len(op2)
+            try:
+                return len(op1) == len(op2)
+            except TypeError:
+                return True
 
     @staticmethod
     def _compare_dtypes(op1: Any, op2: Any) -> bool:

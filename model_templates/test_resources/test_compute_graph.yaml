@@ -7,8 +7,8 @@
 op0:
   base: OperatorTemplate
   equations:
-    - "a = b*0.5"
-    - "b = a + 2.0"
+    - "d/dt * a = b*0.5"
+    - "d/dt * b = a + 2.0"
   variables:
     a:
       default: output
@@ -84,7 +84,7 @@ op7:
 
 op8:
   base: OperatorTemplate
-  equations: "a = 2.0 + u"
+  equations: "d/dt * a = 2.0 + u"
   variables:
     a:
       default: output
