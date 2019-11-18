@@ -494,7 +494,7 @@ class ClusterGridSearch(ClusterCompute):
 
     def run(self, circuit_template: str, param_grid: Union[dict, pd.DataFrame], param_map: dict, dt: float,
             simulation_time: float, chunk_size: (int, list),  inputs: dict, outputs: dict,
-            worker_env: Optional[str] = sys.executable, worker_file: Optional[str] = os.path.abspath(__file__),
+            worker_env: Optional[Union[str, list]] = sys.executable, worker_file: Optional[str] = os.path.abspath(__file__),
             sampling_step_size: Optional[float] = None, result_kwargs: Optional[dict] = {},
             worker_kwargs: Optional[dict] = {}, gs_kwargs: Optional[dict] = {},
             add_template_info: Optional[bool] = False, permute_grid: Optional[bool] = False,
@@ -529,7 +529,7 @@ class ClusterGridSearch(ClusterCompute):
             /result_kwargs_key_k
         /TemplateInfo (if add_template_info is True)
 
-        e.g. to access the stored simzulation you can
+        e.g. to access the stored simulation you can
         and performs Run multiple instances of grid_search simultaneously on different workstations in the compute cluster
 
         `:class:ClusterGridSearch` requires all necessary data (worker script, worker environment, compute directory)
@@ -571,13 +571,15 @@ class ClusterGridSearch(ClusterCompute):
         worker_env
             Path to python executable inside an environment that will be used to execute the worker file.
             Can be used if worker file with customized post processing should be executed in a different environment
-             than the executing script.
+            than the executing script.
         worker_file
             Path to customized worker file.
         result_kwargs
             Key-value pairs that will be added to the 'AdditionalData' group inside the result file.
-        config_kwargs
+        worker_kwargs
             Key-value pairs that will be added to the config file.
+        gs_kwargs
+            Key-Value pairs that will be passed to the grid_search() call of the workers
         add_template_info
             If True, all operator templates and its variables are copied from the circuit_template yaml file to the
             'TemplateInfo' group inside the result file.
@@ -626,6 +628,11 @@ class ClusterGridSearch(ClusterCompute):
                 client['chunk_size'] = chunk_size[i]
             else:
                 client['chunk_size'] = chunk_size
+
+            if isinstance(worker_env, list):
+                client['worker_env'] = worker_env[i]
+            else:
+                client['worker_env'] = worker_env
 
         # Assign chunk indices to parameter grid
         working_grid = param_grid.copy()
@@ -710,8 +717,6 @@ class ClusterGridSearch(ClusterCompute):
             "config_file": config_file,
             "global_res_file": global_res_file
         }
-
-        # TODO: Copy configuration file to the worker, if necessary
 
         # Start cluster computation
         ###########################
@@ -805,13 +810,13 @@ class ClusterGridSearch(ClusterCompute):
         pm_client = client["paramiko_client"]
         logfile = client["logfile"]
         chunk_size = client["chunk_size"]
+        worker_env = client["worker_env"]
 
         # Get keyword arguments
         config_file = thread_kwargs["config_file"]
         working_grid = thread_kwargs["working_grid"]
         grid_name = thread_kwargs["grid_name"]
         grid_res_dir = thread_kwargs["grid_res_dir"]
-        worker_env = thread_kwargs["worker_env"]
         worker_file = thread_kwargs["worker_file"]
 
         # Prepare worker command
@@ -862,8 +867,6 @@ class ClusterGridSearch(ClusterCompute):
                 subgrid_df = working_grid.iloc[param_idx]
                 subgrid_df.to_hdf(subgrid_fp, key="subgrid")
                 subgrid_idx += 1
-
-                # TODO: Copy subgrid to worker if necessary
 
                 # Temporary result file for current subgrid
                 ###########################################
@@ -1036,7 +1039,7 @@ class ClusterGridSearch(ClusterCompute):
         return chunked_grid
 
     @staticmethod
-    def check_key_consistency(param_grid: dict, param_map: dict):
+    def check_key_consistency(param_grid: Union[dict, pd.DataFrame], param_map: dict):
         """Check if keys in param_grid and param_map match
 
         Parameters
