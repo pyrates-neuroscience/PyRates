@@ -38,7 +38,6 @@ from copy import deepcopy
 # system imports
 import os
 import sys
-import h5py
 import time as t
 import glob
 import yaml
@@ -174,7 +173,8 @@ class ClusterCompute:
             Directory that will be used to store the logfiles.
             If none is provided, a default compute directory is created in the current working directory
         verbose:
-            If False, all std output will still be copied to the log file but won't be shown in the terminal
+            If False, all std output will still be copied to the log file but won't be shown in the terminal. Overwrites
+            the verbosity of the run() method
 
         Returns
         -------
