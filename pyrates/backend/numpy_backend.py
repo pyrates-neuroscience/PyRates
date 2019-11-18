@@ -1425,7 +1425,7 @@ class NumpyBackend(object):
                 var = params[idx][1]
                 func_gen.add_code_line(f"{var.short_name} = params[{idx}]")
                 func_gen.add_linebreak()
-                args[idx] = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
+                args[idx] = var
         func_gen.add_linebreak()
 
         # extract state variables from input vector y
