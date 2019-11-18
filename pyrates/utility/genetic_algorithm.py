@@ -135,6 +135,7 @@ class GeneticAlgorithmTemplate:
         iter_count = 0
         stagnation_count = 0
         while iter_count < max_iter:
+            print("")
             print(f'ITERATION: {iter_count}')
 
             # Evaluate fitness of current population
