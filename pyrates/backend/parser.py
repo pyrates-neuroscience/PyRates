@@ -233,6 +233,8 @@ class ExpressionParser(ParserElement):
         self.rhs = self.parse(self.expr_stack[:])
 
         # post rhs parsing steps
+        if hasattr(self.rhs, 'vtype') or "float" in str(type(self.rhs)) or "int" in str(type(self.rhs)):
+            self.rhs = self.backend.add_op('no_op', self.rhs, **self.parser_kwargs)
         self.clear()
         self._finished_rhs = True
 
@@ -367,10 +369,7 @@ class ExpressionParser(ParserElement):
         elif op in self.vars:
 
             # extract constant/variable from args dict
-            if op == self.expr_list[0] and len(self.expr_list) == 1 and not self._finished_rhs:
-                self.op = self.backend.add_op('no_op', self.vars[op], **self.parser_kwargs)
-            else:
-                self.op = self.vars[op]
+            self.op = self.vars[op]
 
         elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
 
@@ -493,8 +492,10 @@ class ExpressionParser(ParserElement):
 
         if diff_eq:
 
-            self.backend.state_vars.append(self.vars[self.lhs_key].name)
-            self.rhs.state_var = self.vars[self.lhs_key].name
+            lhs = self.vars[self.lhs_key]
+            self.vars[self.lhs_key], self.rhs = self.backend.broadcast(lhs, self.rhs, **self.parser_kwargs)
+            self.backend.state_vars.append(lhs.name)
+            self.rhs.state_var = lhs.name
 
         elif self._instantaneous:
 

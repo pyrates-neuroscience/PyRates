@@ -338,6 +338,10 @@ class TensorflowBackend(NumpyBackend):
         self._build_dir = net_dir
         sys.path.append(net_dir)
 
+        # remove previously imported rhs_funcs from system
+        if 'rhs_func' in sys.modules:
+            del sys.modules['rhs_func']
+
         # collect state variable and parameter vectors
         state_vars, params, var_map = self._process_vars()
 
@@ -351,18 +355,22 @@ class TensorflowBackend(NumpyBackend):
             func_gen.add_linebreak()
         func_gen.add_linebreak()
 
-        # define function head and collect constant arguments
-        args = []
-        func_gen.add_code_line("def rhs_eval(t, y, ")
+        # define function head
+        func_gen.add_code_line("def rhs_eval(t, y, params):")
+        func_gen.add_linebreak()
+        func_gen.add_indent()
+        func_gen.add_linebreak()
+
+        # declare constants
+        args = [None for _ in range(len(params))]
+        func_gen.add_code_line("# declare constants")
+        func_gen.add_linebreak()
         for key, (vtype, idx) in var_map.items():
             if vtype == 'constant':
                 var = params[idx][1]
-                func_gen.add_code_line(f"{var.short_name},")
-                args.append(var)
-        func_gen.code[-1] = func_gen.code[-1][:-1]
-        func_gen.add_code_line("):")
-        func_gen.add_linebreak()
-        func_gen.add_indent()
+                func_gen.add_code_line(f"{var.short_name} = params[{idx}]")
+                func_gen.add_linebreak()
+                args[idx] = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
         func_gen.add_linebreak()
 
         # extract state variables from input vector y
@@ -401,9 +409,8 @@ class TensorflowBackend(NumpyBackend):
             f.close()
 
         # import function from file
-        funcs = {}
-        exec("from rhs_func import rhs_eval", globals(), funcs)
-        rhs_eval = funcs['rhs_eval']
+        exec("from rhs_func import rhs_eval", globals())
+        rhs_eval = globals().pop('rhs_eval')
         os.chdir(orig_path)
 
         # apply function decorator
@@ -458,7 +465,14 @@ class TensorflowBackend(NumpyBackend):
                     var_count[var.short_name] = 0
         return self.add_op('stack', vars)
 
-    def _integrate(self, rhs_func, func_args, T, dt, dts, state_vars, state_var_info, output_indices):
+    def add_input_layer(self, inputs: list, T: float, continuous=False) -> NumpyVar:
+        if continuous:
+            raise ValueError('Invalid input structure. The tensorflow backend can only be used with fixed step-size '
+                             'solvers and thus only supports inputs with discrete time steps. Either change the '
+                             'backend or set `continuous` to False.')
+        return super().add_input_layer(inputs=inputs, T=T, continuous=continuous)
+
+    def _integrate(self, rhs_func, func_args, T, dt, dts, t, state_vars, state_var_info, output_indices):
 
         sampling_steps = int(np.round(T / dts, decimals=0))
 
@@ -472,11 +486,13 @@ class TensorflowBackend(NumpyBackend):
             results.append(tf.Variable(np.zeros((sampling_steps,) + var_dim, dtype=self._float_def)))
 
         # solve via pyrates internal explicit euler algorithm
-        t = tf.Variable(0.0)
         sampling_idx = tf.Variable(0, dtype='int32')
-        results = self._run(rhs_func=rhs_func, func_args=func_args, state_vars=state_vars, t=t,
-                            T=T, dt=dt, dts=dts,
-                            sampling_idx=sampling_idx, results=results, output_indices=output_indices)
+        sampling_steps = tf.constant(int(np.round(dts / dt, decimals=0)))
+        dt = tf.constant(dt)
+        steps = tf.constant(int(np.round(T / dt, decimals=0)))
+        results = self._run(rhs_func=rhs_func, func_args=func_args, state_vars=state_vars, t=t, dt=dt, steps=steps,
+                            sampling_steps=sampling_steps, results=results, sampling_idx=sampling_idx,
+                            output_indices=output_indices)
 
         results = np.asarray([r.numpy() for r in results])
         times = np.arange(0, T, dts)
@@ -484,15 +500,14 @@ class TensorflowBackend(NumpyBackend):
         return times, results
 
     @tf.function
-    def _run(self, rhs_func, func_args, state_vars, t, T, dt, dts, sampling_idx, results, output_indices):
+    def _run(self, rhs_func, func_args, state_vars, t, dt, steps, sampling_steps, results, sampling_idx,
+             output_indices):
 
-        steps = tf.math.rint(T/dt)
-        sampling_steps = tf.math.rint(dts/dt)
-        zero = tf.constant(0.0)
+        zero = tf.constant(0, dtype=tf.int32)
 
         for step in tf.range(steps):
 
-            deltas = rhs_func(t, state_vars, *func_args)
+            deltas = rhs_func(t, state_vars, func_args)
 
             for s, d in zip(state_vars, deltas):
                 s.assign_add(dt*d)
@@ -542,28 +557,6 @@ class TensorflowBackend(NumpyBackend):
                     break
             args = tuple(args)
         return TensorflowOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
-
-    def _process_vars(self):
-        """
-
-        Returns
-        -------
-
-        """
-        state_vars, constants, var_map = [], [], {}
-        s_idx, c_idx, s_len = 0, 0, 0
-        for key, var in self.vars.items():
-            key, state_var = self._is_state_var(key)
-            if state_var:
-                state_vars.append((key, var))
-                var_map[key] = ('state_var', (s_idx, s_len))
-                s_idx += 1
-                s_len += 1
-            elif var.vtype == 'constant' or var.vtype == 'state_var':
-                constants.append((key, var))
-                var_map[key] = ('constant', c_idx)
-                c_idx += 1
-        return state_vars, constants, var_map
 
     def _preprocess_state_vars(self, state_vars):
         return [state_var for _, state_var in state_vars]

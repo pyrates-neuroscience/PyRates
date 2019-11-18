@@ -865,7 +865,8 @@ class NumpyBackend(object):
             t0 = time.time()
 
         # add inputs to graph
-        t = self.add_input_layer(inputs=inputs, T=T)
+        continuous = 'pyrates' in solver
+        t = self.add_input_layer(inputs=inputs, T=T, continuous=continuous)
 
         # graph execution
         #################
@@ -1069,7 +1070,7 @@ class NumpyBackend(object):
                 self._set_op(None, idx_1, idx_2)
 
         # for constant ops, add a constant to the graph, containing the op evaluation
-        if op.is_constant:
+        if op.is_constant and op_name != 'no_op':
             new_var = op.eval()
             if hasattr(new_var, 'shape'):
                 name = f'{name}_evaluated'
@@ -1157,13 +1158,14 @@ class NumpyBackend(object):
 
         return output_col
 
-    def add_input_layer(self, inputs: list, T: float) -> NumpyVar:
+    def add_input_layer(self, inputs: list, T: float, continuous=True) -> NumpyVar:
         """
 
         Parameters
         ----------
         inputs
         T
+        continuous
 
         Returns
         -------
@@ -1182,19 +1184,41 @@ class NumpyBackend(object):
 
         if inputs:
 
-            time = self.add_var('constant', name='time_vec', value=np.linspace(0, T, inputs[0][0].shape[0]))
+            if continuous:
 
-            for (inp, target_var, idx) in inputs:
-                in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
-                in_var = self.add_var(vtype='constant', name=in_name, scope="network_inputs", value=inp)
-                if len(in_var.shape) > 1:
-                    in_var = self.add_op('squeeze', in_var, scope="network_inputs")
-                in_var_interp = self.add_op('interpolate', t, time, in_var, scope="network_inputs")
-                if idx:
-                    self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
-                else:
-                    self.add_op('=', target_var, in_var_interp, scope="network_inputs")
-                self.lhs_vars.append(target_var.short_name)
+                time = self.add_var('constant', name='time_vec', value=np.linspace(0, T, inputs[0][0].shape[0]))
+
+                for (inp, target_var, idx) in inputs:
+                    in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
+                    in_var = self.add_var(vtype='constant', name=in_name, scope="network_inputs", value=inp)
+                    if len(in_var.shape) > 1:
+                        in_var = self.add_op('squeeze', in_var, scope="network_inputs")
+                    in_var_interp = self.add_op('interpolate', t, time, in_var, scope="network_inputs")
+                    if idx:
+                        self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
+                    else:
+                        self.add_op('=', target_var, in_var_interp, scope="network_inputs")
+                    self.lhs_vars.append(target_var.short_name)
+
+            else:
+
+                # create counting index for input variables
+                time_step_idx = self.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
+                                             scope="network_inputs")
+
+                for (inp, target_var, idx) in inputs:
+                    in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
+                    in_var = self.add_var(vtype='state_var', name=in_name, scope="network_inputs", value=inp)
+                    in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
+                    if idx:
+                        self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
+                    else:
+                        self.add_op('=', target_var, in_var_indexed, scope="network_inputs")
+
+                # create increment operator for counting index
+                time_step = self.add_var('constant', name='time_step_increment', value=np.ones((1,), dtype='int32'),
+                                         scope="network_inputs")
+                self.add_op('+=', time_step_idx, time_step, scope="network_inputs")
 
         return t
 
@@ -1271,6 +1295,8 @@ class NumpyBackend(object):
         self.var_counter = 0
         self.layer = 0
         rmtree(self._build_dir)
+        if 'rhs_func' in sys.modules:
+            del sys.modules['rhs_func']
 
     def get_layer(self, idx) -> list:
         """Retrieve layer from graph.
@@ -1367,6 +1393,10 @@ class NumpyBackend(object):
         self._build_dir = net_dir
         sys.path.append(net_dir)
 
+        # remove previously imported rhs_funcs from system
+        if 'rhs_func' in sys.modules:
+            del sys.modules['rhs_func']
+
         # collect state variable and parameter vectors
         state_vars, params, var_map = self._process_vars()
 
@@ -1424,11 +1454,11 @@ class NumpyBackend(object):
         func_gen.add_linebreak()
 
         # add return line
-        func_gen.add_code_line(f"return np.asarray([")
+        func_gen.add_code_line(f"return [")
         for i in range(len(state_vars)):
             func_gen.add_code_line(f"y_delta_{i},")
         func_gen.code[-1] = func_gen.code[-1][:-1]
-        func_gen.add_code_line("]).flatten()")
+        func_gen.add_code_line("]")
         func_gen.add_linebreak()
 
         # save rhs function to file
@@ -1437,9 +1467,8 @@ class NumpyBackend(object):
             f.close()
 
         # import function from file
-        funcs = {}
-        exec("from rhs_func import rhs_eval", globals(), funcs)
-        rhs_eval = funcs['rhs_eval']
+        exec("from rhs_func import rhs_eval", globals())
+        rhs_eval = globals().pop('rhs_eval')
         os.chdir(orig_path)
 
         # apply function decorator
@@ -1624,6 +1653,7 @@ class NumpyBackend(object):
 
         sampling_step = int(np.round(dts / dt, decimals=0))
         sampling_steps = int(np.round(T / dts, decimals=0))
+        steps = int(np.round(T / dt, decimals=0))
 
         # initialize results storage vectors
         results = []
@@ -1635,19 +1665,16 @@ class NumpyBackend(object):
             results.append(np.zeros((sampling_steps, var_dim)))
 
         # solve via pyrates internal explicit euler algorithm
-        i = 0
         sampling_idx = 0
-        while t < T-dt:
+        for i in range(steps):
             deltas = rhs_func(t, state_vars, func_args)
             t += dt
-            i += 1
-            state_vars += dt * deltas
-            if i == sampling_step:
+            for s, d in zip(state_vars, deltas):
+                s[:] += dt * d
+            if i % sampling_step == 0:
                 for idx1, idx2 in enumerate(output_indices):
-                    results[idx1][sampling_idx, :] = state_vars[idx2[1]] if len(idx2) == 2 \
-                        else state_vars[idx2[1]:idx2[2]]
+                    results[idx1][sampling_idx, :] = state_vars[idx2[1]]
                 sampling_idx += 1
-                i = 0
 
         times = np.arange(0, T, dts)
 
@@ -1746,10 +1773,7 @@ class NumpyBackend(object):
                     continue
 
     def _preprocess_state_vars(self, state_vars):
-        state_vars_tmp = []
-        for (_, state_var) in state_vars:
-            state_vars_tmp += state_var
-        return np.asarray(state_vars_tmp, dtype=self._float_def)
+        return [state_var for _, state_var in state_vars]
 
     def _process_update_args_old(self, var, update, idx):
         """Preprocesses the index and a variable update to match the variable shape.
@@ -1868,17 +1892,14 @@ class NumpyBackend(object):
         for key, var in self.vars.items():
             key, state_var = self._is_state_var(key)
             if state_var:
-                val = var.flatten().tolist() if hasattr(var, 'flatten') else var
-                val_len = len(val)
-                state_vars.append((key, val))
-                var_map[key] = ('state_var', (s_idx, s_len, s_len + val_len) if val_len > 1 else (s_idx, s_len))
+                state_vars.append((key, var))
+                var_map[key] = ('state_var', (s_idx, s_len))
                 s_idx += 1
-                s_len += len(val)
+                s_len += 1
             elif var.vtype == 'constant' or var.short_name not in self.lhs_vars:
                 constants.append((key, var))
                 var_map[key] = ('constant', c_idx)
                 c_idx += 1
-
         return state_vars, constants, var_map
 
     def _is_state_var(self, key):

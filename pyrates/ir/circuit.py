@@ -1028,10 +1028,10 @@ class CircuitIR(AbstractBaseIR):
             for i, node_key in enumerate(node_keys):
                 out_val_tmp = np.squeeze(out_val[:, i]) if len(out_val.shape) > 1 else out_val
                 if len(out_val_tmp.shape) < 2:
-                    outputs[tuple(node_key.split('/')) + (outkey,)] = out_val_tmp
+                    outputs[(outkey,) + tuple(node_key.split('/'))] = out_val_tmp
                 else:
                     for k in range(out_val_tmp.shape[1]):
-                        outputs[(node_key, outkey, str(k))] = np.squeeze(out_val_tmp[:, k])
+                        outputs[(outkey, node_key, str(k))] = np.squeeze(out_val_tmp[:, k])
 
         # create data frame
         out_vars = DataFrame(outputs, index=times)
