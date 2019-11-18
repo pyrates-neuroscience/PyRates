@@ -1153,7 +1153,7 @@ class CircuitIR(AbstractBaseIR):
                 n, m = tval['shape'][0], sval['shape'][0]
 
                 # check whether the weight matrix is dense enough for this edge realization to be efficient
-                if 1-len(weight)/(n*m) < matrix_sparseness:
+                if 1-len(weight)/(n*m) < matrix_sparseness and n > 1 and m > 1:
 
                     weight_mat = np.zeros((n, m), dtype=np.float32)
                     if not tidx:
