@@ -75,11 +75,11 @@ def test_2_1_operator():
 
         # instantiate compute graph from net config
         dt = 1e-1
-        net = ComputeGraph(net_config=net_config, name='net0', vectorization=True, dt=dt, backend=b)
+        net = ComputeGraph(net_config=net_config, name='net0', vectorization=True, backend=b)
 
         # simulate operator behavior
         sim_time = 10.0
-        results = net.run(sim_time, outputs={'a': 'pop0/op0/a'})
+        results = net.run(simulation_time=sim_time, step_size=dt, outputs={'a': 'pop0/op0/a'})
 
         # generate target values
         sim_steps = int(sim_time / dt)
@@ -87,8 +87,8 @@ def test_2_1_operator():
         update0_0 = lambda x: x + 2.0
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i + 1, 0] = update0_0(targets[i, 1])
-            targets[i + 1, 1] = update0_1(targets[i, 0])
+            targets[i + 1, 0] = targets[i, 0] + dt * update0_0(targets[i, 1])
+            targets[i + 1, 1] = targets[i, 1] + dt * update0_1(targets[i, 0])
 
         # compare results with target values
         diff = results['a'].values[:] - targets[:, 1]
