@@ -117,3 +117,4 @@ The CGS.run() method does not return DataFrames, but filepaths to result files o
 
     results = pd.read_hdf(res_file, key=f'Results/results')
     result_map = pd.read_hdf(res_file, key='Results/result_map')
+

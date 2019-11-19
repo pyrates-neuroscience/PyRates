@@ -396,7 +396,6 @@ class GeneticAlgorithmTemplate:
         parent_repro = np.abs(parent_repro.to_numpy())
         parent_repro /= np.abs(parent_repro.sum())
 
-
         # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values
         for n in range(n_parent_pairs):

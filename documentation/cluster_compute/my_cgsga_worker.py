@@ -16,5 +16,4 @@ class MyWorker(ClusterWorkerTemplate):
 
 if __name__ == "__main__":
     cgs_worker = MyWorker()
-    # cgs_worker.worker_test()
     cgs_worker.worker_init()

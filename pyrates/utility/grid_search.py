@@ -470,6 +470,7 @@ class ClusterGridSearch(ClusterCompute):
         -------
 
         """
+
         super().__init__(nodes, compute_dir, verbose)
 
         self.chunk_idx = 0
