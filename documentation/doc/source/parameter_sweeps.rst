@@ -50,7 +50,7 @@ In the following example we simulate two coupled montbrio populations, represent
             'solver': 'euler'                         # Solver for the differential equation approximation.
         },
         profile='t',                                  # Automated runtime tracking
-        njit=True,                                    # Uses Numba's njit compiler if set to True
+        njit=True,                                    # Use Numba's njit compiler if set to True
         parallel=False
     )
     results.plot()
@@ -58,7 +58,7 @@ In the following example we simulate two coupled montbrio populations, represent
 ClusterGridSearch
 -----------------
 
-The ClusterGridSearch class extends PyRates' tools for parameter space investigations with the ability to distribute computations among multiple workstation in a computer network. This is especially useful when investigating high-dimensional parameter spaces that require large parameter grids which might exceed the hardware capacities of a single workstation. In the following example we present the same parameter space invetigation as presented above, yet utilizing PyRates' ClusterGridSearch module.
+The ClusterGridSearch class extends PyRates' tools for parameter space investigations with the ability to distribute computations among multiple workstation in a computer network. This can be used to compute large parameter grids that might exceed the hardware capacities of a single workstation. In the following example we present the same parameter space investigation as above, yet utilizing PyRates' ClusterGridSearch module.
 
 1) Initialization: A cluster computation consist of two components, the cluster initialization and the actual model computation. During its initialization a ClusterGridSearch (CGS) object expects a list of computer names in the computer network that will be utilized for the computation. Optionally, a compute directory can be specified where all result files, transfer data and configuration files will be stored. If no explicit path is provided, a compute directory is created at the same location of the calling python script.::
 
@@ -67,70 +67,53 @@ The ClusterGridSearch class extends PyRates' tools for parameter space investiga
     import matplotlib.pyplot as plt
     from IPython.display import display
     from pyrates.utility.grid_search import ClusterGridSearch
-    %matplotlib inline
+
 
     nodes = [
         'animals',
-        'spanien'
+        'osttimor'
     ]
 
-    compute_dir = "/nobackup/spanien1/salomon/CGS/Benchmark_jup"
+    compute_dir = "~/Documents/CGS_presentation"
 
     cgs = ClusterGridSearch(nodes, compute_dir=compute_dir)
 
-2) Execution: In the cell below, first all simulation and cluster parameters are set. For a detailed description of the CGS specific parameters please see the function documentation. The CGS.run() method does not return DataFrames, but filepaths to result files of the cluster computation. These result files can be then easily loaded into DataFrames using pandas' read_hdf() function.::
+2) Execution: In the cell below, first all simulation and cluster parameters are set. For a detailed description of the CGS specific parameters please see the function documentation.
+The CGS.run() method does not return DataFrames, but filepaths to result files of the cluster computation. These result files can be then easily loaded into DataFrames using pandas' read_hdf() function.::
 
-    # Simulation/grid search parameters
     circuit_template = "model_templates.montbrio.simple_montbrio.Net3"
     dt = 1e-4                                     # integration step size in s
     dts = 1e-3                                    # variable storage sub-sampling step size in s
     T = 5.                                        # total simulation time in s
-    inp = np.ones((int(T/dt), 1))                 # external input to the population
-    inputs = {"PC/Op_e/inp": inp}
-    outputs = {'r': 'PC/Op_e/r'}                  # model output parameters
 
-    param_grid = {'eta_op': np.linspace(-5, 5, 5),
-                  'eta_iin': np.linspace(-5, 5, 5)}
+    param_grid = {'eta_op': np.linspace(-5, 5, 11),
+                  'eta_iin': np.linspace(0, 10, 11)}
 
     param_map = {'eta_op': {'vars': ['Op_e/eta'],
                             'nodes': ['PC']},
                  'eta_iin': {'vars': ['Op_i/eta'],
                              'nodes': ['IIN']}}
-
-    # CGS specific parameters
-    chunk_size = 5  # [10,5]
-    worker_env = "/data/u_salomon_software/anaconda3/envs/PyRates/bin/python3"
-    worker_file = '/data/hu_salomon/PycharmProjects/PyRates/pyrates/utility/worker_template.py'
-    add_template_info = False
-    config_kwargs = {
-        "init_kwargs": {
-            'backend': 'numpy',
-            'solver': 'euler'
-        }
-    }
-
     # Simulation run
     res_file = cgs.run(
-        circuit_template=circuit_template,
-        params=param_grid,
+        circuit_template= "model_templates.montbrio.simple_montbrio.Net3",
+        param_grid=param_grid,
         param_map=param_map,
         simulation_time=T,
         dt=dt,
-        permute=True,
+        permute_grid=False,
         sampling_step_size=dts,
-        inputs=inputs,
-        outputs=outputs,
-        chunk_size=chunk_size,
-        worker_env=worker_env,
-        worker_file=worker_file,
-        add_template_info=add_template_info,
-        config_kwargs=config_kwargs)
+        inputs={"PC/Op_e/inp": np.ones((int(T/dt), 1))},
+        outputs={'r': 'PC/Op_e/r'},
+        chunk_size=5,  # [5, 10]
+        gs_kwargs={
+            "init_kwargs": {
+                'backend': 'numpy',
+                'solver': 'euler'
+            },
+            "njit": True,
+            "parallel": False
+        },
+    )
 
     results = pd.read_hdf(res_file, key=f'Results/results')
     result_map = pd.read_hdf(res_file, key='Results/result_map')
-
-    results.plot()
-
-
-3) CGS individual postprocessing
-

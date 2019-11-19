@@ -174,7 +174,7 @@ class ClusterCompute:
             If none is provided, a default compute directory is created in the current working directory
         verbose:
             If False, all std output will still be copied to the log file but won't be shown in the terminal. Overwrites
-            the verbosity of the run() method
+            the verbosity of the run() method of all child classes.
 
         Returns
         -------
@@ -1575,10 +1575,6 @@ class ClusterWorkerTemplate(object):
 if __name__ == "__main__":
     cgs_worker = ClusterWorkerTemplate()
     # cgs_worker.worker_test()
-    cgs_worker.worker_init(
-        config_file=f'{os.path.dirname(os.path.realpath(__file__))}/../../tests/cgs_test_data/cgs_test_config.yaml',
-        subgrid=f'{os.path.dirname(os.path.realpath(__file__))}/../../tests/cgs_test_data/cgs_test_grid.h5',
-        result_file=f'{os.path.dirname(os.path.realpath(__file__))}/../../tests/cgs_test_data/cgs_test_results.h5',
-        build_dir=os.getcwd())
+    cgs_worker.worker_init()
 
 
