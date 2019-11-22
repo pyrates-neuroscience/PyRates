@@ -286,13 +286,15 @@ class TensorflowBackend(NumpyBackend):
                        "bool": tf.bool
                        }
 
-    def compile(self, build_dir: Optional[str] = None, **kwargs) -> tuple:
+    def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = tf.function, **kwargs) -> tuple:
         """Compile the graph layers/operations. Creates python files containing the functions in each layer.
 
         Parameters
         ----------
         build_dir
             Directory in which to create the file structure for the simulation.
+        decorator
+        kwargs
 
         Returns
         -------
@@ -300,125 +302,126 @@ class TensorflowBackend(NumpyBackend):
             Contains tuples of layer run functions and their respective arguments.
 
         """
+        return super().compile(build_dir=build_dir, decorator=decorator, **kwargs)
 
-        # preparations
-        ##############
-
-        # remove empty layers and operators
-        new_layer_idx = 0
-        for layer_idx, layer in enumerate(self.layers.copy()):
-            for op in layer.copy():
-                if op is None:
-                    layer.pop(layer.index(op))
-            if len(layer) == 0:
-                self.layers.pop(new_layer_idx)
-            else:
-                new_layer_idx += 1
-
-        # create directory in which to store rhs function
-        orig_path = os.getcwd()
-        if build_dir:
-            os.mkdir(build_dir)
-        dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
-        try:
-            os.mkdir(dir_name)
-        except FileExistsError:
-            pass
-        os.chdir(dir_name)
-        try:
-            os.mkdir(self.name)
-        except FileExistsError:
-            rmtree(self.name)
-            os.mkdir(self.name)
-        for key in sys.modules.copy():
-            if self.name in key:
-                del sys.modules[key]
-        os.chdir(self.name)
-        net_dir = os.getcwd()
-        self._build_dir = net_dir
-        sys.path.append(net_dir)
-
-        # remove previously imported rhs_funcs from system
-        if 'rhs_func' in sys.modules:
-            del sys.modules['rhs_func']
-
-        # collect state variable and parameter vectors
-        state_vars, params, var_map = self._process_vars()
-
-        # create rhs evaluation function
-        ################################
-
-        # set up file header
-        func_gen = CodeGen()
-        for import_line in self._imports:
-            func_gen.add_code_line(import_line)
-            func_gen.add_linebreak()
-        func_gen.add_linebreak()
-
-        # define function head
-        func_gen.add_code_line("def rhs_eval(t, y, params):")
-        func_gen.add_linebreak()
-        func_gen.add_indent()
-        func_gen.add_linebreak()
-
-        # declare constants
-        args = [None for _ in range(len(params))]
-        func_gen.add_code_line("# declare constants")
-        func_gen.add_linebreak()
-        for key, (vtype, idx) in var_map.items():
-            if vtype == 'constant':
-                var = params[idx][1]
-                func_gen.add_code_line(f"{var.short_name} = params[{idx}]")
-                func_gen.add_linebreak()
-                args[idx] = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
-        func_gen.add_linebreak()
-
-        # extract state variables from input vector y
-        func_gen.add_code_line("# extract state variables from input vector")
-        func_gen.add_linebreak()
-        for key, (vtype, idx) in var_map.items():
-            var = self.get_var(key)
-            if vtype == 'state_var':
-                func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}]")
-                func_gen.add_linebreak()
-        func_gen.add_linebreak()
-
-        # add equations
-        func_gen.add_code_line("# calculate right-hand side update of equation system")
-        func_gen.add_linebreak()
-        for i, layer in enumerate(self.layers):
-            for j, op in enumerate(layer):
-                if hasattr(op, 'state_var'):
-                    _, idx = var_map[op.state_var]
-                    func_gen.add_code_line(f"y_delta_{idx[0]} = ")
-                func_gen.add_code_line(op.value)
-                func_gen.add_linebreak()
-        func_gen.add_linebreak()
-
-        # add return line
-        func_gen.add_code_line(f"return [")
-        for i in range(len(state_vars)):
-            func_gen.add_code_line(f"y_delta_{i},")
-        func_gen.code[-1] = func_gen.code[-1][:-1]
-        func_gen.add_code_line("]")
-        func_gen.add_linebreak()
-
-        # save rhs function to file
-        with open('rhs_func.py', 'w') as f:
-            f.writelines(func_gen.code)
-            f.close()
-
-        # import function from file
-        exec("from rhs_func import rhs_eval", globals())
-        rhs_eval = globals().pop('rhs_eval')
-        os.chdir(orig_path)
-
-        # apply function decorator
-        decorator = kwargs.pop('decorator', tf.function)
-        if decorator:
-            rhs_eval = decorator(rhs_eval, **kwargs)
-
-        return rhs_eval, args, state_vars, var_map
+    #     # preparations
+    #     ##############
+    #
+    #     # remove empty layers and operators
+    #     new_layer_idx = 0
+    #     for layer_idx, layer in enumerate(self.layers.copy()):
+    #         for op in layer.copy():
+    #             if op is None:
+    #                 layer.pop(layer.index(op))
+    #         if len(layer) == 0:
+    #             self.layers.pop(new_layer_idx)
+    #         else:
+    #             new_layer_idx += 1
+    #
+    #     # create directory in which to store rhs function
+    #     orig_path = os.getcwd()
+    #     if build_dir:
+    #         os.mkdir(build_dir)
+    #     dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
+    #     try:
+    #         os.mkdir(dir_name)
+    #     except FileExistsError:
+    #         pass
+    #     os.chdir(dir_name)
+    #     try:
+    #         os.mkdir(self.name)
+    #     except FileExistsError:
+    #         rmtree(self.name)
+    #         os.mkdir(self.name)
+    #     for key in sys.modules.copy():
+    #         if self.name in key:
+    #             del sys.modules[key]
+    #     os.chdir(self.name)
+    #     net_dir = os.getcwd()
+    #     self._build_dir = net_dir
+    #     sys.path.append(net_dir)
+    #
+    #     # remove previously imported rhs_funcs from system
+    #     if 'rhs_func' in sys.modules:
+    #         del sys.modules['rhs_func']
+    #
+    #     # collect state variable and parameter vectors
+    #     state_vars, params, var_map = self._process_vars()
+    #
+    #     # create rhs evaluation function
+    #     ################################
+    #
+    #     # set up file header
+    #     func_gen = CodeGen()
+    #     for import_line in self._imports:
+    #         func_gen.add_code_line(import_line)
+    #         func_gen.add_linebreak()
+    #     func_gen.add_linebreak()
+    #
+    #     # define function head
+    #     func_gen.add_code_line("def rhs_eval(t, y, params):")
+    #     func_gen.add_linebreak()
+    #     func_gen.add_indent()
+    #     func_gen.add_linebreak()
+    #
+    #     # declare constants
+    #     args = [None for _ in range(len(params))]
+    #     func_gen.add_code_line("# declare constants")
+    #     func_gen.add_linebreak()
+    #     for key, (vtype, idx) in var_map.items():
+    #         if vtype == 'constant':
+    #             var = params[idx][1]
+    #             func_gen.add_code_line(f"{var.short_name} = params[{idx}]")
+    #             func_gen.add_linebreak()
+    #             args[idx] = var.squeeze().tolist() if hasattr(var, 'squeeze') else var
+    #     func_gen.add_linebreak()
+    #
+    #     # extract state variables from input vector y
+    #     func_gen.add_code_line("# extract state variables from input vector")
+    #     func_gen.add_linebreak()
+    #     for key, (vtype, idx) in var_map.items():
+    #         var = self.get_var(key)
+    #         if vtype == 'state_var':
+    #             func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}]")
+    #             func_gen.add_linebreak()
+    #     func_gen.add_linebreak()
+    #
+    #     # add equations
+    #     func_gen.add_code_line("# calculate right-hand side update of equation system")
+    #     func_gen.add_linebreak()
+    #     for i, layer in enumerate(self.layers):
+    #         for j, op in enumerate(layer):
+    #             if hasattr(op, 'state_var'):
+    #                 _, idx = var_map[op.state_var]
+    #                 func_gen.add_code_line(f"y_delta_{idx[0]} = ")
+    #             func_gen.add_code_line(op.value)
+    #             func_gen.add_linebreak()
+    #     func_gen.add_linebreak()
+    #
+    #     # add return line
+    #     func_gen.add_code_line(f"return [")
+    #     for i in range(len(state_vars)):
+    #         func_gen.add_code_line(f"y_delta_{i},")
+    #     func_gen.code[-1] = func_gen.code[-1][:-1]
+    #     func_gen.add_code_line("]")
+    #     func_gen.add_linebreak()
+    #
+    #     # save rhs function to file
+    #     with open('rhs_func.py', 'w') as f:
+    #         f.writelines(func_gen.code)
+    #         f.close()
+    #
+    #     # import function from file
+    #     exec("from rhs_func import rhs_eval", globals())
+    #     rhs_eval = globals().pop('rhs_eval')
+    #     os.chdir(orig_path)
+    #
+    #     # apply function decorator
+    #     decorator = kwargs.pop('decorator', tf.function)
+    #     if decorator:
+    #         rhs_eval = decorator(rhs_eval, **kwargs)
+    #
+    #     return rhs_eval, args, state_vars, var_map
 
     def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
 
@@ -472,25 +475,22 @@ class TensorflowBackend(NumpyBackend):
                              'backend or set `continuous` to False.')
         return super().add_input_layer(inputs=inputs, T=T, continuous=continuous)
 
-    def _integrate(self, rhs_func, func_args, T, dt, dts, t, state_vars, state_var_info, output_indices):
+    def _integrate(self, rhs_func, func_args, T, dt, dts, t, output_indices):
 
         sampling_steps = int(np.round(T / dts, decimals=0))
 
         # initialize results storage vectors
         results = []
         for idx in output_indices:
-            try:
-                var_dim = state_vars[idx[1]].shape
-            except AttributeError:
-                var_dim = (1,)
-            results.append(tf.Variable(np.zeros((sampling_steps,) + var_dim, dtype=self._float_def)))
+            var_dim = idx[1] - idx[0] if type(idx) is tuple else 1
+            results.append(tf.Variable(np.zeros((sampling_steps, var_dim), dtype=self._float_def)))
 
         # solve via pyrates internal explicit euler algorithm
         sampling_idx = tf.Variable(0, dtype='int32')
         sampling_steps = tf.constant(int(np.round(dts / dt, decimals=0)))
         dt = tf.constant(dt)
         steps = tf.constant(int(np.round(T / dt, decimals=0)))
-        results = self._run(rhs_func=rhs_func, func_args=func_args, state_vars=state_vars, t=t, dt=dt, steps=steps,
+        results = self._run(rhs_func=rhs_func, func_args=func_args, t=t, dt=dt, steps=steps,
                             sampling_steps=sampling_steps, results=results, sampling_idx=sampling_idx,
                             output_indices=output_indices)
 
@@ -500,22 +500,21 @@ class TensorflowBackend(NumpyBackend):
         return times, results
 
     @tf.function
-    def _run(self, rhs_func, func_args, state_vars, t, dt, steps, sampling_steps, results, sampling_idx,
+    def _run(self, rhs_func, func_args, t, dt, steps, sampling_steps, results, sampling_idx,
              output_indices):
 
         zero = tf.constant(0, dtype=tf.int32)
+        state_vars = self.vars['y']
 
         for step in tf.range(steps):
 
             deltas = rhs_func(t, state_vars, func_args)
-
-            for s, d in zip(state_vars, deltas):
-                s.assign_add(dt*d)
+            state_vars.assign_add(dt*deltas)
 
             if tf.equal(tf.math.floormod(step, sampling_steps), zero):
 
                 for r, idx in zip(results, output_indices):
-                    r.scatter_nd_update([[sampling_idx, 0]], state_vars[idx[1]])
+                    r.scatter_nd_update([[sampling_idx, 0]], [state_vars[idx]])
 
                 sampling_idx.assign_add(1)
                 t.assign_add(dt)
@@ -557,9 +556,6 @@ class TensorflowBackend(NumpyBackend):
                     break
             args = tuple(args)
         return TensorflowOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
-
-    def _preprocess_state_vars(self, state_vars):
-        return [state_var for _, state_var in state_vars]
 
     def _process_update_args_old(self, var, update, idx):
         """Preprocesses the index and a variable update to match the variable shape.
@@ -612,7 +608,6 @@ class TensorflowBackend(NumpyBackend):
         """Match data types of two operators/variables.
         """
 
-        # TODO: account for cases where one of the variables is simple integer or float.
         if issubclass(type(op1), tf.Variable):
 
             if issubclass(type(op2), tf.Variable):
@@ -652,7 +647,7 @@ class TensorflowBackend(NumpyBackend):
         else:
 
             # cast op2 to dtype of op1 referred from its type string
-            return op1, self.add_op('cast', op2, str(type(op1)).split('\'')[-2])
+            return super()._match_dtypes(op1, op2)
 
     def _is_state_var(self, key):
         if ':' not in key and f"{key}:0" in self.state_vars:

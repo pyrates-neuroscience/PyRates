@@ -1075,6 +1075,13 @@ class NumpyBackend(object):
                 args_tmp = (args_tmp[0], args_tmp[1]) + tuple(args[0][2:])
                 args_new = args_tmp + args[1:]
 
+            elif '=' in op_name and len(args) > 2:
+
+                # for assign operations with index, apply index temporarily and broadcast rhs to match indexed lhs
+                arg1_tmp = self._create_op('index', 'test_idx', args[0], args[2])
+                args_tmp = self.broadcast(arg1_tmp, args[1])
+                args_new = (args[0], args_tmp[1], args[2])
+
             else:
 
                 # broadcast leading 2 arguments to operation
@@ -1468,19 +1475,12 @@ class NumpyBackend(object):
         func_gen.add_linebreak()
         for i, layer in enumerate(self.layers):
             for j, op in enumerate(layer):
-                if hasattr(op, 'state_var'):
-                    _, idx = var_map[op.state_var]
-                    func_gen.add_code_line(f"y_delta_{idx[0]} = ")
                 func_gen.add_code_line(op.value)
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
 
         # add return line
-        func_gen.add_code_line(f"return [")
-        for i in range(len(state_vars)):
-            func_gen.add_code_line(f"y_delta_{i},")
-        func_gen.code[-1] = func_gen.code[-1][:-1]
-        func_gen.add_code_line("]")
+        func_gen.add_code_line(f"return {self.vars['y_delta'].short_name}")
         func_gen.add_linebreak()
 
         # save rhs function to file
@@ -1679,7 +1679,7 @@ class NumpyBackend(object):
         state_vars = self.vars['y']
         sampling_idx = 0
         for i in range(steps):
-            deltas = np.asarray(rhs_func(t, state_vars, func_args))
+            deltas = rhs_func(t, state_vars, func_args)
             t += dt
             state_vars += dt * deltas
             if i % sampling_step == 0:
@@ -1743,6 +1743,40 @@ class NumpyBackend(object):
         if adjust_second:
             return op_target, op_adjust
         return op_adjust, op_target
+
+    def _match_dtypes(self, op1: Any, op2: Any) -> tuple:
+        """Match data types of two operators/variables.
+        """
+
+        if issubclass(type(op1), PyRatesOp):
+
+            if issubclass(type(op2), PyRatesOp):
+
+                # cast both variables to lowest precision
+                for acc in ["16", "32", "64", "128"]:
+                    if acc in op2.dtype:
+                        return self.add_op('cast', op1, op2.dtype), op2
+
+            return op1, self.add_op('cast', op2, op1.dtype)
+
+        elif issubclass(type(op2), PyRatesOp):
+
+            return self.add_op('cast', op1, op2.dtype), op2
+
+        elif hasattr(op1, 'numpy') or type(op1) is np.ndarray:
+
+            # cast op2 to numpy dtype of op1
+            return op1, self.add_op('cast', op2, op1.dtype)
+
+        elif hasattr(op2, 'numpy') or type(op2) is np.ndarray:
+
+            # cast op1 to numpy dtype of op2
+            return self.add_op('cast', op1, op2.dtype), op2
+
+        else:
+
+            # cast op2 to dtype of op1 referred from its type string
+            return op1, self.add_op('cast', op2, str(type(op1)))
 
     def _create_var(self, vtype, dtype, shape, value, name):
         return NumpyVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
