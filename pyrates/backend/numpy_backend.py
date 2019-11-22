@@ -46,7 +46,7 @@ Currently supported backends:
 
 # external imports
 import time
-from typing import Optional, Dict, List, Union, Any
+from typing import Optional, Dict, List, Union, Any, Callable
 import numpy as np
 from copy import deepcopy
 import os
@@ -125,7 +125,7 @@ class NumpyVar(np.ndarray):
 
         return obj, name
 
-    def eval(self):
+    def numpy(self):
         """Returns current value of NumpyVar.
         """
         try:
@@ -178,10 +178,10 @@ class PyRatesOp:
     ----------
     op
         Call-signature of the operation/function.
+    short_name
+        Name of the operation within the equations.
     name
         Name of the operation/function.
-    decorator
-        Optional function decorators that should be used.
     args
         Arguments to the function.
 
@@ -872,19 +872,24 @@ class NumpyBackend(object):
         #################
 
         # map layers that need to be executed to compiled network structure
-        rhs_func, args, state_vars, var_map = self.compile(**kwargs)
+        decorator = kwargs.pop('decorator', None)
+        decorator_kwargs = kwargs.pop('decorator_kwargs', {})
+        rhs_func, args, state_vars, var_map = self.compile(self._build_dir, decorator=decorator, **decorator_kwargs)
 
         # create output indices
         output_indices = []
         for out_key, out_vars in outputs.items():
-            for var_name, out_info in out_vars.items():
-                _, idx = var_map[var_name]
+            for n, (idx, _) in enumerate(out_vars):
+                if ':' in idx:
+                    idx = tuple([int(i) for i in idx.split(':')])
+                else:
+                    idx = int(idx)
                 output_indices.append(idx)
-                outputs[out_key][var_name][0] = len(output_indices)-1
+                outputs[out_key][n][0] = len(output_indices)-1
 
         # simulate backend behavior for each time-step
-        times, results = self._solve(rhs_func=rhs_func, func_args=args, state_vars=state_vars, T=T, dt=dt, dts=dts, t=t,
-                                     solver=solver, output_indices=output_indices, **kwargs)
+        times, results = self._solve(rhs_func=rhs_func, func_args=tuple(args), T=T, dt=dt, dts=dts, t=t, solver=solver,
+                                     output_indices=output_indices, **kwargs)
 
         # output storage and clean-up
         #############################
@@ -892,7 +897,7 @@ class NumpyBackend(object):
         # store output variables in output dictionary
         for i, (out_key, out_vars) in enumerate(outputs.items()):
             node_col = []
-            for (_, node_keys) in out_vars.values():
+            for _, node_keys in out_vars:
                 node_col += node_keys
             outputs[out_key] = (np.asarray(results[i]), node_col)
 
@@ -963,6 +968,22 @@ class NumpyBackend(object):
         self.vars[name] = var
         return var
 
+    def remove_var(self, name: str) -> NumpyVar:
+        """Removes variable from backend and returns it.
+
+        Parameters
+        ----------
+        name
+            Variable name.
+
+        Returns
+        -------
+        NumpyVar
+
+        """
+        self.var_counter[name] -= 1
+        return self.vars.pop(name)
+
     def add_op(self,
                op_name: str,
                *args,
@@ -977,7 +998,7 @@ class NumpyBackend(object):
         args
             Positional arguments to be passed to the operation.
         kwargs
-            Keyword arguments to be passed to the operation, except for scope, dependencies and decorator, which are
+            Keyword arguments to be passed to the operation, except for scope and dependencies, which are
             extracted before.
 
         Returns
@@ -1339,15 +1360,19 @@ class NumpyBackend(object):
             Current value of the variable.
 
         """
-        return self.vars[var].eval()
+        return self.vars[var].numpy()
 
-    def compile(self, build_dir: Optional[str] = None, **kwargs) -> tuple:
+    def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = None, **kwargs) -> tuple:
         """Compile the graph layers/operations. Creates python files containing the functions in each layer.
 
         Parameters
         ----------
         build_dir
             Directory in which to create the file structure for the simulation.
+        decorator
+            Decorator function that should be applied to the right-hand side evaluation function.
+        kwargs
+            decorator keyword arguments
 
         Returns
         -------
@@ -1434,10 +1459,7 @@ class NumpyBackend(object):
         for key, (vtype, idx) in var_map.items():
             var = self.get_var(key)
             if vtype == 'state_var':
-                if len(idx) == 3:
-                    func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}:{idx[2]}]")
-                else:
-                    func_gen.add_code_line(f"{var.short_name} = y[{idx[1]}]")
+                func_gen.add_code_line(f"{var.short_name} = {var.value}")
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
 
@@ -1472,7 +1494,6 @@ class NumpyBackend(object):
         os.chdir(orig_path)
 
         # apply function decorator
-        decorator = kwargs.pop('decorator', None)
         if decorator:
             rhs_eval = decorator(rhs_eval, **kwargs)
 
@@ -1568,7 +1589,7 @@ class NumpyBackend(object):
             List of operations to evaluate.
 
         """
-        return [op.eval() for op in ops]
+        return [op.numpy() for op in ops]
 
     @staticmethod
     def eval_layer(layer: tuple) -> Any:
@@ -1596,7 +1617,7 @@ class NumpyBackend(object):
         else:
             self.get_layer(layer).append(op)
 
-    def _solve(self, rhs_func, func_args, state_vars, T, dt, dts, t, solver, output_indices, **kwargs):
+    def _solve(self, rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs):
         """
 
         Parameters
@@ -1617,20 +1638,12 @@ class NumpyBackend(object):
 
         """
 
-        # track all state variables, if no output is declared
-        if not output_indices:
-            output_indices = [idx for idx, _ in enumerate(state_vars)]
-
-        # bring state variables into vectorized shape
-        state_vars_tmp = self._preprocess_state_vars(state_vars)
-
         # choose solver
         ###############
 
         if solver == 'euler':
 
             times, results = self._integrate(rhs_func=rhs_func, func_args=func_args, T=T, dt=dt, dts=dts, t=t,
-                                             state_vars=state_vars_tmp, state_var_info=state_vars,
                                              output_indices=output_indices)
 
         elif solver == 'scipy':
@@ -1639,7 +1652,8 @@ class NumpyBackend(object):
 
             # solve via scipy's ode integration function
             fun = lambda t, y: rhs_func(t, y, func_args)
-            outputs = solve_ivp(fun=fun, t_span=(t, T), y0=state_vars_tmp, first_step=dt, **kwargs)
+            outputs = solve_ivp(fun=fun, t_span=(float(t.numpy()), T), y0=self.vars['y'], first_step=dt,
+                                **kwargs)
             results = [outputs['y'].T[:, idx] for idx in output_indices]
             times = outputs['t']
 
@@ -1649,7 +1663,7 @@ class NumpyBackend(object):
 
         return times, results
 
-    def _integrate(self, rhs_func, func_args, T, dt, dts, t, state_vars, state_var_info, output_indices):
+    def _integrate(self, rhs_func, func_args, T, dt, dts, t, output_indices):
 
         sampling_step = int(np.round(dts / dt, decimals=0))
         sampling_steps = int(np.round(T / dts, decimals=0))
@@ -1658,22 +1672,20 @@ class NumpyBackend(object):
         # initialize results storage vectors
         results = []
         for idx in output_indices:
-            try:
-                var_dim = len(state_var_info[idx[0]][1])
-            except AttributeError:
-                var_dim = 1
+            var_dim = idx[1]-idx[0] if type(idx) is tuple else 1
             results.append(np.zeros((sampling_steps, var_dim)))
 
         # solve via pyrates internal explicit euler algorithm
+        state_vars = self.vars['y']
         sampling_idx = 0
         for i in range(steps):
-            deltas = rhs_func(t, state_vars, func_args)
+            deltas = np.asarray(rhs_func(t, state_vars, func_args))
             t += dt
-            for s, d in zip(state_vars, deltas):
-                s[:] += dt * d
+            state_vars += dt * deltas
             if i % sampling_step == 0:
                 for idx1, idx2 in enumerate(output_indices):
-                    results[idx1][sampling_idx, :] = state_vars[idx2[1]]
+                    results[idx1][sampling_idx, :] = state_vars[idx2[0]:idx2[1]] if type(idx2) is tuple \
+                        else state_vars[idx2]
                 sampling_idx += 1
 
         times = np.arange(0, T, dts)
@@ -1725,8 +1737,8 @@ class NumpyBackend(object):
 
             # cut singleton dimension from op_adjust
             old_shape = list(op_adjust.shape)
-            idx = old_shape.index(1)
-            op_adjust = self.add_op('squeeze', op_adjust, idx)
+            idx = ",".join(['0' if s == 1 else ':' for s in old_shape])
+            op_adjust = self.add_op('index', op_adjust, idx)
 
         if adjust_second:
             return op_target, op_adjust
@@ -1759,21 +1771,6 @@ class NumpyBackend(object):
                         break
                 args = tuple(args)
             return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
-
-    def _generate_layer_run(self, layer_ops, op_args, decorator=None, **kwargs):
-
-        # apply function decorator to each layer op if provided
-        if decorator:
-            for i, func in enumerate(layer_ops):
-                try:
-                    func_decorated = decorator(func, **kwargs)
-                    func_decorated(*self._deepcopy(op_args[i]))
-                    layer_ops[i] = func_decorated
-                except Exception:
-                    continue
-
-    def _preprocess_state_vars(self, state_vars):
-        return [state_var for _, state_var in state_vars]
 
     def _process_update_args_old(self, var, update, idx):
         """Preprocesses the index and a variable update to match the variable shape.
@@ -1896,7 +1893,7 @@ class NumpyBackend(object):
                 var_map[key] = ('state_var', (s_idx, s_len))
                 s_idx += 1
                 s_len += 1
-            elif var.vtype == 'constant' or var.short_name not in self.lhs_vars:
+            elif var.vtype == 'constant' or (var.short_name not in self.lhs_vars and key != 'y'):
                 constants.append((key, var))
                 var_map[key] = ('constant', c_idx)
                 c_idx += 1

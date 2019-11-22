@@ -293,7 +293,7 @@ def test_2_3_edge():
 
         # simulate edge behavior
         results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt)
-        net.clear()
+        #net.clear()
 
         diff = np.mean(np.abs(results['a'].values[:, 0] - targets[1:, 2])) + \
                np.mean(np.abs(results['b'].values[:, 0] - targets[1:, 3]))

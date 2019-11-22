@@ -493,8 +493,31 @@ class ExpressionParser(ParserElement):
         if diff_eq:
 
             lhs = self.vars[self.lhs_key]
-            self.vars[self.lhs_key], self.rhs = self.backend.broadcast(lhs, self.rhs, **self.parser_kwargs)
+
+            # create state variable vector if not existent
+            if 'y' not in self.vars:
+                self.vars['y'] = self.backend.add_var(vtype='state_var', name='y', shape=(), dtype=lhs.dtype, value=[])
+
+            # append left-hand side variable to state variable vector
+            state_var = self.backend.remove_var('y')
+            state_var_val = state_var.numpy().tolist()
+            val = state_var_val+lhs.numpy().tolist()
+            self.vars['y'] = self.backend.add_var(vtype='state_var', name='y', value=val, shape=(len(val),),
+                                                  dtype=state_var.dtype)
+
+            # index state variable vector to retrieve left-hand side variable
+            idx = f"{len(state_var_val)}:{len(val)}" #if len(val)-len(state_var_val) > 1 else len(state_var_val)
+            lhs_indexed = self.backend._create_op('index', self.backend.ops['index']['name'],
+                                                  self.vars['y'], idx)
+            lhs_indexed.short_name = self.lhs_key
+            if 'y_' in lhs_indexed.value:
+                del_start, del_end = lhs_indexed.value.index('_'), lhs_indexed.value.index('[')
+                lhs_indexed.value = lhs_indexed.value[:del_start] + lhs_indexed.value[del_end:]
+
+            # broadcast rhs and lhs and store results in backend
+            self.vars[self.lhs_key], self.rhs = self.backend.broadcast(lhs_indexed, self.rhs, **self.parser_kwargs)
             self.backend.state_vars.append(lhs.name)
+            self.backend.vars[lhs.name] = self.vars[self.lhs_key]
             self.rhs.state_var = lhs.name
 
         elif self._instantaneous:
@@ -691,6 +714,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         equation parsing).
 
     """
+    state_vars = {}
 
     for layer in equations:
         for eq, scope in layer:
@@ -742,7 +766,11 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
             # save backend variables to equation args
             for key, var in variables.items():
-                equation_args[f"{scope}/{key}"] = var
+                var_name = f"{scope}/{key}"
+                if var_name in backend.state_vars and var_name not in state_vars:
+                    state_vars[var_name] = var
+                else:
+                    equation_args[var_name] = var
 
             # save previously unprocessed input variables to equation args
             for key, inp in inputs.items():
@@ -751,6 +779,10 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
         # go to next layer in backend
         backend.add_layer()
+
+    # save state variables in backend
+    equation_args.update(state_vars)
+    backend.vars.update(state_vars)
 
     return equation_args
 
@@ -1036,6 +1068,10 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
             var_dict_new[var_name] = var['value']
         else:
             var.update(kwargs)
+            if var_name == 'y':
+                print('Warning: Variable name `y` is reserved for the pyrates-internal state vector. '
+                      'Variable was renamed to `y1`.')
+                var_name = 'y1'
             var_dict_new[var_name] = backend.add_var(name=var_name, **var)
 
     return var_dict_new

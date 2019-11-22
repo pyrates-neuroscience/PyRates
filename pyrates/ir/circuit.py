@@ -876,7 +876,12 @@ class CircuitIR(AbstractBaseIR):
             # apply the indices to the vectorized node variables
             for vnode_key in vnode_indices:
                 var_value = self[f"{vnode_key}/{op}/{var}"]['value']
-                idx = vnode_indices[vnode_key]['var']
+                if var_value.name == 'pyrates_index':
+                    idx_start = var_value.value.index('[')
+                    idx = var_value.value[idx_start+1:-1]
+                    var_value = self._backend.vars['y']
+                else:
+                    idx = vnode_indices[vnode_key]['var']
                 if apply_idx:
                     idx = f"{idx[0]}:{idx[-1] + 1}" if all(np.diff(idx) == 1) else [idx]
                     vnode_indices[vnode_key]['var'] = self._backend.apply_idx(var_value, idx)
@@ -973,9 +978,8 @@ class CircuitIR(AbstractBaseIR):
             for key, val in outputs.items():
 
                 # extract respective output variables from the network and store their information
-                outputs_col[key] = {}
-                for var_info in self.get_node_var(val, apply_idx=False).values():
-                    outputs_col[key][var_info['var'].name] = [var_info['idx'], var_info['nodes']]
+                outputs_col[key] = [[var_info['idx'], var_info['nodes']]
+                                    for var_info in self.get_node_var(val, apply_idx=False).values()]
 
         # collect backend input variables
         #################################

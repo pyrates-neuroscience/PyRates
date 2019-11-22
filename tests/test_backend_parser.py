@@ -165,6 +165,8 @@ def test_1_3_expression_parser_math_ops():
         result = p.rhs.numpy() if hasattr(p.rhs, 'numpy') else p.rhs
         if hasattr(result, 'eval'):
             result = result.eval()
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
 
@@ -237,6 +239,8 @@ def test_1_4_expression_parser_logic_ops():
         result = p.rhs
         if hasattr(result, 'eval'):
             result = result.eval()
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         assert result
 
     # false logical expression
@@ -248,6 +252,8 @@ def test_1_4_expression_parser_logic_ops():
     result = p.rhs
     if hasattr(result, 'eval'):
         result = result.eval()
+    if hasattr(result, 'numpy'):
+        result = result.numpy()
     assert not result
 
 
@@ -333,6 +339,8 @@ def test_1_5_expression_parser_indexing():
         result = p.rhs
         if hasattr(result, 'eval'):
             result = result.eval()
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # test expression parsers on expression results
@@ -419,6 +427,8 @@ def test_1_6_expression_parser_funcs():
         result = p.rhs
         if hasattr(result, 'eval'):
             result = result.eval()
+        if hasattr(result, 'numpy'):
+            result = result.numpy()
         assert result == pytest.approx(target, rel=1e-6)
 
     # invalid cases
@@ -443,7 +453,7 @@ def test_1_7_equation_parsing():
                  ]
 
     # define equation variables
-    a = np.zeros(shape=(), dtype=np.float32)
+    a = np.zeros(shape=(1,), dtype=np.float32)
 
     # define equation results
     results = [7., 0.7]
