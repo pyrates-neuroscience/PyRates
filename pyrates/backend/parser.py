@@ -111,6 +111,7 @@ class ExpressionParser(ParserElement):
 
         # input arguments
         self.vars = args.copy()
+        self.var_map = {}
         self.backend = backend
         self.parser_kwargs = kwargs
 
@@ -733,6 +734,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
     """
     state_vars = {}
+    var_map = {}
 
     for layer in equations:
         for eq, scope in layer:
@@ -747,7 +749,11 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             for key, inp in inputs.items():
                 if inp not in equation_args:
                     raise KeyError(inp)
-                inp_tmp = equation_args[inp]
+                if inp in state_vars:
+                    var_tmp = state_vars[inp]
+                    inp_tmp = var_map[var_tmp.short_name]
+                else:
+                    inp_tmp = equation_args[inp]
                 op_args[key] = inp_tmp
                 if type(inp_tmp) is dict and 'vtype' in inp_tmp:
                     unprocessed_inputs.append(key)
@@ -759,6 +765,16 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                     args_tmp[key] = arg
             args_tmp = parse_dict(args_tmp, backend, scope=scope, **kwargs)
             op_args.update(args_tmp)
+
+            # add state variable vector to op args
+            if 'y' in equation_args:
+                op_args['y'] = equation_args['y']
+                op_args['y_delta'] = equation_args['y_delta']
+
+            # remember state variables
+            for key, var in op_args.items():
+                if hasattr(var, 'short_name'):
+                    var_map[var.short_name] = var
 
             # parse equation
             ################
@@ -784,7 +800,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
             # save backend variables to equation args
             for key, var in variables.items():
-                var_name = f"{scope}/{key}"
+                var_name = key if key == 'y' or key == 'y_delta' else f"{scope}/{key}"
                 _, state_var = backend._is_state_var(var_name)
                 if state_var and var_name not in state_vars:
                     state_vars[var_name] = var

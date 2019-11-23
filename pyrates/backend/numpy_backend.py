@@ -963,7 +963,7 @@ class NumpyBackend(object):
                 var.short_name = name_new
                 self.var_counter[name_old] += 1
         else:
-            self.var_counter[var.short_name] = 1
+            self.var_counter[var.short_name] = 0
 
         self.vars[name] = var
         return var
@@ -981,8 +981,14 @@ class NumpyBackend(object):
         NumpyVar
 
         """
-        self.var_counter[name] -= 1
-        return self.vars.pop(name)
+        if name in self.var_counter:
+            self.var_counter[name] -= 1
+            if self.var_counter[name] < 0:
+                self.var_counter.pop(name)
+        if name in self.vars:
+            return self.vars.pop(name)
+        else:
+            return None
 
     def add_op(self,
                op_name: str,
