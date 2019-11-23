@@ -30,12 +30,11 @@
 operations.
 """
 
+# external imports
 import math
 import typing as tp
 from copy import deepcopy
 from numbers import Number
-
-# external imports
 from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 
@@ -495,44 +494,21 @@ class ExpressionParser(ParserElement):
 
             lhs = self.vars[self.lhs_key]
 
-            # create state variable vectors if not existent
-            if 'y' not in self.vars:
-                self.vars['y'] = self.backend.add_var(vtype='state_var', name='y', shape=(), dtype=lhs.dtype, value=[])
-                self.vars['y_delta'] = self.backend.add_var(vtype='state_var', name='y_delta', shape=(),
-                                                            dtype=lhs.dtype, value=[])
+            # update state variable vectors
+            y_idx = self._append_to_var(var_name='y', val=lhs)
+            self._append_to_var(var_name='y_delta', val=lhs)
 
-            # append left-hand side variable to state variable vectors
-            state_var = self.backend.remove_var('y')
-            state_delta = self.backend.remove_var('y_delta')
-            state_var_val = state_var.numpy().tolist()
-            state_delta_val = state_delta.numpy().tolist()
-            lhs_val = lhs.numpy().tolist()
-            if sum(state_var.shape) and sum(lhs.shape):
-                val = state_var_val + lhs_val
-                delta = state_delta_val + lhs_val
-            elif sum(state_var.shape):
-                val = state_var_val + [lhs_val]
-                delta = state_delta_val + [lhs_val]
-            else:
-                val = [lhs_val]
-                delta = [lhs_val]
-            self.vars['y'] = self.backend.add_var(vtype='state_var', name='y', value=val, shape=(len(val),),
-                                                  dtype=state_var.dtype)
-            self.vars['y_delta'] = self.backend.add_var(vtype='state_var', name='y_delta', value=delta,
-                                                        shape=(len(delta),), dtype=state_delta.dtype)
+            # extract left-hand side variable from state variable vector
+            lhs_indexed = self.backend._create_op('index', self.backend.ops['index']['name'], self.vars['y'], y_idx)
+            lhs_indexed.short_name = lhs.short_name
 
-            # index state variable vector to retrieve left-hand side variable
-            idx = f"{len(state_var_val)}:{len(val)}" if len(val)-len(state_var_val) > 1 else f"{len(state_var_val)}"
-            lhs_indexed = self.backend._create_op('index', self.backend.ops['index']['name'],
-                                                  self.vars['y'], idx)
-            lhs_indexed.short_name = self.lhs_key
             if 'y_' in lhs_indexed.value:
                 del_start, del_end = lhs_indexed.value.index('_'), lhs_indexed.value.index('[')
                 lhs_indexed.value = lhs_indexed.value[:del_start] + lhs_indexed.value[del_end:]
             self.vars[self.lhs_key] = lhs_indexed
 
             # assign rhs to state var delta vector
-            self.rhs = self.backend.add_op('=', self.vars['y_delta'], self.rhs, idx, **self.parser_kwargs)
+            self.rhs = self.backend.add_op('=', self.vars['y_delta'], self.rhs, y_idx, **self.parser_kwargs)
 
             # broadcast rhs and lhs and store results in backend
             self.backend.state_vars.append(lhs.name)
@@ -701,6 +677,31 @@ class ExpressionParser(ParserElement):
         if len(expr_str) > 0:
             raise ValueError(f"Error while parsing expression: {self.expr_str}. {expr_str} could not be parsed.")
 
+    def _append_to_var(self, var_name: str, val: tp.Any) -> str:
+
+        # create variable vector if not existent
+        if var_name not in self.vars:
+            self.vars[var_name] = self.backend.add_var(vtype='state_var', name=var_name, shape=(), dtype=val.dtype,
+                                                       value=[])
+
+        # append left-hand side variable to variable vector
+        var = self.backend.remove_var(var_name)
+        var_val = var.numpy().tolist()
+        append_val = val.numpy().tolist()
+        if sum(var.shape) and sum(val.shape):
+            new_val = var_val + append_val
+        elif sum(var.shape):
+            new_val = var_val + [append_val]
+        else:
+            new_val = [append_val]
+
+        # add updated variable to backend
+        self.vars[var_name] = self.backend.add_var(vtype='state_var', name=var_name, value=new_val,
+                                                   shape=(len(new_val),), dtype=var.dtype)
+
+        # return index to variable vector to retrieve appended values
+        return f"{len(var_val)}:{len(new_val)}" if len(new_val) - len(var_val) > 1 else f"{len(var_val)}"
+
     @staticmethod
     def _compare(x: tp.Any, y: tp.Any) -> bool:
         """Checks whether x and y are equal or not.
@@ -745,18 +746,14 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             # extract operator variables from equation args
             op_args = {key.split('/')[-1]: var for key, var in equation_args.items() if scope in key}
             inputs = op_args['inputs'] if 'inputs' in op_args else {}
-            unprocessed_inputs = []
             for key, inp in inputs.items():
                 if inp not in equation_args:
                     raise KeyError(inp)
-                if inp in state_vars:
-                    var_tmp = state_vars[inp]
-                    inp_tmp = var_map[var_tmp.short_name]
-                else:
-                    inp_tmp = equation_args[inp]
+                var_tmp = state_vars[inp] if inp in state_vars else equation_args[inp]
+                inp_tmp = var_tmp if type(var_tmp) is dict else var_map[var_tmp.short_name]
+                if type(inp_tmp) is dict:
+                    inp_tmp = parse_dict({key: inp_tmp}, backend, scope="/".join(inp.split('/')[:-1]), **kwargs)[key]
                 op_args[key] = inp_tmp
-                if type(inp_tmp) is dict and 'vtype' in inp_tmp:
-                    unprocessed_inputs.append(key)
 
             # parse operator variables in backend
             args_tmp = {}
@@ -804,13 +801,8 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                 _, state_var = backend._is_state_var(var_name)
                 if state_var and var_name not in state_vars:
                     state_vars[var_name] = var
-                else:
+                elif key not in variables['inputs']:
                     equation_args[var_name] = var
-
-            # save previously unprocessed input variables to equation args
-            for key, inp in inputs.items():
-                if key in unprocessed_inputs:
-                    equation_args[inp] = variables[key]
 
         # go to next layer in backend
         backend.add_layer()
@@ -1107,10 +1099,6 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
                 print(f'Warning: Variable name {var_name} is reserved for pyrates-internal state variables. '
                       f'Variable was renamed to {var_name}1.')
                 var_name = f'{var_name}1'
-            if sum(var['shape']) == 1:
-                var['shape'] = ()
-                if type(var['value']) is not float and type(var['value']) is not int:
-                    var['value'] = var['value'][0]
             var_dict_new[var_name] = backend.add_var(name=var_name, **var)
 
     return var_dict_new

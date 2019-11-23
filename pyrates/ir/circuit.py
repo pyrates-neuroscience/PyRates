@@ -1146,7 +1146,7 @@ class CircuitIR(AbstractBaseIR):
             args = {}
             dtype = sval["dtype"]
             d = "[target_idx]" if tidx and sum(tval['shape']) > 1 else ""
-            idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
+            idx = "[source_idx]" if sidx and len(sval['shape']) > 1 else ""
             assign = '+=' if add_project else '='
 
             # check whether edge projection can be solved by a simple inner product between a weight matrix and the
