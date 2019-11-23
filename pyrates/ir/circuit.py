@@ -877,11 +877,8 @@ class CircuitIR(AbstractBaseIR):
             for vnode_key in vnode_indices:
                 var_value = self[f"{vnode_key}/{op}/{var}"]['value']
                 if var_value.name == 'pyrates_index':
-                    idx_start = var_value.value.index('[')
-                    idx = var_value.value[idx_start+1:-1]
-                    var_value = self._backend.vars['y']
-                else:
-                    idx = vnode_indices[vnode_key]['var']
+                    var_value = var_value.eval()
+                idx = vnode_indices[vnode_key]['var']
                 if apply_idx:
                     idx = f"{idx[0]}:{idx[-1] + 1}" if all(np.diff(idx) == 1) else [idx]
                     vnode_indices[vnode_key]['var'] = self._backend.apply_idx(var_value, idx)
