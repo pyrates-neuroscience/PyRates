@@ -801,7 +801,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                 _, state_var = backend._is_state_var(var_name)
                 if state_var and var_name not in state_vars:
                     state_vars[var_name] = var
-                elif key not in variables['inputs']:
+                elif 'inputs' in variables and key not in variables['inputs']:
                     equation_args[var_name] = var
 
         # go to next layer in backend
