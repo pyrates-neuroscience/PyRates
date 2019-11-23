@@ -282,19 +282,19 @@ def test_2_3_edge():
         net = ComputeGraph(net_config=net_config, name='net0', vectorization=True, backend=b)
 
         # calculate edge behavior from hand
-        update0 = lambda x: x * 0.5
-        update1 = lambda x: x + 2.0
+        update0 = lambda x, y: x + dt * y * 0.5
+        update1 = lambda x, y: x + dt * (y + 2.0)
         update2 = lambda x, y: x + dt * (y - x)
         targets = np.zeros((sim_steps + 1, 4), dtype=np.float32)
         for i in range(sim_steps):
-            targets[i + 1, 0] = update0(targets[i, 1])
-            targets[i + 1, 1] = update1(targets[i, 0])
+            targets[i + 1, 0] = update0(targets[i, 0], targets[i, 1])
+            targets[i + 1, 1] = update1(targets[i, 1], targets[i, 0])
             targets[i + 1, 2] = update2(targets[i, 2], targets[i, 0] * 2.0)
             targets[i + 1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
 
         # simulate edge behavior
         results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt)
-        #net.clear()
+        net.clear()
 
         diff = np.mean(np.abs(results['a'].values[:, 0] - targets[1:, 2])) + \
                np.mean(np.abs(results['b'].values[:, 0] - targets[1:, 3]))

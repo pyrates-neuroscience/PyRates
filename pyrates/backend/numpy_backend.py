@@ -880,10 +880,10 @@ class NumpyBackend(object):
         output_indices = []
         for out_key, out_vars in outputs.items():
             for n, (idx, _) in enumerate(out_vars):
-                if ':' in idx:
-                    idx = tuple([int(i) for i in idx.split(':')])
-                else:
-                    idx = int(idx)
+                #if ':' in idx:
+                #    idx = tuple([int(i) for i in idx.split(':')])
+                #else:
+                #    idx = int(idx)
                 output_indices.append(idx)
                 outputs[out_key][n][0] = len(output_indices)-1
 
