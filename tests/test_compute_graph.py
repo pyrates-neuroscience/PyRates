@@ -184,6 +184,7 @@ def test_2_2_node():
 
         # simulate node behavior
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt)
+        net.clear()
 
         # calculate node behavior from hand
         update0 = lambda x: x + dt * 2.

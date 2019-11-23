@@ -1233,12 +1233,13 @@ class CircuitIR(AbstractBaseIR):
 
         # save parsed variables in net config
         for key, val in variables.items():
-            node, op, var = key.split('/')
-            if "inputs" not in var:
-                try:
-                    self[f"{node}/{op}/{var}"]['value'] = val
-                except KeyError as e:
-                    pass
+            if key != 'y' and key != 'y_delta':
+                node, op, var = key.split('/')
+                if "inputs" not in var:
+                    try:
+                        self[f"{node}/{op}/{var}"]['value'] = val
+                    except KeyError as e:
+                        pass
 
         return self
 
