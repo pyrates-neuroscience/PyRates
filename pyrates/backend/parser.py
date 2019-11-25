@@ -693,7 +693,7 @@ class ExpressionParser(ParserElement):
         elif sum(var.shape):
             new_val = var_val + [append_val]
         else:
-            new_val = [append_val]
+            new_val = append_val if type(append_val) is list else [append_val]
 
         # add updated variable to backend
         self.vars[var_name] = self.backend.add_var(vtype='state_var', name=var_name, value=new_val,
@@ -749,16 +749,21 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
             for key, inp in inputs.items():
                 if inp not in equation_args:
                     raise KeyError(inp)
-                var_tmp = state_vars[inp] if inp in state_vars else equation_args[inp]
-                inp_tmp = var_tmp if type(var_tmp) is dict else var_map[var_tmp.short_name]
-                if type(inp_tmp) is dict:
-                    inp_tmp = parse_dict({key: inp_tmp}, backend, scope="/".join(inp.split('/')[:-1]), **kwargs)[key]
+                if inp in var_map:
+                    inp_tmp = var_map[inp]
+                else:
+                    inp_tmp = state_vars[inp] if inp in state_vars else equation_args[inp]
+                    if type(inp_tmp) is dict:
+                        inp_tmp = parse_dict({key: inp_tmp}, backend, scope="/".join(inp.split('/')[:-1]),
+                                             **kwargs)[key]
                 op_args[key] = inp_tmp
 
             # parse operator variables in backend
             args_tmp = {}
             for key, arg in op_args.items():
-                if type(arg) is dict and 'vtype' in arg:
+                if f"{scope}/{key}" in var_map:
+                    op_args[key] = var_map[f"{scope}/{key}"]
+                elif type(arg) is dict and 'vtype' in arg:
                     args_tmp[key] = arg
             args_tmp = parse_dict(args_tmp, backend, scope=scope, **kwargs)
             op_args.update(args_tmp)
@@ -770,8 +775,10 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
             # remember state variables
             for key, var in op_args.items():
-                if hasattr(var, 'short_name'):
-                    var_map[var.short_name] = var
+                if hasattr(var, 'name') and var.name not in var_map:
+                    var_map[var.name] = var
+                    if f"{scope}/{key}" != var.name:
+                        var_map[f"{scope}/{key}"] = var
 
             # parse equation
             ################
