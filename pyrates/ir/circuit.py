@@ -518,8 +518,9 @@ class CircuitIR(AbstractBaseIR):
                                              'network edge, please pass the simulation `step-size` to the `compile` '
                                              'method.')
                         if type(d) is list:
-                            d_tmp = np.asarray(d).squeeze()
-                            d = np.asarray(int(np.round(d_tmp/dt, decimals=0)), dtype=np.int32).tolist()
+                            d = np.asarray(d).squeeze()
+                            d = [int(np.round(d_tmp/dt, decimals=0)) for d_tmp in d] if d.shape else \
+                                [int(np.round(d/dt, decimals=0))]
                         else:
                             d = [int(np.round(d/dt, decimals=0))]
                     self.edges[s, t, e]['delay'] = d
