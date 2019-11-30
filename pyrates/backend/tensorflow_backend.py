@@ -132,7 +132,7 @@ class TensorflowAssignOp(PyRatesAssignOp):
             # for tensorflow-like scatter indexing
             if hasattr(args[2], 'short_name'):
                 key = args[2].short_name
-                if hasattr(args[2], 'value'):
+                if hasattr(args[2], 'value') and not callable(args[2].value):
                     var_idx = f"{args[2].value},"
                 else:
                     var_idx = f"{key},"

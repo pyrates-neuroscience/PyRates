@@ -1135,16 +1135,17 @@ class CircuitIR(AbstractBaseIR):
             target_node_ir = self[target_node]
 
             # define target index
+            buffer_len = tval['shape'][-1]
             if delay is not None and tidx and len(tval['shape']) > 1:
                 tidx_tmp = []
                 for idx, d in zip(tidx, delay):
                     if type(idx) is list:
-                        tidx_tmp.append(idx + [-d])
+                        tidx_tmp.append(idx + [buffer_len-d])
                     else:
-                        tidx_tmp.append([idx, -d])
+                        tidx_tmp.append([idx, buffer_len-d])
                 tidx = tidx_tmp
             elif delay is not None:
-                tidx = [-d for d in delay] if type(delay) is list else [-delay]
+                tidx = [buffer_len-d for d in delay] if type(delay) is list else [buffer_len-delay]
 
             # create mapping equation and its arguments
             args = {}

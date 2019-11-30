@@ -266,7 +266,7 @@ def test_2_3_edge():
 
     """
 
-    backends = ['tensorflow', 'numpy']
+    backends = ['numpy', 'tensorflow']
     accuracy = 1e-4
 
     for b in backends:
