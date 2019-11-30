@@ -63,7 +63,7 @@ def test_2_1_operator():
     :method:`add_operator`: Detailed documentation of method for adding operations to instance of `ComputeGraph`.
     """
 
-    backends = ["numpy"]
+    backends = ["numpy", "tensorflow"]
     accuracy = 1e-4
 
     for b in backends:
@@ -166,7 +166,7 @@ def test_2_2_node():
     :method:`add_node`: Detailed documentation of method for adding nodes to instance of `ComputeGraph`.
     """
 
-    backends = ['numpy']
+    backends = ['numpy', 'tensorflow']
 
     accuracy = 1e-4
 

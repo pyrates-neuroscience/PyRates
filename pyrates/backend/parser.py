@@ -682,7 +682,7 @@ class ExpressionParser(ParserElement):
         # create variable vector if not existent
         if var_name not in self.vars:
             self.vars[var_name] = self.backend.add_var(vtype='state_var', name=var_name, shape=(), dtype=val.dtype,
-                                                       value=[])
+                                                       value=[], squeeze=False)
 
         # append left-hand side variable to variable vector
         var = self.backend.remove_var(var_name)
@@ -697,7 +697,7 @@ class ExpressionParser(ParserElement):
 
         # add updated variable to backend
         self.vars[var_name] = self.backend.add_var(vtype='state_var', name=var_name, value=new_val,
-                                                   shape=(len(new_val),), dtype=var.dtype)
+                                                   shape=(len(new_val),), dtype=var.dtype, squeeze=False)
 
         # return index to variable vector to retrieve appended values
         return f"{len(var_val)}:{len(new_val)}" if len(new_val) - len(var_val) > 1 else f"{len(var_val)}"
