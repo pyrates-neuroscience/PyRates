@@ -140,6 +140,12 @@ class TensorflowAssignOp(PyRatesAssignOp):
                 key = "__no_name__"
                 var_idx = f"{key},"
 
+            if type(args[2]) is str and len(args) > 3:
+                results_args.append(args[3])
+            else:
+                results_args.append(args[2])
+            results_arg_names.append(key)
+
             return var_idx, results_args, results_arg_names
 
         else:
@@ -537,8 +543,7 @@ class TensorflowBackend(NumpyBackend):
     def _is_state_var(self, key):
         if ':' not in key and f"{key}:0" in self.state_vars:
             return f"{key}:0", True
-        else:
-            return super()._is_state_var(key)
+        return super()._is_state_var(key)
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:

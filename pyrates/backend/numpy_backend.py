@@ -962,6 +962,9 @@ class NumpyBackend(object):
         if scope:
             name = f'{scope}/{name}'
 
+        if name in self.vars:
+            return self.get_var(name)
+
         # create variable
         var, name = self._create_var(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name,
                                      squeeze=kwargs.pop('squeeze', True))
@@ -1576,12 +1579,11 @@ class NumpyBackend(object):
             Updated/indexed variable.
 
         """
-        if update is not None:
-            if not update_type:
-                update_type = '='
-            return self.add_op(update_type, var, update, idx, *args)
-        else:
+        if update is None:
             return self.add_op('index', var, idx, *args)
+        if not update_type:
+            update_type = '='
+        return self.add_op(update_type, var, update, idx, *args)
 
     def stack_vars(self, vars: tuple, **kwargs) -> np.ndarray:
         """Group variables into a stack, with the number of variables being the first dimension of the stack.

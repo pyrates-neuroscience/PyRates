@@ -775,29 +775,17 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
             # remember state variables
             for key, var in op_args.items():
-                if hasattr(var, 'name') and var.name not in var_map:
-                    var_map[var.name] = var
-                    if f"{scope}/{key}" != var.name:
-                        var_map[f"{scope}/{key}"] = var
+                var_name = f"{scope}/{key}"
+                if var_name not in var_map:
+                    var_map[var_name] = var
 
             # parse equation
             ################
 
-            diff_eq = is_diff_eq(eq)
-
-            if not diff_eq:
-
-                # apply update to lhs variable of equation instantaneously
-                parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=True,
-                                          **kwargs.copy())
-                _, _, variables = parser.parse_expr()
-
-            else:
-
-                # just calculate rhs variable (differential equations will be solved later)
-                parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope, instantaneous=False,
-                                          **kwargs.copy())
-                _, _, variables = parser.parse_expr()
+            instantaneous = is_diff_eq(eq) is False
+            parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope,
+                                      instantaneous=instantaneous, **kwargs.copy())
+            _, _, variables = parser.parse_expr()
 
             # update equations args
             #######################

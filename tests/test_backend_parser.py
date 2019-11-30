@@ -269,16 +269,11 @@ def test_1_5_expression_parser_indexing():
     # test indexing ability of tensorflow-based parser
     ##################################################
 
-    # define backend
-    b = TensorflowBackend()
-
-    # define variables
     A = np.array(np.random.randn(10, 10), dtype=np.float32)
     B = np.eye(10, dtype=np.float32) == 1
     arg_dict = {'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype},
                 'B': {'vtype': 'constant', 'value': B, 'shape': B.shape, 'dtype': B.dtype},
                 'd': {'vtype': 'constant', 'value': 4, 'Shape': (), 'dtype': 'int32'}}
-    args = parse_dict(arg_dict, backend=b)
 
     # define valid test cases
     indexed_expressions = [("A[:]", A[:]),               # single-dim indexing I
@@ -296,6 +291,10 @@ def test_1_5_expression_parser_indexing():
 
     # test expression parsers on expression results
     for expr, target in indexed_expressions:
+
+        # define backend
+        b = TensorflowBackend()
+        args = parse_dict(arg_dict, backend=b)
 
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args=args, backend=b)
@@ -320,6 +319,10 @@ def test_1_5_expression_parser_indexing():
     # test expression parsers on expression results
     for expr in indexed_expressions_wrong:
 
+        # define backend
+        b = TensorflowBackend()
+        args = parse_dict(arg_dict, backend=b)
+
         # tensorflow-based parser
         with pytest.raises((IndexError, ValueError, SyntaxError, TypeError, BaseException)):
             p = ExpressionParser(expr_str=expr, args=args, backend=b)
@@ -328,12 +331,10 @@ def test_1_5_expression_parser_indexing():
     # test indexing ability of numpy-based parser
     #############################################
 
-    # define backend
-    b = NumpyBackend()
-    args = parse_dict(arg_dict, backend=b)
-
     # test expression parsers on expression results
     for expr, target in indexed_expressions:
+        b = NumpyBackend()
+        args = parse_dict(arg_dict, backend=b)
         p = ExpressionParser(expr_str=expr, args=args, backend=b)
         p.parse_expr()
         result = p.rhs
@@ -345,6 +346,8 @@ def test_1_5_expression_parser_indexing():
 
     # test expression parsers on expression results
     for expr in indexed_expressions_wrong:
+        b = NumpyBackend()
+        args = parse_dict(arg_dict, backend=b)
         with pytest.raises((IndexError, ValueError, SyntaxError, TypeError, BaseException)):
             p = ExpressionParser(expr_str=expr, args=args, backend=b)
             p.parse_expr()
@@ -384,12 +387,13 @@ def test_1_6_expression_parser_funcs():
     # test function calling on tensorflow-based parser
     ##################################################
 
-    # define backend
-    b = TensorflowBackend()
-    args = parse_dict({'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype}}, backend=b)
-
     # start testing: valid cases
     for expr, target in expressions:
+
+        # define backend
+        b = TensorflowBackend()
+        args = parse_dict({'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype}}, backend=b)
+
         # tensorflow-based parser
         p = ExpressionParser(expr_str=expr, args=args, backend=b)
         p.parse_expr()
@@ -405,6 +409,10 @@ def test_1_6_expression_parser_funcs():
     # invalid cases
     for expr in expressions_wrong:
 
+        # define backend
+        b = TensorflowBackend()
+        args = parse_dict({'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype}}, backend=b)
+
         # tensorflow-based parser
         with pytest.raises((IndexError, ValueError, SyntaxError, TypeError, BaseException)):
             p = ExpressionParser(expr_str=expr, args=args, backend=b)
@@ -413,15 +421,10 @@ def test_1_6_expression_parser_funcs():
     # test function calling on numpy-based parser
     #############################################
 
-    # define backend
-    b = NumpyBackend()
-
-    # define variables
-    args = parse_dict({'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype}}, backend=b)
-
     # start testing: valid cases
     for expr, target in expressions:
-        # tensorflow-based parser
+        b = NumpyBackend()
+        args = parse_dict({'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype}}, backend=b)
         p = ExpressionParser(expr_str=expr, args=args, backend=b)
         p.parse_expr()
         result = p.rhs
@@ -433,7 +436,8 @@ def test_1_6_expression_parser_funcs():
 
     # invalid cases
     for expr in expressions_wrong[:-1]:
-        # tensorflow-based parser
+        b = NumpyBackend()
+        args = parse_dict({'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype}}, backend=b)
         with pytest.raises((IndexError, ValueError, SyntaxError, TypeError, BaseException)):
             p = ExpressionParser(expr_str=expr, args=args, backend=b)
             p.parse_expr()
