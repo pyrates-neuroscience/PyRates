@@ -84,7 +84,7 @@ class NumpyVar(np.ndarray):
     """
 
     def __new__(cls, vtype: str, backend: Any, name: str, dtype: Optional[str] = None,
-                shape: Optional[tuple] = None, value: Optional[Any] = None):
+                shape: Optional[tuple] = None, value: Optional[Any] = None, squeeze: bool = True):
         """Creates new instance of NumpyVar.
         """
 
@@ -114,8 +114,15 @@ class NumpyVar(np.ndarray):
                               f'Datatype will be set to default type: {dtype}.')
 
         # create variable
+        if vtype == 'state_var' and 1 in tuple(shape) and squeeze:
+            idx = tuple(shape).index(1)
+            shape = list(shape)
+            shape.pop(idx)
+            shape = tuple(shape)
         value = cls._get_value(value, dtype, shape)
         obj = cls._get_var(value, name, dtype)
+
+        # store additional attributes on variable object
         obj.short_name = name.split('/')[-1]
         if not hasattr(obj, 'name'):
             obj.name = name
@@ -144,8 +151,16 @@ class NumpyVar(np.ndarray):
                 return np.zeros(shape=shape, dtype=dtype) + np.asarray(value, dtype=dtype).reshape(shape)
             else:
                 return np.zeros(shape=shape, dtype=dtype) + value
+        elif shape:
+            if value.shape == shape:
+                return value
+            elif sum(shape) < sum(value.shape):
+                return value.squeeze()
+            else:
+                idx = ",".join("None" if s == 1 else ":" for s in shape)
+                return value[eval(idx)]
         else:
-            return value
+            return np.asarray(value, dtype=dtype)
 
     @classmethod
     def _get_var(cls, value, name, dtype):
@@ -948,7 +963,8 @@ class NumpyBackend(object):
             name = f'{scope}/{name}'
 
         # create variable
-        var, name = self._create_var(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name)
+        var, name = self._create_var(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name,
+                                     squeeze=kwargs.pop('squeeze', True))
 
         # ensure uniqueness of variable names
         if var.short_name in self.var_counter and name not in self.vars:
@@ -1677,8 +1693,17 @@ class NumpyBackend(object):
 
         # initialize results storage vectors
         results = []
-        for idx in output_indices:
-            var_dim = idx[1]-idx[0] if type(idx) is tuple else 1
+        for i, idx in enumerate(output_indices):
+            if type(idx) is tuple:
+                var_dim = idx[1]-idx[0]
+            elif type(idx) is list:
+                if all(np.diff(idx, n=1) == 1):
+                    output_indices[i] = (idx[0], idx[-1]+1)
+                    var_dim = idx[-1]+1-idx[0]
+                else:
+                    var_dim = len(idx)
+            else:
+                var_dim = 1
             results.append(np.zeros((sampling_steps, var_dim)))
 
         # solve via pyrates internal explicit euler algorithm
@@ -1784,8 +1809,8 @@ class NumpyBackend(object):
             # cast op2 to dtype of op1 referred from its type string
             return op1, self.add_op('cast', op2, str(type(op1)))
 
-    def _create_var(self, vtype, dtype, shape, value, name):
-        return NumpyVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self)
+    def _create_var(self, vtype, dtype, shape, value, name, squeeze=True):
+        return NumpyVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self, squeeze=squeeze)
 
     def _create_op(self, op, name, *args):
         if op in ["=", "+=", "-=", "*=", "/="]:
