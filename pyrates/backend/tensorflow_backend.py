@@ -389,7 +389,7 @@ class TensorflowBackend(NumpyBackend):
 
         return times, results
 
-    @tf.function
+    #@tf.function
     def _run(self, rhs_func, func_args, t, dt, steps, sampling_steps, results, sampling_idx,
              output_indices):
 
@@ -399,6 +399,7 @@ class TensorflowBackend(NumpyBackend):
         for step in tf.range(steps):
 
             deltas = rhs_func(t, state_vars, func_args)
+            t.assign_add(dt)
             state_vars.assign_add(dt*deltas)
 
             if tf.equal(tf.math.floormod(step, sampling_steps), zero):
@@ -407,7 +408,6 @@ class TensorflowBackend(NumpyBackend):
                     r.scatter_nd_update([[sampling_idx, 0]], [state_vars[idx]])
 
                 sampling_idx.assign_add(1)
-                t.assign_add(dt)
 
         return results
 

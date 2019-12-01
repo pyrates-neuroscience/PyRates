@@ -1135,7 +1135,7 @@ class CircuitIR(AbstractBaseIR):
             target_node_ir = self[target_node]
 
             # define target index
-            buffer_len = tval['shape'][-1]-2
+            buffer_len = tval['shape'][-1]-1
             if delay is not None and tidx and len(tval['shape']) > 1:
                 tidx_tmp = []
                 for idx, d in zip(tidx, delay):
@@ -1493,6 +1493,10 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
+        # TODO: implement continuous time buffering for scipy solvers. Use scipy.interpolate.interp1d. Create new time
+        #  vectors and buffer elements at each time step. add t to time vector at each iteration and extract buffer
+        #  values at t - tau where tau is a vector of delays.
+
         target_shape = self.get_node_var(f"{node}/{op}/{var}")['shape']
         node_ir = self[node]
 
@@ -1517,42 +1521,35 @@ class CircuitIR(AbstractBaseIR):
 
         # create buffer equations
         if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-            eqs_op_read = [f"{var} = {var}_buffer_{idx}[-1]"]
-            eqs_op_rotate = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 0)",
-                             f"{var}_buffer_{idx}[0] = {var}_buffer_{idx}_reset"]
+            buffer_eqs = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 0)",
+                          f"{var}_buffer_{idx}[0] = {var}_buffer_{idx}_reset",
+                          f"{var} = {var}_buffer_{idx}[{buffer_length}]"]
         else:
-            eqs_op_read = [f"{var} = {var}_buffer_{idx}[:, -1]"]
-            eqs_op_rotate = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 1)",
-                             f"{var}_buffer_{idx}[:, 0] = {var}_buffer_{idx}_reset"]
+            buffer_eqs = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 1)",
+                          f"{var}_buffer_{idx}[:, 0] = {var}_buffer_{idx}_reset",
+                          f"{var} = {var}_buffer_{idx}[:, {buffer_length}]"]
 
         # add buffer operators to operator graph
-        node_ir.add_op(f'{op}_{var}_buffer_rotate_{idx}',
+        node_ir.add_op(f'{op}_{var}_buffer_{idx}',
                        inputs={},
-                       output=f'{var}_buffer_{idx}',
-                       equations=eqs_op_rotate,
-                       variables=var_dict)
-        node_ir.add_op(f'{op}_{var}_buffer_read_{idx}',
-                       inputs={f'{var}_buffer_{idx}': {'sources': [f'{op}_{var}_buffer_rotate_{idx}'],
-                                                       'reduce_dim': False}},
                        output=var,
-                       equations=eqs_op_read,
-                       variables={})
+                       equations=buffer_eqs,
+                       variables=var_dict)
 
         # connect operators to rest of the graph
-        node_ir.add_op_edge(f'{op}_{var}_buffer_rotate_{idx}', f'{op}_{var}_buffer_read_{idx}')
-        node_ir.add_op_edge(f'{op}_{var}_buffer_read_{idx}', op)
+        node_ir.add_op_edge(f'{op}_{var}_buffer_{idx}', op)
 
         # add input information to target operator
         inputs = self.get_node_var(f"{node}/{op}")['inputs']
         if var in inputs.keys():
-            inputs[var]['sources'].add(f'{op}_{var}_buffer_read_{idx}')
+            inputs[var]['sources'].add(f'{op}_{var}_buffer_{idx}')
         else:
-            inputs[var] = {'sources': {f'{op}_{var}_buffer_read_{idx}'},
+            inputs[var] = {'sources': {f'{op}_{var}_buffer_{idx}'},
                            'reduce_dim': True}
 
         # update edge information
         s, t, e = edge
-        self.edges[s, t, e]['target_var'] = f'{op}_{var}_buffer_rotate_{idx}/{var}_buffer_{idx}'
+        self.edges[s, t, e]['target_var'] = f'{op}_{var}_buffer_{idx}/{var}_buffer_{idx}'
         self.edges[s, t, e]['add_project'] = True
 
     def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:

@@ -1257,7 +1257,6 @@ class NumpyBackend(object):
                         self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
                     else:
                         self.add_op('=', target_var, in_var_interp, scope="network_inputs")
-                        self.lhs_vars.append(target_var.short_name)
 
             else:
 
@@ -1273,7 +1272,6 @@ class NumpyBackend(object):
                         self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
                     else:
                         self.add_op('=', target_var, in_var_indexed, scope="network_inputs")
-                        self.lhs_vars.append(target_var.short_name)
 
                 # create increment operator for counting index
                 time_step = self.add_var('constant', name='time_step_increment', value=np.ones((1,), dtype='int32'),

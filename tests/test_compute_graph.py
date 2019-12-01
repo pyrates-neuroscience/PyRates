@@ -329,11 +329,11 @@ def test_2_3_edge():
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_compute_graph.net10").apply()
         net = ComputeGraph(net_config=net_config, name='net2', vectorization=True, backend=b, step_size=dt)
         results = net.run(sim_time, outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt)
-        net.clear()
+        #net.clear()
 
         # calculate edge behavior from hand
-        delay0 = int(0.5 / dt)-1
-        delay1 = int(1. / dt)-1
+        delay0 = int(0.5 / dt)
+        delay1 = int(1. / dt)
         targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
         update4 = lambda x, y: x + dt * (2.0 + y)
         for i in range(sim_steps):
