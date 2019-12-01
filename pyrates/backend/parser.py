@@ -515,19 +515,17 @@ class ExpressionParser(ParserElement):
             self.backend.vars[lhs.name] = self.vars[self.lhs_key]
             self.rhs.state_var = lhs.name
 
-        elif self._instantaneous:
-
-            # simple instantaneous update
-            self.lhs = self.parse(self.expr_stack + ['rhs', self._assign_type])
-            self.backend.lhs_vars.append(self.vars[self.lhs_key].name)
-
         else:
 
-            # simple non-instantaneous update
-            self.backend.next_layer()
+            # simple update
+            if not self._instantaneous:
+                self.backend.next_layer()
+            indexed_lhs = "]" in self.expr_stack
             self.lhs = self.parse(self.expr_stack + ['rhs', self._assign_type])
-            self.backend.lhs_vars.append(self.vars[self.lhs_key].name)
-            self.backend.previous_layer()
+            if not indexed_lhs:
+                self.backend.lhs_vars.append(self.vars[self.lhs_key].name)
+            if not self._instantaneous:
+                self.backend.previous_layer()
 
     def _preprocess_expr_str(self, expr: str) -> tuple:
         """Turns differential equations into simple algebraic equations using a certain solver scheme and extracts
