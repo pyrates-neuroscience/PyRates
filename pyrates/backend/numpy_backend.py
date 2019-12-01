@@ -778,7 +778,7 @@ class NumpyBackend(object):
                     "group": {'name': "pyrates_group", 'call': "pr_group"},
                     "asarray": {'name': "numpy_asarray", 'call': "np.asarray"},
                     "no_op": {'name': "pyrates_identity", 'call': "pr_identity"},
-                    "interpolate": {'name': "numpy_interp", 'call': "np.interp"},
+                    "interpolate": {'name': "pyrates_interpolate", 'call': "pr_interp"},
                     }
         if ops:
             self.ops.update(ops)
@@ -880,7 +880,7 @@ class NumpyBackend(object):
             t0 = time.time()
 
         # add inputs to graph
-        continuous = 'pyrates' in solver
+        continuous = 'scipy' in solver
         t = self.add_input_layer(inputs=inputs, T=T, continuous=continuous)
 
         # graph execution
@@ -1075,7 +1075,7 @@ class NumpyBackend(object):
 
             # make sure that the output shape of the operation matches the expectations
             in_shape = []
-            expand_ops = ('@', 'index', 'concat', 'expand', 'stack', 'group', 'asarray')
+            expand_ops = ('@', 'index', 'concat', 'expand', 'stack', 'group', 'asarray', 'interpolate', 'interpolate2d')
             if op_name not in expand_ops:
                 for arg in args:
                     if hasattr(arg, 'shape'):
@@ -1239,19 +1239,25 @@ class NumpyBackend(object):
 
             if continuous:
 
-                time = self.add_var('constant', name='time_vec', value=np.linspace(0, T, inputs[0][0].shape[0]))
+                from scipy.interpolate import interp1d
+                time = np.linspace(0, T, inputs[0][0].shape[0])
 
                 for (inp, target_var, idx) in inputs:
                     in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
-                    in_var = self.add_var(vtype='constant', name=in_name, scope="network_inputs", value=inp)
-                    if len(in_var.shape) > 1:
-                        in_var = self.add_op('squeeze', in_var, scope="network_inputs")
-                    in_var_interp = self.add_op('interpolate', t, time, in_var, scope="network_inputs")
+                    if len(inp.shape) > 1:
+                        inp = inp.squeeze()
+                    f = interp1d(time, inp, axis=0)
+                    f.shape = inp.shape[1:]
+                    f.vtype = 'state_var'
+                    f.short_name = in_name
+                    f.name = f"network_inputs/{in_name}"
+                    self.vars[f.name] = f
+                    in_var_interp = self.add_op('interpolate', f, t, scope="network_inputs")
                     if idx:
                         self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
                     else:
                         self.add_op('=', target_var, in_var_interp, scope="network_inputs")
-                    self.lhs_vars.append(target_var.short_name)
+                        self.lhs_vars.append(target_var.short_name)
 
             else:
 
@@ -1267,6 +1273,7 @@ class NumpyBackend(object):
                         self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
                     else:
                         self.add_op('=', target_var, in_var_indexed, scope="network_inputs")
+                        self.lhs_vars.append(target_var.short_name)
 
                 # create increment operator for counting index
                 time_step = self.add_var('constant', name='time_step_increment', value=np.ones((1,), dtype='int32'),

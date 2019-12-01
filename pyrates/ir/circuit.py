@@ -1135,7 +1135,7 @@ class CircuitIR(AbstractBaseIR):
             target_node_ir = self[target_node]
 
             # define target index
-            buffer_len = tval['shape'][-1]
+            buffer_len = tval['shape'][-1]-2
             if delay is not None and tidx and len(tval['shape']) > 1:
                 tidx_tmp = []
                 for idx, d in zip(tidx, delay):

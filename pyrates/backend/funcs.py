@@ -32,6 +32,7 @@
 
 # external imports
 import numpy as np
+from scipy.interpolate import interp1d
 
 # meta infos
 __author__ = "Richard Gast"
@@ -52,3 +53,7 @@ def pr_softmax(x, axis=0):
 
 def pr_identity(x):
     return x
+
+
+def pr_interp(f, x_new):
+    return f(x_new)
