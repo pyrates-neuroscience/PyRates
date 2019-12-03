@@ -583,7 +583,7 @@ class ClusterGridSearch(ClusterCompute):
             file.create_dataset(f'/Config/config_file', data=config_file)
             file.create_dataset(f'/Config/circuit_template', data=circuit_template)
             file.create_dataset(f'/Config/simulation_time', data=simulation_time)
-            file.create_dataset(f'/Config/dt', data=dt)
+            file.create_dataset(f'/Config/step_size', data=dt)
             file.create_dataset(f'/Config/sampling_step_size', data=sampling_step_size)
             if add_template_info:
                 template_file = f'{circuit_template.rsplit("/", 1)[0]}.yaml'
@@ -958,7 +958,7 @@ class ClusterGridSearch(ClusterCompute):
         config_dict = {
             "circuit_template": circuit_template,
             "param_map": param_map,
-            "dt": dt,
+            "step_size": dt,
             "simulation_time": simulation_time,
             "outputs": outputs,
             "sampling_step_size": sampling_step_size,

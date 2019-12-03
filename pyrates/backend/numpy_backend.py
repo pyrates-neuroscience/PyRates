@@ -208,7 +208,7 @@ class PyRatesOp:
 
         # set identifiers of operator
         self.op = op
-        self.short_name = short_name
+        self.short_name = short_name if short_name in name else name.split('/')[-1]
         self.name = name
 
         # generate function string
@@ -643,9 +643,14 @@ class PyRatesIndexOp(PyRatesOp):
             pop_indices = []
             for i, arg in enumerate(args[2:]):
                 if hasattr(arg, 'short_name') and arg.short_name in idx:
-                    if arg.vtype == 'constant' and sum(arg.shape) < 2:
+                    if hasattr(arg, 'vtype') and arg.vtype == 'constant' and sum(arg.shape) < 2:
                         idx = replace(idx, arg.short_name, f"{int(arg)}")
                         pop_indices.append(i+2)
+                    elif hasattr(arg, 'value'):
+                        idx = replace(idx, arg.short_name, arg.value)
+                        pop_indices.append(i+2)
+                        results['args'] += arg.args
+                        results['arg_names'] += arg.arg_names
             var_idx = f"[{idx}]"
             args = list(args)
             for idx in pop_indices[::-1]:
@@ -779,6 +784,8 @@ class NumpyBackend(object):
                     "asarray": {'name': "numpy_asarray", 'call': "np.asarray"},
                     "no_op": {'name': "pyrates_identity", 'call': "pr_identity"},
                     "interpolate": {'name': "pyrates_interpolate", 'call': "pr_interp"},
+                    "interpolate_1d": {'name': "pyrates_interpolate_1d", 'call': "pr_interp_1d"},
+                    "interpolate_nd": {'name': "pyrates_interpolate_nd", 'call': "pr_interp_nd"},
                     }
         if ops:
             self.ops.update(ops)
@@ -971,7 +978,7 @@ class NumpyBackend(object):
 
         # ensure uniqueness of variable names
         if var.short_name in self.var_counter and name not in self.vars:
-            rename = True
+            rename = True if var.short_name not in "y y_delta t times" else False
             if var.vtype == 'constant':
                 for var_tmp in self.vars.values():
                     if var.short_name == var_tmp.short_name and var == var_tmp:

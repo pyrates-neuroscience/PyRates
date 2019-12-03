@@ -453,7 +453,7 @@ def test_1_7_equation_parsing():
 
     # define test equations
     equations = ["a = 5. + 2.",              # simple update of variable
-                 "d/dt * a = 5. + 2.",       # simple differential equation
+                 "d/step_size * a = 5. + 2.",       # simple differential equation
                  ]
 
     # define equation variables
@@ -468,7 +468,7 @@ def test_1_7_equation_parsing():
     # define backend
     b = TensorflowBackend()
     args = {'node/op/a': {'vtype': 'state_var', 'value': a, 'shape': a.shape, 'dtype': a.dtype},
-            'all/all/dt': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
+            'all/all/step_size': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
     arguments = [parse_dict(args, backend=b), parse_dict(args, backend=b)]
 
     # test equation parser on different test equations
@@ -485,7 +485,7 @@ def test_1_7_equation_parsing():
     # define backend
     b = NumpyBackend()
     args = {'node/op/a': {'vtype': 'state_var', 'value': a, 'shape': a.shape, 'dtype': a.dtype},
-            'all/all/dt': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
+            'all/all/step_size': {'vtype': 'constant', 'value': 0.1, 'shape': (), 'dtype': 'float32'}}
     arguments = [parse_dict(args, backend=b), parse_dict(args, backend=b)]
 
     # test equation parser on different test equations

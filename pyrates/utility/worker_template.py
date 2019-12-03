@@ -69,7 +69,7 @@ def main(_):
         circuit_template = global_config_dict['circuit_template']
         param_map = global_config_dict['param_map']
         sampling_step_size = global_config_dict['sampling_step_size']
-        dt = global_config_dict['dt']
+        dt = global_config_dict['step_size']
         simulation_time = global_config_dict['simulation_time']
         # 'inputs' and 'outputs' are optional parameters
         try:

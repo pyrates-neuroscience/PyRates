@@ -827,7 +827,7 @@ class Interactive2DParamPlot(object):
         -------
 
         """
-        dt = kwargs.pop('dt', data_series.index[1] - data_series.index[0])
+        dt = kwargs.pop('step_size', data_series.index[1] - data_series.index[0])
         tmin = int(tmin/dt)
         self.data = data_series.iloc[tmin:, :]
         self.x_values = x_values
