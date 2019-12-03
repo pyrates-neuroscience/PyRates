@@ -33,7 +33,6 @@ from typing import Optional, Union
 
 # system imports
 import os
-import h5py
 import random
 from itertools import cycle
 
@@ -460,11 +459,71 @@ class GeneticAlgorithmTemplate:
         raise NotImplementedError
 
 
-class CGSGeneticAlgorithmTemplate(GeneticAlgorithmTemplate):
-    def __init__(self, nodes, compute_dir=None, verbose: Optional[bool] = True):
+class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
+    from scipy.spatial.distance import cdist
+
+    def __init__(self, nodes, compute_dir=None, verbose: bool = True, fitness_measure: Callable = cdist):
         super().__init__()
 
         self.cgs = ClusterGridSearch(nodes=nodes, compute_dir=compute_dir, verbose=verbose)
+        self.fitness_measure = fitness_measure
 
-    def eval_fitness(self, target: list, *argv, **kwargs):
-        raise NotImplementedError
+    def eval_fitness(self, target: list, **kwargs):
+        param_grid = self.pop.drop(['fitness', 'sigma'], axis=1)
+
+        results = grid_search(circuit_template=self.gs_config['circuit_template'],
+                              param_grid=param_grid,
+                              param_map=self.gs_config['param_map'],
+                              simulation_time=self.gs_config['simulation_time'],
+                              dt=self.gs_config['step_size'],
+                              sampling_step_size=self.gs_config['sampling_step_size'],
+                              permute_grid=False,
+                              inputs=self.gs_config['inputs'],
+                              outputs=self.gs_config['outputs'].copy()
+                              )
+
+        for i, candidate_genes in enumerate(param_grid.values):
+            candidate_out = results.loc[:, tuple(candidate_genes)].values.T
+            target_reshaped = np.array(target)[None, :]
+            dist = self.fitness_measure(candidate_out, target_reshaped)
+            self.pop.at[i, 'fitness'] = float(1 / dist)
+
+
+class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
+    def __init__(self, gs_config, cgs_config):
+        super().__init__()
+
+        self.gs_config = gs_config
+        self.cgs_config = cgs_config
+
+        self.cgs = ClusterGridSearch(cgs_config['nodes'], compute_dir=cgs_config['compute_dir'])
+
+    def eval_fitness(self, target: list, **kwargs):
+
+        param_grid = self.pop.drop(['fitness', 'sigma'], axis=1)
+
+        res_file = self.cgs.run(
+            circuit_template=self.gs_config['circuit_template'],
+            params=param_grid,
+            param_map=self.gs_config['param_map'],
+            simulation_time=self.gs_config['simulation_time'],
+            dt=self.gs_config['step_size'],
+            inputs=self.gs_config['inputs'],
+            outputs=self.gs_config['outputs'],
+            sampling_step_size=self.gs_config['sampling_step_size'],
+            permute=False,
+            chunk_size=self.cgs_config['chunk_size'],
+            worker_env=self.cgs_config['worker_env'],
+            worker_file=self.cgs_config['worker_file'],
+            config_kwargs={
+                'target': target
+            })
+
+        results = pd.read_hdf(res_file, key=f'/Results/fitness')
+
+        for i, candidate_genes in enumerate(param_grid.values):
+            self.pop.at[i, 'fitness'] = float(results.loc['fitness', tuple(candidate_genes)])
+
+
+
+

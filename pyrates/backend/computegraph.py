@@ -45,7 +45,7 @@ class ComputeGraph(object):
     net_config
         Intermediate representation of the network configuration. For a more detailed description, see the documentation
         of `pyrates.IR.CircuitIR`.
-    dt
+    step_size
         Step-size with which the network should be simulated later on.
         Important for discretizing delays, differential equations, ...
     vectorization

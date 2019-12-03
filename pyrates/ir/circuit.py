@@ -50,7 +50,7 @@ class CircuitIR(AbstractBaseIR):
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
     __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map",
-                 "_first_run", "_vectorized", "_compile_info", "_backend", "_dt"]
+                 "_first_run", "_vectorized", "_compile_info", "_backend", "step_size", "solver"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -96,6 +96,8 @@ class CircuitIR(AbstractBaseIR):
         self._vectorized = False
         self._compile_info = {}
         self._backend = None
+        self.solver = None
+        self.step_size = None
 
     def _collect_references(self, edge_or_node):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
@@ -481,25 +483,47 @@ class CircuitIR(AbstractBaseIR):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
+        # node vectorization
         old_nodes = self._vectorize_nodes_in_place(max_node_idx)
-
         self._vectorize_edges_in_place(max_node_idx)
-
         nodes = (node for node, data in old_nodes)
         self.graph.remove_nodes_from(nodes)
 
+        # edge vectorization
         if vectorize:
-
-            # go through new nodes
             for source in self.nodes:
                 for target in self.nodes:
                     self._vectorize_edges(source, target)
 
-        # go through nodes and create mapping for their inputs
+        # go through nodes and create buffers for delayed outputs and mappings for their inputs
         for node_name in self.nodes:
 
+            node_outputs = self.graph.out_edges(node_name, keys=True)
+            node_outputs = self._sort_edges(node_outputs, 'source_var')
             node_inputs = self.graph.in_edges(node_name, keys=True)
             node_inputs = self._sort_edges(node_inputs, 'target_var')
+
+            # loop over ouput variables of node
+            for i, (out_var, edges) in enumerate(node_outputs.items()):
+
+                # extract delay info from variable projections
+                n_outputs = len(edges)
+                op_name, var_name = out_var.split('/')
+                delays, nodes = self._collect_delays_from_edges(edges)
+                max_delay = np.max(delays)
+
+                # set delays to None of max_delay is 0
+                add_delay = ("int" in str(type(max_delay)) and max_delay > 1) or \
+                            ("float" in str(type(max_delay)) and max_delay > self.step_size)
+                if add_delay:
+                    for s, t, e in edges:
+                        self.edges[s, t, e]['delay'] = None
+
+                # add synaptic buffer to output variables
+                for j in range(n_outputs):
+                    if add_delay:
+                        self._add_edge_buffer(node_name, op_name, var_name, idx=j, edge=edges[j], delays=delays,
+                                              nodes=nodes if len(delays) > 1 else None)
 
             # loop over input variables of node
             for i, (in_var, edges) in enumerate(node_inputs.items()):
@@ -507,44 +531,10 @@ class CircuitIR(AbstractBaseIR):
                 # extract delay info from input variable connections
                 n_inputs = len(edges)
                 op_name, var_name = in_var.split('/')
-                delays = []
-                for s, t, e in edges:
-                    d = self.edges[s, t, e]['delay']
-                    if d is None or np.sum(d) == 0:
-                        d = [1] * len(self.edges[s, t, e]['target_idx'])
-                    else:
-                        if dt is None:
-                            raise ValueError('Step-size not passed for discretizing delays. If delays are added to any '
-                                             'network edge, please pass the simulation `step-size` to the `compile` '
-                                             'method.')
-                        if type(d) is list:
-                            d = np.asarray(d).squeeze()
-                            d = [int(np.round(d_tmp/dt, decimals=0)) for d_tmp in d] if d.shape else \
-                                [int(np.round(d/dt, decimals=0))]
-                        else:
-                            d = [int(np.round(d/dt, decimals=0))]
-                    self.edges[s, t, e]['delay'] = d
-                    delays += d
 
-                max_delay = np.max(delays)
-
-                # set delays to None of max_delay is 0
-                if max_delay <= 1:
-                    for s, t, e in edges:
-                        self.edges[s, t, e]['delay'] = None
-
-                # loop over different input sources
+                # add synaptic input collector to the input variables
                 for j in range(n_inputs):
-
-                    if max_delay > 1:
-
-                        # add synaptic buffer to the input variable
-                        self._add_edge_buffer(node_name, op_name, var_name, idx=j,
-                                              buffer_length=max_delay, edge=edges[j])
-
-                    elif n_inputs > 1:
-
-                        # add synaptic input collector to the input variable
+                    if n_inputs > 1:
                         self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
 
         return self
@@ -897,7 +887,7 @@ class CircuitIR(AbstractBaseIR):
 
     def run(self,
             simulation_time: Optional[float] = None,
-            step_size: float = 1e-3,
+            step_size: Optional[float] = None,
             inputs: Optional[dict] = None,
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
@@ -968,6 +958,12 @@ class CircuitIR(AbstractBaseIR):
             simulation_time = step_size
         sim_steps = int(np.round(simulation_time/step_size, decimals=0))
 
+        if self.solver is not None:
+            solver = self.solver
+        if self.step_size is not None:
+            step_size = self.step_size
+        if step_size is None:
+            raise ValueError('Step-size not provided. Please pass the desired initial simulation step-size to `run()`.')
         if not sampling_step_size:
             sampling_step_size = step_size
 
@@ -1057,6 +1053,7 @@ class CircuitIR(AbstractBaseIR):
                 float_precision: str = 'float32',
                 matrix_sparseness: float = 0.5,
                 step_size: Optional[float] = None,
+                solver: Optional[str] = None,
                 **kwargs
                 ) -> AbstractBaseIR:
         """Parses IR into the backend. Returns an instance of the CircuitIR that allows for numerical simulations via
@@ -1081,6 +1078,8 @@ class CircuitIR(AbstractBaseIR):
         step_size
             Step-size with which the network should be simulated later on. Only needs to be passed here, if the edges of
             the network contain delays. Will be used to discretize the delays.
+        solver
+
         kwargs
             Additional keyword arguments that will be passed on to the backend instance. For a full list of viable
             keyword arguments, see the documentation of the respective backend class (`numpy_backend.NumpyBackend` or
@@ -1092,6 +1091,9 @@ class CircuitIR(AbstractBaseIR):
 
         # set basic attributes
         ######################
+
+        self.solver = solver
+        self.step_size = step_size
 
         # instantiate the backend and set the backend default_device
         if backend == 'tensorflow':
@@ -1133,19 +1135,6 @@ class CircuitIR(AbstractBaseIR):
 
             add_project = data.get('add_project', False)
             target_node_ir = self[target_node]
-
-            # define target index
-            buffer_len = tval['shape'][-1]-1
-            if delay is not None and tidx and len(tval['shape']) > 1:
-                tidx_tmp = []
-                for idx, d in zip(tidx, delay):
-                    if type(idx) is list:
-                        tidx_tmp.append(idx + [buffer_len-d])
-                    else:
-                        tidx_tmp.append([idx, buffer_len-d])
-                tidx = tidx_tmp
-            elif delay is not None:
-                tidx = [buffer_len-d for d in delay] if type(delay) is list else [buffer_len-delay]
 
             # create mapping equation and its arguments
             args = {}
@@ -1388,6 +1377,33 @@ class CircuitIR(AbstractBaseIR):
 
         return equations, variables
 
+    def _collect_delays_from_edges(self, edges):
+        delays, nodes = [], []
+        for s, t, e in edges:
+            d = self.edges[s, t, e]['delay']
+            if d is None or np.sum(d) == 0:
+                d = [1] * len(self.edges[s, t, e]['target_idx'])
+            else:
+                if self.step_size is None and self.solver == 'scipy':
+                    raise ValueError('Step-size not passed for setting up edge delays. If delays are added to any '
+                                     'network edge, please pass the simulation `step-size` to the `compile` '
+                                     'method.')
+                if type(d) is list:
+                    d = np.asarray(d).squeeze()
+                    d = [self._preprocess_delay(d_tmp) for d_tmp in d] if d.shape else \
+                        [self._preprocess_delay(d)]
+                else:
+                    d = [self._preprocess_delay(d)]
+            self.edges[s, t, e]['delay'] = d
+            delays += d
+            idx = self.edges[s, t, e]['source_idx']
+            nodes += idx if type(idx) is list else [idx]
+        return delays, nodes
+
+    def _preprocess_delay(self, delay):
+        discretize = self.step_size is None or self.solver != 'scipy'
+        return int(np.round(delay / self.step_size, decimals=0)) if discretize else delay
+
     @staticmethod
     def _map_multiple_inputs(inputs: dict, reduce_dim: bool) -> tuple:
         """Creates mapping between multiple input variables and a single output variable.
@@ -1469,7 +1485,7 @@ class CircuitIR(AbstractBaseIR):
 
         return edges_new
 
-    def _add_edge_buffer(self, node: str, op: str, var: str, idx: int, buffer_length: int, edge: tuple) -> None:
+    def _add_edge_buffer(self, node: str, op: str, var: str, idx: int, edge: tuple, delays: list, nodes: list) -> None:
         """Adds a buffer variable to an edge.
 
         Parameters
@@ -1482,10 +1498,12 @@ class CircuitIR(AbstractBaseIR):
             Name of the target variable of the edge.
         idx
             Index of the buffer variable for that specific edge.
-        buffer_length
-            Length of the time-buffer that should be added to realize edge delays.
         edge
             Edge identifier (source_name, target_name, edge_idx).
+        delays
+            edge delays.
+        nodes
+            Node indices for each edge delay.
 
         Returns
         -------
@@ -1493,63 +1511,109 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        # TODO: implement continuous time buffering for scipy solvers. Use scipy.interpolate.interp1d. Create new time
-        #  vectors and buffer elements at each time step. add t to time vector at each iteration and extract buffer
-        #  values at t - tau where tau is a vector of delays.
+        max_delay = np.max(delays)
 
-        target_shape = self.get_node_var(f"{node}/{op}/{var}")['shape']
+        # extract target shape and node
+        node_var = self.get_node_var(f"{node}/{op}/{var}")
+        target_shape = node_var['shape']
         node_ir = self[node]
 
-        # create buffer variable definitions
-        if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-            buffer_shape = (buffer_length + 1,)
-            buffer_shape_reset = (1,)
+        # discretized edge buffers
+        ##########################
+
+        if self.step_size is None or self.solver != 'scipy':
+
+            # create buffer variable shapes
+            if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+                buffer_shape = (max_delay + 1,)
+            else:
+                buffer_shape = (target_shape[0], max_delay + 1)
+
+            # create buffer variable definitions
+            var_dict = {f'{var}_buffer_{idx}': {'vtype': 'state_var',
+                                                'dtype': self._backend._float_def,
+                                                'shape': buffer_shape,
+                                                'value': 0.},
+                        f'{var}_buffered': node_var.copy(),
+                        f'{var}_delays': {'vtype': 'constant',
+                                          'dtype': 'int32',
+                                          'value': np.asarray([nodes, delays], dtype=np.int32) if nodes else delays}}
+
+            # create buffer equations
+            if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+                buffer_eqs = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 0)",
+                              f"{var}_buffer_{idx}[0] = {var}",
+                              f"{var}_buffered = {var}_buffer_{idx}[{var}_delays]"]
+            else:
+                buffer_eqs = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 1)",
+                              f"{var}_buffer_{idx}[:, 0] = {var}",
+                              f"{var}_buffered = {var}_buffer_{idx}[{var}_delays[0], {var}_delays[1]]"]
+
+        # continuous delay buffers
+        ##########################
+
         else:
-            buffer_shape = (target_shape[0], buffer_length + 1)
-            buffer_shape_reset = (target_shape[0], 1)
-        var_dict = {f'{var}_buffer_{idx}': {'vtype': 'state_var',
-                                            'dtype': self._backend._float_def,
-                                            'shape': buffer_shape,
-                                            'value': 0.
-                                            },
-                    f'{var}_buffer_{idx}_reset': {'vtype': 'constant',
-                                                  'dtype': self._backend._float_def,
-                                                  'shape': buffer_shape_reset,
-                                                  'value': 0.
-                                                  }
-                    }
 
-        # create buffer equations
-        if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-            buffer_eqs = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 0)",
-                          f"{var}_buffer_{idx}[0] = {var}_buffer_{idx}_reset",
-                          f"{var} = {var}_buffer_{idx}[{buffer_length}]"]
-        else:
-            buffer_eqs = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 1)",
-                          f"{var}_buffer_{idx}[:, 0] = {var}_buffer_{idx}_reset",
-                          f"{var} = {var}_buffer_{idx}[:, {buffer_length}]"]
+            # create buffer variables
+            max_delay_int = int(np.round(max_delay / self.step_size, decimals=0))
+            times = [0. - i * self.step_size for i in range(max_delay_int)]
+            if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+                buffer_shape = (len(times),)
+            else:
+                buffer_shape = (target_shape[0], len(times))
 
-        # add buffer operators to operator graph
-        node_ir.add_op(f'{op}_{var}_buffer_{idx}',
-                       inputs={},
-                       output=var,
-                       equations=buffer_eqs,
-                       variables=var_dict)
+            # create buffer variable definitions
+            var_dict = {f'{var}_buffer_{idx}': {'vtype': 'state_var',
+                                                'dtype': self._backend._float_def,
+                                                'shape': buffer_shape,
+                                                'value': 0.
+                                                },
+                        'times': {'vtype': 'state_var',
+                                  'dtype': self._backend._float_def,
+                                  'shape': (len(times),),
+                                  'value': times
+                                  },
+                        't': {'vtype': 'state_var',
+                              'dtype': self._backend._float_def,
+                              'shape': (),
+                              'value': 0.0
+                              },
+                        f'{var}_buffered': node_var.copy(),
+                        f'{var}_delays': {'vtype': 'constant',
+                                          'dtype': 'float32',
+                                          'value': np.asarray([[n, d] for n, d in zip(nodes, delays)], dtype=np.float32)
+                                              if nodes else delays}}
 
-        # connect operators to rest of the graph
-        node_ir.add_op_edge(f'{op}_{var}_buffer_{idx}', op)
+            # create buffer equations
+            if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+                buffer_eqs = [f"times[:] = roll(times, 1)",
+                              f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1)",
+                              f"times[0] = t",
+                              f"{var}_buffer_{idx}[0] = {var}",
+                              f"{var}_buffered = interpolate_1d(times, {var}_buffer_{idx}, t + {var}_delays)"]
+            else:
+                buffer_eqs = [f"times[:] = roll(times, 1)",
+                              f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 1)",
+                              f"times[0] = t",
+                              f"{var}_buffer_{idx}[:, 0] = {var}",
+                              f"{var}_buffered = interpolate_nd(times, {var}_buffer_{idx}, {var}_delays, t)"]
 
-        # add input information to target operator
-        inputs = self.get_node_var(f"{node}/{op}")['inputs']
-        if var in inputs.keys():
-            inputs[var]['sources'].add(f'{op}_{var}_buffer_{idx}')
-        else:
-            inputs[var] = {'sources': {f'{op}_{var}_buffer_{idx}'},
-                           'reduce_dim': True}
+        # add buffer equations to node operator
+        op_info = node_ir[op]
+        op_info['equations'] += buffer_eqs
+        op_info['variables'].update(var_dict)
+        op_info['output'] = f"{var}_buffered"
+
+        # update input information of node operators connected to this operator
+        for succ in node_ir.op_graph.succ[op]:
+            inputs = self.get_node_var(f"{node}/{succ}")['inputs']
+            if var not in inputs.keys():
+                inputs[var] = {'sources': {op},
+                               'reduce_dim': True}
 
         # update edge information
         s, t, e = edge
-        self.edges[s, t, e]['target_var'] = f'{op}_{var}_buffer_{idx}/{var}_buffer_{idx}'
+        self.edges[s, t, e]['source_var'] = f"{op}/{var}_buffered"
         self.edges[s, t, e]['add_project'] = True
 
     def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:

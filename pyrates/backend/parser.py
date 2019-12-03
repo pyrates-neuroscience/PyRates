@@ -371,17 +371,6 @@ class ExpressionParser(ParserElement):
             # extract constant/variable from args dict
             self.op = self.vars[op]
 
-        elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
-
-            expr_stack.pop(-1)
-
-            # extract data type
-            try:
-                self.op = self.backend.add_op('cast', self.parse(expr_stack), op[0:-1], **self.parser_kwargs)
-            except AttributeError:
-                raise AttributeError(f"Datatype casting error in expression: {self.expr_str}. "
-                                     f"{op[0:-1]} is not a valid data-type for this parser.")
-
         elif op[-1] == "(":
 
             expr_stack.pop(-1)
@@ -402,9 +391,11 @@ class ExpressionParser(ParserElement):
                 else:
                     self.op = self.backend.add_op(op[0:-1], *tuple(args[::-1]), **self.parser_kwargs)
             except KeyError:
-                raise KeyError(
-                    f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be provided "
-                    f"in arguments dictionary.")
+                if any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
+                    self.op = self.backend.add_op('cast', args[0], op[0:-1], **self.parser_kwargs)
+                else:
+                    raise KeyError(f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be "
+                                   f"provided in arguments dictionary.")
 
         elif op == ")":
 
@@ -440,6 +431,17 @@ class ExpressionParser(ParserElement):
 
             # return boolean
             self.op = True if op in "Truetrue" else False
+
+        elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
+
+            expr_stack.pop(-1)
+
+            # extract data type
+            try:
+                self.op = self.backend.add_op('cast', self.parse(expr_stack), op[0:-1], **self.parser_kwargs)
+            except AttributeError:
+                raise AttributeError(f"Datatype casting error in expression: {self.expr_str}. "
+                                     f"{op[0:-1]} is not a valid data-type for this parser.")
 
         elif "." in op:
 
@@ -1006,7 +1008,7 @@ def update_lhs(equations: list, equation_args: dict, update_num: int, var_dict: 
                                 lhs = lhs.replace(" ", "")
                             if de:
                                 lhs = replace(lhs, var, new_var)
-                                equations[i][j] = (f"{lhs} = dt * ({rhs})", scope)
+                                equations[i][j] = (f"{lhs} = step_size * ({rhs})", scope)
 
             if add_to_args:
 
@@ -1246,7 +1248,7 @@ def is_diff_eq(eq: str) -> bool:
         de = True
     elif "'" in lhs:
         de = True
-    elif "dt_test" in replace(rhs, "dt", "dt_test"):
+    elif "dt_test" in replace(rhs, "step_size", "dt_test"):
         de = True
     else:
         de = False
