@@ -216,7 +216,7 @@ class PyRatesOp:
 
         # extract information from parsing results
         self.value = self._op_dict['value']
-        self.arg_names = self._op_dict['arg_names'].copy()
+        self.arg_names, args = self._get_unique_args(self._op_dict['arg_names'], self._op_dict['args'])
         self.input_ops = self._op_dict['input_ops']
         self.is_constant = self._op_dict['is_constant']
 
@@ -225,9 +225,9 @@ class PyRatesOp:
         self._callable = func_dict.pop(self.short_name)
 
         # test function
-        self.args = self._deepcopy(self._op_dict['args'])
+        self.args = self._deepcopy(args)
         result = self.eval()
-        self.args = self._op_dict['args'].copy()
+        self.args = args
 
         # remember output shape and data-type
         self.shape = result.shape if hasattr(result, 'shape') else ()
@@ -239,6 +239,22 @@ class PyRatesOp:
         result = self._callable(*self.args)
         self._check_numerics(result, self.name)
         return result
+
+    def _generate_func(self):
+        """Generates a function from operator value and arguments"""
+        func_dict = {}
+        func = CodeGen()
+        func.add_code_line(f"def {self.short_name}(")
+        for arg in self._op_dict['arg_names']:
+            func.add_code_line(f"{arg},")
+        if len(self._op_dict['arg_names']) > 0:
+            func.code[-1] = func.code[-1][:-1]
+        func.add_code_line("):")
+        func.add_linebreak()
+        func.add_indent()
+        func.add_code_line(f"return {self._op_dict['value']}")
+        exec(func.generate(), globals(), func_dict)
+        return func_dict
 
     @classmethod
     def generate_op(cls, op, args):
@@ -366,6 +382,19 @@ class PyRatesOp:
         return results, results_args, results_arg_names, n_vars
 
     @staticmethod
+    def _get_unique_args(arg_names, args):
+        arg_names_unique = np.unique(arg_names)
+        for name in arg_names_unique:
+            n = arg_names.count(name)
+            while n > 1:
+                i0 = arg_names.index(name)+1
+                i1 = arg_names[i0:].index(name)
+                arg_names.pop(i0+i1)
+                args.pop(i0+i1)
+                n -= 1
+        return arg_names, args
+
+    @staticmethod
     def _check_numerics(vals, name):
         """Checks whether function evaluation leads to any NaNs or infinite values.
         """
@@ -381,22 +410,6 @@ class PyRatesOp:
             check.append(np.isnan(vals) or np.isneginf(vals))
         if any(check):
             raise ValueError(f'Result of operation ({name}) contains NaNs or infinite values.')
-
-    def _generate_func(self):
-        """Generates a function from operator value and arguments"""
-        func_dict = {}
-        func = CodeGen()
-        func.add_code_line(f"def {self.short_name}(")
-        for arg in self._op_dict['arg_names']:
-            func.add_code_line(f"{arg},")
-        if len(self._op_dict['arg_names']) > 0:
-            func.code[-1] = func.code[-1][:-1]
-        func.add_code_line("):")
-        func.add_linebreak()
-        func.add_indent()
-        func.add_code_line(f"return {self._op_dict['value']}")
-        exec(func.generate(), globals(), func_dict)
-        return func_dict
 
     @staticmethod
     def _deepcopy(x):

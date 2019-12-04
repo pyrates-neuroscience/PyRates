@@ -81,7 +81,7 @@ def test_2_1_operator():
         # simulate operator behavior
         sim_time = 10.0
         results = net.run(simulation_time=sim_time, step_size=dt, outputs={'a': 'pop0/op0/a'})
-        net.clear()
+        #net.clear()
 
         # generate target values
         sim_steps = int(sim_time / dt)
@@ -294,7 +294,7 @@ def test_2_3_edge():
 
         # simulate edge behavior
         results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt)
-        #net.clear()
+        net.clear()
 
         diff = np.mean(np.abs(results['a'].values[:, 0] - targets[1:, 2])) + \
                np.mean(np.abs(results['b'].values[:, 0] - targets[1:, 3]))
