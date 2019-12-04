@@ -978,11 +978,14 @@ class NumpyBackend(object):
 
         # ensure uniqueness of variable names
         if var.short_name in self.var_counter and name not in self.vars:
-            rename = True if var.short_name not in "y y_delta t times" else False
-            if var.vtype == 'constant':
+            rename = True if var.short_name not in ["y",  "y_delta", "t",  "times"] else False
+            if var.vtype == 'constant' and rename:
                 for var_tmp in self.vars.values():
-                    if var.short_name == var_tmp.short_name and var == var_tmp:
-                        rename = False
+                    if var.short_name == var_tmp.short_name and var.shape == var_tmp.shape:
+                        if sum(var.shape) > 1:
+                            rename = all(var != var_tmp)
+                        else:
+                            rename = var_tmp != var
             if rename:
                 name_old = var.short_name
                 name_new = f"{name_old}_{self.var_counter[name_old]}"
