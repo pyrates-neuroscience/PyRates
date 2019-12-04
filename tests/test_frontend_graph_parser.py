@@ -120,13 +120,13 @@ def test_circuit_from_graph():
     graph = MultiDiGraph()
     for i in range(0, n_jrcs):
         data = {'operators': {'RPO_e_pc.0': {
-                                   'equations': ["d/step_size * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
-                                                 "d/step_size * psp = x"],
+                                   'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                                                 "d/dt * psp = x"],
                                    'inputs': {},
                                    'output': 'psp'},
                               'RPO_i_pc.0': {
-                                  'equations': ["d/step_size * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
-                                                "d/step_size * psp = x"],
+                                  'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                                                "d/dt * psp = x"],
                                   'inputs': {},
                                   'output': 'psp'},
                               'PRO.0': {
@@ -210,8 +210,8 @@ def test_circuit_from_graph():
         graph.add_node(f'PC.{i}', **data)
 
         data = {'operators': {'RPO_e.0': {
-                                   'equations': ["d/step_size * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
-                                                 "d/step_size * psp = x"],
+                                   'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                                                 "d/dt * psp = x"],
                                    'inputs': {},
                                    'output': 'psp'},
                               'PRO.0': {
@@ -270,8 +270,8 @@ def test_circuit_from_graph():
         graph.add_node(f'EIN.{i}', **data)
 
         data = {'operators': {'RPO_e.0': {
-                                   'equations': ["d/step_size * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
-                                                 "d/step_size * psp = x"],
+                                   'equations': ["d/dt * x = H/tau * (m_in + u) - 2. * 1./tau * x - (1./tau)^2 * psp",
+                                                 "d/dt * psp = x"],
                                    'inputs': {},
                                    'output': 'psp'},
                               'PRO.0': {

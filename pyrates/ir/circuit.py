@@ -1139,14 +1139,21 @@ class CircuitIR(AbstractBaseIR):
             # create mapping equation and its arguments
             args = {}
             dtype = sval["dtype"]
-            d = "[target_idx]" if tidx and sum(tval['shape']) > 1 else ""
-            idx = "[source_idx]" if sidx and len(sval['shape']) > 1 else ""
+            if tidx and sum(tval['shape']) > 1:
+                if not sidx:
+                    sidx = list(range(0, len(tidx)))
+                d = np.zeros((tval['shape'][0], len(tidx)))
+                for s, t in zip(sidx, tidx):
+                    d[t, s] = 1
+            else:
+                d = []
+            idx = "[source_idx]" if sidx and len(sval['shape']) > 1 and "_buffered" not in svar else ""
             assign = '+=' if add_project else '='
 
             # check whether edge projection can be solved by a simple inner product between a weight matrix and the
             # source variables
             dot_edge = False
-            if delay is None and len(tval['shape']) < 2 and len(sval['shape']) < 2 and len(sidx) > 1:
+            if len(tval['shape']) < 2 and len(sval['shape']) < 2 and len(sidx) > 1:
 
                 n, m = tval['shape'][0], sval['shape'][0]
 
@@ -1160,17 +1167,19 @@ class CircuitIR(AbstractBaseIR):
                         weight_mat[row, col] = w
 
                     # set up weights and edge projection equation
-                    eq = f"{tvar} {assign} weight @ {svar}"
+                    eq = f"{tvar} {assign} target_idx @ (weight @ {svar})" if len(d) \
+                        else f"{tvar} {assign} weight @ {svar}"
                     weight = weight_mat
                     dot_edge = True
 
             # set up edge projection equation and edge indices for edges that cannot be realized via a matrix product
             if not dot_edge:
-                eq = f"{tvar}{d} {assign} {svar}{idx} * weight"
-                if tidx:
-                    args['target_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                          'value': np.array(tidx, dtype=np.int32)}
-                if sidx:
+                eq = f"{tvar} {assign} target_idx @ ({svar}{idx} * weight)" if len(d) \
+                    else f"{tvar} {assign} {svar}{idx} * weight"
+                if len(d):
+                    args['target_idx'] = {'vtype': 'constant', 'dtype': self._backend._float_def,
+                                          'value': np.array(d, dtype=np.float32)}
+                if idx:
                     args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                           'value': np.array(sidx, dtype=np.int32)}
 
@@ -1537,7 +1546,10 @@ class CircuitIR(AbstractBaseIR):
                         f'{var}_buffered': node_var.copy(),
                         f'{var}_delays': {'vtype': 'constant',
                                           'dtype': 'int32',
-                                          'value': np.asarray([nodes, delays], dtype=np.int32) if nodes else delays}}
+                                          'value': delays},
+                        f'source_idx': {'vtype': 'constant',
+                                        'dtype': 'int32',
+                                        'value': nodes}}
 
             # create buffer equations
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
@@ -1547,7 +1559,7 @@ class CircuitIR(AbstractBaseIR):
             else:
                 buffer_eqs = [f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 1)",
                               f"{var}_buffer_{idx}[:, 0] = {var}",
-                              f"{var}_buffered = {var}_buffer_{idx}[{var}_delays[0], {var}_delays[1]]"]
+                              f"{var}_buffered = {var}_buffer_{idx}[source_idx, {var}_delays]"]
 
         # continuous delay buffers
         ##########################
@@ -1580,9 +1592,11 @@ class CircuitIR(AbstractBaseIR):
                               },
                         f'{var}_buffered': node_var.copy(),
                         f'{var}_delays': {'vtype': 'constant',
-                                          'dtype': 'float32',
-                                          'value': np.asarray([[n, d] for n, d in zip(nodes, delays)], dtype=np.float32)
-                                              if nodes else delays}}
+                                          'dtype': self._backend._float_def,
+                                          'value': delays},
+                        f'source_idx': {'vtype': 'constant',
+                                        'dtype': 'int32',
+                                        'value': nodes}}
 
             # create buffer equations
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
@@ -1590,13 +1604,15 @@ class CircuitIR(AbstractBaseIR):
                               f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1)",
                               f"times[0] = t",
                               f"{var}_buffer_{idx}[0] = {var}",
-                              f"{var}_buffered = interpolate_1d(times, {var}_buffer_{idx}, t + {var}_delays)"]
+                              f"{var}_buffered = interpolate_1d(times, {var}_buffer_{idx}, t + {var}_delays)"
+                              ]
             else:
                 buffer_eqs = [f"times[:] = roll(times, 1)",
                               f"{var}_buffer_{idx}[:] = roll({var}_buffer_{idx}, 1, 1)",
                               f"times[0] = t",
                               f"{var}_buffer_{idx}[:, 0] = {var}",
-                              f"{var}_buffered = interpolate_nd(times, {var}_buffer_{idx}, {var}_delays, t)"]
+                              f"{var}_buffered = interpolate_nd(times, {var}_buffer_{idx}, {var}_delays, source_idx, t)"
+                              ]
 
         # add buffer equations to node operator
         op_info = node_ir[op]

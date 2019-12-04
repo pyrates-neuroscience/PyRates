@@ -58,8 +58,8 @@ def pr_interp_1d(x, y, x_new):
     return np.interp(x_new, x, y)
 
 
-def pr_interp_nd(x, y, x_new, t):
-    return np.asarray([np.interp(t + x_new_tmp, x, y[int(i), :]) for i, x_new_tmp in x_new])
+def pr_interp_nd(x, y, x_new, y_idx, t):
+    return np.asarray([np.interp(t + x_new_tmp, x, y[i, :]) for i, x_new_tmp in zip(y_idx, x_new)])
 
 
 def pr_interp(f, x_new):
