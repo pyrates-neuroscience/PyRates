@@ -994,11 +994,9 @@ class NumpyBackend(object):
             rename = True if var.short_name not in ["y",  "y_delta", "t",  "times"] else False
             if var.vtype == 'constant' and rename:
                 for var_tmp in self.vars.values():
-                    if var.short_name == var_tmp.short_name and var.shape == var_tmp.shape:
-                        if sum(var.shape) > 1:
-                            rename = all(var != var_tmp)
-                        else:
-                            rename = var_tmp != var
+                    rename = not self._compare_vars(var, var_tmp)
+                    if rename:
+                        break
             if rename:
                 name_old = var.short_name
                 name_new = f"{name_old}_{self.var_counter[name_old]}"
@@ -1996,6 +1994,14 @@ class NumpyBackend(object):
 
     def _is_state_var(self, key):
         return key, key in self.state_vars
+
+    @staticmethod
+    def _compare_vars(v1, v2):
+        if v1.short_name == v2.short_name and v1.shape == v2.shape:
+            if sum(var.shape) > 1:
+                return all(var.flatten() != var_tmp.flatten())
+            else:
+                return var_tmp != var
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:

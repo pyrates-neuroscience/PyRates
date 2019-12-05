@@ -29,18 +29,18 @@ dt = 1e-4                                                       # integration st
 T = 1.0                                                         # overall simulation time in s
 inp = np.random.uniform(120., 320., (int(T/dt)+1, 2))           # white noise input to the pyramidal cells in Hz.
 
-N = 5                                                            # grid-size
-C = np.linspace(0., 200., N)                                      # bi-directional connection strength
-D = np.linspace(0., 5e-2, N)                                    # bi-directional coupling delay
+N = 10                                                            # grid-size
+C = np.linspace(0.001, 1.0, N)                                    # bi-directional connection strength
+D = np.linspace(1e-4, 5e-2, N)                                    # bi-directional coupling delay
 
 # parameter grid
 params = {'C': C,
-          #'D': D
+          'D': D
           }
 param_map = {'C': {'vars': ['weight'],
                    'edges': [('JRC1', 'JRC2'), ('JRC2', 'JRC1')]},
-             #'D': {'vars': ['delay'],
-             #      'edges': [('JRC1', 'JRC2'), ('JRC2', 'JRC1')]}
+             'D': {'vars': ['delay'],
+                   'edges': [('JRC1', 'JRC2'), ('JRC2', 'JRC1')]}
              }
 
 # grid searches
@@ -52,8 +52,9 @@ results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit
                                     inputs={"all/JRC_op/u": np.asarray(inp, dtype=np.float32)},
                                     outputs={"v": "all/JRC_op/PSP_ein"},
                                     dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3,
-                                    init_kwargs={'backend': 'numpy', 'matrix_sparseness': 0.9, 'vectorization': True},
-                                    profile=True, solver='euler')
+                                    init_kwargs={'backend': 'numpy', 'matrix_sparseness': 0.9, 'step_size': dt,
+                                                 'solver': 'scipy'},
+                                    profile=True)
 
 # tensorflow backend grid-search
 # results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled",
@@ -61,7 +62,7 @@ results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit
 #                                     inputs={"JRC1/PC/RPO_e_pc/u": np.asarray(inp1, dtype=np.float32),
 #                                             "JRC2/PC/RPO_e_pc/u": np.asarray(inp2, dtype=np.float32)},
 #                                     outputs={"v": "all/PC/OBS/V"},
-#                                     dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3,
+#                                     step_size=step_size, simulation_time=T, permute_grid=True, sampling_step_size=1e-3,
 #                                     init_kwargs={'solver': 'euler', 'backend': 'tensorflow'}, profile='t',
 #                                     )
 

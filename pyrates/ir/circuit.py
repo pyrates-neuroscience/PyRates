@@ -49,7 +49,7 @@ class CircuitIR(AbstractBaseIR):
     and variables."""
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
-    __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map",
+    __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map", "_buffered",
                  "_first_run", "_vectorized", "_compile_info", "_backend", "step_size", "solver"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
@@ -96,6 +96,7 @@ class CircuitIR(AbstractBaseIR):
         self._vectorized = False
         self._compile_info = {}
         self._backend = None
+        self._buffered = False
         self.solver = None
         self.step_size = None
 
@@ -1148,15 +1149,15 @@ class CircuitIR(AbstractBaseIR):
                         weight_mat[row, col] = w
 
                     # set up weights and edge projection equation
-                    eq = f"{tvar} = target_idx @ (weight @ {svar}){idx}" if len(d) \
-                        else f"{tvar} = (weight @ {svar}){idx}"
+                    eq = f"{tvar} = target_idx @ (weight @ {svar}{idx})" if len(d) \
+                        else f"{tvar} = weight @ {svar}{idx}"
                     weight = weight_mat
                     dot_edge = True
 
             # set up edge projection equation and edge indices for edges that cannot be realized via a matrix product
             if not dot_edge:
-                eq = f"{tvar} = target_idx @ ({svar} * weight){idx}" if len(d) \
-                    else f"{tvar} = ({svar} * weight){idx}"
+                eq = f"{tvar} = target_idx @ ({svar}{idx} * weight)" if len(d) \
+                    else f"{tvar} = {svar}{idx} * weight"
                 if len(d):
                     args['target_idx'] = {'vtype': 'constant', 'dtype': self._backend._float_def,
                                           'value': np.array(d, dtype=np.float32)}
@@ -1609,6 +1610,10 @@ class CircuitIR(AbstractBaseIR):
                               f"{var}_buffer[:, 0] = {var}",
                               f"{var}_buffered = interpolate_nd(times, {var}_buffer, {var}_delays, source_idx, t)"
                               ]
+            if self._buffered:
+                buffer_eqs.pop(2)
+                buffer_eqs.pop(0)
+            self._buffered = True
 
         # add buffer equations to node operator
         op_info = node_ir[op]
@@ -1624,11 +1629,14 @@ class CircuitIR(AbstractBaseIR):
                                'reduce_dim': True}
 
         # update edge information
+        idx_l = 0
         for i, edge in enumerate(edges):
             s, t, e = edge
             self.edges[s, t, e]['source_var'] = f"{op}/{var}_buffered"
             if len(edges) > 1:
-                self.edges[s, t, e]['source_idx'] = [i]
+                idx_h = idx_l + len(nodes[i])
+                self.edges[s, t, e]['source_idx'] = list(range(idx_l, idx_h))
+                idx_l = idx_h
 
     def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
         """Adds an input collector variable to an edge.
