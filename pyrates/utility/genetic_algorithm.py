@@ -96,7 +96,7 @@ class GeneticAlgorithmTemplate:
         candidate_save
             If set, the strongest member of a population will be saved to an hdf5 file, before the population is updated
         drop_save
-            If set, all members that are droped from a population due to stagnation or other criteria will be saved to
+            If set, all members that are dropped from a population due to stagnation or other criteria will be saved to
             this folder in hdf5 format
         gene_sampling_func
         kwargs
@@ -136,8 +136,9 @@ class GeneticAlgorithmTemplate:
             self.current_max_fitness = float(new_candidate.loc[:, "fitness"])
             print(f'Currently fittest genes:')
             self.plot_genes(new_candidate)
-            target_tmp = [np.round(tar[0], decimals=2) for tar in target]
-            print(f'Target: {target_tmp}')
+
+            #target_tmp = [np.round(tar[0], decimals=2) for tar in target]
+            #print(f'Target: {target_tmp}')
 
             # Check for fitness stagnation
             ##############################
@@ -385,10 +386,11 @@ class GeneticAlgorithmTemplate:
 class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
     from scipy.spatial.distance import cdist
 
-    def __init__(self, gs_config, fitness_measure=cdist):
+    def __init__(self, gs_config, fitness_measure=cdist, **fitness_kwargs):
         super().__init__()
 
         self.fitness_measure = fitness_measure
+        self.fitness_kwargs = fitness_kwargs
         self.gs_config = gs_config
 
     def eval_fitness(self, target: list, **kwargs):
@@ -402,13 +404,15 @@ class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
                               sampling_step_size=self.gs_config['sampling_step_size'],
                               permute_grid=False,
                               inputs=self.gs_config['inputs'],
-                              outputs=self.gs_config['outputs'].copy()
+                              outputs=self.gs_config['outputs'].copy(),
+                              init_kwargs=self.gs_config['init_kwargs'],
+                              **kwargs
                               )
 
         for i, candidate_genes in enumerate(param_grid.values):
             candidate_out = results.loc[:, tuple(candidate_genes)].values.T
             target_reshaped = np.array(target)[None, :]
-            dist = self.fitness_measure(candidate_out, target_reshaped)
+            dist = self.fitness_measure(candidate_out, target_reshaped, **self.fitness_kwargs)
             self.pop.at[i, 'fitness'] = float(1 / dist)
 
 
