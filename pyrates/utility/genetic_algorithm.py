@@ -113,6 +113,8 @@ class GeneticAlgorithmTemplate:
 
         """
 
+        import hypy
+
         self.initial_gene_pool = initial_gene_pool
         self.num_genes = len(initial_gene_pool)
         self.sigma_adapt = sigma_adapt
@@ -229,6 +231,7 @@ class GeneticAlgorithmTemplate:
 
             # Create offspring from current population
             ##########################################
+
             if self.current_max_fitness == -0.0:
                 print(f'No candidate available for the current gene set')
                 print(f'Generating new population')
@@ -462,11 +465,12 @@ class GeneticAlgorithmTemplate:
 class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
     from scipy.spatial.distance import cdist
 
-    def __init__(self, nodes, compute_dir=None, verbose: bool = True, fitness_measure: Callable = cdist):
+    def __init__(self, gs_config, fitness_measure=cdist, **fitness_kwargs):
         super().__init__()
 
-        self.cgs = ClusterGridSearch(nodes=nodes, compute_dir=compute_dir, verbose=verbose)
         self.fitness_measure = fitness_measure
+        self.fitness_kwargs = fitness_kwargs
+        self.gs_config = gs_config
 
     def eval_fitness(self, target: list, **kwargs):
         param_grid = self.pop.drop(['fitness', 'sigma'], axis=1)
@@ -479,13 +483,15 @@ class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
                               sampling_step_size=self.gs_config['sampling_step_size'],
                               permute_grid=False,
                               inputs=self.gs_config['inputs'],
-                              outputs=self.gs_config['outputs'].copy()
+                              outputs=self.gs_config['outputs'].copy(),
+                              init_kwargs=self.gs_config['init_kwargs'],
+                              **kwargs
                               )
 
         for i, candidate_genes in enumerate(param_grid.values):
             candidate_out = results.loc[:, tuple(candidate_genes)].values.T
             target_reshaped = np.array(target)[None, :]
-            dist = self.fitness_measure(candidate_out, target_reshaped)
+            dist = self.fitness_measure(candidate_out, target_reshaped, **self.fitness_kwargs)
             self.pop.at[i, 'fitness'] = float(1 / dist)
 
 
