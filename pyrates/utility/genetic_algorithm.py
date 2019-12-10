@@ -137,9 +137,6 @@ class GeneticAlgorithmTemplate:
             print(f'Currently fittest genes:')
             self.plot_genes(new_candidate)
 
-            #target_tmp = [np.round(tar[0], decimals=2) for tar in target]
-            #print(f'Target: {target_tmp}')
-
             # Check for fitness stagnation
             ##############################
             if max_stagnation_steps > 0:
@@ -193,13 +190,6 @@ class GeneticAlgorithmTemplate:
                 else:
                     return self.candidate
 
-            # Drop additional information
-            #############################
-            try:
-                self.pop = self.pop.drop("holgado", axis=1)
-            except KeyError:
-                pass
-
             # Create offspring from current population
             ##########################################
             self.__create_offspring(n_parent_pairs=n_parent_pairs, n_new=n_new, n_winners=n_winners)
@@ -227,6 +217,11 @@ class GeneticAlgorithmTemplate:
 
         # Create new offspring
         ######################
+
+        if self.pop['fitness'].sum() == 0.0:
+            n_new = self.pop_size
+            n_parent_pairs = 0
+            n_winners = 0
         offspring = []
         new_sigs = []
         n_mutations = self.pop_size - (n_parent_pairs + n_new + n_winners)
@@ -270,6 +265,7 @@ class GeneticAlgorithmTemplate:
         offspring = pd.DataFrame(offspring)
         offspring['fitness'] = 0.0
         offspring['sigma'] = new_sigs
+        offspring['results'] = [[] for _ in range(len(new_sigs))]
         offspring.columns = self.pop.columns
 
         self.pop = offspring
@@ -284,7 +280,6 @@ class GeneticAlgorithmTemplate:
                 pop_grid[param] = np.array([np.mean([value['min'], value['max']])])
             else:
                 pop_grid[param] = sampling_func(value['min'], value['max'], value['N'])
-            # pop_grid[param] = np.linspace(value['min'], value['max'], value['N'])
         self.pop = linearize_grid(pop_grid, permute=True)
         self.pop_size = self.pop.shape[0]
 
@@ -292,12 +287,13 @@ class GeneticAlgorithmTemplate:
 
         self.pop['fitness'] = 0.0
         self.pop['sigma'] = [sigmas for _ in range(self.pop_size)]
+        self.pop['results'] = [[] for _ in range(self.pop_size)]
 
     def __select_winners(self, n_winners):
         """Returns the n_winners fittest members from the current population"""
         winners = []
         for idx in self.pop.nlargest(n_winners, 'fitness').index:
-            winner_genes = self.pop.iloc[idx].drop(['fitness', 'sigma']).to_list()
+            winner_genes = self.pop.iloc[idx].drop(['fitness', 'sigma', 'results']).to_list()
             winner_sigma = self.pop.iloc[idx]['sigma']
             winners.append([winner_genes, winner_sigma])
         return winners
@@ -325,7 +321,7 @@ class GeneticAlgorithmTemplate:
             genes.append(random.uniform(value['min'], value['max']))
             sigma.append(value['sigma'])
         new_member = [genes, sigma]
-        already_exists = (self.pop.drop(['fitness', 'sigma'], axis=1) == new_member[0]).all(1).any()
+        already_exists = (self.pop.drop(['fitness', 'sigma', 'results'], axis=1) == new_member[0]).all(1).any()
         if already_exists:
             new_member = self.__create_new_member()
         return new_member
@@ -366,7 +362,7 @@ class GeneticAlgorithmTemplate:
                     else:
                         child_genes.append(parents[1][gene])
                         child_sigma.append(parents[1]['sigma'][g])
-                already_exists = (self.pop.drop(['fitness', 'sigma'], axis=1) == child_genes).all(1).any()
+                already_exists = (self.pop.drop(['fitness', 'sigma', 'results'], axis=1) == child_genes).all(1).any()
                 if not already_exists:
                     break
                 count += 1
@@ -394,7 +390,7 @@ class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
         self.gs_config = gs_config
 
     def eval_fitness(self, target: list, **kwargs):
-        param_grid = self.pop.drop(['fitness', 'sigma'], axis=1)
+        param_grid = self.pop.drop(['fitness', 'sigma', 'results'], axis=1)
 
         results = grid_search(circuit_template=self.gs_config['circuit_template'],
                               param_grid=param_grid,
@@ -417,17 +413,19 @@ class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
 
 
 class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
-    def __init__(self, gs_config, cgs_config):
+    def __init__(self, gs_config, cgs_config, fitness_measure, **fitness_kwargs):
         super().__init__()
 
         self.gs_config = gs_config
         self.cgs_config = cgs_config
+        self.fitness_measure = fitness_measure
+        self.fitness_kwargs = fitness_kwargs
 
         self.cgs = ClusterGridSearch(cgs_config['nodes'], compute_dir=cgs_config['compute_dir'])
 
     def eval_fitness(self, target: list, **kwargs):
 
-        param_grid = self.pop.drop(['fitness', 'sigma'], axis=1)
+        param_grid = self.pop.drop(['fitness', 'sigma', 'results'], axis=1)
 
         res_file = self.cgs.run(
             circuit_template=self.gs_config['circuit_template'],

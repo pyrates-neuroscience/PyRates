@@ -951,8 +951,6 @@ class CircuitIR(AbstractBaseIR):
             step_size = self.step_size
         if step_size is None:
             raise ValueError('Step-size not provided. Please pass the desired initial simulation step-size to `run()`.')
-        if not sampling_step_size:
-            sampling_step_size = step_size
         if not simulation_time:
             simulation_time = step_size
         sim_steps = int(np.round(simulation_time/step_size, decimals=0))
@@ -1028,6 +1026,12 @@ class CircuitIR(AbstractBaseIR):
                         outputs[(outkey, node_key, str(k))] = np.squeeze(out_val_tmp[:, k])
 
         # create data frame
+        if sampling_step_size and not all(np.diff(times, 1) == step_size):
+            n = int(np.round(simulation_time/sampling_step_size, decimals=0))
+            new_times = np.linspace(step_size, simulation_time, n + 1)
+            for key, val in outputs.items():
+                outputs[key] = np.interp(new_times, times, val)
+            times = new_times
         out_vars = DataFrame(outputs, index=times)
 
         # return results

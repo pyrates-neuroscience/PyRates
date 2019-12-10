@@ -1585,7 +1585,7 @@ class NumpyBackend(object):
 
         return op1, op2
 
-    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, update_type: str = None, *args) -> Any:
+    def apply_idx(self, var: Any, idx: Any, update: Optional[Any] = None, update_type: str = None, *args) -> Any:
         """Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.
 
         Parameters

@@ -181,7 +181,7 @@ def analytic_signal(data: pd.DataFrame, fmin: float, fmax: float, nodes: List[st
     return data
 
 
-def welch(data, tmin=0., tmax=None, **kwargs):
+def welch(data, tmin=0., tmax=None, fmin=0., fmax=np.inf, **kwargs):
     """
 
     Parameters
@@ -189,6 +189,8 @@ def welch(data, tmin=0., tmax=None, **kwargs):
     data
     tmin
     tmax
+    fmin
+    fmax
     kwargs
 
     Returns
@@ -205,12 +207,13 @@ def welch(data, tmin=0., tmax=None, **kwargs):
     else:
         data = data.iloc[tmin:tmax]
 
+    # create mne raw data object
+    from pyrates.utility import mne_from_dataframe
+    raw = mne_from_dataframe(data)
+
     # Compute power spectral density
-    try:
-        from scipy.signal import welch
-        return welch(data.values, fs=1./dt, axis=0, **kwargs)
-    except IndexError:
-        return np.NaN, np.NaN
+    from mne.time_frequency import psd_welch
+    return psd_welch(raw, fmin=fmin, fmax=fmax, verbose=False, **kwargs)
 
 
 def fft(data, tmin=0., **kwargs):
