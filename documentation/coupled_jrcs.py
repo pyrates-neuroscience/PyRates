@@ -30,8 +30,8 @@ T = 1.0                                                         # overall simula
 inp = np.random.uniform(120., 320., (int(T/dt)+1, 2))           # white noise input to the pyramidal cells in Hz.
 
 N = 10                                                            # grid-size
-C = np.linspace(0.001, 1.0, N)                                    # bi-directional connection strength
-D = np.linspace(1e-4, 5e-2, N)                                    # bi-directional coupling delay
+C = np.linspace(0., 5.0, N)                                    # bi-directional connection strength
+D = np.linspace(0., 5e-3, N)                                    # bi-directional coupling delay
 
 # parameter grid
 params = {'C': C,
