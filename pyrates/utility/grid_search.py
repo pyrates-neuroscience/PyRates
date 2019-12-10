@@ -40,7 +40,6 @@ import os
 import sys
 import time as t
 import glob
-import yaml
 import getpass
 import argparse
 from pathlib import Path
@@ -1092,6 +1091,9 @@ class ClusterGridSearch(ClusterCompute):
         -------
 
         """
+
+        import yaml
+
         if not sampling_step_size:
             sampling_step_size = dt
 

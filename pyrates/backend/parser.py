@@ -464,6 +464,11 @@ class ExpressionParser(ParserElement):
                                                    **self.parser_kwargs)
                     self.vars[op] = self.op
 
+            elif op == 't':
+
+                self.op = self.backend.add_var(vtype='state_var', name=op, shape=(), dtype='float', value=0.0,
+                                               **self.parser_kwargs)
+
             else:
 
                 raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "

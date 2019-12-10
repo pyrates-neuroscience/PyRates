@@ -113,7 +113,7 @@ class GeneticAlgorithmTemplate:
 
         """
 
-        import hypy
+        import h5py
 
         self.initial_gene_pool = initial_gene_pool
         self.num_genes = len(initial_gene_pool)
@@ -152,7 +152,7 @@ class GeneticAlgorithmTemplate:
             target_tmp = []
             for tar in target:
                 if isinstance(tar, list):
-                    target_tmp.append(np.round(tar[0], decimals=2))
+                    target_tmp.append(np.round(tar, decimals=2))
                 else:
                     target_tmp.append(np.round(tar, decimals=2))
             print(f'Target: {target_tmp}')
@@ -481,18 +481,18 @@ class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
     def eval_fitness(self, target: list, **kwargs):
         param_grid = self.pop.drop(['fitness', 'sigma', 'results'], axis=1)
 
-        results = grid_search(circuit_template=self.gs_config['circuit_template'],
-                              param_grid=param_grid,
-                              param_map=self.gs_config['param_map'],
-                              simulation_time=self.gs_config['simulation_time'],
-                              dt=self.gs_config['step_size'],
-                              sampling_step_size=self.gs_config['sampling_step_size'],
-                              permute_grid=False,
-                              inputs=self.gs_config['inputs'],
-                              outputs=self.gs_config['outputs'].copy(),
-                              init_kwargs=self.gs_config['init_kwargs'],
-                              **kwargs
-                              )
+        results, params = grid_search(circuit_template=self.gs_config['circuit_template'],
+                                      param_grid=param_grid,
+                                      param_map=self.gs_config['param_map'],
+                                      simulation_time=self.gs_config['simulation_time'],
+                                      dt=self.gs_config['step_size'],
+                                      sampling_step_size=self.gs_config['sampling_step_size'],
+                                      permute_grid=False,
+                                      inputs=self.gs_config['inputs'],
+                                      outputs=self.gs_config['outputs'].copy(),
+                                      init_kwargs=self.gs_config['init_kwargs'],
+                                      **kwargs
+                                      )
 
         for i, candidate_genes in enumerate(param_grid.values):
             candidate_out = results.loc[:, tuple(candidate_genes)].values.T
@@ -518,7 +518,7 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
 
         res_file = self.cgs.run(
             circuit_template=self.gs_config['circuit_template'],
-            params=param_grid,
+            param_grid=param_grid,
             param_map=self.gs_config['param_map'],
             simulation_time=self.gs_config['simulation_time'],
             dt=self.gs_config['step_size'],
