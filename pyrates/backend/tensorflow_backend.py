@@ -32,9 +32,6 @@
 # external imports
 from typing import Optional, Dict, Callable, List, Any, Union
 import tensorflow as tf
-import os
-import sys
-from shutil import rmtree
 
 # pyrates internal imports
 from .funcs import *
@@ -365,7 +362,7 @@ class TensorflowBackend(NumpyBackend):
                              'backend or set `continuous` to False.')
         return super().add_input_layer(inputs=inputs, T=T, continuous=continuous)
 
-    def apply_idx(self, var: Any, idx: str, update: Optional[Any] = None, update_type: str = None, *args) -> Any:
+    def apply_idx(self, var: Any, idx: Any, update: Optional[Any] = None, update_type: str = None, *args) -> Any:
         """Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.
 
         Parameters
@@ -386,29 +383,29 @@ class TensorflowBackend(NumpyBackend):
 
         """
 
-        idx_tmp = idx.split(',')
-        n_indices = len(idx_tmp)
-        if n_indices > 1 and args:
+        if type(idx) is str:
 
-            # create boolean mask as index
-            indices = []
-            for i, idx in enumerate(idx_tmp):
-                if idx == ':':
-                    indices.append(list(range(var.shape[i])))
-                elif len(args) > i and hasattr(args[i], 'numpy'):
-                    indices.append(args[i].numpy())
-                else:
-                    indices.append([int(idx)])
+            idx_tmp = idx.split(',')
+            n_indices = len(idx_tmp)
+            if n_indices > 1 and args:
 
-            idx_var = np.zeros(tuple(var.shape), dtype=np.int32)
-            idx_var[tuple(indices)] = 1
-            idx_var = self.add_var('constant', name=f"{var.name.split(':')[0]}_idx", value=idx_var != 0)
-            return super().apply_idx(var, idx_var, update, update_type)
+                # create boolean mask as index
+                indices = []
+                for i, idx in enumerate(idx_tmp):
+                    if idx == ':':
+                        indices.append(list(range(var.shape[i])))
+                    elif len(args) > i and hasattr(args[i], 'numpy'):
+                        indices.append(args[i].numpy())
+                    else:
+                        indices.append([int(idx)])
 
-        else:
+                idx_var = np.zeros(tuple(var.shape), dtype=np.int32)
+                idx_var[tuple(indices)] = 1
+                idx_var = self.add_var('constant', name=f"{var.name.split(':')[0]}_idx", value=idx_var != 0)
+                return super().apply_idx(var, idx_var, update, update_type)
 
-            # standard indexing
-            return super().apply_idx(var, idx, update, update_type, *args)
+        # standard indexing
+        return super().apply_idx(var, idx, update, update_type, *args)
 
     def _integrate(self, rhs_func, func_args, T, dt, dts, t, output_indices):
 
