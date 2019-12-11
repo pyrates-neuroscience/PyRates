@@ -40,7 +40,6 @@ import os
 import sys
 import time as t
 import glob
-import yaml
 import getpass
 import argparse
 from pathlib import Path
@@ -1091,6 +1090,9 @@ class ClusterGridSearch(ClusterCompute):
         -------
 
         """
+        
+        import yaml
+        
         if not sampling_step_size:
             sampling_step_size = dt
 
@@ -1112,7 +1114,9 @@ class ClusterGridSearch(ClusterCompute):
     @staticmethod
     def add_template_information(yaml_fp, hdf5_file):
         """Add opearator information of the circuit template to the global result file"""
-
+        
+        import yaml
+        
         with open(yaml_fp, 'r') as stream:
             try:
                 yaml_dict = yaml.safe_load(stream)
@@ -1317,6 +1321,7 @@ class ClusterWorkerTemplate(object):
         import warnings
         # external imports
         from numba import config
+        import yaml
 
         # tf.config.set_soft_device_placement(True)
 
