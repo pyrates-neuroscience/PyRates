@@ -26,11 +26,11 @@ Op_e_adapt:
     delta:
       default: 2.0
     eta:
-      default: -12.0
+      default: -10.0
     J_e:
       default: 21.2132
     alpha:
-      default: 1.0
+      default: 0.05
     tau_a:
       default: 10.0
     inp:
@@ -53,11 +53,11 @@ Op_e:
     tau:
       default: 1.0
     delta:
-      default: 1.0
+      default: 2.0
     eta:
-      default: -5.0
+      default: -10.0
     J_e:
-      default: 15.0
+      default: 21.2132
     J_i:
       default: 2.0
     inp:

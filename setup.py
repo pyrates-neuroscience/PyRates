@@ -21,7 +21,7 @@ CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Topic :: Scientific/Engineering",
                ]
 
-EXTRAS = {"tf": ["tensorflow==2.0.0-rc0"],
+EXTRAS = {"tf": ["tensorflow>=2.0"],
           "plot": ["seaborn", "pydot"],
           "proc": ["mne", "scipy"],
           "cluster": ["paramiko", "h5py"],

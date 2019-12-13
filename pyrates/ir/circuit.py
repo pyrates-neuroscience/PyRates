@@ -1179,7 +1179,8 @@ class CircuitIR(AbstractBaseIR):
             target_node_ir.add_op(op_name,
                                   inputs={svar: {'sources': [sop],
                                                  'reduce_dim': True,
-                                                 'node': source_node}},
+                                                 'node': source_node,
+                                                 'var': svar}},
                                   output=tvar,
                                   equations=[eq],
                                   variables=args)
@@ -1332,11 +1333,12 @@ class CircuitIR(AbstractBaseIR):
                     in_ops_col = {}
                     reduce_inputs = inp['reduce_dim'] if type(inp['reduce_dim']) is bool else False
                     in_node = inp['node'] if 'node' in inp else node_name
+                    in_var_tmp = inp.pop('var', None)
 
                     for i, in_op in enumerate(inp['sources']):
 
                         # collect single input to op
-                        in_var = self[f"{in_node}/{in_op}"]['output']
+                        in_var = in_var_tmp if in_var_tmp else self[f"{in_node}/{in_op}"]['output']
                         try:
                             in_val = self[f"{in_node}/{in_op}/{in_var}"]
                         except KeyError:

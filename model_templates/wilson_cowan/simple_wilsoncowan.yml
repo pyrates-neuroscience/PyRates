@@ -19,11 +19,105 @@ Op_rate:
     I_syn:
       default: input
 
+WC_stp_edge:
+  base: OperatprTemplate
+  equations:
+    - "d/dt * x = (1-x)/tau_r - k_r*u*x*g"
+    - "d/dt * u = (U - u)/tau_f + k_f*U*(1.0-u)*g"
+    - "d/dt * p = (1-p)/tau_p + I*I_d*k_p(fr - dr)"
+    - "g_scaled = g*x*u*p"
+  variables:
+    g:
+      default: source_var
+    I:
+      default: source_var
+    I_d:
+      default: source_var
+    x:
+      default: variable
+    u:
+      default: variable
+    p:
+      default: variable
+    g_scaled:
+      default: output
+    tau_r:
+      default: 0.1
+    tau_f:
+      default: 0.2
+    k_r:
+      default: 0.1
+    k_f:
+      default: 0.2
+    U:
+      default: 1.0
+
+
+WC_e_op:
+  base: OperatorTemplate
+  equations:
+    - "re = max(sigmoid(ve, 1.0, s, theta), 0)"
+    - "d/dt * ve = (re_in - ri_in + w_in*I + B - ve) / tau"
+  variables:
+    re:
+      default: output
+    ve:
+      default: variable
+    re_in:
+      default: input
+    ri_in:
+      default: input
+    s:
+      default: 0.67
+    theta:
+      default: 0.0
+    tau:
+      default: 2e-2
+    I:
+      default: input
+    B:
+      default: 0.0
+    w_in:
+      default: 1.0
+
+WC_i_op:
+  base: OperatorTemplate
+  equations:
+    - "ri = max(sigmoid(vi, 1.0, s, theta), 0)"
+    - "d/dt * vi = (re_in - ri_in - vi) / tau"
+  variables:
+    ri:
+      default: output
+    vi:
+      default: variable
+    re_in:
+      default: input
+    ri_in:
+      default: input
+    s:
+      default: 0.67
+    theta:
+      default: 0.0
+    tau:
+      default: 4e-2
+
+# nodes
+WC_e:
+  base: NodeTemplate
+  operators:
+    - WC_e_op
+
+WC_i:
+  base: NodeTemplate
+  operators:
+    - WC_i_op
+
 Pop_rate:
   base: NodeTemplate
   operators:
     - Op_rate
 
+# circuits
 WC:
   base: CircuitTemplate
   nodes:
@@ -34,3 +128,25 @@ WC:
     - [I/Op_rate/r, E/Op_rate/I_syn, null, {weight: -1.0}]
     - [E/Op_rate/r, E/Op_rate/I_syn, null, {weight: 1.0}]
     - [I/Op_rate/r, I/Op_rate/I_syn, null, {weight: -1.0}]
+
+WC_stp_net:
+  base: CircuitTemplate
+  nodes:
+    WC: WC_pop
+  edges:
+    - [WC/WC_stp_op/gu, WC/WC_stp_op/gu_ee, WC_stp_edge, {weight: 1.0}]
+    - [WC/WC_stp_op/gu, WC/WC_stp_op/gu_ie, WC_stp_edge, {weight: 1.0}]
+    - [WC/WC_stp_op/gv, WC/WC_stp_op/gv_ei, WC_stp_edge, {weight: 1.0}]
+    - [WC/WC_stp_op/gv, WC/WC_stp_op/gv_ii, WC_stp_edge, {weight: 1.0}]
+    - [WC/WC_inp_op/I, WC/WC_stp_op/I_d, null, {weight: 1.0, delay: 0.1}]
+
+WC_stp_net_test:
+  base: CircuitTemplate
+  nodes:
+    E: WC_e
+    I: WC_i
+  edges:
+    - [E/WC_e_op/re, E/WC_e_op/re_in, null, {weight: 1.0}]
+    - [E/WC_e_op/re, I/WC_i_op/re_in, null, {weight: 0.5}]
+    - [I/WC_i_op/ri, E/WC_e_op/ri_in, null, {weight: 0.5}]
+    - [I/WC_i_op/ri, I/WC_i_op/ri_in, null, {weight: 0.0}]

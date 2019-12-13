@@ -2,7 +2,7 @@ numpy
 matplotlib
 networkx
 pandas
-tensorflow==2.0.0-alpha
+tensorflow>=2.0
 pyparsing
 ruamel.yaml
 scipy

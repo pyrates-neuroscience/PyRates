@@ -1116,6 +1116,8 @@ class ClusterGridSearch(ClusterCompute):
     def add_template_information(yaml_fp, hdf5_file):
         """Add opearator information of the circuit template to the global result file"""
 
+        import yaml
+
         with open(yaml_fp, 'r') as stream:
             try:
                 yaml_dict = yaml.safe_load(stream)
@@ -1320,6 +1322,7 @@ class ClusterWorkerTemplate(object):
         import warnings
         # external imports
         from numba import config
+        import yaml
 
         # tf.config.set_soft_device_placement(True)
 
