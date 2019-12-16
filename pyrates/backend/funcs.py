@@ -60,7 +60,7 @@ def pr_interp_1d_linear(x, y, x_new):
 
 
 def pr_interp_nd_linear(x, y, x_new, y_idx, t):
-    return np.asarray([np.interp(t + x_new_tmp, x, y[i, :]) for i, x_new_tmp in zip(y_idx, x_new)])
+    return np.asarray([np.interp(t - x_new_tmp, x, y[i, :]) for i, x_new_tmp in zip(y_idx, x_new)])
 
 
 def pr_interp_1d(x, y, x_new):
@@ -71,8 +71,11 @@ def pr_interp_nd(x, y, x_new, y_idx, t):
     try:
         f = interp1d(x, y, kind=3, axis=-1, fill_value='extrapolate', copy=False)
     except ValueError:
-        x, idx = np.unique(x, return_index=True)
-        f = interp1d(x, y[:, idx], kind=3, axis=-1, fill_value='extrapolate', copy=False)
+        try:
+            x, idx = np.unique(x, return_index=True)
+            f = interp1d(x, y[:, idx], kind=3, axis=-1, copy=False, fill_value='extrapolate')
+        except ValueError:
+            f = interp1d(x, y[:, idx], kind='linear', axis=-1, copy=False, fill_value='extrapolate')
     return np.asarray([f(x_new_tmp)[i] for i, x_new_tmp in zip(y_idx, t-x_new)])
 
 

@@ -13,7 +13,7 @@ T = 20.                                        # total simulation time in s
 inp = np.zeros((int(T/dt), 1), dtype='float32')                 # external input to the population
 inp[int(5./dt):int((T-5.)/dt)] = 1.0
 
-circuit = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp_net_test").apply()
+circuit = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp_net").apply()
 
 compute_graph = ComputeGraph(circuit, vectorization=True, backend='numpy', name='wc', step_size=dt,
                              solver='scipy')

@@ -778,6 +778,7 @@ class NumpyBackend(object):
                     "mean": {'name': "numpy_mean", 'call': "np.mean"},
                     "concat": {'name': "numpy_concatenate", 'call': "np.concatenate"},
                     "reshape": {'name': "numpy_reshape", 'call': "np.reshape"},
+                    "append": {'name': "numpy_append", 'call': "np.append"},
                     "shape": {'name': "numpy_shape", 'call': "np.shape"},
                     "dtype": {'name': "numpy_dtype", 'call': "np.dtype"},
                     'squeeze': {'name': "numpy_squeeze", 'call': "np.squeeze"},
@@ -1501,12 +1502,18 @@ class NumpyBackend(object):
         args = [None for _ in range(len(params))]
         func_gen.add_code_line("# declare constants")
         func_gen.add_linebreak()
+        updates, indices = [], []
+        i = 0
         for key, (vtype, idx) in var_map.items():
             if vtype == 'constant':
                 var = params[idx][1]
                 func_gen.add_code_line(f"{var.short_name} = params[{idx}]")
                 func_gen.add_linebreak()
                 args[idx] = var
+                if var.short_name != "y_delta":
+                    updates.append(f"{var.short_name}")
+                    indices.append(i)
+                    i += 1
         func_gen.add_linebreak()
 
         # extract state variables from input vector y
@@ -1522,11 +1529,27 @@ class NumpyBackend(object):
         # add equations
         func_gen.add_code_line("# calculate right-hand side update of equation system")
         func_gen.add_linebreak()
+        arg_updates = []
         for i, layer in enumerate(self.layers):
             for j, op in enumerate(layer):
+                lhs = op.value.split("=")[0]
+                lhs = lhs.replace(" ", "")
+                find_arg = [arg == lhs for arg in updates]
+                if any(find_arg):
+                    idx = find_arg.index(True)
+                    arg_updates.append((updates[idx], indices[idx]))
                 func_gen.add_code_line(op.value)
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
+
+        # update parameters where necessary
+        func_gen.add_code_line("# update system parameters")
+        func_gen.add_linebreak()
+        for upd, idx in arg_updates:
+            update_str = f"params[{idx}] = {upd}"
+            if f"    {update_str}" not in func_gen.code:
+                func_gen.add_code_line(update_str)
+                func_gen.add_linebreak()
 
         # add return line
         func_gen.add_code_line(f"return {self.vars['y_delta'].short_name}")
@@ -1998,15 +2021,15 @@ class NumpyBackend(object):
         for key, var_info in var_map.items():
             if 'times' in key:
                 args[var_info[1]] -= dt
-        return tuple(args)
+        return list(args)
 
     @staticmethod
     def _compare_vars(v1, v2):
         if v1.short_name == v2.short_name and v1.shape == v2.shape:
-            if sum(var.shape) > 1:
-                return all(var.flatten() != var_tmp.flatten())
+            if sum(v1.shape) > 1:
+                return all(v1.flatten() != v2.flatten())
             else:
-                return var_tmp != var
+                return v2 != v1
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:

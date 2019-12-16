@@ -50,11 +50,10 @@ class CircuitIR(AbstractBaseIR):
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
     __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map", "_buffered",
-                 "_first_run", "_vectorized", "_compile_info", "_backend", "step_size", "solver",
-                 "_dde_approximation_order"]
+                 "_first_run", "_vectorized", "_compile_info", "_backend", "step_size", "solver"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
-                 edges: list = None, template: str = None, dde_approximation_order: int = 0):
+                 edges: list = None, template: str = None):
         """
         Parameters:
         -----------
@@ -72,10 +71,6 @@ class CircuitIR(AbstractBaseIR):
         template
             optional string reference to path to template that this circuit was loaded from. Leave empty, if no template
             was used.
-        dde_approximation_order
-            Only relevant for delayed systems. If larger than zero, all discrete delays in the system will be
-            automatically approximated by a system of (n+1) coupled ODEs that represent a convolution with a
-            gamma distribution centered around the original delay (n is the approximation order).
         """
 
         super().__init__(template)
@@ -102,7 +97,6 @@ class CircuitIR(AbstractBaseIR):
         self._compile_info = {}
         self._backend = None
         self._buffered = False
-        self._dde_approximation_order = dde_approximation_order
         self.solver = None
         self.step_size = None
 
@@ -489,7 +483,7 @@ class CircuitIR(AbstractBaseIR):
         from pyrates.frontend import circuit_from_yaml
         return circuit_from_yaml(path)
 
-    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True, dt: Optional[float] = None):
+    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True, dde_approx: float = 0.0):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
@@ -523,7 +517,8 @@ class CircuitIR(AbstractBaseIR):
                 # add synaptic buffer to output variables with delay
                 if add_delay:
                     self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
-                                          nodes=nodes if len(delays) > 1 else None, spreads=spreads)
+                                          nodes=nodes if len(delays) > 1 else None, spreads=spreads,
+                                          dde_approx=dde_approx)
 
             # loop over input variables of node
             for i, (in_var, edges) in enumerate(node_inputs.items()):
@@ -686,12 +681,9 @@ class CircuitIR(AbstractBaseIR):
                     # and set size of this node to 1
                     node_sizes[op_graph] = 1
 
-                # TODO: decide, whether reference collecting for operator_graphs in `_reference_map` is actually necessary
-                #   and if we thus need to remove these reference again after vectorization.
-
                 # refer node key to new node and respective list index of its values
                 # format: "nodeX[Z]" with X = node index and Z = list index for values
-                self.label_map[specifier] = f"{new_name}[{coupling_vec_idx}]"
+                # self.label_map[specifier] = f"{new_name}[{coupling_vec_idx}]"
 
                 # get new reference for source/target nodes
                 # new references should have format "vector_node{node_idx}[{vector_idx}]"
@@ -1063,6 +1055,7 @@ class CircuitIR(AbstractBaseIR):
                 matrix_sparseness: float = 0.5,
                 step_size: Optional[float] = None,
                 solver: Optional[str] = None,
+                dde_approximation_order: int = 0,
                 **kwargs
                 ) -> AbstractBaseIR:
         """Parses IR into the backend. Returns an instance of the CircuitIR that allows for numerical simulations via
@@ -1088,7 +1081,10 @@ class CircuitIR(AbstractBaseIR):
             Step-size with which the network should be simulated later on. Only needs to be passed here, if the edges of
             the network contain delays. Will be used to discretize the delays.
         solver
-
+        dde_approximation_order
+            Only relevant for delayed systems. If larger than zero, all discrete delays in the system will be
+            automatically approximated by a system of (n+1) coupled ODEs that represent a convolution with a
+            gamma distribution centered around the original delay (n is the approximation order).
         kwargs
             Additional keyword arguments that will be passed on to the backend instance. For a full list of viable
             keyword arguments, see the documentation of the respective backend class (`numpy_backend.NumpyBackend` or
@@ -1119,7 +1115,7 @@ class CircuitIR(AbstractBaseIR):
 
         # run graph optimization and vectorization
         self._first_run = True
-        self.optimize_graph_in_place(vectorize=vectorization, dt=step_size)
+        self.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order)
 
         # move edge operations to nodes
         ###############################
@@ -1143,10 +1139,12 @@ class CircuitIR(AbstractBaseIR):
 
             # create mapping equation and its arguments
             args = {}
-            if tidx and sum(tval['shape']) > 1:
+            if len(tidx) > 1 and sum(tval['shape']) > 1:
                 d = np.zeros((tval['shape'][0], len(tidx)))
                 for i, t in enumerate(tidx):
                     d[t, i] = 1
+            elif len(tidx) and sum(tval['shape']) > 1:
+                d = tidx
             else:
                 d = []
             idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
@@ -1168,21 +1166,29 @@ class CircuitIR(AbstractBaseIR):
                         weight_mat[row, col] = w
 
                     # set up weights and edge projection equation
-                    eq = f"{tvar} = target_idx @ (weight @ {svar}{idx})" if len(d) \
-                        else f"{tvar} = weight @ {svar}{idx}"
+                    if len(d) > 1:
+                        eq = f"{tvar} = target_idx @ (weight @ {svar}{idx})"
+                    elif len(d):
+                        eq = f"{tvar}[target_idx] = weight @ {svar}{idx}"
+                    else:
+                        eq = f"{tvar} = weight @ {svar}{idx}"
                     weight = weight_mat
                     dot_edge = True
 
             # set up edge projection equation and edge indices for edges that cannot be realized via a matrix product
             if not dot_edge:
-                eq = f"{tvar} = target_idx @ ({svar}{idx} * weight)" if len(d) \
-                    else f"{tvar} = {svar}{idx} * weight"
-                if len(d):
-                    args['target_idx'] = {'vtype': 'constant', 'dtype': self._backend._float_def,
-                                          'value': np.array(d, dtype=np.float32)}
-                if idx:
-                    args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                          'value': np.array(sidx, dtype=np.int32)}
+                if len(d) > 1:
+                    eq = f"{tvar} = target_idx @ ({svar}{idx} * weight)"
+                elif len(d):
+                    eq = f"{tvar}[target_idx] = {svar}{idx} * weight"
+                else:
+                    eq = f"{tvar} = {svar}{idx} * weight"
+            if len(d):
+                args['target_idx'] = {'vtype': 'constant',
+                                      'value': np.array(d, dtype=self._backend._float_def if len(d) > 1 else np.int32)}
+            if idx:
+                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                      'value': np.array(sidx, dtype=np.int32)}
 
             # add edge variables to dict
             dtype = sval["dtype"]
@@ -1399,20 +1405,11 @@ class CircuitIR(AbstractBaseIR):
             if d is None or np.sum(d) == 0:
                 d = [1] * len(self.edges[s, t, e]['target_idx'])
             else:
-                if self.step_size is None and self.solver == 'scipy':
-                    raise ValueError('Step-size not passed for setting up edge delays. If delays are added to any '
-                                     'network edge, please pass the simulation `step-size` to the `compile` '
-                                     'method.')
-                if type(d) is list:
-                    d = np.asarray(d).squeeze()
-                    v = np.asarray(v).squeeze()
-                    d = [self._preprocess_delay(d_tmp) for d_tmp in d] if d.shape else \
-                        [self._preprocess_delay(d)]
-                    v = [self._preprocess_delay(v_tmp) for v_tmp in v] if v.shape else \
-                        [self._preprocess_delay(v)]
-                else:
-                    d = [self._preprocess_delay(d)]
-                    v = [self._preprocess_delay(v)]
+                d = self._process_delays(d)
+            if v is None or np.sum(v) == 0:
+                v = [0] * len(self.edges[s, t, e]['target_idx'])
+            else:
+                v = self._process_delays(v)
             means += d
             stds += v
 
@@ -1429,6 +1426,19 @@ class CircuitIR(AbstractBaseIR):
             self.edges[s, t, e]['delay'] = None
 
         return means, stds, nodes, add_delay
+
+    def _process_delays(self, d):
+        if self.step_size is None and self.solver == 'scipy':
+            raise ValueError('Step-size not passed for setting up edge delays. If delays are added to any '
+                             'network edge, please pass the simulation `step-size` to the `compile` '
+                             'method.')
+        if type(d) is list:
+            d = np.asarray(d).squeeze()
+            d = [self._preprocess_delay(d_tmp) for d_tmp in d] if d.shape else \
+                [self._preprocess_delay(d)]
+        else:
+            d = [self._preprocess_delay(d)]
+        return d
 
     def _preprocess_delay(self, delay):
         discretize = self.step_size is None or self.solver != 'scipy'
@@ -1516,7 +1526,7 @@ class CircuitIR(AbstractBaseIR):
         return edges_new
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
-                         spreads: Optional[list] = None) -> None:
+                         spreads: Optional[list] = None, dde_approx: float = 0.0) -> None:
         """Adds a buffer variable to an edge.
 
         Parameters
@@ -1535,6 +1545,10 @@ class CircuitIR(AbstractBaseIR):
             Node indices for each edge delay.
         spreads
             Standard deviations of delay distributions around means given by `delays`.
+        dde_approx
+            Only relevant for delayed systems. If larger than zero, all discrete delays in the system will be
+            automatically approximated by a system of (n+1) coupled ODEs that represent a convolution with a
+            gamma distribution centered around the original delay (n is the approximation order).
 
         Returns
         -------
@@ -1553,20 +1567,20 @@ class CircuitIR(AbstractBaseIR):
         # ODE approximation to DDE
         ##########################
 
-        if self._dde_approximation_order or spreads:
+        if dde_approx or spreads:
 
             # calculate orders and rates of ODE-system approximations to delayed connections
             if spreads:
                 orders, rates = [], []
                 for m, v in zip(delays, spreads):
-                    order = int(np.round((m/v)**2, decimals=0)) if m else 0
-                    orders.append(order if order >= self._dde_approximation_order else self._dde_approximation_order)
+                    order = np.round((m/v)**2, decimals=0) if v > 0 else 0
+                    orders.append(int(order) if m and order > dde_approx else dde_approx)
                     rates.append(orders[-1]/m if m else 0)
             else:
                 orders, rates = [], []
                 for m in delays:
-                    orders.append(self._dde_approximation_order)
-                    rates.append(self._dde_approximation_order*m)
+                    orders.append(dde_approx if m else 0)
+                    rates.append(dde_approx*m)
 
             orders = np.asarray(orders, dtype=np.int32)
             orders_tmp = np.asarray(orders, dtype=np.int32)
@@ -1575,29 +1589,30 @@ class CircuitIR(AbstractBaseIR):
             # create ODE system equations
             buffer_eqs, var_dict, final_idx = [], {}, []
             max_order = max(orders)
-            for i in range(max_order):
+            for i in range(max_order+1):
                 idx = np.argwhere(orders_tmp > i).squeeze().tolist()
                 idx_f1 = np.argwhere(orders_tmp == i).squeeze().tolist()
                 idx_f2 = np.argwhere(orders == i).squeeze().tolist()
-                var_next = f"{var}_d{i+1}"
-                var_prev = f"{var}_d{i}" if i > 0 else var
-                rate = f"k_d{i+1}"
-                idx_str = f"{idx[0]}:{idx[-1]+1}" if idx and all(np.diff(idx) == 1) else f"{idx}"
-                idx_f1_str = f"{idx_f1[0]}:{idx_f1[-1]+1}" if idx_f1 and all(np.diff(idx_f1) == 1) else f"{idx_f1}"
-                idx_f2_str = f"{idx_f2[0]}:{idx_f2[-1]+1}" if idx_f2 and all(np.diff(idx_f2) == 1) else f"{idx_f2}"
-                buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}[{idx_str}] - {var_next})")
-                var_dict[var_next] = {'vtype': 'state_var',
+                idx_f1_str = f"{idx_f1[0]}:{idx_f1[-1] + 1}" if idx_f1 and all(np.diff(idx_f1) == 1) else f"{idx_f1}"
+                idx_f2_str = f"{idx_f2[0]}:{idx_f2[-1] + 1}" if idx_f2 and all(np.diff(idx_f2) == 1) else f"{idx_f2}"
+                if idx:
+                    var_next = f"{var}_d{i+1}"
+                    var_prev = f"{var}_d{i}" if i > 0 else var
+                    rate = f"k_d{i+1}"
+                    idx_str = f"{idx[0]}:{idx[-1]+1}" if all(np.diff(idx) == 1) else f"{idx}"
+                    buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}[{idx_str}] - {var_next})")
+                    var_dict[var_next] = {'vtype': 'state_var',
+                                          'dtype': self._backend._float_def,
+                                          'shape': (len(idx),),
+                                          'value': 0.}
+                    var_dict[rate] = {'vtype': 'state_var',
                                       'dtype': self._backend._float_def,
                                       'shape': (len(idx),),
-                                      'value': 0.}
-                var_dict[rate] = {'vtype': 'state_var',
-                                  'dtype': self._backend._float_def,
-                                  'shape': (len(idx),),
-                                  'value': rates_tmp[idx]}
+                                      'value': rates_tmp[idx]}
+                    orders_tmp = orders_tmp[idx]
+                    rates_tmp = rates_tmp[idx]
                 if idx_f1:
                     final_idx.append((i, idx_f2_str, idx_f1_str))
-                orders_tmp = orders_tmp[idx]
-                rates_tmp = rates_tmp[idx]
 
             # create buffered variable
             for i, idx1, idx2 in final_idx:
@@ -1662,10 +1677,10 @@ class CircuitIR(AbstractBaseIR):
 
             # create buffer variable definitions
             var_dict = {f'{var}_buffer': {'vtype': 'state_var',
-                                                'dtype': self._backend._float_def,
-                                                'shape': buffer_shape,
-                                                'value': 0.
-                                                },
+                                          'dtype': self._backend._float_def,
+                                          'shape': buffer_shape,
+                                          'value': 0.
+                                          },
                         'times': {'vtype': 'state_var',
                                   'dtype': self._backend._float_def,
                                   'shape': (len(times),),
@@ -1685,21 +1700,29 @@ class CircuitIR(AbstractBaseIR):
                                           'value': delays},
                         f'source_idx': {'vtype': 'constant',
                                         'dtype': 'int32',
-                                        'value': source_idx}}
+                                        'value': source_idx},
+                        f'{var}_maxdelay': {'vtype': 'constant',
+                                            'dtype': self._backend._float_def,
+                                            'value': (max_delay_int+1)*self.step_size},
+                        f'{var}_idx': {'vtype': 'state_var',
+                                       'dtype': 'bool',
+                                       'value': True}}
 
             # create buffer equations
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-                buffer_eqs = [f"times[:] = roll(times, 1)",
-                              f"{var}_buffer[:] = roll({var}_buffer, 1)",
-                              f"times[0] = t",
-                              f"{var}_buffer[0] = {var}",
+                buffer_eqs = [f"{var}_idx = times >= (t - {var}_maxdelay)",
+                              f"{var}_buffer = {var}_buffer[{var}_idx]",
+                              f"times = times[{var}_idx]",
+                              f"times = append(t, times)",
+                              f"{var}_buffer = append({var}, {var}_buffer)",
                               f"{var}_buffered = interpolate_1d(times, {var}_buffer, t - {var}_delays)"
                               ]
             else:
-                buffer_eqs = [f"times[:] = roll(times, 1)",
-                              f"{var}_buffer[:] = roll({var}_buffer, 1, 1)",
-                              f"times[0] = t",
-                              f"{var}_buffer[:, 0] = {var}",
+                buffer_eqs = [f"{var}_idx = times >= (t - {var}_maxdelay)",
+                              f"{var}_buffer = {var}_buffer[:, {var}_idx]",
+                              f"times = times[{var}_idx]",
+                              f"times = append(t, times)",
+                              f"{var}_buffer = append({var}, {var}_buffer, 1)",
                               f"{var}_buffered = interpolate_nd(times, {var}_buffer, {var}_delays, source_idx, t)"
                               ]
             if self._buffered:

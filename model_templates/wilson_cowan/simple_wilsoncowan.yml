@@ -20,26 +20,22 @@ Op_rate:
       default: input
 
 WC_stp_edge:
-  base: OperatprTemplate
+  base: OperatorTemplate
   equations:
-    - "d/dt * x = (1-x)/tau_r - k_r*u*x*g"
-    - "d/dt * u = (U - u)/tau_f + k_f*U*(1.0-u)*g"
-    - "d/dt * p = (1-p)/tau_p + I*I_d*k_p(fr - dr)"
-    - "g_scaled = g*x*u*p"
+    - "d/dt * x = (1-x)/tau_r - k_r*u*x*r"
+    - "d/dt * u = (U - u)/tau_f + k_f*U*(1.0-u)*r"
+    #- "d/dt * p = (1-p)/tau_p + I*I_d*k_p(fr - dr)"
+    - "r_scaled = r*x*u"
   variables:
-    g:
-      default: source_var
-    I:
-      default: source_var
-    I_d:
-      default: source_var
+    r:
+      default: input
     x:
       default: variable
     u:
       default: variable
     p:
       default: variable
-    g_scaled:
+    r_scaled:
       default: output
     tau_r:
       default: 0.1
@@ -117,6 +113,13 @@ Pop_rate:
   operators:
     - Op_rate
 
+# edges
+
+WC_edge:
+  base: EdgeTemplate
+  operators:
+    - WC_stp_edge
+
 # circuits
 WC:
   base: CircuitTemplate
@@ -132,13 +135,12 @@ WC:
 WC_stp_net:
   base: CircuitTemplate
   nodes:
-    WC: WC_pop
+    E: WC_e
+    I: WC_i
   edges:
-    - [WC/WC_stp_op/gu, WC/WC_stp_op/gu_ee, WC_stp_edge, {weight: 1.0}]
-    - [WC/WC_stp_op/gu, WC/WC_stp_op/gu_ie, WC_stp_edge, {weight: 1.0}]
-    - [WC/WC_stp_op/gv, WC/WC_stp_op/gv_ei, WC_stp_edge, {weight: 1.0}]
-    - [WC/WC_stp_op/gv, WC/WC_stp_op/gv_ii, WC_stp_edge, {weight: 1.0}]
-    - [WC/WC_inp_op/I, WC/WC_stp_op/I_d, null, {weight: 1.0, delay: 0.1}]
+    - [E/WC_e_op/re, E/WC_e_op/re_in, WC_edge, {weight: 1.0}]
+    - [E/WC_e_op/re, I/WC_i_op/re_in, WC_edge, {weight: 0.5}]
+    - [I/WC_i_op/ri, E/WC_e_op/ri_in, WC_edge, {weight: 0.5}]
 
 WC_stp_net_test:
   base: CircuitTemplate
