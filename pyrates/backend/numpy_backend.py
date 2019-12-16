@@ -727,7 +727,7 @@ class NumpyBackend(object):
                  ops: Optional[Dict[str, str]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
                  name: str = 'net_0',
-                 float_default_type: str = 'float32',
+                 float_default_type: str = 'float64',
                  imports: Optional[List[str]] = None,
                  ) -> None:
         """Instantiates numpy backend, i.e. a compute graph with numpy operations.
@@ -915,15 +915,12 @@ class NumpyBackend(object):
         output_indices = []
         for out_key, out_vars in outputs.items():
             for n, (idx, _) in enumerate(out_vars):
-                #if ':' in idx:
-                #    idx = tuple([int(i) for i in idx.split(':')])
-                #else:
-                #    idx = int(idx)
                 output_indices.append(idx)
                 outputs[out_key][n][0] = len(output_indices)-1
 
         # simulate backend behavior for each time-step
-        times, results = self._solve(rhs_func=rhs_func, func_args=tuple(args), T=T, dt=dt, dts=dts, t=t, solver=solver,
+        func_args = self._process_func_args(args, var_map, dt)
+        times, results = self._solve(rhs_func=rhs_func, func_args=func_args, T=T, dt=dt, dts=dts, t=t, solver=solver,
                                      output_indices=output_indices, **kwargs)
 
         # output storage and clean-up
@@ -1096,7 +1093,8 @@ class NumpyBackend(object):
 
             # make sure that the output shape of the operation matches the expectations
             in_shape = []
-            expand_ops = ('@', 'index', 'concat', 'expand', 'stack', 'group', 'asarray', 'interpolate', 'interpolate2d')
+            expand_ops = ('@', 'index', 'concat', 'expand', 'stack', 'group', 'asarray', 'interpolate', 'interpolate_nd'
+                          )
             if op_name not in expand_ops:
                 for arg in args:
                     if hasattr(arg, 'shape'):
@@ -1267,7 +1265,7 @@ class NumpyBackend(object):
                     in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
                     if len(inp.shape) > 1:
                         inp = inp.squeeze()
-                    f = interp1d(time, inp, axis=0)
+                    f = interp1d(time, inp, axis=0, copy=False, kind='linear')
                     f.shape = inp.shape[1:]
                     f.vtype = 'state_var'
                     f.short_name = in_name
@@ -1994,6 +1992,13 @@ class NumpyBackend(object):
 
     def _is_state_var(self, key):
         return key, key in self.state_vars
+
+    @staticmethod
+    def _process_func_args(args, var_map, dt):
+        for key, var_info in var_map.items():
+            if 'times' in key:
+                args[var_info[1]] -= dt
+        return tuple(args)
 
     @staticmethod
     def _compare_vars(v1, v2):

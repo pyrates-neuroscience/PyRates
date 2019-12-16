@@ -135,6 +135,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             # get delay
             delay = values.pop("delay", None)
+            spread = values.pop("spread", None)
 
             # treat empty dummy edge templates as not existent templates
             if template and len(template.operators) == 0:
@@ -145,13 +146,15 @@ class CircuitTemplate(AbstractBaseTemplate):
                     # should not happen. Putting this just in case.
                     raise PyRatesException("An empty edge IR was provided with additional values. "
                                            "No way to figure out where to apply those values.")
+
             else:
                 edge_ir = template.apply(values=values)  # type: Optional[EdgeIR] # edge spec
 
             edges.append((source, target,  # edge_unique_key,
                           {"edge_ir": edge_ir,
                            "weight": weight,
-                           "delay": delay
+                           "delay": delay,
+                           "spread": spread
                            }))
 
         return CircuitIR(label, self.circuits, nodes, edges, self.path)

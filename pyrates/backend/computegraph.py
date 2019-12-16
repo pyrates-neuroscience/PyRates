@@ -65,7 +65,7 @@ class ComputeGraph(object):
                 vectorization: bool = True,
                 name: Optional[str] = 'net0',
                 backend: str = 'numpy',
-                float_precision: str = 'float32',
+                float_precision: str = 'float64',
                 **kwargs
                 ) -> Any:
         """Instantiates operator.

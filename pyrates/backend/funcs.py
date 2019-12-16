@@ -32,6 +32,7 @@
 
 # external imports
 import numpy as np
+from scipy.interpolate import interp1d
 
 # meta infos
 __author__ = "Richard Gast"
@@ -54,12 +55,25 @@ def pr_identity(x):
     return x
 
 
-def pr_interp_1d(x, y, x_new):
+def pr_interp_1d_linear(x, y, x_new):
     return np.interp(x_new, x, y)
 
 
-def pr_interp_nd(x, y, x_new, y_idx, t):
+def pr_interp_nd_linear(x, y, x_new, y_idx, t):
     return np.asarray([np.interp(t + x_new_tmp, x, y[i, :]) for i, x_new_tmp in zip(y_idx, x_new)])
+
+
+def pr_interp_1d(x, y, x_new):
+    return interp1d(x, y, kind=3, axis=-1)(x_new)
+
+
+def pr_interp_nd(x, y, x_new, y_idx, t):
+    try:
+        f = interp1d(x, y, kind=3, axis=-1, fill_value='extrapolate', copy=False)
+    except ValueError:
+        x, idx = np.unique(x, return_index=True)
+        f = interp1d(x, y[:, idx], kind=3, axis=-1, fill_value='extrapolate', copy=False)
+    return np.asarray([f(x_new_tmp)[i] for i, x_new_tmp in zip(y_idx, t-x_new)])
 
 
 def pr_interp(f, x_new):
