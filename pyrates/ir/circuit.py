@@ -1589,18 +1589,30 @@ class CircuitIR(AbstractBaseIR):
             # create ODE system equations
             buffer_eqs, var_dict, final_idx = [], {}, []
             max_order = max(orders)
+            target_check = sum(target_shape) > 1
+            # TODO: handle different cases of indices correctly.
             for i in range(max_order+1):
                 idx = np.argwhere(orders_tmp > i).squeeze().tolist()
                 idx_f1 = np.argwhere(orders_tmp == i).squeeze().tolist()
                 idx_f2 = np.argwhere(orders == i).squeeze().tolist()
-                idx_f1_str = f"{idx_f1[0]}:{idx_f1[-1] + 1}" if idx_f1 and all(np.diff(idx_f1) == 1) else f"{idx_f1}"
-                idx_f2_str = f"{idx_f2[0]}:{idx_f2[-1] + 1}" if idx_f2 and all(np.diff(idx_f2) == 1) else f"{idx_f2}"
+                if not target_check:
+                    idx, idx_f2 = [0], []
+                if type(idx) is not list:
+                    idx = [idx]
+                if type(idx_f1) is not list:
+                    idx_f1 = [idx_f1]
+                if type(idx_f2) is not list:
+                    idx_f2 = [idx_f2]
+                idx_f1_str = f"[{idx_f1[0]}:{idx_f1[-1] + 1}]" if len(idx_f1) > 1 and all(np.diff(idx_f1) == 1) \
+                    else f"[{idx_f1[0] if idx_f1 else ''}]"
+                idx_f2_str = f"[{idx_f2[0]}:{idx_f2[-1] + 1}]" if len(idx_f2) > 1 and all(np.diff(idx_f2) == 1) \
+                    else f"[{idx_f2[0] if idx_f2 else ''}]"
                 if idx:
                     var_next = f"{var}_d{i+1}"
                     var_prev = f"{var}_d{i}" if i > 0 else var
                     rate = f"k_d{i+1}"
-                    idx_str = f"{idx[0]}:{idx[-1]+1}" if all(np.diff(idx) == 1) else f"{idx}"
-                    buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}[{idx_str}] - {var_next})")
+                    idx_str = f"[{idx[0]}:{idx[-1]+1}]" if len(idx) > 1 and all(np.diff(idx) == 1) else f""
+                    buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
                     var_dict[var_next] = {'vtype': 'state_var',
                                           'dtype': self._backend._float_def,
                                           'shape': (len(idx),),
@@ -1612,14 +1624,16 @@ class CircuitIR(AbstractBaseIR):
                     orders_tmp = orders_tmp[idx]
                     rates_tmp = rates_tmp[idx]
                 if idx_f1:
-                    final_idx.append((i, idx_f2_str, idx_f1_str))
+                    final_idx.append((i, idx_f1_str, idx_f2_str))
 
             # create buffered variable
             for i, idx1, idx2 in final_idx:
+                idx1 = idx1 if len(idx1) > 2 else ''
+                idx2 = idx2 if len(idx2) > 2 else ''
                 if i != 0:
-                    buffer_eqs.append(f"{var}_buffered[{idx1}] = {var}_d{i}[{idx2}]")
+                    buffer_eqs.append(f"{var}_buffered{idx1} = {var}_d{i}{idx2}")
                 else:
-                    buffer_eqs.append(f"{var}_buffered[{idx1}] = {var}[{idx2}]")
+                    buffer_eqs.append(f"{var}_buffered{idx1} = {var}{idx2}")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
                                            'dtype': self._backend._float_def,
                                            'shape': (len(delays),),
