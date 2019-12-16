@@ -1051,7 +1051,7 @@ class CircuitIR(AbstractBaseIR):
     def compile(self,
                 vectorization: bool = True,
                 backend: str = 'numpy',
-                float_precision: str = 'float64',
+                float_precision: str = 'float32',
                 matrix_sparseness: float = 0.5,
                 step_size: Optional[float] = None,
                 solver: Optional[str] = None,

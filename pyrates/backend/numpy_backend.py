@@ -727,7 +727,7 @@ class NumpyBackend(object):
                  ops: Optional[Dict[str, str]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
                  name: str = 'net_0',
-                 float_default_type: str = 'float64',
+                 float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
                  ) -> None:
         """Instantiates numpy backend, i.e. a compute graph with numpy operations.
