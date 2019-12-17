@@ -19,40 +19,57 @@ Op_rate:
     I_syn:
       default: input
 
-WC_stp_edge:
+WC_stp_ee:
   base: OperatorTemplate
   equations:
-    - "d/dt * x = (1-x)/tau_r - k_r*u*x*r"
-    - "d/dt * u = (U - u)/tau_f + k_f*U*(1.0-u)*r"
+    - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*r"
+    - "d/dt * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*r"
     #- "d/dt * p = (1-p)/tau_p + I*I_d*k_p(fr - dr)"
     - "r_scaled = r*x*u"
   variables:
     r:
       default: input
     x:
-      default: variable
+      default: variable(1.0)
     u:
-      default: variable
+      default: variable(1.0)
     p:
       default: variable
     r_scaled:
       default: output
     tau_r:
-      default: 0.1
+      default: 2000.0
     tau_f:
-      default: 0.2
+      default: 1.0
     k_r:
-      default: 0.1
+      default: 0.005
     k_f:
-      default: 0.2
+      default: 0.0
     U:
       default: 1.0
+
+
+WC_stp_ie:
+  base: WC_stp_ee
+  variables:
+    u:
+      default: variable(0.05)
+    tau_r:
+      default: 1.0
+    tau_f:
+      default: 500.0
+    k_r:
+      default: 0.0
+    k_f:
+      default: 0.3
+    U:
+      default: 0.05
 
 
 WC_e_op:
   base: OperatorTemplate
   equations:
-    - "re = max(sigmoid(ve, 1.0, s, theta), 0)"
+    - "re = max(tanh(s*(ve-theta)), 0)"
     - "d/dt * ve = (re_in - ri_in + w_in*I + B - ve) / tau"
   variables:
     re:
@@ -64,11 +81,11 @@ WC_e_op:
     ri_in:
       default: input
     s:
-      default: 0.67
+      default: 0.6667
     theta:
       default: 0.0
     tau:
-      default: 2e-2
+      default: 20.0
     I:
       default: input
     B:
@@ -79,7 +96,7 @@ WC_e_op:
 WC_i_op:
   base: OperatorTemplate
   equations:
-    - "ri = max(sigmoid(vi, 1.0, s, theta), 0)"
+    - "ri = max(tanh(s*(vi-theta)), 0)"
     - "d/dt * vi = (re_in - ri_in - vi) / tau"
   variables:
     ri:
@@ -91,11 +108,11 @@ WC_i_op:
     ri_in:
       default: input
     s:
-      default: 0.67
+      default: 0.6667
     theta:
       default: 0.0
     tau:
-      default: 4e-2
+      default: 40.0
 
 # nodes
 WC_e:
@@ -115,10 +132,15 @@ Pop_rate:
 
 # edges
 
-WC_edge:
+WC_ie:
   base: EdgeTemplate
   operators:
-    - WC_stp_edge
+    - WC_stp_ie
+
+WC_ee:
+  base: EdgeTemplate
+  operators:
+    - WC_stp_ee
 
 # circuits
 WC:
@@ -138,17 +160,6 @@ WC_stp_net:
     E: WC_e
     I: WC_i
   edges:
-    - [E/WC_e_op/re, E/WC_e_op/re_in, WC_edge, {weight: 1.0}]
-    - [E/WC_e_op/re, I/WC_i_op/re_in, WC_edge, {weight: 0.5}]
-    - [I/WC_i_op/ri, E/WC_e_op/ri_in, WC_edge, {weight: 0.5}]
-
-WC_stp_net_test:
-  base: CircuitTemplate
-  nodes:
-    E: WC_e
-    I: WC_i
-  edges:
-    - [E/WC_e_op/re, E/WC_e_op/re_in, null, {weight: 1.0}]
-    - [E/WC_e_op/re, I/WC_i_op/re_in, null, {weight: 0.5}]
+    - [E/WC_e_op/re, E/WC_e_op/re_in, WC_ee, {weight: 1.0}]
+    - [E/WC_e_op/re, I/WC_i_op/re_in, WC_ie, {weight: 0.5}]
     - [I/WC_i_op/ri, E/WC_e_op/ri_in, null, {weight: 0.5}]
-    - [I/WC_i_op/ri, I/WC_i_op/ri_in, null, {weight: 0.0}]

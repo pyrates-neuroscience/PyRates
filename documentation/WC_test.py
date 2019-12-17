@@ -6,12 +6,12 @@ from pyrates.backend import ComputeGraph
 import numpy as np
 import matplotlib.pyplot as plt
 
-dt = 1e-3                                      # integration step size in s
-dts = 1e-2                                     # variable storage sub-sampling step size in s
+dt = 1.0                                   # integration step size in s
+dts = 1.0                                     # variable storage sub-sampling step size in s
 sub = int(dts/dt)                              # sub-sampling rate
-T = 20.                                        # total simulation time in s
+T = 20000                                        # total simulation time in ms
 inp = np.zeros((int(T/dt), 1), dtype='float32')                 # external input to the population
-inp[int(5./dt):int((T-5.)/dt)] = 1.0
+inp[int(5000./dt):int((T-5000.)/dt)] = 1.0
 
 circuit = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp_net").apply()
 
