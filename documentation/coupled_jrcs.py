@@ -53,7 +53,7 @@ results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit
                                     outputs={"v": "all/JRC_op/PSP_ein"},
                                     dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3,
                                     init_kwargs={'backend': 'numpy', 'matrix_sparseness': 0.9, 'step_size': dt,
-                                                 'solver': 'scipy', 'dde_approximation_order': 20},
+                                                 'solver': 'scipy', 'dde_approximation_order': 1},
                                     profile=True)
 
 # tensorflow backend grid-search

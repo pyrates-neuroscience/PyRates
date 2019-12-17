@@ -1580,7 +1580,7 @@ class CircuitIR(AbstractBaseIR):
                 orders, rates = [], []
                 for m in delays:
                     orders.append(dde_approx if m else 0)
-                    rates.append(dde_approx*m)
+                    rates.append(dde_approx/m if m else 0)
 
             orders = np.asarray(orders, dtype=np.int32)
             orders_tmp = np.asarray(orders, dtype=np.int32)
@@ -1590,41 +1590,47 @@ class CircuitIR(AbstractBaseIR):
             buffer_eqs, var_dict, final_idx = [], {}, []
             max_order = max(orders)
             target_check = sum(target_shape) > 1
-            # TODO: handle different cases of indices correctly.
             for i in range(max_order+1):
-                idx = np.argwhere(orders_tmp > i).squeeze().tolist()
-                idx_f1 = np.argwhere(orders_tmp == i).squeeze().tolist()
-                idx_f2 = np.argwhere(orders == i).squeeze().tolist()
+                idx, idx_str = self._bool_to_idx(orders_tmp > i)
+                idx_f1, idx_f1_str = self._bool_to_idx(orders_tmp == i)
+                idx_f2, idx_f2_str = self._bool_to_idx(orders == i)
                 if not target_check:
-                    idx, idx_f2 = [0], []
-                if type(idx) is not list:
-                    idx = [idx]
-                if type(idx_f1) is not list:
-                    idx_f1 = [idx_f1]
-                if type(idx_f2) is not list:
-                    idx_f2 = [idx_f2]
-                idx_f1_str = f"[{idx_f1[0]}:{idx_f1[-1] + 1}]" if len(idx_f1) > 1 and all(np.diff(idx_f1) == 1) \
-                    else f"[{idx_f1[0] if idx_f1 else ''}]"
-                idx_f2_str = f"[{idx_f2[0]}:{idx_f2[-1] + 1}]" if len(idx_f2) > 1 and all(np.diff(idx_f2) == 1) \
-                    else f"[{idx_f2[0] if idx_f2 else ''}]"
-                if idx:
+                    idx_str, idx_f1_str = "", ""
+                if idx or not target_check:
                     var_next = f"{var}_d{i+1}"
                     var_prev = f"{var}_d{i}" if i > 0 else var
                     rate = f"k_d{i+1}"
-                    idx_str = f"[{idx[0]}:{idx[-1]+1}]" if len(idx) > 1 and all(np.diff(idx) == 1) else f""
                     buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
+                    idx_apply = type(idx) is int or idx
+                    if idx and type(idx) is list:
+                        var_shape = (len(idx),)
+                    elif idx_f2 and type(idx_f2) is list:
+                        var_shape = (len(idx_f2),)
+                    else:
+                        var_shape = ()
                     var_dict[var_next] = {'vtype': 'state_var',
                                           'dtype': self._backend._float_def,
-                                          'shape': (len(idx),),
+                                          'shape': var_shape,
                                           'value': 0.}
                     var_dict[rate] = {'vtype': 'state_var',
                                       'dtype': self._backend._float_def,
-                                      'shape': (len(idx),),
-                                      'value': rates_tmp[idx]}
-                    orders_tmp = orders_tmp[idx]
-                    rates_tmp = rates_tmp[idx]
-                if idx_f1:
-                    final_idx.append((i, idx_f1_str, idx_f2_str))
+                                      'shape': var_shape,
+                                      'value': rates_tmp[idx] if idx_apply else rates_tmp}
+                    if idx_apply:
+                        orders_tmp = orders_tmp[idx]
+                        rates_tmp = rates_tmp[idx]
+                    if not hasattr(orders_tmp, 'shape'):
+                        orders_tmp = np.asarray([orders_tmp], dtype=np.int32)
+                        rates_tmp = np.asarray([rates_tmp])
+                if idx_f1 or type(idx_f1) is int:
+                    final_idx.append((i, idx_f2_str, idx_f1_str))
+
+            # remove unnecessary ODEs
+            for _ in range(len(buffer_eqs)-final_idx[-1][0]):
+                i = len(buffer_eqs)
+                var_dict.pop(f"{var}_d{i}")
+                var_dict.pop(f"k_d{i}")
+                buffer_eqs.pop(-1)
 
             # create buffered variable
             for i, idx1, idx2 in final_idx:
@@ -1766,6 +1772,14 @@ class CircuitIR(AbstractBaseIR):
                 idx_h = idx_l + len(nodes[i])
                 self.edges[s, t, e]['source_idx'] = list(range(idx_l, idx_h))
                 idx_l = idx_h
+
+    def _bool_to_idx(self, v):
+        v_idx = np.argwhere(v).squeeze()
+        if v_idx.shape and v_idx.shape[0] > 1:
+            v_idx_str = f"[{v_idx[0]}:{v_idx[-1] + 1}]" if all(np.diff(v_idx) == 1) else f"[{v_idx}]"
+        else:
+            v_idx_str = f"[{v_idx[0]}]" if len(v_idx) > 0 else f"[{v_idx}]"
+        return v_idx.tolist(), v_idx_str
 
     def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
         """Adds an input collector variable to an edge.
