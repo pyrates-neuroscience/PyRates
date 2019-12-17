@@ -2,7 +2,19 @@
 
 ## 0.8
 
-### 0.8.0 (work in progress)
+### 0.8.2 Included bug fixes from jajcayn:
+
+- Allow to initialise CircuitTemplate with instances of `EdgeTemplate` instead of a template path, previous behaviour is unaffected. 
+- Fix writing graph to the file by passing `_format` along until the end
+
+### 0.8.1 Improved cluster distribution and bug fixes
+
+- updated tensorflow dependency to >=2.0, fixes some dependency problems
+- Improved cluster distribution system, available under `pyrates.utility.grid_search`
+- New feature: model optimization with genetic algorithms, available under `pyrates.utility.genetic_algorithm`
+- Miscellaneous bug fixes
+
+### 0.8.0 
 
 - removed version ID numbers of operator/node instances in the intermediate representation. I.e. a node label `mynode` 
   was previously renamed to `mynode.0` and will now keep it's original label.
