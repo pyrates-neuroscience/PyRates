@@ -38,7 +38,7 @@ from pyrates import PyRatesException
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
-from pyrates.backend.parser import parse_dict, parse_equations, is_diff_eq, replace
+from pyrates.backend.parser import parse_equations, is_diff_eq, replace
 
 __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
@@ -217,8 +217,8 @@ class CircuitIR(AbstractBaseIR):
 
         self.graph.add_edges_from(edge_list, **attr)
 
-    def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None, **attr
-                              ) -> None:
+    def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
+                              template=None, **attr) -> None:
         """Adds all possible edges between the `source_var` and `target_var` of all passed `nodes`. `Weight` and `Delay`
         need to be arrays containing scalars for each of those edges.
 
@@ -236,6 +236,8 @@ class CircuitIR(AbstractBaseIR):
         delay
             Optional N x N matrix with edge delays (N = number of nodes). If not passed, all edges receive a delay of
             0.0.
+        template
+            Can be link to edge template that should be used for each edge.
         attr
             Additional edge attributes. Can either be N x N matrices or other scalars/objects.
 
@@ -252,6 +254,10 @@ class CircuitIR(AbstractBaseIR):
         if weight is None:
             weight = 1.0
         edge_attributes = {'weight': weight, 'delay': delay}
+
+        # template
+        if template:
+            edge_attributes['edge_ir'] = template if type(template) is EdgeIR else template.apply()
 
         # add rest of the attributes
         edge_attributes.update(attr)
@@ -1137,18 +1143,6 @@ class CircuitIR(AbstractBaseIR):
             tval = self[f"{target_node}/{top}/{tvar}"]
             target_node_ir = self[target_node]
 
-            # create mapping equation and its arguments
-            args = {}
-            if len(tidx) > 1 and sum(tval['shape']) > 1:
-                d = np.zeros((tval['shape'][0], len(tidx)))
-                for i, t in enumerate(tidx):
-                    d[t, i] = 1
-            elif len(tidx) and sum(tval['shape']) > 1:
-                d = tidx
-            else:
-                d = []
-            idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
-
             # check whether edge projection can be solved by a simple inner product between a weight matrix and the
             # source variables
             dot_edge = False
@@ -1166,16 +1160,21 @@ class CircuitIR(AbstractBaseIR):
                         weight_mat[row, col] = w
 
                     # set up weights and edge projection equation
-                    if len(d) > 1:
-                        eq = f"{tvar} = target_idx @ (weight @ {svar}{idx})"
-                    elif len(d):
-                        eq = f"{tvar}[target_idx] = weight @ {svar}{idx}"
-                    else:
-                        eq = f"{tvar} = weight @ {svar}{idx}"
+                    eq = f"{tvar} = weight @ {svar}"
                     weight = weight_mat
                     dot_edge = True
 
             # set up edge projection equation and edge indices for edges that cannot be realized via a matrix product
+            args = {}
+            if len(tidx) > 1 and sum(tval['shape']) > 1:
+                d = np.zeros((tval['shape'][0], len(tidx)))
+                for i, t in enumerate(tidx):
+                    d[t, i] = 1
+            elif len(tidx) and sum(tval['shape']) > 1:
+                d = tidx
+            else:
+                d = []
+            idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
             if not dot_edge:
                 if len(d) > 1:
                     eq = f"{tvar} = target_idx @ ({svar}{idx} * weight)"
@@ -1183,17 +1182,17 @@ class CircuitIR(AbstractBaseIR):
                     eq = f"{tvar}[target_idx] = {svar}{idx} * weight"
                 else:
                     eq = f"{tvar} = {svar}{idx} * weight"
+
+            # add edge variables to dict
+            dtype = sval["dtype"]
+            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
+            args[tvar] = tval
             if len(d):
                 args['target_idx'] = {'vtype': 'constant',
                                       'value': np.array(d, dtype=self._backend._float_def if len(d) > 1 else np.int32)}
             if idx:
                 args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                       'value': np.array(sidx, dtype=np.int32)}
-
-            # add edge variables to dict
-            dtype = sval["dtype"]
-            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
-            args[tvar] = tval
 
             # add edge operator to target node
             op_name = f'edge_from_{source_node}_{edge_idx}'

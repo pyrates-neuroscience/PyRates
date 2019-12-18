@@ -38,11 +38,11 @@ WC_stp_ee:
     r_scaled:
       default: output
     tau_r:
-      default: 2000.0
+      default: 100.0
     tau_f:
       default: 1.0
     k_r:
-      default: 0.005
+      default: 0.2
     k_f:
       default: 0.0
     U:
@@ -57,11 +57,11 @@ WC_stp_ie:
     tau_r:
       default: 1.0
     tau_f:
-      default: 500.0
+      default: 200.0
     k_r:
       default: 0.0
     k_f:
-      default: 0.3
+      default: 0.05
     U:
       default: 0.05
 
@@ -71,6 +71,7 @@ WC_e_op:
   equations:
     - "re = max(tanh(s*(ve-theta)), 0)"
     - "d/dt * ve = (re_in - ri_in + w_in*I + B - ve) / tau"
+    - "d/dt * meg = ((re_in+ri_in)/(2.0*N) - meg)/1.0"
   variables:
     re:
       default: output
@@ -92,6 +93,10 @@ WC_e_op:
       default: 0.0
     w_in:
       default: 1.0
+    meg:
+      default: variable
+    N:
+      default: 15.0
 
 WC_i_op:
   base: OperatorTemplate
