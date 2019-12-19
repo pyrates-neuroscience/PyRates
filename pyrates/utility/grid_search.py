@@ -1165,13 +1165,16 @@ def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
 
     if len(list(set(arg_lengths))) == 1 and not permute:
         return pd.DataFrame(grid)
-    else:
+    elif permute:
         vals, keys = [], []
         for key, val in grid.items():
             vals.append(val)
             keys.append(key)
         new_grid = np.stack(np.meshgrid(*tuple(vals)), -1).reshape(-1, len(grid))
         return pd.DataFrame(new_grid, columns=keys)
+    else:
+        raise ValueError('Wrong number of parameter combinations. If `permute` is False, all parameter vectors in grid '
+                         'must have the same number of elements.')
 
 
 def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitIR:

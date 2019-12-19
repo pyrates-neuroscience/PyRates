@@ -1618,11 +1618,11 @@ class CircuitIR(AbstractBaseIR):
                     if idx_apply:
                         orders_tmp = orders_tmp[idx]
                         rates_tmp = rates_tmp[idx]
-                    if not hasattr(orders_tmp, 'shape'):
+                    if not orders_tmp.shape:
                         orders_tmp = np.asarray([orders_tmp], dtype=np.int32)
                         rates_tmp = np.asarray([rates_tmp])
                 if idx_f1 or type(idx_f1) is int:
-                    final_idx.append((i, idx_f2_str, idx_f1_str))
+                    final_idx.append((i, idx_f2_str, idx_str if i == 0 else idx_f1_str))
 
             # remove unnecessary ODEs
             for _ in range(len(buffer_eqs)-final_idx[-1][0]):
@@ -1777,7 +1777,7 @@ class CircuitIR(AbstractBaseIR):
         if v_idx.shape and v_idx.shape[0] > 1:
             v_idx_str = f"[{v_idx[0]}:{v_idx[-1] + 1}]" if all(np.diff(v_idx) == 1) else f"[{v_idx}]"
         else:
-            v_idx_str = f"[{v_idx[0]}]" if len(v_idx) > 0 else f"[{v_idx}]"
+            v_idx_str = f"[{v_idx[0]}]" if len(v_idx.shape) > 0 and max(v_idx.shape) > 0 else f"[{v_idx}]"
         return v_idx.tolist(), v_idx_str
 
     def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:

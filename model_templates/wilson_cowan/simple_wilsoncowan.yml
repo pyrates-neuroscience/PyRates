@@ -71,7 +71,7 @@ WC_e_op:
   equations:
     - "re = max(tanh(s*(ve-theta)), 0)"
     - "d/dt * ve = (re_in - ri_in + w_in*I + B - ve) / tau"
-    - "d/dt * meg = ((re_in+ri_in)/(2.0*N) - meg)/1.0"
+    - "d/dt * meg = (re_in+ri_in)/(2.0*N) - meg"
   variables:
     re:
       default: output
