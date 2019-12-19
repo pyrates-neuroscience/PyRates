@@ -38,7 +38,7 @@ for idx in range(N):
                         )
 circuit.add_edges_from_matrix(source_var="WC_e_op/re", target_var="WC_e_op/re_in", template=edge1,
                               nodes=[f'wc_{idx}/E' for idx in range(N)], weight=C_ee)
-circuit.add_edges_from_matrix(source_var="E/WC_e_op/re", target_var="I/WC_i_op/re_in",
+circuit.add_edges_from_matrix(source_var="E/WC_e_op/re", target_var="I/WC_i_op/re_in", template=edge2,
                               nodes=[f'wc_{idx}' for idx in range(N)], weight=C_ie)
 
 compute_graph = ComputeGraph(circuit, vectorization=True, backend='numpy', name='wc_net', step_size=dt,

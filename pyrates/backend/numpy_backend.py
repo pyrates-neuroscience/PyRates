@@ -914,10 +914,19 @@ class NumpyBackend(object):
 
         # create output indices
         output_indices = []
-        for out_key, out_vars in outputs.items():
-            for n, (idx, _) in enumerate(out_vars):
-                output_indices.append(idx)
-                outputs[out_key][n][0] = len(output_indices)-1
+        if outputs:
+            for out_key, out_vars in outputs.items():
+                for n, (idx, _) in enumerate(out_vars):
+                    output_indices.append(idx)
+                    outputs[out_key][n][0] = len(output_indices)-1
+        else:
+            for i in range(len(self.state_vars)):
+                output_indices.append(i)
+                out_key = self.state_vars[i]
+                if len(self.vars[out_key].shape) > 0:
+                    outputs[out_key] = [(i, [f"{out_key}_{j}" for j in range(self.vars[out_key].shape[0])])]
+                else:
+                    outputs[out_key] = [(i, [out_key])]
 
         # simulate backend behavior for each time-step
         func_args = self._process_func_args(args, var_map, dt)
@@ -1708,6 +1717,10 @@ class NumpyBackend(object):
         -------
 
         """
+
+        # process outputs
+        if not output_indices:
+            output_indices = [i for i in range(len(self.state_vars))]
 
         # choose solver
         ###############
