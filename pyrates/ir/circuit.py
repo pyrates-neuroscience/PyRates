@@ -523,7 +523,7 @@ class CircuitIR(AbstractBaseIR):
                 # add synaptic buffer to output variables with delay
                 if add_delay:
                     self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
-                                          nodes=nodes if len(delays) > 1 else None, spreads=spreads,
+                                          nodes=nodes, spreads=spreads,
                                           dde_approx=dde_approx)
 
             # loop over input variables of node
@@ -1622,7 +1622,7 @@ class CircuitIR(AbstractBaseIR):
                         orders_tmp = np.asarray([orders_tmp], dtype=np.int32)
                         rates_tmp = np.asarray([rates_tmp])
                 if idx_f1 or type(idx_f1) is int:
-                    final_idx.append((i, idx_f2_str, idx_str if i == 0 else idx_f1_str))
+                    final_idx.append((i, idx_f2_str if len(delays) > 1 else "", idx_str if i == 0 else idx_f1_str))
 
             # remove unnecessary ODEs
             for _ in range(len(buffer_eqs)-final_idx[-1][0]):
