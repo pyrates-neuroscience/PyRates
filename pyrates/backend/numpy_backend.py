@@ -1736,6 +1736,9 @@ class NumpyBackend(object):
 
             # solve via scipy's ode integration function
             fun = lambda t, y: rhs_func(t, y, func_args)
+            if dts:
+                times = np.arange(0, T, dts)
+                kwargs['t_eval'] = times
             outputs = solve_ivp(fun=fun, t_span=(float(t.numpy()), T), y0=self.vars['y'], first_step=dt,
                                 **kwargs)
             results = [outputs['y'].T[:, idx] for idx in output_indices]

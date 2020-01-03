@@ -25,13 +25,14 @@ tf.config.threading.set_intra_op_parallelism_threads(2)
 ############
 
 # general parameters
-dt = 1e-5                                                       # integration step-size of the forward euler solver in s
-T = 1.0                                                         # overall simulation time in s
+dt = 1e-4                                                       # integration step-size of the forward euler solver in s
+T = 3.0                                                         # overall simulation time in s
 inp = np.random.uniform(120., 320., (int(T/dt)+1, 2))           # white noise input to the pyramidal cells in Hz.
+inp[:, :] = 200.0
 
 N = 10                                                            # grid-size
-C = np.linspace(0., 5.0, N)                                    # bi-directional connection strength
-D = np.linspace(0., 5e-3, N)                                    # bi-directional coupling delay
+C = np.linspace(0., 1.0, 2)                                    # bi-directional connection strength
+D = np.linspace(1e-3, 5e-3, N)                                    # bi-directional coupling delay
 
 # parameter grid
 params = {'C': C,
@@ -49,11 +50,13 @@ param_map = {'C': {'vars': ['weight'],
 # numpy backend grid-search
 results, param_map, _ = grid_search(circuit_template="model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled",
                                     param_grid=params, param_map=param_map,
-                                    inputs={"all/JRC_op/u": np.asarray(inp, dtype=np.float32)},
+                                    inputs={
+                                        #"all/JRC_op/u": np.asarray(inp, dtype=np.float32)
+                                    },
                                     outputs={"v": "all/JRC_op/PSP_ein"},
                                     dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3,
                                     init_kwargs={'backend': 'numpy', 'matrix_sparseness': 0.9, 'step_size': dt,
-                                                 'solver': 'euler'},
+                                                 'solver': 'scipy'},
                                     profile=True)
 
 # tensorflow backend grid-search

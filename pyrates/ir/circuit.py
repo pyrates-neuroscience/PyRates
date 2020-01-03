@@ -1039,7 +1039,7 @@ class CircuitIR(AbstractBaseIR):
                         outputs[(outkey, node_key, str(k))] = np.squeeze(out_val_tmp[:, k])
 
         # create data frame
-        if sampling_step_size and not all(np.diff(times, 1) == step_size):
+        if sampling_step_size and not all(np.diff(times, 1) - sampling_step_size < step_size*0.01):
             n = int(np.round(simulation_time/sampling_step_size, decimals=0))
             new_times = np.linspace(step_size, simulation_time, n + 1)
             for key, val in outputs.items():
@@ -1401,14 +1401,16 @@ class CircuitIR(AbstractBaseIR):
             d = self.edges[s, t, e]['delay'].copy() if type(self.edges[s, t, e]['delay']) is list else \
                 self.edges[s, t, e]['delay']
             v = self.edges[s, t, e].pop('spread', [0])
+            if v is None or np.sum(v) == 0:
+                v = [0] * len(self.edges[s, t, e]['target_idx'])
+                discretize = True
+            else:
+                discretize = False
+                v = self._process_delays(v, discretize=discretize)
             if d is None or np.sum(d) == 0:
                 d = [1] * len(self.edges[s, t, e]['target_idx'])
             else:
-                d = self._process_delays(d)
-            if v is None or np.sum(v) == 0:
-                v = [0] * len(self.edges[s, t, e]['target_idx'])
-            else:
-                v = self._process_delays(v)
+                d = self._process_delays(d, discretize=discretize)
             means += d
             stds += v
 
@@ -1426,21 +1428,22 @@ class CircuitIR(AbstractBaseIR):
 
         return means, stds, nodes, add_delay
 
-    def _process_delays(self, d):
+    def _process_delays(self, d, discretize=True):
         if self.step_size is None and self.solver == 'scipy':
             raise ValueError('Step-size not passed for setting up edge delays. If delays are added to any '
                              'network edge, please pass the simulation `step-size` to the `compile` '
                              'method.')
         if type(d) is list:
             d = np.asarray(d).squeeze()
-            d = [self._preprocess_delay(d_tmp) for d_tmp in d] if d.shape else \
-                [self._preprocess_delay(d)]
+            d = [self._preprocess_delay(d_tmp, discretize=discretize) for d_tmp in d] if d.shape else \
+                [self._preprocess_delay(d, discretize=discretize)]
         else:
-            d = [self._preprocess_delay(d)]
+            d = [self._preprocess_delay(d, discretize=discretize)]
         return d
 
-    def _preprocess_delay(self, delay):
-        discretize = self.step_size is None or self.solver != 'scipy'
+    def _preprocess_delay(self, delay, discretize=True):
+        if discretize:
+            discretize = self.step_size is None or self.solver != 'scipy'
         return int(np.round(delay / self.step_size, decimals=0)) if discretize else delay
 
     @staticmethod
@@ -1622,7 +1625,14 @@ class CircuitIR(AbstractBaseIR):
                         orders_tmp = np.asarray([orders_tmp], dtype=np.int32)
                         rates_tmp = np.asarray([rates_tmp])
                 if idx_f1 or type(idx_f1) is int:
-                    final_idx.append((i, idx_f2_str if len(delays) > 1 else "", idx_str if i == 0 else idx_f1_str))
+                    if len(delays) > 1:
+                        idx1 = idx_f2_str
+                        n1 = len(idx_f2)
+                    else:
+                        idx1 = ""
+                        n1 = target_shape[0]
+                    final_idx.append((i, idx1, idx_str if n1 == len(idx) else idx_f1_str))
+            # TODO: fix problems with last argument of final_idx ...if condition does not cover all cases yet
 
             # remove unnecessary ODEs
             for _ in range(len(buffer_eqs)-final_idx[-1][0]):
