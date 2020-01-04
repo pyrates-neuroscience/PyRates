@@ -336,10 +336,7 @@ class GeneticAlgorithmTemplate:
         self.gene_names = []
         for param, value in self.initial_gene_pool.items():
             self.gene_names.append(param)
-            if value['N'] == 1:
-                pop_grid[param] = np.array([np.mean([value['min'], value['max']])])
-            else:
-                pop_grid[param] = sampling_func(value['min'], value['max'], value['N'])
+            pop_grid[param] = sampling_func(value['min'], value['max'], value['N'])
         self.pop = linearize_grid(pop_grid, permute=True)
         self.pop_size = self.pop.shape[0]
 
