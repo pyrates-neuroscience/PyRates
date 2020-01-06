@@ -56,30 +56,36 @@ class EdgeIR(NodeIR):
 
         super().__init__(operators, values, template)
 
-    @property
-    def input(self):
-        """Detect input variable of edge, assuming only one input variable exists. This also references the operator
-        the variable belongs to."""
-        # noinspection PyTypeChecker
-        in_op = [op for op, in_degree in self.op_graph.in_degree if in_degree == 0]  # type: List[str]
-
-        # multiple input operations are possible, as long as they require the same singular input variable
-        in_var = set()
-        for op_key in in_op:
-            for var in self[op_key].inputs:
-                in_var.add(f"{op_key}/{var}")
-
-        if len(in_var) == 1:
-            return in_var.pop()
-        elif len(in_var) == 0:
-            return None
-        else:
-            raise PyRatesException("Too many input variables found. Exactly one or zero input variables are "
-                                   "required per edge.")
-
-    @property
-    def input_var(self):
-        return self.input
+    # @property
+    # def input(self):
+    #     """Redirects to `self.inputs` for compatibility."""
+    #     return self.inputs
+    #
+    # @property
+    # def input_var(self):
+    #     return self.inputs
+    #
+    # @property
+    # def inputs(self):
+    #     """Detect input variables of edge. This also references the operator
+    #      the variable belongs to.
+    #
+    #      Note: As of `0.9.0` multiple source/input variables are allowed per edge."""
+    #     # noinspection PyTypeChecker
+    #     in_op = [op for op, in_degree in self.op_graph.in_degree if in_degree == 0]  # type: List[str]
+    #     # ToDo: Verify, whether multiple input variables are still captured by this filter in all circumstances
+    #
+    #     in_var = set()
+    #     for op_key in in_op:
+    #         for var in self[op_key].inputs:
+    #             in_var.add(f"{op_key}/{var}")
+    #
+    #     if len(in_var) == 1:
+    #         return in_var.pop()
+    #     if len(in_var) == 0:
+    #         return None
+    #     else:
+    #         return tuple(in_var)
 
     @property
     def output(self):
