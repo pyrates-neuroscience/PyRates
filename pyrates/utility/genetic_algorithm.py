@@ -526,7 +526,7 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
             chunk_size=self.cgs_config['chunk_size'],
             worker_env=self.cgs_config['worker_env'],
             worker_file=self.cgs_config['worker_file'],
-            config_kwargs={
+            worker_kwargs={
                 'target': target
             })
 
@@ -534,7 +534,3 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
 
         for i, candidate_genes in enumerate(param_grid.values):
             self.pop.at[i, 'fitness'] = float(results.loc['fitness', tuple(candidate_genes)])
-
-
-
-

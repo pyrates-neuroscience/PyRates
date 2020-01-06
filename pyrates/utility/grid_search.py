@@ -1413,23 +1413,21 @@ class ClusterWorkerTemplate(object):
         ########################
         print("")
         print("***COMPUTING PARAMETER GRID***")
-        t0 = t.time()
 
-        self.results, self.result_map, t_ = grid_search(
-            circuit_template=circuit_template,
-            param_grid=param_grid,
-            param_map=param_map,
-            simulation_time=simulation_time,
-            dt=dt,
-            sampling_step_size=sampling_step_size,
-            permute_grid=False,
-            inputs=inputs,
-            outputs=outputs.copy(),
-            profile="t",
-            build_dir=build_dir,
-            **gs_kwargs)
+        t_ = self.worker_gs(circuit_template=circuit_template,
+                            param_grid=param_grid,
+                            param_map=param_map,
+                            simulation_time=simulation_time,
+                            dt=dt,
+                            sampling_step_size=sampling_step_size,
+                            permute_grid=False,
+                            inputs=inputs,
+                            outputs=outputs.copy(),
+                            profile="t",
+                            build_dir=build_dir,
+                            **gs_kwargs)
 
-        print(f'Total parameter grid computation time: {t.time() - t0:.3f} seconds')
+        print(f'Total parameter grid computation time: {t_:.3f} seconds')
 
         # Post process results and write data to local result file
         ##########################################################
@@ -1447,6 +1445,19 @@ class ClusterWorkerTemplate(object):
         print(f'Result files created. Elapsed time: {t.time() - t0:.3f} seconds')
         print("")
         print(f'Total elapsed time: {t.time() - t_total:.3f} seconds')
+
+    def worker_gs(self, *args, **kwargs):
+        """
+        Function that contains the grid_search call. Can be customized if necessary, as long as the `results` and
+        `result_map` attributes of the worker are updated during the call.
+
+        Returns
+        -------
+        float
+            simulation time
+        """
+        self.results, self.result_map, t_ = grid_search(*args, **kwargs)
+        return t_
 
     def worker_postprocessing(self, **worker_kwargs):
         """
