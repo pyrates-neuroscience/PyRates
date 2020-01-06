@@ -865,7 +865,7 @@ class ClusterGridSearch(ClusterCompute):
                 # Create parameter sub-grid
                 ###########################
                 subgrid_fp = f'{subgrid_dir}/{thread_name}_Subgrid_{subgrid_idx}.h5'
-                subgrid_df = working_grid.iloc[param_idx]
+                subgrid_df = working_grid.loc[param_idx, :]
                 subgrid_df.to_hdf(subgrid_fp, key="subgrid")
                 subgrid_idx += 1
 
