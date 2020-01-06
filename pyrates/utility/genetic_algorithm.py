@@ -63,7 +63,8 @@ class GeneticAlgorithmTemplate:
             sigma_adapt: Optional[float] = 0., max_stagnation_steps: Optional[int] = 0,
             stagnation_decimals: Optional[int] = 8, max_stagnation_drops: Optional[Union[int, float]] = np.Inf,
             enforce_max_iter: Optional[bool] = False, new_pop_on_drop: Optional[bool] = False,
-            candidate_save: Optional[str] = "", drop_save: Optional[str] = "", gene_sampling_func=np.linspace, **kwargs):
+            pop_save: Optional[str] = "", candidate_save: Optional[str] = "", drop_save: Optional[str] = "",
+            gene_sampling_func=np.linspace, **kwargs):
         """Run a genetic algorithm to optimize genes of a population in respect to a given target vector
 
         Parameters
@@ -98,6 +99,8 @@ class GeneticAlgorithmTemplate:
         new_pop_on_drop
             If True, a new population is created once the fitness stagnates. If False, only the fittest member of
             the population is replaced by a new member and the computation continues
+        pop_save
+            If set, the whole population will be saved to an hdf5 file.
         candidate_save
             If set, the strongest member of a population will be saved to an hdf5 file, before the population is updated
         drop_save
@@ -199,7 +202,9 @@ class GeneticAlgorithmTemplate:
             # Update candidate and save if necessary
             ########################################
             self.candidate = new_candidate
-            if candidate_save:
+            if pop_save:
+                self.pop.to_hdf(f"{pop_save}_{iter_count}", key='data')
+            elif candidate_save:
                 self.candidate.to_hdf(candidate_save, key='data')
 
             # Update current winning genes
