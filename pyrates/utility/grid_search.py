@@ -857,7 +857,7 @@ class ClusterGridSearch(ClusterCompute):
                 # Find chunk index of first value in remaining params and fetch all parameter combinations with the
                 # same chunk index
                 param_idx, chunk_idx = self._fetch_index(remaining_params, chunk_size, working_grid)
-                working_grid.loc[param_idx, "status"] = "pending"
+                working_grid.at[param_idx, "status"] = "pending"
 
                 print(f'[T]\'{thread_name}\': Fetching {len(param_idx)} indices: ', end="")
                 print(f'[{param_idx[0]}] - [{param_idx[-1]}]')
@@ -950,9 +950,9 @@ class ClusterGridSearch(ClusterCompute):
                         working_grid.at[param_idx, 'status'] = 'done'
                     except (KeyError, FileNotFoundError):
                         for row in param_idx:
-                            if working_grid.loc[row]["err_count"] < 2:
+                            if working_grid.at[row, "err_count"] < 2:
                                 working_grid.at[row, "status"] = "unsolved"
-                                working_grid.at[row, "err_count"] = working_grid.iloc[row]["err_count"] + 1
+                                working_grid.at[row, "err_count"] += 1
                             else:
                                 working_grid.at[row, "status"] = "failed"
 
@@ -961,9 +961,9 @@ class ClusterGridSearch(ClusterCompute):
                     print(f'[T]\'{thread_name}\': Remote computation failed with exit status {exit_status}')
                     connection_lost_counter += 1
                     for row in param_idx:
-                        if working_grid.loc[row]["err_count"] < 4:
+                        if working_grid.at[row, "err_count"] < 4:
                             working_grid.at[row, "status"] = "unsolved"
-                            working_grid.at[row, "err_count"] = working_grid.iloc[row]["err_count"] + 1
+                            working_grid.at[row, "err_count"] += 1
                         else:
                             working_grid.at[row, "status"] = "failed"
                     if connection_lost_counter >= 2:
@@ -987,7 +987,7 @@ class ClusterGridSearch(ClusterCompute):
                 return pd.Index(param_idx), chunk_idx
             elif row['chunk_idx'] == -1:
                 # Chunk parameter grid
-                working_grid.loc[i, 'chunk_idx'] = self.chunk_idx
+                working_grid.at[i, 'chunk_idx'] = self.chunk_idx
                 param_idx.append(i)
                 chunk_count += 1
             else:
