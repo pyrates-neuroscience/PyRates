@@ -337,9 +337,9 @@ class GeneticAlgorithmTemplate:
         for param, value in self.initial_gene_pool.items():
             self.gene_names.append(param)
             if value['N'] == 1:
-                range = value['max']-value['min']
-                mean = value['min'] + range*0.5
-                std = range*0.1
+                val_range = value['max']-value['min']
+                mean = value['min'] + val_range*0.5
+                std = val_range*0.1
                 pop_grid[param] = -np.inf
                 while pop_grid[param] < value['min'] or pop_grid[param] > value['max']:
                     pop_grid[param] = np.random.normal(mean, std, 1)
