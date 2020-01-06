@@ -174,11 +174,14 @@ class CircuitTemplate(AbstractBaseTemplate):
         """
         edges_with_templates = []
         for edge in edges:
+
             if isinstance(edge, dict):
                 edge = (edge["source"], edge["target"], edge["template"], edge["variables"])
+
             # "template" is EdgeTemplate, just use it
             if isinstance(edge[2], EdgeTemplate):
                 temp = edge[2]
+
             # if not, try to load template path from yaml
             else:
                 path = edge[2]
@@ -187,7 +190,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                     temp = EdgeTemplate.from_yaml(path)
                 except TypeError:
                     temp = None
-            edges_with_templates.append((*edge[0:2], temp, *edge[3:]))
+            edges_with_templates.append((*edge[0:2], temp, edge[3]))
         return edges_with_templates
 
 
