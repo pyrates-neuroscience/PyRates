@@ -193,12 +193,16 @@ class CircuitIR(AbstractBaseIR):
             edge_ir = edge_dict.get("edge_ir", None)
 
             if "target_var" in edge_dict:
-                target_var = edge_dict["target_var"]
-                target = f"{target}/{target_var}"
+                raise PyRatesException("Deprecated API usage: Target variable should be defined as 2nd position in "
+                                       "edge list.")
+                # target_var = edge_dict["target_var"]
+                # target = f"{target}/{target_var}"
 
             if "source_var" in edge_dict:
-                source_var = edge_dict["source_var"]
-                source = f"{source}/{source_var}"
+                raise PyRatesException("Deprecated API usage: Source variable should be defined as 1st position in "
+                                       "edge list")
+                # source_var = edge_dict["source_var"]
+                # source = f"{source}/{source_var}"
 
             # test, if variables at source and target exist and reference them properly
             source, target = self._validate_separate_key_path(source, target)
