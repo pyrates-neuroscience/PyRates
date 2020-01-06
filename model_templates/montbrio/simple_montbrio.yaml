@@ -4,10 +4,10 @@
 Op_e_adapt:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - I_a - tau*(PI*r)^2"
-    - "d/dt * I_a = x"
-    - "d/dt * x = (alpha*r - 2.0*x - I_a/tau_a)/tau_a"
+    - "d/step_size * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/step_size * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - I_a - tau*(PI*r)^2"
+    - "d/step_size * I_a = x"
+    - "d/step_size * x = (alpha*r - 2.0*x - I_a/tau_a)/tau_a"
   variables:
     r:
       default: output
@@ -39,8 +39,8 @@ Op_e_adapt:
 Op_e:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - J_i * r_i - tau*(PI*r)^2"
+    - "d/step_size * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/step_size * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - J_i * r_i - tau*(PI*r)^2"
   variables:
     r:
       default: output
@@ -66,8 +66,8 @@ Op_e:
 Op_i:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau - J_i* (r + r_i) + J_e * r_e - tau*(PI*r)^2"
+    - "d/step_size * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/step_size * v = (v^2 + eta + inp) / tau - J_i* (r + r_i) + J_e * r_e - tau*(PI*r)^2"
   variables:
     r:
       default: output

@@ -143,7 +143,7 @@ class OperatorIR(AbstractBaseIR):
     # @staticmethod
     # def _reduce_ode_order(equations: str, variables):
     #     """Checks if a 2nd-order ODE is present and reduces it to two coupled first-order ODEs.
-    #     Currently limited to special case of the form '(d/dt + a)^2 * x = b'.
+    #     Currently limited to special case of the form '(d/step_size + a)^2 * x = b'.
     #
     #     Parameters
     #     ----------
@@ -151,16 +151,16 @@ class OperatorIR(AbstractBaseIR):
     #         string of form 'a = b'
     #     """
     #
-    #     # matches pattern of form `(d/dt + a)^2 * y` and extracts `a` and `y`
-    #     match = re.match(r"\(\s*d\s*/\s*dt\s*[+-]\s*([\d]*[.]?[\d]*/?[a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)",
+    #     # matches pattern of form `(d/step_size + a)^2 * y` and extracts `a` and `y`
+    #     match = re.match(r"\(\s*d\s*/\s*step_size\s*[+-]\s*([\d]*[.]?[\d]*/?[a-zA-Z]\w*)\s*\)\s*\^2\s*\*\s*([a-zA-Z]\w*)",
     #                      equations)
     #
     #     if match:
     #         # assume the entire lhs was matched, fails if there is something remaining on the lhs
     #         lhs, rhs = equations.split("=")
     #         a, var = match.groups()  # returns coefficient `a` and variable `y`
-    #         eq1 = f"d/dt * {var} = {var}_t"
-    #         eq2 = f"d/dt * {var}_t = {rhs} - ({a})^2 * {var} - 2. * {a} * {var}_t"
+    #         eq1 = f"d/step_size * {var} = {var}_t"
+    #         eq2 = f"d/step_size * {var}_t = {rhs} - ({a})^2 * {var} - 2. * {a} * {var}_t"
     #
     #         variables[f"{var}_t"] = {"dtype": "float32",
     #                                  "description": "integration variable",

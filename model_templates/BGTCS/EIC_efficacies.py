@@ -23,7 +23,7 @@ param_map = {'H_e': {'var': [('Op_e.0', 'H_e'), ('Op_i.0', 'H_e')],
 results = grid_search(circuit_template="EI_circuit.Net",
                       param_grid=params, param_map=param_map,
                       inputs={("PC", "Op_e.0", "i_in"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
-                      dt=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3)
+                      step_size=dt, simulation_time=T, permute_grid=True, sampling_step_size=1e-3)
 
 # plotting
 cut_off = 1.

@@ -4,7 +4,7 @@
 Op_rate:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = (sigmoid(s*(I_syn+I_ext-I_th))-r)/tau"
+    - "d/step_size * r = (sigmoid(s*(I_syn+I_ext-I_th))-r)/tau"
   variables:
     r:
       default: output
@@ -22,9 +22,9 @@ Op_rate:
 WC_stp_ee:
   base: OperatorTemplate
   equations:
-    - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*r"
-    - "d/dt * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*r"
-    #- "d/dt * p = (1-p)/tau_p + I*I_d*k_p(fr - dr)"
+    - "d/step_size * x = (1.0-x)/tau_r - k_r*u*x*r"
+    - "d/step_size * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*r"
+    #- "d/step_size * p = (1-p)/tau_p + I*I_d*k_p(fr - dr)"
     - "r_scaled = r*x*u"
   variables:
     r:
@@ -70,8 +70,8 @@ WC_e_op:
   base: OperatorTemplate
   equations:
     - "re = max(tanh(s*(ve-theta)), 0)"
-    - "d/dt * ve = (re_in - ri_in + w_in*I + B - ve) / tau"
-    - "d/dt * meg = (re_in+ri_in)/(2.0*N) - meg"
+    - "d/step_size * ve = (re_in - ri_in + w_in*I + B - ve) / tau"
+    - "d/step_size * meg = (re_in+ri_in)/(2.0*N) - meg"
   variables:
     re:
       default: output
@@ -102,7 +102,7 @@ WC_i_op:
   base: OperatorTemplate
   equations:
     - "ri = max(tanh(s*(vi-theta)), 0)"
-    - "d/dt * vi = (re_in - ri_in - vi) / tau"
+    - "d/step_size * vi = (re_in - ri_in - vi) / tau"
   variables:
     ri:
       default: output

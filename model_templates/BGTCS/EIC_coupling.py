@@ -45,7 +45,7 @@ for idx, C in enumerate(Cs):
     results, result_map = grid_search(circuit_template="EI_circuit.Net",
                                       param_grid=params, param_map=param_map,
                                       inputs={("PC", "Op_e", "i_in"): inp}, outputs={"r": ("PC", "Op_e", "r")},
-                                      dt=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
+                                      step_size=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
 
     # plotting
     cut_off = 1.

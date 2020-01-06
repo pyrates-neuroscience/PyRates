@@ -7,8 +7,8 @@
 Op_exc:
   base: OperatorTemplate
   equations:
-    - 'd/dt * r = (delta/(PI*tau)+2.*r*v)/tau'
-    - 'd/dt * v = (v^2+eta+I_ext+J*(r+r_exc-r_inh)*tau-(PI*r*tau)^2)/tau'
+    - 'd/step_size * r = (delta/(PI*tau)+2.*r*v)/tau'
+    - 'd/step_size * v = (v^2+eta+I_ext+J*(r+r_exc-r_inh)*tau-(PI*r*tau)^2)/tau'
   variables:
     delta:
       default: 1.0
@@ -32,8 +32,8 @@ Op_exc:
 Op_inh:
   base: OperatorTemplate
   equations:
-    - 'd/dt * r = (delta/(PI*tau)+2.*r*v)/tau'
-    - 'd/dt * v = (v^2+eta+I_ext+J*(r_exc-r_inh-r)*tau-(PI*r*tau)^2)/tau'
+    - 'd/step_size * r = (delta/(PI*tau)+2.*r*v)/tau'
+    - 'd/step_size * v = (v^2+eta+I_ext+J*(r_exc-r_inh-r)*tau-(PI*r*tau)^2)/tau'
   variables:
     delta:
       default: 1.0
@@ -57,12 +57,12 @@ Op_inh:
 Op_exc_syns:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * I_e - J_i * I_i - tau*(PI*r)^2"
-    - "d/dt * I_e = x_e"
-    - "d/dt * x_e = H_e*(r + r_e)/tau_e - 2*x_e/tau_e - I_e/tau_e^2"
-    - "d/dt * I_i = x_i"
-    - "d/dt * x_i = H_i*r_i/tau_i - 2*x_i/tau_i - I_i/tau_i^2"
+    - "d/step_size * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/step_size * v = (v^2 + eta + inp) / tau + J_e * I_e - J_i * I_i - tau*(PI*r)^2"
+    - "d/step_size * I_e = x_e"
+    - "d/step_size * x_e = H_e*(r + r_e)/tau_e - 2*x_e/tau_e - I_e/tau_e^2"
+    - "d/step_size * I_i = x_i"
+    - "d/step_size * x_i = H_i*r_i/tau_i - 2*x_i/tau_i - I_i/tau_i^2"
   variables:
     r:
       default: output
@@ -104,12 +104,12 @@ Op_exc_syns:
 Op_inh_syns:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * I_e - J_i * I_i - tau*(PI*r)^2"
-    - "d/dt * I_e = x_e"
-    - "d/dt * x_e = H_e*r_e/tau_e - 2*x_e/tau_e - I_e/tau_e^2"
-    - "d/dt * I_i = x_i"
-    - "d/dt * x_i = H_i*(r+r_i)/tau_i - 2*x_i/tau_i - I_i/tau_i^2"
+    - "d/step_size * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/step_size * v = (v^2 + eta + inp) / tau + J_e * I_e - J_i * I_i - tau*(PI*r)^2"
+    - "d/step_size * I_e = x_e"
+    - "d/step_size * x_e = H_e*r_e/tau_e - 2*x_e/tau_e - I_e/tau_e^2"
+    - "d/step_size * I_i = x_i"
+    - "d/step_size * x_i = H_i*(r+r_i)/tau_i - 2*x_i/tau_i - I_i/tau_i^2"
   variables:
     r:
       default: output

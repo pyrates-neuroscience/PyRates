@@ -559,16 +559,16 @@ class ExpressionParser(ParserElement):
             return self._preprocess_expr_str(f"x = {expr}")
 
         # for the left-hand side, check whether it includes a differential operator
-        if "d/dt" in lhs:
+        if "d/step_size" in lhs:
             diff_eq = True
             lhs_split = lhs.split('*')
             lhs = "".join(lhs_split[1:])
         elif "'" in lhs:
             diff_eq = True
             lhs = lhs.replace("'", "")
-        elif "d" in lhs and "/dt" in lhs:
+        elif "d" in lhs and "/step_size" in lhs:
             diff_eq = True
-            lhs = lhs.split('/dt')[0]
+            lhs = lhs.split('/step_size')[0]
             lhs = lhs.replace("d", "", count=1)
         else:
             diff_eq = False
@@ -1000,10 +1000,10 @@ def update_lhs(equations: list, equation_args: dict, update_num: int, var_dict: 
                         lhs, rhs, _ = split_equation(eq)
                         if var in lhs and new_var in replace(lhs, var, new_var):
                             de = False
-                            if "d/dt" in lhs:
+                            if "d/step_size" in lhs:
                                 de = True
                                 add_to_args = True
-                                lhs = lhs.replace("d/dt", "")
+                                lhs = lhs.replace("d/step_size", "")
                                 lhs = lhs.replace("*", "")
                                 lhs = lhs.replace(" ", "")
                             elif "'" in lhs:
@@ -1249,7 +1249,7 @@ def is_diff_eq(eq: str) -> bool:
     """
 
     lhs, rhs, _ = split_equation(eq)
-    if "d/dt" in lhs:
+    if "d/step_size" in lhs:
         de = True
     elif "'" in lhs:
         de = True
@@ -1287,7 +1287,7 @@ def is_coupled(eqs: list) -> bool:
     # check whether equations are coupled
     for lhs, lhs_scope in zip(lhs_col, scope_col):
         lhs = lhs.replace(" ", "")
-        lhs = lhs.replace("d/dt", "")
+        lhs = lhs.replace("d/step_size", "")
         lhs = lhs.replace("*", "")
         lhs = lhs.replace("'", "")
         if "[" in lhs:

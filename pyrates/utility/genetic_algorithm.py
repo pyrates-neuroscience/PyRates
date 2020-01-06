@@ -490,7 +490,7 @@ class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
                                       param_grid=param_grid,
                                       param_map=self.gs_config['param_map'],
                                       simulation_time=self.gs_config['simulation_time'],
-                                      dt=self.gs_config['step_size'],
+                                      step_size=self.gs_config['step_size'],
                                       sampling_step_size=self.gs_config['sampling_step_size'],
                                       permute_grid=False,
                                       inputs=self.gs_config['inputs'],

@@ -453,7 +453,7 @@ def test_1_7_equation_parsing():
 
     # define test equations
     equations = ["a = 5. + 2.",              # simple update of variable
-                 "d/dt * a = 5. + 2.",       # simple differential equation
+                 "d/step_size * a = 5. + 2.",       # simple differential equation
                  ]
 
     # define equation variables

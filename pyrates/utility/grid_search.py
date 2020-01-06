@@ -56,7 +56,7 @@ __status__ = "development"
 
 
 def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union[dict, pd.DataFrame], param_map: dict,
-                dt: float, simulation_time: float, inputs: dict, outputs: dict,
+                step_size: float, simulation_time: float, inputs: dict, outputs: dict,
                 sampling_step_size: Optional[float] = None, permute_grid: bool = False, init_kwargs: dict = None,
                 **kwargs) -> tuple:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
@@ -69,7 +69,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         Key-value pairs for each circuit parameter that should be altered over different circuit parametrizations.
     param_map
         Key-value pairs that map the keys of param_grid to concrete circuit variables.
-    dt
+    step_size
         Simulation step-size in s.
     simulation_time
         Simulation time in s.
@@ -142,7 +142,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
     # simulate the circuits behavior
     results = net.run(simulation_time=simulation_time,
-                      step_size=dt,
+                      step_size=step_size,
                       sampling_step_size=sampling_step_size,
                       inputs=inputs,
                       outputs=outputs,
@@ -511,7 +511,7 @@ class ClusterGridSearch(ClusterCompute):
         /Config
             /circuit_template
             /config_file
-            /dt
+            /step_size
             /sampling_step_size
             /simulation_time
             /inputs (if provided)
@@ -1363,7 +1363,7 @@ class ClusterWorkerTemplate(object):
 
         circuit_template = global_config_dict['circuit_template']
         param_map = global_config_dict['param_map']
-        dt = global_config_dict['dt']
+        dt = global_config_dict['step_size']
         simulation_time = global_config_dict['simulation_time']
 
         # Optional parameters
@@ -1505,8 +1505,8 @@ class ClusterWorkerTemplate(object):
                 def worker_postprocessing(self):
                     for idx, data in self.results.iteritems():
                         t = self.results.index.to_list()
-                        dt = t[1] - t[0]
-                        f, p = welch(data.to_numpy(), fs=1/dt, axis=0)
+                        step_size = t[1] - t[0]
+                        f, p = welch(data.to_numpy(), fs=1/step_size, axis=0)
                         self.processed_results[:, idx] = p
                     self.processed_results.index = f
 

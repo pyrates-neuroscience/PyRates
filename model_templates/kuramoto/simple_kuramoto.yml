@@ -4,7 +4,7 @@
 Op_phase:
   base: OperatorTemplate
   equations:
-    - "d/dt * theta = omega + noise_in*sqrt(step_size) + K*net_in"
+    - "d/step_size * theta = omega + noise_in*sqrt(step_size) + K*net_in"
     - "theta_wrapped = theta % (2*PI)"
   variables:
     theta:
