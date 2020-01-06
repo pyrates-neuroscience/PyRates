@@ -7,8 +7,8 @@
 op0:
   base: OperatorTemplate
   equations:
-    - "d/step_size * a = b*0.5"
-    - "d/step_size * b = a + 2.0"
+    - "d/dt * a = b*0.5"
+    - "d/dt * b = a + 2.0"
   variables:
     a:
       default: output
@@ -17,7 +17,7 @@ op0:
 
 op1:
   base: OperatorTemplate
-  equations: "d/step_size * a = u - a"
+  equations: "d/dt * a = u - a"
   variables:
     a:
       default: output
@@ -27,7 +27,7 @@ op1:
 op2:
   base: OperatorTemplate
   equations:
-    - "d/step_size * a = b - a"
+    - "d/dt * a = b - a"
     - "b = sigmoid(a)"
   variables:
     a:
@@ -38,8 +38,8 @@ op2:
 op3:
   base: OperatorTemplate
   equations:
-    - "d/step_size * a = -10.0 * a + b^2 + u"
-    - "d/step_size * b = 0.1 * a"
+    - "d/dt * a = -10.0 * a + b^2 + u"
+    - "d/dt * b = 0.1 * a"
   variables:
     a:
       default: variable
@@ -50,14 +50,14 @@ op3:
 
 op4:
   base: OperatorTemplate
-  equations: "d/step_size * u = 2.0"
+  equations: "d/dt * u = 2.0"
   variables:
     u:
       default: output
 
 op5:
   base: OperatorTemplate
-  equations: "d/step_size * a = u - a"
+  equations: "d/dt * a = u - a"
   variables:
     a:
       default: output
@@ -66,14 +66,14 @@ op5:
 
 op6:
   base: OperatorTemplate
-  equations: "d/step_size * u = 4. + tanh(0.5)"
+  equations: "d/dt * u = 4. + tanh(0.5)"
   variables:
     u:
       default: output
 
 op7:
   base: OperatorTemplate
-  equations: "d/step_size * a = u + inp - a"
+  equations: "d/dt * a = u + inp - a"
   variables:
     a:
       default: output
@@ -84,7 +84,7 @@ op7:
 
 op8:
   base: OperatorTemplate
-  equations: "d/step_size * a = 2.0 + u"
+  equations: "d/dt * a = 2.0 + u"
   variables:
     a:
       default: output

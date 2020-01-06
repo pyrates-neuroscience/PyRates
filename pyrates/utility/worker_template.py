@@ -61,8 +61,8 @@ def cgs_postprocessing(data: np.array):
     # e.g. Computation of power spectral density of the time signal:
     #
     # from scipy.signal import welch
-    # step_size = data[1] - data[0]
-    # f, p  = welch(data.values, fs=1 / step_size, axis=0, **kwargs)
+    # dt = data[1] - data[0]
+    # f, p  = welch(data.values, fs=1 / dt, axis=0, **kwargs)
     # processed_data = p
 
     # Placeholder
@@ -110,7 +110,7 @@ def main(_):
         global_config_dict = json.load(g_conf)
         circuit_template = global_config_dict['circuit_template']
         param_map = global_config_dict['param_map']
-        dt = global_config_dict['step_size']
+        dt = global_config_dict['dt']
         simulation_time = global_config_dict['simulation_time']
 
         # Optional parameters
@@ -162,7 +162,7 @@ def main(_):
             param_grid=param_grid,
             param_map=param_map,
             simulation_time=simulation_time,
-            step_size=dt,
+            dt=dt,
             sampling_step_size=sampling_step_size,
             permute_grid=False,
             inputs=inputs,

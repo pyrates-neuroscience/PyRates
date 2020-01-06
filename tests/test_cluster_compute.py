@@ -34,7 +34,7 @@
 #
 #     # Simulation specs
 #     circuit_template = "model_templates.jansen_rit.simple_jansenrit.JRC"
-#     step_size = 1e-3
+#     dt = 1e-3
 #     sim_time = 1.0
 #     param_map = {'u': {'vars': ['RPO_e_pc/u'],
 #                        'nodes': ['PC']}}
@@ -50,9 +50,9 @@
 #         param_grid=param_grid,
 #         param_map=param_map,
 #         simulation_time=sim_time,
-#         step_size=step_size,
+#         dt=dt,
 #         permute_grid=False,
-#         sampling_step_size=step_size,
+#         sampling_step_size=dt,
 #         inputs={},
 #         outputs=output,
 #         chunk_size=len(u),

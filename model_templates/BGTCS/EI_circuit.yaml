@@ -4,13 +4,13 @@
 Op_e:
   base: OperatorTemplate
   equations:
-    - 'd/step_size * r = delta/(PI * tau**2) + 2.*r*v/tau'
-    - 'd/step_size * g_e = x_e'
-    - 'd/step_size * x_e =  H_e/tau_e * (r_in_e + J * r) - g_e/tau_e^2. - 2.*x_e/tau_e'
-    - 'd/step_size * g_i = x_i'
-    - 'd/step_size * x_i =  H_i/tau_i * r_in_i - g_i/tau_i^2. - 2.*x_i/tau_i'
-    - 'd/step_size * eta = (r_th - r)/tau_r'
-    - 'd/step_size * v = (v**2 + eta + i_in + g_e*(v_th_e - v) + g_i*(v_th_i - v)) / tau - tau*(PI*r)**2'
+    - 'd/dt * r = delta/(PI * tau**2) + 2.*r*v/tau'
+    - 'd/dt * g_e = x_e'
+    - 'd/dt * x_e =  H_e/tau_e * (r_in_e + J * r) - g_e/tau_e^2. - 2.*x_e/tau_e'
+    - 'd/dt * g_i = x_i'
+    - 'd/dt * x_i =  H_i/tau_i * r_in_i - g_i/tau_i^2. - 2.*x_i/tau_i'
+    - 'd/dt * eta = (r_th - r)/tau_r'
+    - 'd/dt * v = (v**2 + eta + i_in + g_e*(v_th_e - v) + g_i*(v_th_i - v)) / tau - tau*(PI*r)**2'
   variables:
     r:
       default: output
@@ -58,13 +58,13 @@ Op_e:
 Op_i:
   base: OperatorTemplate
   equations:
-    - 'd/step_size * r = delta/(PI * tau**2) + 2.*r*v/tau'
-    - 'd/step_size * g_e = x_e'
-    - 'd/step_size * x_e =  H_e/tau_e * r_in_e - g_e/tau_e^2. - 2.*x_e/tau_e'
-    - 'd/step_size * g_i = x_i'
-    - 'd/step_size * x_i =  H_i/tau_i * (r_in_i + J*r) - g_i/tau_i^2. - 2.*x_i/tau_i'
-    - 'd/step_size * eta = (r_th - r)/tau_r'
-    - 'd/step_size * v = (v**2 + eta + i_in + g_e*(v_th_e - v) + g_i*(v_th_i - v)) / tau - tau*(PI*r)**2'
+    - 'd/dt * r = delta/(PI * tau**2) + 2.*r*v/tau'
+    - 'd/dt * g_e = x_e'
+    - 'd/dt * x_e =  H_e/tau_e * r_in_e - g_e/tau_e^2. - 2.*x_e/tau_e'
+    - 'd/dt * g_i = x_i'
+    - 'd/dt * x_i =  H_i/tau_i * (r_in_i + J*r) - g_i/tau_i^2. - 2.*x_i/tau_i'
+    - 'd/dt * eta = (r_th - r)/tau_r'
+    - 'd/dt * v = (v**2 + eta + i_in + g_e*(v_th_e - v) + g_i*(v_th_i - v)) / tau - tau*(PI*r)**2'
   variables:
     r:
       default: output

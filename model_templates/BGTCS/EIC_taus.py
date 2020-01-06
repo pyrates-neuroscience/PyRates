@@ -41,7 +41,7 @@ for i, t in enumerate(taus):
     results = grid_search(circuit_template="EI_circuit.Net",
                           param_grid=params, param_map=param_map,
                           inputs={("PC", "Op_e.0", "i_in"): inp}, outputs={"r": ("PC", "Op_e.0", "r")},
-                          step_size=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
+                          dt=dt, simulation_time=T, permute_grid=False, sampling_step_size=1e-3)
 
     # plotting
     cut_off = 1.
