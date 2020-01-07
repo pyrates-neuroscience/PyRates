@@ -153,7 +153,8 @@ class CircuitTemplate(AbstractBaseTemplate):
             # check whether multiple source variables are defined
             try:
                 # if source is a dictionary, pass on its values as source_var
-                source_var = source.values()  # type: dict
+                source_var = list(source.values())[0]  # type: dict
+                source_node = list(source.keys())[0]
             except AttributeError:
                 # no dictionary? only singular source definition present. go on as planned.
                 edges.append((source, target,  # edge_unique_key,
@@ -166,7 +167,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             else:
                 # oh source was indeed a dictionary. go pass source information as separate entry
 
-                edges.append((source, target,  # edge_unique_key,
+                edges.append((source_node, target,  # edge_unique_key,
                               {"edge_ir": edge_ir,
                                "weight": weight,
                                "delay": delay,
