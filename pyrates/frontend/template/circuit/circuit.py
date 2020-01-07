@@ -165,11 +165,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             else:
                 # oh source was indeed a dictionary. go pass source information as separate entry
-                # but first verify that number of source variables matches number of input variables in edge
-                if len(source_var) != edge_ir.n_inputs:
-                    raise PyRatesException(f"Mismatch between number of source variables ({len(source_var)}) and "
-                                           f"inputs ({edge_ir.n_inputs}) in an edge between source '{source}' and"
-                                           f"target '{target}'.")
+
                 edges.append((source, target,  # edge_unique_key,
                               {"edge_ir": edge_ir,
                                "weight": weight,

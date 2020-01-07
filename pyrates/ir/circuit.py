@@ -184,42 +184,36 @@ class CircuitIR(AbstractBaseIR):
         edge_list = []
         for (source, target, edge_dict) in edges:
             # get weight
-            weight = edge_dict.get("weight", 1.)
-            # get delay
-            delay = edge_dict.get("delay", None)
-            spread = edge_dict.get("spread", None)
+            # weight = edge_dict.get("weight", 1.)
+            # # get delay
+            # delay = edge_dict.get("delay", None)
+            # spread = edge_dict.get("spread", None)
+            #
+            # # get edge_ir or (if not included) default to an empty edge
+            # edge_ir = edge_dict.get("edge_ir", None)
 
-            # get edge_ir or (if not included) default to an empty edge
-            edge_ir = edge_dict.get("edge_ir", None)
-
-            if "target_var" in edge_dict:
-                raise PyRatesException("Deprecated API usage: Target variable should be defined as 2nd position in "
-                                       "edge list.")
-                # target_var = edge_dict["target_var"]
-                # target = f"{target}/{target_var}"
-
-            if "source_var" in edge_dict:
-                raise PyRatesException("Deprecated API usage: Source variable should be defined as 1st position in "
-                                       "edge list")
-                # source_var = edge_dict["source_var"]
-                # source = f"{source}/{source_var}"
+            # if "target_var" in edge_dict:
+            #     raise PyRatesException("Deprecated API usage: Target variable should be defined as 2nd position in "
+            #                            "edge list.")
+            #     # target_var = edge_dict["target_var"]
+            #     # target = f"{target}/{target_var}"
+            #
+            # if "source_var" in edge_dict:
+            #     raise PyRatesException("Deprecated API usage: Source variable should be defined as 1st position in "
+            #                            "edge list")
+            #     # source_var = edge_dict["source_var"]
+            #     # source = f"{source}/{source_var}"
 
             # test, if variables at source and target exist and reference them properly
-            source, target = self._validate_separate_key_path(source, target)
+            # source, target = self._validate_separate_key_path(source, target)
 
-            edge_list.append((source[0], target[0],  # edge_unique_key,
-                              {"edge_ir": edge_ir,
-                               "weight": weight,
-                               "delay": delay,
-                               "spread": spread,
-                               "source_var": "/".join(source[-2:]),
-                               "target_var": "/".join(target[-2:])
-                               }))
+            self.add_edge(source, target,  # edge_unique_key,
+                          **edge_dict)
 
             # collect references to op_graph in edge ir
-            self._collect_references(edge_ir)
+            # self._collect_references(edge_ir)
 
-        self.graph.add_edges_from(edge_list, **attr)
+        # self.graph.add_edges_from(edge_list, **attr)
 
     def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
                               template=None, **attr) -> None:
@@ -299,8 +293,8 @@ class CircuitIR(AbstractBaseIR):
         # add edges to network
         self.add_edges_from(edges)
 
-    def add_edge(self, source: Union[str, dict], target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
-                 spread: float = None, identify_relations: bool = True, **data):
+    def add_edge(self, source: str, target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
+                 spread: float = None, **data):
         """
         Parameters
         ----------
@@ -313,81 +307,179 @@ class CircuitIR(AbstractBaseIR):
         data
             If no template is given, `data` is assumed to conform to the format that is needed to add an edge. I.e.,
             `data` needs to contain fields for `weight`, `delay`, `edge_ir`, `source_var`, `target_var`.
-        identify_relations
+        verify_paths
 
         Returns
         -------
 
         """
-
         # operators are not renamed anymore. Thus the validation part only needs to be done, if the existing label does not exist yet.
 
-        if source in self:
-            pass
-            # no renaming
-        else:
-            pass
-            # disassamble, rename nodes, reassamble
+        # step 1: parse and verify source and target specifiers
 
-        if target in self:
-            pass
-            # no renaming
-        else:
-            pass
-            # disassamble, rename nodes, reassamble
+        source_node, source_var = self._parse_edge_specifier(source, data, "source_var")
 
-        if identify_relations:
-            # test, if variables at source and target exist and reference them properly
-            source, target = self._validate_separate_key_path(source, target)
-        else:
-            # assume that source and target strings are already consistent. This should be the case,
-            # if the given strings came from existing circuits (instances of `CircuitIR`)
-            # or in general, if operators are not renamed.
-            for path in (source, target):
-                if path not in self:
-                    raise PyRatesException(f"Failed to add edge, because referenced node `{path}` does not exist in "
-                                           f"network graph. Edges can only be added to existing nodes.")
+        target_node, target_var = self._parse_edge_specifier(target, data, "target_var")
 
-            source = source.split("/")
-            target = target.split("/")
+        # step 2: parse source variable specifier (might be single string or dictionary for multiple source variables)
+
+        source_vars = self._parse_source_vars(source_node, source_var, edge_ir)
+        # step 3: verify complete source/target paths (safeguard, might be unnecessary)
+
+        # step 4: add edges
 
         # temporary workaround to make sure source/target variable/operator and nodes are defined properly
-        try:
-            # try to get source variable info from data dictionary
-            source_var = data.pop("source_var")
-        except KeyError:
-            # not found, assume variable info is contained in `source`
-            source_node = "/".join(source[:-2])
-            source_var = "/".join(source[-2:])
-        else:
-            # source_var was in data, so `source` contains only info about source node
-            source_node = "/".join(source)
-
-        try:
-            # try to get target variable info from data dictionary
-            target_var = data.pop("target_var")
-        except KeyError:
-            # not found, assume variable info is contained in `target`
-            target_node = "/".join(target[:-2])
-            target_var = "/".join(target[-2:])
-        else:
-            # target_var was in data, so `target` contains only info about target node
-            target_node = "/".join(target)
 
         attr_dict = dict(edge_ir=edge_ir,
                          weight=weight,
                          delay=delay,
                          spread=spread,
-                         source_var=source_var,
+                         source_var=source_vars,
                          target_var=target_var,
                          **data)
+
+        # ToDo: make sure multiple source variables are understood down the road
 
         self.graph.add_edge(source_node, target_node, **attr_dict)
 
         # collect references to op_graph in edge ir
         self._collect_references(edge_ir)
 
-    # def _validate_key_path(self, *paths: str):
+    def _parse_edge_specifier(self, specifier: str, data: dict, var_string: str) -> Tuple[str, Union[str, dict]]:
+        """Parse source or target specifier for an edge.
+
+        Parameters
+        ----------
+        specifier
+            String that defines either a specific node or complete variable path of source or target for an edge.
+            Format: *circuits/node/op/var
+        data
+            dictionary containing additional information about the edge. This function looks for a variable specifier
+            as specified in `var_string`
+        var_string
+            String that points to an optional key of the `data` dictionary. Should be either 'source_var' or
+            'target_var'
+
+        Returns
+        -------
+        (node, var)
+
+        """
+        # step 1: try to get source and target variables from data dictionary, if not available, get them from
+        # source/target  string
+
+        try:
+            # try to get source variable info from data dictionary
+            var = data.pop(var_string)  # type: Union[str, dict]
+        except KeyError:
+            # not found, assume variable info is contained in `source`
+            # also means that there is onle one source variable to take care of
+            *node, op, var = specifier.split("/")
+            node = "/".join(node)
+            var = "/".join((op, var))
+        else:
+            # source_var was in data, so `source` contains only info about source node
+            node = specifier  # type: str
+
+        # step 2: verify node paths, rename if necessary
+        node = self._verify_rename_node(node)  # type: str
+
+        return node, var
+
+    def _verify_rename_node(self, node: str) -> str:
+        """Verify that a given node specifier exists in the circuit. First tries to rename it accordings to the internal
+        label map and then verifies the existence of the result.
+
+        Parameters
+        ----------
+        node
+            String that specifies a node in this circuit. Can either be prepended with sub-circuit labels. Format
+            '*circuit_labels/node_label'.
+
+        Returns
+        -------
+        node
+        """
+
+        # re-reference node labels, if necessary
+        # this syntax yields `node` back as default if it is not in label_map
+        node = self.label_map.get(node, node)  # type: str
+
+        # check if node path is valid
+        if node not in self:
+            raise PyRatesException(f"Could not find node with path `{node}`.")
+
+        return node
+
+    def _parse_source_vars(self, source_node: str, source_var: Union[str, dict], edge_ir) -> Union[str, dict]:
+        """Parse is source variable specifications. This tests, whether a single or more source variables and verifies
+        all given paths.
+
+        Parameters
+        ----------
+        source_node
+            String that specifies a single node as source of an edge.
+        source_var
+            Single variable specifier string or dictionary of form `{source_op/source_var: edge_op/edge_var
+        edge_ir
+            Instance of an EdgeIR that contains information about the internal structure of an edge.
+
+        Returns
+        -------
+        source_var
+        """
+
+        # step 1: figure out, whether only one or more source variables are defined
+
+        try:
+            # try to treat source_var as dictionary
+            n_source_vars = len(source_var.keys())
+        except AttributeError:
+            # not a dictionary, so must be a string
+            n_source_vars = 1
+        else:
+            # was a dictionary, treat case that it only has length 1
+            if n_source_vars == 1:
+                source_var = next(iter(source_var))
+
+        if n_source_vars == 1:
+            _, _ = source_var.split("/")  # should be op, var, but we do not need them here
+            self._verify_path(source_node, source_var)
+        else:
+            # verify that number of source variables matches number of input variables in edge
+            if n_source_vars != edge_ir.n_inputs:
+                raise PyRatesException(f"Mismatch between number of source variables ({n_source_vars}) and "
+                                       f"inputs ({edge_ir.n_inputs}) in an edge with source '{source_node}' and source"
+                                       f"variables {source_var}.")
+            for node_var, edge_var in source_var.items():
+
+                self._verify_path(source_node, node_var)
+
+            # ToDo: Get all input variables from all operators and properly map them at this stage?
+            #  note: at this stage source_var is not manipulated at all
+
+        return source_var
+
+    def _verify_path(self, *parts: str):
+        """
+
+        Parameters
+        ----------
+        parts
+            One or more parts of a path string
+
+        Returns
+        -------
+
+        """
+
+        path = "/".join(parts)
+
+        # check if path is valid
+        if path not in self:
+            raise PyRatesException(f"Could not find object with path `{path}`.")
+
+    # def _validate_separate_key_path(self, *paths: str):
     #
     #     for key in paths:
     #         # (circuits), node, operator and variable specifiers
@@ -408,28 +500,6 @@ class CircuitIR(AbstractBaseIR):
     #
     #         separated = (node, op, var)
     #         yield separated
-
-    def _validate_separate_key_path(self, *paths: str):
-
-        for key in paths:
-            # (circuits), node, operator and variable specifiers
-
-            *node, op, var = key.split("/")
-
-            node = "/".join(node)
-
-            # TODO: check, whether checking the node label against the label map ist still necessary
-            # re-reference node labels, if necessary
-            # this syntax yields `node` back as default if it is not in label_map
-            node = self.label_map.get(node, node)
-            # ignore circuits for now
-            path = "/".join((node, op, var))
-            # check if path is valid
-            if path not in self:
-                raise PyRatesException(f"Could not find object with key path `{path}`.")
-
-            separated = (node, op, var)
-            yield separated
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
 
@@ -530,7 +600,7 @@ class CircuitIR(AbstractBaseIR):
         for source, target, data in circuit.edges(data=True):
             # source_var = data.pop("source_var")
             # target_var = data.pop("target_var")
-            self.add_edge(f"{label}/{source}", f"{label}/{target}", identify_relations=False, **data)
+            self.add_edge(f"{label}/{source}", f"{label}/{target}", verify_paths=False, **data)
 
     @staticmethod
     def from_yaml(path):
@@ -612,7 +682,7 @@ class CircuitIR(AbstractBaseIR):
 
                 # refer node key to new node and respective list index of its values
                 # format: (nodeX, Z) with X = node index and Z = list index for values
-                self.label_map[node_key] = (new_name, len(collapsed_node)-1)
+                self.label_map[node_key] = (new_name, len(collapsed_node) - 1)
 
             except KeyError:
                 # if it does not exist, create a new one and save its reference in the map
@@ -902,7 +972,7 @@ class CircuitIR(AbstractBaseIR):
                 if node_lvl != 'all':
                     for j, net_node in enumerate(node_keys.copy()):
                         if net_node[i] != node_lvl:
-                            node_keys.pop(j-n_popped)
+                            node_keys.pop(j - n_popped)
                             n_popped += 1
 
             # collect variable indices for the remaining nodes
@@ -924,7 +994,7 @@ class CircuitIR(AbstractBaseIR):
                     idx = var_value.value[idx_start + 1:-1]
                     idx = [int(i) for i in idx.split(':')]
                     idx_tmp = vnode_indices[vnode_key]['var']
-                    idx = [int(i)+idx[0] for i in idx_tmp]
+                    idx = [int(i) + idx[0] for i in idx_tmp]
                     var_value = var_value.eval()
                 else:
                     idx = vnode_indices[vnode_key]['var']
@@ -1014,7 +1084,7 @@ class CircuitIR(AbstractBaseIR):
             raise ValueError('Step-size not provided. Please pass the desired initial simulation step-size to `run()`.')
         if not simulation_time:
             simulation_time = step_size
-        sim_steps = int(np.round(simulation_time/step_size, decimals=0))
+        sim_steps = int(np.round(simulation_time / step_size, decimals=0))
 
         # collect backend output variables
         ##################################
@@ -1025,7 +1095,6 @@ class CircuitIR(AbstractBaseIR):
 
             # go through passed output names
             for key, val in outputs.items():
-
                 # extract respective output variables from the network and store their information
                 outputs_col[key] = [[var_info['idx'], var_info['nodes']]
                                     for var_info in self.get_node_var(val, apply_idx=False).values()]
@@ -1087,8 +1156,8 @@ class CircuitIR(AbstractBaseIR):
                         outputs[(outkey, node_key, str(k))] = np.squeeze(out_val_tmp[:, k])
 
         # create data frame
-        if sampling_step_size and not all(np.diff(times, 1) - sampling_step_size < step_size*0.01):
-            n = int(np.round(simulation_time/sampling_step_size, decimals=0))
+        if sampling_step_size and not all(np.diff(times, 1) - sampling_step_size < step_size * 0.01):
+            n = int(np.round(simulation_time / sampling_step_size, decimals=0))
             new_times = np.linspace(step_size, simulation_time, n + 1)
             for key, val in outputs.items():
                 outputs[key] = np.interp(new_times, times, val)
@@ -1199,7 +1268,7 @@ class CircuitIR(AbstractBaseIR):
                 n, m = tval['shape'][0], sval['shape'][0]
 
                 # check whether the weight matrix is dense enough for this edge realization to be efficient
-                if 1-len(weight)/(n*m) < matrix_sparseness and n > 1 and m > 1:
+                if 1 - len(weight) / (n * m) < matrix_sparseness and n > 1 and m > 1:
 
                     weight_mat = np.zeros((n, m), dtype=np.float32)
                     if not tidx:
@@ -1623,14 +1692,14 @@ class CircuitIR(AbstractBaseIR):
             if spreads:
                 orders, rates = [], []
                 for m, v in zip(delays, spreads):
-                    order = np.round((m/v)**2, decimals=0) if v > 0 else 0
+                    order = np.round((m / v) ** 2, decimals=0) if v > 0 else 0
                     orders.append(int(order) if m and order > dde_approx else dde_approx)
-                    rates.append(orders[-1]/m if m else 0)
+                    rates.append(orders[-1] / m if m else 0)
             else:
                 orders, rates = [], []
                 for m in delays:
                     orders.append(dde_approx if m else 0)
-                    rates.append(dde_approx/m if m else 0)
+                    rates.append(dde_approx / m if m else 0)
 
             orders = np.asarray(orders, dtype=np.int32)
             orders_tmp = np.asarray(orders, dtype=np.int32)
@@ -1640,16 +1709,16 @@ class CircuitIR(AbstractBaseIR):
             buffer_eqs, var_dict, final_idx = [], {}, []
             max_order = max(orders)
             target_check = sum(target_shape) > 1
-            for i in range(max_order+1):
+            for i in range(max_order + 1):
                 idx, idx_str = self._bool_to_idx(orders_tmp > i)
                 idx_f1, idx_f1_str = self._bool_to_idx(orders_tmp == i)
                 idx_f2, idx_f2_str = self._bool_to_idx(orders == i)
                 if not target_check:
                     idx_str, idx_f1_str = "", ""
                 if idx or not target_check:
-                    var_next = f"{var}_d{i+1}"
+                    var_next = f"{var}_d{i + 1}"
                     var_prev = f"{var}_d{i}" if i > 0 else var
-                    rate = f"k_d{i+1}"
+                    rate = f"k_d{i + 1}"
                     buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
                     idx_apply = type(idx) is int or idx
                     if idx and type(idx) is list:
@@ -1683,7 +1752,7 @@ class CircuitIR(AbstractBaseIR):
             # TODO: fix problems with last argument of final_idx ...if condition does not cover all cases yet
 
             # remove unnecessary ODEs
-            for _ in range(len(buffer_eqs)-final_idx[-1][0]):
+            for _ in range(len(buffer_eqs) - final_idx[-1][0]):
                 i = len(buffer_eqs)
                 var_dict.pop(f"{var}_d{i}")
                 var_dict.pop(f"k_d{i}")
@@ -1746,7 +1815,7 @@ class CircuitIR(AbstractBaseIR):
 
             # create buffer variables
             max_delay_int = int(np.round(max_delay / self.step_size, decimals=0)) + 2
-            times = [0. - i*self.step_size for i in range(max_delay_int)]
+            times = [0. - i * self.step_size for i in range(max_delay_int)]
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
                 buffer_shape = (len(times),)
             else:
@@ -1780,7 +1849,7 @@ class CircuitIR(AbstractBaseIR):
                                         'value': source_idx},
                         f'{var}_maxdelay': {'vtype': 'constant',
                                             'dtype': self._backend._float_def,
-                                            'value': (max_delay_int+1)*self.step_size},
+                                            'value': (max_delay_int + 1) * self.step_size},
                         f'{var}_idx': {'vtype': 'state_var',
                                        'dtype': 'bool',
                                        'value': True}}
@@ -1973,9 +2042,9 @@ def sort_equations(edge_eqs: list, node_eqs: list) -> list:
 
         # clean-up already added equations from node equations
         if node_layer:
-            node_eqs[i-n_popped] = node_layer
+            node_eqs[i - n_popped] = node_layer
         else:
-            node_eqs.pop(i-n_popped)
+            node_eqs.pop(i - n_popped)
             n_popped += 1
 
     eqs_new += edge_eqs
