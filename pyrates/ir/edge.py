@@ -80,8 +80,6 @@ class EdgeIR(NodeIR):
 
         if len(inputs) == 0:
             return None
-        elif len(inputs) == 1:
-            return inputs[0]
         else:
             return inputs
 
@@ -99,14 +97,19 @@ class EdgeIR(NodeIR):
         except TypeError:
             # find inputs
             # noinspection PyTypeChecker
-            in_op = [op for op, in_degree in self.op_graph.in_degree if in_degree == 0]  # type: List[str]
-            # ToDo: Verify, whether multiple input variables are still captured by this filter in all circumstances
-            inputs = set()
-            for op_key in in_op:
-                for var in self[op_key].inputs:
-                    inputs.add(f"{op_key}/{var}")
+            # in_op = [op for op, in_degree in self.op_graph.in_degree if in_degree == 0]  # type: List[str]
+            inputs = dict()
+            # alternative:
+            for op, op_data in self.op_graph.nodes(data=True):
+                for var, var_data in op_data["inputs"].items():
+                    if len(var_data["sources"]) == 0:
+                        key = f"{op}/{var}"
+                        try:
+                            inputs[var].append(key)
+                        except KeyError:
+                            inputs[var] = [key]
 
-            self._inputs = tuple(inputs)
+            self._inputs = inputs
         return self._inputs
 
     @property

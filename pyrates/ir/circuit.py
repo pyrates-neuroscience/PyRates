@@ -183,37 +183,9 @@ class CircuitIR(AbstractBaseIR):
 
         edge_list = []
         for (source, target, edge_dict) in edges:
-            # get weight
-            # weight = edge_dict.get("weight", 1.)
-            # # get delay
-            # delay = edge_dict.get("delay", None)
-            # spread = edge_dict.get("spread", None)
-            #
-            # # get edge_ir or (if not included) default to an empty edge
-            # edge_ir = edge_dict.get("edge_ir", None)
-
-            # if "target_var" in edge_dict:
-            #     raise PyRatesException("Deprecated API usage: Target variable should be defined as 2nd position in "
-            #                            "edge list.")
-            #     # target_var = edge_dict["target_var"]
-            #     # target = f"{target}/{target_var}"
-            #
-            # if "source_var" in edge_dict:
-            #     raise PyRatesException("Deprecated API usage: Source variable should be defined as 1st position in "
-            #                            "edge list")
-            #     # source_var = edge_dict["source_var"]
-            #     # source = f"{source}/{source_var}"
-
-            # test, if variables at source and target exist and reference them properly
-            # source, target = self._validate_separate_key_path(source, target)
 
             self.add_edge(source, target,  # edge_unique_key,
                           **edge_dict)
-
-            # collect references to op_graph in edge ir
-            # self._collect_references(edge_ir)
-
-        # self.graph.add_edges_from(edge_list, **attr)
 
     def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
                               template=None, **attr) -> None:
@@ -307,14 +279,11 @@ class CircuitIR(AbstractBaseIR):
         data
             If no template is given, `data` is assumed to conform to the format that is needed to add an edge. I.e.,
             `data` needs to contain fields for `weight`, `delay`, `edge_ir`, `source_var`, `target_var`.
-        verify_paths
 
         Returns
         -------
 
         """
-        # operators are not renamed anymore. Thus the validation part only needs to be done, if the existing label does not exist yet.
-
         # step 1: parse and verify source and target specifiers
 
         source_node, source_var = self._parse_edge_specifier(source, data, "source_var")
@@ -478,28 +447,6 @@ class CircuitIR(AbstractBaseIR):
         # check if path is valid
         if path not in self:
             raise PyRatesException(f"Could not find object with path `{path}`.")
-
-    # def _validate_separate_key_path(self, *paths: str):
-    #
-    #     for key in paths:
-    #         # (circuits), node, operator and variable specifiers
-    #
-    #         *node, op, var = key.split("/")
-    #
-    #         node = "/".join(node)
-    #
-    #         # TODO: check, whether checking the node label against the label map ist still necessary
-    #         # re-reference node labels, if necessary
-    #         # this syntax yields `node` back as default if it is not in label_map
-    #         node = self.label_map.get(node, node)
-    #         # ignore circuits for now
-    #         path = "/".join((node, op, var))
-    #         # check if path is valid
-    #         if path not in self:
-    #             raise PyRatesException(f"Could not find object with key path `{path}`.")
-    #
-    #         separated = (node, op, var)
-    #         yield separated
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
 
@@ -745,12 +692,25 @@ class CircuitIR(AbstractBaseIR):
             delay = data["delay"]
             spread = data["spread"]
             edge_ir = data["edge_ir"]
-            source_var = data["source_var"]
+            source_var = data["source_var"]  # type: Union[str, dict]
             target_var = data["target_var"]
+
             if edge_ir is None:
                 # if the edge is empty, just add one with remapped names
                 source, source_idx = self.label_map[source]
                 target, target_idx = self.label_map[target]
+                # make sure simple edges do have only one source variable defined
+                try:
+                    # try to calculate length
+                    n_vars = len(source_var.keys())
+                except AttributeError:
+                    # no dictionary --> we should be fine (assume string)
+                    pass
+                else:
+                    if n_vars > 1:
+                        raise PyRatesException("Too many source variables defined. Edges with no operators allow only"
+                                               "one source variable to be defined.")
+                        # could actually do this earlier
 
                 # add edge from source to the new node
                 self.graph.add_edge(source, target,
@@ -789,14 +749,15 @@ class CircuitIR(AbstractBaseIR):
                             break
                     else:
                         raise PyRatesException(
-                            "Too many nodes with generic name 'node{counter}' exist. Aborting vectorization."
+                            "Too many nodes with generic name 'vector_coupling{counter}' exist. Aborting vectorization."
                             "Consider not using this naming scheme for your own nodes as it is used for "
                             "vectorization. This problem will also occur, when more unique operator graphs "
                             "exist than the maximum number of iterations allows (default: 100k). You can "
                             "increase this number by setting `max_node_idx` to a larger number.")
 
                     # add new node directly to node graph, bypassing external interface
-                    # this is the "in_place" way to do this. Otherwise we would create an entirely new CircuitIR instance
+                    # this is the "in_place" way to do this. Otherwise we would create an entirely new CircuitIR
+                    # instance
                     self.graph.add_node(new_name, node=collapsed_node)
                     node_op_graph_map[op_graph] = (new_name, collapsed_node)
 
@@ -815,19 +776,60 @@ class CircuitIR(AbstractBaseIR):
                 source, source_idx = self.label_map[source]
                 target, target_idx = self.label_map[target]
 
-                # add edge from source to the new node
-                self.graph.add_edge(source, new_name,
-                                    source_var=source_var, source_idx=[source_idx],
-                                    target_var=edge_ir.input_var, target_idx=[coupling_vec_idx],
-                                    weight=1, delay=None, spread=None
-                                    )
+                source_vars = []
 
-                # add edge from new node to target
-                self.graph.add_edge(new_name, target,
-                                    source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
-                                    target_var=target_var, target_idx=[target_idx],
-                                    weight=weight, delay=delay, spread=spread
-                                    )
+                try:
+                    n_vars = len(source_var.keys())
+                except AttributeError:
+                    # simple/legacy case: only one input present. Unclear whether this also works with multiple
+                    # operators that use the same input variable
+                    n_vars = 1
+                    input_var = next(iter(edge_ir.inputs.values()))[0]
+                    # add edge from source to the new node
+                    self.graph.add_edge(source, new_name,
+                                        source_var=source_var, source_idx=[source_idx],
+                                        target_var=input_var, target_idx=[coupling_vec_idx],
+                                        weight=1, delay=None, spread=None
+                                        )
+
+                    # add edge from new node to target
+                    self.graph.add_edge(new_name, target,
+                                        source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                                        target_var=target_var, target_idx=[target_idx],
+                                        weight=weight, delay=delay, spread=spread
+                                        )
+                else:
+                    for in_var, op_vars in edge_ir.inputs.items():
+
+                        input_var = op_vars[0]  # simple solution for now: take only first reference
+                        # add edge from source to the new node
+                        self.graph.add_edge(source, new_name,
+                                            source_var=source_var, source_idx=[source_idx],
+                                            target_var=input_var, target_idx=[coupling_vec_idx],
+                                            weight=1, delay=None, spread=None
+                                            )
+
+                        # add edge from new node to target
+                        self.graph.add_edge(new_name, target,
+                                            source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                                            target_var=target_var, target_idx=[target_idx],
+                                            weight=weight, delay=delay, spread=spread
+                                            )
+
+
+                # # add edge from source to the new node
+                # self.graph.add_edge(source, new_name,
+                #                     source_var=source_var, source_idx=[source_idx],
+                #                     target_var=edge_ir.input_var, target_idx=[coupling_vec_idx],
+                #                     weight=1, delay=None, spread=None
+                #                     )
+                #
+                # # add edge from new node to target
+                # self.graph.add_edge(new_name, target,
+                #                     source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                #                     target_var=target_var, target_idx=[target_idx],
+                #                     weight=weight, delay=delay, spread=spread
+                #                     )
 
             # remove old edge
             self.graph.remove_edge(*specifier)
