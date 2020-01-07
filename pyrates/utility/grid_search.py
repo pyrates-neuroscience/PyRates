@@ -650,8 +650,9 @@ class ClusterGridSearch(ClusterCompute):
         print("***CHECKING PARAMETER GRID AND MAP FOR CONSISTENCY***")
         t0 = t.time()
         if not self.check_key_consistency(param_grid, param_map):
-            print("Terminating execution!")
-            return ""
+            print("WARNING: Not all parameter grid keys found in parameter map (see above). This needs to be handled "
+                  "accordingly by the user-specified worker template. Else, the network construction will fail with "
+                  "a key error.")
         print(f'Done! Elapsed time: {t.time() - t0:.3f} seconds')
 
         print("")
@@ -1057,7 +1058,6 @@ class ClusterGridSearch(ClusterCompute):
         map_key_lst = list(param_map.keys())
         # Not all keys of parameter map can be found in parameter grid
         if not all((grid_key in map_key_lst for grid_key in grid_key_lst)):
-            print("Not all parameter grid keys found in parameter map")
             print("Parameter map keys:")
             print(*list(param_map.keys()))
             print("Parameter grid keys:")
