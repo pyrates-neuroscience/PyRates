@@ -1418,7 +1418,7 @@ class ClusterWorkerTemplate(object):
                             param_grid=param_grid,
                             param_map=param_map,
                             simulation_time=simulation_time,
-                            dt=dt,
+                            step_size=dt,
                             sampling_step_size=sampling_step_size,
                             permute_grid=False,
                             inputs=inputs,
