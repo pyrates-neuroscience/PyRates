@@ -1435,7 +1435,6 @@ class ClusterWorkerTemplate(object):
         print("***POSTPROCESSING AND CREATING RESULT FILES***")
         t0 = t.time()
 
-        self.processed_results = pd.DataFrame(data=None, columns=self.results.columns)
         self.worker_postprocessing(**worker_kwargs)
 
         with pd.HDFStore(local_res_file, "w") as store:
@@ -1523,7 +1522,7 @@ class ClusterWorkerTemplate(object):
         -------
 
         """
-
+        self.processed_results = pd.DataFrame(data=None, columns=self.results.columns)
         for idx, data in self.results.iteritems():
 
             # Add post customized post processing of 'data' here
