@@ -40,6 +40,8 @@ __status__ = "Development"
 
 class EdgeIR(NodeIR):
 
+    __slots__ = ["_inputs"]
+
     def __init__(self, operators: dict = None, values: dict = None, template: str = None):
 
         if not operators:
@@ -56,36 +58,56 @@ class EdgeIR(NodeIR):
 
         super().__init__(operators, values, template)
 
-    # @property
-    # def input(self):
-    #     """Redirects to `self.inputs` for compatibility."""
-    #     return self.inputs
-    #
-    # @property
-    # def input_var(self):
-    #     return self.inputs
-    #
-    # @property
-    # def inputs(self):
-    #     """Detect input variables of edge. This also references the operator
-    #      the variable belongs to.
-    #
-    #      Note: As of `0.9.0` multiple source/input variables are allowed per edge."""
-    #     # noinspection PyTypeChecker
-    #     in_op = [op for op, in_degree in self.op_graph.in_degree if in_degree == 0]  # type: List[str]
-    #     # ToDo: Verify, whether multiple input variables are still captured by this filter in all circumstances
-    #
-    #     in_var = set()
-    #     for op_key in in_op:
-    #         for var in self[op_key].inputs:
-    #             in_var.add(f"{op_key}/{var}")
-    #
-    #     if len(in_var) == 1:
-    #         return in_var.pop()
-    #     if len(in_var) == 0:
-    #         return None
-    #     else:
-    #         return tuple(in_var)
+        self._inputs = None
+
+    @property
+    def input(self):
+        """Redirects to `self.inputs` for compatibility."""
+        return self.inputs
+
+    @property
+    def input_var(self):
+        return self.inputs
+
+    @property
+    def inputs(self):
+        """Detect input variables of edge. This also references the operator
+         the variable belongs to.
+
+         Note: As of `0.9.0` multiple source/input variables are allowed per edge."""
+
+        inputs = self.get_inputs()
+
+        if len(inputs) == 0:
+            return None
+        elif len(inputs) == 1:
+            return inputs[0]
+        else:
+            return inputs
+
+    @property
+    def n_inputs(self):
+        """Computes number of input variables that need to be informed from outside the edge (meaning from some node).
+        """
+        inputs = self.get_inputs()
+        return len(inputs)
+
+    def get_inputs(self):
+        """Find all input variables of operators that need to be mapped to source variables in a source node."""
+        try:
+            len(self._inputs)
+        except TypeError:
+            # find inputs
+            # noinspection PyTypeChecker
+            in_op = [op for op, in_degree in self.op_graph.in_degree if in_degree == 0]  # type: List[str]
+            # ToDo: Verify, whether multiple input variables are still captured by this filter in all circumstances
+            inputs = set()
+            for op_key in in_op:
+                for var in self[op_key].inputs:
+                    inputs.add(f"{op_key}/{var}")
+
+            self._inputs = tuple(inputs)
+        return self._inputs
 
     @property
     def output(self):

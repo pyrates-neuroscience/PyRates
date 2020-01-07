@@ -299,7 +299,7 @@ class CircuitIR(AbstractBaseIR):
         # add edges to network
         self.add_edges_from(edges)
 
-    def add_edge(self, source: str, target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
+    def add_edge(self, source: Union[str, dict], target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
                  spread: float = None, identify_relations: bool = True, **data):
         """
         Parameters
@@ -320,37 +320,59 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        source_var = ""
-        target_var = ""
+        # operators are not renamed anymore. Thus the validation part only needs to be done, if the existing label does not exist yet.
+
+        if source in self:
+            pass
+            # no renaming
+        else:
+            pass
+            # disassamble, rename nodes, reassamble
+
+        if target in self:
+            pass
+            # no renaming
+        else:
+            pass
+            # disassamble, rename nodes, reassamble
+
         if identify_relations:
             # test, if variables at source and target exist and reference them properly
             source, target = self._validate_separate_key_path(source, target)
         else:
             # assume that source and target strings are already consistent. This should be the case,
-            # if the given strings were coming from existing circuits (instances of `CircuitIR`)
+            # if the given strings came from existing circuits (instances of `CircuitIR`)
             # or in general, if operators are not renamed.
             for path in (source, target):
                 if path not in self:
                     raise PyRatesException(f"Failed to add edge, because referenced node `{path}` does not exist in "
                                            f"network graph. Edges can only be added to existing nodes.")
 
-            source_var = data.pop("source_var", "")
-            target_var = data.pop("target_var", "")
             source = source.split("/")
             target = target.split("/")
 
         # temporary workaround to make sure source/target variable/operator and nodes are defined properly
-        if source_var:
-            source_node = "/".join(source)
-        else:
+        try:
+            # try to get source variable info from data dictionary
+            source_var = data.pop("source_var")
+        except KeyError:
+            # not found, assume variable info is contained in `source`
             source_node = "/".join(source[:-2])
             source_var = "/".join(source[-2:])
-
-        if target_var:
-            target_node = "/".join(target)
         else:
+            # source_var was in data, so `source` contains only info about source node
+            source_node = "/".join(source)
+
+        try:
+            # try to get target variable info from data dictionary
+            target_var = data.pop("target_var")
+        except KeyError:
+            # not found, assume variable info is contained in `target`
             target_node = "/".join(target[:-2])
             target_var = "/".join(target[-2:])
+        else:
+            # target_var was in data, so `target` contains only info about target node
+            target_node = "/".join(target)
 
         attr_dict = dict(edge_ir=edge_ir,
                          weight=weight,
@@ -364,6 +386,28 @@ class CircuitIR(AbstractBaseIR):
 
         # collect references to op_graph in edge ir
         self._collect_references(edge_ir)
+
+    # def _validate_key_path(self, *paths: str):
+    #
+    #     for key in paths:
+    #         # (circuits), node, operator and variable specifiers
+    #
+    #         *node, op, var = key.split("/")
+    #
+    #         node = "/".join(node)
+    #
+    #         # TODO: check, whether checking the node label against the label map ist still necessary
+    #         # re-reference node labels, if necessary
+    #         # this syntax yields `node` back as default if it is not in label_map
+    #         node = self.label_map.get(node, node)
+    #         # ignore circuits for now
+    #         path = "/".join((node, op, var))
+    #         # check if path is valid
+    #         if path not in self:
+    #             raise PyRatesException(f"Could not find object with key path `{path}`.")
+    #
+    #         separated = (node, op, var)
+    #         yield separated
 
     def _validate_separate_key_path(self, *paths: str):
 

@@ -150,12 +150,33 @@ class CircuitTemplate(AbstractBaseTemplate):
             else:
                 edge_ir = template.apply(values=values)  # type: Optional[EdgeIR] # edge spec
 
-            edges.append((source, target,  # edge_unique_key,
-                          {"edge_ir": edge_ir,
-                           "weight": weight,
-                           "delay": delay,
-                           "spread": spread
-                           }))
+            # check whether multiple source variables are defined
+            try:
+                # if source is a dictionary, pass on its values as source_var
+                source_var = source.values()  # type: dict
+            except AttributeError:
+                # no dictionary? only singular source definition present. go on as planned.
+                edges.append((source, target,  # edge_unique_key,
+                              {"edge_ir": edge_ir,
+                               "weight": weight,
+                               "delay": delay,
+                               "spread": spread
+                               }))
+
+            else:
+                # oh source was indeed a dictionary. go pass source information as separate entry
+                # but first verify that number of source variables matches number of input variables in edge
+                if len(source_var) != edge_ir.n_inputs:
+                    raise PyRatesException(f"Mismatch between number of source variables ({len(source_var)}) and "
+                                           f"inputs ({edge_ir.n_inputs}) in an edge between source '{source}' and"
+                                           f"target '{target}'.")
+                edges.append((source, target,  # edge_unique_key,
+                              {"edge_ir": edge_ir,
+                               "weight": weight,
+                               "delay": delay,
+                               "spread": spread,
+                               "source_var": source_var
+                               }))
 
         return CircuitIR(label, self.circuits, nodes, edges, self.path)
 
