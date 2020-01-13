@@ -158,7 +158,7 @@ class NumpyVar(np.ndarray):
                 return value.squeeze()
             else:
                 idx = ",".join("None" if s == 1 else ":" for s in shape)
-                return value[eval(idx)]
+                return eval(f'value[{idx}]')
         else:
             return np.asarray(value, dtype=dtype)
 

@@ -50,7 +50,7 @@ class CircuitIR(AbstractBaseIR):
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
     __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map", "_buffered",
-                 "_first_run", "_vectorized", "_compile_info", "_backend", "step_size", "solver"]
+                 "_first_run", "_vectorized", "_compile_info", "_backend", "step_size", "solver", "_edge_idx_counter"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -99,6 +99,7 @@ class CircuitIR(AbstractBaseIR):
         self._buffered = False
         self.solver = None
         self.step_size = None
+        self._edge_idx_counter = 0
 
     def _collect_references(self, edge_or_node):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.
@@ -1712,30 +1713,27 @@ class CircuitIR(AbstractBaseIR):
             max_order = max(orders)
             target_check = sum(target_shape) > 1
             for i in range(max_order + 1):
-                idx, idx_str = self._bool_to_idx(orders_tmp > i)
-                idx_f1, idx_f1_str = self._bool_to_idx(orders_tmp == i)
-                idx_f2, idx_f2_str = self._bool_to_idx(orders == i)
+                idx, idx_str, idx_var = self._bool_to_idx(orders_tmp > i)
+                idx_f1, idx_f1_str, idx_f1_var = self._bool_to_idx(orders_tmp == i)
+                idx_f2, idx_f2_str, idx_f2_var = self._bool_to_idx(orders == i)
+                var_dict.update(idx_var)
+                var_dict.update(idx_f1_var)
+                var_dict.update(idx_f2_var)
                 if not target_check:
                     idx_str, idx_f1_str = "", ""
-                if idx or not target_check:
+                if idx or idx == 0 or not target_check:
                     var_next = f"{var}_d{i + 1}"
                     var_prev = f"{var}_d{i}" if i > 0 else var
                     rate = f"k_d{i + 1}"
                     buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
-                    idx_apply = type(idx) is int or idx
-                    if idx and type(idx) is list:
-                        var_shape = (len(idx),)
-                    elif idx_f2 and type(idx_f2) is list:
-                        var_shape = (len(idx_f2),)
-                    else:
-                        var_shape = ()
+                    idx_apply = idx == 0 or idx
+                    val = rates_tmp[idx] if idx_apply else rates_tmp
                     var_dict[var_next] = {'vtype': 'state_var',
                                           'dtype': self._backend._float_def,
-                                          'shape': var_shape,
+                                          'shape': (len(val),) if val.shape else (),
                                           'value': 0.}
                     var_dict[rate] = {'vtype': 'state_var',
                                       'dtype': self._backend._float_def,
-                                      'shape': var_shape,
                                       'value': rates_tmp[idx] if idx_apply else rates_tmp}
                     if idx_apply:
                         orders_tmp = orders_tmp[idx]
@@ -1744,14 +1742,14 @@ class CircuitIR(AbstractBaseIR):
                         orders_tmp = np.asarray([orders_tmp], dtype=np.int32)
                         rates_tmp = np.asarray([rates_tmp])
                 if idx_f1 or type(idx_f1) is int:
+                    n = len(idx) if type(idx) is list else 1
                     if len(delays) > 1:
                         idx1 = idx_f2_str
-                        n1 = len(idx_f2)
+                        n1 = len(idx_f2) if type(idx_f2) is list else 1
                     else:
                         idx1 = ""
                         n1 = target_shape[0]
-                    final_idx.append((i, idx1, idx_str if n1 == len(idx) else idx_f1_str))
-            # TODO: fix problems with last argument of final_idx ...if condition does not cover all cases yet
+                    final_idx.append((i, idx1, idx_str if n1 == n else idx_f1_str))
 
             # remove unnecessary ODEs
             for _ in range(len(buffer_eqs) - final_idx[-1][0]):
@@ -1903,11 +1901,19 @@ class CircuitIR(AbstractBaseIR):
 
     def _bool_to_idx(self, v):
         v_idx = np.argwhere(v).squeeze()
-        if v_idx.shape and v_idx.shape[0] > 1:
-            v_idx_str = f"[{v_idx[0]}:{v_idx[-1] + 1}]" if all(np.diff(v_idx) == 1) else f"[{v_idx}]"
+        v_dict = {}
+        if v_idx.shape and v_idx.shape[0] > 1 and all(np.diff(v_idx) == 1):
+            v_idx_str = f"[{v_idx[0]}:{v_idx[-1] + 1}]"
+        elif v_idx.shape and v_idx.shape[0] > 1:
+            var_name = f"delay_idx_{self._edge_idx_counter}"
+            v_idx_str = f"[{var_name}]"
+            v_dict[var_name] = {'value': v_idx, 'vtype': 'constant'}
+            self._edge_idx_counter += 1
+        elif v_idx > 0:
+            v_idx_str = f"[{v_idx}]"
         else:
-            v_idx_str = f"[{v_idx[0]}]" if len(v_idx.shape) > 0 and max(v_idx.shape) > 0 else f"[{v_idx}]"
-        return v_idx.tolist(), v_idx_str
+            v_idx_str = ""
+        return v_idx.tolist(), v_idx_str, v_dict
 
     def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
         """Adds an input collector variable to an edge.
