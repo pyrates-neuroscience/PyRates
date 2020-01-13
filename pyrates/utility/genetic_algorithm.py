@@ -339,21 +339,26 @@ class GeneticAlgorithmTemplate:
         pop_grid = {}
         # Prevent duplicates if create_pop() is called again if population had no winner
         self.gene_names = []
+        sigmas = [self.initial_gene_pool[gene]['sigma'] for gene in self.initial_gene_pool.keys()]
         for param, value in self.initial_gene_pool.items():
             self.gene_names.append(param)
-            if value['N'] == 1:
-                val_range = value['max']-value['min']
-                mean = value['min'] + val_range*0.5
-                std = val_range*0.1
-                pop_grid[param] = -np.inf
-                while pop_grid[param] < value['min'] or pop_grid[param] > value['max']:
-                    pop_grid[param] = np.random.normal(mean, std, 1)
-            else:
-                pop_grid[param] = sampling_func(value['min'], value['max'], value['N'])
+            value_tmp = value.copy()
+            value_tmp.pop('sigma')
+            try:
+                pop_grid[param] = sampling_func(**value_tmp)
+            except TypeError:
+                min_val, max_val = value_tmp.pop('min'), value_tmp.pop('max')
+                vals = sampling_func(**value_tmp)
+                idx = np.argwhere((vals < min_val)+(vals > max_val)).squeeze()
+                while idx:
+                    for _ in idx:
+                        vals.pop(idx)
+                    value['size'] = len(idx)
+                    vals += list(sampling_func(**value_tmp))
+                    idx = np.argwhere((vals < min_val) * (vals > max_val))
+                pop_grid[param] = np.asarray(vals)
         self.pop = linearize_grid(pop_grid, permute=True)
         self.pop_size = self.pop.shape[0]
-
-        sigmas = [self.initial_gene_pool[gene]['sigma'] for gene in self.initial_gene_pool.keys()]
 
         self.pop['fitness'] = 0.0
         self.pop['sigma'] = [sigmas for _ in range(self.pop_size)]
