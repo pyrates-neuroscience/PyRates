@@ -1712,6 +1712,7 @@ class CircuitIR(AbstractBaseIR):
             buffer_eqs, var_dict, final_idx = [], {}, []
             max_order = max(orders)
             target_check = sum(target_shape) > 1
+            var_shape = target_shape
             for i in range(max_order + 1):
                 idx, idx_str, idx_var = self._bool_to_idx(orders_tmp > i)
                 idx_f1, idx_f1_str, idx_f1_var = self._bool_to_idx(orders_tmp == i)
@@ -1719,18 +1720,19 @@ class CircuitIR(AbstractBaseIR):
                 var_dict.update(idx_var)
                 var_dict.update(idx_f1_var)
                 var_dict.update(idx_f2_var)
-                if not target_check:
-                    idx_str, idx_f1_str = "", ""
                 if idx or idx == 0 or not target_check:
                     var_next = f"{var}_d{i + 1}"
                     var_prev = f"{var}_d{i}" if i > 0 else var
                     rate = f"k_d{i + 1}"
-                    buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
-                    idx_apply = idx == 0 or idx
+                    idx_apply = (idx == 0) or idx
                     val = rates_tmp[idx] if idx_apply else rates_tmp
+                    if not target_check or not var_shape:
+                        idx_str, idx_f1_str = "", ""
+                    var_shape = (len(val),) if val.shape else ()
+                    buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
                     var_dict[var_next] = {'vtype': 'state_var',
                                           'dtype': self._backend._float_def,
-                                          'shape': (len(val),) if val.shape else (),
+                                          'shape': var_shape,
                                           'value': 0.}
                     var_dict[rate] = {'vtype': 'state_var',
                                       'dtype': self._backend._float_def,
@@ -1741,11 +1743,11 @@ class CircuitIR(AbstractBaseIR):
                     if not orders_tmp.shape:
                         orders_tmp = np.asarray([orders_tmp], dtype=np.int32)
                         rates_tmp = np.asarray([rates_tmp])
-                if idx_f1 or type(idx_f1) is int:
-                    n = len(idx) if type(idx) is list else 1
+                if idx_f1 or idx_f1 == 0:
+                    n = len(idx) if type(idx) is list and idx else 1
                     if len(delays) > 1:
                         idx1 = idx_f2_str
-                        n1 = len(idx_f2) if type(idx_f2) is list else 1
+                        n1 = len(idx_f2) if type(idx_f2) is list and idx_f2 else 1
                     else:
                         idx1 = ""
                         n1 = target_shape[0]
@@ -1909,10 +1911,11 @@ class CircuitIR(AbstractBaseIR):
             v_idx_str = f"[{var_name}]"
             v_dict[var_name] = {'value': v_idx, 'vtype': 'constant'}
             self._edge_idx_counter += 1
-        elif v_idx > 0:
-            v_idx_str = f"[{v_idx}]"
         else:
-            v_idx_str = ""
+            try:
+                v_idx_str = f"[{v_idx.max()}]"
+            except ValueError:
+                v_idx_str = ""
         return v_idx.tolist(), v_idx_str, v_dict
 
     def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
