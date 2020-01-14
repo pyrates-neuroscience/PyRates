@@ -768,8 +768,8 @@ class ClusterGridSearch(ClusterCompute):
         with pd.HDFStore(global_res_file, "a") as store:
             for key, value in res_dict.items():
                 if key != '/result_map' and len(value) > 0:
-                    df = pd.concat(value, axis=1)
-                    store.put(key=f'/Results/{key}', value=df)
+                    df = pd.concat(value, axis=0)
+                    store.put(key=f'/Results{key}', value=df)
             result_map = pd.concat(res_dict['/result_map'], axis=0)
             store.put(key=f'/Results/result_map', value=result_map)
 
@@ -1407,6 +1407,7 @@ class ClusterWorkerTemplate(object):
         # Drop all columns that don't contain a parameter map value (e.g. status, chunk_idx, err_count) since
         # grid_search() can't handle additional columns
         param_grid = param_grid[list(param_map.keys())]
+        worker_kwargs.update({'param_grid': param_grid})
         print(f'Elapsed time: {t.time() - t0:.3f} seconds')
 
         # COMPUTE PARAMETER GRID
@@ -1415,7 +1416,7 @@ class ClusterWorkerTemplate(object):
         print("***COMPUTING PARAMETER GRID***")
 
         t_ = self.worker_gs(circuit_template=circuit_template,
-                            param_grid=param_grid,
+                            param_grid=param_grid.copy(),
                             param_map=param_map,
                             simulation_time=simulation_time,
                             step_size=dt,
