@@ -561,7 +561,7 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
 
 
 def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = '.h5', fitness_measure: str = 'fitness',
-                    **kwargs):
+                    cbar_kwargs: dict = None, **kwargs):
     """
 
     Parameters
@@ -571,6 +571,7 @@ def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = '
     fname_identifier
     fname_type
     fitness_measure
+    cbar_kwargs
     kwargs
 
     Returns
@@ -596,8 +597,15 @@ def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = '
 
     # plot data
     grid = jointplot(p1_col, p2_col, C=fitness, **kwargs)
-    subplots_adjust(left=0.2, right=0.8, top=0.8, bottom=0.2)
-    cbar_ax = grid.fig.add_axes([.85, .25, .05, .4])  # x, y, width, height
+
+    # add subplot
+    pos = cbar_kwargs.pop('pos', [.85, .25, .05, .4])
+    left = cbar_kwargs.pop('left', 0.2)
+    right = cbar_kwargs.pop('right', 0.8)
+    top = cbar_kwargs.pop('top', 0.8)
+    bottom = cbar_kwargs.pop('bottom, 0.2')
+    subplots_adjust(left=left, right=right, top=top, bottom=bottom)
+    cbar_ax = grid.fig.add_axes(pos)  # x, y, width, height
     colorbar(cax=cbar_ax)
 
     return grid
