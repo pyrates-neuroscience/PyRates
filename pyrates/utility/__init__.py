@@ -39,6 +39,7 @@ from .grid_search import grid_search, adapt_circuit, ClusterCompute, ClusterGrid
 from .filestorage import get_simulation_data, save_simulation_data_to_file, read_simulation_data_from_file
 from .mne_wrapper import mne_from_csv, mne_from_dataframe
 from .annarchy_wrapper import pyrates_from_annarchy, grid_search_annarchy
+from .genetic_algorithm import GeneticAlgorithmTemplate, CGSGeneticAlgorithm, GSGeneticAlgorithm, plot_results_2d
 
 # from .construct import construct_circuit_from_file  # this one fails tests due to circular import
 
