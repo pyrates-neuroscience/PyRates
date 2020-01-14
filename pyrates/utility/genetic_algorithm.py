@@ -203,7 +203,7 @@ class GeneticAlgorithmTemplate:
             ########################################
             self.candidate = new_candidate
             if pop_save:
-                self.pop.to_hdf(f"{pop_save}_{iter_count}", key='data')
+                self.pop.to_hdf(f"{pop_save}_{iter_count}.h5", key='data')
             elif candidate_save:
                 self.candidate.to_hdf(candidate_save, key='data')
 
@@ -554,7 +554,7 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
             self.pop.at[i, 'fitness'] = float(results.loc['fitness', tuple(candidate_genes)])
 
 
-def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = 'hd5', fitness_measure: str = 'fitness',
+def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = '.h5', fitness_measure: str = 'fitness',
                     **kwargs):
     """
 
@@ -572,11 +572,15 @@ def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = '
 
     """
     import glob
+    import os
     from pandas import read_hdf, DataFrame
     from seaborn import jointplot
+    from matplotlib.pyplot import colorbar, subplots_adjust
 
     # retrieve data from files
-    files = glob.glob(f"{fname_identifier}*.{fname_type}")
+    if '/' not in fname_identifier:
+        fname_identifier = f"{os.curdir}/{fname_identifier}"
+    files = glob.glob(f"{fname_identifier}*{fname_type}")
     p1_col, p2_col, fitness = [], [], []
     for f in files:
         data = read_hdf(f, key='data')
@@ -585,12 +589,9 @@ def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = '
         fitness += list(data.loc[:, fitness_measure])
 
     # plot data
-    if fitness_measure != 'density':
-        for key in ['joint_kws', 'margin_kws']:
-            if key in kwargs:
-                kwargs[key]['C'] = fitness
-            else:
-                kwargs.update({key: {'C': fitness}})
-    grid = jointplot(p1, p2, **kwargs)
+    grid = jointplot(p1_col, p2_col, C=fitness, **kwargs)
+    subplots_adjust(left=0.2, right=0.8, top=0.8, bottom=0.2)
+    cbar_ax = grid.fig.add_axes([.85, .25, .05, .4])  # x, y, width, height
+    colorbar(cax=cbar_ax)
 
     return grid
