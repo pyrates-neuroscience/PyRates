@@ -553,7 +553,8 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
         for i, candidate_genes in enumerate(param_grid.values):
             self.pop.at[i, 'fitness'] = float(results.loc['fitness', tuple(candidate_genes)])
 
-def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str='hd5', fitness_measure: str='fitness',
+
+def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = 'hd5', fitness_measure: str = 'fitness',
                     **kwargs):
     """
 
@@ -562,6 +563,7 @@ def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str='hd
     p1
     p2
     fname_identifier
+    fname_type
     fitness_measure
     kwargs
 
@@ -577,7 +579,7 @@ def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str='hd
     files = glob.glob(f"{fname_identifier}*.{fname_type}")
     p1_col, p2_col, fitness = [], [], []
     for f in files:
-        data = read_hdf(f)
+        data = read_hdf(f, key='data')
         p1_col += list(data.loc[:, p1])
         p2_col += list(data.loc[:, p2])
         fitness += list(data.loc[:, fitness_measure])
