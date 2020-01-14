@@ -552,3 +552,43 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
 
         for i, candidate_genes in enumerate(param_grid.values):
             self.pop.at[i, 'fitness'] = float(results.loc['fitness', tuple(candidate_genes)])
+
+def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str='hd5', fitness_measure: str='fitness',
+                    **kwargs):
+    """
+
+    Parameters
+    ----------
+    p1
+    p2
+    fname_identifier
+    fitness_measure
+    kwargs
+
+    Returns
+    -------
+
+    """
+    import glob
+    from pandas import read_hdf, DataFrame
+    from seaborn import jointplot
+
+    # retrieve data from files
+    files = glob.glob(f"{fname_identifier}*.{fname_type}")
+    p1_col, p2_col, fitness = [], [], []
+    for f in files:
+        data = read_hdf(f)
+        p1_col += list(data.loc[:, p1])
+        p2_col += list(data.loc[:, p2])
+        fitness += list(data.loc[:, fitness_measure])
+
+    # plot data
+    if fitness_measure != 'density':
+        for key in ['joint_kws', 'margin_kws']:
+            if key in kwargs:
+                kwargs[key]['C'] = fitness
+            else:
+                kwargs.update({key: {'C': fitness}})
+    grid = jointplot(p1, p2, **kwargs)
+
+    return grid
