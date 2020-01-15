@@ -56,6 +56,7 @@ def _cache_op_graph(cls):
         # compute hash from incoming operators. Different order of operators in input might lead to different hash.
         h = hash(tuple(operators.values()))
 
+        changed_labels = False
         try:
             op_graph = op_graph_cache[h]
         except KeyError:
@@ -63,8 +64,20 @@ def _cache_op_graph(cls):
             # test, if hash computation leads to same result
             assert h == hash(op_graph)
             op_graph_cache[h] = op_graph
+        else:
+            # temporary workaround to obtain correct labels for values.
+            changed_labels = {}
+            for name, op in operators.items():
+                op_hash = hash(op)
+                for cached_name, cached_op in op_graph:
+                    if op_hash == hash(cached_op["operator"]):
+                        changed_labels[name] = cached_name
+                        # should only ever be able to find one, right? this fails (either way, if two operators with
+                        # identical hash exist in the same operator graph
+                        # fixme
+                        break
 
-        return op_graph
+        return op_graph, changed_labels
 
     return cache_func
 

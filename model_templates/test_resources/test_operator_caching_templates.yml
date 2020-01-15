@@ -1,0 +1,81 @@
+%YAML 1.2
+---
+
+TestOpSin:
+  base: OperatorTemplate
+  equations:
+    - "var = ext + c"
+    - "d/dt * out_var = sin(ext)"
+  variables:
+    var:
+      default: output
+    ext:
+      default: input
+    c:
+      default: 0
+
+TestOpCos:
+  base: TestOp1
+  variables:
+    c:
+      default: -PI/2
+
+TestOpLin0:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * out_var = in_var * c"
+  variables:
+    out_var:
+      default: output
+    in_var:
+      default: input
+    c:
+      default: 0
+
+TestOpLin1:
+  base: TestOpLin0
+  variables:
+    c:
+      default: 1
+
+
+TestNodeLin0:
+  base: NodeTemplate
+  operators:
+    TestOpLin0
+
+TestNodeLin1:
+  base: NodeTemplate
+  operators:
+    TestOpLin1
+
+TestCircuit1:
+  base: CircuitTemplate
+  nodes:
+    node1: TestNodeLin0
+    node2: TestNodeLin1
+  edges:
+    - [node1/TestOpLin0/out_var, node2/TestOpLin1/in_var, null, {weight: 1}]
+
+TestEdge1:
+  base: EdgeTemplate
+  operators:
+    TestOpSin
+
+TestEdge2:
+  base: EdgeTemplate
+  operators:
+    TestOpCos
+
+TestCircuit2:
+  base: CircuitTemplate
+  nodes:
+    node1: TestNodeLin0
+    node2: TestNodeLin0
+  edges:
+    - [node1/TestOpLin0/out_var, node2/TestOpLin0/in_var, TestEdge1, {weight: 1}]
+    - [node2/TestOpLin0/out_var, node1/TestOpLin0/in_var, TestEdge2, {weight: 1}]
+
+
+
+

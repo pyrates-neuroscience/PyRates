@@ -803,9 +803,25 @@ class CircuitIR(AbstractBaseIR):
                     for in_var, op_vars in edge_ir.inputs.items():
 
                         input_var = op_vars[0]  # simple solution for now: take only first reference
+                        # need to rewrite this, if problems arise from operators in a node referencing the same
+                        # node-wide
+
+                        # now fetch the source variable connected to this input variable
+                        # should fail, if there is a mismatch between assigned input variable and actual inputs
+                        # could check for this during edge creation in the case of multiple source variables.
+                        try:
+                            single_source = next((key for key, value in source_var.items() if value == in_var))
+                        except StopIteration:
+                            raise PyRatesException(f"Failed to divide edge with multiple source variables into many "
+                                                   f"edges with single source variable, because there is a mismatch "
+                                                   f"between assigned input variables in the source definition "
+                                                   f"{source_var} and inputs as defined by internal operator graph "
+                                                   f"{edge_ir.inputs}. This happened in an edge between {source} and "
+                                                   f"{target}.")
                         # add edge from source to the new node
+
                         self.graph.add_edge(source, new_name,
-                                            source_var=source_var, source_idx=[source_idx],
+                                            source_var=single_source, source_idx=[source_idx],
                                             target_var=input_var, target_idx=[coupling_vec_idx],
                                             weight=1, delay=None, spread=None
                                             )

@@ -179,7 +179,7 @@ WC_stp_net:
     E: WC_e
     I: WC_i
   edges:
-    - [E: {WC_e_op/re: re_in, WC_e_op/I: I, WC_e_op/I_d: I_d}, E/WC_e_op/re_in, WC_ee, {weight: 1.0}]
-    - [E: {WC_e_op/re: re_in, WC_e_op/I: I, WC_e_op/I_d: I_d}, I/WC_i_op/re_in, WC_ie, {weight: 0.5}]
+    - [E: {WC_e_op/re: r, WC_e_op/I: I, WC_e_op/I_d: I_d}, E/WC_e_op/re_in, WC_ee, {weight: 1.0}]
+    - [E: {WC_e_op/re: r, WC_e_op/I: I, WC_e_op/I_d: I_d}, I/WC_i_op/re_in, WC_ie, {weight: 0.5}]
     - [I/WC_i_op/ri, E/WC_e_op/ri_in, null, {weight: 0.5}]
     - [E/WC_e_op/I, E/WC_e_op/I_d, null, {weight: 1.0, delay: 0.005}]

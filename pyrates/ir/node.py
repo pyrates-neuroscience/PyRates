@@ -44,7 +44,14 @@ class NodeIR(AbstractBaseIR):
 
     def __init__(self, operators: dict = None, values: dict = None, template: str = None):
         super().__init__(template)
-        self._op_graph = OperatorGraph(operators)
+        self._op_graph, changed_labels = OperatorGraph(operators)
+        # ToDo: Move caching function to NodeIR instead of using a decorator, for clarity
+        try:
+            for old_name, new_name in changed_labels.items():
+                values[new_name] = values.pop(old_name)
+        except AttributeError:
+            pass
+
         self.values = values
 
     @property
