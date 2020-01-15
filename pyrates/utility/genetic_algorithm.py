@@ -244,7 +244,8 @@ class GeneticAlgorithmTemplate:
                 iter_count += 1
             else:
                 print(f'Generating offspring')
-                self.__create_offspring(n_parent_pairs=n_parent_pairs, n_new=n_new, n_winners=n_winners)
+                self.__create_offspring(n_parent_pairs=n_parent_pairs, n_new=n_new, n_winners=n_winners,
+                                        sampling_func=gene_sampling_func)
                 iter_count += 1
 
         # End of iteration loop
@@ -253,7 +254,7 @@ class GeneticAlgorithmTemplate:
             print('Could not satisfy minimum fitness condition.')
         return self.winner
 
-    def __create_offspring(self, n_winners, n_parent_pairs=0, n_new=0):
+    def __create_offspring(self, n_winners, n_parent_pairs=0, n_new=0, sampling_func=np.random.uniform):
         """Create a new offspring of the current population
 
         Offspring contains:
@@ -310,7 +311,7 @@ class GeneticAlgorithmTemplate:
         # 4. Add n_new fresh members from initial gene_pool
         ###################################################
         for n in range(n_new):
-            new_member = self.__create_new_member()
+            new_member = self.__create_new_member(sampling_func=sampling_func)
             offspring.append(new_member[0])
             new_sigs.append(new_member[1])
 
@@ -322,7 +323,7 @@ class GeneticAlgorithmTemplate:
             dupl_idx = offspring.loc[offspring.duplicated()].index.to_numpy()
             for i in dupl_idx:
                 # Replace every duplicate with a new chromosome, fitness 0.0 and respective sigmas
-                new_member = self.__create_new_member()
+                new_member = self.__create_new_member(sampling_func=sampling_func)
                 offspring.iloc[i] = new_member[0]
                 new_sigs[i] = new_member[1]
 
@@ -344,19 +345,7 @@ class GeneticAlgorithmTemplate:
             self.gene_names.append(param)
             value_tmp = value.copy()
             value_tmp.pop('sigma')
-            try:
-                pop_grid[param] = sampling_func(**value_tmp)
-            except TypeError:
-                min_val, max_val = value_tmp.pop('min'), value_tmp.pop('max')
-                vals = sampling_func(**value_tmp)
-                idx = np.argwhere((vals < min_val)+(vals > max_val)).squeeze()
-                while idx:
-                    for _ in idx:
-                        vals.pop(idx)
-                    value['size'] = len(idx)
-                    vals += list(sampling_func(**value_tmp))
-                    idx = np.argwhere((vals < min_val) * (vals > max_val))
-                pop_grid[param] = np.asarray(vals)
+            pop_grid[param] = self.__sample_gene(sampling_func, **value_tmp)
         self.pop = linearize_grid(pop_grid, permute=True)
         self.pop_size = self.pop.shape[0]
 
@@ -388,17 +377,18 @@ class GeneticAlgorithmTemplate:
             sigma_new.append(sigma*xi)
         return mu_new, sigma_new
 
-    def __create_new_member(self):
+    def __create_new_member(self, sampling_func=np.random.uniform):
         """Create a new population member from the initial gene pool"""
         genes = []
         sigma = []
         for i, (key, value) in enumerate(self.initial_gene_pool.items()):
-            genes.append(random.uniform(value['min'], value['max']))
-            sigma.append(value['sigma'])
+            value_tmp = value.copy()
+            sigma.append(value_tmp.pop('sigma'))
+            genes.append(self.__sample_gene(sampling_func, **value_tmp))
         new_member = [genes, sigma]
         already_exists = (self.pop.loc[:, self.gene_names] == new_member[0]).all(1).any()
         if already_exists:
-            new_member = self.__create_new_member()
+            new_member = self.__create_new_member(sampling_func)
         return new_member
 
     def __create_parent_pairs(self, n_parent_pairs):
@@ -454,6 +444,22 @@ class GeneticAlgorithmTemplate:
                 count += 1
             childs.append((child_genes, child_sigma))
         return childs
+
+    @staticmethod
+    def __sample_gene(sampling_func, **kwargs):
+        try:
+            return sampling_func(**kwargs)
+        except TypeError:
+            min_val, max_val = kwargs.pop('min'), kwargs.pop('max')
+            vals = sampling_func(**kwargs)
+            idx = np.argwhere((vals < min_val) + (vals > max_val)).squeeze()
+            while idx:
+                for _ in idx:
+                    vals.pop(idx)
+                kwargs['size'] = len(idx)
+                vals += list(sampling_func(**kwargs))
+                idx = np.argwhere((vals < min_val) * (vals > max_val))
+            return np.asarray(vals)
 
     def plot_genes(self, pop_member):
         # Iterate over all genes of the member
