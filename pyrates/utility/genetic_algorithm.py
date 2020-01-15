@@ -203,9 +203,9 @@ class GeneticAlgorithmTemplate:
             ########################################
             self.candidate = new_candidate
             if pop_save:
-                self.pop.to_hdf(f"{pop_save}_{iter_count}.h5", key='data')
+                self.pop.to_hdf(f"{pop_save}_{iter_count}.h5", key='data', mode='w')
             elif candidate_save:
-                self.candidate.to_hdf(candidate_save, key='data')
+                self.candidate.to_hdf(candidate_save, key='data', mode='w')
 
             # Update current winning genes
             #############################
