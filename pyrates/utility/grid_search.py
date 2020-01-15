@@ -1393,6 +1393,11 @@ class ClusterWorkerTemplate(object):
         except KeyError:
             gs_kwargs = {}
 
+        if 'init_kwargs' not in gs_kwargs:
+            gs_kwargs['init_kwargs'] = {}
+        if build_dir:
+            gs_kwargs['init_kwargs']['build_dir'] = build_dir
+
         print(f'Elapsed time: {t.time() - t0:.3f} seconds')
 
         # LOAD PARAMETER GRID
@@ -1414,7 +1419,6 @@ class ClusterWorkerTemplate(object):
         ########################
         print("")
         print("***COMPUTING PARAMETER GRID***")
-
         t_ = self.worker_gs(circuit_template=circuit_template,
                             param_grid=param_grid.copy(),
                             param_map=param_map,
@@ -1425,7 +1429,6 @@ class ClusterWorkerTemplate(object):
                             inputs=inputs,
                             outputs=outputs.copy(),
                             profile="t",
-                            build_dir=build_dir,
                             **gs_kwargs)
 
         print(f'Total parameter grid computation time: {t_:.3f} seconds')

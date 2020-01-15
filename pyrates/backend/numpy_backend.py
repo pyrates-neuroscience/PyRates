@@ -720,6 +720,8 @@ class NumpyBackend(object):
     imports
         Can be used to pass additional import statements that are needed for code generation of the custom functions
         provided via `ops`. Will be added to the top of each generated code file.
+    build_dir
+        Directory in which pyrates builds will be stored.
 
     """
 
@@ -729,6 +731,7 @@ class NumpyBackend(object):
                  name: str = 'net_0',
                  float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
+                 build_dir: Optional[str] = None,
                  ) -> None:
         """Instantiates numpy backend, i.e. a compute graph with numpy operations.
         """
@@ -830,7 +833,7 @@ class NumpyBackend(object):
         self.op_counter = {}
         self.layer = 0
         self.op_indices = {}
-        self._build_dir = ""
+        self._build_dir = build_dir if build_dir else ""
         self._float_def = self.dtypes[float_default_type]
         self.name = name
         self._base_layer = 0
