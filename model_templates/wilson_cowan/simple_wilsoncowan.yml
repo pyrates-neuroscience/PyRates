@@ -24,14 +24,14 @@ WC_stp_ee:
   equations:
     - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*r"
     - "d/dt * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*r"
-    - "d/dt * p = (1.0-p)/tau_p + I*I_d*k_p(fr - dr)"
+    - "d/dt * p = (1.0-p)/tau_p + Inp*Inp_d*k_p*(fr - dr)"
     - "r_scaled = r*x*u"
   variables:
     r:
       default: input
-    I:
+    Inp:
       default: input
-    I_d:
+    Inp_d:
       default: input
     x:
       default: variable(1.0)
@@ -40,9 +40,9 @@ WC_stp_ee:
     p:
       default: variable
     fr:
-      default: variable
+      default: 1.0
     dr:
-      default: variable
+      default: 0.0
     r_scaled:
       default: output
     tau_r:
@@ -50,13 +50,13 @@ WC_stp_ee:
     tau_f:
       default: 1.0
     tau_p:
-      default: 1.0
+      default: 200.0
     k_r:
       default: 0.2
     k_f:
       default: 0.0
     k_p:
-      default: 0.0
+      default: 0.1
     U:
       default: 1.0
 
@@ -179,7 +179,7 @@ WC_stp_net:
     E: WC_e
     I: WC_i
   edges:
-    - [E: {WC_e_op/re: r, WC_e_op/I: I, WC_e_op/I_d: I_d}, E/WC_e_op/re_in, WC_ee, {weight: 1.0}]
-    - [E: {WC_e_op/re: r, WC_e_op/I: I, WC_e_op/I_d: I_d}, I/WC_i_op/re_in, WC_ie, {weight: 0.5}]
+    - [E: {WC_e_op/re: r, WC_e_op/I: Inp, WC_e_op/I_d: Inp_d}, E/WC_e_op/re_in, WC_ee, {weight: 1.0}]
+    - [E: {WC_e_op/re: r, WC_e_op/I: Inp, WC_e_op/I_d: Inp_d}, I/WC_i_op/re_in, WC_ie, {weight: 0.5}]
     - [I/WC_i_op/ri, E/WC_e_op/ri_in, null, {weight: 0.5}]
     - [E/WC_e_op/I, E/WC_e_op/I_d, null, {weight: 1.0, delay: 0.005}]

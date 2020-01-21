@@ -1700,7 +1700,10 @@ class CircuitIR(AbstractBaseIR):
         node_var = self.get_node_var(f"{node}/{op}/{var}")
         target_shape = node_var['shape']
         node_ir = self[node]
-        source_idx = np.asarray(nodes, dtype=np.int32).flatten()
+        nodes_tmp = []
+        for n in nodes:
+            nodes_tmp += n
+        source_idx = np.asarray(nodes_tmp, dtype=np.int32).flatten()
 
         # ODE approximation to DDE
         ##########################
