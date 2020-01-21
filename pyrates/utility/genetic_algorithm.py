@@ -552,7 +552,8 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
             worker_file=self.cgs_config['worker_file'],
             worker_kwargs={
                 'target': target
-            })
+            },
+            result_concat_axis=0)
 
         results = pd.read_hdf(res_file, key=f'/Results/fitness')
 

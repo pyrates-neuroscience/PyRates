@@ -768,7 +768,7 @@ class ClusterGridSearch(ClusterCompute):
         with pd.HDFStore(global_res_file, "a") as store:
             for key, value in res_dict.items():
                 if key != '/result_map' and len(value) > 0:
-                    df = pd.concat(value, axis=0)
+                    df = pd.concat(value, axis=kwargs.pop('result_concat_axis', 1))
                     store.put(key=f'/Results{key}', value=df)
             result_map = pd.concat(res_dict['/result_map'], axis=0)
             store.put(key=f'/Results/result_map', value=result_map)
