@@ -23,25 +23,25 @@ while (i+1)*dur < T-delay:
         inp[int(i*dur/dt):int(((i+1)*dur)/dt), i_tmp] = 1.0
     i += 1
 
-#circuit = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp_net").apply()
-C_ee = np.zeros((N, N))
-C_ee[np.eye(N) == 0] = 3.5/N
-
-C_ie = np.zeros((N, N))
-C_ie[np.eye(N) == 0] = 6.0/N
-
-circuit = CircuitIR()
-edge1 = EdgeTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_ee")
-edge2 = EdgeTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_ie")
-for idx in range(N):
-    circuit.add_circuit(f'wc_{idx}', CircuitIR.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp_net")
-                        )
-circuit.add_edges_from_matrix(source_var="WC_e_op/re", target_var="WC_e_op/re_in", template=edge1,
-                              nodes=[f'wc_{idx}/E' for idx in range(N)], weight=C_ee)
-circuit.add_edges_from_matrix(source_var="E/WC_e_op/re", target_var="I/WC_i_op/re_in", template=edge2,
-                              nodes=[f'wc_{idx}' for idx in range(N)], weight=C_ie)
-
-compute_graph = ComputeGraph(circuit, vectorization=True, backend='numpy', name='wc_net', step_size=dt,
+circuit = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp_net").apply()
+# C_ee = np.zeros((N, N))
+# C_ee[np.eye(N) == 0] = 3.5/N
+#
+# C_ie = np.zeros((N, N))
+# C_ie[np.eye(N) == 0] = 6.0/N
+#
+# circuit = CircuitIR()
+# edge1 = EdgeTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_ee")
+# edge2 = EdgeTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_ie")
+# for idx in range(N):
+#     circuit.add_circuit(f'wc_{idx}', CircuitIR.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp_net")
+#                         )
+# circuit.add_edges_from_matrix(source_var="WC_e_op/re", target_var="WC_e_op/re_in", template=edge1,
+#                               nodes=[f'wc_{idx}/E' for idx in range(N)], weight=C_ee)
+# circuit.add_edges_from_matrix(source_var="E/WC_e_op/re", target_var="I/WC_i_op/re_in", template=edge2,
+#                               nodes=[f'wc_{idx}' for idx in range(N)], weight=C_ie)
+#
+compute_graph = ComputeGraph(circuit, vectorization=True, backend='fortran', name='wc_net', step_size=dt,
                              solver='euler')
 
 result, t = compute_graph.run(T,

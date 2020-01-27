@@ -1249,8 +1249,13 @@ class CircuitIR(AbstractBaseIR):
         elif backend == 'numpy':
             from pyrates.backend.numpy_backend import NumpyBackend
             backend = NumpyBackend
+        elif backend == 'fortran':
+            from pyrates.backend.fortran_backend import FortranBackend
+            backend = FortranBackend
+            kwargs['squeeze'] = True
         else:
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
+        squeeze_vars = kwargs.pop('squeeze', False)
         kwargs['name'] = self.label
         kwargs['float_default_type'] = float_precision
         self._backend = backend(**kwargs)
@@ -1376,7 +1381,8 @@ class CircuitIR(AbstractBaseIR):
         self._backend.bottom_layer()
 
         # parse mapping
-        variables = parse_equations(equations=equations, equation_args=variables, backend=self._backend)
+        variables = parse_equations(equations=equations, equation_args=variables, backend=self._backend,
+                                    squeeze=squeeze_vars)
 
         # save parsed variables in net config
         for key, val in variables.items():

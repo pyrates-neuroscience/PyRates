@@ -98,7 +98,13 @@ class NumpyVar(np.ndarray):
 
         # get data type
         if not dtype:
-            dtype = value.dtype if hasattr(value, 'dtype') else np.dtype(value)
+            if hasattr(value, 'dtype'):
+                dtype = value.dtype
+            else:
+                try:
+                    dtype = np.dtype(value)
+                except TypeError:
+                    dtype = type(value)
         dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
         dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
         if dtype in backend.dtypes:
@@ -120,6 +126,8 @@ class NumpyVar(np.ndarray):
             shape.pop(idx)
             shape = tuple(shape)
         value = cls._get_value(value, dtype, shape)
+        if squeeze:
+            value = value.squeeze()
         obj = cls._get_var(value, name, dtype)
 
         # store additional attributes on variable object
@@ -268,35 +276,46 @@ class PyRatesOp:
         # setup operator call
         #####################
 
-        # begin
         eval_gen = CodeGen()
-        eval_gen.add_code_line(f"{op}(")
+
+        # check whether operator is a simple mathematical symbol or involves a function call
+        if op in "+-**/*^%<>==>=<=" and len(args) == 2:
+            arg1 = cls._get_arg_str(args[0], results_args[0], results_arg_names[0])
+            arg2 = cls._get_arg_str(args[1], results_args[1], results_arg_names[1])
+            eval_gen.add_code_line(f"({arg1}) {op} ({arg2})")
+            func_call = False
+        else:
+            func_call = True
+            eval_gen.add_code_line(f"{op}(")
 
         # add operator arguments
         for i, (key, arg) in enumerate(zip(results_arg_names, results_args)):
             if key != '__no_name__':
                 if type(arg) is str:
-                    if arg is "(":
-                        eval_gen.add_code_line(f"{arg}")
-                    else:
-                        eval_gen.add_code_line(f"{arg},")
+                    if func_call:
+                        if arg is "(":
+                            eval_gen.add_code_line(f"{arg}")
+                        else:
+                            eval_gen.add_code_line(f"{arg},")
                     idx = cls._index(results['args'], arg)
                     results['args'].pop(idx)
                     results['arg_names'].pop(idx)
-                elif type(arg) is dict:
+                elif type(arg) is dict and func_call:
                     eval_gen.add_code_line(f"{arg['value']},")
-                else:
+                elif func_call:
                     eval_gen.add_code_line(f"{key},")
             else:
-                eval_gen.add_code_line(f"{arg},")
+                if func_call:
+                    eval_gen.add_code_line(f"{arg},")
                 if key in results['arg_names']:
                     idx = cls._index(results['arg_names'], key)
                     results['args'].pop(idx)
                     results['arg_names'].pop(idx)
 
         # add function end
-        eval_gen.code[-1] = eval_gen.code[-1][:-1]
-        eval_gen.add_code_line(")")
+        if func_call:
+            eval_gen.code[-1] = eval_gen.code[-1][:-1]
+            eval_gen.add_code_line(")")
         results['value'] = eval_gen.generate()
 
         # check whether operation arguments contain merely constants
@@ -410,6 +429,15 @@ class PyRatesOp:
             check.append(np.isnan(vals) or np.isneginf(vals))
         if any(check):
             raise ValueError(f'Result of operation ({name}) contains NaNs or infinite values.')
+
+    @staticmethod
+    def _get_arg_str(arg: Any, arg_reduced: Any, key: str) -> str:
+        if key == '__no_name__':
+            return f"{arg_reduced}" if arg_reduced > 0 else f"({arg_reduced})"
+        elif PyRatesOp.__subclasscheck__(type(arg)):
+            return f"{arg.value}"
+        else:
+            return key
 
     @staticmethod
     def _deepcopy(x):
@@ -1606,12 +1634,13 @@ class NumpyBackend(object):
         if not self._compare_shapes(op1, op2):
 
             # try adjusting op2 to match shape of op1
-            op1_tmp, op2_tmp = self._match_shapes(op1, op2, adjust_second=True)
+            adjust_first = True if hasattr(op2, 'short_name') else False
+            op1_tmp, op2_tmp = self._match_shapes(op1, op2, adjust_second=adjust_first)
 
             if not self._compare_shapes(op1_tmp, op2_tmp):
 
                 # try adjusting op1 to match shape of op2
-                op1_tmp, op2_tmp = self._match_shapes(op1_tmp, op2_tmp, adjust_second=False)
+                op1_tmp, op2_tmp = self._match_shapes(op1_tmp, op2_tmp, adjust_second=not adjust_first)
 
             if self._compare_shapes(op1_tmp, op2_tmp):
                 op1, op2 = op1_tmp, op2_tmp
@@ -1812,9 +1841,9 @@ class NumpyBackend(object):
         """
 
         if not hasattr(op1, 'shape'):
-            op1 = self.add_var(vtype='constant', value=op1)
+            op1 = self.add_var(vtype='constant', value=op1, name='c')
         if not hasattr(op2, 'shape'):
-            op2 = self.add_var(vtype='constant', value=op2)
+            op2 = self.add_var(vtype='constant', value=op2, name='c')
 
         if adjust_second:
             op_adjust = op2
@@ -1881,6 +1910,10 @@ class NumpyBackend(object):
         return NumpyVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self, squeeze=squeeze)
 
     def _create_op(self, op, name, *args):
+        if not self.ops[op]['call']:
+            raise NotImplementedError(f"The operator `{op}` is not implemented for this backend ({self.name}). "
+                                      f"Please consider passing the required operation to the backend initialization "
+                                      f"or choose another backend.")
         if op in ["=", "+=", "-=", "*=", "/="]:
             if len(args) > 2 and hasattr(args[2], 'shape') and len(args[2].shape) > 1 and \
                     'bool' not in str(type(args[2])):
@@ -2096,12 +2129,12 @@ class CodeGen:
     def generate(self):
         """Generates a single code string from its history of code additions.
         """
-        return "".join(self.code)
+        return ''.join(self.code)
 
     def add_code_line(self, code_str):
         """Add code line string to code.
         """
-        self.code.append("    " * self.lvl + code_str)
+        self.code.append("\t" * self.lvl + code_str)
 
     def add_linebreak(self):
         """Add a line-break to the code.
