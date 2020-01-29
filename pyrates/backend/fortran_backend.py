@@ -561,11 +561,19 @@ class FortranBackend(NumpyBackend):
             pyauto.run(e='rhs_func', c='ivp', DS=dt, DSMIN=dsmin, DSMAX=1.0, name='t', UZR={14: T}, STOP={'UZ1'},
                        NMX=nmx, NPR=npr, **kwargs)
 
-            extract = [f'U({i[0]+self.idx_start if type(i) is list else i+self.idx_start})' for i in output_indices]
+            extract = [f'U({i+1})' for i in range(self.ndim)]
+            out_vars = [f'U({i[0]+self.idx_start if type(i) is list else i+self.idx_start})' for i in output_indices]
             extract.append('PAR(14)')
-            results_tmp = pyauto.extract(keys=extract, cont='t')
-            times = results_tmp.pop('PAR(14)')
-            return times, [results_tmp[v] for v in extract[:-1]]
+
+            results = pyauto.extract(keys=extract, cont='t')
+            times = results.pop('PAR(14)')
+
+            state_vars = self.get_var('y')
+            for key, val in results.items():
+                idx = int(key[key.index('(')+1])
+                state_vars[idx-self.idx_start] = val[-1]
+
+            return times, [results[v] for v in out_vars]
 
         return super()._solve(rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs)
 
