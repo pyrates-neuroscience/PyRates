@@ -1009,7 +1009,7 @@ class CircuitIR(AbstractBaseIR):
             for vnode_key in vnode_indices:
                 var_value = self[f"{vnode_key}/{op}/{var}"]['value']
                 if var_value.name == 'pyrates_index':
-                    idx_start = var_value.value.index('[')
+                    idx_start = var_value.value.index(self._backend.idx_l)
                     idx = var_value.value[idx_start + 1:-1]
                     idx = [int(i) for i in idx.split(':')]
                     idx_tmp = vnode_indices[vnode_key]['var']
@@ -1395,6 +1395,30 @@ class CircuitIR(AbstractBaseIR):
                         pass
 
         return self
+
+    def generate_auto_file(self, dir: str) -> str:
+        """Creates fortran files needed by auto (and pyauto) to run parameter continuaitons. The `run` method should be
+        called at least once before calling this method to start parameter continuations from a well-defined
+        initial state (i.e. a fixed point).
+
+        Parameters
+        ----------
+        dir
+            Build directory. If the `CircuitIR.run` method has been called previously, this should take the same value as the
+            `build_dir` argument of `run`.
+
+        Returns
+        -------
+        str
+            Full path to the generated auto file.
+        """
+
+        if hasattr(self._backend, 'generate_auto_file'):
+            return self._backend.generate_auto_file(dir)
+        else:
+            raise NotImplementedError(f'Method not implemented for the chosen backend: {self._backend.name}. Please'
+                                      f'choose another backend (e.g. `fortran`) to generate an auto file of the system.'
+                                      )
 
     def _collect_op_layers(self, layers: list, exclude: bool = False, op_identifier: Optional[str] = None
                            ) -> tuple:

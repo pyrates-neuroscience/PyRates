@@ -34,11 +34,11 @@ from typing import Optional, Dict, Callable, List, Any, Union
 import os
 import sys
 from shutil import rmtree
+import numpy as np
 from numpy import f2py
 
 # pyrates internal imports
-from .numpy_backend import NumpyBackend, PyRatesAssignOp, PyRatesOp, CodeGen
-from .parser import replace
+from .numpy_backend import NumpyBackend, PyRatesAssignOp, PyRatesIndexOp, PyRatesOp, CodeGen
 
 # meta infos
 __author__ = "Richard Gast"
@@ -50,178 +50,39 @@ module_counter = 0
 class FortranOp(PyRatesOp):
 
     def _generate_func(self):
-        """Generates a function from operator value and arguments"""
-
-        global module_counter
-
-        # function head
-        func_dict = {}
-        func = FortranGen()
-        func.add_linebreak()
-        func.add_indent()
-        func.add_code_line(f"subroutine {self.short_name}(f")
-        for arg in self._op_dict['arg_names']:
-            func.add_code_line(f",{arg}")
-        func.add_code_line(")")
-        func.add_linebreak()
-
-        # argument type definition
-        for arg, name in zip(self._op_dict['args'], self._op_dict['arg_names']):
-            dtype = "integer" if "int" in str(arg.vtype) else "double precision"
-            dim = f"dimension({','.join([str(s) for s in arg.shape])}), " if arg.shape else ""
-            func.add_code_line(f"{dtype}, {dim}intent(in) :: {name}")
-            func.add_linebreak()
-        func.add_code_line("double precision, intent(out) :: f")
-        func.add_linebreak()
-
-        func.add_code_line(f"f = {self._op_dict['value']}")
-        func.add_linebreak()
-        func.add_code_line("end")
-        func.add_linebreak()
-        func.remove_indent()
-        module_counter += 1
-        f2py.compile(func.generate(), modulename=f"pyrates_func_{module_counter}", extension=".f",
-                     source_fn=f"/tmp/pyrates_func_{module_counter}.f", verbose=False)
-        exec(f"from pyrates_func_{module_counter} import {self.short_name}", globals(), func_dict)
-        return func_dict
-
-
-class FortranIndexOp(FortranOp):
+        return generate_func(self)
 
     @classmethod
-    def generate_op(cls, op, args):
-        """Generates the index function string, call signature etc.
+    def _process_args(cls, args, results, constants_to_num=False):
+        """Parses arguments to function into argument names that are added to the function call and argument values
+        that can used to set up the return line of the function.
         """
+        return super()._process_args(args, results, constants_to_num=constants_to_num)
 
-        # initialization
-        results = {'value': None, 'args': [], 'arg_names': [], 'is_constant': False, 'shape': (), 'dtype': 'float32',
-                   'input_ops': []}
 
-        # extract variable
-        ##################
+class FortranIndexOp(PyRatesIndexOp):
+    def _generate_func(self):
+        return generate_func(self)
 
-        var_tmp = args[0]
-        n_vars = 0
 
-        if PyRatesOp.__subclasscheck__(type(var_tmp)):
+class FortranAssignOp(PyRatesAssignOp):
 
-            # nest pyrates operations and their arguments into the indexing operation
-            var = var_tmp.lhs if hasattr(var_tmp, 'lhs') else var_tmp.value
-            pop_indices = []
-            for arg_tmp in var_tmp.arg_names:
-                if arg_tmp in results['arg_names']:
-                    pop_indices.append(var_tmp.arg_names.index(arg_tmp))
-            new_args = var_tmp.args.copy()
-            new_arg_names = var_tmp.arg_names.copy()
-            for i, pop_idx in enumerate(pop_indices):
-                new_args.pop(pop_idx - i)
-                new_arg_names.pop(pop_idx - i)
-            results['input_ops'].append(var_tmp.name)
-            results['args'] += new_args
-            results['arg_names'] += new_arg_names
-            n_vars += 1
+    def _generate_func(self):
+        idx = self._op_dict['arg_names'].index('y_delta')
+        ndim = self._op_dict['args'][idx].shape
+        return generate_func(self, return_key='y_delta', omit_assign=True, return_dim=ndim, return_intent='out')
 
-        elif hasattr(var_tmp, 'vtype'):
-
-            # parse pyrates variables into the indexing operation
-            if var_tmp.vtype != 'constant' or var_tmp.shape:
-                var = var_tmp.short_name
-                results['args'].append(var_tmp)
-                results['arg_names'].append(var)
-                n_vars += 1
-            else:
-                var = var_tmp.value
-
-        else:
-
-            raise ValueError(f'Variable type for indexing not understood: {var_tmp}. '
-                             f'Please consider another form of variable declaration or indexing.')
-
-        # extract idx
-        #############
-
-        idx = args[1]
-
-        if PyRatesOp.__subclasscheck__(type(idx)):
-
-            # nest pyrates operations and their arguments into the indexing operation
-            var_idx = idx.lhs if hasattr(idx, 'lhs') else idx.value
-            pop_indices = []
-            for arg_tmp in idx.arg_names:
-                if arg_tmp in results['arg_names']:
-                    pop_indices.append(idx.arg_names.index(arg_tmp))
-            new_args = idx.args.copy()
-            new_arg_names = idx.arg_names.copy()
-            for i, pop_idx in enumerate(pop_indices):
-                new_args.pop(pop_idx - i)
-                new_arg_names.pop(pop_idx - i)
-            results['input_ops'].append(idx.name)
-            results['args'] += new_args
-            results['arg_names'] += new_arg_names
-            n_vars += 1
-
-        elif hasattr(idx, 'vtype'):
-
-            # parse pyrates variables into the indexing operation
-            key = idx.short_name
-            if idx.vtype != 'constant' or idx.shape:
-                var_idx = key
-                results['args'].append(idx)
-                results['arg_names'].append(key)
-                n_vars += 1
-            else:
-                var_idx = idx.value
-
-        elif type(idx) is str or "int" in str(type(idx)) or "float" in str(type(idx)):
-
-            # parse constant numpy-like indices into the indexing operation
-            pop_indices = []
-            for i, arg in enumerate(args[2:]):
-                if hasattr(arg, 'short_name') and arg.short_name in idx:
-                    if hasattr(arg, 'vtype') and arg.vtype == 'constant' and sum(arg.shape) < 2:
-                        idx = replace(idx, arg.short_name, f"{int(arg)}")
-                        pop_indices.append(i + 2)
-                    elif hasattr(arg, 'value'):
-                        idx = replace(idx, arg.short_name, arg.value)
-                        pop_indices.append(i + 2)
-                        results['args'] += arg.args
-                        results['arg_names'] += arg.arg_names
-            var_idx = idx
-            args = list(args)
-            for idx in pop_indices[::-1]:
-                args.pop(idx)
-            args = tuple(args)
-
-        elif type(idx) in (list, tuple):
-
-            # parse list of constant indices into the operation
-            var_idx = f"{','.join(i for i in idx)}"
-
-        else:
-            raise ValueError(f'Index type not understood: {idx}. Please consider another form of variable indexing.')
-
-        # setup function head
-        #####################
-
-        # remaining arguments
-        results, results_args, results_arg_names, n_vars_tmp = cls._process_args(args[2:], results)
-        n_vars += n_vars_tmp
-
-        # apply index to variable and return variable
-        #############################################
-
-        # generate op
-        var_idx = f"({','.join([str(int(idx) + 1) for idx in var_idx.split(',')])})"
-        results['value'] = f"{var}{var_idx}"
-
-        # check whether any state variables are part of the indexing operation or not
-        if n_vars == 0:
-            results['is_constant'] = True
-
-        return results
+    def eval(self):
+        result = self._callable(*self.args[1:])
+        self._check_numerics(result, self.name)
+        return result
 
 
 class FortranBackend(NumpyBackend):
+
+    idx_l, idx_r = "(", ")"
+    idx_start = 1
+
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
@@ -229,6 +90,7 @@ class FortranBackend(NumpyBackend):
                  float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
                  build_dir: Optional[str] = None,
+                 pyauto_compat: bool = False
                  ) -> None:
         """Instantiates numpy backend, i.e. a compute graph with numpy operations.
         """
@@ -290,7 +152,7 @@ class FortranBackend(NumpyBackend):
                  "softmax": {'name': "pyrates_softmax", 'call': ""},
                  "sigmoid": {'name': "pyrates_sigmoid", 'call': ""},
                  "tanh": {'name': "fortran_tanh", 'call': "TANH"},
-                 "index": {'name': "pyrates_index", 'call': "fortran_index"},
+                 "index": {'name': "pyrates_index", 'call': "pyrates_index"},
                  "mask": {'name': "pyrates_mask", 'call': ""},
                  "group": {'name': "pyrates_group", 'call': ""},
                  "asarray": {'name': "fortran_asarray", 'call': ""},
@@ -301,8 +163,13 @@ class FortranBackend(NumpyBackend):
                  }
         if ops:
             ops_f.update(ops)
+        self.pyauto_compat = pyauto_compat
         super().__init__(ops=ops_f, dtypes=dtypes, name=name, float_default_type=float_default_type,
                          imports=imports, build_dir=build_dir)
+        self._imports = []
+        self.npar = 0
+        self.ndim = 0
+        self._auto_files_generated = False
 
     def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = None, **kwargs) -> tuple:
         """Compile the graph layers/operations. Creates python files containing the functions in each layer.
@@ -341,7 +208,7 @@ class FortranBackend(NumpyBackend):
         orig_path = os.getcwd()
         if build_dir:
             os.makedirs(build_dir, exist_ok=True)
-        dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
+        dir_name = f"{build_dir}/pyrates_build" if build_dir and "/pyrates_build" not in build_dir else "pyrates_build"
         try:
             os.mkdir(dir_name)
         except FileExistsError:
@@ -371,42 +238,57 @@ class FortranBackend(NumpyBackend):
         ################################
 
         # set up file header
-        func_gen = CodeGen()
+        func_gen = FortranGen()
         for import_line in self._imports:
             func_gen.add_code_line(import_line)
             func_gen.add_linebreak()
         func_gen.add_linebreak()
 
         # define function head
-        func_gen.add_code_line("SUBROUTINE FUNC(NDIM,U,ICP,PAR,IJAC,F,DFDU,DFDP)")
-        func_gen.add_linebreak()
-        func_gen.add_code_line("IMPLICIT NONE")
-        func_gen.add_linebreak()
-        func_gen.add_code_line("INTEGER, INTENT(IN) :: NDIM, ICP(*), IJAC")
-        func_gen.add_linebreak()
-        func_gen.add_code_line("DOUBLE PRECISION, INTENT(IN) :: U(NDIM), PAR(*)")
-        func_gen.add_linebreak()
-        func_gen.add_code_line("DOUBLE PRECISION, INTENT(OUT) :: F(NDIM)")
-        func_gen.add_linebreak()
-        func_gen.add_code_line("DOUBLE PRECISION, INTENT(INOUT) :: DFDU(NDIM,NDIM), DFDP(NDIM,*)")
-        func_gen.add_linebreak()
+        func_gen.add_indent()
+        if self.pyauto_compat:
+            func_gen.add_code_line("subroutine func(ndim,y,icp,args,ijac,y_delta,dfdu,dfdp)")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("implicit none")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("integer, intent(in) :: ndim, icp(*), ijac")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("double precision, intent(in) :: y(ndim), args(*)")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("double precision, intent(out) :: y_delta(ndim)")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("double precision, intent(inout) :: dfdu(ndim,ndim), dfdp(ndim,*)")
+            func_gen.add_linebreak()
+        else:
+            func_gen.add_code_line("subroutine func(ndim,t,y,args,y_delta)")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("implicit none")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("integer, intent(in) :: ndim")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("double precision, intent(in) :: t, y(ndim)")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("double precision, intent(in) :: args(*)")
+            func_gen.add_linebreak()
+            func_gen.add_code_line("double precision, intent(out) :: y_delta(ndim)")
+            func_gen.add_linebreak()
 
         # declare variable types
-        func_gen.add_code_line("DOUBLE PRECISION ")
+        func_gen.add_code_line("double precision ")
         for key in var_map:
             var = self.get_var(key)
-            if "float" in str(var.vtype):
-                func_gen.add_code_line(f"{var},")
+            if "float" in str(var.dtype) and var.short_name != 'y_delta':
+                func_gen.add_code_line(f"{var.short_name},")
         if "," in func_gen.code[-1]:
             func_gen.code[-1] = func_gen.code[-1][:-1]
         else:
             func_gen.code.pop(-1)
         func_gen.add_linebreak()
-        func_gen.add_code_line("INTEGER ")
+        func_gen.add_code_line("integer ")
         for key in var_map:
             var = self.get_var(key)
-            if "int" in str(var.vtype):
-                func_gen.add_code_line(f"{var},")
+            if "int" in str(var.dtype):
+                func_gen.add_code_line(f"{var.short_name},")
         if "," in func_gen.code[-1]:
             func_gen.code[-1] = func_gen.code[-1][:-1]
         else:
@@ -422,27 +304,27 @@ class FortranBackend(NumpyBackend):
         for key, (vtype, idx) in var_map.items():
             if vtype == 'constant':
                 var = params[idx][1]
-                func_gen.add_code_line(f"{var.short_name} = PAR({idx})")
-                func_gen.add_linebreak()
-                args[idx] = var
-                if var.short_name != "y_delta":
+                if var.short_name != 'y_delta':
+                    func_gen.add_code_line(f"{var.short_name} = args({idx+1})")
+                    func_gen.add_linebreak()
+                    args[idx] = var
                     updates.append(f"{var.short_name}")
                     indices.append(i)
                     i += 1
         func_gen.add_linebreak()
 
         # extract state variables from input vector y
-        func_gen.add_code_line("# extract state variables from input vector")
+        func_gen.add_code_line("! extract state variables from input vector")
         func_gen.add_linebreak()
         for key, (vtype, idx) in var_map.items():
             var = self.get_var(key)
             if vtype == 'state_var':
-                func_gen.add_code_line(f"{var.short_name} = U({idx})")
+                func_gen.add_code_line(f"{var.short_name} = {var.value}")
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
 
         # add equations
-        func_gen.add_code_line("# calculate right-hand side update of equation system")
+        func_gen.add_code_line("! calculate right-hand side update of equation system")
         func_gen.add_linebreak()
         arg_updates = []
         for i, layer in enumerate(self.layers):
@@ -458,33 +340,234 @@ class FortranBackend(NumpyBackend):
         func_gen.add_linebreak()
 
         # update parameters where necessary
-        func_gen.add_code_line("# update system parameters")
+        func_gen.add_code_line("! update system parameters")
         func_gen.add_linebreak()
         for upd, idx in arg_updates:
-            update_str = f"params[{idx}] = {upd}"
+            update_str = f"args{self.idx_l}{idx}{self.idx_r} = {upd}"
             if f"    {update_str}" not in func_gen.code:
                 func_gen.add_code_line(update_str)
                 func_gen.add_linebreak()
 
-        # add return line
-        func_gen.add_code_line(f"return {self.vars['y_delta'].short_name}")
+        # end function
+        func_gen.add_code_line(f"end subroutine func")
         func_gen.add_linebreak()
+        func_gen.remove_indent()
 
         # save rhs function to file
-        with open('rhs_func.py', 'w') as f:
-            f.writelines(func_gen.code)
-            f.close()
+        f2py.compile(func_gen.generate(), modulename='rhs_func', extension='.f', source_fn='rhs_func.f', verbose=False)
+
+        # create additional subroutines in pyauto compatibility mode
+        if self.pyauto_compat:
+            self.generate_auto_file(net_dir)
 
         # import function from file
-        exec("from rhs_func import rhs_eval", globals())
-        rhs_eval = globals().pop('rhs_eval')
+        exec("from rhs_func import func", globals())
+        rhs_eval = globals().pop('func')
         os.chdir(orig_path)
 
         # apply function decorator
         if decorator:
             rhs_eval = decorator(rhs_eval, **kwargs)
 
-        return rhs_eval, args, state_vars, var_map
+        return rhs_eval, args, state_vars, var_map, net_dir
+
+    def generate_auto_file(self, directory):
+        """
+
+        Parameters
+        ----------
+        directory
+
+        Returns
+        -------
+
+        """
+
+        if not self.pyauto_compat:
+            raise ValueError('This method can only be called in pyauto compatible mode. Please set `pyauto_compat` to '
+                             'True upon calling the `CircuitIR.compile` method.')
+
+        # read file
+        ###########
+
+        try:
+
+            # read file from excisting system compilation
+            if not directory:
+                directory = os.getcwd()
+            directory = f"{directory}/pyrates_build/{self.name}" if "/pyrates_build" not in directory else directory
+            fn = f"{directory}/rhs_func.f" if "rhs_func.f" not in directory else directory
+            with open(fn, 'rt') as f:
+                func_str = f.read()
+
+        except FileNotFoundError:
+
+            # compile system and then read the built files
+            compile_results = self.compile(build_dir=directory)
+            fn = f"{compile_results[-1]}/rhs_func.f"
+            with open(fn, 'r') as f:
+                func_str = f.read()
+
+        # generate additional subroutines
+        #################################
+
+        func_gen = FortranGen()
+
+        # generate subroutine header
+        func_gen.add_linebreak()
+        func_gen.add_indent()
+        func_gen.add_code_line("subroutine stpnt(ndim, y, args, t)")
+        func_gen.add_linebreak()
+        func_gen.add_code_line("implicit None")
+        func_gen.add_linebreak()
+        func_gen.add_code_line("integer, intent(in) :: ndim")
+        func_gen.add_linebreak()
+        func_gen.add_code_line("double precision, intent(inout) :: y(ndim), args(*)")
+        func_gen.add_linebreak()
+        func_gen.add_code_line("double precision, intent(in) :: T")
+        func_gen.add_linebreak()
+
+        # declare variable types
+        func_gen.add_code_line("double precision ")
+        for key in self.vars:
+            var = self.get_var(key)
+            name = var.short_name
+            if "float" in str(var.dtype) and name != 'y_delta' and name != 'y' and name != 't':
+                func_gen.add_code_line(f"{var.short_name},")
+        if "," in func_gen.code[-1]:
+            func_gen.code[-1] = func_gen.code[-1][:-1]
+        else:
+            func_gen.code.pop(-1)
+        func_gen.add_linebreak()
+        func_gen.add_code_line("integer ")
+        for key in self.vars:
+            var = self.get_var(key)
+            if "int" in str(var.dtype):
+                func_gen.add_code_line(f"{var.short_name},")
+        if "," in func_gen.code[-1]:
+            func_gen.code[-1] = func_gen.code[-1][:-1]
+        else:
+            func_gen.code.pop(-1)
+        func_gen.add_linebreak()
+
+        # define parameter values
+        func_gen.add_linebreak()
+        for key in self.vars:
+            var = self.get_var(key)
+            if hasattr(var, 'vtype') and var.vtype == 'constant' and var.short_name != 'y_delta' and var.short_name != 'y':
+                func_gen.add_code_line(f"{var.short_name} = {var}")
+                func_gen.add_linebreak()
+        func_gen.add_linebreak()
+
+        # define initial state
+        state_vars, params, var_map = self._process_vars()
+
+        func_gen.add_linebreak()
+        npar = 0
+        for key, (vtype, idx) in var_map.items():
+            if vtype == 'constant':
+                var = params[idx][1]
+                if var.short_name != 'y_delta':
+                    func_gen.add_code_line(f"args({idx + 1}) = {var.short_name}")
+                    func_gen.add_linebreak()
+                    if idx+1 > npar:
+                        npar = idx+1
+        func_gen.add_linebreak()
+
+        func_gen.add_linebreak()
+        for key, (vtype, idx) in var_map.items():
+            var = self.get_var(key)
+            if vtype == 'state_var':
+                func_gen.add_code_line(f"{var.value} = {var.eval()}")
+                func_gen.add_linebreak()
+        func_gen.add_linebreak()
+
+        # end subroutine
+        func_gen.add_linebreak()
+        func_gen.add_code_line("end subroutine stpnt")
+        func_gen.add_linebreak()
+
+        # add dummy subroutines
+        for routine in ['bcnd', 'icnd', 'fopt', 'pvls']:
+            func_gen.add_linebreak()
+            func_gen.add_code_line(f"subroutine {routine}")
+            func_gen.add_linebreak()
+            func_gen.add_code_line(f"end subroutine {routine}")
+            func_gen.add_linebreak()
+        func_gen.add_linebreak()
+        func_gen.remove_indent()
+
+        func_combined = f"{func_str} \n {func_gen.generate()}"
+        f2py.compile(func_combined, source_fn=fn, modulename='rhs_func', extension='.f', verbose=False)
+
+        self.npar = npar
+        self.ndim = self.get_var('y').shape[0]
+
+        # generate constants file
+        #########################
+
+        # declare auto constants and their values
+        auto_constants = {'NDIM': self.ndim, 'NPAR': self.npar, 'IPS': -2, 'ILP': 0, 'ICP': 14, 'NTST': 1, 'NCOL': 4,
+                          'IAD': 3, 'ISP': 0, 'ISW': 1, 'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 10000, 'NPR': 10,
+                          'MXBF': 10, 'IID': 2, 'ITMX': 8, 'ITNW': 5, 'NWTN': 3, 'JAC': 0, 'EPSL': 1e-7, 'EPSU': 1e-7,
+                          'EPSS': 1e-5, 'IRS': 0}
+
+        # write auto constants to string
+        cgen = FortranGen()
+        for key, val in auto_constants.items():
+            cgen.add_code_line(f"{key} = {val}")
+            cgen.add_linebreak()
+
+        # write auto constants to file
+        try:
+            with open('c.ivp', 'wt') as cfile:
+                cfile.write(cgen.generate())
+        except FileNotFoundError:
+            with open('c.ivp', 'xt') as cfile:
+                cfile.write(cgen.generate())
+
+        self._auto_files_generated = True
+
+        return fn
+
+    def _solve(self, rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs):
+        """
+
+        Parameters
+        ----------
+        rhs_func
+        func_args
+        state_vars
+        T
+        dt
+        dts
+        t
+        solver
+        output_indices
+        kwargs
+
+        Returns
+        -------
+
+        """
+
+        if self.pyauto_compat:
+
+            from pyrates.utility import PyAuto
+            pyauto = PyAuto(auto_dir=self._build_dir)
+            dsmin, dsmax = dt*1e-2, dt*1e2
+            nmx = int(T/dsmin)
+            npr = int(dts/dt)
+            pyauto.run(e='rhs_func', c='ivp', DS=dt, DSMIN=dsmin, DSMAX=1.0, name='t', UZR={14: T}, STOP={'UZ1'},
+                       NMX=nmx, NPR=npr, **kwargs)
+
+            extract = [f'U({i[0]+self.idx_start if type(i) is list else i+self.idx_start})' for i in output_indices]
+            extract.append('PAR(14)')
+            results_tmp = pyauto.extract(keys=extract, cont='t')
+            times = results_tmp.pop('PAR(14)')
+            return times, [results_tmp[v] for v in extract[:-1]]
+
+        return super()._solve(rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs)
 
     def _create_op(self, op, name, *args):
         if not self.ops[op]['call']:
@@ -502,9 +585,11 @@ class FortranBackend(NumpyBackend):
                 var, upd, idx = self._process_update_args_old(args[0], args[1], idx)
                 idx_str = ",".join([f"{idx.short_name}[:,{i}]" for i in range(idx.shape[1])])
                 args = (var, upd, idx_str, idx)
-            return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
+            return FortranAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
+                                   idx_r=self.idx_r)
         elif op is "index":
-            return FortranIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
+            return FortranIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
+                                  idx_r=self.idx_r)
         else:
             if op is "cast":
                 args = list(args)
@@ -556,8 +641,8 @@ class FortranGen(CodeGen):
     def add_code_line(self, code_str):
         """Add code line string to code.
         """
-        code_line = "\t" * self.lvl + code_str if self.code[-1] == '\n' else code_str
-        n = 72
+        code_line = "\t" * self.lvl + code_str if self.code and self.code[-1] == '\n' else code_str
+        n = 60
         if len(code_line) > n:
             idx = self._find_first_op(code_line, start=0, stop=n)
             self.code.append(f"{code_line[0:idx]}")
@@ -576,4 +661,45 @@ class FortranGen(CodeGen):
             indices = [code_tmp.index(op) for op in ops if op in code_tmp]
             if indices and max(indices) > 0:
                 return max(indices)
+            return len(code_tmp) - 1 - code_tmp[::-1].index(' ')
         return stop
+
+
+def generate_func(self, return_key='f', omit_assign=False, return_dim=None, return_intent='out'):
+    """Generates a function from operator value and arguments"""
+
+    global module_counter
+
+    # function head
+    func_dict = {}
+    func = FortranGen()
+    func.add_linebreak()
+    func.add_indent()
+    func.add_code_line(f"subroutine {self.short_name}({return_key}")
+    for arg in self._op_dict['arg_names']:
+        if arg != return_key:
+            func.add_code_line(f",{arg}")
+    func.add_code_line(")")
+    func.add_linebreak()
+
+    # argument type definition
+    for arg, name in zip(self._op_dict['args'], self._op_dict['arg_names']):
+        if name != return_key:
+            dtype = "integer" if "int" in str(arg.vtype) else "double precision"
+            dim = f"dimension({','.join([str(s) for s in arg.shape])}), " if arg.shape else ""
+            func.add_code_line(f"{dtype}, {dim}intent(in) :: {name}")
+            func.add_linebreak()
+    out_dim = f"({','.join([str(s) for s in return_dim])})" if return_dim else ""
+    func.add_code_line(f"double precision, intent({return_intent}) :: {return_key}{out_dim}")
+    func.add_linebreak()
+
+    func.add_code_line(f"{self._op_dict['value']}" if omit_assign else f"{return_key} = {self._op_dict['value']}")
+    func.add_linebreak()
+    func.add_code_line("end")
+    func.add_linebreak()
+    func.remove_indent()
+    module_counter += 1
+    f2py.compile(func.generate(), modulename=f"pyrates_func_{module_counter}", extension=".f",
+                 source_fn=f"/tmp/pyrates_func_{module_counter}.f", verbose=False)
+    exec(f"from pyrates_func_{module_counter} import {self.short_name}", globals(), func_dict)
+    return func_dict

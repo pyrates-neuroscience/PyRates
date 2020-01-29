@@ -705,7 +705,9 @@ class ExpressionParser(ParserElement):
                                                    shape=(len(new_val),), dtype=var.dtype, squeeze=False)
 
         # return index to variable vector to retrieve appended values
-        return f"{len(var_val)}:{len(new_val)}" if len(new_val) - len(var_val) > 1 else f"{len(var_val)}"
+        i1 = len(var_val) + self.backend.idx_start
+        i2 = len(new_val) + self.backend.idx_start
+        return f"{i1}:{i2}" if i2 - i1 > 1 else f"{i1}"
 
     @staticmethod
     def _compare(x: tp.Any, y: tp.Any) -> bool:

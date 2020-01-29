@@ -210,7 +210,7 @@ class PyRatesOp:
 
     """
 
-    def __init__(self, op: str, short_name: str, name, *args) -> None:
+    def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
         """Instantiates PyRates operator.
         """
 
@@ -220,7 +220,7 @@ class PyRatesOp:
         self.name = name
 
         # generate function string
-        self._op_dict = self.generate_op(op, args)
+        self._op_dict = self.generate_op(op, args, **kwargs)
 
         # extract information from parsing results
         self.value = self._op_dict['value']
@@ -265,7 +265,7 @@ class PyRatesOp:
         return func_dict
 
     @classmethod
-    def generate_op(cls, op, args):
+    def generate_op(cls, op, args, **kwargs):
         """Generates the function string, call signature etc.
         """
 
@@ -280,9 +280,9 @@ class PyRatesOp:
 
         # check whether operator is a simple mathematical symbol or involves a function call
         if op in "+-**/*^%<>==>=<=" and len(args) == 2:
-            arg1 = cls._get_arg_str(args[0], results_args[0], results_arg_names[0])
-            arg2 = cls._get_arg_str(args[1], results_args[1], results_arg_names[1])
-            eval_gen.add_code_line(f"({arg1}) {op} ({arg2})")
+            arg1 = cls._arg_to_str(op, args[0], results_args[0], results_arg_names[0])
+            arg2 = cls._arg_to_str(op, args[1], results_args[1], results_arg_names[1])
+            eval_gen.add_code_line(f"{arg1} {op} {arg2}")
             func_call = False
         else:
             func_call = True
@@ -325,7 +325,7 @@ class PyRatesOp:
         return results
 
     @classmethod
-    def _process_args(cls, args, results):
+    def _process_args(cls, args, results, constants_to_num=True):
         """Parses arguments to function into argument names that are added to the function call and argument values
         that can used to set up the return line of the function.
         """
@@ -359,7 +359,7 @@ class PyRatesOp:
             elif hasattr(arg, 'vtype'):
 
                 # parse PyRates variable into the function
-                if arg.vtype is 'constant' and not arg.shape:
+                if arg.vtype is 'constant' and not arg.shape and constants_to_num:
                     arg_name = '__no_name__'
                     arg_value = arg.value if hasattr(arg, 'value') else arg
                 else:
@@ -431,13 +431,36 @@ class PyRatesOp:
             raise ValueError(f'Result of operation ({name}) contains NaNs or infinite values.')
 
     @staticmethod
-    def _get_arg_str(arg: Any, arg_reduced: Any, key: str) -> str:
+    def _get_arg(arg: Any, arg_reduced: Any, key: str) -> str:
         if key == '__no_name__':
             return f"{arg_reduced}" if arg_reduced > 0 else f"({arg_reduced})"
         elif PyRatesOp.__subclasscheck__(type(arg)):
             return f"{arg.value}"
         else:
             return key
+
+    @classmethod
+    def _arg_to_str(cls, op: str, arg, arg_reduced, key: str) -> str:
+        op_orders = [['+', '-'],
+                     ['*'],
+                     ['/', '%', '>', '<', '==', '<=', '>=', '!='],
+                     ['^', '**']]
+        op_order = 0
+        for i, ops in enumerate(op_orders):
+            if op in ops:
+                op_order = i+1
+                break
+        arg_order = 5
+        if hasattr(arg, 'op'):
+            for i, ops in enumerate(op_orders):
+                if arg.op in ops:
+                    arg_order = i+1
+                    break
+        arg_str = cls._get_arg(arg, arg_reduced, key)
+        if (op_order > arg_order or (op_order == arg_order and op_order >= 3)) and \
+                not (arg_str[0] == "(" and arg_str[-1] == ")"):
+            return f"({arg_str})"
+        return arg_str
 
     @staticmethod
     def _deepcopy(x):
@@ -453,8 +476,8 @@ class PyRatesAssignOp(PyRatesOp):
     (1. entry in args). An index can be provided as third argument to target certain entries of the variable.
     """
 
-    def __init__(self, op: str, short_name: str, name, *args) -> None:
-        super().__init__(op, short_name, name, *args)
+    def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
+        super().__init__(op, short_name, name, *args, **kwargs)
         self.lhs = self._op_dict.pop('lhs')
         self.rhs = self._op_dict.pop('rhs')
 
@@ -475,7 +498,7 @@ class PyRatesAssignOp(PyRatesOp):
         return func_dict
 
     @classmethod
-    def generate_op(cls, op, args):
+    def generate_op(cls, op, args, **kwargs):
         """Generates the assign function string, call signature etc.
         """
 
@@ -490,7 +513,8 @@ class PyRatesAssignOp(PyRatesOp):
         var, upd = args[0:2]
 
         if len(args) > 2:
-            var_idx, results_args, results_arg_names = cls._extract_var_idx(op, args, results_args, results_arg_names)
+            var_idx, results_args, results_arg_names = cls._extract_var_idx(op, args, results_args, results_arg_names,
+                                                                            **kwargs)
         else:
             var_idx = ""
 
@@ -556,28 +580,28 @@ class PyRatesAssignOp(PyRatesOp):
         return results
 
     @classmethod
-    def _extract_var_idx(cls, op, args, results_args, results_arg_names):
+    def _extract_var_idx(cls, op, args, results_args, results_arg_names, idx_l='[', idx_r=']'):
 
         if hasattr(args[2], 'vtype'):
 
             # for indexing via PyRates variables
             key = args[2].short_name
             if hasattr(args[2], 'value'):
-                var_idx = f"[{args[2].value}]"
+                var_idx = f"{idx_l}{args[2].value}{idx_r}"
             else:
-                var_idx = f"[{key}]"
+                var_idx = f"{idx_l}{key}{idx_r}"
 
         elif type(args[2]) is str and len(args) > 3:
 
             # for indexing via string-based indices
             key = args[3].short_name
-            var_idx = f"[{args[2]}]"
+            var_idx = f"{idx_l}{args[2]}{idx_r}"
             var_idx = var_idx.replace(args[3].short_name, key)
 
         else:
 
             # for indexing via integers
-            var_idx = f"[{args[2]}]"
+            var_idx = f"{idx_l}{args[2]}{idx_r}"
             key = "__no_name__"
 
         if type(args[2]) is str and len(args) > 3:
@@ -595,7 +619,7 @@ class PyRatesIndexOp(PyRatesOp):
     """
 
     @classmethod
-    def generate_op(cls, op, args):
+    def generate_op(cls, op, args, idx_l='[', idx_r=']'):
         """Generates the index function string, call signature etc.
         """
 
@@ -651,7 +675,7 @@ class PyRatesIndexOp(PyRatesOp):
         if PyRatesOp.__subclasscheck__(type(idx)):
 
             # nest pyrates operations and their arguments into the indexing operation
-            var_idx = f"[{idx.lhs if hasattr(idx, 'lhs') else idx.value}]"
+            var_idx = f"{idx_l}{idx.lhs if hasattr(idx, 'lhs') else idx.value}{idx_r}"
             pop_indices = []
             for arg_tmp in idx.arg_names:
                 if arg_tmp in results['arg_names']:
@@ -671,12 +695,12 @@ class PyRatesIndexOp(PyRatesOp):
             # parse pyrates variables into the indexing operation
             key = idx.short_name
             if idx.vtype != 'constant' or idx.shape:
-                var_idx = f"[{key}]"
+                var_idx = f"{idx_l}{key}{idx_r}"
                 results['args'].append(idx)
                 results['arg_names'].append(key)
                 n_vars += 1
             else:
-                var_idx = f"[{idx.value}]"
+                var_idx = f"{idx_l}{idx.value}{idx_r}"
 
         elif type(idx) is str or "int" in str(type(idx)) or "float" in str(type(idx)):
 
@@ -692,7 +716,7 @@ class PyRatesIndexOp(PyRatesOp):
                         pop_indices.append(i+2)
                         results['args'] += arg.args
                         results['arg_names'] += arg.arg_names
-            var_idx = f"[{idx}]"
+            var_idx = f"{idx_l}{idx}{idx_r}"
             args = list(args)
             for idx in pop_indices[::-1]:
                 args.pop(idx)
@@ -752,6 +776,9 @@ class NumpyBackend(object):
         Directory in which pyrates builds will be stored.
 
     """
+
+    idx_l, idx_r = "[", "]"
+    idx_start = 0
 
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
@@ -941,14 +968,14 @@ class NumpyBackend(object):
         # map layers that need to be executed to compiled network structure
         decorator = kwargs.pop('decorator', None)
         decorator_kwargs = kwargs.pop('decorator_kwargs', {})
-        rhs_func, args, state_vars, var_map = self.compile(self._build_dir, decorator=decorator, **decorator_kwargs)
+        rhs_func, args, state_vars, var_map, _ = self.compile(self._build_dir, decorator=decorator, **decorator_kwargs)
 
         # create output indices
         output_indices = []
         if outputs:
             for out_key, out_vars in outputs.items():
                 for n, (idx, _) in enumerate(out_vars):
-                    output_indices.append(idx)
+                    output_indices.append([i-self.idx_start for i in idx] if type(idx) is list else idx-self.idx_start)
                     outputs[out_key][n][0] = len(output_indices)-1
         else:
             for i in range(len(self.state_vars)):
@@ -1609,7 +1636,7 @@ class NumpyBackend(object):
         if decorator:
             rhs_eval = decorator(rhs_eval, **kwargs)
 
-        return rhs_eval, args, state_vars, var_map
+        return rhs_eval, args, state_vars, var_map, net_dir
 
     def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
         """Tries to match the shapes of op1 and op2 such that op can be applied.
@@ -1750,10 +1777,6 @@ class NumpyBackend(object):
 
         """
 
-        # process outputs
-        if not output_indices:
-            output_indices = [i for i in range(len(self.state_vars))]
-
         # choose solver
         ###############
 
@@ -1775,6 +1798,7 @@ class NumpyBackend(object):
                                 **kwargs)
             results = [outputs['y'].T[:, idx] for idx in output_indices]
             times = outputs['t']
+            self.vars['y'] = outputs['y'].T[:, -1]
 
         else:
 
@@ -1816,6 +1840,7 @@ class NumpyBackend(object):
                         else state_vars[idx2]
                 sampling_idx += 1
 
+        self.vars['y'] = state_vars
         times = np.arange(0, T, dts)
 
         return times, results
@@ -1925,9 +1950,11 @@ class NumpyBackend(object):
                 var, upd, idx = self._process_update_args_old(args[0], args[1], idx)
                 idx_str = ",".join([f"{idx.short_name}[:,{i}]" for i in range(idx.shape[1])])
                 args = (var, upd, idx_str, idx)
-            return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
+            return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args,
+                                   idx_l=self.idx_l, idx_r=self.idx_r)
         elif op is "index":
-            return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
+            return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
+                                  idx_r=self.idx_r)
         else:
             if op is "cast":
                 args = list(args)
