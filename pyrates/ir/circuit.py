@@ -1396,7 +1396,7 @@ class CircuitIR(AbstractBaseIR):
 
         return self
 
-    def generate_auto_file(self, dir: str) -> str:
+    def generate_auto_def(self, dir: str) -> str:
         """Creates fortran files needed by auto (and pyauto) to run parameter continuaitons. The `run` method should be
         called at least once before calling this method to start parameter continuations from a well-defined
         initial state (i.e. a fixed point).
@@ -1413,11 +1413,30 @@ class CircuitIR(AbstractBaseIR):
             Full path to the generated auto file.
         """
 
-        if hasattr(self._backend, 'generate_auto_file'):
-            return self._backend.generate_auto_file(dir)
+        if hasattr(self._backend, 'generate_auto_def'):
+            return self._backend.generate_auto_def(dir)
         else:
             raise NotImplementedError(f'Method not implemented for the chosen backend: {self._backend.name}. Please'
                                       f'choose another backend (e.g. `fortran`) to generate an auto file of the system.'
+                                      )
+
+    def to_pyauto(self, dir: str):
+        """
+
+        Parameters
+        ----------
+        dir
+
+        Returns
+        -------
+
+        """
+        if hasattr(self._backend, 'to_pyauto'):
+            return self._backend.to_pyauto(dir)
+        else:
+            raise NotImplementedError(f'Method not implemented for the chosen backend: {self._backend.name}. Please'
+                                      f'choose another backend (e.g. `fortran`) to generate a pyauto instance of the '
+                                      f'system.'
                                       )
 
     def _collect_op_layers(self, layers: list, exclude: bool = False, op_identifier: Optional[str] = None

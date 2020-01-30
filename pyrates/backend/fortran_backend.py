@@ -100,7 +100,7 @@ class FortranBackend(NumpyBackend):
                  float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
                  build_dir: Optional[str] = None,
-                 pyauto_compat: bool = False
+                 auto_compat: bool = False
                  ) -> None:
         """Instantiates numpy backend, i.e. a compute graph with numpy operations.
         """
@@ -166,14 +166,14 @@ class FortranBackend(NumpyBackend):
                  "mask": {'name': "pyrates_mask", 'call': ""},
                  "group": {'name': "pyrates_group", 'call': ""},
                  "asarray": {'name': "fortran_asarray", 'call': ""},
-                 "no_op": {'name': "pyrates_identity", 'call': ""},
+                 "no_op": {'name': "pyrates_identity", 'call': "no_op"},
                  "interpolate": {'name': "pyrates_interpolate", 'call': ""},
                  "interpolate_1d": {'name': "pyrates_interpolate_1d", 'call': ""},
                  "interpolate_nd": {'name': "pyrates_interpolate_nd", 'call': ""},
                  }
         if ops:
             ops_f.update(ops)
-        self.pyauto_compat = pyauto_compat
+        self.pyauto_compat = auto_compat
         super().__init__(ops=ops_f, dtypes=dtypes, name=name, float_default_type=float_default_type,
                          imports=imports, build_dir=build_dir)
         self._imports = []
@@ -300,11 +300,11 @@ class FortranBackend(NumpyBackend):
         i = 0
         for key, (vtype, idx) in var_map.items():
             if vtype == 'constant':
-                var = params[idx][1]
+                var = params[idx-self.idx_start][1]
                 if var.short_name != 'y_delta':
-                    func_gen.add_code_line(f"{var.short_name} = args({idx+1})")
+                    func_gen.add_code_line(f"{var.short_name} = args({idx})")
                     func_gen.add_linebreak()
-                    args[idx] = var
+                    args[idx-1] = var
                     updates.append(f"{var.short_name}")
                     indices.append(i)
                     i += 1
@@ -337,13 +337,13 @@ class FortranBackend(NumpyBackend):
         func_gen.add_linebreak()
 
         # update parameters where necessary
-        func_gen.add_code_line("! update system parameters")
-        func_gen.add_linebreak()
-        for upd, idx in arg_updates:
-            update_str = f"args{self.idx_l}{idx}{self.idx_r} = {upd}"
-            if f"    {update_str}" not in func_gen.code:
-                func_gen.add_code_line(update_str)
-                func_gen.add_linebreak()
+        # func_gen.add_code_line("! update system parameters")
+        # func_gen.add_linebreak()
+        # for upd, idx in arg_updates:
+        #     update_str = f"args{self.idx_l}{idx}{self.idx_r} = {upd}"
+        #     if f"    {update_str}" not in func_gen.code:
+        #         func_gen.add_code_line(update_str)
+        #         func_gen.add_linebreak()
 
         # end function
         func_gen.add_code_line(f"end subroutine func")
@@ -355,7 +355,7 @@ class FortranBackend(NumpyBackend):
 
         # create additional subroutines in pyauto compatibility mode
         if self.pyauto_compat:
-            self.generate_auto_file(self._build_dir)
+            self.generate_auto_def(self._build_dir)
 
         # import function from file
         exec("from rhs_func import func", globals())
@@ -368,7 +368,7 @@ class FortranBackend(NumpyBackend):
 
         return rhs_eval, args, state_vars, var_map
 
-    def generate_auto_file(self, directory):
+    def generate_auto_def(self, directory):
         """
 
         Parameters
@@ -450,28 +450,29 @@ class FortranBackend(NumpyBackend):
             func_gen.code.pop(-1)
         func_gen.add_linebreak()
 
+        _, params, var_map = self._process_vars()
+
         # define parameter values
         func_gen.add_linebreak()
-        for key in self.vars:
-            var = self.get_var(key)
-            if hasattr(var, 'vtype') and var.vtype == 'constant' and var.short_name != 'y_delta' and var.short_name != 'y':
-                func_gen.add_code_line(f"{var.short_name} = {var}")
-                func_gen.add_linebreak()
+        for key, (vtype, idx) in var_map.items():
+            if vtype == 'constant':
+                var = params[idx-self.idx_start][1]
+                if var.short_name != 'y_delta' and var.short_name != 'y':
+                    func_gen.add_code_line(f"{var.short_name} = {var}")
+                    func_gen.add_linebreak()
         func_gen.add_linebreak()
 
         # define initial state
-        _, params, var_map = self._process_vars()
-
         func_gen.add_linebreak()
         npar = 0
         for key, (vtype, idx) in var_map.items():
             if vtype == 'constant':
-                var = params[idx][1]
-                if var.short_name != 'y_delta':
-                    func_gen.add_code_line(f"args({idx + 1}) = {var.short_name}")
+                var = params[idx-self.idx_start][1]
+                if var.short_name != 'y_delta' and var.short_name != 'y':
+                    func_gen.add_code_line(f"args({idx}) = {var.short_name}")
                     func_gen.add_linebreak()
-                    if idx+1 > npar:
-                        npar = idx+1
+                    if idx > npar:
+                        npar = idx
         func_gen.add_linebreak()
 
         func_gen.add_linebreak()
@@ -530,6 +531,20 @@ class FortranBackend(NumpyBackend):
 
         return fn
 
+    def to_pyauto(self, directory=None):
+        """
+
+        Parameters
+        ----------
+        directory
+
+        Returns
+        -------
+
+        """
+        from pyrates.utility import PyAuto
+        return PyAuto(directory if directory else self._build_dir)
+
     def _solve(self, rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs):
         """
 
@@ -555,11 +570,12 @@ class FortranBackend(NumpyBackend):
 
             from pyrates.utility import PyAuto
             pyauto = PyAuto(auto_dir=self._build_dir)
-            dsmin, dsmax = dt*1e-2, dt*1e2
-            nmx = int(T/dsmin)
-            npr = int(dts/dt)
-            pyauto.run(e='rhs_func', c='ivp', DS=dt, DSMIN=dsmin, DSMAX=1.0, name='t', UZR={14: T}, STOP={'UZ1'},
-                       NMX=nmx, NPR=npr, **kwargs)
+            dsmin = dt*1e-2
+            auto_defs = {'DSMIN': dsmin, 'DSMAX': dt*1e2, 'NMX': int(T/dsmin), 'NPR': int(dts/dt)}
+            for key, val in auto_defs.items():
+                if key not in kwargs:
+                    kwargs[key] = val
+            pyauto.run(e='rhs_func', c='ivp', DS=dt, name='t', UZR={14: T}, STOP={'UZ1'}, **kwargs)
 
             extract = [f'U({i+1})' for i in range(self.ndim)]
             out_vars = [f'U({i[0]+self.idx_start if type(i) is list else i+self.idx_start})' for i in output_indices]
@@ -608,6 +624,32 @@ class FortranBackend(NumpyBackend):
                 args = tuple(args)
             return FortranOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, build_dir=self._build_dir)
 
+    def _process_vars(self):
+        """
+
+        Returns
+        -------
+
+        """
+        state_vars, constants, var_map = [], [], {}
+        s_idx, c_idx, s_len = 0, 0, 0
+        for key, var in self.vars.items():
+            key, state_var = self._is_state_var(key)
+            if state_var:
+                state_vars.append((key, var))
+                var_map[key] = ('state_var', (s_idx, s_len))
+                s_idx += 1
+                s_len += 1
+            elif var.vtype == 'constant' or (var.short_name not in self.lhs_vars and key != 'y'):
+                if c_idx == 10:
+                    for _ in range(4):
+                        constants.append(())
+                    c_idx = 14
+                constants.append((key, var))
+                var_map[key] = ('constant', c_idx+self.idx_start)
+                c_idx += 1
+        return state_vars, constants, var_map
+
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:
         """Checks whether the shapes of op1 and op2 are compatible with each other.
@@ -649,27 +691,43 @@ class FortranGen(CodeGen):
     def add_code_line(self, code_str):
         """Add code line string to code.
         """
-        code_line = "\t" * self.lvl + code_str if self.code and self.code[-1] == '\n' else code_str
+        if self.code:
+            idx = -1
+            while self.code[idx] != '\n' and abs(idx) < len(self.code):
+                idx -= 1
+            code_line = ''.join([self.code.pop(i) for i in range(idx+1, 0)]) + code_str
+        else:
+            code_line = code_str
+        if "&" not in code_line:
+            code_line = code_line.replace('\t', '')
+            code_line = "\t" * self.lvl + code_line
         n = 60
         if len(code_line) > n:
             idx = self._find_first_op(code_line, start=0, stop=n)
             self.code.append(f"{code_line[0:idx]}")
-            while idx < n:
+            while idx < len(code_line):
                 self.add_linebreak()
                 idx_new = self._find_first_op(code_line, start=idx, stop=idx+n)
-                self.code.append("     " f"& {code_line[idx:idx+idx_new]}")
+                self.code.append(f"     & {code_line[idx:idx+idx_new]}")
                 idx += idx_new
         else:
             self.code.append(code_line)
 
-    def _find_first_op(self, code, start, stop):
+    @staticmethod
+    def _find_first_op(code, start, stop):
         if stop < len(code):
             code_tmp = code[start:stop]
             ops = ["+", "-", "*", "/", "**", "^", "%", "<", ">", "==", "!=", "<=", ">="]
             indices = [code_tmp.index(op) for op in ops if op in code_tmp]
             if indices and max(indices) > 0:
                 return max(indices)
-            return len(code_tmp) - 1 - code_tmp[::-1].index(' ')
+            idx = start
+            for break_sign in [',', ')', ' ']:
+                if break_sign in code_tmp:
+                    idx_tmp = len(code_tmp) - code_tmp[::-1].index(break_sign)
+                    if len(code_tmp)-idx_tmp < len(code_tmp)-idx:
+                        idx = idx_tmp
+            return idx
         return stop
 
 
@@ -683,7 +741,8 @@ def generate_func(self, return_key='f', omit_assign=False, return_dim=None, retu
     func = FortranGen()
     func.add_linebreak()
     func.add_indent()
-    func.add_code_line(f"subroutine {self.short_name}({return_key}")
+    fname = self.short_name.lower()
+    func.add_code_line(f"subroutine {fname}({return_key}")
     for arg in self._op_dict['arg_names']:
         if arg != return_key:
             func.add_code_line(f",{arg}")
@@ -710,5 +769,6 @@ def generate_func(self, return_key='f', omit_assign=False, return_dim=None, retu
     fn = f"pyrates_func_{module_counter}"
     f2py.compile(func.generate(), modulename=fn, extension=".f", verbose=False,
                  source_fn=f"{self.build_dir}/{fn}.f" if self.build_dir else f"{fn}.f")
-    exec(f"from pyrates_func_{module_counter} import {self.short_name}", globals(), func_dict)
+    exec(f"from pyrates_func_{module_counter} import {fname}", globals())
+    func_dict[self.short_name] = globals().pop(fname)
     return func_dict
