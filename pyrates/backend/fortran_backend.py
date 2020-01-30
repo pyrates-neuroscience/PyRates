@@ -234,6 +234,14 @@ class FortranBackend(NumpyBackend):
         # collect state variable and parameter vectors
         state_vars, params, var_map = self._process_vars()
 
+        # update state variable getter operations to include the full state variable vector as first argument
+        y = self.get_var('y')
+        for key, (vtype, idx) in var_map.items():
+            var = self.get_var(key)
+            if vtype == 'state_var' and var.short_name != 'y':
+                var.args[0] = y
+                var.build_op(var.args)
+
         # create rhs evaluation function
         ################################
 
@@ -460,7 +468,7 @@ class FortranBackend(NumpyBackend):
         func_gen.add_linebreak()
 
         # define initial state
-        state_vars, params, var_map = self._process_vars()
+        _, params, var_map = self._process_vars()
 
         func_gen.add_linebreak()
         npar = 0
@@ -475,6 +483,7 @@ class FortranBackend(NumpyBackend):
         func_gen.add_linebreak()
 
         func_gen.add_linebreak()
+        state_vars = self.get_var('y')
         for key, (vtype, idx) in var_map.items():
             var = self.get_var(key)
             if vtype == 'state_var':

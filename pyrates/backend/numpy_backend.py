@@ -220,7 +220,7 @@ class PyRatesOp:
         self.name = name
 
         # generate function string
-        self._op_dict = self.generate_op(op, args, **kwargs)
+        self._op_dict = self.generate_op_str(op, args, **kwargs)
 
         # extract information from parsing results
         self.value = self._op_dict['value']
@@ -228,18 +228,12 @@ class PyRatesOp:
         self.input_ops = self._op_dict['input_ops']
         self.is_constant = self._op_dict['is_constant']
 
-        # generate function
-        func_dict = self._generate_func()
-        self._callable = func_dict.pop(self.short_name)
-
-        # test function
-        self.args = self._deepcopy(args)
-        result = self.eval()
-        self.args = args
-
-        # remember output shape and data-type
-        self.shape = result.shape if hasattr(result, 'shape') else ()
-        self.dtype = result.dtype if hasattr(result, 'dtype') else type(result)
+        # build final op
+        self.shape = ()
+        self.dtype = 'float'
+        self._callable = lambda x: x
+        self.args = ()
+        self.build_op(args)
 
     def eval(self):
         """Evaluates the return values of the PyRates operation.
@@ -264,8 +258,25 @@ class PyRatesOp:
         exec(func.generate(), globals(), func_dict)
         return func_dict
 
+    def build_op(self, args):
+        """Builds the function of the operator, tests its functionality and stores shape and data-type of the result
+        on the instance.
+        """
+
+        func_dict = self._generate_func()
+        self._callable = func_dict.pop(self.short_name)
+
+        # test function
+        self.args = self._deepcopy(args)
+        result = self.eval()
+        self.args = args
+
+        # remember output shape and data-type
+        self.shape = result.shape if hasattr(result, 'shape') else ()
+        self.dtype = result.dtype if hasattr(result, 'dtype') else type(result)
+
     @classmethod
-    def generate_op(cls, op, args, **kwargs):
+    def generate_op_str(cls, op, args, **kwargs):
         """Generates the function string, call signature etc.
         """
 
@@ -498,7 +509,7 @@ class PyRatesAssignOp(PyRatesOp):
         return func_dict
 
     @classmethod
-    def generate_op(cls, op, args, **kwargs):
+    def generate_op_str(cls, op, args, **kwargs):
         """Generates the assign function string, call signature etc.
         """
 
@@ -619,7 +630,7 @@ class PyRatesIndexOp(PyRatesOp):
     """
 
     @classmethod
-    def generate_op(cls, op, args, idx_l='[', idx_r=']'):
+    def generate_op_str(cls, op, args, idx_l='[', idx_r=']'):
         """Generates the index function string, call signature etc.
         """
 
@@ -1548,6 +1559,14 @@ class NumpyBackend(object):
 
         # collect state variable and parameter vectors
         state_vars, params, var_map = self._process_vars()
+
+        # update state variable getter operations to include the full state variable vector as first argument
+        y = self.get_var('y')
+        for key, (vtype, idx) in var_map.items():
+            var = self.get_var(key)
+            if vtype == 'state_var' and var.short_name != 'y':
+                var.args[0] = y
+                var.build_op(var.args)
 
         # create rhs evaluation function
         ################################
