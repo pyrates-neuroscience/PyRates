@@ -797,7 +797,7 @@ class NumpyBackend(object):
                  name: str = 'net_0',
                  float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
-                 build_dir: Optional[str] = None,
+                 build_dir: str = None,
                  ) -> None:
         """Instantiates numpy backend, i.e. a compute graph with numpy operations.
         """
@@ -899,7 +899,6 @@ class NumpyBackend(object):
         self.op_counter = {}
         self.layer = 0
         self.op_indices = {}
-        self._build_dir = build_dir if build_dir else ""
         self._float_def = self.dtypes[float_default_type]
         self.name = name
         self._base_layer = 0
@@ -909,6 +908,32 @@ class NumpyBackend(object):
             for imp in imports:
                 if imp not in self._imports:
                     self._imports.append(imp)
+
+        # create build dir
+        orig_dir = os.getcwd()
+        if build_dir:
+            os.makedirs(build_dir, exist_ok=True)
+        dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
+        try:
+            os.mkdir(dir_name)
+        except FileExistsError:
+            pass
+        os.chdir(dir_name)
+        try:
+            os.mkdir(self.name)
+        except FileExistsError:
+            rmtree(self.name)
+            os.mkdir(self.name)
+        for key in sys.modules.copy():
+            if self.name in key:
+                del sys.modules[key]
+        os.chdir(self.name)
+        net_dir = os.getcwd()
+        self._build_dir = net_dir
+        sys.path.append(net_dir)
+
+        self._build_dir = net_dir
+        self._orig_dir = orig_dir
 
     def run(self,
             T: float,
@@ -979,7 +1004,7 @@ class NumpyBackend(object):
         # map layers that need to be executed to compiled network structure
         decorator = kwargs.pop('decorator', None)
         decorator_kwargs = kwargs.pop('decorator_kwargs', {})
-        rhs_func, args, state_vars, var_map, _ = self.compile(self._build_dir, decorator=decorator, **decorator_kwargs)
+        rhs_func, args, state_vars, var_map = self.compile(self._build_dir, decorator=decorator, **decorator_kwargs)
 
         # create output indices
         output_indices = []
@@ -1519,6 +1544,8 @@ class NumpyBackend(object):
         # preparations
         ##############
 
+        os.chdir(self._build_dir)
+
         # remove empty layers and operators
         new_layer_idx = 0
         for layer_idx, layer in enumerate(self.layers.copy()):
@@ -1529,29 +1556,6 @@ class NumpyBackend(object):
                 self.layers.pop(new_layer_idx)
             else:
                 new_layer_idx += 1
-
-        # create directory in which to store rhs function
-        orig_path = os.getcwd()
-        if build_dir:
-            os.makedirs(build_dir, exist_ok=True)
-        dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
-        try:
-            os.mkdir(dir_name)
-        except FileExistsError:
-            pass
-        os.chdir(dir_name)
-        try:
-            os.mkdir(self.name)
-        except FileExistsError:
-            rmtree(self.name)
-            os.mkdir(self.name)
-        for key in sys.modules.copy():
-            if self.name in key:
-                del sys.modules[key]
-        os.chdir(self.name)
-        net_dir = os.getcwd()
-        self._build_dir = net_dir
-        sys.path.append(net_dir)
 
         # remove previously imported rhs_funcs from system
         if 'rhs_func' in sys.modules:
@@ -1649,13 +1653,13 @@ class NumpyBackend(object):
         # import function from file
         exec("from rhs_func import rhs_eval", globals())
         rhs_eval = globals().pop('rhs_eval')
-        os.chdir(orig_path)
+        os.chdir(self._orig_dir)
 
         # apply function decorator
         if decorator:
             rhs_eval = decorator(rhs_eval, **kwargs)
 
-        return rhs_eval, args, state_vars, var_map, net_dir
+        return rhs_eval, args, state_vars, var_map
 
     def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
         """Tries to match the shapes of op1 and op2 such that op can be applied.

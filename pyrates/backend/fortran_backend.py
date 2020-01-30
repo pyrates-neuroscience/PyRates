@@ -49,23 +49,33 @@ module_counter = 0
 
 class FortranOp(PyRatesOp):
 
+    def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
+        self.build_dir = kwargs.pop('build_dir', '')
+        super().__init__(op, short_name, name, *args, **kwargs)
+
     def _generate_func(self):
         return generate_func(self)
 
     @classmethod
     def _process_args(cls, args, results, constants_to_num=False):
-        """Parses arguments to function into argument names that are added to the function call and argument values
-        that can used to set up the return line of the function.
-        """
         return super()._process_args(args, results, constants_to_num=constants_to_num)
 
 
 class FortranIndexOp(PyRatesIndexOp):
+
+    def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
+        self.build_dir = kwargs.pop('build_dir', '')
+        super().__init__(op, short_name, name, *args, **kwargs)
+
     def _generate_func(self):
         return generate_func(self)
 
 
 class FortranAssignOp(PyRatesAssignOp):
+
+    def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
+        self.build_dir = kwargs.pop('build_dir', '')
+        super().__init__(op, short_name, name, *args, **kwargs)
 
     def _generate_func(self):
         idx = self._op_dict['arg_names'].index('y_delta')
@@ -193,6 +203,8 @@ class FortranBackend(NumpyBackend):
         # preparations
         ##############
 
+        os.chdir(self._build_dir)
+
         # remove empty layers and operators
         new_layer_idx = 0
         for layer_idx, layer in enumerate(self.layers.copy()):
@@ -203,29 +215,6 @@ class FortranBackend(NumpyBackend):
                 self.layers.pop(new_layer_idx)
             else:
                 new_layer_idx += 1
-
-        # create directory in which to store rhs function
-        orig_path = os.getcwd()
-        if build_dir:
-            os.makedirs(build_dir, exist_ok=True)
-        dir_name = f"{build_dir}/pyrates_build" if build_dir and "/pyrates_build" not in build_dir else "pyrates_build"
-        try:
-            os.mkdir(dir_name)
-        except FileExistsError:
-            pass
-        os.chdir(dir_name)
-        try:
-            os.mkdir(self.name)
-        except FileExistsError:
-            rmtree(self.name)
-            os.mkdir(self.name)
-        for key in sys.modules.copy():
-            if self.name in key:
-                del sys.modules[key]
-        os.chdir(self.name)
-        net_dir = os.getcwd()
-        self._build_dir = net_dir
-        sys.path.append(net_dir)
 
         # remove previously imported rhs_funcs from system
         if 'rhs_func' in sys.modules:
@@ -366,18 +355,18 @@ class FortranBackend(NumpyBackend):
 
         # create additional subroutines in pyauto compatibility mode
         if self.pyauto_compat:
-            self.generate_auto_file(net_dir)
+            self.generate_auto_file(self._build_dir)
 
         # import function from file
         exec("from rhs_func import func", globals())
         rhs_eval = globals().pop('func')
-        os.chdir(orig_path)
+        os.chdir(self._orig_dir)
 
         # apply function decorator
         if decorator:
             rhs_eval = decorator(rhs_eval, **kwargs)
 
-        return rhs_eval, args, state_vars, var_map, net_dir
+        return rhs_eval, args, state_vars, var_map
 
     def generate_auto_file(self, directory):
         """
@@ -402,19 +391,22 @@ class FortranBackend(NumpyBackend):
 
             # read file from excisting system compilation
             if not directory:
-                directory = os.getcwd()
-            directory = f"{directory}/pyrates_build/{self.name}" if "/pyrates_build" not in directory else directory
+                directory = self._build_dir
             fn = f"{directory}/rhs_func.f" if "rhs_func.f" not in directory else directory
             with open(fn, 'rt') as f:
                 func_str = f.read()
 
         except FileNotFoundError:
 
-            # compile system and then read the built files
-            compile_results = self.compile(build_dir=directory)
-            fn = f"{compile_results[-1]}/rhs_func.f"
+            # compile system and then read the build files
+            self.compile(build_dir=directory)
+            fn = f"{self._build_dir}/rhs_func.f"
             with open(fn, 'r') as f:
                 func_str = f.read()
+
+        end_str = "end subroutine func\n"
+        idx = func_str.index(end_str)
+        func_str = func_str[:idx+len(end_str)]
 
         # generate additional subroutines
         #################################
@@ -483,7 +475,6 @@ class FortranBackend(NumpyBackend):
         func_gen.add_linebreak()
 
         func_gen.add_linebreak()
-        state_vars = self.get_var('y')
         for key, (vtype, idx) in var_map.items():
             var = self.get_var(key)
             if vtype == 'state_var':
@@ -603,10 +594,10 @@ class FortranBackend(NumpyBackend):
                 idx_str = ",".join([f"{idx.short_name}[:,{i}]" for i in range(idx.shape[1])])
                 args = (var, upd, idx_str, idx)
             return FortranAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
-                                   idx_r=self.idx_r)
+                                   idx_r=self.idx_r, build_dir=self._build_dir)
         elif op is "index":
             return FortranIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
-                                  idx_r=self.idx_r)
+                                  idx_r=self.idx_r, build_dir=self._build_dir)
         else:
             if op is "cast":
                 args = list(args)
@@ -615,7 +606,7 @@ class FortranBackend(NumpyBackend):
                         args[1] = f"np.{dtype}"
                         break
                 args = tuple(args)
-            return FortranOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
+            return FortranOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, build_dir=self._build_dir)
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:
@@ -716,7 +707,8 @@ def generate_func(self, return_key='f', omit_assign=False, return_dim=None, retu
     func.add_linebreak()
     func.remove_indent()
     module_counter += 1
-    f2py.compile(func.generate(), modulename=f"pyrates_func_{module_counter}", extension=".f",
-                 source_fn=f"/tmp/pyrates_func_{module_counter}.f", verbose=False)
+    fn = f"pyrates_func_{module_counter}"
+    f2py.compile(func.generate(), modulename=fn, extension=".f", verbose=False,
+                 source_fn=f"{self.build_dir}/{fn}.f" if self.build_dir else f"{fn}.f")
     exec(f"from pyrates_func_{module_counter} import {self.short_name}", globals(), func_dict)
     return func_dict
