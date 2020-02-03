@@ -586,7 +586,8 @@ class FortranBackend(NumpyBackend):
 
             state_vars = self.get_var('y')
             for key, val in results.items():
-                idx = int(key[key.index('(')+1])
+                start, stop = key.index('('), key.index(')')
+                idx = int(key[start+1:stop])
                 state_vars[idx-self.idx_start] = val[-1]
 
             return times, [results[v] for v in out_vars]

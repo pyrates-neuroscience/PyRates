@@ -284,9 +284,17 @@ class PyRatesOp:
         results = {'value': None, 'args': [], 'arg_names': [], 'is_constant': False, 'input_ops': []}
 
         if op == 'no_op':
-            results['value'] = args[0].short_name
-            results['args'] = [args[0]]
-            results['arg_names'] = [args[0].short_name]
+            if hasattr(args[0], 'short_name'):
+                val = args[0].short_name
+                arg = [args[0]]
+                name = [args[0].short_name]
+            else:
+                val = str(args[0])
+                arg = []
+                name = []
+            results['value'] = val
+            results['args'] = arg
+            results['arg_names'] = name
             return results
 
         results, results_args, results_arg_names, n_vars = cls._process_args(args, results)

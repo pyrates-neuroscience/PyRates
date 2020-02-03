@@ -1439,6 +1439,26 @@ class CircuitIR(AbstractBaseIR):
                                       f'system.'
                                       )
 
+    def to_file(self, filename: str) -> None:
+        """Save continuation results on disc.
+
+        Parameters
+        ----------
+        filename
+
+        Returns
+        -------
+        None
+        """
+
+        import pickle
+
+        data = {key: getattr(self, key) for key in self.__slots__}
+        try:
+            pickle.dump(data, open(filename, 'x'))
+        except (FileExistsError, TypeError):
+            pickle.dump(data, open(filename, 'wb'))
+
     def _collect_op_layers(self, layers: list, exclude: bool = False, op_identifier: Optional[str] = None
                            ) -> tuple:
         """

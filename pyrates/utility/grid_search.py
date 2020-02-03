@@ -1411,7 +1411,7 @@ class ClusterWorkerTemplate(object):
 
         # Drop all columns that don't contain a parameter map value (e.g. status, chunk_idx, err_count) since
         # grid_search() can't handle additional columns
-        param_grid = param_grid[list(param_map.keys())]
+        param_grid = param_grid[[key for key in param_map.keys() if key in param_grid]]
         worker_kwargs.update({'param_grid': param_grid})
         print(f'Elapsed time: {t.time() - t0:.3f} seconds')
 
