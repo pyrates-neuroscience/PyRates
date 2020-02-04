@@ -199,6 +199,8 @@ def welch(data, tmin=0., tmax=None, fmin=0., fmax=np.inf, **kwargs):
     """
 
     # prepare data frame
+    if isinstance(data, pd.Series):
+        data = data.to_frame()
     dt = data.index[1] - data.index[0]
     tmin = int(tmin / dt)
     tmax = data.shape[0] + 1 if tmax is None else max([int(tmax/dt), data.shape[0] + 1])
