@@ -4,10 +4,13 @@
 Op_rate:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = (sigmoid(s*(I_syn+I_ext-I_th))-r)/tau"
+    - "delta = sigmoid((s*(I_syn+I_ext-I_th)-r)/tau)"
+    - "d/dt * r = delta"
   variables:
     r:
       default: output
+    delta:
+      default: variable
     tau:
       default: 1.0
     s:
@@ -18,6 +21,27 @@ Op_rate:
       default: input
     I_syn:
       default: input
+
+Op_stp:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * p = (1.0-p)/tau_p + rs*rt*k_p"
+    - "r_scaled = r*p"
+  variables:
+    r_scaled:
+      default: output
+    r:
+      default: input
+    rs:
+      default: input
+    rt:
+      default: input
+    p:
+      default: variable
+    tau_p:
+      default: 200.0
+    k_p:
+      default: 0.1
 
 WC_stp_ee:
   base: OperatorTemplate
@@ -161,6 +185,11 @@ WC_ee:
   operators:
     - WC_stp_ee
 
+Rate_stp:
+  base: EdgeTemplate
+  operators:
+    - Op_stp
+
 # circuits
 WC:
   base: CircuitTemplate
@@ -183,3 +212,11 @@ WC_stp_net:
     - [E: {WC_e_op/re: r, WC_e_op/I: Inp, WC_e_op/I_d: Inp_d}, I/WC_i_op/re_in, WC_ie, {weight: 0.5}]
     - [I/WC_i_op/ri, E/WC_e_op/ri_in, null, {weight: 0.5}]
     - [E/WC_e_op/I, E/WC_e_op/I_d, null, {weight: 1.0, delay: 0.005}]
+
+RC:
+  base: CircuitTemplate
+  nodes:
+    P1: Pop_rate
+    P2: Pop_rate
+  edges:
+    [P1: {Op_rate/delta: rs, Op_rate/r: r}, P2/Op_rate/I_syn, Rate_stp, {weight: 1.0, rt: P2/Op_rate/delta}]

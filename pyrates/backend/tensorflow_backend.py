@@ -65,6 +65,10 @@ class TensorflowVar(NumpyVar):
     def _get_var(cls, value, name, dtype):
         return tf.Variable(value, name=name, dtype=dtype)
 
+    @staticmethod
+    def squeeze(var, **kwargs):
+        return tf.squeeze(var, **kwargs)
+
 
 class TensorflowOp(PyRatesOp):
 

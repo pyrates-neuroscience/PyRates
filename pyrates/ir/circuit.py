@@ -949,6 +949,23 @@ class CircuitIR(AbstractBaseIR):
                       f'failed.')
                 idx += 1
 
+    def set_node_var(self, key: str, val):
+        """
+
+        Parameters
+        ----------
+        key
+        val
+
+        Returns
+        -------
+
+        """
+
+        var_dict = self.get_node_var(key, apply_idx=False).popitem()[1]
+        var, idx = var_dict.pop('var'), var_dict.pop('idx')
+        var[idx] = val
+
     def get_node_var(self, key: str, apply_idx: bool = True) -> dict:
         """This function extracts and returns variables from nodes of the network graph.
 
@@ -1246,6 +1263,7 @@ class CircuitIR(AbstractBaseIR):
         if backend == 'tensorflow':
             from pyrates.backend.tensorflow_backend import TensorflowBackend
             backend = TensorflowBackend
+            kwargs['squeeze'] = True
         elif backend == 'numpy':
             from pyrates.backend.numpy_backend import NumpyBackend
             backend = NumpyBackend
@@ -1453,11 +1471,31 @@ class CircuitIR(AbstractBaseIR):
 
         import pickle
 
-        data = {key: getattr(self, key) for key in self.__slots__}
+        data = {key: getattr(self, key) for key in self.__slots__ if key != '_backend'}
         try:
-            pickle.dump(data, open(filename, 'x'))
+            pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
         except (FileExistsError, TypeError):
-            pickle.dump(data, open(filename, 'wb'))
+            pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def from_file(cls, filename: str):
+        """
+
+        Parameters
+        ----------
+        filename
+
+        Returns
+        -------
+        Any
+        """
+        import pickle
+        circuit_instance = cls()
+        data = pickle.load(open(filename, 'rb'))
+        for key, val in data.items():
+            if hasattr(circuit_instance, key):
+                setattr(circuit_instance, key, val)
+        return circuit_instance
 
     def _collect_op_layers(self, layers: list, exclude: bool = False, op_identifier: Optional[str] = None
                            ) -> tuple:

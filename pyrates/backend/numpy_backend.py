@@ -127,7 +127,7 @@ class NumpyVar(np.ndarray):
             shape = tuple(shape)
         value = cls._get_value(value, dtype, shape)
         if squeeze:
-            value = value.squeeze()
+            value = cls.squeeze(value)
         obj = cls._get_var(value, name, dtype)
 
         # store additional attributes on variable object
@@ -169,6 +169,10 @@ class NumpyVar(np.ndarray):
                 return eval(f'value[{idx}]')
         else:
             return np.asarray(value, dtype=dtype)
+
+    @staticmethod
+    def squeeze(var, axis=None):
+        return var.squeeze(axis)
 
     @classmethod
     def _get_var(cls, value, name, dtype):
@@ -1755,6 +1759,34 @@ class NumpyBackend(object):
 
         """
         return self.add_op('asarray', vars)
+
+    def to_file(self, fn: str):
+        """Writes backend to file
+
+        Parameters
+        ----------
+        fn
+
+        Returns
+        -------
+
+        """
+
+        pass
+
+    def from_file(self, fn: str):
+        """
+
+        Parameters
+        ----------
+        fn
+
+        Returns
+        -------
+
+        """
+
+        pass
 
     @staticmethod
     def eval(ops: list) -> list:

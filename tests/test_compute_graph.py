@@ -63,7 +63,7 @@ def test_2_1_operator():
     :method:`add_operator`: Detailed documentation of method for adding operations to instance of `ComputeGraph`.
     """
 
-    backends = ["numpy", "tensorflow"]
+    backends = ["tensorflow", "numpy"]
     accuracy = 1e-4
 
     for b in backends:
@@ -81,7 +81,7 @@ def test_2_1_operator():
         # simulate operator behavior
         sim_time = 10.0
         results = net.run(simulation_time=sim_time, step_size=dt, outputs={'a': 'pop0/op0/a'})
-        #net.clear()
+        net.clear()
 
         # generate target values
         sim_steps = int(sim_time / dt)
