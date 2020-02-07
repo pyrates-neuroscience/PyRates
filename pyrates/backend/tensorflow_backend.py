@@ -435,7 +435,7 @@ class TensorflowBackend(NumpyBackend):
 
         return times, results
 
-    #@tf.function
+    @tf.function
     def _run(self, rhs_func, func_args, t, dt, steps, sampling_steps, results, sampling_idx,
              output_indices):
 
