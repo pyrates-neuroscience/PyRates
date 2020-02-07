@@ -208,6 +208,7 @@ def welch(data, tmin=0., tmax=None, fmin=0., fmax=np.inf, **kwargs):
         data = data.iloc[tmin:tmax, :]
     else:
         data = data.iloc[tmin:tmax]
+        data = data.to_frame()
 
     # create mne raw data object
     from pyrates.utility import mne_from_dataframe

@@ -383,10 +383,11 @@ class GeneticAlgorithmTemplate:
         sigma = []
         for i, (key, value) in enumerate(self.initial_gene_pool.items()):
             value_tmp = value.copy()
+            value_tmp['size'] = 1
             sigma.append(value_tmp.pop('sigma'))
-            genes.append(self.__sample_gene(sampling_func, **value_tmp))
+            genes.append(self.__sample_gene(sampling_func, **value_tmp)[0])
         new_member = [genes, sigma]
-        already_exists = (self.pop.loc[:, self.gene_names] == new_member[0]).all(1).any()
+        already_exists = (self.pop.loc[:, self.gene_names] == genes).all(1).any()
         if already_exists:
             new_member = self.__create_new_member(sampling_func)
         return new_member
