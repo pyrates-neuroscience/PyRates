@@ -21,7 +21,7 @@ compute_graph = ComputeGraph(circuit, vectorization=True, backend='numpy', name=
 
 result, t = compute_graph.run(T,
                               inputs={"P1/Op_rate/I_ext": inp},
-                              outputs={"r1": "P1/Op_rate/r"},
+                              outputs={"r1": "P1/Op_rate/r", "r2": "P2/Op_rate/r"},
                               sampling_step_size=dts,
                               profile=True,
                               verbose=True,
