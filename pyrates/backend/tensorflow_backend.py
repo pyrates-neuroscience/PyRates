@@ -478,7 +478,7 @@ class TensorflowBackend(NumpyBackend):
         if op is "index":
             if hasattr(args[1], 'dtype') and 'bool' in str(args[1].dtype):
                 return TensorflowOp(self.ops['mask']['call'], self.ops['mask']['name'], name, *args)
-            if hasattr(args[1], 'shape') or type(args[1]) in (list, tuple):
+            if (hasattr(args[1], 'shape') and len(args[1].shape)) or type(args[1]) in (list, tuple):
                 try:
                     return TensorflowOp(self.ops['gather']['call'], self.ops['gather']['name'], name, *args)
                 except (ValueError, IndexError):

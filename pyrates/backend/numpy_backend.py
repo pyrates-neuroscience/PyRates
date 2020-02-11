@@ -391,7 +391,7 @@ class PyRatesOp:
                 # parse PyRates variable into the function
                 if arg.vtype is 'constant' and not arg.shape and constants_to_num:
                     arg_name = '__no_name__'
-                    arg_value = arg.value if hasattr(arg, 'value') else arg
+                    arg_value = arg.numpy() if hasattr(arg, 'numpy') else arg
                 else:
                     arg_name = arg.short_name
                     arg_value = arg
@@ -690,7 +690,7 @@ class PyRatesIndexOp(PyRatesOp):
                 results['arg_names'].append(var)
                 n_vars += 1
             else:
-                var = var_tmp.value
+                var = var_tmp.numpy()
 
         else:
 
@@ -730,7 +730,7 @@ class PyRatesIndexOp(PyRatesOp):
                 results['arg_names'].append(key)
                 n_vars += 1
             else:
-                var_idx = f"{idx_l}{idx.value}{idx_r}"
+                var_idx = f"{idx_l}{idx.numpy()}{idx_r}"
 
         elif type(idx) is str or "int" in str(type(idx)) or "float" in str(type(idx)):
 

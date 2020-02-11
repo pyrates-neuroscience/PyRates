@@ -4,8 +4,8 @@
 Op_rate:
   base: OperatorTemplate
   equations:
-    - "delta = sigmoid((s*(I_syn+I_ext-I_th)-r)/tau)"
-    - "d/dt * r = delta"
+    - "delta = sigmoid(s*(I_syn+I_ext-I_th)-r)"
+    - "d/dt * r = - delta/tau"
   variables:
     r:
       default: output
@@ -217,6 +217,6 @@ RC:
   base: CircuitTemplate
   nodes:
     P1: Pop_rate
-    P2: Pop_rate
-  edges:
-    [P1: {Op_rate/delta: rs, Op_rate/r: r}, P2/Op_rate/I_syn, Rate_stp, {weight: 1.0, rt: P2/Op_rate/delta}]
+  #  P2: Pop_rate
+  #edges:
+  #  [P1: {Op_rate/delta: rs, Op_rate/r: r}, P2/Op_rate/I_syn, Rate_stp, {weight: 1.0, rt: P2/Op_rate/delta}]

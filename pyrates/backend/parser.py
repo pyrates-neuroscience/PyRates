@@ -33,7 +33,6 @@ operations.
 # external imports
 import math
 import typing as tp
-from copy import deepcopy
 from numbers import Number
 from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
@@ -205,7 +204,8 @@ class ExpressionParser(ParserElement):
                    (par_l.setParseAction(self._push_last) + self.expr.suppress() + par_r).setParseAction(self._push_neg)
 
             # apply indexing to atoms
-            indexed = atom + ZeroOrMore((index_start + index_multiples + index_end))
+            indexed = (Optional(minus) + atom).setParseAction(self._push_neg) + \
+                      ZeroOrMore((index_start + index_multiples + index_end))
             index_base = (self.expr.suppress() | index_comb)
             index_full = index_base + ZeroOrMore((index_comb + index_base)) + ZeroOrMore(index_comb)
             index_multiples << index_full + ZeroOrMore((arg_comb + index_full))
@@ -214,7 +214,8 @@ class ExpressionParser(ParserElement):
             boolean = indexed + Optional((op_logical + indexed).setParseAction(self._push_first))
             exponential << boolean + ZeroOrMore((op_exp + Optional(exponential)).setParseAction(self._push_first))
             factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self._push_first))
-            self.expr << factor + ZeroOrMore((op_add + factor).setParseAction(self._push_first))
+            expr = factor + ZeroOrMore((op_add + factor).setParseAction(self._push_first))
+            self.expr << expr #(Optional(minus) + expr).setParseAction(self._push_neg)
 
     def parse_expr(self) -> tuple:
         """Parses string-based mathematical expression/equation.
@@ -652,8 +653,11 @@ class ExpressionParser(ParserElement):
                                 idx_var = idx_var[0]
                             idx[-1] = f"{idx_var}"
                         else:
-                            idx[-1] = idx_var.short_name
-                            args.append(idx_var)
+                            if "_evaluated" in idx_var.short_name:
+                                idx[-1] = f"{idx_var.numpy()}"
+                            else:
+                                idx[-1] = idx_var.short_name
+                                args.append(idx_var)
                     idx.append(':')
                 idx.pop(-1)
                 idx.append(',')
