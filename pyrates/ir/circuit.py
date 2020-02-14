@@ -184,9 +184,8 @@ class CircuitIR(AbstractBaseIR):
 
         edge_list = []
         for (source, target, edge_dict) in edges:
-
             self.add_edge(source, target,  # edge_unique_key,
-                          **edge_dict)
+                          **edge_dict, **attr)
 
     def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
                               template=None, **attr) -> None:
@@ -293,7 +292,9 @@ class CircuitIR(AbstractBaseIR):
 
         # step 2: parse source variable specifier (might be single string or dictionary for multiple source variables)
 
-        source_vars = self._parse_source_vars(source_node, source_var, edge_ir)
+        # ToDo: treat extra_sources properly, possibly by mapping inputs and sources at this point
+        source_vars, extra_sources = self._parse_source_vars(source_node, source_var, edge_ir,
+                                                             data.pop("extra_sources", None))
         # step 3: verify complete source/target paths (safeguard, might be unnecessary)
 
         # step 4: add edges
@@ -306,6 +307,7 @@ class CircuitIR(AbstractBaseIR):
                          spread=spread,
                          source_var=source_vars,
                          target_var=target_var,
+                         extra_sources=extra_sources,
                          **data)
 
         # ToDo: make sure multiple source variables are understood down the road
@@ -343,7 +345,7 @@ class CircuitIR(AbstractBaseIR):
             var = data.pop(var_string)  # type: Union[str, dict]
         except KeyError:
             # not found, assume variable info is contained in `source`
-            # also means that there is onle one source variable to take care of
+            # also means that there is only one source variable (on the main source node) to take care of
             *node, op, var = specifier.split("/")
             node = "/".join(node)
             var = "/".join((op, var))
@@ -381,7 +383,8 @@ class CircuitIR(AbstractBaseIR):
 
         return node
 
-    def _parse_source_vars(self, source_node: str, source_var: Union[str, dict], edge_ir) -> Union[str, dict]:
+    def _parse_source_vars(self, source_node: str, source_var: Union[str, dict], edge_ir, extra_sources: dict = None
+                           ) -> Tuple[Union[str, dict], dict]:
         """Parse is source variable specifications. This tests, whether a single or more source variables and verifies
         all given paths.
 
@@ -417,18 +420,28 @@ class CircuitIR(AbstractBaseIR):
             self._verify_path(source_node, source_var)
         else:
             # verify that number of source variables matches number of input variables in edge
+            if extra_sources is not None:
+                n_source_vars += len(extra_sources)
+
             if n_source_vars != edge_ir.n_inputs:
                 raise PyRatesException(f"Mismatch between number of source variables ({n_source_vars}) and "
                                        f"inputs ({edge_ir.n_inputs}) in an edge with source '{source_node}' and source"
                                        f"variables {source_var}.")
             for node_var, edge_var in source_var.items():
-
                 self._verify_path(source_node, node_var)
 
             # ToDo: Get all input variables from all operators and properly map them at this stage?
             #  note: at this stage source_var is not manipulated at all
 
-        return source_var
+        if extra_sources is not None:
+            for edge_var, source in extra_sources.items():
+                node, op, var = source.split("/")
+                node = self._verify_rename_node(node)
+                source = "/".join((node, op, var))
+                self._verify_path(source)
+                extra_sources[edge_var] = source
+
+        return source_var, extra_sources
 
     def _verify_path(self, *parts: str):
         """
@@ -695,6 +708,7 @@ class CircuitIR(AbstractBaseIR):
             edge_ir = data["edge_ir"]
             source_var = data["source_var"]  # type: Union[str, dict]
             target_var = data["target_var"]
+            extra_sources = data["extra_sources"]
 
             if edge_ir is None:
                 # if the edge is empty, just add one with remapped names
@@ -804,7 +818,7 @@ class CircuitIR(AbstractBaseIR):
 
                         input_var = op_vars[0]  # simple solution for now: take only first reference
                         # need to rewrite this, if problems arise from operators in a node referencing the same
-                        # node-wide
+                        # node-wide variable
 
                         # now fetch the source variable connected to this input variable
                         # should fail, if there is a mismatch between assigned input variable and actual inputs
@@ -812,12 +826,15 @@ class CircuitIR(AbstractBaseIR):
                         try:
                             single_source = next((key for key, value in source_var.items() if value == in_var))
                         except StopIteration:
-                            raise PyRatesException(f"Failed to divide edge with multiple source variables into many "
-                                                   f"edges with single source variable, because there is a mismatch "
-                                                   f"between assigned input variables in the source definition "
-                                                   f"{source_var} and inputs as defined by internal operator graph "
-                                                   f"{edge_ir.inputs}. This happened in an edge between {source} and "
-                                                   f"{target}.")
+                            if in_var in extra_sources.keys():
+                                continue
+                            else:
+                                raise PyRatesException(f"Failed to divide edge with multiple source variables into many "
+                                                       f"edges with single source variable, because there is a mismatch "
+                                                       f"between assigned input variables in the source definition "
+                                                       f"{source_var} and inputs as defined by internal operator graph "
+                                                       f"{edge_ir.inputs}. This happened in an edge between {source} and "
+                                                       f"{target}.")
                         # add edge from source to the new node
 
                         self.graph.add_edge(source, new_name,
@@ -826,13 +843,12 @@ class CircuitIR(AbstractBaseIR):
                                             weight=1, delay=None, spread=None
                                             )
 
-                        # add edge from new node to target
-                        self.graph.add_edge(new_name, target,
-                                            source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
-                                            target_var=target_var, target_idx=[target_idx],
-                                            weight=weight, delay=delay, spread=spread
-                                            )
-
+                    # add edge from new node to target
+                    self.graph.add_edge(new_name, target,
+                                        source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                                        target_var=target_var, target_idx=[target_idx],
+                                        weight=weight, delay=delay, spread=spread
+                                        )
 
                 # # add edge from source to the new node
                 # self.graph.add_edge(source, new_name,
@@ -847,6 +863,19 @@ class CircuitIR(AbstractBaseIR):
                 #                     target_var=target_var, target_idx=[target_idx],
                 #                     weight=weight, delay=delay, spread=spread
                 #                     )
+
+                # in case we have additional sources that are not linked to the source node, add edges for them also
+                if extra_sources is not None:
+                    for edge_var, source in extra_sources.items():
+                        *node, source_op, source_var = source.split("/")
+                        source, source_idx = self.label_map["/".join(node)]
+                        input_var = edge_ir.inputs[edge_var][0]
+
+                        self.graph.add_edge(source, new_name,
+                                            source_var="/".join((source_op, source_var)), source_idx=[source_idx],
+                                            target_var=input_var, target_idx=[coupling_vec_idx],
+                                            weight=1, delay=None, spread=None
+                                            )
 
             # remove old edge
             self.graph.remove_edge(*specifier)

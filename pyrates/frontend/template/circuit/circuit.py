@@ -137,6 +137,43 @@ class CircuitTemplate(AbstractBaseTemplate):
             delay = values.pop("delay", None)
             spread = values.pop("spread", None)
 
+            # treat additional source assignments in values dictionary
+            extra_sources = {}
+            keys_to_remove = []
+            for key, value in values.items():
+                try:
+                    _, _, _ = value.split("/")
+                except AttributeError:
+                    # not a string
+                    continue
+                except ValueError as e:
+                    raise ValueError(f"Wrong format of source specifier. Expected form: `node/op/var`. "
+                                     f"Actual form: {value}")
+                else:
+                    # was actually able to split that string? Then it is an additional source specifier.
+                    # Let's treat it as such
+                    try:
+                        op, var = key.split("/")
+                    except ValueError as e:
+                        if e.args[0].startswith("not enough"):
+                            # No operator specified: assume that it is a known input variable. If not, we will notice
+                            # later.
+                            var = key
+                            # Need to remove the key, but need to wait until after the iteration finishes.
+                            keys_to_remove.append(key)
+                        else:
+                            raise e
+                    else:
+                        # we know which variable in which operator, so let us set its type to "input"
+                        values[key] = "input"
+
+                    # assuming, the variable has been set to "input", we can omit any operator description and only
+                    # pass the actual variable name
+                    extra_sources[var] = value
+
+            for key in keys_to_remove:
+                values.pop(key)
+
             # treat empty dummy edge templates as not existent templates
             if template and len(template.operators) == 0:
                 template = None
@@ -154,26 +191,29 @@ class CircuitTemplate(AbstractBaseTemplate):
             try:
                 # if source is a dictionary, pass on its values as source_var
                 source_var = list(source.values())[0]  # type: dict
-                source_node = list(source.keys())[0]
+                source = list(source.keys())[0]
             except AttributeError:
                 # no dictionary? only singular source definition present. go on as planned.
-                edges.append((source, target,  # edge_unique_key,
-                              {"edge_ir": edge_ir,
-                               "weight": weight,
-                               "delay": delay,
-                               "spread": spread
-                               }))
+                edge_dict = dict(edge_ir=edge_ir,
+                                 weight=weight,
+                                 delay=delay,
+                                 spread=spread)
 
             else:
                 # oh source was indeed a dictionary. go pass source information as separate entry
+                edge_dict = dict(edge_ir=edge_ir,
+                                 weight=weight,
+                                 delay=delay,
+                                 spread=spread,
+                                 source_var=source_var)
 
-                edges.append((source_node, target,  # edge_unique_key,
-                              {"edge_ir": edge_ir,
-                               "weight": weight,
-                               "delay": delay,
-                               "spread": spread,
-                               "source_var": source_var
-                               }))
+            # now add extra sources, if there are some
+            if extra_sources:
+                edge_dict["extra_sources"] = extra_sources
+
+            edges.append((source, target,  # edge_unique_key,
+                          edge_dict
+                          ))
 
         return CircuitIR(label, self.circuits, nodes, edges, self.path)
 
@@ -194,7 +234,10 @@ class CircuitTemplate(AbstractBaseTemplate):
         for edge in edges:
 
             if isinstance(edge, dict):
-                edge = (edge["source"], edge["target"], edge["template"], edge["variables"])
+                try:
+                    edge = (edge["source"], edge["target"], edge["template"], edge["variables"])
+                except KeyError as e:
+                    raise TypeError(f"Wrong edge configuration. Unable to find key {e.args[0]}")
 
             # "template" is EdgeTemplate, just use it
             if isinstance(edge[2], EdgeTemplate):

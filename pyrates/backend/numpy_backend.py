@@ -937,6 +937,9 @@ class NumpyBackend(object):
             os.mkdir(dir_name)
         except FileExistsError:
             pass
+        except FileNotFoundError as e:
+            # for debugging
+            raise e
         os.chdir(dir_name)
         try:
             os.mkdir(self.name)
