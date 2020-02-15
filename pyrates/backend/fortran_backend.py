@@ -531,19 +531,23 @@ class FortranBackend(NumpyBackend):
 
         return fn
 
-    def to_pyauto(self, directory=None):
+    def to_pyauto(self, directory=None, generate_auto_def=True):
         """
 
         Parameters
         ----------
         directory
+        generate_auto_def
 
         Returns
         -------
 
         """
         from pyrates.utility import PyAuto
-        return PyAuto(directory if directory else self._build_dir)
+        directory = directory if directory else self._build_dir
+        if generate_auto_def:
+            self.generate_auto_def(directory)
+        return PyAuto(directory)
 
     def _solve(self, rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs):
         """

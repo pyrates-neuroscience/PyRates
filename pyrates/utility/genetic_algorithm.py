@@ -64,7 +64,7 @@ class GeneticAlgorithmTemplate:
             stagnation_decimals: Optional[int] = 8, max_stagnation_drops: Optional[Union[int, float]] = np.Inf,
             enforce_max_iter: Optional[bool] = False, new_pop_on_drop: Optional[bool] = False,
             pop_save: Optional[str] = "", candidate_save: Optional[str] = "", drop_save: Optional[str] = "",
-            gene_sampling_func=np.linspace, **kwargs):
+            gene_sampling_func=np.linspace, new_member_sampling_func=None, **kwargs):
         """Run a genetic algorithm to optimize genes of a population in respect to a given target vector
 
         Parameters
@@ -107,6 +107,7 @@ class GeneticAlgorithmTemplate:
             If set, all members that are dropped from a population due to stagnation or other criteria will be saved to
             this folder in hdf5 format
         gene_sampling_func
+        new_member_sampling_func
         kwargs
 
 
@@ -245,7 +246,8 @@ class GeneticAlgorithmTemplate:
             else:
                 print(f'Generating offspring')
                 self.__create_offspring(n_parent_pairs=n_parent_pairs, n_new=n_new, n_winners=n_winners,
-                                        sampling_func=gene_sampling_func)
+                                        sampling_func=new_member_sampling_func if new_member_sampling_func
+                                        else gene_sampling_func)
                 iter_count += 1
 
         # End of iteration loop
@@ -362,16 +364,18 @@ class GeneticAlgorithmTemplate:
             winners.append([winner_genes, winner_sigma])
         return winners
 
-    def __mutate(self, parent):
+    def __mutate(self, parent, max_iter=1e3):
         """Create mutation of a parent, based on a gaussian distribution for each gene"""
         mu_new = []
         sigma_new = []
         for i, (mu, sigma) in enumerate(zip(parent[0], parent[1])):
             mu_temp = mu + np.random.randn() * sigma
+            i = 0
             while any([mu_temp < self.initial_gene_pool[self.gene_names[i]]['min'],
-                       mu_temp > self.initial_gene_pool[self.gene_names[i]]['max']]):
+                       mu_temp > self.initial_gene_pool[self.gene_names[i]]['max']]) and i < max_iter:
                 mu_temp = mu+np.random.randn()*sigma
-            mu_new.append(mu_temp)
+                i += 1
+            mu_new.append(mu_temp if i < max_iter else mu)
             # Adapt sigma (Beyer1995, p.5)
             xi = np.exp(self.sigma_adapt*np.random.randn())
             sigma_new.append(sigma*xi)

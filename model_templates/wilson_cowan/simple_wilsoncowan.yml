@@ -4,19 +4,18 @@
 Op_rate:
   base: OperatorTemplate
   equations:
-    - "delta = sigmoid(s*(I_syn+I_ext-I_th)-r)"
-    - "d/dt * r = delta/tau"
+    - "d/dt * r = (alpha*sigmoid(s*(I_syn+I_ext-I_th)) - r)/tau"
   variables:
     r:
       default: output
-    delta:
-      default: variable
     tau:
       default: 1.0
     s:
       default: 2.0
+    alpha:
+      default: 10.0
     I_th:
-      default: 0.0
+      default: 3.0
     I_ext:
       default: input
     I_syn:
@@ -26,12 +25,10 @@ Op_stp:
   base: OperatorTemplate
   equations:
     - "d/dt * p = (1.0-p)/tau_p + rs*rt*k_p"
-    - "r_scaled = r*p"
+    - "r_scaled = rs*p"
   variables:
     r_scaled:
       default: output
-    r:
-      default: input
     rs:
       default: input
     rt:
@@ -39,42 +36,36 @@ Op_stp:
     p:
       default: variable
     tau_p:
-      default: 200.0
+      default: 100.0
     k_p:
       default: 0.1
 
 WC_stp_ee:
   base: OperatorTemplate
   equations:
-    - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*r"
-    - "d/dt * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*r"
-    - "d/dt * p = (1.0-p)/tau_p + Inp*Inp_d*k_p*(fr - dr)"
-    - "r_scaled = r*x*u"
+    - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*rs"
+    - "d/dt * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*rs"
+    - "d/dt * p = (1.0-p)/tau_p + k_p*rs*rt"
+    - "r_scaled = rs*x*u*p"
   variables:
-    r:
+    rs:
       default: input
-    Inp:
-      default: input
-    Inp_d:
+    rt:
       default: input
     x:
       default: variable(1.0)
     u:
       default: variable(1.0)
     p:
-      default: variable
-    fr:
-      default: 1.0
-    dr:
-      default: 0.0
+      default: variable(1.0)
     r_scaled:
       default: output
     tau_r:
-      default: 100.0
+      default: 50.0
     tau_f:
       default: 1.0
     tau_p:
-      default: 200.0
+      default: 100.0
     k_r:
       default: 0.2
     k_f:
@@ -219,4 +210,4 @@ RC:
     P1: Pop_rate
     P2: Pop_rate
   edges:
-    - [P1: {Op_rate/delta: rs, Op_rate/r: r}, P2/Op_rate/I_syn, Rate_stp, {weight: 1.0, rt: P2/Op_rate/delta}]
+    - [P1: {Op_rate/r: rs}, P2/Op_rate/I_syn, WC_ee, {weight: 2.0, rt: P2/Op_rate/r}]

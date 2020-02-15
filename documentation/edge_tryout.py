@@ -12,8 +12,9 @@ sub = int(dts/dt)                              # sub-sampling rate
 T = 1000.0                                     # total simulation time in ms
 
 inp = np.zeros((int(T/dt), 1), dtype='float32')                 # external input to the population
-dur = 100.0
-inp[int(dur/dt):int(dur/dt), :] = 10.0
+start = 200.0
+stop = 400.0
+inp[int(start/dt):int(stop/dt), :] = 10.0
 
 circuit = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.RC").apply()
 compute_graph = ComputeGraph(circuit, vectorization=True, backend='numpy', name='wc_net', step_size=dt,
