@@ -38,7 +38,7 @@ import numpy as np
 from numpy import f2py
 
 # pyrates internal imports
-from .numpy_backend import NumpyBackend, PyRatesAssignOp, PyRatesIndexOp, PyRatesOp, CodeGen
+from .numpy_backend import NumpyBackend, PyRatesAssignOp, PyRatesIndexOp, PyRatesOp, CodeGen, extract_lhs_var
 
 # meta infos
 __author__ = "Richard Gast"
@@ -77,10 +77,14 @@ class FortranAssignOp(PyRatesAssignOp):
         self.build_dir = kwargs.pop('build_dir', '')
         super().__init__(op, short_name, name, *args, **kwargs)
 
-    def _generate_func(self):
-        idx = self._op_dict['arg_names'].index('y_delta')
+    def _generate_func(self, return_key='y_delta'):
+        try:
+            idx = self._op_dict['arg_names'].index(return_key)
+        except ValueError:
+            return_key = extract_lhs_var(self._op_dict['value'])
+            idx = self._op_dict['arg_names'].index(return_key)
         ndim = self._op_dict['args'][idx].shape
-        return generate_func(self, return_key='y_delta', omit_assign=True, return_dim=ndim, return_intent='out')
+        return generate_func(self, return_key=return_key, omit_assign=True, return_dim=ndim, return_intent='out')
 
     def eval(self):
         result = self._callable(*self.args[1:])

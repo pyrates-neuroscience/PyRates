@@ -1644,8 +1644,7 @@ class NumpyBackend(object):
         arg_updates = []
         for i, layer in enumerate(self.layers):
             for j, op in enumerate(layer):
-                lhs = op.value.split("=")[0]
-                lhs = lhs.replace(" ", "")
+                lhs = extract_lhs_var(op.value)
                 find_arg = [arg == lhs for arg in updates]
                 if any(find_arg):
                     idx = find_arg.index(True)
@@ -2252,3 +2251,23 @@ class CodeGen:
         if self.lvl == 0:
             raise(SyntaxError("internal error in code generator"))
         self.lvl -= 1
+
+
+def extract_lhs_var(eq_str: str) -> str:
+    """
+
+    Parameters
+    ----------
+    eq_str
+
+    Returns
+    -------
+
+    """
+
+    lhs = eq_str.split("=")[0]
+    lhs = lhs.replace(" ", "")
+    if "[" in lhs:
+        idx = lhs.index("[")
+        lhs = lhs[:idx]
+    return lhs

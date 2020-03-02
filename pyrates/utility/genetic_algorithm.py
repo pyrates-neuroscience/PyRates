@@ -403,16 +403,16 @@ class GeneticAlgorithmTemplate:
         # Reproduction probability for each parent is based on its relative fitness
         parent_repro = self.pop['fitness'].copy()
 
+        # Convert fitness to list of normalized choice probabilities
+        parent_repro = np.abs(parent_repro.to_numpy())
+        parent_repro /= np.abs(parent_repro.sum())
+
         # Set -inf and NaN to 0 since np.choice can only handle positive floats or ints
         # Safety measure, should not occur in the first place
         parent_repro[parent_repro == -np.inf] = 0.0
         parent_repro[parent_repro == -np.Inf] = 0.0
         parent_repro[parent_repro == np.NaN] = 0.0
         parent_repro[parent_repro == np.nan] = 0.0
-
-        # Convert fitness to list of normalized choice probabilities
-        parent_repro = np.abs(parent_repro.to_numpy())
-        parent_repro /= np.abs(parent_repro.sum())
 
         # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values

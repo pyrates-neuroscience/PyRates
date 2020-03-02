@@ -18,7 +18,7 @@ inp[int(start/dt):int(stop/dt), :] = 10.0
 
 circuit = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.RC").apply()
 compute_graph = ComputeGraph(circuit, vectorization=True, backend='numpy', name='wc_net', step_size=dt,
-                             solver='euler')
+                             solver='scipy')
 
 result, t = compute_graph.run(T,
                               inputs={"P1/Op_rate/I_ext": inp},
