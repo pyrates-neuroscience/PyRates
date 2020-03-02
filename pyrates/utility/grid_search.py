@@ -1613,9 +1613,11 @@ class ClusterWorkerTemplate(object):
             if limit:
                 _, hard = resource.getrlimit(r)
                 if type(limit) is bool:
-                    resource.setrlimit(r, (def_lim, hard))
+                    if def_lim < hard:
+                        resource.setrlimit(r, (def_lim, hard))
                 else:
-                    resource.setrlimit(r, (limit, hard))
+                    if limit < hard:
+                        resource.setrlimit(r, (limit, hard))
 
 
 if __name__ == "__main__":
