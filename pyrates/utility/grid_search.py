@@ -1400,6 +1400,13 @@ class ClusterWorkerTemplate(object):
 
         print(f'Elapsed time: {t.time() - t0:.3f} seconds')
 
+        # restrict resources of worker process
+        resource_kwargs = {}
+        for key in ['cpu_lim', 'memory_lim', 'nproc_lim', 'time_lim']:
+            if key in worker_kwargs:
+                resource_kwargs[key] = worker_kwargs[key]
+        self._limit_resources(**resource_kwargs)
+
         # LOAD PARAMETER GRID
         #####################
         print("")
@@ -1594,6 +1601,20 @@ class ClusterWorkerTemplate(object):
         self.worker_postprocessing()
 
         print('Test successful, no errors occurred!')
+
+    @staticmethod
+    def _limit_resources(cpu_lim=True, memory_lim=True, nproc_lim=True, time_lim=True):
+        import resource
+
+        resources = [resource.RLIMIT_NICE, resource.RLIMIT_MEMLOCK, resource.RLIMIT_NPROC, resource.RLIMIT_CPU]
+        default_limits = [(19, 19), (4e9, 6e9), (8, 16), (2000, 3600)]
+
+        for limit, r, def_lim in zip([cpu_lim, memory_lim, nproc_lim, time_lim], resources, default_limits):
+            if limit:
+                if type(limit) is tuple:
+                    resource.setrlimit(r, limit)
+                else:
+                    resource.setrlimit(r, def_lim)
 
 
 if __name__ == "__main__":
