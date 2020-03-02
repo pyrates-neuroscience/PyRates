@@ -1607,14 +1607,15 @@ class ClusterWorkerTemplate(object):
         import resource
 
         resources = [resource.RLIMIT_NICE, resource.RLIMIT_MEMLOCK, resource.RLIMIT_NPROC, resource.RLIMIT_CPU]
-        default_limits = [(19, 19), (4e9, 6e9), (8, 16), (2000, 3600)]
+        default_limits = [19, 6e9, 16, 3600]
 
         for limit, r, def_lim in zip([cpu_lim, memory_lim, nproc_lim, time_lim], resources, default_limits):
             if limit:
-                if type(limit) is tuple:
-                    resource.setrlimit(r, limit)
+                _, hard = resource.getrlimit(r)
+                if type(limit) is bool:
+                    resource.setrlimit(r, (def_lim, hard))
                 else:
-                    resource.setrlimit(r, def_lim)
+                    resource.setrlimit(r, (limit, hard))
 
 
 if __name__ == "__main__":
