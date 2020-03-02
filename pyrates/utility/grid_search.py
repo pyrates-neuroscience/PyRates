@@ -1603,13 +1603,22 @@ class ClusterWorkerTemplate(object):
         print('Test successful, no errors occurred!')
 
     @staticmethod
-    def _limit_resources(cpu_lim=True, memory_lim=True, nproc_lim=True, time_lim=True):
+    def _limit_resources(cpu_lim=True, memory_lim=True, nproc_lim=False, time_lim=True):
         import resource
 
-        resources = [resource.RLIMIT_NICE, resource.RLIMIT_MEMLOCK, resource.RLIMIT_NPROC, resource.RLIMIT_CPU]
-        default_limits = [19, 6e9, 16, 3600]
+        # manage niceness level
+        if cpu_lim:
+            if type(cpu_lim) is bool:
+                os.nice(10)
+            else:
+                os.nice(cpu_lim)
 
-        for limit, r, def_lim in zip([cpu_lim, memory_lim, nproc_lim, time_lim], resources, default_limits):
+        # manage other resources
+        limits = [memory_lim, nproc_lim, time_lim]
+        resources = [resource.RLIMIT_MEMLOCK, resource.RLIMIT_NPROC, resource.RLIMIT_CPU]
+        default_limits = [6e9, 256, 3600]
+
+        for limit, r, def_lim in zip(limits, resources, default_limits):
             if limit:
                 _, hard = resource.getrlimit(r)
                 if type(limit) is bool:

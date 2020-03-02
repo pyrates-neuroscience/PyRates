@@ -147,7 +147,7 @@ class GeneticAlgorithmTemplate:
             ########################################
             self.eval_fitness(target, **kwargs)
             new_candidate = self.pop.nlargest(1, "fitness")
-            self.current_max_fitness = float(new_candidate.loc[:, "fitness"])
+            self.current_max_fitness = float(new_candidate.loc[:, "fitness"].values)
 
             # If no population member yields a proper fitness value since all computed timeseries contained at least one
             # undefined value (e.g. np.NaN)
@@ -370,12 +370,12 @@ class GeneticAlgorithmTemplate:
         sigma_new = []
         for i, (mu, sigma) in enumerate(zip(parent[0], parent[1])):
             mu_temp = mu + np.random.randn() * sigma
-            i = 0
+            j = 0
             while any([mu_temp < self.initial_gene_pool[self.gene_names[i]]['min'],
-                       mu_temp > self.initial_gene_pool[self.gene_names[i]]['max']]) and i < max_iter:
+                       mu_temp > self.initial_gene_pool[self.gene_names[i]]['max']]) and j < max_iter:
                 mu_temp = mu+np.random.randn()*sigma
-                i += 1
-            mu_new.append(mu_temp if i < max_iter else mu)
+                j += 1
+            mu_new.append(mu_temp if j < max_iter else mu)
             # Adapt sigma (Beyer1995, p.5)
             xi = np.exp(self.sigma_adapt*np.random.randn())
             sigma_new.append(sigma*xi)
@@ -409,10 +409,8 @@ class GeneticAlgorithmTemplate:
 
         # Set -inf and NaN to 0 since np.choice can only handle positive floats or ints
         # Safety measure, should not occur in the first place
-        parent_repro[parent_repro == -np.inf] = 0.0
-        parent_repro[parent_repro == -np.Inf] = 0.0
-        parent_repro[parent_repro == np.NaN] = 0.0
-        parent_repro[parent_repro == np.nan] = 0.0
+        parent_repro[np.isinf(parent_repro)] = 0.0
+        parent_repro[np.isnan(parent_repro)] = 0.0
 
         # Get a list containing the indices of all population members
         parent_indices = self.pop.index.values
@@ -456,14 +454,17 @@ class GeneticAlgorithmTemplate:
             return sampling_func(**kwargs)
         except TypeError:
             min_val, max_val = kwargs.pop('min'), kwargs.pop('max')
-            vals = sampling_func(**kwargs)
-            idx = np.argwhere((vals < min_val) + (vals > max_val)).squeeze()
-            while idx:
-                for _ in idx:
-                    vals.pop(idx)
-                kwargs['size'] = len(idx)
-                vals += list(sampling_func(**kwargs))
-                idx = np.argwhere((vals < min_val) * (vals > max_val))
+            try:
+                vals = sampling_func(**kwargs)
+                idx = np.argwhere((vals < min_val) + (vals > max_val)).squeeze()
+                while idx:
+                    for _ in idx:
+                        vals.pop(idx)
+                    kwargs['size'] = len(idx)
+                    vals += list(sampling_func(**kwargs))
+                    idx = np.argwhere((vals < min_val) * (vals > max_val))
+            except TypeError:
+                vals = np.random.uniform(min_val, max_val, kwargs['size'])
             return np.asarray(vals)
 
     def plot_genes(self, pop_member):
