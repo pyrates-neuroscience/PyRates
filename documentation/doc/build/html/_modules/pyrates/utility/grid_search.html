@@ -74,6 +74,7 @@
 <span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span>
 
 <span class="c1"># system imports</span>
 <span class="kn">import</span> <span class="nn">os</span>
@@ -82,9 +83,6 @@
 <span class="kn">import</span> <span class="nn">time</span> <span class="k">as</span> <span class="nn">t</span>
 <span class="kn">import</span> <span class="nn">glob</span>
 <span class="kn">import</span> <span class="nn">getpass</span>
-<span class="kn">import</span> <span class="nn">h5py</span>
-<span class="kn">import</span> <span class="nn">paramiko</span>
-<span class="kn">from</span> <span class="nn">shutil</span> <span class="k">import</span> <span class="n">copy2</span>
 <span class="kn">from</span> <span class="nn">pathlib</span> <span class="k">import</span> <span class="n">Path</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
 <span class="kn">from</span> <span class="nn">threading</span> <span class="k">import</span> <span class="n">Thread</span><span class="p">,</span> <span class="n">currentThread</span><span class="p">,</span> <span class="n">RLock</span>
@@ -99,9 +97,10 @@
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;development&quot;</span>
 
 
-<div class="viewcode-block" id="grid_search"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.grid_search">[docs]</a><span class="k">def</span> <span class="nf">grid_search</span><span class="p">(</span><span class="n">circuit_template</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">CircuitTemplate</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">param_grid</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">dict</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span> <span class="n">param_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">simulation_time</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-                <span class="n">inputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">outputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">sampling_step_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                <span class="n">permute_grid</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">init_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<div class="viewcode-block" id="grid_search"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.grid_search">[docs]</a><span class="k">def</span> <span class="nf">grid_search</span><span class="p">(</span><span class="n">circuit_template</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">CircuitTemplate</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">param_grid</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">dict</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span> <span class="n">param_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+                <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">simulation_time</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">inputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">outputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+                <span class="n">sampling_step_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">permute_grid</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">init_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.</span>
 
 <span class="sd">    Parameters</span>
@@ -132,13 +131,18 @@
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    pd.DataFrame</span>
-<span class="sd">        Simulation results stored in a multi-index data frame where each index lvl refers to one of the parameters of</span>
-<span class="sd">        param_grid.</span>
+<span class="sd">    tuple</span>
+<span class="sd">        Simulation results stored in a multi-index data frame, the mapping between the data frame column names and the</span>
+<span class="sd">        parameter grid, the simulation time, and the memory consumption.</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># load template if necessary</span>
+    <span class="c1"># argument pre-processing</span>
+    <span class="c1">#########################</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">init_kwargs</span><span class="p">:</span>
+        <span class="n">init_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">vectorization</span> <span class="o">=</span> <span class="n">init_kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;vectorization&#39;</span><span class="p">,</span> <span class="s1">&#39;nodes&#39;</span><span class="p">)</span>
     <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">circuit_template</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
         <span class="n">circuit_template</span> <span class="o">=</span> <span class="n">CircuitTemplate</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">circuit_template</span><span class="p">)</span>
 
@@ -146,60 +150,38 @@
     <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">param_grid</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span><span class="p">:</span>
         <span class="n">param_grid</span> <span class="o">=</span> <span class="n">linearize_grid</span><span class="p">(</span><span class="n">param_grid</span><span class="p">,</span> <span class="n">permute_grid</span><span class="p">)</span>
 
-    <span class="c1"># create multi-index for later results storage</span>
-    <span class="n">param_keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">param_grid</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-    <span class="n">multi_idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">param_grid</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">values</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">param_keys</span><span class="p">]</span>
-    <span class="n">n_iters</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">multi_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-    <span class="n">outs</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">out_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">outputs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-    <span class="k">for</span> <span class="n">out_name</span> <span class="ow">in</span> <span class="n">out_names</span><span class="p">:</span>
-        <span class="n">outs</span> <span class="o">+=</span> <span class="p">[</span><span class="n">out_name</span><span class="p">]</span> <span class="o">*</span> <span class="n">n_iters</span>
-    <span class="n">multi_idx</span> <span class="o">=</span> <span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">out_names</span><span class="p">)</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">multi_idx</span><span class="p">]</span>
-    <span class="n">multi_idx</span> <span class="o">=</span> <span class="n">multi_idx</span> <span class="o">+</span> <span class="p">[</span><span class="n">outs</span><span class="p">]</span>
-    <span class="n">index</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">MultiIndex</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">multi_idx</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="n">param_keys</span> <span class="o">+</span> <span class="p">[</span><span class="s2">&quot;out_var&quot;</span><span class="p">])</span>
-    <span class="n">index</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">MultiIndex</span><span class="o">.</span><span class="n">from_tuples</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">index</span><span class="p">)),</span> <span class="n">names</span><span class="o">=</span><span class="n">param_keys</span> <span class="o">+</span> <span class="p">[</span><span class="s2">&quot;out_var&quot;</span><span class="p">])</span>
+    <span class="c1"># create grid-structure of network</span>
+    <span class="c1">##################################</span>
 
-    <span class="c1"># assign parameter updates to each circuit and combine them to unconnected network</span>
+    <span class="c1"># get parameter names and grid length</span>
+    <span class="n">param_keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">param_grid</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">param_grid</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># assign parameter updates to each circuit, combine them to unconnected network and remember their parameters</span>
     <span class="n">circuit</span> <span class="o">=</span> <span class="n">CircuitIR</span><span class="p">()</span>
     <span class="n">circuit_names</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">param_keys</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">names</span>
-    <span class="n">results_indices</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">idx</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results_indices</span><span class="p">:</span>
-            <span class="n">results_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-            <span class="n">new_params</span> <span class="o">=</span> <span class="p">{}</span>
-            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">param_keys</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">param_grid</span><span class="p">:</span>
-                    <span class="n">new_params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
-            <span class="n">circuit_tmp</span> <span class="o">=</span> <span class="n">circuit_template</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span>
-            <span class="n">circuit_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;</span><span class="si">{circuit_tmp.label}</span><span class="s1">_</span><span class="si">{i}</span><span class="s1">&#39;</span><span class="p">)</span>
-            <span class="n">circuit_tmp</span> <span class="o">=</span> <span class="n">adapt_circuit</span><span class="p">(</span><span class="n">circuit_tmp</span><span class="p">,</span> <span class="n">new_params</span><span class="p">,</span> <span class="n">param_map</span><span class="p">)</span>
-            <span class="n">circuit</span><span class="o">.</span><span class="n">add_circuit</span><span class="p">(</span><span class="n">circuit_names</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">circuit_tmp</span><span class="p">)</span>
-            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">param_grid</span><span class="o">.</span><span class="n">index</span><span class="p">:</span>
+        <span class="n">new_params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">param_keys</span><span class="p">:</span>
+            <span class="n">new_params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">param_grid</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">idx</span><span class="p">]</span>
+        <span class="n">circuit_tmp</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">circuit_template</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span>
+        <span class="n">circuit_key</span> <span class="o">=</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{circuit_tmp.label}</span><span class="s1">_</span><span class="si">{idx}</span><span class="s1">&#39;</span>
+        <span class="n">circuit_tmp</span> <span class="o">=</span> <span class="n">adapt_circuit</span><span class="p">(</span><span class="n">circuit_tmp</span><span class="p">,</span> <span class="n">new_params</span><span class="p">,</span> <span class="n">param_map</span><span class="p">)</span>
+        <span class="n">circuit</span><span class="o">.</span><span class="n">add_circuit</span><span class="p">(</span><span class="n">circuit_key</span><span class="p">,</span> <span class="n">circuit_tmp</span><span class="p">)</span>
+        <span class="n">circuit_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">circuit_key</span><span class="p">)</span>
+    <span class="n">param_grid</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">circuit_names</span>
 
     <span class="c1"># create backend graph</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">init_kwargs</span><span class="p">:</span>
-        <span class="n">init_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="n">vectorization</span> <span class="o">=</span> <span class="n">init_kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;vectorization&#39;</span><span class="p">,</span> <span class="s1">&#39;nodes&#39;</span><span class="p">)</span>
-    <span class="n">net</span> <span class="o">=</span> <span class="n">ComputeGraph</span><span class="p">(</span><span class="n">circuit</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span> <span class="n">vectorization</span><span class="o">=</span><span class="n">vectorization</span><span class="p">,</span> <span class="o">**</span><span class="n">init_kwargs</span><span class="p">)</span>
+    <span class="n">net</span> <span class="o">=</span> <span class="n">circuit</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span> <span class="n">vectorization</span><span class="o">=</span><span class="n">vectorization</span><span class="p">,</span> <span class="o">**</span><span class="n">init_kwargs</span><span class="p">)</span>
 
     <span class="c1"># adjust input of simulation to combined network</span>
-    <span class="k">for</span> <span class="n">inp_key</span><span class="p">,</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">inputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="n">inputs</span><span class="p">[</span><span class="n">inp_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">circuit_names</span><span class="p">)))</span>
+    <span class="k">for</span> <span class="n">inp_key</span><span class="p">,</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">inputs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">inputs</span><span class="p">[</span><span class="n">f</span><span class="s2">&quot;all/</span><span class="si">{inp_key}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">N</span><span class="p">))</span>
+        <span class="n">inputs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">inp_key</span><span class="p">)</span>
 
     <span class="c1"># adjust output of simulation to combined network</span>
-    <span class="n">nodes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">circuit_template</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
-    <span class="n">out_nodes</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">out_key</span> <span class="ow">in</span> <span class="n">out_names</span><span class="p">:</span>
-        <span class="n">out</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">out_key</span><span class="p">)</span>
-        <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
-        <span class="n">out_nodes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-        <span class="n">node</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">])</span>
-        <span class="k">if</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
-            <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">out</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-            <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-            <span class="n">outputs</span><span class="p">[</span><span class="n">out_key</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">((</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">out_key</span><span class="p">,</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">outputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">outputs</span><span class="p">[</span><span class="n">out_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;all/</span><span class="si">{out}</span><span class="s2">&quot;</span>
 
     <span class="c1"># simulate the circuits behavior</span>
     <span class="n">results</span> <span class="o">=</span> <span class="n">net</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">simulation_time</span><span class="o">=</span><span class="n">simulation_time</span><span class="p">,</span>
@@ -208,20 +190,11 @@
                       <span class="n">sampling_step_size</span><span class="o">=</span><span class="n">sampling_step_size</span><span class="p">,</span>
                       <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>    <span class="c1"># type: pd.DataFrame</span>
     <span class="k">if</span> <span class="s1">&#39;profile&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
-        <span class="n">results</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">memory</span> <span class="o">=</span> <span class="n">results</span>
-
-    <span class="c1"># transform results into long-form dataframe with changed parameters as columns</span>
-    <span class="n">results_final</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">index</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">values</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="n">results</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">out_name</span><span class="p">,</span> <span class="n">out_info</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">out_names</span><span class="p">,</span> <span class="n">out_nodes</span><span class="p">):</span>
-        <span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">out_info</span>
-        <span class="k">for</span> <span class="n">node_name</span><span class="p">,</span> <span class="n">params</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">circuit_names</span><span class="p">,</span> <span class="n">results_indices</span><span class="p">):</span>
-            <span class="n">key</span> <span class="o">=</span> <span class="n">params</span> <span class="o">+</span> <span class="p">(</span><span class="n">out_name</span><span class="p">,)</span>
-            <span class="n">idx</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">get_var</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{node_name}</span><span class="s2">/</span><span class="si">{node}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">retrieve</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
-            <span class="n">results_final</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="n">out_name</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="n">idx</span><span class="p">]</span>
+        <span class="n">results</span><span class="p">,</span> <span class="n">duration</span> <span class="o">=</span> <span class="n">results</span>
 
     <span class="k">if</span> <span class="s1">&#39;profile&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">results_final</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">memory</span>
-    <span class="k">return</span> <span class="n">results_final</span></div>
+        <span class="k">return</span> <span class="n">results</span><span class="p">,</span> <span class="n">param_grid</span><span class="p">,</span> <span class="n">duration</span>
+    <span class="k">return</span> <span class="n">results</span><span class="p">,</span> <span class="n">param_grid</span></div>
 
 
 <div class="viewcode-block" id="ClusterCompute"><a class="viewcode-back" href="../../../pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute">[docs]</a><span class="k">class</span> <span class="nc">ClusterCompute</span><span class="p">:</span>
@@ -459,6 +432,7 @@
 <span class="sd">            Is None if connection fails. For detailed information of the thrown exception see Paramiko documentation</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">paramiko</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">SSHClient</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="c1"># Using kerberos authentication</span>
@@ -557,6 +531,7 @@
 <span class="sd">            .hdf5 file containing the computation results as DataFrame in dataset &#39;/Results/...&#39;</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
+        <span class="kn">import</span> <span class="nn">h5py</span>
         <span class="n">t_total</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -747,6 +722,9 @@
 <span class="sd">        -------</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="kn">import</span> <span class="nn">paramiko</span>
+
         <span class="n">thread_name</span> <span class="o">=</span> <span class="n">currentThread</span><span class="p">()</span><span class="o">.</span><span class="n">getName</span><span class="p">()</span>
         <span class="n">connection_lost</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="n">connection_lost_counter</span> <span class="o">=</span> <span class="mi">0</span>
@@ -1113,18 +1091,35 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+
         <span class="n">val</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
-        <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s1">&#39;var&#39;</span><span class="p">]:</span>
+
+        <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s1">&#39;vars&#39;</span><span class="p">]:</span>
+
+            <span class="c1"># change variable values on nodes</span>
             <span class="n">nodes</span> <span class="o">=</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s1">&#39;nodes&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;nodes&#39;</span> <span class="ow">in</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">else</span> <span class="p">[]</span>
-            <span class="n">edges</span> <span class="o">=</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s1">&#39;edges&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;edges&#39;</span> <span class="ow">in</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">else</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">node</span><span class="p">][</span><span class="s1">&#39;node&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
-                    <span class="n">circuit</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">node</span><span class="p">][</span><span class="s1">&#39;node&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;variables&#39;</span><span class="p">][</span><span class="n">var</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">]:</span>
-                    <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">][</span><span class="n">op</span><span class="p">][</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">]:</span>
-                    <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">][</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+                <span class="k">if</span> <span class="s2">&quot;/&quot;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+                    <span class="n">op</span><span class="p">,</span> <span class="n">var_name</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">circuit</span><span class="p">[</span><span class="n">node</span><span class="p">]:</span>
+                        <span class="n">circuit</span><span class="p">[</span><span class="n">node</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="n">var_name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">circuit</span><span class="p">[</span><span class="n">node</span><span class="p">]:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">circuit</span><span class="p">[</span><span class="n">node</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+                        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                            <span class="k">pass</span>
+
+            <span class="c1"># change variable values on edges</span>
+            <span class="n">edges</span> <span class="o">=</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s1">&#39;edges&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;edges&#39;</span> <span class="ow">in</span> <span class="n">param_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">else</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="n">edges</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">edges</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="mi">0</span><span class="p">]:</span>
+                        <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="mi">0</span><span class="p">][</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">]:</span>
+                        <span class="n">circuit</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">edge</span><span class="p">][</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">circuit</span></div>
 

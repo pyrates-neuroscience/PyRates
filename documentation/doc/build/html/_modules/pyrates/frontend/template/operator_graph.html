@@ -67,7 +67,7 @@
 <span class="c1"># CITATION:</span>
 <span class="c1"># </span>
 <span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Type</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Dict</span>
 
 <span class="kn">from</span> <span class="nn">pyrates</span> <span class="k">import</span> <span class="n">PyRatesException</span>
 <span class="kn">from</span> <span class="nn">pyrates.frontend.template.abc</span> <span class="k">import</span> <span class="n">AbstractBaseTemplate</span>
@@ -76,7 +76,7 @@
 
 
 <div class="viewcode-block" id="OperatorGraphTemplate"><a class="viewcode-back" href="../../../../pyrates.frontend.template.html#pyrates.frontend.template.operator_graph.OperatorGraphTemplate">[docs]</a><span class="k">class</span> <span class="nc">OperatorGraphTemplate</span><span class="p">(</span><span class="n">AbstractBaseTemplate</span><span class="p">):</span>
-    <span class="n">target_ir</span> <span class="o">=</span> <span class="n">OperatorGraph</span>
+    <span class="n">target_ir</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">dict</span><span class="p">],</span>
                  <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;A node or an edge.&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
@@ -155,18 +155,20 @@
                 <span class="n">value_updates</span><span class="p">[</span><span class="n">op_name</span><span class="p">][</span><span class="n">var_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
 
         <span class="n">operators</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">all_values</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># # type: Dict[OperatorIR, Dict]</span>
 
         <span class="k">for</span> <span class="n">template</span><span class="p">,</span> <span class="n">variations</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">operators</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">values_to_update</span> <span class="o">=</span> <span class="n">variations</span>
 
             <span class="k">if</span> <span class="n">values_to_update</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">values_to_update</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="c1"># if a value for this particular variation has been passed, overwrite the previous value</span>
             <span class="k">if</span> <span class="n">template</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">value_updates</span><span class="p">:</span>
                 <span class="n">values_to_update</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">value_updates</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">template</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
-            <span class="n">op_instance</span><span class="p">,</span> <span class="n">op_variables</span><span class="p">,</span> <span class="n">key</span> <span class="o">=</span> <span class="n">template</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">return_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-                                                            <span class="n">values</span><span class="o">=</span><span class="n">values_to_update</span><span class="p">)</span>
-            <span class="n">operators</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;operator&quot;</span><span class="p">:</span> <span class="n">op_instance</span><span class="p">,</span>
-                              <span class="s2">&quot;variables&quot;</span><span class="p">:</span> <span class="n">op_variables</span><span class="p">}</span>
+            <span class="c1"># apply operator tempalte to get OperatorIR and associated default values and label</span>
+            <span class="n">operator</span><span class="p">,</span> <span class="n">op_values</span><span class="p">,</span> <span class="n">key</span> <span class="o">=</span> <span class="n">template</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">return_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">values_to_update</span><span class="p">)</span>
+            <span class="n">operators</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">operator</span>
+            <span class="n">all_values</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">op_values</span>
 
         <span class="c1"># fail gracefully, if any variables remain in `values` which means, that there is some typo</span>
         <span class="k">if</span> <span class="n">value_updates</span><span class="p">:</span>
@@ -174,7 +176,7 @@
                 <span class="s2">&quot;Found value updates that did not fit any operator by name. This may be due to a &quot;</span>
                 <span class="s2">&quot;typo in specifying the operator or variable to update. Remaining variables:&quot;</span>
                 <span class="n">f</span><span class="s2">&quot;</span><span class="si">{value_updates}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_ir</span><span class="p">(</span><span class="n">operators</span><span class="o">=</span><span class="n">operators</span><span class="p">,</span> <span class="n">template</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">)</span></div></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_ir</span><span class="p">(</span><span class="n">operators</span><span class="o">=</span><span class="n">operators</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">all_values</span><span class="p">,</span> <span class="n">template</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">)</span></div></div>
 
 
 <span class="k">def</span> <span class="nf">_update_operators</span><span class="p">(</span><span class="n">base_operators</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">updates</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">dict</span><span class="p">]):</span>

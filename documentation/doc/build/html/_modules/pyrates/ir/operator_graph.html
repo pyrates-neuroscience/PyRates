@@ -68,58 +68,97 @@
 <span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span><span class="p">,</span> <span class="n">copy</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">_np</span>
 <span class="kn">from</span> <span class="nn">networkx</span> <span class="k">import</span> <span class="n">DiGraph</span><span class="p">,</span> <span class="n">find_cycle</span><span class="p">,</span> <span class="n">NetworkXNoCycle</span>
 
 <span class="kn">from</span> <span class="nn">pyrates</span> <span class="k">import</span> <span class="n">PyRatesException</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.operator</span> <span class="k">import</span> <span class="n">OperatorIR</span>
 
 <span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
 
+<span class="c1"># define cache for OperatorGraph instances</span>
 
-<div class="viewcode-block" id="OperatorGraph"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator_graph.OperatorGraph">[docs]</a><span class="k">class</span> <span class="nc">OperatorGraph</span><span class="p">(</span><span class="n">DiGraph</span><span class="p">):</span>
+<span class="n">op_graph_cache</span> <span class="o">=</span> <span class="p">{}</span>
+
+
+<span class="k">def</span> <span class="nf">_cache_op_graph</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Cache unique instances of operator graphs and return the instance. If hash of Operator graph is not known yet,</span>
+<span class="sd">    a new instance will be created. Otherwise, an instance from cash will be returned.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">cache_func</span><span class="p">(</span><span class="n">operators</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">OperatorIR</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">operators</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">operators</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="c1"># compute hash from incoming operators. Different order of operators in input might lead to different hash.</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">operators</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">op_graph</span> <span class="o">=</span> <span class="n">op_graph_cache</span><span class="p">[</span><span class="n">h</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="n">op_graph</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">operators</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+            <span class="c1"># test, if hash computation leads to same result</span>
+            <span class="k">assert</span> <span class="n">h</span> <span class="o">==</span> <span class="nb">hash</span><span class="p">(</span><span class="n">op_graph</span><span class="p">)</span>
+            <span class="n">op_graph_cache</span><span class="p">[</span><span class="n">h</span><span class="p">]</span> <span class="o">=</span> <span class="n">op_graph</span>
+
+        <span class="k">return</span> <span class="n">op_graph</span>
+
+    <span class="k">return</span> <span class="n">cache_func</span>
+
+
+<div class="viewcode-block" id="OperatorGraph"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.OperatorGraph">[docs]</a><span class="nd">@_cache_op_graph</span>
+<span class="k">class</span> <span class="nc">OperatorGraph</span><span class="p">(</span><span class="n">DiGraph</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Intermediate representation for nodes and edges.&quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">OperatorIR</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
 
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">operators</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">operators</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">operators</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="n">all_outputs</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># type: Dict[str, dict]</span>
+
+        <span class="c1"># compute hash from incoming operators. Different order of operators in input might lead to different hash.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_h</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">operators</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+        <span class="c1"># collect all information about output variables of operators</span>
+        <span class="c1">#############################################################</span>
+        <span class="n">all_outputs</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># type: Dict[str, List[str]]</span>
         <span class="c1"># op_inputs, op_outputs = set(), set()</span>
-
-        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">operators</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-
-            <span class="n">op_instance</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span>
-            <span class="n">op_variables</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;variables&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">operator</span> <span class="ow">in</span> <span class="n">operators</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 
             <span class="c1"># add operator as node to local operator_graph</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">operator</span><span class="o">=</span><span class="n">op_instance</span><span class="p">,</span> <span class="n">variables</span><span class="o">=</span><span class="n">op_variables</span><span class="p">)</span>
+            <span class="n">inputs</span> <span class="o">=</span> <span class="p">{</span><span class="n">var</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">sources</span><span class="o">=</span><span class="nb">set</span><span class="p">(),</span> <span class="n">reduce_dim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">operator</span><span class="o">.</span><span class="n">inputs</span><span class="p">}</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">operator</span><span class="o">=</span><span class="n">operator</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">key</span><span class="p">)</span>
 
             <span class="c1"># collect all output variables</span>
-            <span class="n">out_var</span> <span class="o">=</span> <span class="n">op_instance</span><span class="o">.</span><span class="n">output</span>
+            <span class="n">out_var</span> <span class="o">=</span> <span class="n">operator</span><span class="o">.</span><span class="n">output</span>
 
             <span class="c1"># check, if variable name exists in outputs and create empty list if it doesn&#39;t</span>
             <span class="k">if</span> <span class="n">out_var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">all_outputs</span><span class="p">:</span>
-                <span class="n">all_outputs</span><span class="p">[</span><span class="n">out_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="n">all_outputs</span><span class="p">[</span><span class="n">out_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
 
-            <span class="n">all_outputs</span><span class="p">[</span><span class="n">out_var</span><span class="p">][</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">out_var</span>
-            <span class="c1"># this assumes input and output variables map on each other by equal name</span>
-            <span class="c1"># with additional information, non-equal names could also be mapped here</span>
+            <span class="n">all_outputs</span><span class="p">[</span><span class="n">out_var</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
 
         <span class="c1"># link outputs to inputs</span>
-        <span class="k">for</span> <span class="n">op_key</span><span class="p">,</span> <span class="n">op</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">operators</span><span class="p">(</span><span class="n">get_ops</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="c1">########################</span>
+        <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">op</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">in_var</span> <span class="ow">in</span> <span class="n">op</span><span class="o">.</span><span class="n">inputs</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">in_var</span> <span class="ow">in</span> <span class="n">all_outputs</span><span class="p">:</span>
                     <span class="c1"># link all collected outputs of given variable in inputs field of operator</span>
-                    <span class="k">for</span> <span class="n">predecessor</span><span class="p">,</span> <span class="n">out_var</span> <span class="ow">in</span> <span class="n">all_outputs</span><span class="p">[</span><span class="n">in_var</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">for</span> <span class="n">predecessor</span> <span class="ow">in</span> <span class="n">all_outputs</span><span class="p">[</span><span class="n">in_var</span><span class="p">]:</span>
                         <span class="c1"># add predecessor output as source; this would also work for non-equal variable names</span>
-                        <span class="k">if</span> <span class="n">predecessor</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">op</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="n">in_var</span><span class="p">][</span><span class="s2">&quot;sources&quot;</span><span class="p">]:</span>
-                            <span class="n">op</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="n">in_var</span><span class="p">][</span><span class="s2">&quot;sources&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">predecessor</span><span class="p">)</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">predecessor</span><span class="p">,</span> <span class="n">op_key</span><span class="p">)</span>
+                        <span class="n">data</span><span class="p">[</span><span class="s2">&quot;inputs&quot;</span><span class="p">][</span><span class="n">in_var</span><span class="p">][</span><span class="s2">&quot;sources&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">predecessor</span><span class="p">)</span>
+                        <span class="c1"># adding into set means there will be no order, but also nothing can be added twice</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">predecessor</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">pass</span>  <span class="c1"># means, that &#39;source&#39; will remain an empty list and no incoming edge will be added</span>
 
+        <span class="c1"># check for cycle in operator graph</span>
+        <span class="c1">###################################</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">find_cycle</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">NetworkXNoCycle</span><span class="p">:</span>
@@ -128,7 +167,10 @@
             <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="s2">&quot;Found cyclic operator graph. Cycles are not allowed for operators within one node &quot;</span>
                                    <span class="s2">&quot;or edge.&quot;</span><span class="p">)</span>
 
-<div class="viewcode-block" id="OperatorGraph.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator_graph.OperatorGraph.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_h</span>
+
+    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If `key_iter`</span>
 <span class="sd">        contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of</span>
@@ -152,25 +194,149 @@
             <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="c1"># variable specified, so we return variable properties instead</span>
+            <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">item</span>
+
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return an iterator containing all operator labels in the operator graph.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">operators</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">get_ops</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">get_vals</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Alias for self.nodes&quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">get_ops</span> <span class="ow">and</span> <span class="n">get_vals</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">op</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">])</span> <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">get_ops</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">op</span><span class="p">)</span> <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">get_vals</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">])</span> <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span></div>
+
+
+<div class="viewcode-block" id="VectorizedOperatorGraph"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph">[docs]</a><span class="k">class</span> <span class="nc">VectorizedOperatorGraph</span><span class="p">(</span><span class="n">DiGraph</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Alternate version of `OperatorGraph` that is produced during vectorization. Contents of this version are not</span>
+<span class="sd">    particularly protected and the instance is not cached.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op_graph</span><span class="p">:</span> <span class="n">OperatorGraph</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">op_graph</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="c1"># elif len(op_graph) == 0:</span>
+        <span class="c1">#     self.add_node(&quot;identity_operator&quot;,</span>
+        <span class="c1">#                   inputs=dict(in_var=dict(source=set(),</span>
+        <span class="c1">#                                           reduce_dim=True)),</span>
+        <span class="c1">#                   equations=[&quot;out_var = in_var&quot;],</span>
+        <span class="c1">#                   variables=dict(in_var=dict(dtype=&quot;float32&quot;,</span>
+        <span class="c1">#                                              vtype=&quot;state_var&quot;,</span>
+        <span class="c1">#                                              shape=(1,)),</span>
+        <span class="c1">#                                  out_var=dict(dtype=&quot;float32&quot;,</span>
+        <span class="c1">#                                               vtype=&quot;state_var&quot;,</span>
+        <span class="c1">#                                               shape=(1,))),</span>
+        <span class="c1">#                   output=&quot;out_var&quot;)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">op_key</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">op_graph</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">op</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span>
+                <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                    <span class="c1"># need to add this for the copy capability</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">add_operator</span><span class="p">(</span><span class="n">op_key</span><span class="p">,</span> <span class="o">**</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">add_operator</span><span class="p">(</span><span class="n">op_key</span><span class="p">,</span>
+                                      <span class="n">inputs</span><span class="o">=</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;inputs&quot;</span><span class="p">]),</span>
+                                      <span class="n">equations</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">equations</span><span class="p">),</span>
+                                      <span class="n">variables</span><span class="o">=</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">variables</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()),</span>
+                                      <span class="n">output</span><span class="o">=</span><span class="n">op</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+
+                <span class="c1"># retrieve values from value dict and pass them into variable dictionary of operator</span>
+                <span class="n">op_values</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">op_key</span><span class="p">])</span>
+                <span class="n">op_vars</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">operators</span><span class="p">[</span><span class="n">op_key</span><span class="p">][</span><span class="s2">&quot;variables&quot;</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">var_key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">op_values</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="n">op_vars</span><span class="p">[</span><span class="n">var_key</span><span class="p">][</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">value</span><span class="p">]</span>
+                <span class="c1"># self.operators[op_key][&quot;variables&quot;] = op_vars</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">(</span><span class="n">op_graph</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span>
+
+<div class="viewcode-block" id="VectorizedOperatorGraph.add_operator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.add_operator">[docs]</a>    <span class="k">def</span> <span class="nf">add_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Alias for `self.add_node`&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="VectorizedOperatorGraph.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If `key_iter`</span>
+<span class="sd">        contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of</span>
+<span class="sd">        a variable that belong to an operator is returned.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        key</span>
+<span class="sd">        key_iter</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        item</span>
+<span class="sd">            operator or variable properties</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">key_iter</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">StopIteration</span><span class="p">:</span>
+            <span class="c1"># no variable specified, so we return an operator</span>
+            <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># variable specified, so we return variable properties instead</span>
             <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s2">&quot;variables&quot;</span><span class="p">][</span><span class="n">var</span><span class="p">]</span>
 
         <span class="k">return</span> <span class="n">item</span></div>
 
-    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Return an iterator containing all operator labels in the operator graph.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
-
-<div class="viewcode-block" id="OperatorGraph.operators"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator_graph.OperatorGraph.operators">[docs]</a>    <span class="k">def</span> <span class="nf">operators</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">get_ops</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">get_vars</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">operators</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c1"># , get_ops=False, get_vals=False):</span>
         <span class="sd">&quot;&quot;&quot;Alias for self.nodes&quot;&quot;&quot;</span>
 
-        <span class="k">if</span> <span class="n">get_ops</span> <span class="ow">and</span> <span class="n">get_vars</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;variables&quot;</span><span class="p">])</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-        <span class="k">elif</span> <span class="n">get_ops</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">])</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-        <span class="k">elif</span> <span class="n">get_vars</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;variables&quot;</span><span class="p">])</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span></div></div>
+        <span class="c1"># if get_ops and get_vals:</span>
+        <span class="c1">#     return ((data[&quot;label&quot;], op, data[&quot;values&quot;]) for op, data in self.nodes(data=True))</span>
+        <span class="c1"># elif get_ops:</span>
+        <span class="c1">#     return ((data[&quot;label&quot;], op) for op, data in self.nodes(data=True))</span>
+        <span class="c1"># elif get_vals:</span>
+        <span class="c1">#     return ((data[&quot;label&quot;], data[&quot;values&quot;]) for op, data in self.nodes(data=True))</span>
+        <span class="c1"># else:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span>
+
+<div class="viewcode-block" id="VectorizedOperatorGraph.append_values"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.append_values">[docs]</a>    <span class="k">def</span> <span class="nf">append_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Append value along vector dimension of operators.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        value_dict</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">for</span> <span class="n">op_key</span><span class="p">,</span> <span class="n">variables_updates</span> <span class="ow">in</span> <span class="n">value_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">original_variables</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">op_key</span><span class="p">][</span><span class="s2">&quot;variables&quot;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">var_key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">variables_updates</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">original_variables</span><span class="p">[</span><span class="n">var_key</span><span class="p">]</span>
+                <span class="n">shape</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="n">shape_sum</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">shape_sum</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">_np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">shape</span> <span class="o">==</span> <span class="n">_np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">])[</span><span class="mi">1</span><span class="p">:]):</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Inconsistent dimensions of variable </span><span class="si">{var}</span><span class="s2">. Dimension of value to add: &quot;</span>
+                                         <span class="n">f</span><span class="s2">&quot;</span><span class="si">{shape}</span><span class="s2"> Internal dimension of vectorized value array: &quot;</span>
+                                         <span class="n">f</span><span class="s2">&quot;{_np.shape(var[&#39;value&#39;])[1:]}&quot;</span><span class="p">)</span>
+                    <span class="n">var</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">shape_sum</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="c1"># case, if shape == ()</span>
+                    <span class="n">var</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">var</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+                <span class="c1"># also recompute shape</span>
+                <span class="n">var</span><span class="p">[</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">])</span></div></div>
 </pre></div>
 
           </div>

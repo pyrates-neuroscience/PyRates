@@ -192,6 +192,19 @@ param_grid.</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="pyrates.utility.data_analysis.fft">
+<code class="sig-prename descclassname">pyrates.utility.data_analysis.</code><code class="sig-name descname">fft</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">tmin=0.0</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/utility/data_analysis.html#fft"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.data_analysis.fft" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – </p></li>
+<li><p><strong>tmin</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
 <dt id="pyrates.utility.data_analysis.functional_connectivity">
 <code class="sig-prename descclassname">pyrates.utility.data_analysis.</code><code class="sig-name descname">functional_connectivity</code><span class="sig-paren">(</span><em class="sig-param">data: pandas.core.frame.DataFrame</em>, <em class="sig-param">metric: str = 'cov'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="reference internal" href="_modules/pyrates/utility/data_analysis.html#functional_connectivity"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.data_analysis.functional_connectivity" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calculate functional connectivity of node timeseries in data.</p>
@@ -253,6 +266,21 @@ param_grid.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.utility.data_analysis.welch">
+<code class="sig-prename descclassname">pyrates.utility.data_analysis.</code><code class="sig-name descname">welch</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">tmin=0.0</em>, <em class="sig-param">tmax=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/utility/data_analysis.html#welch"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.data_analysis.welch" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – </p></li>
+<li><p><strong>tmin</strong> – </p></li>
+<li><p><strong>tmax</strong> – </p></li>
+<li><p><strong>kwargs</strong> – </p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -972,7 +1000,7 @@ result file</p></li>
 
 <dl class="function">
 <dt id="pyrates.utility.grid_search.grid_search">
-<code class="sig-prename descclassname">pyrates.utility.grid_search.</code><code class="sig-name descname">grid_search</code><span class="sig-paren">(</span><em class="sig-param">circuit_template: Union[pyrates.frontend.template.circuit.circuit.CircuitTemplate, str], param_grid: Union[dict, pandas.core.frame.DataFrame], param_map: dict, dt: float, simulation_time: float, inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None, permute_grid: bool = False, init_kwargs: dict = None, **kwargs</em><span class="sig-paren">)</span> &#x2192; pandas.core.frame.DataFrame<a class="reference internal" href="_modules/pyrates/utility/grid_search.html#grid_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.grid_search.grid_search" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">pyrates.utility.grid_search.</code><code class="sig-name descname">grid_search</code><span class="sig-paren">(</span><em class="sig-param">circuit_template: Union[pyrates.frontend.template.circuit.circuit.CircuitTemplate, str], param_grid: Union[dict, pandas.core.frame.DataFrame], param_map: dict, dt: float, simulation_time: float, inputs: dict, outputs: dict, sampling_step_size: Optional[float] = None, permute_grid: bool = False, init_kwargs: dict = None, **kwargs</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/utility/grid_search.html#grid_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.grid_search.grid_search" title="Permalink to this definition">¶</a></dt>
 <dd><p>Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -991,11 +1019,11 @@ will be traversed pairwise.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Simulation results stored in a multi-index data frame where each index lvl refers to one of the parameters of
-param_grid.</p>
+<dd class="field-even"><p>Simulation results stored in a multi-index data frame, the mapping between the data frame column names and the
+parameter grid, the simulation time, and the memory consumption.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>pd.DataFrame</p>
+<dd class="field-odd"><p>tuple</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1027,7 +1055,7 @@ param_grid.</p>
 objects.</p>
 <dl class="function">
 <dt id="pyrates.utility.mne_wrapper.mne_from_csv">
-<code class="sig-prename descclassname">pyrates.utility.mne_wrapper.</code><code class="sig-name descname">mne_from_csv</code><span class="sig-paren">(</span><em class="sig-param">csv_dir: str, ch_types: Union[str, List[str]] = 'eeg', ch_names: Union[str, List[str], None] = None, events: Optional[numpy.ndarray] = None, event_keys: Optional[List[str]] = None, epoch_start: Optional[float] = None, epoch_end: Optional[float] = None, epoch_duration: Optional[float] = None, epoch_averaging: bool = False</em><span class="sig-paren">)</span> &#x2192; Union[mne.io.fiff.raw.Raw, mne.epochs.Epochs, mne.evoked.Evoked]<a class="reference internal" href="_modules/pyrates/utility/mne_wrapper.html#mne_from_csv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.mne_wrapper.mne_from_csv" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">pyrates.utility.mne_wrapper.</code><code class="sig-name descname">mne_from_csv</code><span class="sig-paren">(</span><em class="sig-param">csv_dir: str, ch_types: Union[str, List[str]] = 'eeg', ch_names: Union[str, List[str], None] = None, events: Optional[numpy.ndarray] = None, event_keys: Optional[List[str]] = None, epoch_start: Optional[float] = None, epoch_end: Optional[float] = None, epoch_duration: Optional[float] = None, epoch_averaging: bool = False</em><span class="sig-paren">)</span> &#x2192; Any<a class="reference internal" href="_modules/pyrates/utility/mne_wrapper.html#mne_from_csv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.mne_wrapper.mne_from_csv" title="Permalink to this definition">¶</a></dt>
 <dd><p>Uses the data stored on circuit to create a raw/epoch/evoked mne object.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1055,14 +1083,14 @@ be returned that contains ttime-series averaged over all epochs.</p></li>
 <dd class="field-even"><p>MNE object that contains either the raw, epoched, or averaged (over epochs) data.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Union[mne.io.Raw, mne.Epochs, mne.Evoked]</p>
+<dd class="field-odd"><p>Any</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="function">
 <dt id="pyrates.utility.mne_wrapper.mne_from_dataframe">
-<code class="sig-prename descclassname">pyrates.utility.mne_wrapper.</code><code class="sig-name descname">mne_from_dataframe</code><span class="sig-paren">(</span><em class="sig-param">sim_results: pandas.core.frame.DataFrame, ch_types: Union[str, List[str]] = 'eeg', ch_names: Union[str, List[str], None] = None, events: Optional[numpy.ndarray] = None, event_keys: Optional[List[str]] = None, epoch_start: Optional[float] = None, epoch_end: Optional[float] = None, epoch_duration: Optional[float] = None, epoch_averaging: bool = False</em><span class="sig-paren">)</span> &#x2192; Union[mne.io.fiff.raw.Raw, mne.epochs.Epochs, mne.evoked.Evoked]<a class="reference internal" href="_modules/pyrates/utility/mne_wrapper.html#mne_from_dataframe"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.mne_wrapper.mne_from_dataframe" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">pyrates.utility.mne_wrapper.</code><code class="sig-name descname">mne_from_dataframe</code><span class="sig-paren">(</span><em class="sig-param">sim_results: pandas.core.frame.DataFrame, ch_types: Union[str, List[str]] = 'eeg', ch_names: Union[str, List[str], None] = None, events: Optional[numpy.ndarray] = None, event_keys: Optional[List[str]] = None, epoch_start: Optional[float] = None, epoch_end: Optional[float] = None, epoch_duration: Optional[float] = None, epoch_averaging: bool = False</em><span class="sig-paren">)</span> &#x2192; Any<a class="reference internal" href="_modules/pyrates/utility/mne_wrapper.html#mne_from_dataframe"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.mne_wrapper.mne_from_dataframe" title="Permalink to this definition">¶</a></dt>
 <dd><p>Uses the data stored on a circuit to create a raw/epoch/evoked mne object.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1089,7 +1117,7 @@ be returned that contains ttime-series averaged over all epochs.</p></li>
 <dd class="field-even"><p>MNE object that contains either the raw, epoched, or averaged (over epochs) data.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Union[mne.io.Raw, mne.Epochs, mne.Evoked]</p>
+<dd class="field-odd"><p>Any</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1100,7 +1128,7 @@ be returned that contains ttime-series averaged over all epochs.</p></li>
 <p>Visualization functionality for pyrates networks and backend simulations.</p>
 <dl class="class">
 <dt id="pyrates.utility.visualization.Interactive2DParamPlot">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.utility.visualization.</code><code class="sig-name descname">Interactive2DParamPlot</code><span class="sig-paren">(</span><em class="sig-param">data_map: numpy.core.multiarray.array</em>, <em class="sig-param">data_series: pandas.core.frame.DataFrame</em>, <em class="sig-param">x_values: numpy.core.multiarray.array</em>, <em class="sig-param">y_values: numpy.core.multiarray.array</em>, <em class="sig-param">tmin=0.0</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/utility/visualization.html#Interactive2DParamPlot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.visualization.Interactive2DParamPlot" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.utility.visualization.</code><code class="sig-name descname">Interactive2DParamPlot</code><span class="sig-paren">(</span><em class="sig-param">data_map: numpy.array</em>, <em class="sig-param">data_series: pandas.core.frame.DataFrame</em>, <em class="sig-param">x_values: numpy.array</em>, <em class="sig-param">y_values: numpy.array</em>, <em class="sig-param">tmin=0.0</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/utility/visualization.html#Interactive2DParamPlot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.visualization.Interactive2DParamPlot" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <dl class="method">
 <dt id="pyrates.utility.visualization.Interactive2DParamPlot.get_data">
@@ -1245,7 +1273,7 @@ their arguments (can be passed to kwargs).</p>
 
 <dl class="function">
 <dt id="pyrates.utility.visualization.plot_phase">
-<code class="sig-prename descclassname">pyrates.utility.visualization.</code><code class="sig-name descname">plot_phase</code><span class="sig-paren">(</span><em class="sig-param">data: pandas.core.frame.DataFrame</em>, <em class="sig-param">bg_style: str = 'whitegrid'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; seaborn.axisgrid.FacetGrid<a class="reference internal" href="_modules/pyrates/utility/visualization.html#plot_phase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.visualization.plot_phase" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">pyrates.utility.visualization.</code><code class="sig-name descname">plot_phase</code><span class="sig-paren">(</span><em class="sig-param">data: pandas.core.frame.DataFrame</em>, <em class="sig-param">bg_style: str = 'whitegrid'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/utility/visualization.html#plot_phase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.utility.visualization.plot_phase" title="Permalink to this definition">¶</a></dt>
 <dd><p>Plot phase of populations in a polar plot.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>

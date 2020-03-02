@@ -82,26 +82,42 @@
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
 
 
-<div class="viewcode-block" id="to_node"><a class="viewcode-back" href="../../../pyrates.frontend.html#pyrates.frontend.dict.to_node">[docs]</a><span class="nd">@register_interface</span>
-<span class="k">def</span> <span class="nf">to_node</span><span class="p">(</span><span class="n">node_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
-    <span class="n">operators</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="n">operator_args</span> <span class="o">=</span> <span class="n">node_dict</span><span class="p">[</span><span class="s2">&quot;operator_args&quot;</span><span class="p">]</span>
-
-    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">node_dict</span><span class="p">[</span><span class="s2">&quot;operators&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="n">operators</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;operator&quot;</span><span class="p">:</span> <span class="n">to_operator</span><span class="p">(</span><span class="n">item</span><span class="p">),</span>
-                          <span class="s2">&quot;variables&quot;</span><span class="p">:</span> <span class="p">{}}</span>
-
-    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">operator_args</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="n">op_name</span><span class="p">,</span> <span class="n">var_name</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
-        <span class="n">operators</span><span class="p">[</span><span class="n">op_name</span><span class="p">][</span><span class="s2">&quot;variables&quot;</span><span class="p">][</span><span class="n">var_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">item</span>
-
-    <span class="k">return</span> <span class="n">NodeIR</span><span class="p">(</span><span class="n">operators</span><span class="o">=</span><span class="n">operators</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="to_operator"><a class="viewcode-back" href="../../../pyrates.frontend.html#pyrates.frontend.dict.to_operator">[docs]</a><span class="nd">@register_interface</span>
-<span class="k">def</span> <span class="nf">to_operator</span><span class="p">(</span><span class="n">op_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">OperatorIR</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">op_dict</span><span class="p">[</span><span class="s2">&quot;equations&quot;</span><span class="p">],</span> <span class="n">inputs</span><span class="o">=</span><span class="n">op_dict</span><span class="p">[</span><span class="s2">&quot;inputs&quot;</span><span class="p">],</span> <span class="n">output</span><span class="o">=</span><span class="n">op_dict</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">])</span></div>
-
+<span class="c1"># @register_interface</span>
+<span class="c1"># def to_node(node_dict: dict):</span>
+<span class="c1">#</span>
+<span class="c1">#     order = node_dict[&quot;operator_order&quot;]</span>
+<span class="c1">#     variables = {}</span>
+<span class="c1">#     # collect all information about variables and separate operator and variable keys</span>
+<span class="c1">#     for key, var_dict in node_dict[&quot;operator_args&quot;].items():</span>
+<span class="c1">#         op_key, var_key = key.split(&quot;/&quot;)  # split key as &#39;op_key/var_key&#39;</span>
+<span class="c1">#         if op_key not in variables:</span>
+<span class="c1">#             variables[op_key] = {}</span>
+<span class="c1">#</span>
+<span class="c1">#         variables[op_key][var_key] = var_dict</span>
+<span class="c1">#</span>
+<span class="c1">#     operators = []</span>
+<span class="c1">#     for op_key in order:</span>
+<span class="c1">#         op_dict = node_dict[&quot;operators&quot;][op_key]</span>
+<span class="c1">#         op_dict[&quot;name&quot;] = op_key</span>
+<span class="c1">#         op_dict[&quot;path&quot;] = f&quot;custom/{op_key}&quot;</span>
+<span class="c1">#         op_dict[&quot;variables&quot;] = variables[op_key]</span>
+<span class="c1">#         inputs = op_dict.pop(&quot;inputs&quot;)</span>
+<span class="c1">#         for var in inputs:</span>
+<span class="c1">#             op_dict[&quot;variables&quot;][var][&quot;vtype&quot;] = &quot;input&quot;</span>
+<span class="c1">#         outvar = op_dict.pop(&quot;output&quot;)</span>
+<span class="c1">#         op_dict[&quot;variables&quot;][outvar][&quot;vtype&quot;] = &quot;output&quot;</span>
+<span class="c1">#         operators.append(to_operator(op_dict))</span>
+<span class="c1">#</span>
+<span class="c1">#     return NodeIR(operators=operators)</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1"># @register_interface</span>
+<span class="c1"># def to_operator(op_dict: dict):</span>
+<span class="c1">#     from pyrates.frontend import OperatorTemplate</span>
+<span class="c1">#     template = OperatorTemplate(**op_dict)</span>
+<span class="c1">#</span>
+<span class="c1">#     return template.apply()</span>
+<span class="c1">#</span>
 
 <div class="viewcode-block" id="from_circuit"><a class="viewcode-back" href="../../../pyrates.frontend.html#pyrates.frontend.dict.from_circuit">[docs]</a><span class="nd">@register_interface</span>
 <span class="k">def</span> <span class="nf">from_circuit</span><span class="p">(</span><span class="n">circuit</span><span class="p">:</span> <span class="n">CircuitIR</span><span class="p">):</span>

@@ -73,6 +73,7 @@
 
 <span class="kn">from</span> <span class="nn">pyrates</span> <span class="k">import</span> <span class="n">PyRatesException</span>
 <span class="kn">from</span> <span class="nn">pyrates.ir.node</span> <span class="k">import</span> <span class="n">NodeIR</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.operator</span> <span class="k">import</span> <span class="n">OperatorIR</span>
 
 <span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
@@ -80,9 +81,21 @@
 
 <div class="viewcode-block" id="EdgeIR"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.edge.edge.EdgeIR">[docs]</a><span class="k">class</span> <span class="nc">EdgeIR</span><span class="p">(</span><span class="n">NodeIR</span><span class="p">):</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="nb">dict</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">operators</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">operators</span><span class="p">:</span>
+            <span class="c1"># treat the special case of an empty operator graph</span>
+            <span class="n">operators</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="c1"># operators = dict(identity_operator=OperatorIR(equations=[&quot;out_var = in_var&quot;],</span>
+            <span class="c1">#                                               variables=[(&quot;in_var&quot;, &quot;state_var&quot;, &quot;float32&quot;, (1,)),</span>
+            <span class="c1">#                                                          (&quot;out_var&quot;, &quot;state_var&quot;, &quot;float32&quot;, (1,))],</span>
+            <span class="c1">#                                               inputs=[&quot;in_var&quot;],</span>
+            <span class="c1">#                                               output=&quot;out_var&quot;))</span>
+            <span class="c1"># values = dict(identity_operator=dict(in_var=0.,</span>
+            <span class="c1">#                                      out_var=0.))</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">operators</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">input</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -129,7 +142,10 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">output_var</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
 
 </pre></div>
 

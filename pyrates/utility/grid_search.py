@@ -1404,7 +1404,7 @@ class ClusterWorkerTemplate(object):
         resource_kwargs = {}
         for key in ['cpu_lim', 'memory_lim', 'nproc_lim', 'time_lim']:
             if key in worker_kwargs:
-                resource_kwargs[key] = worker_kwargs[key]
+                resource_kwargs[key] = worker_kwargs.pop(key)
         self._limit_resources(**resource_kwargs)
 
         # LOAD PARAMETER GRID

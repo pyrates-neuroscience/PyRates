@@ -116,7 +116,21 @@
     <span class="k">def</span> <span class="nf">_generate_func</span><span class="p">(</span><span class="n">func_str</span><span class="p">):</span>
         <span class="n">func_dict</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="n">exec</span><span class="p">(</span><span class="n">func_str</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">func_dict</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">func_dict</span></div>
+        <span class="k">return</span> <span class="n">func_dict</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_index</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="n">found</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">found</span> <span class="ow">and</span> <span class="n">idx</span> <span class="o">&lt;</span> <span class="n">n</span><span class="p">:</span>
+            <span class="n">elem</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">elem</span><span class="p">))</span> <span class="o">==</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">y</span><span class="p">)):</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="n">elem</span> <span class="o">==</span> <span class="n">y</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">idx</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">idx</span></div>
 
 
 <div class="viewcode-block" id="TensorflowAssignOp"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowAssignOp">[docs]</a><span class="k">class</span> <span class="nc">TensorflowAssignOp</span><span class="p">(</span><span class="n">PyRatesAssignOp</span><span class="p">):</span>
@@ -276,6 +290,29 @@
 
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
+<div class="viewcode-block" id="TensorflowBackend.get_var"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowBackend.get_var">[docs]</a>    <span class="k">def</span> <span class="nf">get_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve variable from graph.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        name</span>
+<span class="sd">            Identifier of the variable.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        NumpyVar</span>
+<span class="sd">            Variable from graph.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">:&quot;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">e</span></div>
+
 <div class="viewcode-block" id="TensorflowBackend.stack_vars"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowBackend.stack_vars">[docs]</a>    <span class="k">def</span> <span class="nf">stack_vars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">vars</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="n">var_count</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">:</span>
@@ -287,11 +324,14 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;stack&#39;</span><span class="p">,</span> <span class="nb">vars</span><span class="p">)</span></div>
 
     <span class="k">def</span> <span class="nf">_create_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vtype</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">TensorflowVar</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="n">vtype</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">var</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">TensorflowVar</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="n">vtype</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;:&#39;</span> <span class="ow">in</span> <span class="n">name</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">var</span><span class="p">,</span> <span class="n">name</span>
 
     <span class="k">def</span> <span class="nf">_create_op</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">decorator</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">op</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;=&quot;</span><span class="p">,</span> <span class="s2">&quot;+=&quot;</span><span class="p">,</span> <span class="s2">&quot;-=&quot;</span><span class="p">,</span> <span class="s2">&quot;*=&quot;</span><span class="p">,</span> <span class="s2">&quot;/=&quot;</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="s1">&#39;shape&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="ow">and</span> <span class="p">(</span><span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="ow">is</span> <span class="nb">list</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;=&quot;</span><span class="p">:</span>
                     <span class="n">op</span> <span class="o">=</span> <span class="s2">&quot;update&quot;</span>
                 <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;+=&quot;</span><span class="p">:</span>
@@ -318,6 +358,26 @@
                     <span class="k">break</span>
             <span class="n">args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">TensorflowOp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;call&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">[</span><span class="n">op</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_process_update_args_old</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Preprocesses the index and a variable update to match the variable shape.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        var</span>
+<span class="sd">        update</span>
+<span class="sd">        idx</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        tuple</span>
+<span class="sd">            Preprocessed index and re-shaped update.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">list</span><span class="p">:</span>
+            <span class="n">idx</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_process_update_args_old</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_process_idx_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Preprocesses the index to a variable.</span>

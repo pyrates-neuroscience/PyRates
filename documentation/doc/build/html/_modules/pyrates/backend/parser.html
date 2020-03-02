@@ -71,13 +71,14 @@
 <span class="sd">operations.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="c1"># external imports</span>
-<span class="kn">from</span> <span class="nn">pyparsing</span> <span class="k">import</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">CaselessLiteral</span><span class="p">,</span> <span class="n">Word</span><span class="p">,</span> <span class="n">Combine</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> \
-    <span class="n">ZeroOrMore</span><span class="p">,</span> <span class="n">Forward</span><span class="p">,</span> <span class="n">nums</span><span class="p">,</span> <span class="n">alphas</span><span class="p">,</span> <span class="n">ParserElement</span>
-<span class="kn">from</span> <span class="nn">numbers</span> <span class="k">import</span> <span class="n">Number</span>
 <span class="kn">import</span> <span class="nn">math</span>
 <span class="kn">import</span> <span class="nn">typing</span> <span class="k">as</span> <span class="nn">tp</span>
 <span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span>
+<span class="kn">from</span> <span class="nn">numbers</span> <span class="k">import</span> <span class="n">Number</span>
+
+<span class="c1"># external imports</span>
+<span class="kn">from</span> <span class="nn">pyparsing</span> <span class="k">import</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">CaselessLiteral</span><span class="p">,</span> <span class="n">Word</span><span class="p">,</span> <span class="n">Combine</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> \
+    <span class="n">ZeroOrMore</span><span class="p">,</span> <span class="n">Forward</span><span class="p">,</span> <span class="n">nums</span><span class="p">,</span> <span class="n">alphas</span><span class="p">,</span> <span class="n">ParserElement</span>
 
 <span class="c1"># meta infos</span>
 <span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Richard Gast&quot;</span>
@@ -100,6 +101,8 @@
 <span class="sd">        Dictionary containing all variables and functions needed to evaluate the expression.</span>
 <span class="sd">    backend</span>
 <span class="sd">        Backend instance in which to parse all variables and operations.</span>
+<span class="sd">        See `pyrates.backend.numpy_backend.NumpyBackend` for a full documentation of the backends methods and</span>
+<span class="sd">        attributes.</span>
 <span class="sd">    kwargs</span>
 <span class="sd">        Additional keyword arguments to be passed to the backend functions.</span>
 
@@ -167,6 +170,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_finished_rhs</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">rhs_eval</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_instantaneous</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;instantaneous&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
 
         <span class="c1"># define algebra</span>
         <span class="c1">################</span>
@@ -234,17 +238,13 @@
             <span class="n">index_end</span> <span class="o">=</span> <span class="n">idx_r</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_first</span><span class="p">)</span>
             <span class="n">index_comb</span> <span class="o">=</span> <span class="n">colon</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_first</span><span class="p">)</span>
             <span class="n">arg_comb</span> <span class="o">=</span> <span class="n">comma</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_first</span><span class="p">)</span>
+            <span class="n">arg_tuple</span> <span class="o">=</span> <span class="n">par_l</span> <span class="o">+</span> <span class="n">ZeroOrMore</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="n">Optional</span><span class="p">(</span><span class="n">arg_comb</span><span class="p">))</span> <span class="o">+</span> <span class="n">par_r</span>
+            <span class="n">func_arg</span> <span class="o">=</span> <span class="n">arg_tuple</span> <span class="o">|</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span>
 
             <span class="c1"># basic computation unit</span>
-            <span class="n">atom</span> <span class="o">=</span> <span class="p">(</span><span class="n">func_name</span> <span class="o">+</span> <span class="n">Optional</span><span class="p">(</span><span class="n">par_l</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span>
-                                         <span class="n">ZeroOrMore</span><span class="p">((</span><span class="n">arg_comb</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span>
-                                                     <span class="n">Optional</span><span class="p">(</span><span class="n">arg_comb</span><span class="o">.</span><span class="n">suppress</span><span class="p">())))</span> <span class="o">+</span>
-                                         <span class="n">par_r</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="n">Optional</span><span class="p">(</span><span class="n">arg_comb</span><span class="p">))</span> <span class="o">+</span>
-                    <span class="n">Optional</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="n">ZeroOrMore</span><span class="p">((</span><span class="n">arg_comb</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">suppress</span><span class="p">())))</span>
-                    <span class="o">+</span> <span class="n">par_r</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">|</span> <span class="n">name</span> <span class="o">|</span> <span class="n">pi</span> <span class="o">|</span> <span class="n">e</span> <span class="o">|</span> <span class="n">num_float</span> <span class="o">|</span> <span class="n">num_int</span>
-                    <span class="p">)</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_neg_or_first</span><span class="p">)</span> <span class="o">|</span> \
-                   <span class="p">(</span><span class="n">par_l</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_last</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="n">par_r</span>
-                    <span class="p">)</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_neg</span><span class="p">)</span>
+            <span class="n">atom</span> <span class="o">=</span> <span class="p">(</span><span class="n">func_name</span> <span class="o">+</span> <span class="n">Optional</span><span class="p">(</span><span class="n">func_arg</span><span class="o">.</span><span class="n">suppress</span><span class="p">())</span> <span class="o">+</span> <span class="n">ZeroOrMore</span><span class="p">(</span><span class="n">arg_comb</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="n">func_arg</span><span class="o">.</span><span class="n">suppress</span><span class="p">())</span> <span class="o">+</span>
+                    <span class="n">par_r</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">|</span> <span class="n">name</span> <span class="o">|</span> <span class="n">pi</span> <span class="o">|</span> <span class="n">e</span> <span class="o">|</span> <span class="n">num_float</span> <span class="o">|</span> <span class="n">num_int</span><span class="p">)</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_neg_or_first</span><span class="p">)</span> <span class="o">|</span> \
+                   <span class="p">(</span><span class="n">par_l</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_last</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">suppress</span><span class="p">()</span> <span class="o">+</span> <span class="n">par_r</span><span class="p">)</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_neg</span><span class="p">)</span>
 
             <span class="c1"># apply indexing to atoms</span>
             <span class="n">indexed</span> <span class="o">=</span> <span class="n">atom</span> <span class="o">+</span> <span class="n">ZeroOrMore</span><span class="p">((</span><span class="n">index_start</span> <span class="o">+</span> <span class="n">index_multiples</span> <span class="o">+</span> <span class="n">index_end</span><span class="p">))</span>
@@ -258,8 +258,13 @@
             <span class="n">factor</span> <span class="o">=</span> <span class="n">exponential</span> <span class="o">+</span> <span class="n">ZeroOrMore</span><span class="p">((</span><span class="n">op_mult</span> <span class="o">+</span> <span class="n">exponential</span><span class="p">)</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_first</span><span class="p">))</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">expr</span> <span class="o">&lt;&lt;</span> <span class="n">factor</span> <span class="o">+</span> <span class="n">ZeroOrMore</span><span class="p">((</span><span class="n">op_add</span> <span class="o">+</span> <span class="n">factor</span><span class="p">)</span><span class="o">.</span><span class="n">setParseAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_push_first</span><span class="p">))</span>
 
-<div class="viewcode-block" id="ExpressionParser.parse_expr"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.ExpressionParser.parse_expr">[docs]</a>    <span class="k">def</span> <span class="nf">parse_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Parses string-based expression.</span>
+<div class="viewcode-block" id="ExpressionParser.parse_expr"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.ExpressionParser.parse_expr">[docs]</a>    <span class="k">def</span> <span class="nf">parse_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Parses string-based mathematical expression/equation.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        tuple</span>
+<span class="sd">            left-hand side, right-hand side and variables of the parsed equation.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="c1"># extract symbols and operations from equations right-hand side</span>
@@ -269,21 +274,29 @@
         <span class="c1"># parse rhs into backend</span>
         <span class="n">rhs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expr_stack</span><span class="p">[:])</span>
 
-        <span class="c1"># create new variable for lhs update</span>
-        <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{self.lhs_key}</span><span class="s2">_update&quot;</span>
-        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">_</span><span class="si">{i}</span><span class="s2">&quot;</span>
-        <span class="k">while</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
-            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
-            <span class="n">name</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
-        <span class="n">dtype</span> <span class="o">=</span> <span class="n">rhs</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">_float_def</span>
-        <span class="n">shape</span> <span class="o">=</span> <span class="n">rhs</span><span class="o">.</span><span class="n">shape</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="p">()</span>
-        <span class="n">delta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">add_var</span><span class="p">(</span><span class="s1">&#39;state_var&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lhs_key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instantaneous</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s1">&#39;short_name&#39;</span><span class="p">):</span>
 
-        <span class="c1"># assign rhs to new variable</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="n">delta</span><span class="p">,</span> <span class="n">rhs</span><span class="p">)</span>
+            <span class="c1"># create new variable for lhs update</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{self.lhs_key}</span><span class="s2">_delta&quot;</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">_</span><span class="si">{i}</span><span class="s2">&quot;</span>
+            <span class="k">while</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+                <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">name</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="n">rhs</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">_float_def</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="n">rhs</span><span class="o">.</span><span class="n">shape</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="p">()</span>
+
+            <span class="c1"># assign rhs to new variable</span>
+            <span class="n">delta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">add_var</span><span class="p">(</span><span class="s1">&#39;state_var&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">parser_kwargs</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="n">delta</span><span class="p">,</span> <span class="n">rhs</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rhs</span> <span class="o">=</span> <span class="n">delta</span>
+
+        <span class="k">else</span><span class="p">:</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">rhs</span> <span class="o">=</span> <span class="n">rhs</span>
+
+        <span class="c1"># post rhs parsing steps</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">rhs_eval</span> <span class="o">=</span> <span class="n">rhs</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">rhs</span> <span class="o">=</span> <span class="n">delta</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_finished_rhs</span> <span class="o">=</span> <span class="kc">True</span>
 
@@ -297,12 +310,12 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">lhs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">rhs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span></div>
 
 <div class="viewcode-block" id="ExpressionParser.parse"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.ExpressionParser.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr_stack</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">:</span>
-        <span class="sd">&quot;&quot;&quot;Parse elements in expression stack to operation.</span>
+        <span class="sd">&quot;&quot;&quot;Parse elements in expression stack into the backend.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        expr_stack</span>
-<span class="sd">            Ordered list with expression variables and operations.</span>
+<span class="sd">            Ordered list with expression variables and operations. Needs to be processed from last to first item.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -458,8 +471,15 @@
         <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;)&quot;</span><span class="p">:</span>
 
             <span class="c1"># check whether expression in parenthesis is a group of arguments to a function</span>
-            <span class="n">start_par</span> <span class="o">=</span> <span class="n">expr_stack</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s2">&quot;(&quot;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="s2">&quot;,&quot;</span> <span class="ow">in</span> <span class="n">expr_stack</span><span class="p">[</span><span class="n">start_par</span><span class="p">:]:</span>
+            <span class="n">start_par</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="n">found_end</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">while</span> <span class="n">found_end</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s2">&quot;(&quot;</span> <span class="ow">in</span> <span class="n">expr_stack</span><span class="p">[</span><span class="n">start_par</span><span class="p">]:</span>
+                    <span class="n">found_end</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="s2">&quot;)&quot;</span> <span class="ow">in</span> <span class="n">expr_stack</span><span class="p">[</span><span class="n">start_par</span><span class="p">]:</span>
+                    <span class="n">found_end</span> <span class="o">-=</span> <span class="mi">1</span>
+                <span class="n">start_par</span> <span class="o">-=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="s2">&quot;,&quot;</span> <span class="ow">in</span> <span class="n">expr_stack</span><span class="p">[</span><span class="n">start_par</span><span class="o">+</span><span class="mi">1</span><span class="p">:]:</span>
 
                 <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
                 <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
@@ -495,7 +515,12 @@
 
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_finished_rhs</span><span class="p">:</span>
 
-                <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rhs</span>
+                <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;rhs&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rhs</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rhs_eval</span><span class="o">.</span><span class="n">shape</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rhs_eval</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="p">()</span>
+                    <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rhs_eval</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rhs_eval</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rhs_eval</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">add_var</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="s1">&#39;state_var&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">op</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span>
 
             <span class="k">else</span><span class="p">:</span>
@@ -525,9 +550,6 @@
         <span class="n">solver</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser_kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;solver&#39;</span><span class="p">,</span> <span class="s1">&#39;euler&#39;</span><span class="p">)</span>
         <span class="n">diff_eq</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_diff_eq</span>
 
-        <span class="c1"># advance one backend layer</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
-
         <span class="c1"># update left-hand side of equation</span>
         <span class="c1">###################################</span>
 
@@ -536,19 +558,26 @@
             <span class="k">if</span> <span class="n">solver</span> <span class="o">==</span> <span class="s1">&#39;euler&#39;</span><span class="p">:</span>
 
                 <span class="c1"># use explicit forward euler</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
                 <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expr_stack</span> <span class="o">+</span> <span class="p">[</span><span class="s1">&#39;dt&#39;</span><span class="p">,</span> <span class="s1">&#39;rhs&#39;</span><span class="p">,</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span> <span class="s1">&#39;+=&#39;</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">previous_layer</span><span class="p">()</span>
 
             <span class="k">else</span><span class="p">:</span>
 
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Wrong solver type: </span><span class="si">{solver}</span><span class="s1">. &#39;</span>
                                  <span class="n">f</span><span class="s1">&#39;Please check the docstring of this function for available solvers.&#39;</span><span class="p">)</span>
 
-        <span class="k">else</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instantaneous</span><span class="p">:</span>
 
+            <span class="c1"># simple instantaneous update</span>
             <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expr_stack</span> <span class="o">+</span> <span class="p">[</span><span class="s1">&#39;rhs&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_assign_type</span><span class="p">])</span>
 
-        <span class="c1"># reset backend layer</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">previous_layer</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+
+            <span class="c1"># simple non-instantaneous update</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
+            <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expr_stack</span> <span class="o">+</span> <span class="p">[</span><span class="s1">&#39;rhs&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_assign_type</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">previous_layer</span><span class="p">()</span>
 
         <span class="k">return</span> <span class="n">op</span>
 
@@ -615,7 +644,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">expr_stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;-one&#39;</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_push_neg_or_first</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">strg</span><span class="p">,</span> <span class="n">loc</span><span class="p">,</span> <span class="n">toks</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Push all tokens to expression stack at once (first-to-last).</span>
+        <span class="sd">&quot;&quot;&quot;Push neg one multipler to expression stack if on first position in toks, else push toks from first-to-last.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">toks</span> <span class="ow">and</span> <span class="n">toks</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;-&#39;</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">expr_stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;-one&#39;</span><span class="p">)</span>
@@ -680,7 +709,7 @@
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">apply_idx</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">update_type</span><span class="p">,</span> <span class="o">*</span><span class="nb">tuple</span><span class="p">(</span><span class="n">args</span><span class="p">))</span>
 
-    <span class="k">def</span> <span class="nf">_check_parsed_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr_str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">_check_parsed_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr_str</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;check whether parsing of expression string was successful.</span>
 
 <span class="sd">        Parameters</span>
@@ -688,7 +717,7 @@
 <span class="sd">        expr_str</span>
 <span class="sd">            Expression that has been attempted to be parsed.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">expr_str</span>
+
         <span class="k">for</span> <span class="n">sub_str</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expr_stack</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="nb">len</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
             <span class="k">if</span> <span class="n">sub_str</span> <span class="o">==</span> <span class="s1">&#39;E&#39;</span><span class="p">:</span>
                 <span class="n">sub_str</span> <span class="o">=</span> <span class="s1">&#39;e&#39;</span>
@@ -701,7 +730,7 @@
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Error while parsing expression: </span><span class="si">{self.expr_str}</span><span class="s2">. </span><span class="si">{expr_str}</span><span class="s2"> could not be parsed.&quot;</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">_compare</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_compare</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;Checks whether x and y are equal or not.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">test</span> <span class="o">=</span> <span class="n">x</span> <span class="o">==</span> <span class="n">y</span>
@@ -710,19 +739,25 @@
         <span class="k">return</span> <span class="n">test</span></div>
 
 
-<div class="viewcode-block" id="parse_equation_list"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.parse_equation_list">[docs]</a><span class="k">def</span> <span class="nf">parse_equation_list</span><span class="p">(</span><span class="n">equations</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">equation_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-    <span class="sd">&quot;&quot;&quot;Parses a list of equations into the backend.</span>
+<div class="viewcode-block" id="parse_equation_system"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.parse_equation_system">[docs]</a><span class="k">def</span> <span class="nf">parse_equation_system</span><span class="p">(</span><span class="n">equations</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">equation_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">,</span> <span class="n">solver</span><span class="o">=</span><span class="s1">&#39;euler&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set</span>
+<span class="sd">    of algebraic equations (depends on the chosen solver).</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    equations</span>
-<span class="sd">        Collection of equations that should be evaluated together.</span>
+<span class="sd">        Collection of equations that describe the dynamics of the nodes and edges.</span>
 <span class="sd">    equation_args</span>
 <span class="sd">        Key-value pairs of arguments needed for parsing the equations.</span>
 <span class="sd">    backend</span>
 <span class="sd">        Backend instance to parse the equations into.</span>
+<span class="sd">    solver</span>
+<span class="sd">        Type of solving algorithm to be applied to the differential equations in the system. Available solvers are:</span>
+<span class="sd">        - `euler` for the explicit euler method</span>
+<span class="sd">        - `midpoint` for the midpoint method</span>
+<span class="sd">        - `rk23` for the Runge-Kutta algorithm of 2nd (3rd) order</span>
 <span class="sd">    kwargs</span>
-<span class="sd">        Additional keyword arguments to be passed to the backend.</span>
+<span class="sd">        Additional keyword arguments to be passed to the backend methods.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -732,226 +767,441 @@
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">updates</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="n">solver</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;solver&#39;</span><span class="p">,</span> <span class="s1">&#39;euler&#39;</span><span class="p">)</span>
     <span class="n">update_num</span> <span class="o">=</span> <span class="mi">0</span>
 
     <span class="k">if</span> <span class="n">solver</span> <span class="o">==</span> <span class="s1">&#39;midpoint&#39;</span><span class="p">:</span>
 
-        <span class="k">if</span> <span class="nb">any</span><span class="p">([</span><span class="s1">&#39;/dt&#39;</span> <span class="ow">in</span> <span class="n">eq</span> <span class="ow">or</span> <span class="s2">&quot;&#39;&quot;</span> <span class="ow">in</span> <span class="n">eq</span> <span class="k">for</span> <span class="n">eq</span> <span class="ow">in</span> <span class="n">equations</span><span class="p">]):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;EXPERIMENTAL FEATURE WARNING: Using the midpoint method for solving differential equations is not fully &quot;</span>
+              <span class="s2">&quot;tested yet and should be used with caution.&quot;</span><span class="p">)</span>
 
-            <span class="c1"># first rhs evaluation</span>
-            <span class="n">update_num</span> <span class="o">+=</span> <span class="mi">1</span>
-            <span class="n">dt_tmp</span> <span class="o">=</span> <span class="n">equation_args</span><span class="p">[</span><span class="s1">&#39;dt&#39;</span><span class="p">]</span>
-            <span class="n">equation_args</span><span class="p">[</span><span class="s1">&#39;dt&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dt_tmp</span><span class="o">/</span><span class="mi">2</span>
-            <span class="n">state_vars</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-                          <span class="k">if</span> <span class="p">((</span><span class="nb">type</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s1">&#39;vtype&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;state_var&#39;</span><span class="p">))}</span>
-            <span class="n">equations_tmp</span><span class="p">,</span> <span class="n">state_vars</span> <span class="o">=</span> <span class="n">update_lhs</span><span class="p">(</span><span class="n">equations</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="n">state_vars</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="s1">&#39;dt&#39;</span><span class="p">,</span> <span class="p">{})</span>
-            <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_vars</span><span class="p">)</span>
-            <span class="n">updates</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations_tmp</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-            <span class="n">equation_args</span><span class="p">[</span><span class="s1">&#39;dt&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dt_tmp</span>
-            <span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
-            <span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
+        <span class="c1"># first rhs evaluation</span>
+        <span class="n">update_num</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">state_vars</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                      <span class="k">if</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="s1">&#39;vtype&#39;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s1">&#39;vtype&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;state_var&#39;</span><span class="p">)}</span>
+        <span class="n">state_vars_orig</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">state_vars</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+        <span class="n">equations_tmp</span><span class="p">,</span> <span class="n">state_vars</span> <span class="o">=</span> <span class="n">update_lhs</span><span class="p">(</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">equations</span><span class="p">),</span> <span class="n">state_vars</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="n">state_vars_orig</span><span class="p">)</span>
+        <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_vars</span><span class="p">)</span>
+        <span class="n">updates</span><span class="p">,</span> <span class="n">equation_args</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations_tmp</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+                                                 <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">backend</span><span class="o">.</span><span class="n">add_layer</span><span class="p">()</span>
 
-            <span class="c1"># second rhs evaluation + combination of the two</span>
-            <span class="n">equations</span><span class="p">,</span> <span class="n">updates</span> <span class="o">=</span> <span class="n">update_rhs</span><span class="p">(</span><span class="n">equations</span><span class="p">,</span> <span class="n">updates</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="s2">&quot;(var_placeholder + update_placeholder)&quot;</span><span class="p">)</span>
-            <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates</span><span class="p">)</span>
-            <span class="n">updates</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="c1"># second rhs evaluation + combination of the two</span>
+        <span class="n">updates</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="n">arg</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="s1">&#39;inputs&#39;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">})</span>
+        <span class="n">equations</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">update_rhs</span><span class="p">(</span><span class="n">equations</span><span class="p">,</span> <span class="n">updates</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="s2">&quot;(var_placeholder + 0.5*update_placeholder)&quot;</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">equation_args</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">solver</span> <span class="o">==</span> <span class="s1">&#39;rk23&#39;</span><span class="p">:</span>
 
-        <span class="k">if</span> <span class="nb">any</span><span class="p">([</span><span class="s1">&#39;/dt&#39;</span> <span class="ow">in</span> <span class="n">eq</span> <span class="ow">or</span> <span class="s2">&quot;&#39;&quot;</span> <span class="ow">in</span> <span class="n">eq</span> <span class="k">for</span> <span class="n">eq</span> <span class="ow">in</span> <span class="n">equations</span><span class="p">]):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;EXPERIMENTAL FEATURE WARNING: Using the Runge-Kutta 23 algorithm for solving differential equations is &quot;</span>
+              <span class="s2">&quot;not fully tested yet and should be used with caution.&quot;</span><span class="p">)</span>
 
-            <span class="c1"># first rhs evaluation</span>
-            <span class="n">update_num</span> <span class="o">+=</span> <span class="mi">1</span>
-            <span class="n">state_vars</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-                          <span class="k">if</span> <span class="p">((</span><span class="nb">type</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s1">&#39;vtype&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;state_var&#39;</span><span class="p">))}</span>
-            <span class="n">state_vars_orig</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">state_vars</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
-            <span class="n">equations_tmp</span><span class="p">,</span> <span class="n">state_vars</span> <span class="o">=</span> <span class="n">update_lhs</span><span class="p">(</span><span class="n">equations</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="n">state_vars</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">state_vars_orig</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">var_orig</span> <span class="ow">in</span> <span class="n">state_vars_orig</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">([</span><span class="n">var_orig</span> <span class="ow">in</span> <span class="n">var</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">state_vars</span><span class="p">]):</span>
-                    <span class="n">state_vars_orig</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">var_orig</span><span class="p">)</span>
-            <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_vars</span><span class="p">)</span>
-            <span class="n">updates</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations_tmp</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-            <span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
-            <span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
+        <span class="c1"># first rhs evaluation</span>
+        <span class="n">update_num</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">state_vars</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                      <span class="k">if</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="s1">&#39;vtype&#39;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s1">&#39;vtype&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;state_var&#39;</span><span class="p">)}</span>
+        <span class="n">state_vars_orig</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">state_vars</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+        <span class="n">equations_tmp</span><span class="p">,</span> <span class="n">state_vars</span> <span class="o">=</span> <span class="n">update_lhs</span><span class="p">(</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">equations</span><span class="p">),</span> <span class="n">state_vars</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="n">state_vars_orig</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">var_orig</span> <span class="ow">in</span> <span class="n">state_vars_orig</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">([</span><span class="n">var_orig</span> <span class="ow">in</span> <span class="n">var</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">state_vars</span><span class="p">]):</span>
+                <span class="n">state_vars_orig</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">var_orig</span><span class="p">)</span>
+        <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_vars</span><span class="p">)</span>
+        <span class="n">updates</span><span class="p">,</span> <span class="n">equation_args</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations_tmp</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+                                                 <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">backend</span><span class="o">.</span><span class="n">add_layer</span><span class="p">()</span>
 
-            <span class="c1"># second rhs evaluation</span>
-            <span class="n">equations_tmp</span><span class="p">,</span> <span class="n">updates_new</span> <span class="o">=</span> <span class="n">update_rhs</span><span class="p">(</span><span class="n">equations</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="n">updates</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span>
-                                                    <span class="s2">&quot;(var_placeholder + 0.5*dt*update_placeholder)&quot;</span><span class="p">)</span>
-            <span class="n">updates</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates_new</span><span class="p">)</span>
-            <span class="n">state_vars</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-                          <span class="k">if</span> <span class="nb">any</span><span class="p">([</span><span class="n">orig_key</span> <span class="ow">in</span> <span class="n">key</span> <span class="k">for</span> <span class="n">orig_key</span> <span class="ow">in</span> <span class="n">state_vars_orig</span><span class="p">])}</span>
-            <span class="n">update_num</span> <span class="o">+=</span> <span class="mi">1</span>
-            <span class="n">equations_tmp</span><span class="p">,</span> <span class="n">state_vars</span> <span class="o">=</span> <span class="n">update_lhs</span><span class="p">(</span><span class="n">equations_tmp</span><span class="p">,</span> <span class="n">state_vars</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">state_vars_orig</span><span class="p">)</span>
-            <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_vars</span><span class="p">)</span>
-            <span class="n">updates_new</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations_tmp</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
-                                          <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-            <span class="n">updates</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates_new</span><span class="p">)</span>
-            <span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
-            <span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
+        <span class="c1"># second rhs evaluation</span>
+        <span class="n">updates</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="n">arg</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="s1">&#39;inputs&#39;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">})</span>
+        <span class="n">equations_tmp</span><span class="p">,</span> <span class="n">updates</span> <span class="o">=</span> <span class="n">update_rhs</span><span class="p">(</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">equations</span><span class="p">),</span> <span class="n">updates</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span>
+                                                                       <span class="s2">&quot;(var_placeholder + 0.5*update_placeholder)&quot;</span><span class="p">)</span>
+        <span class="c1">#equation_args = update_equation_args(equation_args, updates)</span>
+        <span class="n">state_vars</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                      <span class="k">if</span> <span class="nb">any</span><span class="p">([</span><span class="n">orig_key</span> <span class="ow">in</span> <span class="n">key</span> <span class="k">for</span> <span class="n">orig_key</span> <span class="ow">in</span> <span class="n">state_vars_orig</span><span class="p">])}</span>
+        <span class="n">update_num</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">equations_tmp</span><span class="p">,</span> <span class="n">state_vars</span> <span class="o">=</span> <span class="n">update_lhs</span><span class="p">(</span><span class="n">equations_tmp</span><span class="p">,</span> <span class="n">state_vars</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="n">state_vars_orig</span><span class="p">)</span>
+        <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_vars</span><span class="p">)</span>
+        <span class="n">updates_new</span><span class="p">,</span> <span class="n">equation_args</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations_tmp</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span>
+                                                     <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">backend</span><span class="o">.</span><span class="n">add_layer</span><span class="p">()</span>
 
-            <span class="c1"># third rhs evaluation</span>
-            <span class="n">equations</span><span class="p">,</span> <span class="n">updates_new</span> <span class="o">=</span> <span class="n">update_rhs</span><span class="p">(</span><span class="n">equations</span><span class="p">,</span> <span class="n">updates</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span>
-                                                <span class="s2">&quot;(var_placeholder - dt*var_placeholder_1 + 2.0*dt*update_placeholder)&quot;</span><span class="p">)</span>
-            <span class="n">updates</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates_new</span><span class="p">)</span>
-            <span class="n">state_vars</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-                          <span class="k">if</span> <span class="nb">any</span><span class="p">([</span><span class="n">orig_key</span> <span class="ow">in</span> <span class="n">key</span> <span class="k">for</span> <span class="n">orig_key</span> <span class="ow">in</span> <span class="n">state_vars_orig</span><span class="p">])}</span>
-            <span class="n">update_num</span> <span class="o">+=</span> <span class="mi">1</span>
-            <span class="n">equations</span><span class="p">,</span> <span class="n">state_vars</span> <span class="o">=</span> <span class="n">update_lhs</span><span class="p">(</span><span class="n">equations</span><span class="p">,</span> <span class="n">state_vars</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">state_vars_orig</span><span class="p">)</span>
-            <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_vars</span><span class="p">)</span>
-            <span class="n">updates_new</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
-                                          <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-            <span class="n">updates</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates_new</span><span class="p">)</span>
-            <span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
-            <span class="n">backend</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
+        <span class="c1"># third rhs evaluation</span>
+        <span class="n">updates</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="n">arg</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="s1">&#39;inputs&#39;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">})</span>
+        <span class="n">updates</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates_new</span><span class="p">)</span>
+        <span class="n">equations</span><span class="p">,</span> <span class="n">updates</span> <span class="o">=</span> <span class="n">update_rhs</span><span class="p">(</span><span class="n">equations</span><span class="p">,</span> <span class="n">updates</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span>
+                                        <span class="s2">&quot;(var_placeholder - var_placeholder_1 + 2*update_placeholder)&quot;</span><span class="p">)</span>
+        <span class="c1">#equation_args = update_equation_args(equation_args, updates)</span>
+        <span class="n">state_vars</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                      <span class="k">if</span> <span class="nb">any</span><span class="p">([</span><span class="n">orig_key</span> <span class="ow">in</span> <span class="n">key</span> <span class="k">for</span> <span class="n">orig_key</span> <span class="ow">in</span> <span class="n">state_vars_orig</span><span class="p">])}</span>
+        <span class="n">update_num</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">equations</span><span class="p">,</span> <span class="n">state_vars</span> <span class="o">=</span> <span class="n">update_lhs</span><span class="p">(</span><span class="n">equations</span><span class="p">,</span> <span class="n">state_vars</span><span class="p">,</span> <span class="n">update_num</span><span class="p">,</span> <span class="n">state_vars_orig</span><span class="p">)</span>
+        <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_vars</span><span class="p">)</span>
+        <span class="n">updates</span><span class="p">,</span> <span class="n">equation_args</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+                                                 <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">backend</span><span class="o">.</span><span class="n">add_layer</span><span class="p">()</span>
 
-            <span class="c1"># combination of 3 rhs evaluations a&#39;la rk23</span>
-            <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates</span><span class="p">)</span>
-            <span class="n">equations</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span><span class="s1">&#39;</span><span class="si">{var}</span><span class="s1"> += dt * (</span><span class="si">{var}</span><span class="s1">_upd_1/6. + 2.*</span><span class="si">{var}</span><span class="s1">_upd_2/3. + </span><span class="si">{var}</span><span class="s1">_upd_3/6.)&#39;</span>
-                         <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">state_vars_orig</span><span class="p">]</span>
-            <span class="n">updates</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="c1"># combination of 3 rhs evaluations a&#39;la rk23</span>
+        <span class="c1">#equation_args = update_equation_args(equation_args, updates)</span>
+        <span class="n">equations</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">var_info</span> <span class="ow">in</span> <span class="n">state_vars_orig</span><span class="p">:</span>
+            <span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">var_info</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+            <span class="n">equations</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">f</span><span class="s1">&#39;</span><span class="si">{var}</span><span class="s1"> += (</span><span class="si">{var}</span><span class="s1">_upd_1 + 4.*</span><span class="si">{var}</span><span class="s1">_upd_2 + </span><span class="si">{var}</span><span class="s1">_upd_3)/6.&#39;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{node}</span><span class="s2">/</span><span class="si">{op}</span><span class="s2">&quot;</span><span class="p">))</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">equation_args</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="p">[</span><span class="n">equations</span><span class="p">],</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+                                           <span class="n">edge_layer</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">solver</span> <span class="o">==</span> <span class="s1">&#39;euler&#39;</span><span class="p">:</span>
 
-        <span class="n">updates</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">equation_args</span> <span class="o">=</span> <span class="n">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="o">=</span><span class="n">equations</span><span class="p">,</span> <span class="n">equation_args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">else</span><span class="p">:</span>
 
         <span class="n">valid_solvers</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;euler&#39;</span><span class="p">,</span> <span class="s1">&#39;midpoint&#39;</span><span class="p">,</span> <span class="s1">&#39;rk23&#39;</span><span class="p">]</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Invalid solver: </span><span class="si">{solver}</span><span class="s1">. Valid differential equation solvers are: </span><span class="si">{valid_solvers}</span><span class="s1">.&#39;</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">updates</span></div>
+    <span class="k">return</span> <span class="n">equation_args</span></div>
 
 
-<div class="viewcode-block" id="parse_equations"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.parse_equations">[docs]</a><span class="k">def</span> <span class="nf">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="p">,</span> <span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-    <span class="sd">&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="parse_equations"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.parse_equations">[docs]</a><span class="k">def</span> <span class="nf">parse_equations</span><span class="p">(</span><span class="n">equations</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">equation_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+                    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Parses list of equations into the backend.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    equations</span>
+<span class="sd">        List of equations to parse into the backend.</span>
 <span class="sd">    equation_args</span>
+<span class="sd">        Dictionary with arguments needed for the equations.</span>
 <span class="sd">    backend</span>
-
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    dict</span>
-
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">updates</span> <span class="o">=</span> <span class="p">{}</span>
-
-    <span class="k">for</span> <span class="n">eq</span> <span class="ow">in</span> <span class="n">equations</span><span class="p">:</span>
-
-        <span class="c1"># parse arguments</span>
-        <span class="c1">#################</span>
-
-        <span class="n">args_tmp</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span> <span class="ow">and</span> <span class="s1">&#39;vtype&#39;</span> <span class="ow">in</span> <span class="n">arg</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-                <span class="n">args_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
-        <span class="n">args_tmp</span> <span class="o">=</span> <span class="n">parse_dict</span><span class="p">(</span><span class="n">args_tmp</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-        <span class="n">equation_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">args_tmp</span><span class="p">)</span>
-
-        <span class="c1"># parse equation</span>
-        <span class="c1">################</span>
-
-        <span class="n">parser</span> <span class="o">=</span> <span class="n">ExpressionParser</span><span class="p">(</span><span class="n">expr_str</span><span class="o">=</span><span class="n">eq</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">equation_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-        <span class="n">parser</span><span class="o">.</span><span class="n">parse_expr</span><span class="p">()</span>
-
-        <span class="n">updates</span><span class="p">[</span><span class="n">parser</span><span class="o">.</span><span class="n">lhs_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">parser</span><span class="o">.</span><span class="n">lhs_key</span><span class="p">]</span>
-
-    <span class="k">return</span> <span class="n">updates</span></div>
-
-
-<div class="viewcode-block" id="update_rhs"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.update_rhs">[docs]</a><span class="k">def</span> <span class="nf">update_rhs</span><span class="p">(</span><span class="n">equations</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">equation_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">update_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">update_str</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
-    <span class="sd">&quot;&quot;&quot;</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    equations</span>
-<span class="sd">    equation_args</span>
-<span class="sd">    update_num</span>
-<span class="sd">    update_str</span>
+<span class="sd">        Backend instance that the equations should be parsed into.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    tuple</span>
+<span class="sd">        Two dictionaries. The first one contains all left-hand side variables for which update operations were created</span>
+<span class="sd">        according to their right-hand sides. The second one is the updated `equation_args` dictionary that was</span>
+<span class="sd">        passed to this function.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">updates</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">equations</span><span class="p">:</span>
+
+        <span class="n">coupled</span> <span class="o">=</span> <span class="n">is_coupled</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">eq</span><span class="p">,</span> <span class="n">scope</span> <span class="ow">in</span> <span class="n">layer</span><span class="p">:</span>
+
+            <span class="c1"># parse arguments</span>
+            <span class="c1">#################</span>
+
+            <span class="c1"># extract operator variables from equation args</span>
+            <span class="n">op_args</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span> <span class="n">var</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">scope</span> <span class="ow">in</span> <span class="n">key</span><span class="p">}</span>
+            <span class="n">inputs</span> <span class="o">=</span> <span class="n">op_args</span><span class="p">[</span><span class="s1">&#39;inputs&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;inputs&#39;</span> <span class="ow">in</span> <span class="n">op_args</span> <span class="k">else</span> <span class="p">{}</span>
+            <span class="n">unprocessed_inputs</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">inputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">inp</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">inp</span><span class="p">)</span>
+                <span class="n">inp_tmp</span> <span class="o">=</span> <span class="n">equation_args</span><span class="p">[</span><span class="n">inp</span><span class="p">]</span>
+                <span class="c1"># TODO: For some reason, some equation args are added after this point that I do not understand.</span>
+                <span class="n">op_args</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">inp_tmp</span>
+                <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">inp_tmp</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span> <span class="ow">and</span> <span class="s1">&#39;vtype&#39;</span> <span class="ow">in</span> <span class="n">inp_tmp</span><span class="p">:</span>
+                    <span class="n">unprocessed_inputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+
+            <span class="c1"># parse operator variables in backend</span>
+            <span class="n">args_tmp</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">op_args</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span> <span class="ow">and</span> <span class="s1">&#39;vtype&#39;</span> <span class="ow">in</span> <span class="n">arg</span><span class="p">:</span>
+                    <span class="n">args_tmp</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+            <span class="n">args_tmp</span> <span class="o">=</span> <span class="n">parse_dict</span><span class="p">(</span><span class="n">args_tmp</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="n">op_args</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">args_tmp</span><span class="p">)</span>
+            <span class="n">op_args</span><span class="p">[</span><span class="s1">&#39;dt&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">equation_args</span><span class="p">[</span><span class="s1">&#39;all/all/dt&#39;</span><span class="p">]</span>
+
+            <span class="c1"># parse equation</span>
+            <span class="c1">################</span>
+
+            <span class="n">diff_eq</span> <span class="o">=</span> <span class="n">is_diff_eq</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">diff_eq</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">coupled</span><span class="p">:</span>
+
+                <span class="c1"># apply update to lhs variable of equation instantaneously</span>
+                <span class="n">parser</span> <span class="o">=</span> <span class="n">ExpressionParser</span><span class="p">(</span><span class="n">expr_str</span><span class="o">=</span><span class="n">eq</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">op_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span> <span class="n">instantaneous</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                                          <span class="o">**</span><span class="n">kwargs</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+                <span class="n">parser</span><span class="o">.</span><span class="n">parse_expr</span><span class="p">()</span>
+
+            <span class="k">else</span><span class="p">:</span>
+
+                <span class="c1"># apply save, non-instantaneous update to lhs variable</span>
+                <span class="n">parser</span> <span class="o">=</span> <span class="n">ExpressionParser</span><span class="p">(</span><span class="n">expr_str</span><span class="o">=</span><span class="n">eq</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">op_args</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span> <span class="n">instantaneous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                                          <span class="o">**</span><span class="n">kwargs</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+                <span class="n">parser</span><span class="o">.</span><span class="n">parse_expr</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">diff_eq</span><span class="p">:</span>
+                    <span class="n">updates</span><span class="p">[</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{scope}</span><span class="s2">/</span><span class="si">{parser.lhs_key}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">parser</span><span class="o">.</span><span class="n">lhs_key</span><span class="p">]</span>
+
+            <span class="c1"># udpate equations args</span>
+            <span class="c1">#######################</span>
+
+            <span class="c1"># save backend variables to equation args</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">parser</span><span class="o">.</span><span class="n">vars</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="o">!=</span> <span class="s2">&quot;inputs&quot;</span> <span class="ow">and</span> <span class="n">key</span> <span class="o">!=</span> <span class="s2">&quot;rhs&quot;</span> <span class="ow">and</span> <span class="n">key</span> <span class="o">!=</span> <span class="s2">&quot;dt&quot;</span><span class="p">:</span>
+                    <span class="c1">#  TODO: this step adds newly created variables to the equation args like the output variable to a</span>
+                    <span class="c1">#   collection variable</span>
+                    <span class="n">equation_args</span><span class="p">[</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{scope}</span><span class="s2">/</span><span class="si">{key}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">var</span>
+
+            <span class="c1"># save previously unprocessed input variables to equation args</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">inputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">unprocessed_inputs</span><span class="p">:</span>
+                    <span class="n">equation_args</span><span class="p">[</span><span class="n">inp</span><span class="p">]</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+        <span class="c1"># go to next layer in backend</span>
+        <span class="n">backend</span><span class="o">.</span><span class="n">add_layer</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">updates</span><span class="p">,</span> <span class="n">equation_args</span></div>
+
+
+<div class="viewcode-block" id="update_rhs"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.update_rhs">[docs]</a><span class="k">def</span> <span class="nf">update_rhs</span><span class="p">(</span><span class="n">equations</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">equation_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">update_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">update_str</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Update the right-hand side of all equations according to `update_str` and `update_num`. All state-variable</span>
+<span class="sd">    occurrences will be replaced with the expression in the `update_str` template. Convenience function for differential</span>
+<span class="sd">    equation solver that involve multiple partial updates of the state variables.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    equations</span>
+<span class="sd">        List of equations to be updated.</span>
+<span class="sd">    equation_args</span>
+<span class="sd">        Key-argument pairs of all relevant variables which occur in the equations.</span>
+<span class="sd">    update_num</span>
+<span class="sd">        Number of the partial update step for which the equations should be updated.</span>
+<span class="sd">    update_str</span>
+<span class="sd">        Template for the state variable replacement procedure. Should contain the following character strings:</span>
+<span class="sd">        - `var_placeholder` will be replaced with the name of the state variables.</span>
+<span class="sd">        - `var_placeholder_i` for partial updates of the state variables with `i` being a counter that needs to be</span>
+<span class="sd">           replaced with the appropriate number of the partial update. Should be included for each partial update from</span>
+<span class="sd">           i=1 to i=`update_num`.</span>
+<span class="sd">        - `update_placeholder` for the position of the new, updated variable.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    tuple</span>
+<span class="sd">        List of the updated equations and dictionary with the equation arguments.</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># collect variable updates from earlier rhs evaluations</span>
+    <span class="c1">#######################################################</span>
+
     <span class="n">var_updates</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="k">if</span> <span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
-            <span class="n">key</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="s2">&quot;_upd_&quot;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
-            <span class="n">idx</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">key</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-            <span class="n">var</span> <span class="o">=</span> <span class="n">key</span><span class="p">[:</span><span class="o">-</span><span class="mi">6</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">var_updates</span><span class="p">:</span>
-                <span class="n">var_updates</span><span class="p">[</span><span class="n">var</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">f</span><span class="s1">&#39;var_placeholder_</span><span class="si">{idx}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">))</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">var_updates</span><span class="p">[</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="p">[(</span><span class="n">f</span><span class="s1">&#39;var_placeholder_</span><span class="si">{idx}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="n">update_num</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+
+            <span class="c1"># extraction of variable name</span>
+            <span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="s2">&quot;_upd_&quot;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+
+                <span class="c1"># find variable update number and cut of variable update identifier from variable name</span>
+                <span class="n">idx</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+                <span class="n">var_tmp</span> <span class="o">=</span> <span class="n">var</span><span class="p">[:</span><span class="o">-</span><span class="mi">6</span><span class="p">]</span>
+
+                <span class="c1"># indicate which variable placeholder to replace with this variable update below</span>
+                <span class="k">if</span> <span class="n">var_tmp</span> <span class="ow">in</span> <span class="n">var_updates</span><span class="p">:</span>
+                    <span class="n">var_updates</span><span class="p">[</span><span class="n">var_tmp</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">f</span><span class="s1">&#39;var_placeholder_</span><span class="si">{idx}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">var</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">var_updates</span><span class="p">[</span><span class="n">var_tmp</span><span class="p">]</span> <span class="o">=</span> <span class="p">[(</span><span class="n">f</span><span class="s1">&#39;var_placeholder_</span><span class="si">{idx}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">var</span><span class="p">)]</span>
 
     <span class="c1"># integrate previous rhs evaluations into rhs equations</span>
+    <span class="c1">#######################################################</span>
+
     <span class="n">updated_args</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">while</span> <span class="n">equation_args</span><span class="p">:</span>
+
         <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="o">=</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">popitem</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
-            <span class="n">key</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="s2">&quot;_upd_&quot;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
-            <span class="n">updated_args</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
+        <span class="k">if</span> <span class="s1">&#39;inputs&#39;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
+
+            <span class="c1"># process input variables</span>
+            <span class="k">for</span> <span class="n">var</span><span class="p">,</span> <span class="n">arg_tmp</span> <span class="ow">in</span> <span class="n">arg</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+
+                <span class="c1"># extract variable name</span>
+                <span class="k">if</span> <span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+                    <span class="n">var</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="s2">&quot;_upd_&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+
+                    <span class="c1"># create new variable name with update identifier</span>
+                    <span class="n">new_var</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{var}</span><span class="s2">_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span>
+                    <span class="n">arg_tmp</span> <span class="o">=</span> <span class="n">arg_tmp</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+                    <span class="n">arg_tmp</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{arg_tmp[-1]}</span><span class="s2">_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span>
+                    <span class="n">arg_tmp</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">arg_tmp</span><span class="p">)</span>
+
+                    <span class="k">if</span> <span class="n">arg_tmp</span> <span class="ow">in</span> <span class="n">equation_args</span> <span class="ow">or</span> <span class="n">arg_tmp</span> <span class="ow">in</span> <span class="n">updated_args</span><span class="p">:</span>
+
+                        <span class="c1"># add variable update to inputs field</span>
+                        <span class="n">arg</span><span class="p">[</span><span class="n">new_var</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg_tmp</span>
+
+                        <span class="c1"># individualize the replacement template with variable name infos</span>
+                        <span class="n">replace_str</span> <span class="o">=</span> <span class="n">update_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;update_placeholder&#39;</span><span class="p">,</span> <span class="n">new_var</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">var_updates</span><span class="p">:</span>
+                            <span class="k">for</span> <span class="n">placeholder</span><span class="p">,</span> <span class="n">var_tmp</span> <span class="ow">in</span> <span class="n">var_updates</span><span class="p">[</span><span class="n">var</span><span class="p">]:</span>
+                                <span class="n">replace_str</span> <span class="o">=</span> <span class="n">replace_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">placeholder</span><span class="p">,</span> <span class="n">var_tmp</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">update_num</span><span class="p">):</span>
+                                <span class="n">replace_str</span> <span class="o">=</span> <span class="n">replace_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;var_placeholder_</span><span class="si">{i}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">f</span><span class="s1">&#39;</span><span class="si">{var}</span><span class="s1">_upd_</span><span class="si">{i}</span><span class="s1">&#39;</span><span class="p">)</span>
+                        <span class="n">replace_str</span> <span class="o">=</span> <span class="n">replace_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;var_placeholder&#39;</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
+
+                        <span class="c1"># go through equations and replace variable names with the individualized replacement template</span>
+                        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">equations</span><span class="o">.</span><span class="n">copy</span><span class="p">()):</span>
+                            <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">eq</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layer</span><span class="p">):</span>
+                                <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">assign</span> <span class="o">=</span> <span class="n">split_equation</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span>
+                                <span class="k">if</span> <span class="n">replace_str</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">rhs</span><span class="p">:</span>
+                                    <span class="n">rhs</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">replace_str</span><span class="p">)</span>
+                                <span class="n">equations</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{lhs}</span><span class="s2"> </span><span class="si">{assign}</span><span class="s2"> </span><span class="si">{rhs}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>
+
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">new_key</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{key}</span><span class="s2">_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span>
-            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">eq</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">equations</span><span class="o">.</span><span class="n">copy</span><span class="p">()):</span>
-                <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">assign</span> <span class="o">=</span> <span class="n">split_equation</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span>
-                <span class="n">replace_str</span> <span class="o">=</span> <span class="n">update_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;update_placeholder&#39;</span><span class="p">,</span> <span class="n">new_key</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">var_updates</span><span class="p">:</span>
-                    <span class="k">for</span> <span class="n">placeholder</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">var_updates</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
-                        <span class="n">replace_str</span> <span class="o">=</span> <span class="n">replace_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">placeholder</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
-                <span class="n">replace_str</span> <span class="o">=</span> <span class="n">replace_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;var_placeholder&#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
-                <span class="n">rhs</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">replace_str</span><span class="p">)</span>
-                <span class="n">equations</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{lhs}</span><span class="s2"> </span><span class="si">{assign}</span><span class="s2"> </span><span class="si">{rhs}</span><span class="s2">&quot;</span>
-            <span class="n">updated_args</span><span class="p">[</span><span class="n">new_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
+            <span class="c1"># extract variable name</span>
+            <span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="s2">&quot;_upd_&quot;</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+
+                <span class="c1"># save the variable to the arguments dictionary</span>
+                <span class="n">updated_args</span><span class="p">[</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{node}</span><span class="s2">/</span><span class="si">{op}</span><span class="s2">/</span><span class="si">{var}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
+            <span class="k">else</span><span class="p">:</span>
+
+                <span class="c1"># create new variable name and save the variable to the arguments dictionary</span>
+                <span class="n">new_var</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{var}</span><span class="s2">_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span>
+                <span class="n">updated_args</span><span class="p">[</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{node}</span><span class="s2">/</span><span class="si">{op}</span><span class="s2">/</span><span class="si">{new_var}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
+                <span class="c1"># individualize the replacement template</span>
+                <span class="n">replace_str</span> <span class="o">=</span> <span class="n">update_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;update_placeholder&#39;</span><span class="p">,</span> <span class="n">new_var</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">var_updates</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">placeholder</span><span class="p">,</span> <span class="n">var_tmp</span> <span class="ow">in</span> <span class="n">var_updates</span><span class="p">[</span><span class="n">var</span><span class="p">]:</span>
+                        <span class="n">replace_str</span> <span class="o">=</span> <span class="n">replace_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">placeholder</span><span class="p">,</span> <span class="n">var_tmp</span><span class="p">)</span>
+                <span class="n">replace_str</span> <span class="o">=</span> <span class="n">replace_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;var_placeholder&#39;</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
+
+                <span class="c1"># go through equations and replace variable occurences with the individualized replacement template</span>
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">equations</span><span class="o">.</span><span class="n">copy</span><span class="p">()):</span>
+                    <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">eq</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layer</span><span class="p">):</span>
+                        <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">assign</span> <span class="o">=</span> <span class="n">split_equation</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">replace_str</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">rhs</span><span class="p">:</span>
+                            <span class="n">rhs</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">replace_str</span><span class="p">)</span>
+                        <span class="n">equations</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{lhs}</span><span class="s2"> </span><span class="si">{assign}</span><span class="s2"> </span><span class="si">{rhs}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">equations</span><span class="p">,</span> <span class="n">updated_args</span></div>
 
 
-<div class="viewcode-block" id="update_lhs"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.update_lhs">[docs]</a><span class="k">def</span> <span class="nf">update_lhs</span><span class="p">(</span><span class="n">equations</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">equation_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">update_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">rhs_scalar</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">var_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
-    <span class="sd">&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="update_lhs"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.update_lhs">[docs]</a><span class="k">def</span> <span class="nf">update_lhs</span><span class="p">(</span><span class="n">equations</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">equation_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">update_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">var_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Update the left-hand side of all equations according to `update_num`. An update identifier will be added to all</span>
+<span class="sd">    left-hand side state-variable occurences. Convenience function for differential equation solver that involve</span>
+<span class="sd">    multiple partial updates of the state variables.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    equations</span>
+<span class="sd">        Equations, whose left-hand sides should be updated.</span>
 <span class="sd">    equation_args</span>
+<span class="sd">        Key-argument pairs including all relevant left-hand side variables.</span>
 <span class="sd">    update_num</span>
-<span class="sd">    rhs_scalar</span>
+<span class="sd">        Number of the partial udpate of the left-hand side variables.</span>
 <span class="sd">    var_dict</span>
+<span class="sd">        Key-argument pairs including the configurations of all state variables (like shape, dtype, vtype and value).</span>
+
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    tuple</span>
-
+<span class="sd">        List of the updated equations and dictionary with the equation arguments.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="n">updated_args</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">while</span> <span class="n">equation_args</span><span class="p">:</span>
+
+        <span class="c1"># extract variable</span>
         <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="o">=</span> <span class="n">equation_args</span><span class="o">.</span><span class="n">popitem</span><span class="p">()</span>
-        <span class="k">if</span> <span class="s2">&quot;_upd_&quot;</span> <span class="ow">in</span> <span class="n">key</span> <span class="ow">and</span> <span class="n">f</span><span class="s2">&quot;_upd_{update_num-1}&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
+        <span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">var</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="s2">&quot;_upd_&quot;</span> <span class="ow">in</span> <span class="n">var</span> <span class="ow">and</span> <span class="n">f</span><span class="s2">&quot;_upd_{update_num-1}&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var</span><span class="p">:</span>
+
+            <span class="c1"># add previous updates to the arguments dictionary</span>
             <span class="n">updated_args</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">key</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;_upd_{update_num-1}&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-            <span class="n">new_key</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{key}</span><span class="s2">_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span>
+
+            <span class="c1"># create new variable name</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;_upd_{update_num-1}&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">new_var</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{var}</span><span class="s2">_upd_</span><span class="si">{update_num}</span><span class="s2">&quot;</span>
+
+            <span class="c1"># go through equations and replace the left-hand side variables of differential equations</span>
             <span class="n">add_to_args</span> <span class="o">=</span> <span class="kc">False</span>
-            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">eq</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">equations</span><span class="o">.</span><span class="n">copy</span><span class="p">()):</span>
-                <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">split_equation</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">lhs</span><span class="p">:</span>
-                    <span class="n">lhs</span> <span class="o">=</span> <span class="n">new_key</span>
-                    <span class="n">equations</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{lhs}</span><span class="s2"> = </span><span class="si">{rhs_scalar}</span><span class="s2"> * (</span><span class="si">{rhs}</span><span class="s2">)&quot;</span> <span class="k">if</span> <span class="n">rhs_scalar</span> <span class="k">else</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{lhs}</span><span class="s2"> = </span><span class="si">{rhs}</span><span class="s2">&quot;</span>
-                    <span class="n">add_to_args</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">equations</span><span class="o">.</span><span class="n">copy</span><span class="p">()):</span>
+                <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">eq</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layer</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">scope</span> <span class="ow">and</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">:</span>
+                        <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">split_equation</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">lhs</span> <span class="ow">and</span> <span class="n">new_var</span> <span class="ow">in</span> <span class="n">replace</span><span class="p">(</span><span class="n">lhs</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">new_var</span><span class="p">):</span>
+                            <span class="n">de</span> <span class="o">=</span> <span class="kc">False</span>
+                            <span class="k">if</span> <span class="s2">&quot;d/dt&quot;</span> <span class="ow">in</span> <span class="n">lhs</span><span class="p">:</span>
+                                <span class="n">de</span> <span class="o">=</span> <span class="kc">True</span>
+                                <span class="n">add_to_args</span> <span class="o">=</span> <span class="kc">True</span>
+                                <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;d/dt&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                                <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                                <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                            <span class="k">elif</span> <span class="s2">&quot;&#39;&quot;</span> <span class="ow">in</span> <span class="n">lhs</span><span class="p">:</span>
+                                <span class="n">de</span> <span class="o">=</span> <span class="kc">True</span>
+                                <span class="n">add_to_args</span> <span class="o">=</span> <span class="kc">True</span>
+                                <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                                <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="n">de</span><span class="p">:</span>
+                                <span class="n">lhs</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">lhs</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">new_var</span><span class="p">)</span>
+                                <span class="n">equations</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{lhs}</span><span class="s2"> = dt * (</span><span class="si">{rhs}</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>
+
             <span class="k">if</span> <span class="n">add_to_args</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">var_dict</span><span class="p">:</span>
-                    <span class="n">arg</span> <span class="o">=</span> <span class="n">var_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-                <span class="n">updated_args</span><span class="p">[</span><span class="n">new_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
+                <span class="c1"># save updated left-hand side variable to arguments dictionary</span>
+                <span class="k">for</span> <span class="n">var_key</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">var_dict</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">var_key</span> <span class="o">==</span> <span class="n">key</span> <span class="ow">or</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{var_key}</span><span class="s2">_upd_&quot;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
+                        <span class="n">arg</span> <span class="o">=</span> <span class="n">var</span>
+                        <span class="k">break</span>
+                <span class="n">updated_args</span><span class="p">[</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{node}</span><span class="s2">/</span><span class="si">{op}</span><span class="s2">/</span><span class="si">{new_var}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
     <span class="k">return</span> <span class="n">equations</span><span class="p">,</span> <span class="n">updated_args</span></div>
+
+
+<div class="viewcode-block" id="update_equation_args"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.update_equation_args">[docs]</a><span class="k">def</span> <span class="nf">update_equation_args</span><span class="p">(</span><span class="n">args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">updates</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Save variable updates to the equation args dictionary.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    args</span>
+<span class="sd">        Equation argument dictionary.</span>
+<span class="sd">    updates</span>
+<span class="sd">        Dictionary with variable updates.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    dict</span>
+<span class="sd">        Updated equation argument dictionary.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">args_new</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="c1"># add variables updates to equation arguments</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">updates</span><span class="p">:</span>
+            <span class="n">args_new</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">updates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">args_new</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
+    <span class="c1"># check which input fields need to be updated as well</span>
+    <span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">args</span> <span class="k">if</span> <span class="s1">&#39;inputs&#39;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">inputs</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">in_key</span><span class="p">,</span> <span class="n">in_map</span> <span class="ow">in</span> <span class="n">args</span><span class="p">[</span><span class="n">inp</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">upd</span> <span class="ow">in</span> <span class="n">updates</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">in_map</span> <span class="ow">in</span> <span class="n">upd</span><span class="p">:</span>
+                    <span class="n">args_new</span><span class="p">[</span><span class="n">inp</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">upd</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span> <span class="n">upd</span><span class="p">})</span>
+                    <span class="k">break</span>
+
+    <span class="k">return</span> <span class="n">args_new</span></div>
 
 
 <div class="viewcode-block" id="parse_dict"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.parse_dict">[docs]</a><span class="k">def</span> <span class="nf">parse_dict</span><span class="p">(</span><span class="n">var_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
@@ -965,13 +1215,12 @@
 <span class="sd">    backend</span>
 <span class="sd">        Backend instance that the variables should be added to.</span>
 <span class="sd">    kwargs</span>
-<span class="sd">        Additional keyword arguments to be passed to the backend.</span>
+<span class="sd">        Additional keyword arguments to be passed to the backend methods.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    dict</span>
 <span class="sd">        Key-value pairs with the backend variable names and handles.</span>
-
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">var_dict_new</span> <span class="o">=</span> <span class="p">{}</span>
@@ -991,22 +1240,32 @@
     <span class="k">return</span> <span class="n">var_dict_new</span></div>
 
 
-<div class="viewcode-block" id="split_equation"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.split_equation">[docs]</a><span class="k">def</span> <span class="nf">split_equation</span><span class="p">(</span><span class="n">expr</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="split_equation"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.split_equation">[docs]</a><span class="k">def</span> <span class="nf">split_equation</span><span class="p">(</span><span class="n">expr</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Splits an equation string into a left-hand side, right-and side and an assign type.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    expr</span>
+<span class="sd">        Equation string. Should contain a left-hand side and a right-hand side, separated by some form of assign symbol.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-
+<span class="sd">    tuple</span>
+<span class="sd">        left-hand side string, right-hand side string, assign operation string.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># define assign types and explicit non-assign types</span>
     <span class="n">assign_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;+=&#39;</span><span class="p">,</span> <span class="s1">&#39;-=&#39;</span><span class="p">,</span> <span class="s1">&#39;*=&#39;</span><span class="p">,</span> <span class="s1">&#39;/=&#39;</span><span class="p">]</span>
     <span class="n">not_assign_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;&lt;=&#39;</span><span class="p">,</span> <span class="s1">&#39;&gt;=&#39;</span><span class="p">,</span> <span class="s1">&#39;==&#39;</span><span class="p">,</span> <span class="s1">&#39;!=&#39;</span><span class="p">]</span>
+
     <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">assign_type</span><span class="p">,</span> <span class="n">found_assign_type</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="kc">False</span>
+
+    <span class="c1"># look for assign types in expression</span>
     <span class="k">for</span> <span class="n">assign_type</span> <span class="ow">in</span> <span class="n">assign_types</span><span class="p">:</span>
+
         <span class="k">if</span> <span class="n">assign_type</span> <span class="ow">in</span> <span class="n">expr</span><span class="p">:</span>
+
+             <span class="c1"># split expression via assign symbol</span>
             <span class="k">if</span> <span class="n">f</span><span class="s1">&#39; </span><span class="si">{assign_type}</span><span class="s1"> &#39;</span> <span class="ow">in</span> <span class="n">expr</span><span class="p">:</span>
                 <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39; </span><span class="si">{assign_type}</span><span class="s1"> &#39;</span><span class="p">,</span> <span class="n">maxsplit</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">f</span><span class="s1">&#39; </span><span class="si">{assign_type}</span><span class="s1">&#39;</span> <span class="ow">in</span> <span class="n">expr</span><span class="p">:</span>
@@ -1017,15 +1276,23 @@
                 <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">assign_type</span><span class="p">,</span> <span class="n">maxsplit</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
             <span class="n">found_assign_type</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">break</span>
+
         <span class="k">elif</span> <span class="s1">&#39;=&#39;</span> <span class="ow">in</span> <span class="n">expr</span><span class="p">:</span>
+
+            <span class="c1"># assume standard assign</span>
             <span class="n">assign_type</span> <span class="o">=</span> <span class="s1">&#39;=&#39;</span>
             <span class="n">assign</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="c1"># check if `=` symbol marks an assign operation or not</span>
             <span class="k">for</span> <span class="n">not_assign_type</span> <span class="ow">in</span> <span class="n">not_assign_types</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">not_assign_type</span> <span class="ow">in</span> <span class="n">expr</span><span class="p">:</span>
                     <span class="n">expr_tmp</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">not_assign_type</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
                     <span class="k">if</span> <span class="s1">&#39;=&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">expr_tmp</span><span class="p">:</span>
                         <span class="n">assign</span> <span class="o">=</span> <span class="kc">False</span>
+
             <span class="k">if</span> <span class="n">assign</span><span class="p">:</span>
+
+                <span class="c1"># split equation via `=` symbol</span>
                 <span class="k">if</span> <span class="n">f</span><span class="s1">&#39; = &#39;</span> <span class="ow">in</span> <span class="n">expr</span><span class="p">:</span>
                     <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39; = &#39;</span><span class="p">,</span> <span class="n">maxsplit</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
                 <span class="k">elif</span> <span class="n">f</span><span class="s1">&#39; </span><span class="si">{assign_type}</span><span class="s1">&#39;</span> <span class="ow">in</span> <span class="n">expr</span><span class="p">:</span>
@@ -1042,8 +1309,9 @@
     <span class="k">return</span> <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">assign_type</span></div>
 
 
-<div class="viewcode-block" id="replace"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.replace">[docs]</a><span class="k">def</span> <span class="nf">replace</span><span class="p">(</span><span class="n">eq</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">term</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">replacement</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-    <span class="sd">&quot;&quot;&quot;Replaces a term in an equation with a replacement term.</span>
+<div class="viewcode-block" id="replace"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.replace">[docs]</a><span class="k">def</span> <span class="nf">replace</span><span class="p">(</span><span class="n">eq</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">term</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">replacement</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rhs_only</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="n">lhs_only</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Replaces a term in an equation with a replacement term (save replacement).</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -1053,12 +1321,15 @@
 <span class="sd">        Term that should be replaced.</span>
 <span class="sd">    replacement</span>
 <span class="sd">        Replacement for all occurences of term.</span>
+<span class="sd">    rhs_only</span>
+<span class="sd">        If True, replacements will only be performed in right-hand side of the equation.</span>
+<span class="sd">    lhs_only</span>
+<span class="sd">        IF True, replacements will only be performed in left-hand side of the equation.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    str</span>
 <span class="sd">        The updated equation.</span>
-
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># define follow-up operations/signs that are allowed to follow directly after term in eq</span>
@@ -1077,9 +1348,13 @@
         <span class="n">idx_follow_op</span> <span class="o">=</span> <span class="n">idx</span><span class="o">+</span><span class="nb">len</span><span class="p">(</span><span class="n">term</span><span class="p">)</span>
 
         <span class="c1"># if it is an allowed sign, replace term, else not</span>
+        <span class="n">replaced</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">idx_follow_op</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span> <span class="ow">and</span> <span class="n">eq</span><span class="p">[</span><span class="n">idx_follow_op</span><span class="p">]</span> <span class="ow">in</span> <span class="n">allowed_follow_ops</span><span class="p">)</span> <span class="ow">or</span> <span class="n">idx_follow_op</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">eq</span><span class="p">):</span>
-            <span class="n">eq_new</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{eq[:idx]}</span><span class="s2"> </span><span class="si">{replacement}</span><span class="s2">&quot;</span>
-        <span class="k">else</span><span class="p">:</span>
+            <span class="n">eq_part</span> <span class="o">=</span> <span class="n">eq</span><span class="p">[:</span><span class="n">idx</span><span class="p">]</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">rhs_only</span> <span class="ow">and</span> <span class="s2">&quot;=&quot;</span> <span class="ow">in</span> <span class="n">eq_part</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">lhs_only</span> <span class="ow">and</span> <span class="s2">&quot;=&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">eq_part</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="ow">not</span> <span class="n">rhs_only</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">lhs_only</span><span class="p">):</span>
+                <span class="n">eq_new</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{eq_part}</span><span class="s2"> </span><span class="si">{replacement}</span><span class="s2">&quot;</span>
+                <span class="n">replaced</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">replaced</span><span class="p">:</span>
             <span class="n">eq_new</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{eq[:idx_follow_op]}</span><span class="s2">&quot;</span>
 
         <span class="c1"># jump to next appearance of term in eq</span>
@@ -1090,6 +1365,74 @@
     <span class="n">eq_new</span> <span class="o">+=</span> <span class="n">eq</span>
 
     <span class="k">return</span> <span class="n">eq_new</span></div>
+
+
+<div class="viewcode-block" id="is_diff_eq"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.is_diff_eq">[docs]</a><span class="k">def</span> <span class="nf">is_diff_eq</span><span class="p">(</span><span class="n">eq</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Checks whether `eq` is a differential equation or not.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    eq</span>
+<span class="sd">        Equation string.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    bool</span>
+<span class="sd">        True, if `eq` is a differential equation.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">split_equation</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s2">&quot;d/dt&quot;</span> <span class="ow">in</span> <span class="n">lhs</span><span class="p">:</span>
+        <span class="n">de</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">elif</span> <span class="s2">&quot;&#39;&quot;</span> <span class="ow">in</span> <span class="n">lhs</span><span class="p">:</span>
+        <span class="n">de</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">elif</span> <span class="s2">&quot;dt_test&quot;</span> <span class="ow">in</span> <span class="n">replace</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s2">&quot;dt&quot;</span><span class="p">,</span> <span class="s2">&quot;dt_test&quot;</span><span class="p">):</span>
+        <span class="n">de</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">de</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">return</span> <span class="n">de</span></div>
+
+
+<div class="viewcode-block" id="is_coupled"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.parser.is_coupled">[docs]</a><span class="k">def</span> <span class="nf">is_coupled</span><span class="p">(</span><span class="n">eqs</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Checks whether a list of equations defines a set of coupled equations, i.e. at least one left-hand side variable</span>
+<span class="sd">    appears in the right-hand side of another equation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    eqs</span>
+<span class="sd">        List of equation strings</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    bool</span>
+<span class="sd">        True, if at least one left-hand side variable appears in the right-hand side of another equation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># extract lhs, rhs and scope of each equation</span>
+    <span class="n">lhs_col</span><span class="p">,</span> <span class="n">rhs_col</span><span class="p">,</span> <span class="n">scope_col</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">eq</span><span class="p">,</span> <span class="n">scope</span> <span class="ow">in</span> <span class="n">eqs</span><span class="p">:</span>
+        <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">split_equation</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span>
+        <span class="n">lhs_col</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">lhs</span><span class="p">)</span>
+        <span class="n">rhs_col</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rhs</span><span class="p">)</span>
+        <span class="n">scope_col</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">scope</span><span class="p">)</span>
+
+    <span class="c1"># check whether equations are coupled</span>
+    <span class="k">for</span> <span class="n">lhs</span><span class="p">,</span> <span class="n">lhs_scope</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">lhs_col</span><span class="p">,</span> <span class="n">scope_col</span><span class="p">):</span>
+        <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;d/dt&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;[&quot;</span> <span class="ow">in</span> <span class="n">lhs</span><span class="p">:</span>
+            <span class="n">l_idx</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s2">&quot;[&quot;</span><span class="p">)</span>
+            <span class="n">r_idx</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s2">&quot;]&quot;</span><span class="p">)</span>
+            <span class="n">lhs</span> <span class="o">=</span> <span class="n">lhs</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">lhs</span><span class="p">[</span><span class="n">l_idx</span><span class="p">:</span><span class="n">r_idx</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">rhs</span><span class="p">,</span> <span class="n">rhs_scope</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">rhs_col</span><span class="p">,</span> <span class="n">scope_col</span><span class="p">):</span>
+            <span class="k">if</span> <span class="s2">&quot;__test_string__&quot;</span> <span class="ow">in</span> <span class="n">replace</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">lhs</span><span class="p">,</span> <span class="s2">&quot;__test_string__&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">rhs_scope</span> <span class="o">==</span> <span class="n">lhs_scope</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="k">return</span> <span class="kc">False</span></div>
 </pre></div>
 
           </div>

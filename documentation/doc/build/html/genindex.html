@@ -62,6 +62,7 @@
  | <a href="#S"><strong>S</strong></a>
  | <a href="#T"><strong>T</strong></a>
  | <a href="#U"><strong>U</strong></a>
+ | <a href="#V"><strong>V</strong></a>
  | <a href="#W"><strong>W</strong></a>
  
 </div>
@@ -100,6 +101,8 @@
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.CodeGen.add_indent">add_indent() (pyrates.backend.numpy_backend.CodeGen method)</a>
 </li>
+      <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.add_input_layer">add_input_layer() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
+</li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.add_layer">add_layer() (in module pyrates.backend.numpy_backend)</a>
 
       <ul>
@@ -110,8 +113,6 @@
 </li>
       <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.add_node">add_node() (pyrates.ir.circuit.CircuitIR method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.add_nodes_from">add_nodes_from() (pyrates.ir.circuit.CircuitIR method)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.add_op">add_op() (in module pyrates.backend.numpy_backend)</a>
@@ -119,8 +120,18 @@
       <ul>
         <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.add_op">(pyrates.backend.numpy_backend.NumpyBackend method)</a>
 </li>
+        <li><a href="pyrates.ir.html#pyrates.ir.node.VectorizedNodeIR.add_op">(pyrates.ir.node.VectorizedNodeIR method)</a>
+</li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pyrates.ir.html#pyrates.ir.node.VectorizedNodeIR.add_op_edge">add_op_edge() (pyrates.ir.node.VectorizedNodeIR method)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.add_operator">add_operator() (pyrates.ir.operator_graph.VectorizedOperatorGraph method)</a>
+</li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.add_output_layer">add_output_layer() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.ProtectedVariableDict.add_parsed_variable">add_parsed_variable() (pyrates.ir.operator.ProtectedVariableDict method)</a>
 </li>
       <li><a href="pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.add_template_information">add_template_information() (pyrates.utility.grid_search.ClusterGridSearch static method)</a>
 </li>
@@ -131,6 +142,8 @@
 </li>
       </ul></li>
       <li><a href="pyrates.utility.html#pyrates.utility.data_analysis.analytic_signal">analytic_signal() (in module pyrates.utility.data_analysis)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.append_values">append_values() (pyrates.ir.operator_graph.VectorizedOperatorGraph method)</a>
 </li>
       <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.abc.AbstractBaseTemplate.apply">apply() (pyrates.frontend.template.abc.AbstractBaseTemplate method)</a>
 
@@ -184,20 +197,18 @@
 </li>
       <li><a href="pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.chunk_grid">chunk_grid() (pyrates.utility.grid_search.ClusterGridSearch static method)</a>
 </li>
-      <li><a href="pyrates.frontend.html#pyrates.frontend.nxgraph.Circuit2NetDef">Circuit2NetDef (class in pyrates.frontend.nxgraph)</a>
-</li>
       <li><a href="pyrates.frontend.html#pyrates.frontend.circuit_from_yaml">circuit_from_yaml() (in module pyrates.frontend)</a>
 </li>
       <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR">CircuitIR (class in pyrates.ir.circuit)</a>
 </li>
       <li><a href="pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.CircuitTemplate">CircuitTemplate (class in pyrates.frontend.template.circuit.circuit)</a>
 </li>
-      <li><a href="pyrates.backend.html#pyrates.backend.computegraph.ComputeGraph.clear">clear() (pyrates.backend.computegraph.ComputeGraph method)</a>
+      <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.clear">clear() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
 
       <ul>
-        <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.clear">(pyrates.backend.numpy_backend.NumpyBackend method)</a>
-</li>
         <li><a href="pyrates.backend.html#pyrates.backend.parser.ExpressionParser.clear">(pyrates.backend.parser.ExpressionParser method)</a>
+</li>
+        <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.clear">(pyrates.ir.circuit.CircuitIR method)</a>
 </li>
       </ul></li>
   </ul></td>
@@ -211,10 +222,12 @@
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.CodeGen">CodeGen (class in pyrates.backend.numpy_backend)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.compile">compile() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
+
+      <ul>
+        <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.compile">(pyrates.ir.circuit.CircuitIR method)</a>
 </li>
+      </ul></li>
       <li><a href="pyrates.backend.html#pyrates.backend.computegraph.ComputeGraph">ComputeGraph (class in pyrates.backend.computegraph)</a>
-</li>
-      <li><a href="pyrates.ir.html#pyrates.ir.operator.OperatorIR.copy">copy() (pyrates.ir.operator.OperatorIR method)</a>
 </li>
       <li><a href="pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.create_cgs_config">create_cgs_config() (pyrates.utility.grid_search.ClusterGridSearch static method)</a>
 </li>
@@ -232,9 +245,11 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.frontend.html#pyrates.frontend.utility.deep_freeze">deep_freeze() (in module pyrates.frontend.utility)</a>
 </li>
+      <li><a href="pyrates.utility.html#pyrates.utility.filestorage.CustomEncoder.default">default() (pyrates.utility.filestorage.CustomEncoder method)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="pyrates.utility.html#pyrates.utility.filestorage.CustomEncoder.default">default() (pyrates.utility.filestorage.CustomEncoder method)</a>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.Variable.dtype">dtype() (pyrates.ir.operator.Variable property)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.ExpressionParser.dtypes">dtypes (pyrates.backend.parser.ExpressionParser attribute)</a>
 </li>
@@ -251,6 +266,8 @@
       <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.edges">edges() (pyrates.ir.circuit.CircuitIR property)</a>
 </li>
       <li><a href="pyrates.frontend.template.edge.html#pyrates.frontend.template.edge.edge.EdgeTemplate">EdgeTemplate (class in pyrates.frontend.template.edge.edge)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.OperatorIR.equations">equations() (pyrates.ir.operator.OperatorIR property)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.eval">eval() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
 
@@ -290,26 +307,32 @@
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.ExpressionParser">ExpressionParser (class in pyrates.backend.parser)</a>
 </li>
+      <li><a href="pyrates.ir.html#pyrates.ir.node.VectorizedNodeIR.extend">extend() (pyrates.ir.node.VectorizedNodeIR method)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="F">F</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pyrates.utility.html#pyrates.utility.data_analysis.fft">fft() (in module pyrates.utility.data_analysis)</a>
+</li>
       <li><a href="pyrates.frontend.html#pyrates.frontend.dict.from_circuit">from_circuit() (in module pyrates.frontend.dict)</a>
 
       <ul>
-        <li><a href="pyrates.frontend.html#pyrates.frontend.nxgraph.from_circuit">(in module pyrates.frontend.nxgraph)</a>
-</li>
         <li><a href="pyrates.frontend.html#pyrates.frontend.yaml.from_circuit">(in module pyrates.frontend.yaml)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.from_circuits">from_circuits() (pyrates.ir.circuit.CircuitIR class method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.abc.AbstractBaseTemplate.from_yaml">from_yaml() (pyrates.frontend.template.abc.AbstractBaseTemplate class method)</a>
+
+      <ul>
+        <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.from_yaml">(pyrates.ir.circuit.CircuitIR static method)</a>
 </li>
+      </ul></li>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.ExpressionParser.funcs">funcs (pyrates.backend.parser.ExpressionParser attribute)</a>
 </li>
       <li><a href="pyrates.utility.html#pyrates.utility.data_analysis.functional_connectivity">functional_connectivity() (in module pyrates.utility.data_analysis)</a>
@@ -340,12 +363,14 @@
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.get_layer">get_layer() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
 </li>
+      <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.get_node_var">get_node_var() (pyrates.ir.circuit.CircuitIR method)</a>
+</li>
       <li><a href="pyrates.utility.html#pyrates.utility.filestorage.get_simulation_data">get_simulation_data() (in module pyrates.utility.filestorage)</a>
 </li>
-      <li><a href="pyrates.backend.html#pyrates.backend.computegraph.ComputeGraph.get_var">get_var() (pyrates.backend.computegraph.ComputeGraph method)</a>
+      <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.get_var">get_var() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
 
       <ul>
-        <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.get_var">(pyrates.backend.numpy_backend.NumpyBackend method)</a>
+        <li><a href="pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowBackend.get_var">(pyrates.backend.tensorflow_backend.TensorflowBackend method)</a>
 </li>
       </ul></li>
   </ul></td>
@@ -359,12 +384,16 @@
 </li>
         <li><a href="pyrates.ir.html#pyrates.ir.node.NodeIR.getitem_from_iterator">(pyrates.ir.node.NodeIR method)</a>
 </li>
+        <li><a href="pyrates.ir.html#pyrates.ir.node.VectorizedNodeIR.getitem_from_iterator">(pyrates.ir.node.VectorizedNodeIR method)</a>
+</li>
         <li><a href="pyrates.ir.html#pyrates.ir.operator.OperatorIR.getitem_from_iterator">(pyrates.ir.operator.OperatorIR method)</a>
 </li>
-        <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.OperatorGraph.getitem_from_iterator">(pyrates.ir.operator_graph.OperatorGraph method)</a>
+        <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.getitem_from_iterator">(pyrates.ir.operator_graph.VectorizedOperatorGraph method)</a>
 </li>
       </ul></li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.goto_layer">goto_layer() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.graph">graph (pyrates.ir.circuit.CircuitIR attribute)</a>
 </li>
       <li><a href="pyrates.utility.html#pyrates.utility.grid_search.grid_search">grid_search() (in module pyrates.utility.grid_search)</a>
 </li>
@@ -382,11 +411,19 @@
 </li>
       <li><a href="pyrates.ir.html#pyrates.ir.edge.EdgeIR.input">input() (pyrates.ir.edge.EdgeIR property)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.ir.html#pyrates.ir.edge.EdgeIR.input_var">input_var() (pyrates.ir.edge.EdgeIR property)</a>
 </li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.OperatorIR.inputs">inputs() (pyrates.ir.operator.OperatorIR property)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot">Interactive2DParamPlot (class in pyrates.utility.visualization)</a>
+</li>
+      <li><a href="pyrates.backend.html#pyrates.backend.parser.is_coupled">is_coupled() (in module pyrates.backend.parser)</a>
+</li>
+      <li><a href="pyrates.backend.html#pyrates.backend.parser.is_diff_eq">is_diff_eq() (in module pyrates.backend.parser)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.ProtectedVariableDict.items">items() (pyrates.ir.operator.ProtectedVariableDict method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -400,22 +437,28 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.operator.OperatorTemplate.key_map">key_map (pyrates.frontend.template.operator.OperatorTemplate attribute)</a>
 </li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.ProtectedVariableDict.keys">keys() (pyrates.ir.operator.ProtectedVariableDict method)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.label">label (pyrates.ir.circuit.CircuitIR attribute)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.label_map">label_map (pyrates.ir.circuit.CircuitIR attribute)</a>
+</li>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.ExpressionParser.lhs">lhs (pyrates.backend.parser.ExpressionParser attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.utility.html#pyrates.utility.annarchy_wrapper.linearize_grid">linearize_grid() (in module pyrates.utility.annarchy_wrapper)</a>
 
       <ul>
         <li><a href="pyrates.utility.html#pyrates.utility.grid_search.linearize_grid">(in module pyrates.utility.grid_search)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.utility.html#pyrates.utility.visualization.load_fig_from_pickle">load_fig_from_pickle() (in module pyrates.utility.visualization)</a>
 </li>
   </ul></td>
@@ -426,13 +469,11 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.utility.html#pyrates.utility.worker_template.main">main() (in module pyrates.utility.worker_template)</a>
 </li>
-      <li><a href="pyrates.utility.html#pyrates.utility.mne_wrapper.mne_from_csv">mne_from_csv() (in module pyrates.utility.mne_wrapper)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="pyrates.utility.html#pyrates.utility.mne_wrapper.mne_from_dataframe">mne_from_dataframe() (in module pyrates.utility.mne_wrapper)</a>
+      <li><a href="pyrates.utility.html#pyrates.utility.mne_wrapper.mne_from_csv">mne_from_csv() (in module pyrates.utility.mne_wrapper)</a>
 </li>
-      <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.move_edge_operators_to_nodes">move_edge_operators_to_nodes() (pyrates.ir.circuit.CircuitIR method)</a>
+      <li><a href="pyrates.utility.html#pyrates.utility.mne_wrapper.mne_from_dataframe">mne_from_dataframe() (in module pyrates.utility.mne_wrapper)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -443,8 +484,6 @@
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.PyRatesOp.n_consts">n_consts (pyrates.backend.numpy_backend.PyRatesOp attribute)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyVar.n_vars">n_vars (pyrates.backend.numpy_backend.NumpyVar attribute)</a>
-</li>
-      <li><a href="pyrates.frontend.html#pyrates.frontend.nxgraph.Circuit2NetDef.network_def">network_def() (pyrates.frontend.nxgraph.Circuit2NetDef class method)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.next_layer">next_layer() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
 </li>
@@ -470,11 +509,15 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.ExpressionParser.op">op (pyrates.backend.parser.ExpressionParser attribute)</a>
 </li>
+      <li><a href="pyrates.ir.html#pyrates.ir.node.VectorizedNodeIR.op_graph">op_graph (pyrates.ir.node.VectorizedNodeIR attribute)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.node.NodeIR.op_graph">op_graph() (pyrates.ir.node.NodeIR property)</a>
+</li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.PyRatesOp.op_names">op_names (pyrates.backend.numpy_backend.PyRatesOp attribute)</a>
 </li>
       <li><a href="pyrates.frontend.html#pyrates.frontend.operator_from_yaml">operator_from_yaml() (in module pyrates.frontend)</a>
 </li>
-      <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.OperatorGraph">OperatorGraph (class in pyrates.ir.operator_graph)</a>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.OperatorGraph">OperatorGraph() (in module pyrates.ir.operator_graph)</a>
 </li>
       <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.operator_graph.OperatorGraphTemplate">OperatorGraphTemplate (class in pyrates.frontend.template.operator_graph)</a>
 </li>
@@ -485,15 +528,23 @@
       <li><a href="pyrates.ir.html#pyrates.ir.node.NodeIR.operators">operators() (pyrates.ir.node.NodeIR property)</a>
 
       <ul>
-        <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.OperatorGraph.operators">(pyrates.ir.operator_graph.OperatorGraph method)</a>
+        <li><a href="pyrates.ir.html#pyrates.ir.node.VectorizedNodeIR.operators">(pyrates.ir.node.VectorizedNodeIR property)</a>
+</li>
+        <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.operators">(pyrates.ir.operator_graph.VectorizedOperatorGraph property)</a>
 </li>
       </ul></li>
       <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.operator.OperatorTemplate">OperatorTemplate (class in pyrates.frontend.template.operator)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.ExpressionParser.ops">ops (pyrates.backend.parser.ExpressionParser attribute)</a>
 </li>
-      <li><a href="pyrates.ir.html#pyrates.ir.edge.EdgeIR.output">output() (pyrates.ir.edge.EdgeIR property)</a>
+      <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.optimize_graph_in_place">optimize_graph_in_place() (pyrates.ir.circuit.CircuitIR method)</a>
 </li>
+      <li><a href="pyrates.ir.html#pyrates.ir.edge.EdgeIR.output">output() (pyrates.ir.edge.EdgeIR property)</a>
+
+      <ul>
+        <li><a href="pyrates.ir.html#pyrates.ir.operator.OperatorIR.output">(pyrates.ir.operator.OperatorIR property)</a>
+</li>
+      </ul></li>
       <li><a href="pyrates.ir.html#pyrates.ir.edge.EdgeIR.output_var">output_var() (pyrates.ir.edge.EdgeIR property)</a>
 </li>
   </ul></td>
@@ -506,7 +557,7 @@
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.parse_dict">parse_dict() (in module pyrates.backend.parser)</a>
 </li>
-      <li><a href="pyrates.backend.html#pyrates.backend.parser.parse_equation_list">parse_equation_list() (in module pyrates.backend.parser)</a>
+      <li><a href="pyrates.backend.html#pyrates.backend.parser.parse_equation_system">parse_equation_system() (in module pyrates.backend.parser)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.parse_equations">parse_equations() (in module pyrates.backend.parser)</a>
 </li>
@@ -542,6 +593,8 @@
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.previous_layer">previous_layer() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
 </li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.ProtectedVariableDict">ProtectedVariableDict (class in pyrates.ir.operator)</a>
+</li>
       <li><a href="pyrates.html#module-pyrates">pyrates (module)</a>
 </li>
       <li><a href="pyrates.backend.html#module-pyrates.backend">pyrates.backend (module)</a>
@@ -561,8 +614,6 @@
       <li><a href="pyrates.frontend.html#module-pyrates.frontend.dict">pyrates.frontend.dict (module)</a>
 </li>
       <li><a href="pyrates.frontend.html#module-pyrates.frontend.file">pyrates.frontend.file (module)</a>
-</li>
-      <li><a href="pyrates.frontend.html#module-pyrates.frontend.nxgraph">pyrates.frontend.nxgraph (module)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
@@ -649,9 +700,9 @@
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.run">run() (in module pyrates.backend.numpy_backend)</a>
 
       <ul>
-        <li><a href="pyrates.backend.html#pyrates.backend.computegraph.ComputeGraph.run">(pyrates.backend.computegraph.ComputeGraph method)</a>
-</li>
         <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.run">(pyrates.backend.numpy_backend.NumpyBackend method)</a>
+</li>
+        <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.run">(pyrates.ir.circuit.CircuitIR method)</a>
 </li>
         <li><a href="pyrates.utility.html#pyrates.utility.genetic_algorithm.GeneticAlgorithmTemplate.run">(pyrates.utility.genetic_algorithm.GeneticAlgorithmTemplate method)</a>
 </li>
@@ -686,11 +737,15 @@
 </li>
       <li><a href="pyrates.utility.html#pyrates.utility.visualization.Interactive2DParamPlot.set_series_ylabel">set_series_ylabel() (pyrates.utility.visualization.Interactive2DParamPlot method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.Variable.shape">shape() (pyrates.ir.operator.Variable property)</a>
+</li>
       <li><a href="pyrates.utility.html#pyrates.utility.visualization.show_graph">show_graph() (in module pyrates.utility.visualization)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.ExpressionParser.solve">solve (pyrates.backend.parser.ExpressionParser attribute)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.circuit.sort_equations">sort_equations() (in module pyrates.ir.circuit)</a>
 </li>
       <li><a href="pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute.spawn_thread">spawn_thread() (pyrates.utility.grid_search.ClusterCompute method)</a>
 </li>
@@ -705,6 +760,8 @@
 </li>
       </ul></li>
       <li><a href="pyrates.utility.html#pyrates.utility.grid_search.StreamTee">StreamTee (class in pyrates.utility.grid_search)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR.sub_circuits">sub_circuits (pyrates.ir.circuit.CircuitIR attribute)</a>
 </li>
       <li><a href="pyrates.ir.html#pyrates.ir.circuit.SubCircuitView">SubCircuitView (class in pyrates.ir.circuit)</a>
 </li>
@@ -728,6 +785,8 @@
         <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.operator_graph.OperatorGraphTemplate.target_ir">(pyrates.frontend.template.operator_graph.OperatorGraphTemplate attribute)</a>
 </li>
       </ul></li>
+      <li><a href="pyrates.ir.html#pyrates.ir.abc.AbstractBaseIR.template">template() (pyrates.ir.abc.AbstractBaseIR property)</a>
+</li>
       <li><a href="pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowAssignOp">TensorflowAssignOp (class in pyrates.backend.tensorflow_backend)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowBackend">TensorflowBackend (class in pyrates.backend.tensorflow_backend)</a>
@@ -738,25 +797,23 @@
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.tensorflow_backend.TensorflowVar">TensorflowVar (class in pyrates.backend.tensorflow_backend)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.utility.html#pyrates.utility.grid_search.ClusterCompute.thread_master">thread_master() (pyrates.utility.grid_search.ClusterCompute method)</a>
 
       <ul>
         <li><a href="pyrates.utility.html#pyrates.utility.grid_search.ClusterGridSearch.thread_master">(pyrates.utility.grid_search.ClusterGridSearch method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.utility.html#pyrates.utility.data_analysis.time_frequency">time_frequency() (in module pyrates.utility.data_analysis)</a>
 </li>
-      <li><a href="pyrates.frontend.html#pyrates.frontend.nxgraph.to_circuit">to_circuit() (in module pyrates.frontend.nxgraph)</a>
-
-      <ul>
-        <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.to_circuit">(in module pyrates.frontend.template)</a>
+      <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.to_circuit">to_circuit() (in module pyrates.frontend.template)</a>
 </li>
-      </ul></li>
       <li><a href="pyrates.frontend.html#pyrates.frontend.yaml.to_dict">to_dict() (in module pyrates.frontend.yaml)</a>
 
       <ul>
+        <li><a href="pyrates.ir.html#pyrates.ir.operator.ProtectedVariableDict.to_dict">(pyrates.ir.operator.ProtectedVariableDict method)</a>
+</li>
         <li><a href="pyrates.utility.html#pyrates.utility.filestorage.RepresentationBase.to_dict">(pyrates.utility.filestorage.RepresentationBase method)</a>
 </li>
       </ul></li>
@@ -764,18 +821,10 @@
 </li>
       <li><a href="pyrates.utility.html#pyrates.utility.filestorage.RepresentationBase.to_json">to_json() (pyrates.utility.filestorage.RepresentationBase method)</a>
 </li>
-      <li><a href="pyrates.frontend.html#pyrates.frontend.dict.to_node">to_node() (in module pyrates.frontend.dict)</a>
-
-      <ul>
-        <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.to_node">(in module pyrates.frontend.template)</a>
+      <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.to_node">to_node() (in module pyrates.frontend.template)</a>
 </li>
-      </ul></li>
-      <li><a href="pyrates.frontend.html#pyrates.frontend.dict.to_operator">to_operator() (in module pyrates.frontend.dict)</a>
-
-      <ul>
-        <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.to_operator">(in module pyrates.frontend.template)</a>
+      <li><a href="pyrates.frontend.template.html#pyrates.frontend.template.to_operator">to_operator() (in module pyrates.frontend.template)</a>
 </li>
-      </ul></li>
       <li><a href="pyrates.frontend.html#pyrates.frontend.yaml.to_template">to_template() (in module pyrates.frontend.yaml)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.top_layer">top_layer() (pyrates.backend.numpy_backend.NumpyBackend method)</a>
@@ -789,6 +838,8 @@
       <li><a href="pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.update_dict">update_dict() (in module pyrates.frontend.template.circuit.circuit)</a>
 </li>
       <li><a href="pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.update_edges">update_edges() (in module pyrates.frontend.template.circuit.circuit)</a>
+</li>
+      <li><a href="pyrates.backend.html#pyrates.backend.parser.update_equation_args">update_equation_args() (in module pyrates.backend.parser)</a>
 </li>
       <li><a href="pyrates.backend.html#pyrates.backend.parser.update_lhs">update_lhs() (in module pyrates.backend.parser)</a>
 </li>
@@ -811,8 +862,38 @@
   </ul></td>
 </tr></table>
 
+<h2 id="V">V</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pyrates.ir.html#pyrates.ir.edge.EdgeIR.values">values (pyrates.ir.edge.EdgeIR attribute)</a>
+
+      <ul>
+        <li><a href="pyrates.ir.html#pyrates.ir.node.NodeIR.values">(pyrates.ir.node.NodeIR attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.ProtectedVariableDict.values">values() (pyrates.ir.operator.ProtectedVariableDict method)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.Variable">Variable (class in pyrates.ir.operator)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.OperatorIR.variables">variables() (pyrates.ir.operator.OperatorIR property)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.node.VectorizedNodeIR">VectorizedNodeIR (class in pyrates.ir.node)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph">VectorizedOperatorGraph (class in pyrates.ir.operator_graph)</a>
+</li>
+      <li><a href="pyrates.ir.html#pyrates.ir.operator.Variable.vtype">vtype() (pyrates.ir.operator.Variable property)</a>
+</li>
+  </ul></td>
+</tr></table>
+
 <h2 id="W">W</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pyrates.utility.html#pyrates.utility.data_analysis.welch">welch() (in module pyrates.utility.data_analysis)</a>
+</li>
+  </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="pyrates.utility.html#pyrates.utility.visualization.write_graph">write_graph() (in module pyrates.utility.visualization)</a>
 </li>

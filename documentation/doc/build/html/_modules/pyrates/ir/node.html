@@ -39,8 +39,7 @@
           <div class="body" role="main">
             
   <h1>Source code for pyrates.ir.node</h1><div class="highlight"><pre>
-<span></span>
-<span class="c1"># -*- coding: utf-8 -*-</span>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
 <span class="c1">#</span>
 <span class="c1">#</span>
 <span class="c1"># PyRates software framework for flexible implementation of neural </span>
@@ -69,21 +68,29 @@
 <span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">copy</span><span class="p">,</span> <span class="n">deepcopy</span>
 <span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Iterator</span>
 
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
 <span class="kn">from</span> <span class="nn">pyrates.ir.abc</span> <span class="k">import</span> <span class="n">AbstractBaseIR</span>
-<span class="kn">from</span> <span class="nn">pyrates.ir.operator_graph</span> <span class="k">import</span> <span class="n">OperatorGraph</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.operator_graph</span> <span class="k">import</span> <span class="n">OperatorGraph</span><span class="p">,</span> <span class="n">VectorizedOperatorGraph</span>
 
 <span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
 
 
 <div class="viewcode-block" id="NodeIR"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.node.NodeIR">[docs]</a><span class="k">class</span> <span class="nc">NodeIR</span><span class="p">(</span><span class="n">AbstractBaseIR</span><span class="p">):</span>
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;_op_graph&quot;</span><span class="p">,</span> <span class="s2">&quot;values&quot;</span><span class="p">]</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="nb">dict</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">template</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span> <span class="o">=</span> <span class="n">OperatorGraph</span><span class="p">(</span><span class="n">operators</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_op_graph</span> <span class="o">=</span> <span class="n">OperatorGraph</span><span class="p">(</span><span class="n">operators</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">values</span> <span class="o">=</span> <span class="n">values</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">op_graph</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_op_graph</span>
 
 <div class="viewcode-block" id="NodeIR.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.node.NodeIR.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
         <span class="sd">&quot;&quot;&quot;Alias for self.op_graph.getitem_from_iterator&quot;&quot;&quot;</span>
@@ -96,7 +103,114 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">operators</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">operators</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">operators</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+
+<div class="viewcode-block" id="VectorizedNodeIR"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.node.VectorizedNodeIR">[docs]</a><span class="k">class</span> <span class="nc">VectorizedNodeIR</span><span class="p">(</span><span class="n">AbstractBaseIR</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it.&quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;op_graph&quot;</span><span class="p">,</span> <span class="s2">&quot;_length&quot;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_ir</span><span class="p">:</span> <span class="n">NodeIR</span><span class="p">):</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">node_ir</span><span class="o">.</span><span class="n">template</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span> <span class="o">=</span> <span class="n">VectorizedOperatorGraph</span><span class="p">(</span><span class="n">node_ir</span><span class="o">.</span><span class="n">op_graph</span><span class="p">,</span> <span class="n">node_ir</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># reformat all values to be lists of themselves (adding an outer vector dimension)</span>
+        <span class="c1"># if len(node_ir.op_graph) == 0:</span>
+        <span class="c1">#     op_key, data = next(iter(self.op_graph.node(data=True)))</span>
+        <span class="c1">#     for var in data[&quot;variables&quot;]:</span>
+        <span class="c1">#         values[op_key] = {var: [0.]}</span>
+        <span class="c1"># else:</span>
+
+        <span class="c1"># save current length of this node vector.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_length</span> <span class="o">=</span> <span class="mi">1</span>
+
+<div class="viewcode-block" id="VectorizedNodeIR.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.node.VectorizedNodeIR.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+        <span class="sd">&quot;&quot;&quot;Alias for self.op_graph.getitem_from_iterator&quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">getitem_from_iterator</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return an iterator containing all operator labels in the operator graph.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">operators</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">operators</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+<div class="viewcode-block" id="VectorizedNodeIR.extend"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.node.VectorizedNodeIR.extend">[docs]</a>    <span class="k">def</span> <span class="nf">extend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">NodeIR</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Extend variables vectors by values from one additional node.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        node</span>
+<span class="sd">            A node whose values are used to extend the vector dimension of this vectorized node.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># add values to respective lists in collapsed node</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">append_values</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_length</span> <span class="o">+=</span> <span class="mi">1</span></div>
+
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns size of this vector node as recorded in self._length.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self._length</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_length</span>
+
+<div class="viewcode-block" id="VectorizedNodeIR.add_op"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.node.VectorizedNodeIR.add_op">[docs]</a>    <span class="k">def</span> <span class="nf">add_op</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">inputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">equations</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">variables</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Wrapper for internal `op_graph.add_operator` that adds any values to node-level values dictionary for quick</span>
+<span class="sd">        access</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        op_key</span>
+<span class="sd">            Name of operator to be added</span>
+<span class="sd">        inputs</span>
+<span class="sd">            dictionary definining input variables of the operator</span>
+<span class="sd">        output</span>
+<span class="sd">            string defining name of single output variable</span>
+<span class="sd">        equations</span>
+<span class="sd">            list of equations (strings)</span>
+<span class="sd">        variables</span>
+<span class="sd">            dictionary describing variables</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># add operator to op_graph</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">add_operator</span><span class="p">(</span><span class="n">op_key</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="n">output</span><span class="p">,</span> <span class="n">equations</span><span class="o">=</span><span class="n">equations</span><span class="p">,</span> <span class="n">variables</span><span class="o">=</span><span class="n">variables</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="VectorizedNodeIR.add_op_edge"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.node.VectorizedNodeIR.add_op_edge">[docs]</a>    <span class="k">def</span> <span class="nf">add_op_edge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_op_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target_op_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">attr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Alias to `self.op_graph.add_edge`</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        source_op_key</span>
+<span class="sd">        target_op_key</span>
+<span class="sd">        attr</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_graph</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">source_op_key</span><span class="p">,</span> <span class="n">target_op_key</span><span class="p">,</span> <span class="o">**</span><span class="n">attr</span><span class="p">)</span></div></div>
 </pre></div>
 
           </div>

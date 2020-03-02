@@ -66,6 +66,11 @@
 <dd><p>Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass.</p>
 </dd></dl>
 
+<dl class="method">
+<dt id="pyrates.ir.abc.AbstractBaseIR.template">
+<em class="property">property </em><code class="sig-name descname">template</code><a class="headerlink" href="#pyrates.ir.abc.AbstractBaseIR.template" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 </div>
@@ -95,7 +100,7 @@ and variables.</p>
 
 <dl class="method">
 <dt id="pyrates.ir.circuit.CircuitIR.add_edge">
-<code class="sig-name descname">add_edge</code><span class="sig-paren">(</span><em class="sig-param">source: str</em>, <em class="sig-param">target: str</em>, <em class="sig-param">edge_ir: pyrates.ir.edge.EdgeIR</em>, <em class="sig-param">weight: float = 1.0</em>, <em class="sig-param">delay: float = None</em>, <em class="sig-param">identify_relations=True</em>, <em class="sig-param">**data</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.add_edge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.add_edge" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">add_edge</code><span class="sig-paren">(</span><em class="sig-param">source: str</em>, <em class="sig-param">target: str</em>, <em class="sig-param">edge_ir: pyrates.ir.edge.EdgeIR = None</em>, <em class="sig-param">weight: float = 1.0</em>, <em class="sig-param">delay: float = None</em>, <em class="sig-param">identify_relations=True</em>, <em class="sig-param">**data</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.add_edge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.add_edge" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -147,7 +152,7 @@ are stored in the <cite>CircuitIR</cite> instance attribute <cite>label_map</cit
 <dl class="method">
 <dt id="pyrates.ir.circuit.CircuitIR.add_nodes_from">
 <code class="sig-name descname">add_nodes_from</code><span class="sig-paren">(</span><em class="sig-param">nodes: Dict[str, pyrates.ir.node.NodeIR], **attr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.add_nodes_from"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.add_nodes_from" title="Permalink to this definition">¶</a></dt>
-<dd><p>Add multiple nodes to circuit. Allows networkx-style adding if from_templates is set to False.</p>
+<dd><p>Add multiple nodes to circuit. Allows networkx-style adding of nodes.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -157,6 +162,18 @@ here, but passing anything that does not behave like a <cite>NodeIR</cite> may c
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.clear">
+<code class="sig-name descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clears the backend graph from all operations and variables.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.compile">
+<code class="sig-name descname">compile</code><span class="sig-paren">(</span><em class="sig-param">dt: float = 0.001</em>, <em class="sig-param">vectorization: bool = True</em>, <em class="sig-param">build_in_place: bool = True</em>, <em class="sig-param">backend: str = 'numpy'</em>, <em class="sig-param">solver: str = 'euler'</em>, <em class="sig-param">float_precision: str = 'float32'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; pyrates.ir.abc.AbstractBaseIR<a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.compile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.compile" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses IR into the backend.</p>
 </dd></dl>
 
 <dl class="method">
@@ -198,23 +215,94 @@ Empty cells in the DataFrame should be filled with something ‘falsy’ (as in 
 </dd></dl>
 
 <dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.from_yaml">
+<em class="property">static </em><code class="sig-name descname">from_yaml</code><span class="sig-paren">(</span><em class="sig-param">path</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.from_yaml"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.from_yaml" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.get_node_var">
+<code class="sig-name descname">get_node_var</code><span class="sig-paren">(</span><em class="sig-param">key: str</em>, <em class="sig-param">apply_idx: bool = True</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.get_node_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.get_node_var" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> – </p></li>
+<li><p><strong>apply_idx</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt id="pyrates.ir.circuit.CircuitIR.getitem_from_iterator">
 <code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
 <dd><p>Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass.</p>
 </dd></dl>
 
-<dl class="method">
-<dt id="pyrates.ir.circuit.CircuitIR.move_edge_operators_to_nodes">
-<code class="sig-name descname">move_edge_operators_to_nodes</code><span class="sig-paren">(</span><em class="sig-param">copy_data=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.move_edge_operators_to_nodes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.move_edge_operators_to_nodes" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns a new CircuitIR instance, where all operators that were previously in edges are moved to their
-respective target nodes.</p>
-</dd></dl>
+<dl class="attribute">
+<dt id="pyrates.ir.circuit.CircuitIR.graph">
+<code class="sig-name descname">graph</code><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.graph" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.ir.circuit.CircuitIR.label">
+<code class="sig-name descname">label</code><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.label" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.ir.circuit.CircuitIR.label_map">
+<code class="sig-name descname">label_map</code><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.label_map" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 <dl class="method">
 <dt id="pyrates.ir.circuit.CircuitIR.nodes">
 <em class="property">property </em><code class="sig-name descname">nodes</code><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.nodes" title="Permalink to this definition">¶</a></dt>
 <dd><p>Shortcut to self.graph.nodes. See documentation of <cite>networkx.MultiDiGraph.nodes</cite>.</p>
 </dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.optimize_graph_in_place">
+<code class="sig-name descname">optimize_graph_in_place</code><span class="sig-paren">(</span><em class="sig-param">max_node_idx: int = 100000</em>, <em class="sig-param">vectorize: bool = True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.optimize_graph_in_place"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.optimize_graph_in_place" title="Permalink to this definition">¶</a></dt>
+<dd><p>Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
+get an additional vector dimension. References to the respective index is saved in the internal <cite>label_map</cite>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.circuit.CircuitIR.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">simulation_time: Optional[float] = None</em>, <em class="sig-param">inputs: Optional[dict] = None</em>, <em class="sig-param">outputs: Optional[dict] = None</em>, <em class="sig-param">sampling_step_size: Optional[float] = None</em>, <em class="sig-param">out_dir: Optional[str] = None</em>, <em class="sig-param">verbose: bool = True</em>, <em class="sig-param">profile: Optional[str] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; Union[pandas.core.frame.DataFrame, Tuple[pandas.core.frame.DataFrame, float]]<a class="reference internal" href="_modules/pyrates/ir/circuit.html#CircuitIR.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simulate the backend behavior over time via a tensorflow session.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>simulation_time</strong> – Simulation time in seconds.</p></li>
+<li><p><strong>inputs</strong> – Inputs for placeholder variables. Each key is a tuple that specifies a placeholder variable in the graph
+in the following format: (node_name, op_name, var_name). Each value is an array that defines the input for
+the placeholder variable over time (first dimension).</p></li>
+<li><p><strong>outputs</strong> – Output variables that will be returned. Each key is the desired name of an output variable and each value is
+a tuple that specifies a variable in the graph in the following format: (node_name, op_name, var_name).</p></li>
+<li><p><strong>sampling_step_size</strong> – Time in seconds between sampling points of the output variables.</p></li>
+<li><p><strong>out_dir</strong> – Directory in which to store outputs.</p></li>
+<li><p><strong>verbose</strong> – If true, status updates will be printed to the console.</p></li>
+<li><p><strong>profile</strong> – Can be used to extract information about graph execution time and memory load. Can be:
+- <cite>t</cite> for returning the total graph execution time.
+- <cite>m</cite> for returning the peak memory consumption during graph excecution.
+- <cite>mt</cite> or <cite>tm</cite> for both</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
+simulation time in seconds and the third the peak memory consumption. If profiling was not chosen during
+call of the function, only the dataframe will be returned.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Union[DataFrame, Tuple[DataFrame, float, float]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.ir.circuit.CircuitIR.sub_circuits">
+<code class="sig-name descname">sub_circuits</code><a class="headerlink" href="#pyrates.ir.circuit.CircuitIR.sub_circuits" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 </dd></dl>
 
@@ -239,12 +327,25 @@ when needed.</p>
 
 </dd></dl>
 
+<dl class="function">
+<dt id="pyrates.ir.circuit.sort_equations">
+<code class="sig-prename descclassname">pyrates.ir.circuit.</code><code class="sig-name descname">sort_equations</code><span class="sig-paren">(</span><em class="sig-param">edge_eqs: list</em>, <em class="sig-param">node_eqs: list</em><span class="sig-paren">)</span> &#x2192; list<a class="reference internal" href="_modules/pyrates/ir/circuit.html#sort_equations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.circuit.sort_equations" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>edge_eqs</strong> – </p></li>
+<li><p><strong>node_eqs</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 </div>
 <div class="section" id="module-pyrates.ir.edge">
 <span id="pyrates-ir-edge-module"></span><h2>pyrates.ir.edge module<a class="headerlink" href="#module-pyrates.ir.edge" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
 <dt id="pyrates.ir.edge.EdgeIR">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.edge.</code><code class="sig-name descname">EdgeIR</code><span class="sig-paren">(</span><em class="sig-param">operators: dict = None</em>, <em class="sig-param">template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/edge.html#EdgeIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.edge.EdgeIR" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.edge.</code><code class="sig-name descname">EdgeIR</code><span class="sig-paren">(</span><em class="sig-param">operators: dict = None</em>, <em class="sig-param">values: dict = None</em>, <em class="sig-param">template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/edge.html#EdgeIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.edge.EdgeIR" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#pyrates.ir.node.NodeIR" title="pyrates.ir.node.NodeIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.node.NodeIR</span></code></a></p>
 <dl class="method">
 <dt id="pyrates.ir.edge.EdgeIR.input">
@@ -269,6 +370,11 @@ the variable belongs to.</p>
 <em class="property">property </em><code class="sig-name descname">output_var</code><a class="headerlink" href="#pyrates.ir.edge.EdgeIR.output_var" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
+<dl class="attribute">
+<dt id="pyrates.ir.edge.EdgeIR.values">
+<code class="sig-name descname">values</code><a class="headerlink" href="#pyrates.ir.edge.EdgeIR.values" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 </div>
@@ -276,7 +382,7 @@ the variable belongs to.</p>
 <span id="pyrates-ir-node-module"></span><h2>pyrates.ir.node module<a class="headerlink" href="#module-pyrates.ir.node" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
 <dt id="pyrates.ir.node.NodeIR">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.node.</code><code class="sig-name descname">NodeIR</code><span class="sig-paren">(</span><em class="sig-param">operators: dict = None</em>, <em class="sig-param">template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#NodeIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.NodeIR" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.node.</code><code class="sig-name descname">NodeIR</code><span class="sig-paren">(</span><em class="sig-param">operators: dict = None</em>, <em class="sig-param">values: dict = None</em>, <em class="sig-param">template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#NodeIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.NodeIR" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#pyrates.ir.abc.AbstractBaseIR" title="pyrates.ir.abc.AbstractBaseIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.abc.AbstractBaseIR</span></code></a></p>
 <dl class="method">
 <dt id="pyrates.ir.node.NodeIR.getitem_from_iterator">
@@ -285,8 +391,85 @@ the variable belongs to.</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="pyrates.ir.node.NodeIR.op_graph">
+<em class="property">property </em><code class="sig-name descname">op_graph</code><a class="headerlink" href="#pyrates.ir.node.NodeIR.op_graph" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="pyrates.ir.node.NodeIR.operators">
 <em class="property">property </em><code class="sig-name descname">operators</code><a class="headerlink" href="#pyrates.ir.node.NodeIR.operators" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.ir.node.NodeIR.values">
+<code class="sig-name descname">values</code><a class="headerlink" href="#pyrates.ir.node.NodeIR.values" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.ir.node.VectorizedNodeIR">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.node.</code><code class="sig-name descname">VectorizedNodeIR</code><span class="sig-paren">(</span><em class="sig-param">node_ir: pyrates.ir.node.NodeIR</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#VectorizedNodeIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.VectorizedNodeIR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyrates.ir.abc.AbstractBaseIR" title="pyrates.ir.abc.AbstractBaseIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.abc.AbstractBaseIR</span></code></a></p>
+<p>Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it.</p>
+<dl class="method">
+<dt id="pyrates.ir.node.VectorizedNodeIR.add_op">
+<code class="sig-name descname">add_op</code><span class="sig-paren">(</span><em class="sig-param">op_key: str</em>, <em class="sig-param">inputs: dict</em>, <em class="sig-param">output: str</em>, <em class="sig-param">equations: list</em>, <em class="sig-param">variables: dict</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#VectorizedNodeIR.add_op"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.VectorizedNodeIR.add_op" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wrapper for internal <cite>op_graph.add_operator</cite> that adds any values to node-level values dictionary for quick
+access</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>op_key</strong> – Name of operator to be added</p></li>
+<li><p><strong>inputs</strong> – dictionary definining input variables of the operator</p></li>
+<li><p><strong>output</strong> – string defining name of single output variable</p></li>
+<li><p><strong>equations</strong> – list of equations (strings)</p></li>
+<li><p><strong>variables</strong> – dictionary describing variables</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.node.VectorizedNodeIR.add_op_edge">
+<code class="sig-name descname">add_op_edge</code><span class="sig-paren">(</span><em class="sig-param">source_op_key: str</em>, <em class="sig-param">target_op_key: str</em>, <em class="sig-param">**attr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#VectorizedNodeIR.add_op_edge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.VectorizedNodeIR.add_op_edge" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias to <cite>self.op_graph.add_edge</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>source_op_key</strong> – </p></li>
+<li><p><strong>target_op_key</strong> – </p></li>
+<li><p><strong>attr</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.node.VectorizedNodeIR.extend">
+<code class="sig-name descname">extend</code><span class="sig-paren">(</span><em class="sig-param">node: pyrates.ir.node.NodeIR</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#VectorizedNodeIR.extend"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.VectorizedNodeIR.extend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extend variables vectors by values from one additional node.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>node</strong> – A node whose values are used to extend the vector dimension of this vectorized node.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.node.VectorizedNodeIR.getitem_from_iterator">
+<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/node.html#VectorizedNodeIR.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.node.VectorizedNodeIR.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for self.op_graph.getitem_from_iterator</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyrates.ir.node.VectorizedNodeIR.op_graph">
+<code class="sig-name descname">op_graph</code><a class="headerlink" href="#pyrates.ir.node.VectorizedNodeIR.op_graph" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.node.VectorizedNodeIR.operators">
+<em class="property">property </em><code class="sig-name descname">operators</code><a class="headerlink" href="#pyrates.ir.node.VectorizedNodeIR.operators" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -296,11 +479,14 @@ the variable belongs to.</p>
 <span id="pyrates-ir-operator-module"></span><h2>pyrates.ir.operator module<a class="headerlink" href="#module-pyrates.ir.operator" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
 <dt id="pyrates.ir.operator.OperatorIR">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.operator.</code><code class="sig-name descname">OperatorIR</code><span class="sig-paren">(</span><em class="sig-param">equations: List[str], inputs: list, output: str, template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#OperatorIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.OperatorIR" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.operator.</code><code class="sig-name descname">OperatorIR</code><span class="sig-paren">(</span><em class="sig-param">equations: List[str], variables: List[tuple], inputs: List[str], output: str, template: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#OperatorIR"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.OperatorIR" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#pyrates.ir.abc.AbstractBaseIR" title="pyrates.ir.abc.AbstractBaseIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.abc.AbstractBaseIR</span></code></a></p>
+<p>This implementation of the Operator IR is aimed to be hashable and immutable. Following Python standards, we
+assume that users are consenting adults. Objects are thus not actually immutable, just slightly protected.
+This might change in the future.</p>
 <dl class="method">
-<dt id="pyrates.ir.operator.OperatorIR.copy">
-<code class="sig-name descname">copy</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#OperatorIR.copy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.OperatorIR.copy" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.ir.operator.OperatorIR.equations">
+<em class="property">property </em><code class="sig-name descname">equations</code><a class="headerlink" href="#pyrates.ir.operator.OperatorIR.equations" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="method">
@@ -319,19 +505,116 @@ the variable belongs to.</p>
 </dl>
 </dd></dl>
 
+<dl class="method">
+<dt id="pyrates.ir.operator.OperatorIR.inputs">
+<em class="property">property </em><code class="sig-name descname">inputs</code><a class="headerlink" href="#pyrates.ir.operator.OperatorIR.inputs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.OperatorIR.output">
+<em class="property">property </em><code class="sig-name descname">output</code><a class="headerlink" href="#pyrates.ir.operator.OperatorIR.output" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.OperatorIR.variables">
+<em class="property">property </em><code class="sig-name descname">variables</code><a class="headerlink" href="#pyrates.ir.operator.OperatorIR.variables" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.ir.operator.ProtectedVariableDict">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.operator.</code><code class="sig-name descname">ProtectedVariableDict</code><span class="sig-paren">(</span><em class="sig-param">variables: List[tuple]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#ProtectedVariableDict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.ProtectedVariableDict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Hashable dictionary-like object as container for variable definitions. It does not support item assignment after
+creation, but is strictly speaking not immutable. There may also be faster implementations, but this works for
+now.</p>
+<dl class="method">
+<dt id="pyrates.ir.operator.ProtectedVariableDict.add_parsed_variable">
+<code class="sig-name descname">add_parsed_variable</code><span class="sig-paren">(</span><em class="sig-param">key</em>, <em class="sig-param">props</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#ProtectedVariableDict.add_parsed_variable"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.ProtectedVariableDict.add_parsed_variable" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add parsed representation to a variable from compilation.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.ProtectedVariableDict.items">
+<code class="sig-name descname">items</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#ProtectedVariableDict.items"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.ProtectedVariableDict.items" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.ProtectedVariableDict.keys">
+<code class="sig-name descname">keys</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#ProtectedVariableDict.keys"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.ProtectedVariableDict.keys" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.ProtectedVariableDict.to_dict">
+<code class="sig-name descname">to_dict</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#ProtectedVariableDict.to_dict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.ProtectedVariableDict.to_dict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.ProtectedVariableDict.values">
+<code class="sig-name descname">values</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator.html#ProtectedVariableDict.values"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator.ProtectedVariableDict.values" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyrates.ir.operator.Variable">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.operator.</code><code class="sig-name descname">Variable</code><span class="sig-paren">(</span><em class="sig-param">vtype</em>, <em class="sig-param">dtype</em>, <em class="sig-param">shape</em><span class="sig-paren">)</span><a class="headerlink" href="#pyrates.ir.operator.Variable" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code></p>
+<dl class="method">
+<dt id="pyrates.ir.operator.Variable.dtype">
+<em class="property">property </em><code class="sig-name descname">dtype</code><a class="headerlink" href="#pyrates.ir.operator.Variable.dtype" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 1</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.Variable.shape">
+<em class="property">property </em><code class="sig-name descname">shape</code><a class="headerlink" href="#pyrates.ir.operator.Variable.shape" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 2</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator.Variable.vtype">
+<em class="property">property </em><code class="sig-name descname">vtype</code><a class="headerlink" href="#pyrates.ir.operator.Variable.vtype" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 0</p>
+</dd></dl>
+
 </dd></dl>
 
 </div>
 <div class="section" id="module-pyrates.ir.operator_graph">
 <span id="pyrates-ir-operator-graph-module"></span><h2>pyrates.ir.operator_graph module<a class="headerlink" href="#module-pyrates.ir.operator_graph" title="Permalink to this headline">¶</a></h2>
-<dl class="class">
+<dl class="function">
 <dt id="pyrates.ir.operator_graph.OperatorGraph">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.operator_graph.</code><code class="sig-name descname">OperatorGraph</code><span class="sig-paren">(</span><em class="sig-param">operators: dict = None</em>, <em class="sig-param">template: str = ''</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#OperatorGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.OperatorGraph" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">pyrates.ir.operator_graph.</code><code class="sig-name descname">OperatorGraph</code><span class="sig-paren">(</span><em class="sig-param">operators: Dict[str</em>, <em class="sig-param">pyrates.ir.operator.OperatorIR] = None</em>, <em class="sig-param">template: str = ''</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#OperatorGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.OperatorGraph" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="pyrates.ir.operator_graph.VectorizedOperatorGraph">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.ir.operator_graph.</code><code class="sig-name descname">VectorizedOperatorGraph</code><span class="sig-paren">(</span><em class="sig-param">op_graph: pyrates.ir.operator_graph._cache_op_graph.&lt;locals&gt;.cache_func = None</em>, <em class="sig-param">values: dict = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#VectorizedOperatorGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.VectorizedOperatorGraph" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">networkx.classes.digraph.DiGraph</span></code></p>
-<p>Intermediate representation for nodes and edges.</p>
+<p>Alternate version of <cite>OperatorGraph</cite> that is produced during vectorization. Contents of this version are not
+particularly protected and the instance is not cached.</p>
 <dl class="method">
-<dt id="pyrates.ir.operator_graph.OperatorGraph.getitem_from_iterator">
-<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#OperatorGraph.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.OperatorGraph.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.ir.operator_graph.VectorizedOperatorGraph.add_operator">
+<code class="sig-name descname">add_operator</code><span class="sig-paren">(</span><em class="sig-param">*args</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#VectorizedOperatorGraph.add_operator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.VectorizedOperatorGraph.add_operator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for <cite>self.add_node</cite></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator_graph.VectorizedOperatorGraph.append_values">
+<code class="sig-name descname">append_values</code><span class="sig-paren">(</span><em class="sig-param">value_dict: dict</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#VectorizedOperatorGraph.append_values"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.VectorizedOperatorGraph.append_values" title="Permalink to this definition">¶</a></dt>
+<dd><p>Append value along vector dimension of operators.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>value_dict</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.ir.operator_graph.VectorizedOperatorGraph.getitem_from_iterator">
+<code class="sig-name descname">getitem_from_iterator</code><span class="sig-paren">(</span><em class="sig-param">key: str, key_iter: Iterator[str]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#VectorizedOperatorGraph.getitem_from_iterator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.VectorizedOperatorGraph.getitem_from_iterator" title="Permalink to this definition">¶</a></dt>
 <dd><p>Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If <cite>key_iter</cite>
 contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of
 a variable that belong to an operator is returned.</p>
@@ -352,8 +635,8 @@ a variable that belong to an operator is returned.</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="pyrates.ir.operator_graph.OperatorGraph.operators">
-<code class="sig-name descname">operators</code><span class="sig-paren">(</span><em class="sig-param">get_ops=False</em>, <em class="sig-param">get_vars=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/ir/operator_graph.html#OperatorGraph.operators"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.ir.operator_graph.OperatorGraph.operators" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.ir.operator_graph.VectorizedOperatorGraph.operators">
+<em class="property">property </em><code class="sig-name descname">operators</code><a class="headerlink" href="#pyrates.ir.operator_graph.VectorizedOperatorGraph.operators" title="Permalink to this definition">¶</a></dt>
 <dd><p>Alias for self.nodes</p>
 </dd></dl>
 

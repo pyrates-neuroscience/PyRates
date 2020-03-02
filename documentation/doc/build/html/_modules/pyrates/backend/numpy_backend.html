@@ -142,11 +142,11 @@
 
         <span class="c1"># get shape</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">shape</span><span class="p">:</span>
-            <span class="n">shape</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">shape</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">shape</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
 
         <span class="c1"># get data type</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">dtype</span><span class="p">:</span>
-            <span class="n">dtype</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
         <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">name</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">backend</span><span class="o">.</span><span class="n">dtypes</span><span class="p">:</span>
             <span class="n">dtype</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">dtypes</span><span class="p">[</span><span class="n">dtype</span><span class="p">]</span>
@@ -204,7 +204,13 @@
             <span class="n">obj</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s1">&#39;short_name&#39;</span><span class="p">):</span>
             <span class="n">obj</span><span class="o">.</span><span class="n">short_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">short_name</span>
-        <span class="k">return</span> <span class="n">obj</span></div>
+        <span class="k">return</span> <span class="n">obj</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span></div>
 
 
 <div class="viewcode-block" id="PyRatesOp"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.PyRatesOp">[docs]</a><span class="k">class</span> <span class="nc">PyRatesOp</span><span class="p">:</span>
@@ -317,7 +323,7 @@
                     <span class="n">return_gen</span><span class="o">.</span><span class="n">add_code_line</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{arg}</span><span class="s2">&quot;</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">return_gen</span><span class="o">.</span><span class="n">add_code_line</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{arg}</span><span class="s2">,&quot;</span><span class="p">)</span>
-                <span class="n">idx</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;args&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+                <span class="n">idx</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_index</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;args&#39;</span><span class="p">],</span> <span class="n">arg</span><span class="p">)</span>
                 <span class="n">results</span><span class="p">[</span><span class="s1">&#39;args&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
                 <span class="n">results</span><span class="p">[</span><span class="s1">&#39;arg_names&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
             <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">dict</span><span class="p">:</span>
@@ -459,7 +465,11 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">_deepcopy</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_index</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="PyRatesAssignOp"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.PyRatesAssignOp">[docs]</a><span class="k">class</span> <span class="nc">PyRatesAssignOp</span><span class="p">(</span><span class="n">PyRatesOp</span><span class="p">):</span>
@@ -899,6 +909,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_rt_optimization</span> <span class="o">=</span> <span class="n">jit_compile</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_base_layer</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_output_layer_added</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_input_layer_added</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_imports</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;import numpy as np&quot;</span><span class="p">,</span> <span class="s2">&quot;from pyrates.backend.funcs import *&quot;</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">imports</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">imp</span> <span class="ow">in</span> <span class="n">imports</span><span class="p">:</span>
@@ -1118,7 +1129,10 @@
                     <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">):</span>
                         <span class="n">in_shape</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">arg</span><span class="o">.</span><span class="n">shape</span><span class="p">)))</span>
                     <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
-                        <span class="n">in_shape</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">arg</span><span class="p">))</span>
+                        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;shape&#39;</span><span class="p">):</span>
+                            <span class="n">in_shape</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)))</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">in_shape</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">arg</span><span class="p">))</span>
                     <span class="k">else</span><span class="p">:</span>
                         <span class="n">in_shape</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
                 <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span> <span class="o">&gt;</span> <span class="nb">max</span><span class="p">(</span><span class="n">in_shape</span><span class="p">)):</span>
@@ -1127,7 +1141,7 @@
 
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
 
-            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
 
                 <span class="c1"># broadcast entries of argument tuples</span>
                 <span class="n">args_tmp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
@@ -1181,26 +1195,51 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_base_layer</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">=</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_base_layer</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_base_layer</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span></div>
 
-<div class="viewcode-block" id="NumpyBackend.add_output_layer"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.add_output_layer">[docs]</a>    <span class="k">def</span> <span class="nf">add_output_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outputs</span><span class="p">,</span> <span class="n">sampling_steps</span><span class="p">,</span> <span class="n">out_shapes</span><span class="p">):</span>
+<div class="viewcode-block" id="NumpyBackend.add_output_layer"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.add_output_layer">[docs]</a>    <span class="k">def</span> <span class="nf">add_output_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outputs</span><span class="p">,</span> <span class="n">sampling_steps</span><span class="p">,</span> <span class="n">out_shapes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        outputs</span>
+<span class="sd">        sampling_steps</span>
+<span class="sd">        out_shapes</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="n">output_col</span> <span class="o">=</span> <span class="p">{}</span>
 
-        <span class="c1"># create counting index for collector variables</span>
-        <span class="n">out_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_var</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="s1">&#39;state_var&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;out_var_idx&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;int32&#39;</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,),</span> <span class="n">value</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-                               <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;output_collection&quot;</span><span class="p">)</span>
-
         <span class="c1"># add output storage layer to the graph</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_layer_added</span><span class="p">:</span>
+
+            <span class="n">out_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_var</span><span class="p">(</span><span class="s2">&quot;output_collection/out_var_idx&quot;</span><span class="p">)</span>
+
+            <span class="c1"># jump to output layer</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">top_layer</span><span class="p">()</span>
+
         <span class="k">else</span><span class="p">:</span>
+
+            <span class="c1"># add output layer</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_output_layer_added</span> <span class="o">=</span> <span class="kc">True</span>
 
+            <span class="c1"># create counting index for collector variables</span>
+            <span class="n">out_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_var</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="s1">&#39;state_var&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;out_var_idx&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;int32&#39;</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,),</span> <span class="n">value</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                                   <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;output_collection&quot;</span><span class="p">)</span>
+
+            <span class="c1"># create increment operator for counting index</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">next_layer</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;+=&#39;</span><span class="p">,</span> <span class="n">out_idx</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;int32&#39;</span><span class="p">),</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;output_collection&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">previous_layer</span><span class="p">()</span>
+
         <span class="c1"># add collector variables to the graph</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">var_col</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">outputs</span><span class="p">):</span>
+
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">sampling_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">var_col</span><span class="p">))</span> <span class="o">+</span> <span class="n">out_shapes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
             <span class="n">key</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;output_col_</span><span class="si">{i}</span><span class="s2">&quot;</span>
             <span class="n">output_col</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_var</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="s1">&#39;state_var&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">f</span><span class="s2">&quot;out_col_</span><span class="si">{i}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;output_collection&quot;</span><span class="p">,</span>
@@ -1210,16 +1249,47 @@
             <span class="c1"># add collect operation to the graph</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="n">output_col</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="n">var_stack</span><span class="p">,</span> <span class="n">out_idx</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;output_collection&quot;</span><span class="p">)</span>
 
-        <span class="c1"># create increment operator for counting index</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;+=&#39;</span><span class="p">,</span> <span class="n">out_idx</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;int32&#39;</span><span class="p">),</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;output_collection&quot;</span><span class="p">)</span>
-
         <span class="k">return</span> <span class="n">output_col</span></div>
+
+<div class="viewcode-block" id="NumpyBackend.add_input_layer"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.add_input_layer">[docs]</a>    <span class="k">def</span> <span class="nf">add_input_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        inputs</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># add inputs to graph</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_layer_added</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bottom_layer</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">to_beginning</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># create counting index for input variables</span>
+        <span class="n">time_step_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_var</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="s1">&#39;state_var&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;in_var_idx&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;int32&#39;</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,),</span> <span class="n">value</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                                     <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;network_inputs&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">target_var</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span> <span class="ow">in</span> <span class="n">inputs</span><span class="p">:</span>
+            <span class="n">in_name</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{inp.short_name}</span><span class="s2">_inp&quot;</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="s1">&#39;short_name&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;var_inp&quot;</span>
+            <span class="n">in_var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_var</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="s1">&#39;state_var&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">in_name</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;network_inputs&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">inp</span><span class="p">)</span>
+            <span class="n">in_var_indexed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="n">in_var</span><span class="p">,</span> <span class="n">time_step_idx</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;network_inputs&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">idx</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="n">target_var</span><span class="p">,</span> <span class="n">in_var_indexed</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;network_inputs&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="n">target_var</span><span class="p">,</span> <span class="n">in_var_indexed</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;network_inputs&quot;</span><span class="p">)</span>
+
+        <span class="c1"># create increment operator for counting index</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;+=&#39;</span><span class="p">,</span> <span class="n">time_step_idx</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;int32&#39;</span><span class="p">),</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;network_inputs&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="NumpyBackend.next_layer"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.next_layer">[docs]</a>    <span class="k">def</span> <span class="nf">next_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;Jump to next layer in stack. If we are already at end of layer stack, add new layer to the stack and jump to</span>
 <span class="sd">        that.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_base_layer</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">+=</span> <span class="mi">1</span></div>
@@ -1247,7 +1317,7 @@
 <span class="sd">        None</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_base_layer</span> <span class="o">+</span> <span class="n">idx</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">=</span> <span class="n">idx</span></div>
 
 <div class="viewcode-block" id="NumpyBackend.remove_layer"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.remove_layer">[docs]</a>    <span class="k">def</span> <span class="nf">remove_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;Removes layer at index from stack.</span>
@@ -1265,7 +1335,7 @@
 <div class="viewcode-block" id="NumpyBackend.top_layer"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.top_layer">[docs]</a>    <span class="k">def</span> <span class="nf">top_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;Jump to top layer of the stack.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_base_layer</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer</span></div>
 
 <div class="viewcode-block" id="NumpyBackend.bottom_layer"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.bottom_layer">[docs]</a>    <span class="k">def</span> <span class="nf">bottom_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
@@ -1289,31 +1359,6 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">layer</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">rmtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_dir</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="NumpyBackend.get_var"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.get_var">[docs]</a>    <span class="k">def</span> <span class="nf">get_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">updated</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NumpyVar</span><span class="p">:</span>
-        <span class="sd">&quot;&quot;&quot;Retrieve variable from graph.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        name</span>
-<span class="sd">            Identifier of the variable.</span>
-<span class="sd">        updated</span>
-<span class="sd">            If true, return updated value of a state-variable. Else, return the old, non-updated variable of a</span>
-<span class="sd">            state-variable.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        NumpyVar</span>
-<span class="sd">            Variable from graph.</span>
-
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">updated</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">f</span><span class="s1">&#39;</span><span class="si">{name}</span><span class="s1">_old&#39;</span><span class="p">]</span>
-            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
-                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>
-
 <div class="viewcode-block" id="NumpyBackend.get_layer"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.get_layer">[docs]</a>    <span class="k">def</span> <span class="nf">get_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;Retrieve layer from graph.</span>
 
@@ -1324,6 +1369,22 @@
 
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_base_layer</span> <span class="o">+</span> <span class="n">idx</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="NumpyBackend.get_var"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.get_var">[docs]</a>    <span class="k">def</span> <span class="nf">get_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve variable from graph.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        name</span>
+<span class="sd">            Identifier of the variable.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        NumpyVar</span>
+<span class="sd">            Variable from graph.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="NumpyBackend.eval_var"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.numpy_backend.NumpyBackend.eval_var">[docs]</a>    <span class="k">def</span> <span class="nf">eval_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;Get value of variable.</span>
@@ -1718,6 +1779,9 @@
                 <span class="n">idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;reshape&#39;</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,))</span>
             <span class="k">elif</span> <span class="n">idx</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="n">update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;reshape&#39;</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">update</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">update</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="ow">and</span> <span class="mi">1</span> <span class="ow">in</span> <span class="n">update</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+                <span class="n">singleton</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">update</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="s1">&#39;squeeze&#39;</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">singleton</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s1">&#39;Invalid indexing. Operation of shape </span><span class="si">{shape}</span><span class="s1"> cannot be updated with updates of &#39;</span>
                                  <span class="n">f</span><span class="s1">&#39;shapes </span><span class="si">{update.shape}</span><span class="s1"> at locations indicated by indices of shape </span><span class="si">{idx.shape}</span><span class="s1">.&#39;</span><span class="p">)</span>

@@ -75,7 +75,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="c1"># external packages</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span>
 <span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span>
 
 <span class="c1"># pyrates internal imports</span>
@@ -157,17 +157,14 @@
                               <span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span> <span class="n">circuits</span><span class="o">=</span><span class="n">circuits</span><span class="p">,</span> <span class="n">nodes</span><span class="o">=</span><span class="n">nodes</span><span class="p">,</span>
                               <span class="n">edges</span><span class="o">=</span><span class="n">edges</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="CircuitTemplate.apply"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply">[docs]</a>    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">in_place</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+<div class="viewcode-block" id="CircuitTemplate.apply"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply">[docs]</a>    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Create a Circuit graph instance based on the template&quot;&quot;&quot;</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">label</span><span class="p">:</span>
             <span class="n">label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">label</span>
 
         <span class="c1"># reformat node templates to NodeIR instances</span>
-        <span class="k">if</span> <span class="n">in_place</span><span class="p">:</span>
-            <span class="n">nodes</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">temp</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">temp</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">nodes</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">temp</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">temp</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="n">nodes</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">temp</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">temp</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
 
         <span class="c1"># reformat edge templates to EdgeIR instances</span>
         <span class="n">edges</span> <span class="o">=</span> <span class="p">[]</span>
@@ -180,13 +177,17 @@
             <span class="c1"># get delay</span>
             <span class="n">delay</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;delay&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 
+            <span class="c1"># treat empty dummy edge templates as not existent templates</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">template</span><span class="o">.</span><span class="n">operators</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">template</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">template</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">edge_ir</span> <span class="o">=</span> <span class="n">EdgeIR</span><span class="p">()</span>
+                <span class="n">edge_ir</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">if</span> <span class="n">values</span><span class="p">:</span>
+                    <span class="c1"># should not happen. Putting this just in case.</span>
+                    <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="s2">&quot;An empty edge IR was provided with additional values. &quot;</span>
+                                           <span class="s2">&quot;No way to figure out where to apply those values.&quot;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">in_place</span><span class="p">:</span>
-                    <span class="n">edge_ir</span> <span class="o">=</span> <span class="n">template</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">values</span><span class="o">=</span><span class="n">values</span><span class="p">)</span>  <span class="c1"># type: EdgeIR # edge spec</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">edge_ir</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">template</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">values</span><span class="o">=</span><span class="n">values</span><span class="p">)</span>  <span class="c1"># type: EdgeIR # edge spec</span>
+                <span class="n">edge_ir</span> <span class="o">=</span> <span class="n">template</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">values</span><span class="o">=</span><span class="n">values</span><span class="p">)</span>  <span class="c1"># type: Optional[EdgeIR] # edge spec</span>
 
             <span class="n">edges</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span>  <span class="c1"># edge_unique_key,</span>
                           <span class="p">{</span><span class="s2">&quot;edge_ir&quot;</span><span class="p">:</span> <span class="n">edge_ir</span><span class="p">,</span>

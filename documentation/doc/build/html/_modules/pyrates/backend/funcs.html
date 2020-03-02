@@ -82,8 +82,8 @@
 <span class="c1"># function definitions</span>
 <span class="c1">######################</span>
 
-<div class="viewcode-block" id="pr_sigmoid"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.funcs.pr_sigmoid">[docs]</a><span class="k">def</span> <span class="nf">pr_sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-    <span class="k">return</span> <span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span></div>
+<div class="viewcode-block" id="pr_sigmoid"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.funcs.pr_sigmoid">[docs]</a><span class="k">def</span> <span class="nf">pr_sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">scaling</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">steepness</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mf">0.0</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">scaling</span><span class="o">/</span><span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">steepness</span><span class="o">*</span><span class="p">(</span><span class="n">offset</span><span class="o">-</span><span class="n">x</span><span class="p">)))</span></div>
 
 
 <div class="viewcode-block" id="pr_softmax"><a class="viewcode-back" href="../../../pyrates.backend.html#pyrates.backend.funcs.pr_softmax">[docs]</a><span class="k">def</span> <span class="nf">pr_softmax</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>

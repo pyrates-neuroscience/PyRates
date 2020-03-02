@@ -16,7 +16,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="pyrates.frontend.template package" href="pyrates.frontend.template.html" />
-    <link rel="prev" title="Welcome to PyRates’s documentation!" href="index.html" />
+    <link rel="prev" title="Post Processing" href="post_processing.html" />
    
   <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   
@@ -35,7 +35,7 @@
     <ul>
         <li>
           &larr;
-          <a href="index.html" title="Previous document">Welcome to PyRates’s documentation!</a>
+          <a href="post_processing.html" title="Previous document">Post Processing</a>
         </li>
         <li>
           <a href="pyrates.frontend.template.html" title="Next document">pyrates.frontend.template package</a>
@@ -93,16 +93,6 @@
 that nodes and edges are given by as templates.</p>
 </dd></dl>
 
-<dl class="function">
-<dt id="pyrates.frontend.dict.to_node">
-<code class="sig-prename descclassname">pyrates.frontend.dict.</code><code class="sig-name descname">to_node</code><span class="sig-paren">(</span><em class="sig-param">node_dict: dict</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/dict.html#to_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.dict.to_node" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="pyrates.frontend.dict.to_operator">
-<code class="sig-prename descclassname">pyrates.frontend.dict.</code><code class="sig-name descname">to_operator</code><span class="sig-paren">(</span><em class="sig-param">op_dict: dict</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/dict.html#to_operator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.dict.to_operator" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
 </div>
 <div class="section" id="module-pyrates.frontend.file">
 <span id="pyrates-frontend-file-module"></span><h2>pyrates.frontend.file module<a class="headerlink" href="#module-pyrates.frontend.file" title="Permalink to this headline">¶</a></h2>
@@ -113,34 +103,8 @@ that nodes and edges are given by as templates.</p>
 </dd></dl>
 
 </div>
-<div class="section" id="module-pyrates.frontend.nxgraph">
-<span id="pyrates-frontend-nxgraph-module"></span><h2>pyrates.frontend.nxgraph module<a class="headerlink" href="#module-pyrates.frontend.nxgraph" title="Permalink to this headline">¶</a></h2>
-<dl class="class">
-<dt id="pyrates.frontend.nxgraph.Circuit2NetDef">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.nxgraph.</code><code class="sig-name descname">Circuit2NetDef</code><a class="reference internal" href="_modules/pyrates/frontend/nxgraph.html#Circuit2NetDef"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.nxgraph.Circuit2NetDef" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<dl class="method">
-<dt id="pyrates.frontend.nxgraph.Circuit2NetDef.network_def">
-<em class="property">classmethod </em><code class="sig-name descname">network_def</code><span class="sig-paren">(</span><em class="sig-param">circuit: pyrates.ir.circuit.CircuitIR</em>, <em class="sig-param">revert_node_names=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/nxgraph.html#Circuit2NetDef.network_def"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.nxgraph.Circuit2NetDef.network_def" title="Permalink to this definition">¶</a></dt>
-<dd><p>A bit of a workaround to connect interfaces of frontend and backend.
-TODO: Remove BackendIRFormatter and adapt corresponding tests</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="function">
-<dt id="pyrates.frontend.nxgraph.from_circuit">
-<code class="sig-prename descclassname">pyrates.frontend.nxgraph.</code><code class="sig-name descname">from_circuit</code><span class="sig-paren">(</span><em class="sig-param">circuit</em>, <em class="sig-param">revert_node_names=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/nxgraph.html#from_circuit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.nxgraph.from_circuit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Old implementation that transforms all information in a circuit to a networkx.MultiDiGraph with a few additional
-transformations that the old backend needed.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="pyrates.frontend.nxgraph.to_circuit">
-<code class="sig-prename descclassname">pyrates.frontend.nxgraph.</code><code class="sig-name descname">to_circuit</code><span class="sig-paren">(</span><em class="sig-param">graph: networkx.classes.multidigraph.MultiDiGraph</em>, <em class="sig-param">label='circuit'</em>, <em class="sig-param">node_creator=&lt;function to_node&gt;</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/nxgraph.html#to_circuit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.nxgraph.to_circuit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a CircuitIR instance out of a networkx.MultiDiGraph</p>
-</dd></dl>
-
+<div class="section" id="pyrates-frontend-nxgraph-module">
+<h2>pyrates.frontend.nxgraph module<a class="headerlink" href="#pyrates-frontend-nxgraph-module" title="Permalink to this headline">¶</a></h2>
 </div>
 <div class="section" id="module-pyrates.frontend.utility">
 <span id="pyrates-frontend-utility-module"></span><h2>pyrates.frontend.utility module<a class="headerlink" href="#module-pyrates.frontend.utility" title="Permalink to this headline">¶</a></h2>
@@ -225,7 +189,7 @@ refers to a file in an absolute or relative path from the current working direct
     <ul>
         <li>
           &larr;
-          <a href="index.html" title="Previous document">Welcome to PyRates’s documentation!</a>
+          <a href="post_processing.html" title="Previous document">Post Processing</a>
         </li>
         <li>
           <a href="pyrates.frontend.template.html" title="Next document">pyrates.frontend.template package</a>
@@ -282,7 +246,7 @@ refers to a file in an absolute or relative path from the current working direct
 <li><a class="reference internal" href="#submodules">Submodules</a></li>
 <li><a class="reference internal" href="#module-pyrates.frontend.dict">pyrates.frontend.dict module</a></li>
 <li><a class="reference internal" href="#module-pyrates.frontend.file">pyrates.frontend.file module</a></li>
-<li><a class="reference internal" href="#module-pyrates.frontend.nxgraph">pyrates.frontend.nxgraph module</a></li>
+<li><a class="reference internal" href="#pyrates-frontend-nxgraph-module">pyrates.frontend.nxgraph module</a></li>
 <li><a class="reference internal" href="#module-pyrates.frontend.utility">pyrates.frontend.utility module</a></li>
 <li><a class="reference internal" href="#module-pyrates.frontend.yaml">pyrates.frontend.yaml module</a></li>
 <li><a class="reference internal" href="#module-pyrates.frontend">Module contents</a></li>

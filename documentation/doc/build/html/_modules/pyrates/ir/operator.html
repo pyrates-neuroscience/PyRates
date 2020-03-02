@@ -39,8 +39,7 @@
           <div class="body" role="main">
             
   <h1>Source code for pyrates.ir.operator</h1><div class="highlight"><pre>
-<span></span>
-<span class="c1"># -*- coding: utf-8 -*-</span>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
 <span class="c1">#</span>
 <span class="c1">#</span>
 <span class="c1"># PyRates software framework for flexible implementation of neural </span>
@@ -69,26 +68,118 @@
 <span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">namedtuple</span> <span class="k">as</span> <span class="n">_namedtuple</span>
 <span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Iterator</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Iterator</span>
 
-<span class="kn">from</span> <span class="nn">pyrates</span> <span class="k">import</span> <span class="n">PyRatesException</span>
-<span class="kn">from</span> <span class="nn">pyrates.frontend.utility</span> <span class="k">import</span> <span class="n">deep_freeze</span>
 <span class="kn">from</span> <span class="nn">pyrates.ir.abc</span> <span class="k">import</span> <span class="n">AbstractBaseIR</span>
 
 <span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
 
+<span class="n">Variable</span> <span class="o">=</span> <span class="n">_namedtuple</span><span class="p">(</span><span class="s2">&quot;Variable&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;vtype&quot;</span><span class="p">,</span> <span class="s2">&quot;dtype&quot;</span><span class="p">,</span> <span class="s2">&quot;shape&quot;</span><span class="p">])</span>
+
+
+<div class="viewcode-block" id="ProtectedVariableDict"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.ProtectedVariableDict">[docs]</a><span class="k">class</span> <span class="nc">ProtectedVariableDict</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Hashable dictionary-like object as container for variable definitions. It does not support item assignment after</span>
+<span class="sd">    creation, but is strictly speaking not immutable. There may also be faster implementations, but this works for</span>
+<span class="sd">    now.&quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;_hash&quot;</span><span class="p">,</span> <span class="s2">&quot;_d&quot;</span><span class="p">,</span> <span class="s2">&quot;_parsed&quot;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">variables</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]):</span>
+        <span class="n">variables</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">variables</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_hash</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="n">variables</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_d</span> <span class="o">=</span> <span class="p">{</span><span class="n">vname</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">vtype</span><span class="o">=</span><span class="n">vtype</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">)</span>
+                   <span class="k">for</span> <span class="n">vname</span><span class="p">,</span> <span class="n">vtype</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span> <span class="ow">in</span> <span class="n">variables</span><span class="p">}</span>
+
+<div class="viewcode-block" id="ProtectedVariableDict.add_parsed_variable"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.ProtectedVariableDict.add_parsed_variable">[docs]</a>    <span class="k">def</span> <span class="nf">add_parsed_variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">props</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Add parsed representation to a variable from compilation.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parsed</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">props</span></div>
+
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_d</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_d</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_d</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_hash</span>
+
+<div class="viewcode-block" id="ProtectedVariableDict.items"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.ProtectedVariableDict.items">[docs]</a>    <span class="k">def</span> <span class="nf">items</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_d</span><span class="o">.</span><span class="n">items</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ProtectedVariableDict.keys"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.ProtectedVariableDict.keys">[docs]</a>    <span class="k">def</span> <span class="nf">keys</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_d</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ProtectedVariableDict.values"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.ProtectedVariableDict.values">[docs]</a>    <span class="k">def</span> <span class="nf">values</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_d</span><span class="o">.</span><span class="n">values</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ProtectedVariableDict.to_dict"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.ProtectedVariableDict.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_d</span><span class="p">)</span></div></div>
+
+<span class="c1"># class ProtectedVariableDict(dict):</span>
+<span class="c1">#     &quot;&quot;&quot;This is an unsafe hack to provide an immutable and hashable dict. Unsafe means, that checks against isinstance</span>
+<span class="c1">#     or</span>
+<span class="c1">#     issubtype might lead to wrong conclusions about the mutability. There may also be faster implementations, but this</span>
+<span class="c1">#     works for now.&quot;&quot;&quot;</span>
+<span class="c1">#</span>
+<span class="c1">#     def __init__(self, variables: List[tuple]):</span>
+<span class="c1">#         variables = tuple(variables)</span>
+<span class="c1">#         self._h = hash(variables)</span>
+<span class="c1">#</span>
+<span class="c1">#         named_variables = {vname: Variable(vtype, dtype, shape)</span>
+<span class="c1">#                            for vname, vtype, dtype, shape in variables}</span>
+<span class="c1">#</span>
+<span class="c1">#         super().__init__(**named_variables)</span>
+<span class="c1">#</span>
+<span class="c1">#     def __setitem__(self, key, value):</span>
+<span class="c1">#         raise TypeError(&quot;&#39;VariableDict&#39; object does not support item assignment&quot;)</span>
+<span class="c1">#</span>
+<span class="c1">#     # def __setattr__(self, key, value):</span>
+<span class="c1">#     #     raise AttributeError(f&quot;&#39;VariableDict&#39; object has not attribute &#39;{key}&#39;&quot;)</span>
+<span class="c1">#</span>
+<span class="c1">#     def __hash__(self):</span>
+<span class="c1">#         return self._h</span>
+
 
 <div class="viewcode-block" id="OperatorIR"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.OperatorIR">[docs]</a><span class="k">class</span> <span class="nc">OperatorIR</span><span class="p">(</span><span class="n">AbstractBaseIR</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;This implementation of the Operator IR is aimed to be hashable and immutable. Following Python standards, we</span>
+<span class="sd">    assume that users are consenting adults. Objects are thus not actually immutable, just slightly protected.</span>
+<span class="sd">    This might change in the future.&quot;&quot;&quot;</span>
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;_equations&quot;</span><span class="p">,</span> <span class="s2">&quot;_variables&quot;</span><span class="p">,</span> <span class="s2">&quot;_inputs&quot;</span><span class="p">,</span> <span class="s2">&quot;_output&quot;</span><span class="p">]</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">equations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">inputs</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">equations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">variables</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">tuple</span><span class="p">],</span> <span class="n">inputs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">output</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+                 <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">template</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="n">output</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span> <span class="o">=</span> <span class="n">inputs</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">equations</span> <span class="o">=</span> <span class="n">equations</span>
+        <span class="c1"># define hash</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_equations</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">equations</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span> <span class="o">=</span> <span class="n">ProtectedVariableDict</span><span class="p">(</span><span class="n">variables</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_inputs</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_output</span> <span class="o">=</span> <span class="n">output</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_h</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">_equations</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">variables</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">equations</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_equations</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">inputs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inputs</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">output</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output</span>
 
     <span class="c1"># @staticmethod</span>
     <span class="c1"># def _reduce_ode_order(equations: str, variables):</span>
@@ -121,10 +212,6 @@
     <span class="c1">#     else:</span>
     <span class="c1">#         return equations, variables</span>
 
-<div class="viewcode-block" id="OperatorIR.copy"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.OperatorIR.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">(</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">equations</span><span class="p">),</span> <span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">),</span> <span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="p">))</span></div>
-
 <div class="viewcode-block" id="OperatorIR.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.frontend.template.operator.OperatorIR.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Checks if a variable named by key exists in an equations.</span>
@@ -142,7 +229,11 @@
             <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">equation</span><span class="p">:</span>
                 <span class="k">return</span> <span class="n">key</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Variable `</span><span class="si">{key}</span><span class="s2">` not found in equations </span><span class="si">{self.equations}</span><span class="s2">&quot;</span><span class="p">)</span></div></div>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Variable `</span><span class="si">{key}</span><span class="s2">` not found in equations </span><span class="si">{self.equations}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="k">return</span> <span class="n">f</span><span class="s2">&quot;&lt;</span><span class="si">{self.__class__.__name__}</span><span class="s2">(</span><span class="si">{self.equations}</span><span class="s2">), hash = {hash(self)} &gt;&quot;</span></div>
 </pre></div>
 
           </div>

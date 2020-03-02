@@ -58,7 +58,7 @@
 <p>This module provides the backend class that should be used to set up any backend in pyrates.</p>
 <dl class="class">
 <dt id="pyrates.backend.computegraph.ComputeGraph">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.computegraph.</code><code class="sig-name descname">ComputeGraph</code><span class="sig-paren">(</span><em class="sig-param">net_config: Union[str, pyrates.ir.circuit.CircuitIR], dt: float = 0.001, vectorization: str = 'none', name: Optional[str] = 'net0', build_in_place: bool = True, backend: str = 'numpy', solver: str = 'euler', float_precision: str = 'float32', **kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.backend.computegraph.</code><code class="sig-name descname">ComputeGraph</code><a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Creates a compute graph that contains all nodes in the network plus their recurrent connections.</p>
 <dl class="field-list simple">
@@ -78,69 +78,6 @@ nodes together in a vector, <cite>full</cite> for full vectorization of the netw
 </ul>
 </dd>
 </dl>
-<dl class="method">
-<dt id="pyrates.backend.computegraph.ComputeGraph.clear">
-<code class="sig-name descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph.clear" title="Permalink to this definition">¶</a></dt>
-<dd><p>Clears the backend graph from all operations and variables.</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="pyrates.backend.computegraph.ComputeGraph.get_var">
-<code class="sig-name descname">get_var</code><span class="sig-paren">(</span><em class="sig-param">node: str</em>, <em class="sig-param">op: str</em>, <em class="sig-param">var: str</em>, <em class="sig-param">var_name: Optional[str] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph.get_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph.get_var" title="Permalink to this definition">¶</a></dt>
-<dd><p>Extracts a variable from the graph.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>node</strong> – Name of the node(s), the variable exists on. Can be ‘all’ for all nodes, or a sub-string that defines a
-class of nodes or a specific node name.</p></li>
-<li><p><strong>op</strong> – Name of the operator the variable belongs to.</p></li>
-<li><p><strong>var</strong> – Name of the variable.</p></li>
-<li><p><strong>var_name</strong> – Name under which the variable should be returned</p></li>
-<li><p><strong>kwargs</strong> – Additional keyword arguments that may be used to pass arguments for the backend like name scopes.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Dictionary with all variables found in the network that match the provided signature.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>dict</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="method">
-<dt id="pyrates.backend.computegraph.ComputeGraph.run">
-<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">simulation_time: Optional[float] = None</em>, <em class="sig-param">inputs: Optional[dict] = None</em>, <em class="sig-param">outputs: Optional[dict] = None</em>, <em class="sig-param">sampling_step_size: Optional[float] = None</em>, <em class="sig-param">out_dir: Optional[str] = None</em>, <em class="sig-param">verbose: bool = True</em>, <em class="sig-param">profile: Optional[str] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; Union[pandas.core.frame.DataFrame, Tuple[pandas.core.frame.DataFrame, float, float]]<a class="reference internal" href="_modules/pyrates/backend/computegraph.html#ComputeGraph.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.computegraph.ComputeGraph.run" title="Permalink to this definition">¶</a></dt>
-<dd><p>Simulate the backend behavior over time via a tensorflow session.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>simulation_time</strong> – Simulation time in seconds.</p></li>
-<li><p><strong>inputs</strong> – Inputs for placeholder variables. Each key is a tuple that specifies a placeholder variable in the graph
-in the following format: (node_name, op_name, var_name). Each value is an array that defines the input for
-the placeholder variable over time (first dimension).</p></li>
-<li><p><strong>outputs</strong> – Output variables that will be returned. Each key is the desired name of an output variable and each value is
-a tuple that specifies a variable in the graph in the following format: (node_name, op_name, var_name).</p></li>
-<li><p><strong>sampling_step_size</strong> – Time in seconds between sampling points of the output variables.</p></li>
-<li><p><strong>out_dir</strong> – Directory in which to store outputs.</p></li>
-<li><p><strong>verbose</strong> – If true, status updates will be printed to the console.</p></li>
-<li><p><strong>profile</strong> – Can be used to extract information about graph execution time and memory load. Can be:
-- <cite>t</cite> for returning the total graph execution time.
-- <cite>m</cite> for returning the peak memory consumption during graph excecution.
-- <cite>mt</cite> or <cite>tm</cite> for both</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
-simulation time in seconds and the third the peak memory consumption. If profiling was not chosen during
-call of the function, only the dataframe will be returned.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Union[DataFrame, Tuple[DataFrame, float, float]]</p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </div>
@@ -149,7 +86,7 @@ call of the function, only the dataframe will be returned.</p>
 <p>Contains functions that may be used as backend operations</p>
 <dl class="function">
 <dt id="pyrates.backend.funcs.pr_sigmoid">
-<code class="sig-prename descclassname">pyrates.backend.funcs.</code><code class="sig-name descname">pr_sigmoid</code><span class="sig-paren">(</span><em class="sig-param">x</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/funcs.html#pr_sigmoid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.funcs.pr_sigmoid" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">pyrates.backend.funcs.</code><code class="sig-name descname">pr_sigmoid</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">scaling=1.0</em>, <em class="sig-param">steepness=1.0</em>, <em class="sig-param">offset=0.0</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/funcs.html#pr_sigmoid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.funcs.pr_sigmoid" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -269,6 +206,16 @@ provided via <cite>ops</cite>. Will be added to the top of each generated code f
 </dd>
 </dl>
 <dl class="method">
+<dt id="pyrates.backend.numpy_backend.NumpyBackend.add_input_layer">
+<code class="sig-name descname">add_input_layer</code><span class="sig-paren">(</span><em class="sig-param">inputs: dict</em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_input_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_input_layer" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>inputs</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt id="pyrates.backend.numpy_backend.NumpyBackend.add_layer">
 <code class="sig-name descname">add_layer</code><span class="sig-paren">(</span><em class="sig-param">to_beginning=False</em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_layer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Adds a new layer to the backend and sets cursor to that layer.</p>
@@ -309,12 +256,21 @@ extracted before.</p></li>
 
 <dl class="method">
 <dt id="pyrates.backend.numpy_backend.NumpyBackend.add_output_layer">
-<code class="sig-name descname">add_output_layer</code><span class="sig-paren">(</span><em class="sig-param">outputs</em>, <em class="sig-param">sampling_steps</em>, <em class="sig-param">out_shapes</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_output_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_output_layer" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="sig-name descname">add_output_layer</code><span class="sig-paren">(</span><em class="sig-param">outputs</em>, <em class="sig-param">sampling_steps</em>, <em class="sig-param">out_shapes</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_output_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_output_layer" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>outputs</strong> – </p></li>
+<li><p><strong>sampling_steps</strong> – </p></li>
+<li><p><strong>out_shapes</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="method">
 <dt id="pyrates.backend.numpy_backend.NumpyBackend.add_var">
-<code class="sig-name descname">add_var</code><span class="sig-paren">(</span><em class="sig-param">vtype: str</em>, <em class="sig-param">name: Optional[str] = None</em>, <em class="sig-param">value: Optional[Any] = None</em>, <em class="sig-param">shape: Union[tuple</em>, <em class="sig-param">list</em>, <em class="sig-param">numpy.core.fromnumeric.shape</em>, <em class="sig-param">None] = None</em>, <em class="sig-param">dtype: Union[str</em>, <em class="sig-param">numpy.dtype</em>, <em class="sig-param">None] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; pyrates.backend.numpy_backend.NumpyVar<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_var" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">add_var</code><span class="sig-paren">(</span><em class="sig-param">vtype: str</em>, <em class="sig-param">name: Optional[str] = None</em>, <em class="sig-param">value: Optional[Any] = None</em>, <em class="sig-param">shape: Union[tuple</em>, <em class="sig-param">list</em>, <em class="sig-param">numpy.shape</em>, <em class="sig-param">None] = None</em>, <em class="sig-param">dtype: Union[str</em>, <em class="sig-param">numpy.dtype</em>, <em class="sig-param">None] = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; pyrates.backend.numpy_backend.NumpyVar<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.add_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.add_var" title="Permalink to this definition">¶</a></dt>
 <dd><p>Adds a variable to the backend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -483,15 +439,11 @@ extracted before.</p></li>
 
 <dl class="method">
 <dt id="pyrates.backend.numpy_backend.NumpyBackend.get_var">
-<code class="sig-name descname">get_var</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">updated=True</em><span class="sig-paren">)</span> &#x2192; pyrates.backend.numpy_backend.NumpyVar<a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.get_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.get_var" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">get_var</code><span class="sig-paren">(</span><em class="sig-param">name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/numpy_backend.html#NumpyBackend.get_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.numpy_backend.NumpyBackend.get_var" title="Permalink to this definition">¶</a></dt>
 <dd><p>Retrieve variable from graph.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> – Identifier of the variable.</p></li>
-<li><p><strong>updated</strong> – If true, return updated value of a state-variable. Else, return the old, non-updated variable of a
-state-variable.</p></li>
-</ul>
+<dd class="field-odd"><p><strong>name</strong> – Identifier of the variable.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>Variable from graph.</p>
@@ -734,7 +686,9 @@ mathematical operation expressed by it.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>expr_str</strong> – Mathematical expression in string format.</p></li>
 <li><p><strong>args</strong> – Dictionary containing all variables and functions needed to evaluate the expression.</p></li>
-<li><p><strong>backend</strong> – Backend instance in which to parse all variables and operations.</p></li>
+<li><p><strong>backend</strong> – Backend instance in which to parse all variables and operations.
+See <cite>pyrates.backend.numpy_backend.NumpyBackend</cite> for a full documentation of the backends methods and
+attributes.</p></li>
 <li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend functions.</p></li>
 </ul>
 </dd>
@@ -823,10 +777,10 @@ of the <cite>ExpressionParser</cite> (e.g. float32, bool, int32).</p>
 <dl class="method">
 <dt id="pyrates.backend.parser.ExpressionParser.parse">
 <code class="sig-name descname">parse</code><span class="sig-paren">(</span><em class="sig-param">expr_stack: list</em><span class="sig-paren">)</span> &#x2192; Any<a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.parse" title="Permalink to this definition">¶</a></dt>
-<dd><p>Parse elements in expression stack to operation.</p>
+<dd><p>Parse elements in expression stack into the backend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>expr_stack</strong> – Ordered list with expression variables and operations.</p>
+<dd class="field-odd"><p><strong>expr_stack</strong> – Ordered list with expression variables and operations. Needs to be processed from last to first item.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>Parsed expression stack element (object type depends on the backend).</p>
@@ -839,10 +793,53 @@ of the <cite>ExpressionParser</cite> (e.g. float32, bool, int32).</p>
 
 <dl class="method">
 <dt id="pyrates.backend.parser.ExpressionParser.parse_expr">
-<code class="sig-name descname">parse_expr</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.parse_expr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.parse_expr" title="Permalink to this definition">¶</a></dt>
-<dd><p>Parses string-based expression.</p>
+<code class="sig-name descname">parse_expr</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#ExpressionParser.parse_expr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.ExpressionParser.parse_expr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses string-based mathematical expression/equation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>left-hand side, right-hand side and variables of the parsed equation.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>tuple</p>
+</dd>
+</dl>
 </dd></dl>
 
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.is_coupled">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">is_coupled</code><span class="sig-paren">(</span><em class="sig-param">eqs: list</em><span class="sig-paren">)</span> &#x2192; bool<a class="reference internal" href="_modules/pyrates/backend/parser.html#is_coupled"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.is_coupled" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a list of equations defines a set of coupled equations, i.e. at least one left-hand side variable
+appears in the right-hand side of another equation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>eqs</strong> – List of equation strings</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True, if at least one left-hand side variable appears in the right-hand side of another equation.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.is_diff_eq">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">is_diff_eq</code><span class="sig-paren">(</span><em class="sig-param">eq: str</em><span class="sig-paren">)</span> &#x2192; bool<a class="reference internal" href="_modules/pyrates/backend/parser.html#is_diff_eq"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.is_diff_eq" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether <cite>eq</cite> is a differential equation or not.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>eq</strong> – Equation string.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True, if <cite>eq</cite> is a differential equation.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="function">
@@ -855,7 +852,7 @@ of the <cite>ExpressionParser</cite> (e.g. float32, bool, int32).</p>
 <li><p><strong>var_dict</strong> – Contains key-value pairs for each variable that should be translated into the backend graph.
 Each value is a dictionary again containing the variable information (needs at least a field for <cite>vtype</cite>).</p></li>
 <li><p><strong>backend</strong> – Backend instance that the variables should be added to.</p></li>
-<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend methods.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -868,16 +865,21 @@ Each value is a dictionary again containing the variable information (needs at l
 </dd></dl>
 
 <dl class="function">
-<dt id="pyrates.backend.parser.parse_equation_list">
-<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_equation_list</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">backend: Any</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_equation_list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_equation_list" title="Permalink to this definition">¶</a></dt>
-<dd><p>Parses a list of equations into the backend.</p>
+<dt id="pyrates.backend.parser.parse_equation_system">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_equation_system</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">backend: Any</em>, <em class="sig-param">solver='euler'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_equation_system"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_equation_system" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
+of algebraic equations (depends on the chosen solver).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>equations</strong> – Collection of equations that should be evaluated together.</p></li>
+<li><p><strong>equations</strong> – Collection of equations that describe the dynamics of the nodes and edges.</p></li>
 <li><p><strong>equation_args</strong> – Key-value pairs of arguments needed for parsing the equations.</p></li>
 <li><p><strong>backend</strong> – Backend instance to parse the equations into.</p></li>
-<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend.</p></li>
+<li><p><strong>solver</strong> – Type of solving algorithm to be applied to the differential equations in the system. Available solvers are:
+- <cite>euler</cite> for the explicit euler method
+- <cite>midpoint</cite> for the midpoint method
+- <cite>rk23</cite> for the Runge-Kutta algorithm of 2nd (3rd) order</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments to be passed to the backend methods.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -892,34 +894,39 @@ equation parsing).</p>
 
 <dl class="function">
 <dt id="pyrates.backend.parser.parse_equations">
-<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_equations</code><span class="sig-paren">(</span><em class="sig-param">equations</em>, <em class="sig-param">equation_args</em>, <em class="sig-param">backend</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_equations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_equations" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">parse_equations</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">backend: Any</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#parse_equations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.parse_equations" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses list of equations into the backend.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>equations</strong> – </p></li>
-<li><p><strong>equation_args</strong> – </p></li>
-<li><p><strong>backend</strong> – </p></li>
+<li><p><strong>equations</strong> – List of equations to parse into the backend.</p></li>
+<li><p><strong>equation_args</strong> – Dictionary with arguments needed for the equations.</p></li>
+<li><p><strong>backend</strong> – Backend instance that the equations should be parsed into.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p></p>
+<dd class="field-even"><p>Two dictionaries. The first one contains all left-hand side variables for which update operations were created
+according to their right-hand sides. The second one is the updated <cite>equation_args</cite> dictionary that was
+passed to this function.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>dict</p>
+<dd class="field-odd"><p>tuple</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="function">
 <dt id="pyrates.backend.parser.replace">
-<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">replace</code><span class="sig-paren">(</span><em class="sig-param">eq: str</em>, <em class="sig-param">term: str</em>, <em class="sig-param">replacement: str</em><span class="sig-paren">)</span> &#x2192; str<a class="reference internal" href="_modules/pyrates/backend/parser.html#replace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.replace" title="Permalink to this definition">¶</a></dt>
-<dd><p>Replaces a term in an equation with a replacement term.</p>
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">replace</code><span class="sig-paren">(</span><em class="sig-param">eq: str</em>, <em class="sig-param">term: str</em>, <em class="sig-param">replacement: str</em>, <em class="sig-param">rhs_only: Optional[bool] = False</em>, <em class="sig-param">lhs_only: Optional[bool] = False</em><span class="sig-paren">)</span> &#x2192; str<a class="reference internal" href="_modules/pyrates/backend/parser.html#replace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.replace" title="Permalink to this definition">¶</a></dt>
+<dd><p>Replaces a term in an equation with a replacement term (save replacement).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>eq</strong> – Equation that includes the term.</p></li>
 <li><p><strong>term</strong> – Term that should be replaced.</p></li>
 <li><p><strong>replacement</strong> – Replacement for all occurences of term.</p></li>
+<li><p><strong>rhs_only</strong> – If True, replacements will only be performed in right-hand side of the equation.</p></li>
+<li><p><strong>lhs_only</strong> – IF True, replacements will only be performed in left-hand side of the equation.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -933,29 +940,58 @@ equation parsing).</p>
 
 <dl class="function">
 <dt id="pyrates.backend.parser.split_equation">
-<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">split_equation</code><span class="sig-paren">(</span><em class="sig-param">expr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/parser.html#split_equation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.split_equation" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">split_equation</code><span class="sig-paren">(</span><em class="sig-param">expr: str</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#split_equation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.split_equation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Splits an equation string into a left-hand side, right-and side and an assign type.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>expr</strong> – </p>
+<dd class="field-odd"><p><strong>expr</strong> – Equation string. Should contain a left-hand side and a right-hand side, separated by some form of assign symbol.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>left-hand side string, right-hand side string, assign operation string.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyrates.backend.parser.update_equation_args">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">update_equation_args</code><span class="sig-paren">(</span><em class="sig-param">args: dict</em>, <em class="sig-param">updates: dict</em><span class="sig-paren">)</span> &#x2192; dict<a class="reference internal" href="_modules/pyrates/backend/parser.html#update_equation_args"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.update_equation_args" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save variable updates to the equation args dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>args</strong> – Equation argument dictionary.</p></li>
+<li><p><strong>updates</strong> – Dictionary with variable updates.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Updated equation argument dictionary.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="function">
 <dt id="pyrates.backend.parser.update_lhs">
-<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">update_lhs</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">update_num: int</em>, <em class="sig-param">rhs_scalar: str</em>, <em class="sig-param">var_dict: dict</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#update_lhs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.update_lhs" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">update_lhs</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">update_num: int</em>, <em class="sig-param">var_dict: dict</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#update_lhs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.update_lhs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the left-hand side of all equations according to <cite>update_num</cite>. An update identifier will be added to all
+left-hand side state-variable occurences. Convenience function for differential equation solver that involve
+multiple partial updates of the state variables.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>equations</strong> – </p></li>
-<li><p><strong>equation_args</strong> – </p></li>
-<li><p><strong>update_num</strong> – </p></li>
-<li><p><strong>rhs_scalar</strong> – </p></li>
-<li><p><strong>var_dict</strong> – </p></li>
+<li><p><strong>equations</strong> – Equations, whose left-hand sides should be updated.</p></li>
+<li><p><strong>equation_args</strong> – Key-argument pairs including all relevant left-hand side variables.</p></li>
+<li><p><strong>update_num</strong> – Number of the partial udpate of the left-hand side variables.</p></li>
+<li><p><strong>var_dict</strong> – Key-argument pairs including the configurations of all state variables (like shape, dtype, vtype and value).</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p></p>
+<dd class="field-even"><p>List of the updated equations and dictionary with the equation arguments.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>tuple</p>
@@ -966,17 +1002,30 @@ equation parsing).</p>
 <dl class="function">
 <dt id="pyrates.backend.parser.update_rhs">
 <code class="sig-prename descclassname">pyrates.backend.parser.</code><code class="sig-name descname">update_rhs</code><span class="sig-paren">(</span><em class="sig-param">equations: list</em>, <em class="sig-param">equation_args: dict</em>, <em class="sig-param">update_num: int</em>, <em class="sig-param">update_str: str</em><span class="sig-paren">)</span> &#x2192; tuple<a class="reference internal" href="_modules/pyrates/backend/parser.html#update_rhs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.parser.update_rhs" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Update the right-hand side of all equations according to <cite>update_str</cite> and <cite>update_num</cite>. All state-variable
+occurrences will be replaced with the expression in the <cite>update_str</cite> template. Convenience function for differential
+equation solver that involve multiple partial updates of the state variables.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>equations</strong> – </p></li>
-<li><p><strong>equation_args</strong> – </p></li>
-<li><p><strong>update_num</strong> – </p></li>
-<li><p><strong>update_str</strong> – </p></li>
+<li><p><strong>equations</strong> – List of equations to be updated.</p></li>
+<li><p><strong>equation_args</strong> – Key-argument pairs of all relevant variables which occur in the equations.</p></li>
+<li><p><strong>update_num</strong> – Number of the partial update step for which the equations should be updated.</p></li>
+<li><p><strong>update_str</strong> – <p>Template for the state variable replacement procedure. Should contain the following character strings:
+- <cite>var_placeholder</cite> will be replaced with the name of the state variables.
+- <cite>var_placeholder_i</cite> for partial updates of the state variables with <cite>i</cite> being a counter that needs to be</p>
+<blockquote>
+<div><p>replaced with the appropriate number of the partial update. Should be included for each partial update from
+i=1 to i=`update_num`.</p>
+</div></blockquote>
+<ul>
+<li><p><cite>update_placeholder</cite> for the position of the new, updated variable.</p></li>
+</ul>
+</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p></p>
+<dd class="field-even"><p>List of the updated equations and dictionary with the equation arguments.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>tuple</p>
@@ -1045,6 +1094,23 @@ provided via <cite>ops</cite>. Will be added to the top of each generated code f
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyrates.backend.tensorflow_backend.TensorflowBackend.get_var">
+<code class="sig-name descname">get_var</code><span class="sig-paren">(</span><em class="sig-param">name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/backend/tensorflow_backend.html#TensorflowBackend.get_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.backend.tensorflow_backend.TensorflowBackend.get_var" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve variable from graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>name</strong> – Identifier of the variable.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Variable from graph.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="#pyrates.backend.numpy_backend.NumpyVar" title="pyrates.backend.numpy_backend.NumpyVar">NumpyVar</a></p>
 </dd>
 </dl>
 </dd></dl>
