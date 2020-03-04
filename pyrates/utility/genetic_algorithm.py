@@ -134,6 +134,7 @@ class GeneticAlgorithmTemplate:
         if n_winners + n_parent_pairs + n_new > self.pop_size:
             print('WARNING: Sum of winners, parents and new members exceeds the population size. Returning')
             return
+
         # Start genetic algorithm
         #########################
         print("***STARTING GENETIC ALGORITHM***")
@@ -291,7 +292,6 @@ class GeneticAlgorithmTemplate:
         # 2. Add children of n_parents parent pairs
         ###########################################
         parent_pairs = self.__create_parent_pairs(n_parent_pairs=n_parent_pairs)
-        childs = []
         childs = self.__crossover(parent_pairs)
         for c in childs:
             offspring.append(c[0])
@@ -365,7 +365,7 @@ class GeneticAlgorithmTemplate:
             winners.append([winner_genes, winner_sigma])
         return winners
 
-    def __mutate(self, parent, max_iter=1e3):
+    def __mutate(self, parent, max_iter=1000):
         """Create mutation of a parent, based on a gaussian distribution for each gene"""
         mu_new = []
         sigma_new = []
@@ -424,8 +424,7 @@ class GeneticAlgorithmTemplate:
     def __crossover(self, parent_pairs, n_tries=10):
         """Create a child from each parent pair. Each child gene is uniformly chosen from one of its parents
 
-        If the child already exists in the current population, new genes are chosen, but maximal n_tries times before a
-        ValueError is raised.
+        If the child already exists in the current population, new genes are chosen, but maximal n_tries times.
         """
         childs = []
         for parents in parent_pairs:

@@ -45,6 +45,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from threading import Thread, currentThread, RLock
+import socket
 
 # pyrates internal imports
 from pyrates.frontend import CircuitTemplate
@@ -281,13 +282,14 @@ class ClusterCompute:
                     "hardware": hw,
                     "logfile": local_logfile})
 
-    def spawn_thread(self, client, thread_kwargs):
+    def spawn_thread(self, client, thread_kwargs, timeout):
         """
 
         Parameters
         ----------
         client
         thread_kwargs
+        timeout
 
         Returns
         -------
@@ -296,12 +298,12 @@ class ClusterCompute:
         t_ = Thread(
             name=client["node_name"],
             target=self.thread_master,
-            args=(client, thread_kwargs)
+            args=(client, thread_kwargs, timeout)
         )
         t_.start()
         return t_
 
-    def thread_master(self, client, thread_kwargs_: dict):
+    def thread_master(self, client, thread_kwargs_: dict, timeout):
         """Function that is executed by every thread. Every instance of `thread_master` is bound to a different client
 
         The `thread_master` method of `:class:ClusterCompute` can be arbitrarily changed to fit the needs of the user.
@@ -313,6 +315,7 @@ class ClusterCompute:
             dict containing a `paramiko` client, the name of the connected node, a dict with hardware specifications and
             a path to a logfile.
         thread_kwargs
+        timeout
 
         Returns
         -------
@@ -724,7 +727,8 @@ class ClusterGridSearch(ClusterCompute):
         ###########################
         print("***STARTING CLUSTER COMPUTATION***")
         # Spawn threads to control each node connection and start computation
-        threads = [self.spawn_thread(client, thread_kwargs) for client in self.clients]
+        timeout = worker_kwargs['time_lim'] if 'time_lim' in worker_kwargs else None
+        threads = [self.spawn_thread(client, thread_kwargs, timeout=timeout) for client in self.clients]
         # Wait for all threads to finish
         for t_ in threads:
             t_.join()
@@ -783,7 +787,7 @@ class ClusterGridSearch(ClusterCompute):
 
         return global_res_file
 
-    def thread_master(self, client: dict, thread_kwargs: dict):
+    def thread_master(self, client: dict, thread_kwargs: dict, timeout: float):
         """Function that is executed by each thread to schedule computations on the respective worker
 
         Parameters
@@ -792,6 +796,7 @@ class ClusterGridSearch(ClusterCompute):
             Dictionary containing all information about the remote worker that is tied to the current thread
         thread_kwargs
             Dictionary containing all kwargs that are passed to the thread function
+        timeout
 
         Returns
         -------
@@ -806,6 +811,7 @@ class ClusterGridSearch(ClusterCompute):
 
         thread_name = currentThread().getName()
         connection_lost = False
+        timed_out = False
         connection_lost_counter = 0
 
         # Get client information
@@ -844,16 +850,22 @@ class ClusterGridSearch(ClusterCompute):
             # Get all parameters that haven't been successfully computed yet
             remaining_params = working_grid.loc[working_grid["status"] == "unsolved"]
             if remaining_params.empty:
-                print(f'[T]\'{thread_name}\': No more parameter combinations available!')
-                # Enable thread switching
-                self.lock.release()
-                # Release the initial lock in the first iteration
-                try:
+                # check for pending parameters
+                pending_params = working_grid.loc[working_grid["status"] == "pending"]
+                if pending_params.empty:
+                    print(f'[T]\'{thread_name}\': No more parameter combinations available!')
+                    # Enable thread switching
                     self.lock.release()
-                except RuntimeError:
-                    pass
-                break
-
+                    # Release the initial lock in the first iteration
+                    try:
+                        self.lock.release()
+                    except RuntimeError:
+                        pass
+                    break
+                else:
+                    self.lock.release()
+                    t.sleep(30.0)
+                    continue
             else:
                 # Find chunk index of first value in remaining params and fetch all parameter combinations with the
                 # same chunk index
@@ -889,13 +901,14 @@ class ClusterGridSearch(ClusterCompute):
                                                                    f' --build_dir={local_build_dir}'
                                                                    f' &>> {logfile}',  # redirect and append stdout
                                                                                        # and stderr to logfile
+                                                                   timeout=timeout,        # timeout in seconds
                                                                    get_pty=True)       # execute in pseudo terminal
-                except paramiko.ssh_exception.SSHException as e:
-                    # SSH connection has been lost
-                    # (remote machine shut down, ssh connection has been killed manually, ...)
+                except (socket.timeout, paramiko.ssh_exception.SSHException) as e:
+                    # SSH connection has been lost or process ran into timeout
                     print(f'[T]\'{thread_name}\': ERROR: {e}')
                     working_grid.at[param_idx, "status"] = "unsolved"
                     connection_lost = True
+                    timed_out = e == socket.timeout
 
             # Enable thread switching
             self.lock.release()
@@ -908,7 +921,7 @@ class ClusterGridSearch(ClusterCompute):
 
             # Try to reconnect to host if connection has been lost
             ######################################################
-            if connection_lost and connection_lost_counter < 2:
+            if connection_lost and connection_lost_counter < 2 and not timed_out:
                 # Attempt to reconnect while there are still parameter chunks to fetch
                 while True:
                     if working_grid.loc[working_grid["status"] == "unsolved"].empty:
@@ -929,7 +942,27 @@ class ClusterGridSearch(ClusterCompute):
             # Wait for remote computation exit status
             # (independent of success or failure)
             #########################################
-            exit_status = stdout.channel.recv_exit_status()
+
+            channel = stdout.channel
+            if timeout:
+                end_time = t.time() + timeout
+                while not channel.eof_received:
+                    t.sleep(1)
+                    if t.time() > end_time:
+                        channel.close()
+                        timed_out = True
+                        break
+
+            while not channel.exit_status_ready():
+                if channel.recv_ready():
+                    while channel.recv(1024):
+                        channel.recv(1024)
+
+                if channel.recv_stderr_ready():
+                    while channel.recv_stderr(1024):
+                        channel.recv_stderr(1024)
+
+            exit_status = channel.recv_exit_status()
 
             # Update grid status
             ####################
@@ -957,7 +990,7 @@ class ClusterGridSearch(ClusterCompute):
                             else:
                                 working_grid.at[row, "status"] = "failed"
 
-                # Remote execution was interrupted
+                # Remote execution was interrupted or remote process ran into timeout
                 else:
                     print(f'[T]\'{thread_name}\': Remote computation failed with exit status {exit_status}')
                     connection_lost_counter += 1
@@ -967,7 +1000,7 @@ class ClusterGridSearch(ClusterCompute):
                             working_grid.at[row, "err_count"] += 1
                         else:
                             working_grid.at[row, "status"] = "failed"
-                    if connection_lost_counter >= 2:
+                    if connection_lost_counter >= 2 or timed_out:
                         print('Excluding worker from pool')
                         return
 
@@ -975,7 +1008,6 @@ class ClusterGridSearch(ClusterCompute):
         # End of scheduler loop
 
         # TODO: Close pty on remote machine?
-        pm_client.close()
 
     # End of Thread master
 
