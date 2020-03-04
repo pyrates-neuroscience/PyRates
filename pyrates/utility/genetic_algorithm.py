@@ -292,14 +292,15 @@ class GeneticAlgorithmTemplate:
         ###########################################
         parent_pairs = self.__create_parent_pairs(n_parent_pairs=n_parent_pairs)
         childs = []
-        try:
-            childs = self.__crossover(parent_pairs)
-            for c in childs:
-                offspring.append(c[0])
-                new_sigs.append(c[1])
-        except ValueError:
-            # Each failed child will be replaced by a mutation
-            n_mutations += (n_parent_pairs - len(childs))
+        childs = self.__crossover(parent_pairs)
+        for c in childs:
+            offspring.append(c[0])
+            new_sigs.append(c[1])
+
+        # Each failed child will be replaced by a mutation
+        new_mutations = n_parent_pairs - len(childs)
+        if new_mutations > 0:
+            n_mutations += new_mutations
 
         # 3. Add mutations
         ##################
@@ -369,11 +370,12 @@ class GeneticAlgorithmTemplate:
         mu_new = []
         sigma_new = []
         for i, (mu, sigma) in enumerate(zip(parent[0], parent[1])):
-            mu_temp = mu + np.random.randn() * sigma
+            mu_temp = np.random.normal(mu, sigma)
             j = 0
             while any([mu_temp < self.initial_gene_pool[self.gene_names[i]]['min'],
                        mu_temp > self.initial_gene_pool[self.gene_names[i]]['max']]) and j < max_iter:
-                mu_temp = mu+np.random.randn()*sigma
+                mu_temp = np.random.normal(mu, sigma)
+                sigma *= 0.99
                 j += 1
             mu_new.append(mu_temp if j < max_iter else mu)
             # Adapt sigma (Beyer1995, p.5)
@@ -419,7 +421,7 @@ class GeneticAlgorithmTemplate:
             parents.append((self.pop.iloc[p_idx[0], :], self.pop.iloc[p_idx[1], :]))
         return parents
 
-    def __crossover(self, parent_pairs, n_tries=5):
+    def __crossover(self, parent_pairs, n_tries=10):
         """Create a child from each parent pair. Each child gene is uniformly chosen from one of its parents
 
         If the child already exists in the current population, new genes are chosen, but maximal n_tries times before a
@@ -428,9 +430,7 @@ class GeneticAlgorithmTemplate:
         childs = []
         for parents in parent_pairs:
             count = 0
-            while True:
-                if count > n_tries:
-                    raise ValueError
+            while count < n_tries:
                 child_genes = []
                 child_sigma = []
                 for g, gene in enumerate(self.initial_gene_pool):
@@ -445,7 +445,8 @@ class GeneticAlgorithmTemplate:
                 if not already_exists:
                     break
                 count += 1
-            childs.append((child_genes, child_sigma))
+            if count < n_tries:
+                childs.append((child_genes, child_sigma))
         return childs
 
     @staticmethod
