@@ -975,6 +975,7 @@ class ClusterGridSearch(ClusterCompute):
         # End of scheduler loop
 
         # TODO: Close pty on remote machine?
+        pm_client.close()
 
     # End of Thread master
 
