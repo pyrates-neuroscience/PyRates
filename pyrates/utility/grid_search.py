@@ -1648,7 +1648,7 @@ class ClusterWorkerTemplate(object):
 
         # manage other resources
         limits = [memory_lim, nproc_lim, time_lim]
-        resources = [resource.RLIMIT_DATA, resource.RLIMIT_NPROC, resource.RLIMIT_CPU]
+        resources = [resource.RLIMIT_AS, resource.RLIMIT_NPROC, resource.RLIMIT_CPU]
         default_limits = [4e9, 128, 3600]
 
         for limit, r, def_lim in zip(limits, resources, default_limits):
