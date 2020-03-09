@@ -1866,7 +1866,7 @@ class CircuitIR(AbstractBaseIR):
             # create ODE system equations
             buffer_eqs, var_dict, final_idx = [], {}, []
             max_order = max(orders)
-            target_check = sum(target_shape) > 1
+            target_check = sum(target_shape) > 1 or len(orders) > 1
             var_shape = target_shape
             for i in range(max_order + 1):
                 idx, idx_str, idx_var = self._bool_to_idx(orders_tmp > i)
@@ -1881,7 +1881,7 @@ class CircuitIR(AbstractBaseIR):
                     rate = f"k_d{i + 1}"
                     idx_apply = (idx == 0) or idx
                     val = rates_tmp[idx] if idx_apply else rates_tmp
-                    if not target_check or not var_shape:
+                    if not target_check or not var_shape or (type(idx) is list and len(idx) == len(orders_tmp)):
                         idx_str, idx_f1_str = "", ""
                     var_shape = (len(val),) if val.shape else ()
                     buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
