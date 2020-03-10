@@ -1859,6 +1859,7 @@ class CircuitIR(AbstractBaseIR):
                     orders.append(dde_approx if m else 0)
                     rates.append(dde_approx / m if m else 0)
 
+            n_edges = len(orders)
             orders = np.asarray(orders, dtype=np.int32)
             orders_tmp = np.asarray(orders, dtype=np.int32)
             rates_tmp = np.asarray(rates)
@@ -1868,6 +1869,7 @@ class CircuitIR(AbstractBaseIR):
             max_order = max(orders)
             target_check = sum(target_shape) > 1 or len(orders) > 1
             var_shape = target_shape
+            source_var = f'{var}_reshaped_for_edge' if n_edges > 1 else var
             for i in range(max_order + 1):
                 idx, idx_str, idx_var = self._bool_to_idx(orders_tmp > i)
                 idx_f1, idx_f1_str, idx_f1_var = self._bool_to_idx(orders_tmp == i)
@@ -1877,7 +1879,7 @@ class CircuitIR(AbstractBaseIR):
                 var_dict.update(idx_f2_var)
                 if idx or idx == 0 or not target_check:
                     var_next = f"{var}_d{i + 1}"
-                    var_prev = f"{var}_d{i}" if i > 0 else var
+                    var_prev = f"{var}_d{i}" if i > 0 else source_var
                     rate = f"k_d{i + 1}"
                     idx_apply = (idx == 0) or idx
                     val = rates_tmp[idx] if idx_apply else rates_tmp
@@ -1914,6 +1916,15 @@ class CircuitIR(AbstractBaseIR):
                 var_dict.pop(f"{var}_d{i}")
                 var_dict.pop(f"k_d{i}")
                 buffer_eqs.pop(-1)
+
+            # extend source variable to match shape of edge transmission variables
+            if n_edges > 1:
+                for i in range(n_edges):
+                    buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}")
+                var_dict[source_var] = {'vtype': 'state_var',
+                                        'dtype': self._backend._float_def,
+                                        'shape': (target_shape[0]*n_edges,),
+                                        'value': 0.0}
 
             # create buffered variable
             for i, idx1, idx2 in final_idx:
