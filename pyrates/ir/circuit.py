@@ -1859,7 +1859,7 @@ class CircuitIR(AbstractBaseIR):
                     orders.append(dde_approx if m else 0)
                     rates.append(dde_approx / m if m else 0)
 
-            n_edges = len(orders)
+            n_edges = len(orders) // target_shape[0]
             orders = np.asarray(orders, dtype=np.int32)
             orders_tmp = np.asarray(orders, dtype=np.int32)
             rates_tmp = np.asarray(rates)
