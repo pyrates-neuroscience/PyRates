@@ -1933,7 +1933,7 @@ class CircuitIR(AbstractBaseIR):
                 if i != 0:
                     buffer_eqs.append(f"{var}_buffered{idx1} = {var}_d{i}{idx2}")
                 else:
-                    buffer_eqs.append(f"{var}_buffered{idx1} = {var}{idx2}")
+                    buffer_eqs.append(f"{var}_buffered{idx1} = {source_var}{idx2}")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
                                            'dtype': self._backend._float_def,
                                            'shape': (len(delays),),

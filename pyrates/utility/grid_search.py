@@ -148,6 +148,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
                       inputs=inputs,
                       outputs=outputs,
                       **kwargs)    # type: pd.DataFrame
+    #net.clear()
 
     # return results
     if 'profile' in kwargs:
@@ -952,15 +953,6 @@ class ClusterGridSearch(ClusterCompute):
                         channel.close()
                         timed_out = True
                         break
-
-            while not channel.exit_status_ready():
-                if channel.recv_ready():
-                    while channel.recv(1024):
-                        channel.recv(1024)
-
-                if channel.recv_stderr_ready():
-                    while channel.recv_stderr(1024):
-                        channel.recv_stderr(1024)
 
             exit_status = channel.recv_exit_status()
 
