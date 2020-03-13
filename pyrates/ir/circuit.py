@@ -1860,9 +1860,10 @@ class CircuitIR(AbstractBaseIR):
                     rates.append(dde_approx / m if m else 0)
 
             n_edges = len(orders) // target_shape[0]
-            orders = np.asarray(orders, dtype=np.int32)
+            order_idx = np.argsort(orders)
+            orders = np.asarray(orders, dtype=np.int32)[order_idx]
             orders_tmp = np.asarray(orders, dtype=np.int32)
-            rates_tmp = np.asarray(rates)
+            rates_tmp = np.asarray(rates)[order_idx]
 
             # create ODE system equations
             buffer_eqs, var_dict, final_idx = [], {}, []
@@ -1938,6 +1939,14 @@ class CircuitIR(AbstractBaseIR):
                                            'dtype': self._backend._float_def,
                                            'shape': (len(delays),),
                                            'value': 0.0}
+
+            # re-order buffered variable if necessary
+            if any(np.diff(order_idx)) != 1:
+                buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
+                var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
+                                                   'dtype': 'int32',
+                                                   'shape': (len(order_idx),),
+                                                   'value': order_idx}
 
         # discretized edge buffers
         ##########################
