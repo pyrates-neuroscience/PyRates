@@ -732,7 +732,7 @@ class ClusterGridSearch(ClusterCompute):
         threads = [self.spawn_thread(client, thread_kwargs, timeout=timeout) for client in self.clients]
         # Wait for all threads to finish
         for t_ in threads:
-            t_.join()
+            t_.join(timeout=timeout)
 
         print("")
         print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
@@ -895,16 +895,31 @@ class ClusterGridSearch(ClusterCompute):
 
                 try:
                     print(f'[T]\'{thread_name}\': Starting remote computation...')
-                    stdin, stdout, stderr = pm_client.exec_command(command +
-                                                                   f' --config_file={config_file}'
-                                                                   f' --subgrid={subgrid_fp}'
-                                                                   f' --local_res_file={local_res_file}'
-                                                                   f' --build_dir={local_build_dir}'
-                                                                   f' &>> {logfile}',  # redirect and append stdout
-                                                                                       # and stderr to logfile
-                                                                   timeout=timeout,        # timeout in seconds
-                                                                   get_pty=True)       # execute in pseudo terminal
-                except (socket.timeout, paramiko.ssh_exception.SSHException) as e:
+
+                    channel = pm_client.get_transport().open_session()
+                    channel.settimeout(timeout)
+
+                    # Execute the given command
+                    channel.get_pty()
+                    channel.exec_command(command +
+                                         f' --config_file={config_file}'
+                                         f' --subgrid={subgrid_fp}'
+                                         f' --local_res_file={local_res_file}'
+                                         f' --build_dir={local_build_dir}'
+                                         f' &>{logfile}',  # redirect and append stdout
+                                         )
+
+                    # stdin, stdout, stderr = pm_client.exec_command(command +
+                    #                                                f' --config_file={config_file}'
+                    #                                                f' --subgrid={subgrid_fp}'
+                    #                                                f' --local_res_file={local_res_file}'
+                    #                                                f' --build_dir={local_build_dir}'
+                    #                                                f' &>> {logfile}',  # redirect and append stdout
+                    #                                                                    # and stderr to logfile
+                    #                                                timeout=timeout,        # timeout in seconds
+                    #                                                get_pty=True)       # execute in pseudo terminal
+
+                except (socket.timeout, paramiko.ssh_exception.SSHException,  ConnectionError, EOFError) as e:
                     # SSH connection has been lost or process ran into timeout
                     print(f'[T]\'{thread_name}\': ERROR: {e}')
                     working_grid.at[param_idx, "status"] = "unsolved"
@@ -944,16 +959,17 @@ class ClusterGridSearch(ClusterCompute):
             # (independent of success or failure)
             #########################################
 
-            channel = stdout.channel
-            if timeout:
-                end_time = t.time() + timeout
-                while not channel.eof_received:
-                    t.sleep(1)
-                    if t.time() > end_time:
-                        channel.close()
-                        timed_out = True
-                        break
-
+            nbytes = 1024
+            while not channel.exit_status_ready():
+                if channel.recv_ready():
+                    data = channel.recv(nbytes)
+                    while data:
+                        data = channel.recv(nbytes)
+                if channel.recv_stderr_ready():
+                    error_buff = channel.recv_stderr(nbytes)
+                    while error_buff:
+                        error_buff = channel.recv_stderr(nbytes)
+            channel.close()
             exit_status = channel.recv_exit_status()
 
             # Update grid status
@@ -998,9 +1014,6 @@ class ClusterGridSearch(ClusterCompute):
 
             # Lock released, thread switching enabled
         # End of scheduler loop
-
-        # TODO: Close pty on remote machine?
-
     # End of Thread master
 
     def _fetch_index(self, remaining_params, worker_chunk_size, working_grid):

@@ -462,7 +462,7 @@ class GeneticAlgorithmTemplate:
                         vals.pop(idx)
                     kwargs['size'] = len(idx)
                     vals += list(sampling_func(**kwargs))
-                    idx = np.argwhere((vals < min_val) * (vals > max_val))
+                    idx = np.argwhere((vals < min_val) + (vals > max_val))
             except TypeError:
                 vals = np.random.uniform(min_val, max_val, kwargs['size'])
             return np.asarray(vals)
