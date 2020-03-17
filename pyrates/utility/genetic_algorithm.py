@@ -33,8 +33,8 @@ from typing import Optional, Union
 
 # system imports
 import os
-import random
 from itertools import cycle
+from copy import deepcopy
 
 from pyrates.utility.grid_search import grid_search, ClusterGridSearch, linearize_grid
 
@@ -55,6 +55,7 @@ class GeneticAlgorithmTemplate:
         self.pop_size = 0
         self.candidate = pd.DataFrame()
         self.winner = pd.DataFrame()
+        self.current_winners = pd.DataFrame()
         self.current_max_fitness = 0
         self.drop_count = 0
 
@@ -123,7 +124,7 @@ class GeneticAlgorithmTemplate:
         self.num_genes = len(initial_gene_pool)
         self.sigma_adapt = sigma_adapt
 
-        # Counts how many members have already been droped out from a population due to fitness stagnation
+        # Counts how many members have already been dropped out from a population due to fitness stagnation
         self.drop_count = 0
 
         # Create starting population
@@ -131,8 +132,8 @@ class GeneticAlgorithmTemplate:
         self.__create_pop(sampling_func=gene_sampling_func)
         self.pop_size = self.pop.shape[0]
 
-        if n_winners + n_parent_pairs + n_new > self.pop_size:
-            print('WARNING: Sum of winners, parents and new members exceeds the population size. Returning')
+        if n_parent_pairs + n_new > self.pop_size or n_winners > self.pop_size:
+            print('WARNING: Number of winners, or parents and new members exceeds the population size. Returning')
             return
 
         # Start genetic algorithm
@@ -152,7 +153,7 @@ class GeneticAlgorithmTemplate:
 
             # If no population member yields a proper fitness value since all computed timeseries contained at least one
             # undefined value (e.g. np.NaN)
-            print(f'Currently fittest genes:')
+            print(f'Fittest gene in current population:')
             self.plot_genes(new_candidate)
             target_tmp = []
             for tar in target:
@@ -210,12 +211,23 @@ class GeneticAlgorithmTemplate:
                 self.candidate.to_hdf(candidate_save, key='data', mode='w')
 
             # Update current winning genes
-            #############################
+            ##############################
             if self.winner.empty:
                 self.winner = self.candidate
             # Cast floats since truth value of a pd.Series is ambiguous
             elif float(self.candidate['fitness']) > float(self.winner['fitness']):
                 self.winner = self.candidate
+                print('Fittest gene in current population is also the globally fittest gene.')
+            else:
+                print(f'Globally fittest gene:')
+                self.plot_genes(self.winner)
+                target_tmp = []
+                for tar in target:
+                    if isinstance(tar, list):
+                        target_tmp.append(np.round(tar, decimals=2))
+                    else:
+                        target_tmp.append(np.round(tar, decimals=2))
+                print(f'Target: {target_tmp}')
 
             # Evaluate minimum fitness conversion criteria
             ##############################################
@@ -243,13 +255,12 @@ class GeneticAlgorithmTemplate:
                 print(f'No candidate available for the current gene set')
                 print(f'Generating new population')
                 self.__create_pop(sampling_func=gene_sampling_func)
-                iter_count += 1
             else:
                 print(f'Generating offspring')
                 self.__create_offspring(n_parent_pairs=n_parent_pairs, n_new=n_new, n_winners=n_winners,
                                         sampling_func=new_member_sampling_func if new_member_sampling_func
                                         else gene_sampling_func)
-                iter_count += 1
+            iter_count += 1
 
         # End of iteration loop
         print("Maximum iterations reached")
@@ -274,20 +285,17 @@ class GeneticAlgorithmTemplate:
         # Create new offspring
         ######################
 
-        if self.pop['fitness'].sum() == 0.0:
-            n_new = self.pop_size
-            n_parent_pairs = 0
-            n_winners = 0
         offspring = []
         new_sigs = []
-        n_mutations = self.pop_size - (n_parent_pairs + n_new + n_winners)
+        n_mutations = self.pop_size - (n_parent_pairs + n_new)
 
         # 1. Add n_winners strongest members
         ####################################
         winners = self.__select_winners(n_winners=n_winners)
+        winner_genes, winner_sigmas = [], []
         for w in winners:
-            offspring.append(w[0])
-            new_sigs.append(w[1])
+            winner_genes.append(w[0])
+            winner_sigmas.append(w[1])
 
         # 2. Add children of n_parents parent pairs
         ###########################################
@@ -304,8 +312,8 @@ class GeneticAlgorithmTemplate:
 
         # 3. Add mutations
         ##################
-        parent_pool = cycle(zip(offspring, new_sigs))
-        for mut in range(n_mutations):
+        parent_pool = cycle(zip(offspring+winner_genes, new_sigs+winner_sigmas))
+        for _ in range(n_mutations):
             parent = next(parent_pool)
             mutation = self.__mutate(parent)
             offspring.append(mutation[0])
@@ -322,8 +330,8 @@ class GeneticAlgorithmTemplate:
 
         # 5. Swap possible duplicates in the offspring with new members
         ###############################################################
-        while any(offspring.duplicated()):
-            dupl_idx = offspring.loc[offspring.duplicated()].index.to_numpy()
+        while any(offspring.duplicated(keep='first')):
+            dupl_idx = offspring.loc[offspring.duplicated(keep='first')].index.to_numpy()
             for i in dupl_idx:
                 # Replace every duplicate with a new chromosome, fitness 0.0 and respective sigmas
                 new_member = self.__create_new_member(sampling_func=sampling_func)
@@ -358,12 +366,16 @@ class GeneticAlgorithmTemplate:
 
     def __select_winners(self, n_winners):
         """Returns the n_winners fittest members from the current population"""
-        winners = []
-        for idx in self.pop.nlargest(n_winners, 'fitness').index:
-            winner_genes = self.pop.loc[idx, self.gene_names].to_list()
-            winner_sigma = self.pop.iloc[idx]['sigma']
-            winners.append([winner_genes, winner_sigma])
-        return winners
+        if self.current_winners.shape[0] == n_winners:
+            for i in range(n_winners):
+                idx_new = self.pop.nlargest(1, 'fitness').index[0]
+                idx_old = self.current_winners.nsmallest(1, 'fitness').index[0]
+                if self.pop.at[idx_new, 'fitness'] > self.current_winners.at[idx_old, 'fitness']:
+                    self.current_winners.loc[idx_old, :] = self.pop.drop(idx_new)
+        else:
+            self.current_winners = self.pop.nlargest(n_winners, 'fitness', keep='all')
+        return [(self.current_winners.loc[i, self.gene_names], self.current_winners.at[i, 'sigma'])
+                for i in self.current_winners.index]
 
     def __mutate(self, parent, max_iter=1000):
         """Create mutation of a parent, based on a gaussian distribution for each gene"""
@@ -402,8 +414,11 @@ class GeneticAlgorithmTemplate:
         """Create n_parent_pairs parent combinations. The occurrence probability for each parent is based on that
         parent's fitness"""
         parents = []
+
         # Reproduction probability for each parent is based on its relative fitness
-        parent_repro = self.pop['fitness'].copy()
+        total_fitness = self.pop['fitness'].sum()
+        parent_repro = self.current_winners['fitness'].copy()
+        parent_repro_total = parent_repro.sum() / total_fitness
 
         # Set -inf and NaN to 0 since np.choice can only handle positive floats or ints
         # Safety measure, should not occur in the first place
@@ -415,10 +430,19 @@ class GeneticAlgorithmTemplate:
         parent_repro /= np.abs(parent_repro.sum())
 
         # Get a list containing the indices of all population members
-        parent_indices = self.pop.index.values
+        pop_indices = self.pop.index.values
+        parent_indices = self.current_winners.index.values
         for n in range(n_parent_pairs):
-            p_idx = np.random.choice(parent_indices, size=(2,), replace=False, p=parent_repro)
-            parents.append((self.pop.iloc[p_idx[0], :], self.pop.iloc[p_idx[1], :]))
+            parent_pair = []
+            for _ in range(2):
+                winner_parents = np.random.choice([True, False], p=[parent_repro_total, 1-parent_repro_total])
+                if winner_parents:
+                    p_idx = np.random.choice(parent_indices, replace=False, p=parent_repro)
+                    parent_pair.append(self.current_winners.loc[p_idx, :])
+                else:
+                    p_idx = np.random.choice(pop_indices, replace=False)
+                    parent_pair.append(self.pop.loc[p_idx, :])
+            parents.append(tuple(parent_pair))
         return parents
 
     def __crossover(self, parent_pairs, n_tries=10):
@@ -441,7 +465,7 @@ class GeneticAlgorithmTemplate:
                         child_genes.append(parents[1][gene])
                         child_sigma.append(parents[1]['sigma'][g])
                 already_exists = (self.pop.loc[:, self.gene_names] == child_genes).all(1).any()
-                if not already_exists:
+                if not already_exists and (child_genes, child_sigma) not in childs:
                     break
                 count += 1
             if count < n_tries:

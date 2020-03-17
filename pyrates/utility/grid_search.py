@@ -732,7 +732,7 @@ class ClusterGridSearch(ClusterCompute):
         threads = [self.spawn_thread(client, thread_kwargs, timeout=timeout) for client in self.clients]
         # Wait for all threads to finish
         for t_ in threads:
-            t_.join(timeout=timeout)
+            t_.join()
 
         print("")
         print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
@@ -864,8 +864,14 @@ class ClusterGridSearch(ClusterCompute):
                         pass
                     break
                 else:
+                    # Enable thread switching
                     self.lock.release()
-                    t.sleep(30.0)
+                    # Release the initial lock in the first iteration
+                    try:
+                        self.lock.release()
+                    except RuntimeError:
+                        pass
+                    t.sleep(10.0)
                     continue
             else:
                 # Find chunk index of first value in remaining params and fetch all parameter combinations with the
@@ -960,6 +966,7 @@ class ClusterGridSearch(ClusterCompute):
             #########################################
 
             nbytes = 1024
+            t1 = t.time()
             while not channel.exit_status_ready():
                 if channel.recv_ready():
                     data = channel.recv(nbytes)
@@ -969,8 +976,17 @@ class ClusterGridSearch(ClusterCompute):
                     error_buff = channel.recv_stderr(nbytes)
                     while error_buff:
                         error_buff = channel.recv_stderr(nbytes)
-            channel.close()
-            exit_status = channel.recv_exit_status()
+                t2 = t.time()
+                if t2-t1 > timeout:
+                    channel.close()
+                    timed_out = True
+                    break
+                t.sleep(1.0)
+            if timed_out:
+                exit_status = -1
+            else:
+                channel.close()
+                exit_status = channel.recv_exit_status()
 
             # Update grid status
             ####################
@@ -1008,7 +1024,7 @@ class ClusterGridSearch(ClusterCompute):
                             working_grid.at[row, "err_count"] += 1
                         else:
                             working_grid.at[row, "status"] = "failed"
-                    if connection_lost_counter >= 2 or timed_out:
+                    if connection_lost_counter >= 1 or timed_out:
                         print('Excluding worker from pool')
                         return
 
