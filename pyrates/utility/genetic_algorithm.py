@@ -65,7 +65,7 @@ class GeneticAlgorithmTemplate:
             stagnation_decimals: Optional[int] = 8, max_stagnation_drops: Optional[Union[int, float]] = np.Inf,
             enforce_max_iter: Optional[bool] = False, new_pop_on_drop: Optional[bool] = False,
             pop_save: Optional[str] = "", candidate_save: Optional[str] = "", drop_save: Optional[str] = "",
-            gene_sampling_func=np.linspace, new_member_sampling_func=None, **kwargs):
+            gene_sampling_func=np.linspace, new_member_sampling_func=None, permute: bool = False, **kwargs):
         """Run a genetic algorithm to optimize genes of a population in respect to a given target vector
 
         Parameters
@@ -107,6 +107,9 @@ class GeneticAlgorithmTemplate:
         drop_save
             If set, all members that are dropped from a population due to stagnation or other criteria will be saved to
             this folder in hdf5 format
+        permute
+            If False, no permutations of gene samples will be performed. Instead, the gene sampling size equals the
+            population size.
         gene_sampling_func
         new_member_sampling_func
         kwargs
@@ -129,7 +132,7 @@ class GeneticAlgorithmTemplate:
 
         # Create starting population
         ############################
-        self.__create_pop(sampling_func=gene_sampling_func)
+        self.__create_pop(sampling_func=gene_sampling_func, permute=permute)
         self.pop_size = self.pop.shape[0]
 
         if n_parent_pairs + n_new > self.pop_size or n_winners > self.pop_size:
@@ -189,7 +192,7 @@ class GeneticAlgorithmTemplate:
 
                                 if new_pop_on_drop:
                                     print("Dropping fittest from population!")
-                                    self.__create_pop(sampling_func=gene_sampling_func)
+                                    self.__create_pop(sampling_func=gene_sampling_func, permute=permute)
                                     continue
                                 else:
                                     print("Dropping candidate from population!")
@@ -240,7 +243,7 @@ class GeneticAlgorithmTemplate:
                     self.drop_count += 1
                     if new_pop_on_drop:
                         print(f'Generating new population')
-                        self.__create_pop(sampling_func=gene_sampling_func)
+                        self.__create_pop(sampling_func=gene_sampling_func, permute=permute)
                         continue
                     else:
                         print("Dropping candidate from population!")
@@ -254,7 +257,7 @@ class GeneticAlgorithmTemplate:
             if self.current_max_fitness == -0.0:
                 print(f'No candidate available for the current gene set')
                 print(f'Generating new population')
-                self.__create_pop(sampling_func=gene_sampling_func)
+                self.__create_pop(sampling_func=gene_sampling_func, permute=permute)
             else:
                 print(f'Generating offspring')
                 self.__create_offspring(n_parent_pairs=n_parent_pairs, n_new=n_new, n_winners=n_winners,
@@ -346,7 +349,7 @@ class GeneticAlgorithmTemplate:
 
         self.pop = offspring
 
-    def __create_pop(self, sampling_func=np.linspace):
+    def __create_pop(self, sampling_func=np.linspace, permute=True):
         """Create new population from the initial gene pool"""
         pop_grid = {}
         # Prevent duplicates if create_pop() is called again if population had no winner
@@ -357,7 +360,7 @@ class GeneticAlgorithmTemplate:
             value_tmp = value.copy()
             value_tmp.pop('sigma')
             pop_grid[param] = self.__sample_gene(sampling_func, **value_tmp)
-        self.pop = linearize_grid(pop_grid, permute=True)
+        self.pop = linearize_grid(pop_grid, permute=permute)
         self.pop_size = self.pop.shape[0]
 
         self.pop['fitness'] = 0.0
@@ -368,12 +371,12 @@ class GeneticAlgorithmTemplate:
         """Returns the n_winners fittest members from the current population"""
         if self.current_winners.shape[0] == n_winners:
             for i in range(n_winners):
-                idx_new = self.pop.nlargest(1, 'fitness').index[0]
+                winner = self.pop.nlargest(1, 'fitness').index[0]
                 idx_old = self.current_winners.nsmallest(1, 'fitness').index[0]
-                if self.pop.at[idx_new, 'fitness'] > self.current_winners.at[idx_old, 'fitness']:
-                    self.current_winners.loc[idx_old, :] = self.pop.drop(idx_new)
+                if self.pop.at[winner, 'fitness'] > self.current_winners.at[idx_old, 'fitness']:
+                    self.current_winners.loc[idx_old, :] = self.pop.drop(index=winner).iloc[0, :]
         else:
-            self.current_winners = self.pop.nlargest(n_winners, 'fitness', keep='all')
+            self.current_winners = self.pop.nlargest(n_winners, 'fitness')
         return [(self.current_winners.loc[i, self.gene_names], self.current_winners.at[i, 'sigma'])
                 for i in self.current_winners.index]
 
@@ -416,9 +419,8 @@ class GeneticAlgorithmTemplate:
         parents = []
 
         # Reproduction probability for each parent is based on its relative fitness
-        total_fitness = self.pop['fitness'].sum()
+        pop_fitness = self.pop['fitness'].sum()
         parent_repro = self.current_winners['fitness'].copy()
-        parent_repro_total = parent_repro.sum() / total_fitness
 
         # Set -inf and NaN to 0 since np.choice can only handle positive floats or ints
         # Safety measure, should not occur in the first place
@@ -427,7 +429,11 @@ class GeneticAlgorithmTemplate:
 
         # Convert fitness to list of normalized choice probabilities
         parent_repro = np.abs(parent_repro.to_numpy())
-        parent_repro /= np.abs(parent_repro.sum())
+        parent_repro_sum = parent_repro.sum()
+        parent_repro_mean = parent_repro_sum/len(parent_repro)
+        total_repro_mean = pop_fitness/self.pop.shape[0]
+        parent_repro_total = parent_repro_mean/(parent_repro_mean + total_repro_mean)
+        parent_repro /= np.abs(parent_repro_sum)
 
         # Get a list containing the indices of all population members
         pop_indices = self.pop.index.values
@@ -435,8 +441,8 @@ class GeneticAlgorithmTemplate:
         for n in range(n_parent_pairs):
             parent_pair = []
             for _ in range(2):
-                winner_parents = np.random.choice([True, False], p=[parent_repro_total, 1-parent_repro_total])
-                if winner_parents:
+                winner_parent = np.random.choice([True, False], p=[parent_repro_total, 1-parent_repro_total])
+                if winner_parent:
                     p_idx = np.random.choice(parent_indices, replace=False, p=parent_repro)
                     parent_pair.append(self.current_winners.loc[p_idx, :])
                 else:
@@ -479,14 +485,14 @@ class GeneticAlgorithmTemplate:
         except TypeError:
             min_val, max_val = kwargs.pop('min'), kwargs.pop('max')
             try:
-                vals = sampling_func(**kwargs)
-                idx = np.argwhere((vals < min_val) + (vals > max_val)).squeeze()
+                vals = list(sampling_func(**kwargs))
+                idx = np.argwhere((vals < min_val) + (vals > max_val)).squeeze().tolist()
                 while idx:
-                    for _ in idx:
-                        vals.pop(idx)
+                    for i in idx:
+                        vals.pop(i)
                     kwargs['size'] = len(idx)
                     vals += list(sampling_func(**kwargs))
-                    idx = np.argwhere((vals < min_val) + (vals > max_val))
+                    idx = np.argwhere((vals < min_val) + (vals > max_val)).squeeze().tolist()
             except TypeError:
                 vals = np.random.uniform(min_val, max_val, kwargs['size'])
             return np.asarray(vals)
