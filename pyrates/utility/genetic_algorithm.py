@@ -65,7 +65,7 @@ class GeneticAlgorithmTemplate:
             stagnation_decimals: Optional[int] = 8, max_stagnation_drops: Optional[Union[int, float]] = np.Inf,
             enforce_max_iter: Optional[bool] = False, new_pop_on_drop: Optional[bool] = False,
             pop_save: Optional[str] = "", candidate_save: Optional[str] = "", drop_save: Optional[str] = "",
-            gene_sampling_func=np.linspace, new_member_sampling_func=None, permute: bool = False, **kwargs):
+            gene_sampling_func=np.linspace, new_member_sampling_func=None, permute: bool = True, **kwargs):
         """Run a genetic algorithm to optimize genes of a population in respect to a given target vector
 
         Parameters
@@ -182,20 +182,22 @@ class GeneticAlgorithmTemplate:
                             # Check if maximum number of population drops is reached
                             if not (self.drop_count == max_stagnation_drops) or enforce_max_iter:
                                 if drop_save:
-                                    print("Saving candidate!")
+                                    print("Saving fittest candidate.")
                                     os.makedirs(drop_save, exist_ok=True)
                                     new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                                     with h5py.File(f'{drop_save}/PopulationDrop_{self.drop_count}.h5') as file:
                                         file['target'] = target
 
                                 self.drop_count += 1
+                                self.winner = pd.DataFrame()
 
                                 if new_pop_on_drop:
-                                    print("Dropping fittest from population!")
+                                    print("Creating new population.")
                                     self.__create_pop(sampling_func=gene_sampling_func, permute=permute)
                                     continue
                                 else:
                                     print("Dropping candidate from population!")
+                                    self.current_winners = self.current_winners.drop(new_candidate.index)
                                     self.pop = self.pop.drop(new_candidate.index)
                             else:
                                 print("Returning fittest member!")
@@ -241,6 +243,7 @@ class GeneticAlgorithmTemplate:
                         print("Saving candidate!")
                         new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                     self.drop_count += 1
+                    self.winner = pd.DataFrame()
                     if new_pop_on_drop:
                         print(f'Generating new population')
                         self.__create_pop(sampling_func=gene_sampling_func, permute=permute)
@@ -248,6 +251,7 @@ class GeneticAlgorithmTemplate:
                     else:
                         print("Dropping candidate from population!")
                         self.pop = self.pop.drop(self.candidate.index)
+                        self.current_winners = self.current_winners.drop(new_candidate.index)
                 else:
                     return self.candidate
 
@@ -267,7 +271,7 @@ class GeneticAlgorithmTemplate:
 
         # End of iteration loop
         print("Maximum iterations reached")
-        if float(self.winner['fitness']) < min_fit:
+        if float(self.winner['fitness']) < min_fit and self.drop_count == 0:
             print('Could not satisfy minimum fitness condition.')
         return self.winner
 
@@ -351,6 +355,8 @@ class GeneticAlgorithmTemplate:
 
     def __create_pop(self, sampling_func=np.linspace, permute=True):
         """Create new population from the initial gene pool"""
+        for idx in self.current_winners.index:
+            self.current_winners.drop(index=idx)
         pop_grid = {}
         # Prevent duplicates if create_pop() is called again if population had no winner
         self.gene_names = []
@@ -373,7 +379,8 @@ class GeneticAlgorithmTemplate:
             for i in range(n_winners):
                 winner = self.pop.nlargest(1, 'fitness').index[0]
                 idx_old = self.current_winners.nsmallest(1, 'fitness').index[0]
-                if self.pop.at[winner, 'fitness'] > self.current_winners.at[idx_old, 'fitness']:
+                if self.pop.at[winner, 'fitness'] > self.current_winners.at[idx_old, 'fitness'] and not \
+                        [self.current_winners.loc[:, n] == self.pop.at[winner, n] for n in self.gene_names].all():
                     self.current_winners.loc[idx_old, :] = self.pop.drop(index=winner).iloc[0, :]
         else:
             self.current_winners = self.pop.nlargest(n_winners, 'fitness')
