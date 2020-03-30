@@ -380,7 +380,8 @@ class GeneticAlgorithmTemplate:
                 winner = self.pop.nlargest(1, 'fitness').index[0]
                 idx_old = self.current_winners.nsmallest(1, 'fitness').index[0]
                 if self.pop.at[winner, 'fitness'] > self.current_winners.at[idx_old, 'fitness'] and not \
-                        [self.current_winners.loc[:, n] == self.pop.at[winner, n] for n in self.gene_names].all():
+                        (self.current_winners.loc[:, self.gene_names] == self.pop.loc[winner, self.gene_names]
+                         ).all(1).any():
                     self.current_winners.loc[idx_old, :] = self.pop.drop(index=winner).iloc[0, :]
         else:
             self.current_winners = self.pop.nlargest(n_winners, 'fitness')
@@ -593,9 +594,7 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
             chunk_size=self.cgs_config['chunk_size'],
             worker_env=self.cgs_config['worker_env'],
             worker_file=self.cgs_config['worker_file'],
-            worker_kwargs={
-                'target': target
-            },
+            worker_kwargs={'target': target},
             result_concat_axis=0)
 
         results = pd.read_hdf(res_file, key=f'/Results/fitness')
