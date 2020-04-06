@@ -148,7 +148,7 @@ class FortranBackend(NumpyBackend):
                  "argmax": {'name': "fortran_transpose", 'call': "ARGMAX"},
                  "argmin": {'name': "fortran_argmin", 'call': "ARGMIN"},
                  "round": {'name': "fortran_round", 'call': ""},
-                 "sum": {'name': "fortran_sum", 'call': ""},
+                 "sum": {'name': "fortran_sum", 'call': "SUM"},
                  "mean": {'name': "fortran_mean", 'call': ""},
                  "concat": {'name': "fortran_concatenate", 'call': ""},
                  "reshape": {'name': "fortran_reshape", 'call': ""},

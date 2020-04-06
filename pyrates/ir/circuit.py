@@ -1860,7 +1860,8 @@ class CircuitIR(AbstractBaseIR):
                     rates.append(dde_approx / m if m else 0)
 
             n_edges = len(orders) // target_shape[0]
-            order_idx = np.argsort(orders)
+            # TODO: test whether indexing and un-indexing later on actually works.
+            order_idx = np.argsort(orders, kind='stable')
             orders = np.asarray(orders, dtype=np.int32)[order_idx]
             orders_tmp = np.asarray(orders, dtype=np.int32)
             rates_tmp = np.asarray(rates)[order_idx]

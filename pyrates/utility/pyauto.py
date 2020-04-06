@@ -388,9 +388,18 @@ class PyAuto:
         """
 
         # extract information from branch solutions
-        results = []
-        for p in points:
-            results += [self.extract([var] + ['stability', 'PAR(11)'], cont=cont, point=p)]
+        if not points:
+            points = ['RG']
+            points_tmp = self.results[self._results_map[cont] if type(cont) is str else cont].keys()
+            results_tmp = [self.extract([var] + ['stability', 'time'], cont=cont, point=p) for p in points_tmp]
+            results = [{key: [] for key in results_tmp[0].keys()}]
+            for r in results_tmp:
+                for key in r:
+                    results[0][key].append(r[key])
+            for key in results[0].keys():
+                results[0][key] = np.asarray(results[0][key]).squeeze()
+        else:
+            results = [self.extract([var] + ['stability', 'time'], cont=cont, point=p) for p in points]
 
         # create plot
         if ax is None:
@@ -400,7 +409,7 @@ class PyAuto:
         if not linespecs:
             linespecs = [dict() for _ in range(len(points))]
         for i in range(len(points)):
-            time = np.linspace(0, 1, len(results[i][var]))*results[i]['PAR(11)']
+            time = results[i]['time']
             kwargs_tmp = kwargs.copy()
             kwargs_tmp.update(linespecs[i])
             line_col = self._get_line_collection(x=time, y=results[i][var], stability=results[i]['stability'],
@@ -508,6 +517,8 @@ class PyAuto:
                 summary[point]['bifurcation'] = solution_type
                 for var, val in zip(variables, var_vals):
                     summary[point][var] = val
+                if len(var_vals) > len(variables) and timeseries:
+                    summary[point]['time'] = var_vals[-1]
                 for param, val in zip(params, param_vals):
                     summary[point][param] = val
                 if stability:
@@ -593,7 +604,11 @@ class PyAuto:
     def get_vars(solution: Any, vars: list, extract_timeseries: bool = False) -> list:
         if hasattr(solution, 'b') and extract_timeseries:
             solution = solution.b['solution']
-        return [solution[v] for v in vars]
+            solutions = [solution.indepvararray]
+        else:
+            solutions = []
+        solutions = [solution[v] for v in vars] + solutions
+        return solutions
 
     @staticmethod
     def get_params(solution, params):

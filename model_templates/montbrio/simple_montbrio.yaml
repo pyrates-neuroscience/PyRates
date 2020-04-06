@@ -5,18 +5,18 @@ Op_e_adapt:
   base: OperatorTemplate
   equations:
     - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - I_a - tau*(PI*r)^2"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J_e*(r + r_e - r_i)*(1.0-I_a) - tau*(PI*r)^2"
     - "d/dt * I_a = x"
     - "d/dt * x = (alpha*r - 2.0*x - I_a/tau_a)/tau_a"
   variables:
     r:
-      default: output
+      default: output(0.75)
     v:
-      default: variable
+      default: variable(-0.4)
     I_a:
-      default: variable
+      default: variable(0.36)
     x:
-      default: variable
+      default: variable(0.0)
     r_e:
       default: input
     r_i:
@@ -26,7 +26,7 @@ Op_e_adapt:
     delta:
       default: 2.0
     eta:
-      default: -10.0
+      default: -4.6
     J_e:
       default: 21.2132
     alpha:

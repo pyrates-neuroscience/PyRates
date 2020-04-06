@@ -212,12 +212,13 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
         # simple timeseries plot
         if 'ci' not in kwargs:
             kwargs['ci'] = None
-        ylabel = kwargs.pop('ylabel', df.columns.values[0] if len(df.columns.values) == 1 else df.columns.values[0][-1])
+        ylabel = kwargs.pop('ylabel', df.columns.values[0])
         xlabel = kwargs.pop('xlabel', 'time')
         ax = sb.lineplot(data=df, x='time', y=variable, hue='node', palette=cmap, **kwargs)
         ax.set_title(title)
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
+        plt.legend(data_tmp.columns.values)
         if xlim:
             ax.set_xlim(xlim)
         if ylim:
