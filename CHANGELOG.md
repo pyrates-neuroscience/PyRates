@@ -1,11 +1,13 @@
 # Changelog
 
-## 0.9.0 (work in progress)
+## 0.9.0
 
 - Added experimental support for multiple source variables per edge
   - edges can either have multiple input variable from the same input node, or
   - they can have additional ("modulating") input from any node in the network
-- Added experimental support for Fortran code creation backend and [auto](add_link)
+- Added experimental support for Fortran code creation backend
+- various performance improvements
+
 
 ## 0.8
 
