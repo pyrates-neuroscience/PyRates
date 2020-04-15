@@ -174,7 +174,7 @@ class GeneticAlgorithmTemplate:
                     old_fitness = np.round(float(self.candidate['fitness']), decimals=stagnation_decimals)
                     new_fitness = np.round(self.current_max_fitness, decimals=stagnation_decimals)
                     # Check for change in fitness
-                    if new_fitness == old_fitness:
+                    if new_fitness <= old_fitness:
                         stagnation_count += 1
                         # Check if stagnation occured
                         if stagnation_count > max_stagnation_steps:

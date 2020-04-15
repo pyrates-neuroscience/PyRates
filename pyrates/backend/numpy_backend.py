@@ -1388,7 +1388,7 @@ class NumpyBackend(object):
                 time = np.linspace(0, T, inputs[0][0].shape[0])
 
                 for (inp, target_var, idx) in inputs:
-                    in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
+                    in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else f"{target_var.short_name}_inp"
                     if len(inp.shape) > 1:
                         inp = inp.squeeze()
                     f = interp1d(time, inp, axis=0, copy=False, kind='linear')
