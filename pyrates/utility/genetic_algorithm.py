@@ -174,7 +174,7 @@ class GeneticAlgorithmTemplate:
                     old_fitness = np.round(float(self.candidate['fitness']), decimals=stagnation_decimals)
                     new_fitness = np.round(self.current_max_fitness, decimals=stagnation_decimals)
                     # Check for change in fitness
-                    if new_fitness == old_fitness:
+                    if new_fitness <= old_fitness:
                         stagnation_count += 1
                         # Check if stagnation occured
                         if stagnation_count > max_stagnation_steps:
@@ -184,12 +184,13 @@ class GeneticAlgorithmTemplate:
                                 if drop_save:
                                     print("Saving fittest candidate.")
                                     os.makedirs(drop_save, exist_ok=True)
-                                    new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
+                                    self.candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5',
+                                                          key='data')
                                     with h5py.File(f'{drop_save}/PopulationDrop_{self.drop_count}.h5') as file:
                                         file['target'] = target
 
                                 self.drop_count += 1
-                                self.winner = pd.DataFrame()
+                                self.candidate = pd.DataFrame()
 
                                 if new_pop_on_drop:
                                     print("Creating new population.")
@@ -197,12 +198,11 @@ class GeneticAlgorithmTemplate:
                                     continue
                                 else:
                                     print("Dropping candidate from population!")
-                                    self.current_winners = self.current_winners.drop(new_candidate.index)
-                                    self.pop = self.pop.drop(new_candidate.index)
+                                    self.current_winners = self.current_winners.drop(self.candidate.index)
                             else:
                                 print("Returning fittest member!")
                                 print("")
-                                return new_candidate
+                                return self.winner
                     else:
                         # Reset stagnation counter
                         stagnation_count = 0
@@ -217,10 +217,7 @@ class GeneticAlgorithmTemplate:
 
             # Update current winning genes
             ##############################
-            if self.winner.empty:
-                self.winner = self.candidate
-            # Cast floats since truth value of a pd.Series is ambiguous
-            elif float(self.candidate['fitness']) > float(self.winner['fitness']):
+            if self.winner.empty or float(self.candidate['fitness']) > float(self.winner['fitness']):
                 self.winner = self.candidate
                 print('Fittest gene in current population is also the globally fittest gene.')
             else:
@@ -240,9 +237,10 @@ class GeneticAlgorithmTemplate:
                 print("Minimum fitness criterion reached!")
                 if enforce_max_iter:
                     if drop_save:
-                        print("Saving candidate!")
-                        new_candidate.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
+                        print("Saving winner!")
+                        self.winner.to_hdf(f'{drop_save}/PopulationDrop_{self.drop_count}.h5', key='data')
                     self.drop_count += 1
+                    stagnation_count = 0
                     self.winner = pd.DataFrame()
                     if new_pop_on_drop:
                         print(f'Generating new population')
@@ -250,10 +248,11 @@ class GeneticAlgorithmTemplate:
                         continue
                     else:
                         print("Dropping candidate from population!")
-                        self.pop = self.pop.drop(self.candidate.index)
+                        self.pop = self.pop.drop(new_candidate.index)
                         self.current_winners = self.current_winners.drop(new_candidate.index)
+                        self.candidate = pd.DataFrame()
                 else:
-                    return self.candidate
+                    return new_candidate
 
             # Create offspring from current population
             ##########################################
@@ -382,7 +381,7 @@ class GeneticAlgorithmTemplate:
                 if self.pop.at[winner, 'fitness'] > self.current_winners.at[idx_old, 'fitness'] and not \
                         (self.current_winners.loc[:, self.gene_names] == self.pop.loc[winner, self.gene_names]
                          ).all(1).any():
-                    self.current_winners.loc[idx_old, :] = self.pop.drop(index=winner).iloc[0, :]
+                    self.current_winners.loc[idx_old, :] = self.pop.loc[winner, :]
         else:
             self.current_winners = self.pop.nlargest(n_winners, 'fitness')
         return [(self.current_winners.loc[i, self.gene_names], self.current_winners.at[i, 'sigma'])
@@ -393,14 +392,17 @@ class GeneticAlgorithmTemplate:
         mu_new = []
         sigma_new = []
         for i, (mu, sigma) in enumerate(zip(parent[0], parent[1])):
-            mu_temp = np.random.normal(mu, sigma)
+            mu_tmp = np.random.normal(mu, sigma)
+            sigma_tmp = sigma
             j = 0
-            while any([mu_temp < self.initial_gene_pool[self.gene_names[i]]['min'],
-                       mu_temp > self.initial_gene_pool[self.gene_names[i]]['max']]) and j < max_iter:
-                mu_temp = np.random.normal(mu, sigma)
-                sigma *= 0.99
+            while any([mu_tmp < self.initial_gene_pool[self.gene_names[i]]['min'],
+                       mu_tmp > self.initial_gene_pool[self.gene_names[i]]['max']]) and j < max_iter:
+                mu_tmp = np.random.normal(mu, sigma_tmp)
+                sigma_tmp *= 0.99
                 j += 1
-            mu_new.append(mu_temp if j < max_iter else mu)
+            if j > 1:
+                sigma = sigma_tmp
+            mu_new.append(mu_tmp if j < max_iter else mu)
             # Adapt sigma (Beyer1995, p.5)
             xi = np.exp(self.sigma_adapt*np.random.randn())
             sigma_new.append(sigma*xi)
