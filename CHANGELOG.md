@@ -6,6 +6,7 @@
   - edges can either have multiple input variable from the same input node, or
   - they can have additional ("modulating") input from any node in the network
 - Added experimental support for Fortran code creation backend
+- Edge delays can now be transformed into delay distributions via convoluted Gamma-Kernels based on differential equation using a mean and spread parameter for the delay
 - various performance improvements
 
 
