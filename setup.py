@@ -25,7 +25,8 @@ EXTRAS = {"tf": ["tensorflow>=2.0"],
           "plot": ["seaborn", "pydot"],
           "proc": ["mne", "scipy"],
           "cluster": ["paramiko", "h5py"],
-          "numba": ["numba"]}
+          "numba": ["numba"],
+          "dev": ["pytest", "bump2version"]}
 
 EXTRAS["all"] = [item for sublist in EXTRAS.values() for item in sublist]
 
