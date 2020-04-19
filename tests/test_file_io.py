@@ -16,7 +16,8 @@ def setup_module():
 
 def test_pickle_template():
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.template import from_yaml
+    from pyrates.frontend.template import from_yaml, clear_cache
+    clear_cache()
     template = from_yaml(path)
     out_file = "output/jansen_rit_template.p"
     test_file = "resources/jansen_rit_template.p"
