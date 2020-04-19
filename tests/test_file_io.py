@@ -58,10 +58,6 @@ def test_pickle_template():
         else:
             raise ValueError("Files are not the same")
     except FileNotFoundError as e:
-        for path, dirs, files in os.walk(os.getcwd()):
-            print(path)
-            for f in files:
-                print(f)
 
         raise FileNotFoundError(f"Files: {out_file}, {test_file}, CWD: {os.getcwd()}, ")
 

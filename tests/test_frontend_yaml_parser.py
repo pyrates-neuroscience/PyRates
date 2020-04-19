@@ -190,3 +190,5 @@ def test_yaml_dump():
     # reload saved circuit
     saved_circuit = CircuitTemplate.from_yaml("output/yaml_dump/DumpedCircuit").apply()
     assert saved_circuit
+
+    # ToDo: figure out a simple way to compare both instances
