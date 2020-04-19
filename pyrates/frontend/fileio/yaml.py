@@ -94,8 +94,3 @@ def from_circuit(circuit, path: str, name: str):
     from pathlib import Path
     path = Path(path)
     yaml.dump(dict_repr, path)
-
-
-@register_interface
-def to_template(path: str, template_cls):
-    return template_cls.from_yaml(path)
