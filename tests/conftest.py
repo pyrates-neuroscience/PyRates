@@ -1,6 +1,13 @@
 """Pytest module-wide configuration file."""
 
 import pytest
+import os
+
+
+@pytest.fixture(scope="session")
+def ensure_test_directory():
+    if os.getcwd().endswith("PyRates"):
+        os.chdir("tests/")
 
 
 @pytest.fixture(autouse=True)
@@ -9,9 +16,6 @@ def run_around_tests():
     # Find and save current (test) working directory
     import os
     import warnings
-    cwd = os.getcwd()
-    if not cwd.endswith("tests"):
-        os.chdir("tests/")
     cwd = os.getcwd()
     warnings.warn(f"before: {cwd}")
     # A test function will be run at this point
