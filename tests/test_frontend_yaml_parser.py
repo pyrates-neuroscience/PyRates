@@ -89,32 +89,6 @@ def test_import_operator_templates(operator):
 #     assert repr(template) == repr(cached_template) == f"<NodeTemplate '{node}'>"
 
 
-# @pytest.mark.parametrize("circuit", ["pyrates.circuit.templates.JansenRitCircuit",
-#                                      "pyrates.circuit.circuit.BaseCircuit"
-#                                      ])
-# def test_import_circuit_templates(circuit):
-#     """test import of circuit templates"""
-#
-#     from pyrates.circuit.circuit import CircuitTemplateLoader
-#
-#     template = CircuitTemplate.from_yaml(circuit)  # type: CircuitTemplate
-#
-#     assert template.path in CircuitTemplateLoader.cache
-#
-#     cached_template = CircuitTemplateLoader.cache[circuit]  # type: CircuitTemplate
-#
-#     assert template is cached_template
-#     assert template.path == cached_template.path
-#     assert template.nodes == cached_template.nodes
-#     assert template.edges == cached_template.edges
-#
-#     for value in template.coupling.values():
-#         assert isinstance(value, OperatorTemplate)
-#     for value in template.nodes.values():
-#         assert isinstance(value, NodeTemplate)
-#     assert repr(template) == repr(cached_template) == f"<CircuitTemplate '{circuit}'>"
-
-
 def test_full_jansen_rit_circuit_template_load():
     """Test a simple circuit template, including all nodes and operators to be loaded."""
 
