@@ -7,6 +7,10 @@ from typing import Union
 import numpy as np
 import pytest
 
+# pyrates internal imports
+from pyrates.backend import ComputeGraph
+from pyrates.frontend import CircuitTemplate
+
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -58,9 +62,6 @@ def test_2_1_operator():
     --------
     :method:`add_operator`: Detailed documentation of method for adding operations to instance of `ComputeGraph`.
     """
-    # pyrates internal imports
-    from pyrates.backend import ComputeGraph
-    from pyrates.frontend import CircuitTemplate
 
     backends = ["tensorflow", "numpy"]
     accuracy = 1e-4
@@ -164,9 +165,6 @@ def test_2_2_node():
     --------
     :method:`add_node`: Detailed documentation of method for adding nodes to instance of `ComputeGraph`.
     """
-    # pyrates internal imports
-    from pyrates.backend import ComputeGraph
-    from pyrates.frontend import CircuitTemplate
 
     backends = ['numpy', 'tensorflow']
 
@@ -267,9 +265,6 @@ def test_2_3_edge():
     :method:`add_edge`: Detailed documentation of add_edge method of `ComputeGraph`class.
 
     """
-    # pyrates internal imports
-    from pyrates.backend import ComputeGraph
-    from pyrates.frontend import CircuitTemplate
 
     backends = ['numpy', 'tensorflow']
     accuracy = 1e-4
@@ -385,9 +380,6 @@ def test_2_4_vectorization():
     --------
     :method:`_vectorize`: Detailed documentation of vectorize method of `ComputeGraph` class.
     """
-    # pyrates internal imports
-    from pyrates.backend import ComputeGraph
-    from pyrates.frontend import CircuitTemplate
 
     backends = ['tensorflow', 'numpy']
     for b in backends:
