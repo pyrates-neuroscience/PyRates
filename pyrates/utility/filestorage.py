@@ -322,5 +322,6 @@ def read_simulation_data_from_file(dirname: str, path="", filenames: list = None
 
 def to_pickle(obj, filename):
     """Conserve a PyRates object as pickle."""
+    pass
 
 

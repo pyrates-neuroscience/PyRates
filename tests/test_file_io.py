@@ -4,7 +4,8 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 import pytest
-
+import filecmp
+import os
 
 def setup_module():
     print("\n")
@@ -13,8 +14,29 @@ def setup_module():
     print("=======================")
 
 
+def test_pickle_template():
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    from pyrates.frontend.template import from_yaml
+    template = from_yaml(path)
+    out_file = "output/jansen_rit_template.p"
+    test_file = "resources/jansen_rit_template.p"
+
+    from pyrates.frontend.fileio import pickle
+
+    # pickle.dump(template, open("resources/jansen_rit_template.p", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
+    pickle.dump(template, out_file)
+
+    if os.path.getsize(out_file) == os.path.getsize(test_file):
+        assert filecmp.cmp(out_file, test_file, shallow=False)
+    else:
+        raise ValueError("File are not the same")
+
+    data = pickle.load(out_file)
+    assert data
+
+
 @pytest.mark.xfail
-def test_save_to_pickle():
+def test_pickle_ir():
     pass
 
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
@@ -29,7 +51,7 @@ def test_save_to_pickle():
     # circuit.to_file(filename="resources/jansen_rit_vectorized.p", mode="pickle")
 
     import pickle
-    pickle.dump(circuit, open("resources/jansen_rit.p", "wb"))
+    pickle.dump(circuit, open("resources/jansen_rit.p", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
 
 
 @pytest.mark.skip
