@@ -32,11 +32,6 @@ def test_pickle_ir():
     pickle.dump(circuit, open("resources/jansen_rit.p", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
 
 
-@pytest.mark.skip
-def test_load_from_pickle():
-    pass
-
-
 def test_pickle_template():
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.frontend.template import from_yaml, clear_cache
@@ -52,14 +47,10 @@ def test_pickle_template():
     # pickle.dump(template, open("resources/jansen_rit_template.p", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
     pickle.dump(template, out_file)
 
-    try:
-        if os.path.getsize(out_file) == os.path.getsize(test_file):
-            assert filecmp.cmp(out_file, test_file, shallow=False)
-        else:
-            raise ValueError("Files are not the same")
-    except FileNotFoundError as e:
+    if os.path.getsize(out_file) == os.path.getsize(test_file):
+        assert filecmp.cmp(out_file, test_file, shallow=False)
+    else:
+        raise ValueError("Files are not the same")
 
-        raise FileNotFoundError(f"Files: {out_file}, {test_file}, CWD: {os.getcwd()}, ")
-
-    data = pickle.load(out_file)
-    assert data
+    template = pickle.load(out_file)
+    assert template
