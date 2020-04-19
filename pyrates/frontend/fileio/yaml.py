@@ -33,7 +33,6 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-
 def to_dict(path: str):
     """Load a template from YAML and return the resulting dictionary.
 
@@ -79,7 +78,6 @@ def to_dict(path: str):
         raise AttributeError(f"Could not find {template_name} in {filepath}.")
 
     return template_dict
-
 
 
 def from_circuit(circuit, path: str, name: str):

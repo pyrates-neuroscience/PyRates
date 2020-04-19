@@ -52,7 +52,6 @@ register_template_class("EdgeTemplate", EdgeTemplate)
 register_template_class("CircuitTemplate", CircuitTemplate)
 
 
-
 def from_file(path: str, mode: str = "yaml"):
     """Generic file loader function that looks for correct template class"""
 
@@ -63,7 +62,6 @@ def from_file(path: str, mode: str = "yaml"):
         raise ValueError(f"Unknown file loading mode '{mode}'.")
 
     return loader(path)
-
 
 
 def from_yaml(path):
