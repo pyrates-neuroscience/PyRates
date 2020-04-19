@@ -46,11 +46,16 @@ class AbstractBaseTemplate:
     def __repr__(self):
         return f"<{self.__class__.__name__} '{self.path}'>"
 
-    @staticmethod
-    def from_yaml(path):
+    @classmethod
+    def from_yaml(cls, path):
 
         from pyrates.frontend.template import from_yaml
-        return from_yaml(path)
+        tpl = from_yaml(path)
+
+        if isinstance(tpl, cls):
+            return tpl
+        else:
+            raise TypeError(f"The template associated with '{path}' is not of type {cls}.")
 
     def update_template(self, *args, **kwargs):
         """Updates the template with a given list of arguments and returns a new instance of the template class."""
