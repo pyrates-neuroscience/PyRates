@@ -27,13 +27,13 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """ Some utility functions for parsing YAML-based definitions of circuits and components.
 """
-from pyrates.frontend._registry import register_interface
+
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-@register_interface
+
 def to_dict(path: str):
     """Load a template from YAML and return the resulting dictionary.
 
@@ -81,7 +81,7 @@ def to_dict(path: str):
     return template_dict
 
 
-@register_interface
+
 def from_circuit(circuit, path: str, name: str):
     from pyrates.frontend.dict import from_circuit
     dict_repr = {name: from_circuit(circuit)}
