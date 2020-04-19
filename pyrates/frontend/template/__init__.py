@@ -30,7 +30,6 @@ from .node import NodeTemplate
 from .operator import OperatorTemplate
 from .edge import EdgeTemplate
 from .circuit import CircuitTemplate
-from pyrates.frontend._registry import register_interface
 
 known_template_classes = dict()
 
@@ -53,7 +52,7 @@ register_template_class("EdgeTemplate", EdgeTemplate)
 register_template_class("CircuitTemplate", CircuitTemplate)
 
 
-@register_interface
+
 def from_file(path: str, mode: str = "yaml"):
     """Generic file loader function that looks for correct template class"""
 
@@ -66,7 +65,7 @@ def from_file(path: str, mode: str = "yaml"):
     return loader(path)
 
 
-@register_interface
+
 def from_yaml(path):
     """Load template from yaml file. Templates are cached by path. Depending on the 'base' key of the yaml template,
     either a template class is instantiated or the function recursively loads base templates until it hits a known
@@ -125,25 +124,25 @@ def _select_template_class():
 
 # module-lvl functions for template conversion
 # writing them out explicitly
-@register_interface
+
 def to_circuit(template: CircuitTemplate):
     """Takes a circuit template and returns a CircuitIR instance from it."""
     return template.apply()
 
 
-@register_interface
+
 def to_node(template: NodeTemplate):
     """Takes a node template and returns a NodeIR instance from it."""
     return template.apply()
 
 
-@register_interface
+
 def to_edge(template: EdgeTemplate):
     """Takes a edge template and returns a EdgeIR instance from it."""
     return template.apply()
 
 
-@register_interface
+
 def to_operator(template: OperatorTemplate):
     """Takes a operator template and returns a OperatorIR instance from it."""
     return template.apply()
