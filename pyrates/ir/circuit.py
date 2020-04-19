@@ -1486,25 +1486,32 @@ class CircuitIR(AbstractBaseIR):
                                       f'system.'
                                       )
 
-    def to_file(self, filename: str) -> None:
+    def to_file(self, filename: str, mode: str = "pickle") -> None:
         """Save continuation results on disc.
 
         Parameters
         ----------
         filename
+        mode
 
         Returns
         -------
         None
         """
 
-        import pickle
+        if mode == "pickle":
 
-        data = {key: getattr(self, key) for key in self.__slots__ if key != '_backend'}
-        try:
-            pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
-        except (FileExistsError, TypeError):
-            pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+            import pickle
+
+            data = {key: getattr(self, key) for key in self.__slots__ if key != '_backend'}
+            try:
+                pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+            except (FileExistsError, TypeError):
+                pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+
+        else:
+            from pyrates.utility.filestorage import FILEIOMODES
+            ValueError(f"Unknown file format to save to. Allowed modes: {FILEIOMODES}")
 
     @classmethod
     def from_file(cls, filename: str):

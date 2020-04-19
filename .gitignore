@@ -126,3 +126,4 @@ type_info.json
 
 tests/output/
 pyrates_build/
+tests/resources
