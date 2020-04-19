@@ -236,24 +236,27 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             if isinstance(edge, dict):
                 try:
-                    # TODO: remove cast to tuple. instead invoke variable names locally
-                    edge = (edge["source"], edge["target"], edge["template"], edge["variables"])
+                    source = edge["source"]
+                    target = edge["target"]
+                    template = edge["template"]
+                    variables = edge["variables"]
                 except KeyError as e:
                     raise TypeError(f"Wrong edge configuration. Unable to find key {e.args[0]}")
 
+            else:
+                source, target, template, variables = edge
+
             # "template" is EdgeTemplate, just use it
-            if isinstance(edge[2], EdgeTemplate):
-                temp = edge[2]
+            # also just leave it as None, if so it be.
+            if isinstance(template, EdgeTemplate) or template is None:
+                pass
 
             # if not, try to load template path from yaml
             else:
-                path = edge[2]
-                try:
-                    path = _complete_template_path(path, self.path)
-                    temp = EdgeTemplate.from_yaml(path)
-                except TypeError:
-                    temp = None
-            edges_with_templates.append((*edge[0:2], temp, edge[3]))
+                path = _complete_template_path(template, self.path)
+                template = EdgeTemplate.from_yaml(path)
+
+            edges_with_templates.append((source, target, template, variables))
         return edges_with_templates
 
 

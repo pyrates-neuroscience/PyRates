@@ -37,7 +37,6 @@ class AbstractBaseTemplate:
     """Abstract base class for templates"""
 
     target_ir = None  # placeholder for template-specific intermediate representation (IR) target class
-    cache = {}  # dictionary that keeps track of already loaded templates
 
     def __init__(self, name: str, path: str, description: str = "A template."):
         self.name = name
