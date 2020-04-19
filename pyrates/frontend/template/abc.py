@@ -29,8 +29,6 @@
 """ Abstract base classes
 """
 
-from pyrates.frontend.yaml import to_dict as dict_from_yaml
-
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
@@ -50,52 +48,10 @@ class AbstractBaseTemplate:
         return f"<{self.__class__.__name__} '{self.path}'>"
 
     @staticmethod
-    def _complete_template_path(target_path: str, source_path: str) -> str:
-        """Check if path contains a folder structure and prepend own path, if it doesn't"""
+    def from_yaml(path):
 
-        if "." not in target_path:
-            if "/" in source_path or "\\" in source_path:
-                import os
-                basedir, _ = os.path.split(source_path)
-                target_path = os.path.normpath(os.path.join(basedir, target_path))
-            else:
-                target_path = ".".join((*source_path.split('.')[:-1], target_path))
-        return target_path
-
-    @classmethod
-    def from_yaml(cls, path):
-        """Convenience method that looks for a loader class for the template type and applies it, assuming
-        the class naming convention '<template class>Loader'.
-
-        Parameters:
-        -----------
-        path
-            Path to template in YAML file of form 'directories.file.template'
-        """
-
-        if path in cls.cache:
-            template = cls.cache[path]
-        else:
-            template_dict = dict_from_yaml(path)
-            try:
-                base_path = template_dict.pop("base")
-            except KeyError:
-                raise KeyError(f"No 'base' defined for template {path}. Please define a "
-                               f"base to derive the template from.")
-            if base_path == cls.__name__:
-                # if base refers to the python representation, instantiate here
-                template = cls(**template_dict)
-            else:
-                # load base if needed
-                base_path = cls._complete_template_path(base_path, path)
-
-                base_template = cls.from_yaml(base_path)
-                template = base_template.update_template(**template_dict)
-                # may fail if "base" is present but empty
-
-            cls.cache[path] = template
-
-        return template
+        from pyrates.frontend.template import from_yaml
+        return from_yaml(path)
 
     def update_template(self, *args, **kwargs):
         """Updates the template with a given list of arguments and returns a new instance of the template class."""
@@ -104,4 +60,5 @@ class AbstractBaseTemplate:
     def apply(self, *args, **kwargs):
         """Converts the template into its corresponding intermediate representation class."""
         raise NotImplementedError
+
 

@@ -39,6 +39,7 @@ from copy import deepcopy
 
 # pyrates internal imports
 from pyrates import PyRatesException
+from pyrates.frontend.template._io import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
@@ -65,7 +66,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         if nodes:
             for key, node in nodes.items():
                 if isinstance(node, str):
-                    path = self._complete_template_path(node, self.path)
+                    path = _complete_template_path(node, self.path)
                     self.nodes[key] = NodeTemplate.from_yaml(path)
                 else:
                     self.nodes[key] = node
@@ -74,7 +75,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         if circuits:
             for key, circuit in circuits.items():
                 if isinstance(circuit, str):
-                    path = self._complete_template_path(circuit, self.path)
+                    path = _complete_template_path(circuit, self.path)
                     self.circuits[key] = CircuitTemplate.from_yaml(path)
                 else:
                     self.circuits[key] = circuit
@@ -235,6 +236,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             if isinstance(edge, dict):
                 try:
+                    # TODO: remove cast to tuple. instead invoke variable names locally
                     edge = (edge["source"], edge["target"], edge["template"], edge["variables"])
                 except KeyError as e:
                     raise TypeError(f"Wrong edge configuration. Unable to find key {e.args[0]}")
@@ -247,7 +249,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             else:
                 path = edge[2]
                 try:
-                    path = self._complete_template_path(path, self.path)
+                    path = _complete_template_path(path, self.path)
                     temp = EdgeTemplate.from_yaml(path)
                 except TypeError:
                     temp = None

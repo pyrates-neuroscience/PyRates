@@ -29,6 +29,7 @@
 from typing import Union, List, Type, Dict
 
 from pyrates import PyRatesException
+from pyrates.frontend.template import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.ir.operator_graph import OperatorGraph
 from pyrates.frontend.template.operator import OperatorTemplate
@@ -73,7 +74,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
 
     def _load_operator_template(self, path: str) -> OperatorTemplate:
         """Load an operator template based on a path"""
-        path = self._complete_template_path(path, self.path)
+        path = _complete_template_path(path, self.path)
         return OperatorTemplate.from_yaml(path)
 
     def update_template(self, name: str, path: str, label: str,

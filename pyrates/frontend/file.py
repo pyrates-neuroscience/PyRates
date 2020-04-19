@@ -31,7 +31,7 @@
 import importlib
 
 from pyrates import PyRatesException
-from pyrates.frontend import yaml as _yaml
+from pyrates.frontend.fileio import yaml as _yaml
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
