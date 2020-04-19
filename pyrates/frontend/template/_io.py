@@ -1,3 +1,6 @@
+"""Some utility functions for template loading/writing"""
+
+
 def _complete_template_path(target_path: str, source_path: str) -> str:
     """Check if path contains a folder structure and prepend own path, if it doesn't"""
 
