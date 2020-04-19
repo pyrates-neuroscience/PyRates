@@ -10,6 +10,9 @@ def run_around_tests():
     import os
     import warnings
     cwd = os.getcwd()
+    if not cwd.endswith("tests"):
+        os.chdir("tests/")
+    cwd = os.getcwd()
     warnings.warn(f"before: {cwd}")
     # A test function will be run at this point
     yield
