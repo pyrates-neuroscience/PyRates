@@ -52,10 +52,18 @@ def test_pickle_template():
     # pickle.dump(template, open("resources/jansen_rit_template.p", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
     pickle.dump(template, out_file)
 
-    if os.path.getsize(out_file) == os.path.getsize(test_file):
-        assert filecmp.cmp(out_file, test_file, shallow=False)
-    else:
-        raise ValueError("File are not the same")
+    try:
+        if os.path.getsize(out_file) == os.path.getsize(test_file):
+            assert filecmp.cmp(out_file, test_file, shallow=False)
+        else:
+            raise ValueError("Files are not the same")
+    except FileNotFoundError as e:
+        for path, dirs, files in os.walk(os.getcwd()):
+            print(path)
+            for f in files:
+                print(f)
+
+        raise FileNotFoundError(f"Files: {out_file}, {test_file}, CWD: {os.getcwd()}, ")
 
     data = pickle.load(out_file)
     assert data
