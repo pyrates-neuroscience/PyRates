@@ -956,6 +956,8 @@ class NumpyBackend(object):
 
         self._build_dir = net_dir
         self._orig_dir = orig_dir
+        # change back to original directory to prevent recursive directory creation in subsequent calls to this class.
+        os.chdir(orig_dir)
 
     def run(self,
             T: float,
