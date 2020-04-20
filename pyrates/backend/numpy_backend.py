@@ -946,9 +946,6 @@ class NumpyBackend(object):
         except FileExistsError:
             rmtree(self.name)
             os.mkdir(self.name)
-        for key in sys.modules.copy():
-            if self.name in key:
-                del sys.modules[key]
         os.chdir(self.name)
         net_dir = os.getcwd()
         self._build_dir = net_dir
@@ -956,6 +953,7 @@ class NumpyBackend(object):
 
         self._build_dir = net_dir
         self._orig_dir = orig_dir
+        os.chdir(self._orig_dir)
 
     def run(self,
             T: float,
