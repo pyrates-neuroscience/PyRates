@@ -32,7 +32,7 @@ i.e. networks of nodes connected via edges.
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
-__version__ = "0.9.1-dev0"
+__version__ = "0.9.1-dev1"
 
 
 class PyRatesException(Exception):
