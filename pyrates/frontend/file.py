@@ -53,7 +53,8 @@ file_loader_mapping = {"yaml": _yaml.to_dict,
 
 
 def parse_path(path: str):
-    """Parse a path of form path.to.template, returning a tuple of (name, file, abspath)."""
+    """Parse a path of form path.to.template_file.template_name or path/to/template_file/template_name,
+    returning a tuple of (name, file, abspath)."""
 
     if "/" in path or "\\" in path:
         import os

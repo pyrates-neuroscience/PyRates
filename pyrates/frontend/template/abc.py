@@ -39,16 +39,40 @@ class AbstractBaseTemplate:
     target_ir = None  # placeholder for template-specific intermediate representation (IR) target class
 
     def __init__(self, name: str, path: str, description: str = "A template."):
+        """Basic initialiser for template classes, requires template name and path that it is loaded from. For custom
+        templates that are not loaded from a file, the path can be set arbitrarily."""
         self.name = name
         self.path = path
         self.__doc__ = description  # overwrite class-specific doc with user-defined description
 
     def __repr__(self):
+        """Defines how an instance identifies itself when called with `str()` or `repr()`, e.g. when shown in an
+        interactive terminal. Shows Class name and path that was used to construct the class."""
         return f"<{self.__class__.__name__} '{self.path}'>"
 
     @classmethod
     def from_yaml(cls, path):
+        """Short hand to load a template from yaml file. After importing the template, this method also checks whether
+        the resulting template is actually an instance of the class that this method was called from. This is done to
+        ensure any cls.from_yaml() produces only instances of that class and not other classes for consistency.
+        Templates are cached by path. Depending on the 'base' key of the yaml template,
+        either a template class is instantiated or the function recursively loads base templates until it hits a known
+        template class.
 
+        Parameters
+        ----------
+        path
+            (str) path to YAML template of the form `path.to.template_file.template_name` or
+            path/to/template_file/template_name.TemplateName. The dot notation refers to a path that can be found
+            using python's import functionality. That means it needs to be a module (a folder containing an
+            `__init__.py`) located in the Python path (e.g. the current working directory). The slash notation refers to
+            a file in an absolute or relative path from the current working directory. In either case the second-to-last
+            part refers to the filename without file extension and the last part refers to the template name.
+
+        Returns
+        -------
+
+        """
         from pyrates.frontend.template import from_yaml
         tpl = from_yaml(path)
 

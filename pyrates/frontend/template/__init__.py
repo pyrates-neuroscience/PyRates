@@ -72,7 +72,12 @@ def from_yaml(path):
     Parameters:
     -----------
     path
-        Path to template in YAML file of form 'directories.file.template'
+        (str) path to YAML template of the form `path.to.template_file.template_name` or
+        path/to/template_file/template_name.TemplateName. The dot notation refers to a path that can be found
+        using python's import functionality. That means it needs to be a module (a folder containing an `__init__.py`)
+        located in the Python path (e.g. the current working directory). The slash notation refers to a file in an
+        absolute or relative path from the current working directory. In either case the second-to-last part refers to
+        the filename without file extension and the last part refers to the template name.
     """
 
     if path in template_cache:
