@@ -103,4 +103,6 @@ class AbstractBaseIR:
     #     template_cls = getattr(module, f"{cls.__name__[-2]}Template")
     #     return template_cls(name="", path="", **kwargs).apply
 
+    # def to_file(self):
+
 

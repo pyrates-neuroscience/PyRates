@@ -1501,13 +1501,9 @@ class CircuitIR(AbstractBaseIR):
 
         if mode == "pickle":
 
-            import pickle
+            from pyrates.frontend.fileio import pickle
 
-            data = {key: getattr(self, key) for key in self.__slots__ if key != '_backend'}
-            try:
-                pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
-            except (FileExistsError, TypeError):
-                pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(self, filename)
 
         else:
             from pyrates.utility.filestorage import FILEIOMODES
