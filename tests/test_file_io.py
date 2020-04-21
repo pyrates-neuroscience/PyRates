@@ -44,23 +44,23 @@ def test_pickle_ir():
 
     # try to pickle non-vectorized circuit
     circuit = template.apply()  # type: CircuitIR
-    circuit.to_file(filename="output/jansen_rit_ir.p", mode="pickle")
+    circuit.to_file(filename="output/jansen_rit_ir.p", filetype="pickle")
 
     # compare to reference pickle
     # compare_files("output/jansen_rit_ir.p", "resources/jansen_rit_ir.p")  # currently does not work
-    circuit2 = pickle.load("output/jansen_rit_ir.p")
+    circuit2 = CircuitIR.from_file("output/jansen_rit_ir.p", filetype="pickle")
 
     # ToDo: compare circuit IR instances at runtime
 
     # try to pickle vectorized circuit
     circuit.optimize_graph_in_place()
-    circuit.to_file(filename="output/jansen_rit_ir_vectorized.p", mode="pickle")
+    circuit.to_file(filename="output/jansen_rit_ir_vectorized.p", filetype="pickle")
 
     # compare to reference pickle
     # compare_files("output/jansen_rit_ir_vectorized.p", "resources/jansen_rit_ir_vectorized.p")
     # currently does not work
 
-    circuit3 = pickle.load("output/jansen_rit_ir_vectorized.p")
+    circuit3 = CircuitIR.from_file("output/jansen_rit_ir_vectorized.p", filetype="pickle")
 
     # ToDo: compare vectorized circuit IR instances at runtime
 

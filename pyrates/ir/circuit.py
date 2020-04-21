@@ -1486,49 +1486,6 @@ class CircuitIR(AbstractBaseIR):
                                       f'system.'
                                       )
 
-    def to_file(self, filename: str, mode: str = "pickle") -> None:
-        """Save continuation results on disc.
-
-        Parameters
-        ----------
-        filename
-        mode
-
-        Returns
-        -------
-        None
-        """
-
-        if mode == "pickle":
-
-            from pyrates.frontend.fileio import pickle
-
-            pickle.dump(self, filename)
-
-        else:
-            from pyrates.utility.filestorage import FILEIOMODES
-            ValueError(f"Unknown file format to save to. Allowed modes: {FILEIOMODES}")
-
-    @classmethod
-    def from_file(cls, filename: str):
-        """
-
-        Parameters
-        ----------
-        filename
-
-        Returns
-        -------
-        Any
-        """
-        import pickle
-        circuit_instance = cls()
-        data = pickle.load(open(filename, 'rb'))
-        for key, val in data.items():
-            if hasattr(circuit_instance, key):
-                setattr(circuit_instance, key, val)
-        return circuit_instance
-
     def _collect_op_layers(self, layers: list, exclude: bool = False, op_identifier: Optional[str] = None
                            ) -> tuple:
         """
