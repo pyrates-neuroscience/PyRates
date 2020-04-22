@@ -96,3 +96,16 @@ def from_circuit(circuit, path: str, name: str):
     from pathlib import Path
     path = Path(path)
     yaml.dump(dict_repr, path)
+
+
+def dump(_dict: dict, filename: str, obj_name: str):
+    """Dump a template definition dictionary to file."""
+
+    _dict = {obj_name: _dict}
+
+    from ruamel.yaml import YAML
+    yaml = YAML()
+
+    from pathlib import Path
+    path = Path(filename)
+    yaml.dump(_dict, path)
