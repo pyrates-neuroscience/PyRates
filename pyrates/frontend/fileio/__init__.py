@@ -1,8 +1,10 @@
 """Interfaces for loading and saving (dumping) templates and circuits from/to file."""
 from typing import Optional
 
+FILEIOMODES = ["pickle", "yaml"]
 
-def dump(_obj: object, filename: str, filetype: str, obj_name: Optional[str]):
+
+def dump(_obj: object, filename: str, filetype: str, template_name: Optional[str] = None):
     """Save an object to file.
 
     Parameters
@@ -21,11 +23,13 @@ def dump(_obj: object, filename: str, filetype: str, obj_name: Optional[str]):
         None
     """
 
-    # make sure the directory exists
-    from pyrates.utility.filestorage import create_directory
-    create_directory(filename)
+
 
     if filetype == "pickle":
+        # make sure the directory exists
+        from pyrates.utility.filestorage import create_directory
+        create_directory(filename)
+
         from pyrates.frontend.fileio import pickle
         pickle.dump(_obj, filename)
         print(f"{_obj} successfully pickled to {filename}")
@@ -35,12 +39,18 @@ def dump(_obj: object, filename: str, filetype: str, obj_name: Optional[str]):
             _dict = _obj.to_dict()  # type: dict
         except AttributeError:
             raise AttributeError(f"The object {_obj} does not have a `to_dict` method. Please choose a different target"
-                                 f"filetype than 'yaml'.")
+                                 f" filetype than 'yaml'.")
+
+        # make sure the directory exists
+        from pyrates.utility.filestorage import create_directory
+        create_directory(filename)
+
         from pyrates.frontend.fileio import yaml
-        yaml.dump(_dict, filename, obj_name)
+        yaml.dump(_dict, filename, template_name)
         print(f"{_obj} successfully dumped to {filename} in YAML format.")
 
     else:
-        from pyrates.utility.filestorage import FILEIOMODES
 
-        ValueError(f"Unknown file format to save to. Allowed modes: {FILEIOMODES}")
+        raise ValueError(f"Unknown file format to save to. Allowed modes: {FILEIOMODES}")
+
+

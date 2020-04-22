@@ -182,10 +182,23 @@ def test_equation_alteration():
 
 
 def test_yaml_dump():
+    """Test the functionality to dump an object to YAML"""
+    from pyrates.frontend import fileio
+
+    with pytest.raises(AttributeError):
+        fileio.dump("no_to_dict()", "random_art", "yaml")
+
     from pyrates.frontend.template.circuit import CircuitTemplate
     circuit = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit").apply()
-    from pyrates.frontend.fileio.yaml import from_circuit
-    from_circuit(circuit, "output/yaml_dump.yaml", "DumpedCircuit")
+
+    with pytest.raises(ValueError):
+        fileio.dump(circuit, "output/yaml_dump.yaml", "yml")
+
+    with pytest.raises(TypeError):
+        fileio.dump(circuit, "output/yaml_dump.yaml", "yaml")
+
+
+    fileio.dump(circuit, "output/yaml_dump.yaml", "yaml", "DumpedCircuit")
 
     # reload saved circuit
     saved_circuit = CircuitTemplate.from_yaml("output/yaml_dump/DumpedCircuit").apply()

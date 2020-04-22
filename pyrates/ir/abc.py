@@ -28,7 +28,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from typing import Tuple, Iterator, Union
+from typing import Tuple, Iterator, Union, Optional
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -103,8 +103,10 @@ class AbstractBaseIR:
     #     template_cls = getattr(module, f"{cls.__name__[-2]}Template")
     #     return template_cls(name="", path="", **kwargs).apply
 
-    def to_file(self, filename: str, filetype: str = "pickle") -> None:
-        """Save an IR object to file.
+    def to_file(self, filename: str, filetype: str = "pickle", template_name: Optional[str] = None) -> None:
+        """Save an IR object to file. The filetype 'pickle' save the object as is to a file, whereas the 'yaml' option
+        creates a template from the IR object. In the latter case you need to define a `template_name` that is used in
+        the YAML file.
 
         Parameters
         ----------
@@ -112,6 +114,9 @@ class AbstractBaseIR:
             Path to file (absolute or relative).
         filetype
             Chooses which loader to use to load the file. Allowed types: pickle, yaml
+        template_name
+            This is required for the 'yaml' format, in order to define the name of the newly created template.
+
 
         Returns
         -------
@@ -123,7 +128,7 @@ class AbstractBaseIR:
             pickle.dump(self, filename)
 
         else:
-            from pyrates.utility.filestorage import FILEIOMODES
+            from pyrates.frontend.fileio import FILEIOMODES
             ValueError(f"Unknown file format to save to. Allowed modes: {FILEIOMODES}")
 
     @classmethod
@@ -152,7 +157,7 @@ class AbstractBaseIR:
             instance = pickle.load(filename)
 
         else:
-            from pyrates.utility.filestorage import FILEIOMODES
+            from pyrates.frontend.fileio import FILEIOMODES
             ValueError(f"Unknown file format to save to. Allowed modes: {FILEIOMODES}")
 
         if isinstance(instance, cls):

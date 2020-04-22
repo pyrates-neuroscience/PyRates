@@ -568,6 +568,11 @@ class CircuitIR(AbstractBaseIR):
         from pyrates.frontend import circuit_from_yaml
         return circuit_from_yaml(path)
 
+    def to_dict(self):
+        """Transform this object into a dictionary."""
+        from pyrates.frontend.dict import from_circuit
+        return from_circuit(self)
+
     def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True, dde_approx: float = 0.0):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""

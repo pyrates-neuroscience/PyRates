@@ -32,7 +32,7 @@ and read/construct circuit from JSON.
 
 # external packages
 from collections import OrderedDict
-from typing import Generator, Tuple, Any, Union, List, Dict
+from typing import Generator, Tuple, Any, Union, Dict
 from networkx import node_link_data
 from inspect import getsource
 import numpy as np
@@ -44,7 +44,6 @@ import pandas as pd
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
-FILEIOMODES = ["pickle"]
 
 # TODO: Update documentations & clean functions from unnecessary comments (i.e. silent code)
 
