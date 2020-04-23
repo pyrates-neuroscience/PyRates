@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 #
 #
@@ -35,73 +34,78 @@ from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.operator import OperatorIR
 
-
-
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-#
-# def to_node(node_dict: dict):
-#
-#     order = node_dict["operator_order"]
-#     variables = {}
-#     # collect all information about variables and separate operator and variable keys
-#     for key, var_dict in node_dict["operator_args"].items():
-#         op_key, var_key = key.split("/")  # split key as 'op_key/var_key'
-#         if op_key not in variables:
-#             variables[op_key] = {}
-#
-#         variables[op_key][var_key] = var_dict
-#
-#     operators = []
-#     for op_key in order:
-#         op_dict = node_dict["operators"][op_key]
-#         op_dict["name"] = op_key
-#         op_dict["path"] = f"custom/{op_key}"
-#         op_dict["variables"] = variables[op_key]
-#         inputs = op_dict.pop("inputs")
-#         for var in inputs:
-#             op_dict["variables"][var]["vtype"] = "input"
-#         outvar = op_dict.pop("output")
-#         op_dict["variables"][outvar]["vtype"] = "output"
-#         operators.append(to_operator(op_dict))
-#
-#     return NodeIR(operators=operators)
-#
-#
-#
-# def to_operator(op_dict: dict):
-#     from pyrates.frontend import OperatorTemplate
-#     template = OperatorTemplate(**op_dict)
-#
-#     return template.apply()
-#
-
-
-def from_circuit(circuit: CircuitIR):
+def from_circuit(circuit: CircuitIR, deep: bool = False):
     """Reformat graph structure into a dictionary that can be saved as YAML template. The current implementation assumes
-    that nodes and edges are given by as templates."""
+    that nodes and edges are given by as templates.
+
+    Parameters
+    ----------
+    circuit
+        An instance of CircuitIR to transform to a dictionary
+    deep
+        Toggles whether to only include references to node/edge templates (`deep=False`) or also transform these to
+        dictionaries as well (`deep=True`).
+
+    """
 
     node_dict = {}
+    node_templates = {}
     for node_key, node_data in circuit.nodes(data=True):
         node = node_data["node"]
-        if node.template:
-            node_dict[node_key] = node.template
+        if deep:
+            template_name, node = node.to_dict(deep)
+            node_dict[node_key] = template_name
+            node_templates[template_name] = node
         else:
-            # if no template is given, build and search deeper for node templates
-            pass
+            node_dict[node_key] = node.template
 
     edge_list = []
     for source, target, edge_data in circuit.edges(data=True):
         edge_data = deepcopy(edge_data)
         edge = edge_data.pop("edge_ir")
+        if deep:
+            edge = edge.to_dict(deep)
+        else:
+            edge = edge.template
+
         source = f"{source}/{edge_data['source_var']}"
         target = f"{target}/{edge_data['target_var']}"
-        edge_list.append((source, target, edge.template, dict(weight=edge_data["weight"],
-                                                              delay=edge_data["delay"])))
+        edge_list.append((source, target, edge, dict(weight=edge_data["weight"],
+                                                     delay=edge_data["delay"])))
 
     # use Python template as base, since inheritance from YAML templates is ambiguous for circuits
     base = "CircuitTemplate"
 
-    return dict(nodes=node_dict, edges=edge_list, base=base)
+    return dict(nodes=node_dict, edges=edge_list, base=base)  # , description=circuit.__doc__)
+
+
+def from_node(node: NodeIR, deep: bool = False):
+    """Transform NodeIR instance into a dictionary that can be used to create a NodeTemplate.
+
+    Parameters
+    ----------
+    node
+        The node parse.
+    deep
+        Whether or not to also parse included operators. If 'False', then operators will just be included by name.
+    """
+
+    node_dict = dict(base="NodeTemplate")
+    # description=node.__doc__)
+
+    if node.template:
+        name
+
+    operators = []
+
+
+def from_edge(edge: EdgeIR):
+    pass
+
+
+def from_operator(op: OperatorIR):
+    pass

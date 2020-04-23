@@ -80,30 +80,6 @@ class ProtectedVariableDict:
     def to_dict(self):
         return deepcopy(self._d)
 
-# class ProtectedVariableDict(dict):
-#     """This is an unsafe hack to provide an immutable and hashable dict. Unsafe means, that checks against isinstance
-#     or
-#     issubtype might lead to wrong conclusions about the mutability. There may also be faster implementations, but this
-#     works for now."""
-#
-#     def __init__(self, variables: List[tuple]):
-#         variables = tuple(variables)
-#         self._h = hash(variables)
-#
-#         named_variables = {vname: Variable(vtype, dtype, shape)
-#                            for vname, vtype, dtype, shape in variables}
-#
-#         super().__init__(**named_variables)
-#
-#     def __setitem__(self, key, value):
-#         raise TypeError("'VariableDict' object does not support item assignment")
-#
-#     # def __setattr__(self, key, value):
-#     #     raise AttributeError(f"'VariableDict' object has not attribute '{key}'")
-#
-#     def __hash__(self):
-#         return self._h
-
 
 class OperatorIR(AbstractBaseIR):
     """This implementation of the Operator IR is aimed to be hashable and immutable. Following Python standards, we
