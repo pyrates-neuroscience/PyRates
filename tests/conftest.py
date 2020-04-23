@@ -4,10 +4,10 @@ import pytest
 import os
 
 
-@pytest.fixture(scope="session", autouse=True)
-def ensure_test_directory():
-    if os.getcwd().endswith("PyRates"):
-        os.chdir("tests/")
+# @pytest.fixture(scope="session", autouse=True)
+# def ensure_test_directory():
+#     if os.getcwd().endswith("PyRates"):
+#         os.chdir("tests/")
 
 
 @pytest.fixture(autouse=True)

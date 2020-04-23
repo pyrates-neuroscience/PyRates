@@ -85,8 +85,8 @@ def from_yaml(path):
         template = template_cache[path]
     else:
         # if it has not been cached yet, load the file and parse into dict
-        from pyrates.frontend.fileio.yaml import to_dict
-        template_dict = to_dict(path)
+        from pyrates.frontend.fileio.yaml import dict_from_yaml
+        template_dict = dict_from_yaml(path)
 
         try:
             base = template_dict.pop("base")

@@ -33,7 +33,7 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-def to_dict(path: str):
+def dict_from_yaml(path: str):
     """Load a template from YAML and return the resulting dictionary.
 
     Parameters
@@ -98,7 +98,7 @@ def to_dict(path: str):
 #     yaml.dump(dict_repr, path)
 
 
-def dump(_dict: dict, filename: str, template_name: str):
+def dump(_dict: dict, filename: str, template_name: str, **kwargs):
     """Dump a template definition dictionary to file."""
 
     if template_name is None:
@@ -111,4 +111,4 @@ def dump(_dict: dict, filename: str, template_name: str):
 
     from pathlib import Path
     path = Path(filename)
-    yaml.dump(_dict, path)
+    yaml.dump(_dict, path, **kwargs)

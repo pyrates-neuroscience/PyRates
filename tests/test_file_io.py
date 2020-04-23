@@ -5,6 +5,7 @@ __status__ = "Development"
 
 import filecmp
 import os
+import pathlib
 
 import pytest
 
@@ -32,6 +33,11 @@ def compare_files(filename1, filename2):
         raise FileCompareError("Files are not of the same size.")
 
 
+def get_parent_directory():
+    """Helper function to get path of current file"""
+    return pathlib.Path(__file__).parent.absolute()
+
+
 def test_pickle_ir():
     pass
 
@@ -44,23 +50,25 @@ def test_pickle_ir():
 
     # try to pickle non-vectorized circuit
     circuit = template.apply()  # type: CircuitIR
-    circuit.to_file(filename="output/jansen_rit_ir.p", filetype="pickle")
+    filename1 = os.path.join(get_parent_directory(), "output", "jansen_rit_ir.p")
+    circuit.to_file(filename=filename1, filetype="pickle")
 
     # compare to reference pickle
     # compare_files("output/jansen_rit_ir.p", "resources/jansen_rit_ir.p")  # currently does not work
-    circuit2 = CircuitIR.from_file("output/jansen_rit_ir.p", filetype="pickle")
+    circuit2 = CircuitIR.from_file(filename1, filetype="pickle")
 
     # ToDo: compare circuit IR instances at runtime
 
     # try to pickle vectorized circuit
     circuit.optimize_graph_in_place()
-    circuit.to_file(filename="output/jansen_rit_ir_vectorized.p", filetype="pickle")
+    filename2 = os.path.join(get_parent_directory(), "output", "jansen_rit_ir_vectorized.p")
+    circuit.to_file(filename=filename2, filetype="pickle")
 
     # compare to reference pickle
     # compare_files("output/jansen_rit_ir_vectorized.p", "resources/jansen_rit_ir_vectorized.p")
     # currently does not work
 
-    circuit3 = CircuitIR.from_file("output/jansen_rit_ir_vectorized.p", filetype="pickle")
+    circuit3 = CircuitIR.from_file(filename2, filetype="pickle")
 
     # ToDo: compare vectorized circuit IR instances at runtime
 
@@ -70,12 +78,11 @@ def test_pickle_template():
     from pyrates.frontend.template import from_yaml, clear_cache
     clear_cache()
     template = from_yaml(path)
-    out_file = "output/jansen_rit_template.p"
-    test_file = "resources/jansen_rit_template.p"
+    out_file = os.path.join(get_parent_directory(), "output", "jansen_rit_template.p")
+    test_file = os.path.join(get_parent_directory(), "resources", "jansen_rit_template.p")
 
     from pyrates.frontend.fileio import pickle
 
-    # pickle.dump(template, open("resources/jansen_rit_template.p", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
     pickle.dump(template, out_file)
 
     compare_files(out_file, test_file)
