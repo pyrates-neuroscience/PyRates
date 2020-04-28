@@ -1487,46 +1487,6 @@ class CircuitIR(AbstractBaseIR):
                                       f'system.'
                                       )
 
-    def to_file(self, filename: str) -> None:
-        """Save continuation results on disc.
-
-        Parameters
-        ----------
-        filename
-
-        Returns
-        -------
-        None
-        """
-
-        import pickle
-
-        data = {key: getattr(self, key) for key in self.__slots__ if key != '_backend'}
-        try:
-            pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
-        except (FileExistsError, TypeError):
-            pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
-
-    @classmethod
-    def from_file(cls, filename: str):
-        """
-
-        Parameters
-        ----------
-        filename
-
-        Returns
-        -------
-        Any
-        """
-        import pickle
-        circuit_instance = cls()
-        data = pickle.load(open(filename, 'rb'))
-        for key, val in data.items():
-            if hasattr(circuit_instance, key):
-                setattr(circuit_instance, key, val)
-        return circuit_instance
-
     def _collect_op_layers(self, layers: list, exclude: bool = False, op_identifier: Optional[str] = None
                            ) -> tuple:
         """

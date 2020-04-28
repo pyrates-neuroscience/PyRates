@@ -33,7 +33,7 @@ from typing import Iterator
 import numpy as np
 
 from pyrates.ir.abc import AbstractBaseIR
-from pyrates.ir.operator_graph import OperatorGraph, VectorizedOperatorGraph
+from pyrates.ir.operator_graph import OperatorGraph, VectorizedOperatorGraph, cache_op_graph
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
@@ -44,7 +44,7 @@ class NodeIR(AbstractBaseIR):
 
     def __init__(self, operators: dict = None, values: dict = None, template: str = None):
         super().__init__(template)
-        self._op_graph, changed_labels = OperatorGraph(operators)
+        self._op_graph, changed_labels = cache_op_graph(OperatorGraph)(operators)
         # ToDo: Move caching function to NodeIR instead of using a decorator, for clarity
         try:
             for old_name, new_name in changed_labels.items():

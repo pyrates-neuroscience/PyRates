@@ -27,13 +27,12 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """ Some utility functions for parsing YAML-based definitions of circuits and components.
 """
-from pyrates.frontend._registry import register_interface
+
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-@register_interface
 def to_dict(path: str):
     """Load a template from YAML and return the resulting dictionary.
 
@@ -41,9 +40,12 @@ def to_dict(path: str):
     ----------
 
     path
-        string containing path of YAML template of the form path.to.template or path/to/template.file.TemplateName.
-        The dot notation refers to a path that can be found using python's import functionality. The slash notation
-        refers to a file in an absolute or relative path from the current working directory.
+        (str) path to YAML template of the form `path.to.template_file.template_name` or
+        path/to/template_file/template_name.TemplateName. The dot notation refers to a path that can be found
+        using python's import functionality. That means it needs to be a module (a folder containing an `__init__.py`)
+        located in the Python path (e.g. the current working directory). The slash notation refers to a file in an
+        absolute or relative path from the current working directory. In either case the second-to-last part refers to
+        the filename without file extension and the last part refers to the template name.
     """
     from pyrates.frontend.file import parse_path
 
@@ -81,10 +83,10 @@ def to_dict(path: str):
     return template_dict
 
 
-@register_interface
 def from_circuit(circuit, path: str, name: str):
-    from pyrates.frontend.dict import from_circuit
-    dict_repr = {name: from_circuit(circuit)}
+    """Interface to dump a CircuitIR instance to YAML."""
+    from pyrates.frontend.dict import from_circuit as dict_from_circuit
+    dict_repr = {name: dict_from_circuit(circuit)}
 
     from ruamel.yaml import YAML
     yaml = YAML()
@@ -94,8 +96,3 @@ def from_circuit(circuit, path: str, name: str):
     from pathlib import Path
     path = Path(path)
     yaml.dump(dict_repr, path)
-
-
-@register_interface
-def to_template(path: str, template_cls):
-    return template_cls.from_yaml(path)

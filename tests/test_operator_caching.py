@@ -33,7 +33,6 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 import pytest
-from pyrates.frontend import CircuitTemplate
 
 
 def setup_module():
@@ -46,6 +45,7 @@ def setup_module():
 def test_op_caching_nodes():
     """Test the case that two operator templates are identical up to variable definitions, where one inherits from the
     other"""
+    from pyrates.frontend import CircuitTemplate
 
     circuit = CircuitTemplate.from_yaml("model_templates.test_resources.test_operator_caching_templates.TestCircuit1").apply()
 

@@ -1,6 +1,17 @@
 # Changelog
 
-## 0.9.0
+## 0.9
+
+### 0.9.1 (work in progress)
+
+- updated documentation
+- removed conversion function register, because the functions were not used and made the code unnecessarily complicated
+    - might be replaced by a graph-based conversion path-finder in the future, if necessary
+- Extended support for loading circuits from and saving to files
+    - supported formats: `yaml`, `pickle`
+    - supported classes: templates
+
+### 0.9.0
 
 - Added experimental support for multiple source variables per edge
   - edges can either have multiple input variable from the same input node, or

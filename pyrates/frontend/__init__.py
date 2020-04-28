@@ -35,28 +35,11 @@
 
 # template-based interface
 from pyrates.frontend import template
-# from pyrates.frontend import dict as dict_
-from pyrates.frontend import yaml
-# from pyrates.frontend import nxgraph
+from pyrates.frontend.fileio import yaml
 from pyrates.frontend.template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
-
-# By importing the above, all transformation functions (starting with `to_` or `from_`) are registered
-# Below these functions are collected and made available from pyrates.frontend following the naming convention
-# `{target}_from_{source}` with target and source being respective valid representations in the frontend
-
-from pyrates.frontend._registry import REGISTERED_INTERFACES
-import sys
-
-# add all registered functions to main frontend module
-this_module = sys.modules[__name__]
-
-for new_name, func in REGISTERED_INTERFACES.items():
-    # set new name on current module
-    setattr(this_module, new_name, func)
 
 
 # The following function are shorthands that bridge multiple interface steps
-
 def circuit_from_yaml(path: str):
     """Directly return CircuitIR instance from a yaml file."""
     return CircuitTemplate.from_yaml(path).apply()

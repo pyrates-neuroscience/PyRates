@@ -44,6 +44,8 @@ import pandas as pd
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
+FILEIOMODES = ["pickle"]
+
 # TODO: Update documentations & clean functions from unnecessary comments (i.e. silent code)
 
 
@@ -316,3 +318,10 @@ def read_simulation_data_from_file(dirname: str, path="", filenames: list = None
                 raise
 
     return data
+
+
+def to_pickle(obj, filename):
+    """Conserve a PyRates object as pickle."""
+    pass
+
+

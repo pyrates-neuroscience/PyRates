@@ -44,7 +44,7 @@ __status__ = "Development"
 op_graph_cache = {}
 
 
-def _cache_op_graph(cls):
+def cache_op_graph(cls):
     """Cache unique instances of operator graphs and return the instance. If hash of Operator graph is not known yet,
     a new instance will be created. Otherwise, an instance from cash will be returned."""
 
@@ -82,7 +82,6 @@ def _cache_op_graph(cls):
     return cache_func
 
 
-@_cache_op_graph
 class OperatorGraph(DiGraph):
     """Intermediate representation for nodes and edges."""
 

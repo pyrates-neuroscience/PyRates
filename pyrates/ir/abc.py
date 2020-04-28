@@ -103,4 +103,66 @@ class AbstractBaseIR:
     #     template_cls = getattr(module, f"{cls.__name__[-2]}Template")
     #     return template_cls(name="", path="", **kwargs).apply
 
+    def to_file(self, filename: str, filetype: str = "pickle") -> None:
+        """Save an IR object to file.
 
+        Parameters
+        ----------
+        filename
+            Path to file (absolute or relative).
+        filetype
+            Chooses which loader to use to load the file. Allowed types: pickle, yaml
+
+        Returns
+        -------
+        None
+        """
+
+        if filetype == "pickle":
+            from pyrates.frontend.fileio import pickle
+            pickle.dump(self, filename)
+
+        else:
+            from pyrates.utility.filestorage import FILEIOMODES
+            ValueError(f"Unknown file format to save to. Allowed modes: {FILEIOMODES}")
+
+    @classmethod
+    def from_file(cls, filename: str, filetype: str = "pickle", error_on_instance_check: bool = True):
+        """Load an IR instance from file. The function verifies that the loaded object is indeed an instance of the
+        class this function was called from.
+
+        Parameters
+        ----------
+        filename
+            Path to file (relative or absolute)
+        filetype
+            Indicate which file type to expect
+        error_on_instance_check
+            Toggle whether or not to raise an error if the instance check fails.
+
+
+        Returns
+        -------
+        Any
+        """
+
+        if filetype == "pickle":
+            from pyrates.frontend.fileio import pickle
+
+            instance = pickle.load(filename)
+
+        else:
+            from pyrates.utility.filestorage import FILEIOMODES
+            ValueError(f"Unknown file format to save to. Allowed modes: {FILEIOMODES}")
+
+        if isinstance(instance, cls):
+
+            return instance
+
+        else:
+            message = f"The object loaded from '{filename}' is not an instance of the class `{cls}` requesting it."
+            if error_on_instance_check:
+                raise TypeError(message)
+            else:
+                import warnings
+                warnings.warn(message)

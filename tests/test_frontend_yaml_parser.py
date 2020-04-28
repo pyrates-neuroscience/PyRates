@@ -43,29 +43,6 @@ def setup_module():
     print("===========================")
 
 
-# @pytest.mark.parametrize("section", ["axon", "population", "synapse"])
-# def test_parse_operator_templates(section):
-#     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
-#     from ruamel.yaml import YAML
-#     import os
-#
-#     yaml = YAML(typ="safe", pure=True)
-#
-#     path = os.path.abspath(f"pyrates/{section}/")
-#     base_filename = f"{section}.yaml"
-#     template_filename = f"templates.yaml"
-#
-#     # load base template
-#     filepath = os.path.join(path, base_filename)
-#     with open(filepath, "r") as file:
-#         base = yaml.load(file)
-#
-#     # load further templates
-#     filepath = os.path.join(path, template_filename)
-#     with open(filepath, "r") as file:
-#         templates = yaml.load(file)
-
-
 @pytest.mark.parametrize("operator", ["model_templates.jansen_rit.axon.axon.PotentialToRateOperator",
                                       "model_templates.jansen_rit.axon.templates.SigmoidPRO",
                                       "model_templates.jansen_rit.axon.templates.JansenRitPRO",
@@ -75,17 +52,18 @@ def setup_module():
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
     from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.frontend.template import template_cache, clear_cache
+    clear_cache()
 
     template = OperatorTemplate.from_yaml(operator)  # type: OperatorTemplate
 
-    assert template.path in OperatorTemplate.cache
+    assert template.path in template_cache
 
-    cached_template = OperatorTemplate.cache[operator]  # type: OperatorTemplate
+    cached_template = template_cache[operator]  # type: OperatorTemplate
     assert template is cached_template
     assert template.path == cached_template.path
     assert template.equations == cached_template.equations
     assert repr(template) == repr(cached_template) == f"<OperatorTemplate '{operator}'>"
-    # assert template == TemplateLoader.cache[template.path]
 
 
 # @pytest.mark.parametrize("node", ["pyrates.population.templates.JansenRitIN",
@@ -111,32 +89,6 @@ def test_import_operator_templates(operator):
 #     assert repr(template) == repr(cached_template) == f"<NodeTemplate '{node}'>"
 
 
-# @pytest.mark.parametrize("circuit", ["pyrates.circuit.templates.JansenRitCircuit",
-#                                      "pyrates.circuit.circuit.BaseCircuit"
-#                                      ])
-# def test_import_circuit_templates(circuit):
-#     """test import of circuit templates"""
-#
-#     from pyrates.circuit.circuit import CircuitTemplateLoader
-#
-#     template = CircuitTemplate.from_yaml(circuit)  # type: CircuitTemplate
-#
-#     assert template.path in CircuitTemplateLoader.cache
-#
-#     cached_template = CircuitTemplateLoader.cache[circuit]  # type: CircuitTemplate
-#
-#     assert template is cached_template
-#     assert template.path == cached_template.path
-#     assert template.nodes == cached_template.nodes
-#     assert template.edges == cached_template.edges
-#
-#     for value in template.coupling.values():
-#         assert isinstance(value, OperatorTemplate)
-#     for value in template.nodes.values():
-#         assert isinstance(value, NodeTemplate)
-#     assert repr(template) == repr(cached_template) == f"<CircuitTemplate '{circuit}'>"
-
-
 def test_full_jansen_rit_circuit_template_load():
     """Test a simple circuit template, including all nodes and operators to be loaded."""
 
@@ -145,11 +97,13 @@ def test_full_jansen_rit_circuit_template_load():
     from pyrates.frontend.template.edge.edge import EdgeTemplate
     from pyrates.frontend.template.node import NodeTemplate
     from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.frontend.template import template_cache, clear_cache
+    clear_cache()
 
     template = CircuitTemplate.from_yaml(path)
 
     # test, whether circuit is in loader cache
-    assert template is CircuitTemplate.cache[path]
+    assert template is template_cache[path]
 
     # test, whether node templates have been loaded successfully
     nodes = {"JR_PC": "model_templates.jansen_rit.population.templates.JansenRitPC",
@@ -158,17 +112,17 @@ def test_full_jansen_rit_circuit_template_load():
 
     for key, value in nodes.items():
         assert isinstance(template.nodes[key], NodeTemplate)
-        assert template.nodes[key] is NodeTemplate.cache[value]
+        assert template.nodes[key] is template_cache[value]
         # test operators in node templates
         for op in template.nodes[key].operators:
-            assert op.path in OperatorTemplate.cache
+            assert op.path in template_cache
             assert isinstance(op, OperatorTemplate)
 
     # test, whether coupling operator has been loaded correctly
     coupling_path = "model_templates.jansen_rit.edges.LinearCouplingOperator"
     edge_temp = template.edges[0][2]
     assert isinstance(edge_temp, EdgeTemplate)
-    assert list(edge_temp.operators)[0] is OperatorTemplate.cache[coupling_path]
+    assert list(edge_temp.operators)[0] is template_cache[coupling_path]
 
     assert repr(template) == f"<CircuitTemplate '{path}'>"
 
@@ -176,11 +130,12 @@ def test_full_jansen_rit_circuit_template_load():
 def test_circuit_instantiation():
     """Test, if apply() functions all work properly"""
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.template.circuit import CircuitTemplate
+    from pyrates.frontend import template
+    template.clear_cache()
 
-    template = CircuitTemplate.from_yaml(path)
+    circuit_template = template.from_yaml(path)
 
-    circuit = template.apply()
+    circuit = circuit_template.apply()
     # used to be: test if two edges refer to the same coupling operator by comparing ids
     # this is why we referenced by "operator"
     # now: compare operators directly
@@ -203,9 +158,10 @@ def test_circuit_instantiation():
 def test_multi_circuit_instantiation():
     """Test, if a circuit with subcircuits is also working."""
     path = "model_templates.jansen_rit.circuit.MultiJansenRitCircuit"
-    from pyrates.frontend.template.circuit import CircuitTemplate
+    from pyrates.frontend import template as tpl
+    tpl.clear_cache()
 
-    template = CircuitTemplate.from_yaml(path)
+    template = tpl.from_yaml(path)
 
     circuit = template.apply()
     assert circuit
@@ -225,56 +181,14 @@ def test_equation_alteration():
     assert operator.equations == ("V = k * I",)
 
 
-@pytest.mark.xfail  # Silenced for now due to deprecated or unused interface
-def test_network_def_workaround():
-    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.template.circuit import CircuitTemplate
-
-    template = CircuitTemplate.from_yaml(path)
-
-    circuit = template.apply()
-
-    from pyrates.frontend.nxgraph import from_circuit
-    nd = from_circuit(circuit, revert_node_names=True)
-    operator_order = ['LinearCouplingOperator.3',
-                      'LinearCouplingOperator.1',
-                      'JansenRitExcitatorySynapseRCO',
-                      'JansenRitInhibitorySynapseRCO',
-                      'JansenRitCPO',
-                      'JansenRitPRO']
-    inputs = {}
-
-    cpo_i = {'dtype': 'float32',
-             'shape': (),
-             'vtype': 'state_var',
-             'value': 0.}  # 0. is the new default value
-
-    jr_cpo = {'equations': ['V = k * I'],
-              'inputs': {'I': {'reduce_dim': True,
-                               'sources': ['JansenRitExcitatorySynapseRCO',
-                                           'JansenRitInhibitorySynapseRCO']}},
-              'output': 'V'}
-    # assert dict(nd.nodes["JR_PC.0"]) == JR_PC
-    node = nd.nodes["JR_PC.0"]
-    edge = {'delay': 0,
-            'source_var': 'JansenRitPRO/m_out',
-            'target_var': 'LinearCouplingOperator.3/m_out',
-            'weight': 1}
-    # assert node["operator_order"] == operator_order
-    assert node["inputs"] == inputs
-    assert node["operator_args"]['JansenRitCPO/I'] == cpo_i
-    # assert node["operators"]['JansenRitExcitatorySynapseRCO.0']["inputs"]["m_in"]["sources"] == [
-    #     'LinearCouplingOperator.3']
-    # assert node["operators"]['JansenRitCPO.0'] == jr_cpo
-    # assert dict(nd.edges[('JR_EIN.0', 'JR_PC.0', 0)]) == edge
-
-
 def test_yaml_dump():
     from pyrates.frontend.template.circuit import CircuitTemplate
     circuit = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit").apply()
-    from pyrates.frontend.yaml import from_circuit
+    from pyrates.frontend.fileio.yaml import from_circuit
     from_circuit(circuit, "output/yaml_dump.yaml", "DumpedCircuit")
 
     # reload saved circuit
     saved_circuit = CircuitTemplate.from_yaml("output/yaml_dump/DumpedCircuit").apply()
     assert saved_circuit
+
+    # ToDo: figure out a simple way to compare both instances
