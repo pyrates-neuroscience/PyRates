@@ -91,6 +91,29 @@ op8:
     u:
       default: input
 
+op9:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * a = (a*(1 - a) + I_syn + I_ext)/tau"
+    - "b = tanh(a)"
+  variables:
+    b:
+      default: output
+    a:
+      default: variable
+    I_syn:
+      default: input
+    I_ext:
+      default: input
+    tau:
+      default: 10.0
+
+op10:
+  base: op9
+  variables:
+    tau:
+      default: 1.0
+
 # population templates
 ######################
 
@@ -149,6 +172,16 @@ pop9:
   base: NodeTemplate
   operators:
     - op8
+
+pop10:
+  base: NodeTemplate
+  operators:
+    - op9
+
+pop11:
+  base: NodeTemplate
+  operators:
+    - op10
 
 # edge templates
 ################
@@ -254,3 +287,11 @@ net12:
     - [pop0/op7/a, pop1/op7/u, DummyEdge, {weight: 0.1, delay: 0.2}]
     - [pop1/op7/a, pop0/op7/u, DummyEdge, {weight: 0.5, delay: 0.2}]
 
+net13:
+  base: CircuitTemplate
+  nodes:
+    p1: pop10
+    p2: pop11
+  edges:
+    - [p1/op9/b, p2/op9/I_syn, DummyEdge, {weight: 1.0, delay: 2.0, spread: 0.8}]
+    - [p2/op9/b, p1/op9/I_syn, DummyEdge, {weight: 2.0, delay: 1.0, spread: 0.4}]

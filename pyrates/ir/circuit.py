@@ -1178,14 +1178,15 @@ class CircuitIR(AbstractBaseIR):
 
                 # extract respective input variable from the network
                 for var_key, var_info in self.get_node_var(key, apply_idx=False).items():
-                    var_shape = len(var_info['idx'])
-                    var_idx = var_info['idx'] if np.sum(var_shape) > 1 else None
-                    if var_shape == in_shape:
+                    var_shape = int(np.max(var_info['var'].shape)) if tuple(var_info['var'].shape) else 1
+                    var_idx = var_info['idx'] if var_shape > 1 else None
+                    var_idx_shape = len(var_idx) if var_idx else 1
+                    if var_idx_shape == in_shape:
                         inputs_col.append((val, var_info['var'], var_idx))
-                    elif (var_shape % in_shape) == 0:
-                        inputs_col.append((np.tile(val, (1, var_shape)), var_info['var'], var_idx))
+                    elif (var_idx_shape % in_shape) == 0:
+                        inputs_col.append((np.tile(val, (1, var_idx_shape)), var_info['var'], var_idx))
                     else:
-                        inputs_col.append((np.reshape(val, (sim_steps, var_shape)), var_info['var'], var_idx))
+                        inputs_col.append((np.reshape(val, (sim_steps, var_idx_shape)), var_info['var'], var_idx))
 
         # run simulation
         ################
@@ -1936,18 +1937,18 @@ class CircuitIR(AbstractBaseIR):
                     buffer_eqs.append(f"{var}_buffered{idx1} = {var}_d{i}{idx2}")
                 else:
                     buffer_eqs.append(f"{var}_buffered{idx1} = {source_var}{idx2}")
-            buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
+            #buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
                                            'dtype': self._backend._float_def,
                                            'shape': (len(delays),),
                                            'value': 0.0}
-            var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
-                                               'dtype': 'int32',
-                                               'shape': (len(order_idx),),
-                                               'value': order_idx}
+            #var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
+            #                                   'dtype': 'int32',
+            #                                   'shape': (len(order_idx),),
+            #                                   'value': order_idx}
 
             # re-order buffered variable if necessary
-            if any(np.diff(order_idx)) != 1:
+            if any(np.diff(order_idx) != 1):
                 buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
                 var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
                                                    'dtype': 'int32',

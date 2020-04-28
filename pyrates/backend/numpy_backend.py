@@ -2059,7 +2059,7 @@ class NumpyBackend(object):
         # match shape of index and update to shape
         ##########################################
 
-        if idx.shape[0] != update.shape[0]:
+        if tuple(update.shape) and idx.shape[0] != update.shape[0]:
             if update.shape[0] == 1 and len(update.shape) == 1:
                 idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
             elif idx.shape[0] == 1:

@@ -1102,9 +1102,8 @@ def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
         else:
             var.update(kwargs)
             if var_name == 'y' or var_name == 'y_delta':
-                print(f'Warning: Variable name {var_name} is reserved for pyrates-internal state variables. '
-                      f'Variable was renamed to {var_name}1.')
-                var_name = f'{var_name}1'
+                raise KeyError(f'Warning: Variable name {var_name} is reserved for pyrates-internal state variables. '
+                               f'Please choose a different variable name.')
             var_dict_new[var_name] = backend.add_var(name=var_name, **var)
 
     return var_dict_new
@@ -1135,7 +1134,7 @@ def split_equation(expr: str) -> tuple:
 
         if assign_type in expr:
 
-             # split expression via assign symbol
+            # split expression via assign symbol
             if f' {assign_type} ' in expr:
                 lhs, rhs = expr.split(f' {assign_type} ', maxsplit=1)
             elif f' {assign_type}' in expr:
