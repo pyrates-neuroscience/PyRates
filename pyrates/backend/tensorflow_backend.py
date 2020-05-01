@@ -42,7 +42,7 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
-class TensorflowVar(NumpyVar):
+class TensorflowVar(NumpyVar, tf.Variable):
     """Class for creating variables via a tensorflow-based PyRates backend.
     """
 
@@ -58,8 +58,8 @@ class TensorflowVar(NumpyVar):
         elif shape:
             return tf.cast(tf.reshape(value, shape=shape), dtype)
         else:
-            value = tf.constant(value, dtype=dtype)
-            return tf.zeros(shape=value.shape, dtype=value.dtype) + value
+            value = tf.constant(value, dtype=tf.float32)
+            return tf.cast(tf.zeros(shape=value.shape, dtype=value.dtype) + value, dtype=dtype)
 
     @classmethod
     def _get_var(cls, value, name, dtype):
@@ -69,8 +69,17 @@ class TensorflowVar(NumpyVar):
     def squeeze(var, **kwargs):
         return tf.squeeze(var, **kwargs)
 
+    @staticmethod
+    def __subclasscheck__(subclass):
+        if tf.Variable.__subclasscheck__(subclass):
+            return True
+        else:
+            return NumpyVar.__subclasscheck__(subclass)
+
 
 class TensorflowOp(PyRatesOp):
+
+    var_class = TensorflowVar
 
     def _generate_func(self):
         """Generates a function from operator value and arguments"""
@@ -89,6 +98,13 @@ class TensorflowOp(PyRatesOp):
         func.add_code_line(f"return {self._op_dict['value']}")
         exec(func.generate(), globals(), func_dict)
         return func_dict
+
+    def numpy(self):
+        """Evaluates the return values of the PyRates operation.
+        """
+        result = self._callable(*self.args).numpy()
+        self._check_numerics(result, self.name)
+        return result
 
     @staticmethod
     def _index(x, y):
@@ -107,6 +123,8 @@ class TensorflowOp(PyRatesOp):
 
 class TensorflowAssignOp(PyRatesAssignOp):
 
+    var_class = TensorflowVar
+
     def _generate_func(self):
         """Generates a function from operator value and arguments"""
         func_dict = {}
@@ -125,6 +143,13 @@ class TensorflowAssignOp(PyRatesAssignOp):
         exec(func.generate(), globals(), func_dict)
         return func_dict
 
+    def numpy(self):
+        """Evaluates the return values of the PyRates operation.
+        """
+        result = self._callable(*self.args).numpy()
+        self._check_numerics(result, self.name)
+        return result
+
     @classmethod
     def _extract_var_idx(cls, op, args, results_args, results_arg_names):
 
@@ -139,7 +164,7 @@ class TensorflowAssignOp(PyRatesAssignOp):
                     var_idx = f"{key},"
             else:
                 key = "__no_name__"
-                var_idx = f"{key},"
+                var_idx = f"{args[2]},"
 
             if type(args[2]) is str and len(args) > 3:
                 results_args.append(args[3])
@@ -156,6 +181,8 @@ class TensorflowAssignOp(PyRatesAssignOp):
 
 class TensorflowIndexOp(PyRatesIndexOp):
 
+    var_class = TensorflowVar
+
     def _generate_func(self):
         """Generates a function from operator value and arguments"""
         func_dict = {}
@@ -173,6 +200,13 @@ class TensorflowIndexOp(PyRatesIndexOp):
         func.add_code_line(f"return {self._op_dict['value']}")
         exec(func.generate(), globals(), func_dict)
         return func_dict
+
+    def numpy(self):
+        """Evaluates the return values of the PyRates operation.
+        """
+        result = self._callable(*self.args).numpy()
+        self._check_numerics(result, self.name)
+        return result
 
 
 class TensorflowBackend(NumpyBackend):
@@ -364,7 +398,9 @@ class TensorflowBackend(NumpyBackend):
             raise ValueError('Invalid input structure. The tensorflow backend can only be used with fixed step-size '
                              'solvers and thus only supports inputs with discrete time steps. Either change the '
                              'backend or set `continuous` to False.')
-        return super().add_input_layer(inputs=inputs, T=T, continuous=continuous)
+        for i in range(len(inputs)):
+            inputs[i] = (np.asarray(inputs[i][0], dtype=inputs[i][1].dtype.as_numpy_dtype), inputs[i][1], inputs[i][2])
+        return super().add_input_layer(inputs=inputs, T=T, continuous=False)
 
     def apply_idx(self, var: Any, idx: Any, update: Optional[Any] = None, update_type: str = None, *args) -> Any:
         """Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.
@@ -473,7 +509,10 @@ class TensorflowBackend(NumpyBackend):
                     op = "update_add"
                 else:
                     op = "update_sub"
-                args = self._process_update_args_old(*args)
+                if type(args[2]) is list:
+                    args = list(args)
+                    args[2] = tf.constant(args[2])
+                    args = self._process_update_args(*tuple(args))
             return TensorflowAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
         if op is "index":
             if hasattr(args[1], 'dtype') and 'bool' in str(args[1].dtype):
@@ -493,26 +532,6 @@ class TensorflowBackend(NumpyBackend):
                     break
             args = tuple(args)
         return TensorflowOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
-
-    def _process_update_args_old(self, var, update, idx):
-        """Preprocesses the index and a variable update to match the variable shape.
-
-        Parameters
-        ----------
-        var
-        update
-        idx
-
-        Returns
-        -------
-        tuple
-            Preprocessed index and re-shaped update.
-
-        """
-
-        if type(idx) is list:
-            idx = tf.constant(idx)
-        return super()._process_update_args_old(var, update, idx)
 
     def _process_idx_args(self, var, idx):
         """Preprocesses the index to a variable.

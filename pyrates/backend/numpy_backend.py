@@ -68,14 +68,16 @@ class NumpyVar(np.ndarray):
     vtype
         Type of the variable. Can be either `constant` or `state_variable`. Constant variables are necessary to perform
         certain graph optimizations previous to run time.
-    backend
-        Instance of the backend in use.
     dtype
         Data-type of the variable. For valid data-types, check the documentation of the backend in use.
     shape
         Shape of the variable.
     value
         Value of the variable. If scalar, please provide the shape in addition.
+    name
+        Full name of the variable (including the node and operator it belongs to).
+    short_name
+        Name of the variable excluding its node and operator.
 
     Returns
     -------
@@ -214,6 +216,8 @@ class PyRatesOp:
 
     """
 
+    var_class = NumpyVar
+
     def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
         """Instantiates PyRates operator.
         """
@@ -239,7 +243,7 @@ class PyRatesOp:
         self.args = ()
         self.build_op(args)
 
-    def eval(self):
+    def numpy(self):
         """Evaluates the return values of the PyRates operation.
         """
         result = self._callable(*self.args)
@@ -272,7 +276,7 @@ class PyRatesOp:
 
         # test function
         self.args = self._deepcopy(args)
-        result = self.eval() if 'no_op' not in self.short_name else self.args[0]
+        result = self.numpy() if 'no_op' not in self.short_name else self.args[0]
         self.args = args
 
         # remember output shape and data-type
@@ -386,12 +390,12 @@ class PyRatesOp:
                 results['arg_names'] += new_arg_names
                 n_vars += 1
 
-            elif hasattr(arg, 'vtype'):
+            elif cls.var_class.__subclasscheck__(type(arg)):
 
                 # parse PyRates variable into the function
-                if arg.vtype is 'constant' and not arg.shape and constants_to_num:
+                if arg.vtype is 'constant' and not tuple(arg.shape) and constants_to_num:
                     arg_name = '__no_name__'
-                    arg_value = arg.numpy() if hasattr(arg, 'numpy') else arg
+                    arg_value = arg.numpy()  #if hasattr(arg, 'numpy') else arg
                 else:
                     arg_name = arg.short_name
                     arg_value = arg
@@ -444,7 +448,7 @@ class PyRatesOp:
         return arg_names, args
 
     @staticmethod
-    def _check_numerics(vals, name):
+    def _check_numerics(vals: NumpyVar, name: str):
         """Checks whether function evaluation leads to any NaNs or infinite values.
         """
         check = []
@@ -681,10 +685,10 @@ class PyRatesIndexOp(PyRatesOp):
             results['arg_names'] += new_arg_names
             n_vars += 1
 
-        elif hasattr(var_tmp, 'vtype'):
+        elif cls.var_class.__subclasscheck__(type(var_tmp)):
 
             # parse pyrates variables into the indexing operation
-            if var_tmp.vtype != 'constant' or var_tmp.shape:
+            if var_tmp.vtype != 'constant' or tuple(var_tmp.shape):
                 var = var_tmp.short_name
                 results['args'].append(var_tmp)
                 results['arg_names'].append(var)
@@ -720,11 +724,11 @@ class PyRatesIndexOp(PyRatesOp):
             results['arg_names'] += new_arg_names
             n_vars += 1
 
-        elif hasattr(idx, 'vtype'):
+        elif cls.var_class.__subclasscheck__(type(idx)):
 
             # parse pyrates variables into the indexing operation
             key = idx.short_name
-            if idx.vtype != 'constant' or idx.shape:
+            if idx.vtype != 'constant' or tuple(idx.shape):
                 var_idx = f"{idx_l}{key}{idx_r}"
                 results['args'].append(idx)
                 results['arg_names'].append(key)
@@ -1129,7 +1133,7 @@ class NumpyBackend(object):
         self.vars[name] = var
         return var
 
-    def remove_var(self, name: str) -> NumpyVar:
+    def remove_var(self, name: str) -> Union[NumpyVar, None]:
         """Removes variable from backend and returns it.
 
         Parameters
@@ -1267,7 +1271,7 @@ class NumpyBackend(object):
 
         # for constant ops, add a constant to the graph, containing the op evaluation
         if op.is_constant and op_name != 'no_op':
-            new_var = op.eval()
+            new_var = op.numpy()
             if hasattr(new_var, 'shape'):
                 name = f'{name}_evaluated'
                 return self.add_var(vtype='constant', name=name, value=new_var)
@@ -1510,7 +1514,7 @@ class NumpyBackend(object):
         """
         return self.layers[self._base_layer + idx]
 
-    def get_var(self, name):
+    def get_var(self, name: str) -> Union[NumpyVar, PyRatesOp]:
         """Retrieve variable from graph.
 
         Parameters
@@ -1526,7 +1530,7 @@ class NumpyBackend(object):
         """
         return self.vars[name]
 
-    def eval_var(self, var) -> np.ndarray:
+    def eval_var(self, var: str) -> np.ndarray:
         """Get value of variable.
 
         Parameters
@@ -2070,6 +2074,8 @@ class NumpyBackend(object):
             else:
                 raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
                                  f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')
+        elif not tuple(update.shape) and tuple(idx.shape):
+            update = self.add_op('reshape', update, (1,))
 
         if len(idx.shape) < 2:
             idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
@@ -2118,7 +2124,6 @@ class NumpyBackend(object):
 
         # pre-process args
         shape = var.shape
-        scatter_into_first_dim = False
 
         # match shape of index and update to shape
         ##########################################
@@ -2136,9 +2141,10 @@ class NumpyBackend(object):
         elif update.shape == shape[1:] or update.shape == shape[:-1]:
 
             # make sure that index and update scatter into the first dimension of update
-            scatter_into_first_dim = True
+            update = self.add_op('reshape', update, (1,) + tuple(update.shape))
+            idx = idx[None, :]
 
-        return var, update, idx, scatter_into_first_dim
+        return var, update, idx
 
     def _process_vars(self):
         """

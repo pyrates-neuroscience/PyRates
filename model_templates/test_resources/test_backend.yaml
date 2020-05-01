@@ -94,7 +94,7 @@ op8:
 op9:
   base: OperatorTemplate
   equations:
-    - "d/dt * a = (a*(1 - a) + I_syn + I_ext)/tau"
+    - "d/dt * a = (a*(1.0 - a) + I_syn + I_ext)/tau"
     - "b = tanh(a)"
   variables:
     b:

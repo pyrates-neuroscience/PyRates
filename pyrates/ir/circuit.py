@@ -1060,7 +1060,7 @@ class CircuitIR(AbstractBaseIR):
                     idx = [int(i) for i in idx.split(':')]
                     idx_tmp = vnode_indices[vnode_key]['var']
                     idx = [int(i) + idx[0] for i in idx_tmp]
-                    var_value = var_value.eval()
+                    var_value = var_value.numpy()
                 else:
                     idx = vnode_indices[vnode_key]['var']
                 if apply_idx:

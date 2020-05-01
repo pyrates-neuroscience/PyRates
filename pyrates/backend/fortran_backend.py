@@ -86,7 +86,7 @@ class FortranAssignOp(PyRatesAssignOp):
         ndim = self._op_dict['args'][idx].shape
         return generate_func(self, return_key=return_key, omit_assign=True, return_dim=ndim, return_intent='out')
 
-    def eval(self):
+    def numpy(self):
         result = self._callable(*self.args[1:])
         self._check_numerics(result, self.name)
         return result

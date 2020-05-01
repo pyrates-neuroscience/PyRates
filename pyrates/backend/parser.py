@@ -67,6 +67,8 @@ class ExpressionParser(ParserElement):
     ----------
     lhs
         Boolean, indicates whether expression is left-hand side or right-hand side of an equation
+    rhs
+        PyRatesOp for the evaluation of the right-hand side of the equation
     args
         Dictionary containing the variables of an expression
     solve
