@@ -441,3 +441,29 @@ def test_2_5_solver():
     """
 
     backend = 'numpy'
+
+    # define input
+    dt = 1e-3
+    sim_time = 100.
+    sim_steps = int(np.round(sim_time / dt, decimals=0))
+    inp = np.zeros((sim_steps, 1)) + 0.5
+
+    # standard euler solver (trusted)
+    net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net0')
+    net = net_config.compile(vectorization=True, step_size=dt, backend=backend, solver='euler')
+    results = net.run(sim_time,
+                      outputs={'a1': 'p1/op9/a',
+                               'a2': 'p2/op9/a'},
+                      inputs={'p1/op9/I_ext': inp})
+    net.clear()
+
+    # scipy solver (tested)
+    net_config2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net1')
+    net2 = net_config2.compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
+    results2 = net2.run(sim_time,
+                        outputs={'a1': 'p1/op9/a',
+                                 'a2': 'p2/op9/a'},
+                        inputs={'p1/op9/I_ext': inp})
+    net2.clear()
+
+    assert np.mean(results.loc[:, 'a2'].values - results2.loc[:, 'a2'].values) == pytest.approx(0., rel=1e-4, abs=1e-4)

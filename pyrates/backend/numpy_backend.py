@@ -53,6 +53,7 @@ import os
 import sys
 from shutil import rmtree
 import warnings
+from scipy.interpolate.interpolate import interp1d
 
 # pyrates internal imports
 from .funcs import *
@@ -127,10 +128,13 @@ class NumpyVar(np.ndarray):
             shape = list(shape)
             shape.pop(idx)
             shape = tuple(shape)
-        value = cls._get_value(value, dtype, shape)
-        if squeeze:
-            value = cls.squeeze(value)
-        obj = cls._get_var(value, name, dtype)
+        if callable(value):
+            obj = value
+        else:
+            value = cls._get_value(value, dtype, shape)
+            if squeeze:
+                value = cls.squeeze(value)
+            obj = cls._get_var(value, name, dtype)
 
         # store additional attributes on variable object
         obj.short_name = name.split('/')[-1]
@@ -197,6 +201,13 @@ class NumpyVar(np.ndarray):
 
     def __hash__(self):
         return hash(str(self))
+
+    @staticmethod
+    def __subclasscheck__(subclass):
+        if np.ndarray.__subclasscheck__(subclass):
+            return True
+        else:
+            return interp1d.__subclasscheck__(subclass)
 
 
 class PyRatesOp:
@@ -1395,10 +1406,7 @@ class NumpyBackend(object):
                         inp = inp.squeeze()
                     f = interp1d(time, inp, axis=0, copy=False, kind='linear')
                     f.shape = inp.shape[1:]
-                    f.vtype = 'state_var'
-                    f.short_name = in_name
-                    f.name = f"network_inputs/{in_name}"
-                    self.vars[f.name] = f
+                    f = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", value=f)
                     in_var_interp = self.add_op('interpolate', f, t, scope="network_inputs")
                     if idx:
                         self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
