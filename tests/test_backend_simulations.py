@@ -463,7 +463,8 @@ def test_2_5_solver():
     results2 = net2.run(sim_time,
                         outputs={'a1': 'p1/op9/a',
                                  'a2': 'p2/op9/a'},
-                        inputs={'p1/op9/I_ext': inp})
+                        inputs={'p1/op9/I_ext': inp},
+                        method='RK23')
     net2.clear()
 
     assert np.mean(results.loc[:, 'a2'].values - results2.loc[:, 'a2'].values) == pytest.approx(0., rel=1e-4, abs=1e-4)

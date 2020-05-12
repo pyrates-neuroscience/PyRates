@@ -1890,6 +1890,8 @@ class CircuitIR(AbstractBaseIR):
                                         'value': 0.0}
 
             # create buffered variable
+            if any(np.diff(order_idx) != 1):
+                buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
             for i, idx1, idx2 in final_idx:
                 idx1 = idx1 if len(idx1) > 2 else ''
                 idx2 = idx2 if len(idx2) > 2 else ''
@@ -1897,15 +1899,10 @@ class CircuitIR(AbstractBaseIR):
                     buffer_eqs.append(f"{var}_buffered{idx1} = {var}_d{i}{idx2}")
                 else:
                     buffer_eqs.append(f"{var}_buffered{idx1} = {source_var}{idx2}")
-            #buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
                                            'dtype': self._backend._float_def,
                                            'shape': (len(delays),),
                                            'value': 0.0}
-            #var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
-            #                                   'dtype': 'int32',
-            #                                   'shape': (len(order_idx),),
-            #                                   'value': order_idx}
 
             # re-order buffered variable if necessary
             if any(np.diff(order_idx) != 1):

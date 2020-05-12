@@ -95,14 +95,19 @@ class PyAuto:
         new_points = self.get_solution_keys(solution)
 
         # merge auto solutions if necessary and create key for auto solution
-        merged = False
         if new_branch in self._branches and origin in self._branches[new_branch] \
                 and new_icp in self._branches[new_branch][origin]:
-            solution = self._a.merge(solution + self.get_solution(origin))
-            merged = True
 
-        # create pyauto key for solution
-        pyauto_key = self._cont_num + 1 if self._cont_num in self.auto_solutions and not merged else self._cont_num
+            # get key from old solution and merge with new solution
+            solution_old = self.get_solution(origin)
+            pyauto_key = solution_old.pyauto_key
+            solution = self._a.merge(solution + solution_old)
+
+        else:
+
+            # create pyauto key for solution
+            pyauto_key = self._cont_num + 1 if self._cont_num in self.auto_solutions else self._cont_num
+
         solution.pyauto_key = pyauto_key
 
         # set up dictionary fields in _branches for new solution
