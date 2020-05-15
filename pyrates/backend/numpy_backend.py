@@ -942,6 +942,7 @@ class NumpyBackend(object):
             for imp in imports:
                 if imp not in self._imports:
                     self._imports.append(imp)
+        self._input_names = []
 
         # create build dir
         orig_dir = os.getcwd()
@@ -1401,13 +1402,25 @@ class NumpyBackend(object):
                 time = np.linspace(0, T, inputs[0][0].shape[0])
 
                 for (inp, target_var, idx) in inputs:
-                    in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else f"{target_var.short_name}_inp"
+
+                    # create unique name of input variable
+                    in_name_tmp = f"{target_var.short_name}_inp"
+                    counter = 0
+                    in_name = in_name_tmp
+                    while in_name in self._input_names:
+                        in_name = f"{in_name_tmp}_{counter}"
+                        counter += 1
+                    self._input_names.append(in_name)
+
+                    # create interpolation operator
                     if len(inp.shape) > 1:
                         inp = inp.squeeze()
                     f = interp1d(time, inp, axis=0, copy=False, kind='linear')
                     f.shape = inp.shape[1:]
                     f = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", value=f)
                     in_var_interp = self.add_op('interpolate', f, t, scope="network_inputs")
+
+                    # apply input to target variable
                     if idx:
                         self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
                     else:
@@ -1420,9 +1433,22 @@ class NumpyBackend(object):
                                              scope="network_inputs")
 
                 for (inp, target_var, idx) in inputs:
-                    in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
-                    in_var = self.add_var(vtype='state_var', name=in_name, scope="network_inputs", value=inp)
+
+                    # create unique name of input variable
+                    in_name_tmp = f"{target_var.short_name}_inp"
+                    counter = 0
+                    in_name = in_name_tmp
+                    while in_name_tmp in self._input_names:
+                        in_name = f"{in_name_tmp}_{counter}"
+                        counter += 1
+                    self._input_names.append(in_name)
+
+                    # create time indexing operator
+                    in_var = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", scope="network_inputs",
+                                          value=inp)
                     in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
+
+                    # apply input to target variable
                     if idx:
                         self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
                     else:

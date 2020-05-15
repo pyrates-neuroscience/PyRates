@@ -1820,8 +1820,7 @@ class CircuitIR(AbstractBaseIR):
                     orders.append(dde_approx if m else 0)
                     rates.append(dde_approx / m if m else 0)
 
-            n_edges = len(orders) // target_shape[0]
-            # TODO: test whether indexing and un-indexing later on actually works.
+            n_edges = len(orders) / target_shape[0]
             order_idx = np.argsort(orders, kind='stable')
             orders = np.asarray(orders, dtype=np.int32)[order_idx]
             orders_tmp = np.asarray(orders, dtype=np.int32)
@@ -1882,16 +1881,19 @@ class CircuitIR(AbstractBaseIR):
 
             # extend source variable to match shape of edge transmission variables
             if n_edges > 1:
-                for i in range(n_edges):
-                    buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}")
+                if n_edges % 1 == 0:
+                    n_edges = int(n_edges)
+                    for i in range(n_edges):
+                        buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}")
+                else:
+                    for i, idx in enumerate(nodes_tmp):
+                        buffer_eqs.append(f"{source_var}[{i}] = {var}[{idx}]")
                 var_dict[source_var] = {'vtype': 'state_var',
                                         'dtype': self._backend._float_def,
-                                        'shape': (target_shape[0]*n_edges,),
+                                        'shape': (len(orders),),
                                         'value': 0.0}
 
             # create buffered variable
-            if any(np.diff(order_idx) != 1):
-                buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
             for i, idx1, idx2 in final_idx:
                 idx1 = idx1 if len(idx1) > 2 else ''
                 idx2 = idx2 if len(idx2) > 2 else ''
