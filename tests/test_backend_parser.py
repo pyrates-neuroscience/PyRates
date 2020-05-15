@@ -24,9 +24,9 @@ __status__ = "Development"
 
 def setup_module():
     print("\n")
-    print("===============================")
-    print("| Test Suite 1 : Parser Module |")
-    print("===============================")
+    print("==============================")
+    print("| Test Suite : Parser Module |")
+    print("==============================")
 
 
 #########

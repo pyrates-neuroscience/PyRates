@@ -1,4 +1,4 @@
-"""Test suite for basic operator module functionality.
+"""Test suite for basic backend simulation functionalities.
 """
 
 # external imports
@@ -23,9 +23,9 @@ __status__ = "Development"
 
 def setup_module():
     print("\n")
-    print("================================")
-    print("| Test Suite 2 : SimNet Module |")
-    print("================================")
+    print("==================================================")
+    print("| Test Suite: Backend Simulation Functionalities |")
+    print("==================================================")
 
 
 def nmrse(x: np.ndarray,

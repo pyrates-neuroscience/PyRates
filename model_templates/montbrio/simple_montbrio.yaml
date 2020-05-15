@@ -109,16 +109,16 @@ DummyEdge:
   base: EdgeTemplate
   operators: []
 
-Net1:
+QIF_exc:
   base: CircuitTemplate
   nodes:
-    Pop1: Pop_e
+    pop_e: Pop_e
   edges:
 
-Net2:
+QIF_inh:
   base: CircuitTemplate
   nodes:
-    Pop1: Pop_i
+    pop_i: Pop_i
   edges:
 
 Net3:

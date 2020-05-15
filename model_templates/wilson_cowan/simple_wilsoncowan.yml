@@ -1,6 +1,7 @@
 %YAML 1.2
 ---
 
+# base rate coding operator
 Op_rate:
   base: OperatorTemplate
   equations:
@@ -21,92 +22,51 @@ Op_rate:
     I_syn:
       default: input
 
-Op_stp:
+# excitatory node operator
+E_op:
   base: OperatorTemplate
   equations:
-    - "d/dt * p = (1.0-p)/tau_p + rs*rt*k_p"
-    - "r_scaled = rs*p"
+    - "m = max(tanh(s*(v-theta)), 0)"
+    - "d/dt * v = (I_e - I_i + I_ext + B - v) / tau"
+    - "d/dt * meg = ((I_e+I_i)/2.0-meg)/0.01"
   variables:
-    r_scaled:
+    m:
       default: output
-    rs:
-      default: input
-    rt:
-      default: input
-    p:
+    v:
       default: variable
-    tau_p:
-      default: 100.0
-    k_p:
-      default: 0.1
-
-WC_stp_ee:
-  base: OperatorTemplate
-  equations:
-    - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*rs"
-    - "d/dt * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*rs"
-    - "d/dt * p = (1.0-p)/tau_p + k_p*rs*rt"
-    - "r_scaled = rs*x*u*p"
-  variables:
-    rs:
-      default: input
-    rt:
-      default: input
-    x:
-      default: variable(1.0)
-    u:
-      default: variable(1.0)
-    p:
-      default: variable(1.0)
-    r_scaled:
-      default: output
-    tau_r:
-      default: 50.0
-    tau_f:
-      default: 1.0
-    tau_p:
-      default: 100.0
-    k_r:
-      default: 0.2
-    k_f:
-      default: 0.0
-    k_p:
-      default: 0.1
-    U:
-      default: 1.0
-
-
-WC_stp_ie:
-  base: WC_stp_ee
-  variables:
-    u:
-      default: variable(0.05)
-    tau_r:
-      default: 1.0
-    tau_f:
-      default: 200.0
-    k_r:
-      default: 0.0
-    k_f:
-      default: 0.05
-    U:
-      default: 0.05
-
-
-WC_e_op:
-  base: OperatorTemplate
-  equations:
-    - "re = max(tanh(s*(ve-theta)), 0)"
-    - "d/dt * ve = (re_in - ri_in + w_in*I + B - ve) / tau"
-    - "d/dt * meg = (re_in+ri_in)/(2.0*N) - meg"
-  variables:
-    re:
-      default: output
-    ve:
+    meg:
       default: variable
-    re_in:
+    I_e:
       default: input
-    ri_in:
+    I_i:
+      default: input
+    s:
+      default: 0.6667
+    theta:
+      default: 0.0
+    tau:
+      default: 10.0
+    I_ext:
+      default: input
+    B:
+      default: 0.0
+    N:
+      default: 1.0
+
+# inhibitory node operator
+I_op:
+  base: OperatorTemplate
+  equations:
+    - "m_i = max(tanh(s*(v_i-theta)), 0)"
+    - "d/dt * v_i = (I_e - I_i + I_ext + B - v_i) / tau"
+  variables:
+    m_i:
+      default: output
+    v_i:
+      default: variable
+    I_e:
+      default: input
+    I_i:
       default: input
     s:
       default: 0.6667
@@ -114,100 +74,125 @@ WC_e_op:
       default: 0.0
     tau:
       default: 20.0
-    I:
-      default: input
-    I_d:
+    I_ext:
       default: input
     B:
       default: 0.0
-    w_in:
-      default: 1.0
-    meg:
-      default: variable
-    N:
-      default: 15.0
 
-WC_i_op:
+# edge operator
+STP_op:
   base: OperatorTemplate
   equations:
-    - "ri = max(tanh(s*(vi-theta)), 0)"
-    - "d/dt * vi = (re_in - ri_in - vi) / tau"
+    - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*m_in"
+    - "d/dt * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*m_in"
+    - "m_out = m_in*x*u"
   variables:
-    ri:
+    m_in:
+      default: input
+    m_out:
       default: output
-    vi:
-      default: variable
-    re_in:
-      default: input
-    ri_in:
-      default: input
-    s:
-      default: 0.6667
-    theta:
+    x:
+      default: variable(1.0)
+    u:
+      default: variable(1.0)
+    tau_r:
+      default: 200.0
+    tau_f:
+      default: 1.0
+    k_r:
+      default: 0.2
+    k_f:
       default: 0.0
-    tau:
-      default: 40.0
+    U:
+      default: 1.0
 
-# nodes
-WC_e:
-  base: NodeTemplate
-  operators:
-    - WC_e_op
+# alternative edge operator parametrization
+STP_op_2:
+  base: STP_op
+  variables:
+    tau_r:
+      default: 1.0
+    tau_f:
+      default: 600.0
+    k_r:
+      default: 0.0
+    k_f:
+      default: 0.6
+    U:
+      default: 0.05
 
-WC_i:
-  base: NodeTemplate
-  operators:
-    - WC_i_op
+# observation operator
+Obs_op:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * meg = (I_syn/(2.0*N)-meg)/0.1"
+  variables:
+    meg:
+      default: variable
+    I_syn:
+      default: input
+    N:
+      default: 1.0
 
+# nodes and edges
+#################
+
+# basic rate-coded population
 Pop_rate:
   base: NodeTemplate
   operators:
     - Op_rate
 
-# edges
+# basic wilson-cowan type populations
+E_pop:
+  base: NodeTemplate
+  operators:
+    - E_op
 
-WC_ie:
+I_pop:
+  base: NodeTemplate
+  operators:
+    - I_op
+
+# edge 1
+EE_edge:
   base: EdgeTemplate
   operators:
-    - WC_stp_ie
+    - STP_op
 
-WC_ee:
+# edge 2
+EI_edge:
   base: EdgeTemplate
   operators:
-    - WC_stp_ee
+    - STP_op_2
 
-Rate_stp:
-  base: EdgeTemplate
+# observer
+Obs:
+  base: NodeTemplate
   operators:
-    - Op_stp
+    - Obs_op
 
 # circuits
-WC:
+##########
+
+WC_stp:
+  base: CircuitTemplate
+  nodes:
+    E: E_pop
+    I: I_pop
+  edges:
+    - [E/E_op/m, E/E_op/I_e, EE_edge, {weight: 1.0}]
+    - [E/E_op/m, I/I_op/I_e, EI_edge, {weight: 0.3}]
+    - [I/I_op/m_i, E/E_op/I_i, null, {weight: 0.7}]
+
+# circuits
+WC_simple:
   base: CircuitTemplate
   nodes:
     E: Pop_rate
     I: Pop_rate
   edges:
-    - [E/Op_rate/r, I/Op_rate/I_syn, null, {weight: 1.0}]
-    - [I/Op_rate/r, E/Op_rate/I_syn, null, {weight: -1.0}]
-    - [E/Op_rate/r, E/Op_rate/I_syn, null, {weight: 1.0}]
-    - [I/Op_rate/r, I/Op_rate/I_syn, null, {weight: -1.0}]
-
-WC_stp_net:
-  base: CircuitTemplate
-  nodes:
-    E: WC_e
-    I: WC_i
-  edges:
-    - [E: {WC_e_op/re: r, WC_e_op/I: Inp, WC_e_op/I_d: Inp_d}, E/WC_e_op/re_in, WC_ee, {weight: 1.0}]
-    - [E: {WC_e_op/re: r, WC_e_op/I: Inp, WC_e_op/I_d: Inp_d}, I/WC_i_op/re_in, WC_ie, {weight: 0.5}]
-    - [I/WC_i_op/ri, E/WC_e_op/ri_in, null, {weight: 0.5}]
-    - [E/WC_e_op/I, E/WC_e_op/I_d, null, {weight: 1.0, delay: 0.005}]
-
-RC:
-  base: CircuitTemplate
-  nodes:
-    P1: Pop_rate
-    P2: Pop_rate
-  edges:
-    - [P1: {Op_rate/r: rs}, P2/Op_rate/I_syn, WC_ee, {weight: 2.0, rt: P2/Op_rate/r}]
+    - [E/Op_rate/r, I/Op_rate/I_syn, null, {weight: 10.0}]
+    - [I/Op_rate/r, E/Op_rate/I_syn, null, {weight: -10.0}]
+    - [E/Op_rate/r, E/Op_rate/I_syn, null, {weight: 5.0}]
+    - [I/Op_rate/r, I/Op_rate/I_syn, null, {weight: -5.0}]
