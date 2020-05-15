@@ -1,33 +1,52 @@
 %YAML 1.2
 ---
 
-Op_phase:
+Op_noise:
   base: OperatorTemplate
   equations:
-    - "d/dt * theta = omega + noise_in*sqrt(step_size) + K*net_in"
-    - "theta_wrapped = theta % (2*PI)"
+    - "t_old = t_new"
+    - "t_new = t"
+    - "d/dt * theta = omega + xi*sqrt(t_new-t_old) + K*net_in"
   variables:
     theta:
       default: output
-    theta_wrapped:
-      default: variable
     omega:
       default: 10.0
     K:
       default: 1.0
-    noise_in:
+    t_old:
+      default: 0.0
+    t_new:
+      default: 0.0
+    xi:
       default: input
+    net_in:
+      default: input
+
+Op_base:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * theta = omega + K*net_in"
+  variables:
+    theta:
+      default: output
+    omega:
+      default: 10.0
+    K:
+      default: 1.0
     net_in:
       default: input
 
 Op_coupling:
   base: OperatorTemplate
   equations:
-    - "target_var = sin(source_var-target_var)"
+    - "k = sin(theta_s-theta_t)"
   variables:
-    source_var:
+    theta_s:
       default: input
-    target_var:
+    theta_t:
+      default: input
+    k:
       default: output
 
 Sin_edge:
@@ -35,16 +54,40 @@ Sin_edge:
   operators:
     - Op_coupling
 
-KM_node:
+KM:
   base: NodeTemplate
   operators:
-    - Op_phase
+    - Op_base
 
-2KM:
+KM_noise:
+  base: NodeTemplate
+  operators:
+    - Op_noise
+
+KM_single:
   base: CircuitTemplate
   nodes:
-    O1: KM_node
-    O2: KM_node
+    p1: KM
+
+KM_single_noise:
+  base: CircuitTemplate
+  nodes:
+    p1: KM_noise
+
+KMN:
+  base: CircuitTemplate
+  nodes:
+    p1: KM
+    p2: KM
   edges:
-    - [O1/Op_phase/theta, O2/Op_phase/net_in, Sin_edge, {weight: 1.0}]
-    - [O2/Op_phase/theta, O1/Op_phase/net_in, Sin_edge, {weight: 1.0}]
+    - [{p1: {Op_base/theta: theta_s}, p2: {Op_base/theta: theta_t}}, p2/Op_base/net_in, Sin_edge, {weight: 2.0}]
+    - [{p2: {Op_base/theta: theta_s}, p1: {Op_base/theta: theta_t}}, p1/Op_base/net_in, Sin_edge, {weight: -2.0}]
+
+KMN_noise:
+  base: CircuitTemplate
+  nodes:
+    p1: KM_noise
+    p2: KM_noise
+  edges:
+    - [{p1: {Op_noise/theta: theta_s}, p2: {Op_noise/theta: theta_t}}, p2/Op_noise/net_in, Sin_edge, {weight: 4.0}]
+    - [{p2: {Op_noise/theta: theta_s}, p1: {Op_noise/theta: theta_t}}, p1/Op_noise/net_in, Sin_edge, {weight: -4.0}]

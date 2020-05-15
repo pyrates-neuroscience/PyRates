@@ -165,3 +165,69 @@ def test_3_3_wilson_cowan():
     indices = [np.argmin(np.abs(t - r2.index)) for t in times]
     assert r2.iloc[indices[0], 0] < r2.iloc[indices[1], 0]
     assert r2.iloc[indices[0], 0] - r2.iloc[indices[2], 0] == pytest.approx(0., rel=1e-3, abs=1e-3)
+
+
+def test_3_4_kuramoto():
+    """Tests accurate behavior of kuramoto oscillator model.
+    """
+
+    # assess correct response of single base oscillator
+    ###################################################
+
+    T = 2.0
+    dt = 1e-4
+    dts = 1e-2
+
+    # set up circuit
+    km1 = CircuitIR.from_yaml("model_templates.kuramoto.simple_kuramoto.KM_single")
+    km1 = km1.compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+
+    # perform simulation
+    r1 = km1.run(T, sampling_step_size=dts, outputs={"theta": "p1/Op_base/theta"})
+    km1.clear()
+
+    # test linear oscillator properties
+    omega = 10.0
+    results = np.sin(r1.values[:, 0]*2*np.pi)
+    target = np.sin(omega*2.0*np.pi*r1.index.values)
+    assert results - target == pytest.approx(0., rel=1e-2, abs=1e-2)
+
+    # assess correct response of two coupled oscillators
+    ####################################################
+
+    T = 6.0
+    dt = 1e-4
+    dts = 1e-2
+
+    # set up circuit
+    km2 = CircuitIR.from_yaml("model_templates.kuramoto.simple_kuramoto.KMN")
+    km2 = km2.compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+
+    # perform simulation
+    r2 = km2.run(T, sampling_step_size=dts, outputs={"theta1": "p1/Op_base/theta", "theta2": "p2/Op_base/theta"})
+    km2.clear()
+
+    # test whether oscillator 2 showed a faster phase development than oscillator 1
+    assert r2['theta1'].iloc[-1, 0] < r2['theta2'].iloc[-1, 0]
+
+    # repeat test 2 for two coupled noisy oscillators
+    #################################################
+
+    T = 6.0
+    dt = 1e-4
+    dts = 1e-2
+
+    inp1 = np.random.randn(int(np.round(T / dt))) * 0.5
+    inp2 = np.random.randn(int(np.round(T / dt))) * 0.1
+
+    # set up circuit
+    km3 = CircuitIR.from_yaml("model_templates.kuramoto.simple_kuramoto.KMN_noise")
+    km3 = km3.compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+
+    # perform simulation
+    r3 = km3.run(T, sampling_step_size=dts, outputs={"theta1": "p1/Op_noise/theta", "theta2": "p2/Op_noise/theta"},
+                 inputs={"p1/Op_noise/xi": inp1, "p2/Op_noise/xi": inp2})
+    km3.clear()
+
+    # test whether oscillator 2 showed a faster phase development than oscillator 1
+    assert r3['theta1'].iloc[-1, 0] < r3['theta2'].iloc[-1, 0]
