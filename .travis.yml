@@ -5,7 +5,7 @@ python:
 
 # install dependencies
 install:
-  - pip install .[all]
+  - pip install .[tests]
 
 # run tests
 script:
