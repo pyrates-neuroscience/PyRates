@@ -29,6 +29,7 @@ EXTRAS = {"tf": ["tensorflow>=2.0"],
           "dev": ["pytest", "bump2version"]}
 
 EXTRAS["all"] = [item for sublist in EXTRAS.values() for item in sublist]
+EXTRAS["tests"] = list(*EXTRAS["tf"], *EXTRAS["proc"], *EXTRAS["dev"])
 
 with open("README.md", "r", encoding="utf8") as fh:
     DESCRIPTION = fh.read()

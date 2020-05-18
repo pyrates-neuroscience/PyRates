@@ -547,7 +547,7 @@ class FortranBackend(NumpyBackend):
         -------
 
         """
-        from pyrates.utility import PyAuto
+        from pyrates.utility.pyauto import PyAuto
         directory = directory if directory else self._build_dir
         if generate_auto_def:
             self.generate_auto_def(directory)
@@ -576,7 +576,7 @@ class FortranBackend(NumpyBackend):
 
         if self.pyauto_compat:
 
-            from pyrates.utility import PyAuto
+            from pyrates.utility.pyauto import PyAuto
             pyauto = PyAuto(auto_dir=self._build_dir)
             dsmin = dt*1e-2
             auto_defs = {'DSMIN': dsmin, 'DSMAX': dt*1e2, 'NMX': int(T/dsmin), 'NPR': int(dts/dt)}

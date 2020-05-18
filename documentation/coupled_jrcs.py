@@ -1,6 +1,5 @@
 # pyrates imports
-from pyrates.utility import grid_search, functional_connectivity
-from pyrates.utility.grid_search import linearize_grid
+from pyrates.utility.grid_search import grid_search
 
 # additional imports
 import numpy as np

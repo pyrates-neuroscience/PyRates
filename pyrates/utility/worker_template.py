@@ -236,7 +236,7 @@ if __name__ == "__main__":
 def postprocessing_1(data_):
     """Compute spike frequency based on frequency in PSD with the highest energy"""
 
-    from pyrates.utility import plot_psd
+    from pyrates.utility.visualization import plot_psd
     import matplotlib.pyplot as plt
 
     # Store columns for later reconstruction

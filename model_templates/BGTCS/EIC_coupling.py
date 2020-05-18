@@ -1,4 +1,5 @@
-from pyrates.utility import plot_timeseries, grid_search, plot_psd, plot_connectivity
+from pyrates.utility.visualization import plot_timeseries, plot_psd, plot_connectivity
+from pyrates.utility.grid_search import grid_search
 import numpy as np
 import matplotlib.pyplot as plt
 from seaborn import cubehelix_palette

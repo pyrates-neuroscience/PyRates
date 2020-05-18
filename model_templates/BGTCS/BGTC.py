@@ -1,7 +1,7 @@
 # pyrates imports
 from pyrates.ir.circuit import CircuitIR
 from pyrates.backend import ComputeGraph
-from pyrates.utility import plot_connectivity
+from pyrates.utility.visualization import plot_connectivity
 from pyrates.frontend import CircuitTemplate
 
 # additional imports
