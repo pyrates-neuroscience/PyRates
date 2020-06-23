@@ -63,12 +63,6 @@ This container provides a stand-alone version of PyRates including all necessary
 To be able to use this container, you need to install [Singularity](https://singularity.lbl.gov/) on your local machine first.
 Follow these [instructions](https://singularity.lbl.gov/quickstart) to install singularity and run scripts inside the PyRates container.
 
-Documentation
--------------
-
-For a full API of PyRates, see https://pyrates.readthedocs.io/en/latest/.
-For examplary simulations and model configurations, please have a look at the jupyter notebooks provided in the documenation folder.
-
 Reference
 ---------
 
@@ -87,8 +81,8 @@ Examples Gallery
 .. include::
    auto_min/index.rst
 
-Table of contents
------------------
+API
+===
 
 .. toctree::
    :maxdepth: 4

@@ -118,11 +118,10 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = []
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = None
-
+pygments_style = 'sphinx'
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -149,7 +148,7 @@ pngmath_dvipng_args = ['-gamma 1.5', '-D 96', '-bg Transparent']
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = '../../PyRates_logo_color.png'
+html_logo = '_static/img/pyrates_logo.png'
 
 # The name of an image file (relative to this directory) to use as a favicon of
 # the docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
