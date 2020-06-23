@@ -8,7 +8,7 @@ sphinx:
 python:
    version: 3.7
    install:
-      - requirements: requirements.txt
+      - requirements: documentation/doc/source/requirements.txt
       - method: pip
-        path: ./documentation/doc/source
+        path: .
    system_packages: true
