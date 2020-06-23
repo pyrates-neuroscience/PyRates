@@ -12,5 +12,3 @@ pydot
 pytest
 paramiko
 numba
-pillow
-sphinx-gallery

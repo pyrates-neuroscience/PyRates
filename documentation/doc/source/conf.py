@@ -28,7 +28,7 @@ author = u'Richard Gast'
 version = u'0.9'
 
 # The full version, including alpha/beta/rc tags
-release = u'0.9.2'
+release = u'0.9.1'
 
 
 # -- General configuration ---------------------------------------------------
@@ -40,8 +40,19 @@ release = u'0.9.2'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.autosummary', 'sphinx.ext.coverage',
-              'sphinx.ext.extlinks', 'sphinx_gallery.gen_gallery']
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.coverage',
+    'sphinx.ext.extlinks',
+    'sphinx.ext.mathjax',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.githubpages',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.imgmath',
+    'matplotlib.sphinxext.plot_directive',
+    'sphinx_gallery.gen_gallery'
+]
 
 # configuration of sphinx gallery
 sphinx_gallery_conf = {
@@ -138,7 +149,7 @@ pngmath_dvipng_args = ['-gamma 1.5', '-D 96', '-bg Transparent']
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = '../../pyrates_logo_color.png'
+html_logo = '../../PyRates_logo_color.png'
 
 # The name of an image file (relative to this directory) to use as a favicon of
 # the docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
