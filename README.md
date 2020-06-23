@@ -1,6 +1,7 @@
 [![](https://img.shields.io/github/license/pyrates-neuroscience/PyRates.svg)](https://github.com/pyrates-neuroscience/PyRates) 
 [![Build Status](https://travis-ci.com/pyrates-neuroscience/PyRates.svg?branch=master)](https://travis-ci.com/pyrates-neuroscience/PyRates)
 [![PyPI version](https://badge.fury.io/py/pyrates.svg)](https://badge.fury.io/py/pyrates)
+[![Documentation Status](https://readthedocs.org/projects/pyrates/badge/?version=latest)](https://pyrates.readthedocs.io/en/latest/?badge=latest)
 <img src="https://github.com/pyrates-neuroscience/PyRates/blob/master/PyRates_logo_color.png" width="20%" heigth="20%" align="right">
 
 # PyRates

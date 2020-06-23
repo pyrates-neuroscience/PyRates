@@ -12,4 +12,5 @@ pydot
 pytest
 paramiko
 numba
-alabaster
+pillow
+sphinx-gallery
