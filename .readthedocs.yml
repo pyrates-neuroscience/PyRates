@@ -11,5 +11,5 @@ python:
       - requirements: requirements.txt
       - method: pip
         path: .
-        exra_requirements: sphinx_requirements.txt
+        extra_requirements: sphinx_requirements.txt
    system_packages: true
