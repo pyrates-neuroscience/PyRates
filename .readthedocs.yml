@@ -12,5 +12,7 @@ python:
       - method: pip
         path: .
         extra_requirements:
-        - sphinx_requirements.txt
+          - sphinx
+          - sphinx-gallery
+          - pillow
    system_packages: true

@@ -1,4 +1,0 @@
-scipy>=1.4.1
-sphinx>=2.4.4
-sphinx-gallery==0.5.0
-Pillow>=7.0.0
