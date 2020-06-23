@@ -101,6 +101,7 @@ def test_3_2_montbrio():
 
     # perform simulation
     r1 = m1.run(T, sampling_step_size=dts, inputs={"pop_e/Op_e/inp": inp}, outputs={"r": "pop_e/Op_e/r"})
+    m1.clear()
 
     # test firing rate relationships at pre-defined times
     times = [25.0, 49.0, 79.0]

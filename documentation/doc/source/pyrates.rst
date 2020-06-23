@@ -1,20 +1,11 @@
-pyrates package
+PyRates.pyrates
 ===============
 
-Subpackages
------------
+Modules of the PyRates core package.
 
 .. toctree::
 
-   pyrates.backend
-   pyrates.frontend
-   pyrates.ir
-   pyrates.utility
-
-Module contents
----------------
-
-.. automodule:: pyrates
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    backend
+    ir
+    frontend
+    utility

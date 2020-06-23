@@ -28,19 +28,17 @@
 
 """Contains wrapper classes for different backends that are needed by the parser module.
 
-A new backend needs to implement the following methods
-
-Methods
--------
-__init__
-run
-add_var
-add_op
-add_layer
+A new backend needs to implement the following methods:
+- __init__
+- run
+- add_var
+- add_op
+- add_layer
 
 Currently supported backends:
 - Numpy: NumpyBackend.
 - Tensorflow: TensorflowBackend.
+- Fortran: FortranBackend (experimental).
 
 """
 
