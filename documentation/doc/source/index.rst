@@ -7,7 +7,7 @@
 PyRates Documentation
 =====================
 
-Documentation of PyRates, an open-source Python toolbox for neurodynamical systems modeling.
+Documentation of `PyRates <https://github.com/pyrates-neuroscience/PyRates>`_, an open-source Python toolbox for neurodynamical systems modeling.
 
 Basic features:
 ---------------
@@ -60,8 +60,8 @@ or
 
 Finally, a singularity container of the most recent version of this software can be found [here](https://singularity.gwdg.de/containers/3).
 This container provides a stand-alone version of PyRates including all necessary Python tools to be run, independent of local operating systems.
-To be able to use this container, you need to install [Singularity](https://singularity.lbl.gov/) on your local machine first.
-Follow these [instructions](https://singularity.lbl.gov/quickstart) to install singularity and run scripts inside the PyRates container.
+To be able to use this container, you need to install `Singularity <https://singularity.lbl.gov/>`_ on your local machine first.
+Follow these `instructions <https://singularity.lbl.gov/quickstart>`_ to install singularity and run scripts inside the PyRates container.
 
 Reference
 ---------
@@ -73,13 +73,22 @@ If you use PyRates, please cite:
 Contact
 -------
 
-If you have questions, problems or suggestions regarding PyRates, please contact [Richard Gast](https://www.cbs.mpg.de/person/59190/376039) or [Daniel Rose](https://www.cbs.mpg.de/person/51141/374227).
+If you have questions, problems or suggestions regarding PyRates, please contact `Richard Gast <https://www.cbs.mpg.de/person/59190/376039>`_ or `Daniel Rose <https://www.cbs.mpg.de/person/51141/374227>`_.
+
+Contribute
+----------
+
+PyRates is an open-source project that everyone is welcome to contribute to. Check out our `GitHub repository <https://github.com/pyrates-neuroscience/PyRates>`_
+for all the source code, open issues etc. and send us a pull request, if you would like to contribute something to our software.
 
 Examples Gallery
 ================
 
 .. include::
    auto_min/index.rst
+
+.. include::
+   auto_def/index.rst
 
 API
 ===

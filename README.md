@@ -6,6 +6,7 @@
 
 # PyRates
 PyRates is a framework for neural modeling and simulations, developed by Richard Gast and Daniel Rose at the Max Planck Institute of Human Cognitive and Brain Sciences, Leipzig, Germany. 
+It is an open-source project that everyone is welcome to contribute to.
 
 ## Basic features:
 
