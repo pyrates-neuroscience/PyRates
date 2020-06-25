@@ -85,7 +85,7 @@ Examples Gallery
 ================
 
 .. include::
-   auto_min/index.rst
+   auto_mod/index.rst
 
 .. include::
    auto_def/index.rst

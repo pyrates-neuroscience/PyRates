@@ -49,9 +49,9 @@ expressed via 6 coupled ordinary differential equations that are composed of the
 .. math::
 
         \\dot V_{pce} = I_{pce}, \n
-        \\dot I_{pce} = \\frac{H_e}{\\tau_e} c_4 S(c_3 V_{in}) - \\frac{2 I_{pce}}{\\tau_e} - \\frac{V_{pce}}{\\tau_e^2},
+        \\dot I_{pce} = \\frac{H_e}{\\tau_e} c_4 S(c_3 V_{in}) - \\frac{2 I_{pce}}{\\tau_e} - \\frac{V_{pce}}{\\tau_e^2}, \n
         \\dot V_{pci} = I_{pci}, \n
-        \\dot I_{pci} = \\frac{H_i}{\\tau_i} c_2 S(c_1 V_{in}}) - \\frac{2 I_{pci}}{\\tau_i} - \\frac{V_{pci}}{\\tau_i^2},
+        \\dot I_{pci} = \\frac{H_i}{\\tau_i} c_2 S(c_1 V_{in}) - \\frac{2 I_{pci}}{\\tau_i} - \\frac{V_{pci}}{\\tau_i^2}, \n
         \\dot V_{in} = I_{in}, \n
         \\dot I_{in} = \\frac{H_e}{\\tau_e} S(V_{pce} - V_{pci}) - \\frac{2 I_{in}}{\\tau_e} - \\frac{V_{in}}{\\tau_e^2},
 

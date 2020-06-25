@@ -15,6 +15,27 @@ equations and demonstrates how to load the model into PyRates and perform simula
 
 .. raw:: html
 
+    <div class="sphx-glr-thumbcontainer" tooltip="Here, we will introduce the Jansen-Rit model, a neural mass model of the dynamic interactions b...">
+
+.. only:: html
+
+ .. figure:: /auto_mod/images/thumb/sphx_glr_jansenrit_thumb.png
+     :alt: The Jansen-Rit Neural Mass Model
+
+     :ref:`sphx_glr_auto_mod_jansenrit.py`
+
+.. raw:: html
+
+    </div>
+
+
+.. toctree::
+   :hidden:
+
+   /auto_mod/jansenrit
+
+.. raw:: html
+
     <div class="sphx-glr-thumbcontainer" tooltip="Here, we will introduce the QIF population mean-field model, which has been derived from a popu...">
 
 .. only:: html

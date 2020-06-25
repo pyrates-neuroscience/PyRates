@@ -33,9 +33,8 @@ Jansen-Rit neural mass model. An alternative, single-operator way of the model d
 References
 ^^^^^^^^^^
 
-.. [1] B.H. Jansen & V.G. Rit, "Electroencephalogram and visual evoked potential
-       generation in a mathematical model of coupled cortical columns."
-       Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
+.. [1] B.H. Jansen & V.G. Rit (1995) *Electroencephalogram and visual evoked potential generation in a mathematical
+       model of coupled cortical columns.* Biological Cybernetics, 73(4): 357-366.
 
 """
 

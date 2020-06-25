@@ -44,7 +44,7 @@ References
 .. [1] E. Montbrió, D. Pazó, A. Roxin (2015) *Macroscopic description for networks of spiking neurons.* Physical
        Review X, 5:021028, https://doi.org/10.1103/PhysRevX.5.021028.
 
-.. [2] R. Gast, H. Schmidt, T. R. Knösche (2020) *A Mean-Field Description of Bursting Dynamics in Spiking Neural
+.. [2] R. Gast, H. Schmidt, T.R. Knösche (2020) *A Mean-Field Description of Bursting Dynamics in Spiking Neural
        Networks with Short-Term Adaptation.* Neural Computation (in press).
 
 """
