@@ -59,7 +59,7 @@ sphinx_gallery_conf = {
     'examples_dirs': [
         '../../model_introduction',
         '../../model_definition',
-        #'../../parameter_sweeps',
+        '../../parameter_sweeps',
         #'../../parameter_optimization',
         #'../../visualization',
         #'../../parameter_continuation'
@@ -67,7 +67,7 @@ sphinx_gallery_conf = {
     'gallery_dirs': [
         'auto_mod',
         'auto_def',
-        #'auto_sweep',
+        'auto_sweep',
         #'auto_opt',
         #'auto_vis',
         #'auto_cont'
