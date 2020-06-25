@@ -57,18 +57,16 @@ extensions = [
 # configuration of sphinx gallery
 sphinx_gallery_conf = {
     'examples_dirs': [
-        '../../minimal_example',
+        '../../model_introduction',
         '../../model_definition',
-        #'../../simulations',
         #'../../parameter_sweeps',
         #'../../parameter_optimization',
         #'../../visualization',
         #'../../parameter_continuation'
     ],   # path to your example scripts
     'gallery_dirs': [
-        'auto_min',
+        'auto_mod',
         'auto_def',
-        #'auto_sim',
         #'auto_sweep',
         #'auto_opt',
         #'auto_vis',
