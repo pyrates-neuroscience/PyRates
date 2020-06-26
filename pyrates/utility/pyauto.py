@@ -1,5 +1,4 @@
 import os
-import auto as a
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
@@ -14,6 +13,8 @@ class PyAuto:
 
     def __init__(self, auto_dir: str = None) -> None:
 
+        import auto as a
+
         # open attributes
         self.auto_solutions = {}
         self.results = {}
@@ -21,6 +22,7 @@ class PyAuto:
         # private attributes
         if auto_dir:
             os.chdir(auto_dir)
+        self._auto = a
         self._dir = os.getcwd()
         self._last_cont = None
         self._cont_num = 0
@@ -177,7 +179,7 @@ class PyAuto:
         #################
 
         # call merge in auto
-        solution = a.merge(self.auto_solutions[key] + cont)
+        solution = self._auto.merge(self.auto_solutions[key] + cont)
         solution.pyauto_key = key
 
         # store solution in pyauto
@@ -622,9 +624,9 @@ class PyAuto:
     def _call_auto(self, starting_point: Union[str, int], origin: Union[Any, dict], **auto_kwargs) -> Any:
         if starting_point:
             _, s = self.get_solution(point=starting_point, cont=origin)
-            solution = a.run(s, **auto_kwargs)
+            solution = self._auto.run(s, **auto_kwargs)
         else:
-            solution = a.run(**auto_kwargs)
+            solution = self._auto.run(**auto_kwargs)
         return self._start_from_solution(solution)
 
     def _update_axis_lims(self, ax: Union[plt.Axes, Axes3D], ax_data: list, padding: float = 0.,
@@ -807,7 +809,7 @@ class PyAuto:
     def _start_from_solution(self, solution: Any) -> Any:
         diag = str(solution[0].diagnostics)
         if 'Starting direction of the free parameter(s)' in diag and len(self.get_solution_keys(solution)) == 1:
-            solution = a.run(solution)
+            solution = self._auto.run(solution)
         return solution
 
     @staticmethod
