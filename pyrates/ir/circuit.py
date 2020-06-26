@@ -1500,7 +1500,7 @@ class CircuitIR(AbstractBaseIR):
                                       f'choose another backend (e.g. `fortran`) to generate an auto file of the system.'
                                       )
 
-    def to_pyauto(self, dir: str):
+    def to_pyauto(self, dir: Optional[str] = None):
         """
 
         Parameters

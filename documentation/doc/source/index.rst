@@ -93,6 +93,9 @@ Examples Gallery
 .. include::
    auto_sweep/index.rst
 
+.. include::
+   auto_cont/index.rst
+
 API
 ===
 
