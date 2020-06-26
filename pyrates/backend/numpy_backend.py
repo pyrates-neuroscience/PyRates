@@ -978,6 +978,7 @@ class NumpyBackend(object):
             solver: str = 'euler',
             out_dir: Optional[str] = None,
             profile: bool = False,
+            verbose: bool = True,
             **kwargs
             ) -> tuple:
         """Executes all operations in the backend graph for a given number of steps.
@@ -1000,6 +1001,8 @@ class NumpyBackend(object):
             Directory to write the session log into.
         profile
             If true, the total graph execution time will be printed and returned.
+        verbose
+            If true, updates about the simulation process will be displayed in the terminal.
 
         Returns
         -------
@@ -1032,6 +1035,9 @@ class NumpyBackend(object):
         continuous = 'scipy' in solver
         t = self.add_input_layer(inputs=inputs, T=T, continuous=continuous)
 
+        if verbose:
+            print("    ...user-defined inputs have been added to the model.")
+
         # graph execution
         #################
 
@@ -1039,6 +1045,9 @@ class NumpyBackend(object):
         decorator = kwargs.pop('decorator', None)
         decorator_kwargs = kwargs.pop('decorator_kwargs', {})
         rhs_func, args, state_vars, var_map = self.compile(self._build_dir, decorator=decorator, **decorator_kwargs)
+
+        if verbose:
+            print("    ...the run function has been compiled.")
 
         # create output indices
         output_indices = []
@@ -1058,8 +1067,15 @@ class NumpyBackend(object):
 
         # simulate backend behavior for each time-step
         func_args = self._process_func_args(args, var_map, dt)
+
+        if verbose:
+            print("starting the simulation.")
+
         times, results = self._solve(rhs_func=rhs_func, func_args=func_args, T=T, dt=dt, dts=dts, t=t, solver=solver,
                                      output_indices=output_indices, **kwargs)
+
+        if verbose:
+            print("Simulation finished!\n")
 
         # output storage and clean-up
         #############################

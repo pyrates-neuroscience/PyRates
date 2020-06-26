@@ -135,7 +135,7 @@ results, results_map = grid_search(circuit_template="model_templates.jansen_rit.
                                    sampling_step_size=1e-3,
                                    inputs={'JRC/JRC_op/u': noise},
                                    outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'},
-                                   init_kwargs={'backend': 'numpy', 'solver': 'scipy'}
+                                   init_kwargs={'backend': 'numpy', 'solver': 'euler'}
                                    )
 
 # %%
