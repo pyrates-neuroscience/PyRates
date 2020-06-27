@@ -47,6 +47,16 @@ References
 # JSON standard. PyRates uses YAML files to provide a simple and readable way to define network models without any
 # Python code. Each yaml-based model definition will have to be placed inside a yaml file in order to be interpreted
 # properly, i.e. the file needs to have the ending *.yaml* or *.yml*.
+#
+# Building models via YAML templates has several advantages:
+#   1. the model definition requires a minimum of syntax
+#   2. defining a model via YAML templates means setting up an independent, reusable model configuration file
+#      (the .yml file) of small size that can easily be stored, shared and read without any python knowledge
+#   3. Each YAML template of a PyRates model structure can be reused as a base template for a new YAML template
+#
+# However, if you know your way around Python and you prefer to set up your full workflow, from model definition to
+# simulation, in Python, this is also possible in PyRates. Check out the Python-based model definition tutorial for
+# this.
 
 # %%
 # Part 1: Operator Templates

@@ -41,6 +41,27 @@ This includes instructions for:
    :hidden:
 
    /auto_def/yaml_definitions
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="In this tutorial, you will learn how to implement a neurodynamic model with multiple interconne...">
+
+.. only:: html
+
+ .. figure:: /auto_def/images/thumb/sphx_glr_python_definitions_thumb.png
+     :alt: Python-Based Model Definitions
+
+     :ref:`sphx_glr_auto_def_python_definitions.py`
+
+.. raw:: html
+
+    </div>
+
+
+.. toctree::
+   :hidden:
+
+   /auto_def/python_definitions
 .. raw:: html
 
     <div class="sphx-glr-clear"></div>
