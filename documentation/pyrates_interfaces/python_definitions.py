@@ -13,7 +13,7 @@ network, can be found in the figure below.
 
 .. _fig1:
 
-.. figure:: ../../../model_definition/images/pyrates_model.png
+.. figure:: ../../../pyrates_interfaces/images/pyrates_model.png
    :width: 700
 
    Figure 1
@@ -217,7 +217,6 @@ jrc = CircuitTemplate(name="JRC", nodes={'PC': pc, 'EIN': ein, 'IIN': iin},
                       )
 
 # %%
-# This concludes the YAML-based definition of the Jansen-Rit model in PyRates.
 # A circuit template requires the definition of 2 fields: :code:`nodes` and :code:`edges`.
 #
 # :code:`nodes`
@@ -235,3 +234,7 @@ jrc = CircuitTemplate(name="JRC", nodes={'PC': pc, 'EIN': ein, 'IIN': iin},
 #
 #   - more complex syntax can be used within the four entries to define more complex edges. A tutorial on how to use
 #     these will be provided by the *edge definitions* example in this gallery.
+#
+# This concludes the YAML-based definition of the Jansen-Rit model in PyRates.
+# To learn how to use this model definition to perform numerical simulations, check out the other examples in this
+# gallery.

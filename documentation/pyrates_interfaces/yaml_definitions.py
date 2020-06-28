@@ -18,7 +18,7 @@ network, can be found in the figure below.
 
 .. _fig1:
 
-.. figure:: ../../../model_definition/images/pyrates_model.png
+.. figure:: ../../../pyrates_interfaces/images/pyrates_model.png
    :width: 700
 
    Figure 1
@@ -333,8 +333,6 @@ References
 #               - [PC/PRO/m_out, EIN/RPO_e/m_in, null, {weight: 135.}]
 #               - [EIN/PRO/m_out, PC/RPO_e/m_in, null, {weight: 108.}]
 #               - [IIN/PRO/m_out, PC/RPO_i/m_in, null, {weight: 33.75}]
-#
-# This concludes the YAML-based definition of the Jansen-Rit model in PyRates.
 
 # %%
 # Circuit template structure
@@ -365,3 +363,7 @@ References
 #
 #   - more complex syntax can be used within the four entries to define more complex edges. A tutorial on how to use
 #     these will be provided by the *edge definitions* example in this gallery.
+#
+# This concludes the YAML-based definition of the Jansen-Rit model in PyRates.
+# To learn how to use this model definition to perform numerical simulations, check out the other examples in this
+# gallery.

@@ -58,7 +58,7 @@ extensions = [
 sphinx_gallery_conf = {
     'examples_dirs': [
         '../../model_introduction',
-        '../../model_definition',
+        '../../pyrates_interfaces',
         '../../parameter_sweeps',
         #'../../parameter_optimization',
         #'../../visualization',
@@ -66,7 +66,7 @@ sphinx_gallery_conf = {
     ],   # path to your example scripts
     'gallery_dirs': [
         'auto_mod',
-        'auto_def',
+        'auto_inter',
         'auto_sweep',
         #'auto_opt',
         #'auto_vis',
