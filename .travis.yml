@@ -2,7 +2,7 @@ language: python
 python:
   - "3.6.10"
   - "3.7.7"
-  #- "3.8.3" # currently, the file-io test fails for this version
+  - "3.8.3"
 
 # install dependencies
 install:
