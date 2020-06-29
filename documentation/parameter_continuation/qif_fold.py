@@ -109,8 +109,9 @@ qif_auto = qif_compiled.to_pyauto()
 # the values of the state variables from the last simulation step. Alternatively, you can perform simulations in time
 # via PyAuto as follows:
 
-t_sols, t_cont = qif_auto.run(e='rhs_func', c='ivp', name='time', DS=1e-3, DSMIN=1e-4, DSMAX=1.0, NMX=10000,
-                              UZR={14: 1000.0}, STOP={'UZ1'})
+t_sols, t_cont = qif_auto.run(
+    e='rhs_func', c='ivp', name='time', DS=1e-3, DSMIN=1e-4,
+    DSMAX=1.0, NMX=10000, UZR={14: 1000.0}, STOP={'UZ1'})
 
 # %%
 # In this function call, you see how the general interface of the :code:`PyAuto.run()` method works. In every first call
@@ -148,10 +149,11 @@ t_sols, t_cont = qif_auto.run(e='rhs_func', c='ivp', name='time', DS=1e-3, DSMIN
 # parameter of interest: :math:`\bar \eta`. This follows a very similar syntax:
 
 eta_sols, eta_cont = qif_auto.run(
-    origin=t_cont, starting_point='UZ1', name='eta', bidirectional=True, ICP=4, RL0=-20.0, RL1=20.0, IPS=1, ILP=1,
-    ISP=2, ISW=1, NTST=400, NCOL=4, IAD=3, IPLT=0, NBC=0, NINT=0, NMX=2000, NPR=40, MXBF=5, IID=2, ITMX=40, ITNW=40,
-    NWTN=12, JAC=0, EPSL=1e-06, EPSU=1e-06, EPSS=1e-04, DS=1e-4, DSMIN=1e-8, DSMAX=5e-2, IADS=1, THL={}, THU={}, UZR={},
-    STOP={}
+    origin=t_cont, starting_point='UZ1', name='eta', bidirectional=True,
+    ICP=4, RL0=-20.0, RL1=20.0, IPS=1, ILP=1, ISP=2, ISW=1, NTST=400,
+    NCOL=4, IAD=3, IPLT=0, NBC=0, NINT=0, NMX=2000, NPR=40, MXBF=5, IID=2,
+    ITMX=40, ITNW=40, NWTN=12, JAC=0, EPSL=1e-06, EPSU=1e-06, EPSS=1e-04,
+    DS=1e-4, DSMIN=1e-8, DSMAX=5e-2, IADS=1, THL={}, THU={}, UZR={}, STOP={}
 )
 
 # %%
