@@ -78,12 +78,18 @@ def test_pickle_template():
     from pyrates.frontend.template import from_yaml, clear_cache
     clear_cache()
     template = from_yaml(path)
-    out_file = os.path.join(get_parent_directory(), "output", "jansen_rit_template.p")
-    test_file = os.path.join(get_parent_directory(), "resources", "jansen_rit_template.p")
+    # include pickle protocol number in file name for version interoperability
+    from pickle import HIGHEST_PROTOCOL
+    ext = f"p{HIGHEST_PROTOCOL}"
+    # configure filenames
+    out_file = os.path.join(get_parent_directory(), "output", f"jansen_rit_template.{ext}")
+    test_file = os.path.join(get_parent_directory(), "resources", f"jansen_rit_template.{ext}")
 
     from pyrates.frontend.fileio import pickle
 
     pickle.dump(template, out_file)
+    # to update the reference dump, uncomment the following
+    # pickle.dump(template, test_file)
 
     compare_files(out_file, test_file)
 
