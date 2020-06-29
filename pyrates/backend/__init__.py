@@ -29,11 +29,11 @@
 """
 PyRates backend module including the following sub-modules:
 
-a) parser
+- parser
     Used to parse string-based equations into symbolic backend representations.
-b) computegraph
+- computegraph
     Used to realize hierarchical structure between mathematical equations.
-c) backend_wrapper
+- backend_wrapper
     Interface to the backends available in PyRates.
 """
 

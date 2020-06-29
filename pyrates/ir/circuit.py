@@ -568,21 +568,29 @@ class CircuitIR(AbstractBaseIR):
         from pyrates.frontend import circuit_from_yaml
         return circuit_from_yaml(path)
 
-    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True, dde_approx: float = 0.0):
+    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True, dde_approx: float = 0.0,
+                                verbose: bool = True):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
+
+        if verbose:
+            print("Starting automatic optimization of the network graph:")
 
         # node vectorization
         old_nodes = self._vectorize_nodes_in_place(max_node_idx)
         self._vectorize_edges_in_place(max_node_idx)
         nodes = (node for node, data in old_nodes)
         self.graph.remove_nodes_from(nodes)
+        if verbose:
+            print("    ...nodes in the network have been vectorized.")
 
         # edge vectorization
         if vectorize:
             for source in self.nodes:
                 for target in self.nodes:
                     self._vectorize_edges(source, target)
+        if verbose:
+            print("    ...edges in the network have been vectorized.")
 
         # go through nodes and create buffers for delayed outputs and mappings for their inputs
         for node_name in self.nodes:
@@ -616,6 +624,9 @@ class CircuitIR(AbstractBaseIR):
                 for j in range(n_inputs):
                     if n_inputs > 1:
                         self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
+
+        if verbose:
+            print("    ...all edges have been connected to nodes.")
 
         return self
 
@@ -1128,11 +1139,15 @@ class CircuitIR(AbstractBaseIR):
 
         filterwarnings("ignore", category=FutureWarning)
 
+        if verbose:
+            print("Simulation Progress")
+            print("-------------------")
+
         # prepare simulation
         ####################
 
         if verbose:
-            print("Preparing the simulation...")
+            print("Preparing the simulation:")
 
         if not self._first_run:
             self._backend.remove_layer(0)
@@ -1164,6 +1179,9 @@ class CircuitIR(AbstractBaseIR):
                 outputs_col[key] = [[var_info['idx'], var_info['nodes']]
                                     for var_info in self.get_node_var(val, apply_idx=False).values()]
 
+            if verbose:
+                print("    ...user-defined output variables are logged.")
+
         # collect backend input variables
         #################################
 
@@ -1191,9 +1209,6 @@ class CircuitIR(AbstractBaseIR):
         # run simulation
         ################
 
-        if verbose:
-            print("Running the simulation...")
-
         output_col, times, *time = self._backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
                                                      out_dir=out_dir, outputs=outputs_col, inputs=inputs_col,
                                                      solver=solver, profile=profile, **kwargs)
@@ -1204,8 +1219,6 @@ class CircuitIR(AbstractBaseIR):
                       f"simulation resolution of {step_size} s.")
             else:
                 print(f"ComputeGraph computations finished after {time[0]} seconds.")
-        elif verbose:
-            print('finished!')
 
         # store output variables in data frame
         ######################################
@@ -1245,6 +1258,7 @@ class CircuitIR(AbstractBaseIR):
                 step_size: Optional[float] = None,
                 solver: Optional[str] = None,
                 dde_approximation_order: int = 0,
+                verbose: bool = True,
                 **kwargs
                 ) -> AbstractBaseIR:
         """Parses IR into the backend. Returns an instance of the CircuitIR that allows for numerical simulations via
@@ -1274,6 +1288,8 @@ class CircuitIR(AbstractBaseIR):
             Only relevant for delayed systems. If larger than zero, all discrete delays in the system will be
             automatically approximated by a system of (n+1) coupled ODEs that represent a convolution with a
             gamma distribution centered around the original delay (n is the approximation order).
+        verbose
+            If true, updates about compilation process will be displayed in the terminal.
         kwargs
             Additional keyword arguments that will be passed on to the backend instance. For a full list of viable
             keyword arguments, see the documentation of the respective backend class (`numpy_backend.NumpyBackend` or
@@ -1282,6 +1298,10 @@ class CircuitIR(AbstractBaseIR):
         """
 
         filterwarnings("ignore", category=FutureWarning)
+
+        if verbose:
+            print("Compilation Progress")
+            print("--------------------")
 
         # set basic attributes
         ######################
@@ -1310,12 +1330,13 @@ class CircuitIR(AbstractBaseIR):
 
         # run graph optimization and vectorization
         self._first_run = True
-        self.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order)
+        self.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order, verbose=verbose)
 
         # move edge operations to nodes
         ###############################
 
-        print('building the compute graph...')
+        if verbose:
+            print('Loading the network model into the backend:')
 
         # create equations and variables for each edge
         for source_node, target_node, edge_idx, data in self.edges(data=True, keys=True):
@@ -1405,6 +1426,9 @@ class CircuitIR(AbstractBaseIR):
                 inputs[tvar] = {'sources': [op_name],
                                 'reduce_dim': True}
 
+        if verbose:
+            print("    ...all edge operations have been translated to backend-compatible equations.")
+
         # collect node and edge operators
         #################################
 
@@ -1423,14 +1447,22 @@ class CircuitIR(AbstractBaseIR):
         # bring equations into correct order
         equations = sort_equations(edge_eqs=edge_equations, node_eqs=node_equations)
 
+        if verbose:
+            print("    ...all model equations have been collected from the network.")
+
         # parse all equations and variables into the backend
         ####################################################
 
         self._backend.bottom_layer()
 
+        if verbose:
+            print("Parsing the model equations into a compute graph.")
+
         # parse mapping
         variables = parse_equations(equations=equations, equation_args=variables, backend=self._backend,
                                     squeeze=squeeze_vars)
+        if verbose:
+            print("Compilation finished!\n")
 
         # save parsed variables in net config
         for key, val in variables.items():
@@ -1468,7 +1500,7 @@ class CircuitIR(AbstractBaseIR):
                                       f'choose another backend (e.g. `fortran`) to generate an auto file of the system.'
                                       )
 
-    def to_pyauto(self, dir: str):
+    def to_pyauto(self, dir: Optional[str] = None):
         """
 
         Parameters

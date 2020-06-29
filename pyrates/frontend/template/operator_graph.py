@@ -38,7 +38,7 @@ from pyrates.frontend.template.operator import OperatorTemplate
 class OperatorGraphTemplate(AbstractBaseTemplate):
     target_ir = None
 
-    def __init__(self, name: str, path: str, operators: Union[str, List[str], dict],
+    def __init__(self, name: str, path: str, operators: Union[str, List[str], dict, List[AbstractBaseTemplate]],
                  description: str = "A node or an edge.", label: str = None):
         """For now: only allow single equation in operator template."""
 

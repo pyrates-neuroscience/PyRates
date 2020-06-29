@@ -12,4 +12,3 @@ pydot
 pytest
 paramiko
 numba
-alabaster
