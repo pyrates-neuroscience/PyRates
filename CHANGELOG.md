@@ -15,7 +15,9 @@
   might not have been needed. Now all utility functions need to be imported from sub-files in the `pyrates.utility` 
   module instead of directly from the module.
 - Added optional install collection `tests` that includes all packages necessary to run the tests. 
-  Also restricted the travis CI build to use only the tests installation instead of the full installation. 
+  Also restricted the travis CI build to use only the tests installation instead of the full installation.
+- Added feature to pass a dictionary to `CircuitTemplate.apply()` in order to adapt values of variables on the fly. This 
+  behaviour was already supported by all other parts of the hierarchy, only circuits missed out until now.  
 
 ### 0.9.0
 

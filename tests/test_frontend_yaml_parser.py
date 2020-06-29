@@ -154,6 +154,12 @@ def test_circuit_instantiation():
 
     assert len(circuit._reference_map[circuit["JR_EIN"].op_graph]) == 2
 
+    # verify that .apply also understands value updates to nodes
+    value_dict = {"JR_PC/JansenRitExcitatorySynapseRCO/h": 0.1234}
+    circuit2 = circuit_template.apply(node_values=value_dict)
+    node = circuit2["JR_PC"]
+    assert node.values["JansenRitExcitatorySynapseRCO"]["h"] == 0.1234
+
 
 def test_multi_circuit_instantiation():
     """Test, if a circuit with subcircuits is also working."""

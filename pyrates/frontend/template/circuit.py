@@ -117,14 +117,39 @@ class CircuitTemplate(AbstractBaseTemplate):
                               label=label, circuits=circuits, nodes=nodes,
                               edges=edges)
 
-    def apply(self, label: str = None):
-        """Create a Circuit graph instance based on the template"""
+    def apply(self, label: str = None, node_values: dict = None):
+        """Create a Circuit graph instance based on the template
 
+
+        Parameters
+        ----------
+        label
+            (optional) Assign a label that is saved as a sort of name to the circuit instance. This is particularly
+            relevant, when adding multiple circuits to a bigger circuit. This way circuits can be identified by their
+            given label.
+        node_values
+            (optional) Dictionary containing values (and possibly other variable properties) that overwrite defaults in
+            specific nodes/operators/variables. Values must be given in the form: {'node/op/var': value}
+
+        Returns
+        -------
+
+        """
         if not label:
             label = self.label
 
         # reformat node templates to NodeIR instances
-        nodes = {key: temp.apply() for key, temp in self.nodes.items()}
+        if node_values is None:
+            nodes = {key: temp.apply() for key, temp in self.nodes.items()}
+        else:
+            values = dict()
+            for key, value in node_values.items():
+                node, op, var = key.split("/")
+                if node not in values:
+                    values[node] = dict()
+
+                values[node]["/".join((op, var))] = value
+            nodes = {key: temp.apply(values.get(key, None)) for key, temp in self.nodes.items()}
 
         # reformat edge templates to EdgeIR instances
         edges = []
