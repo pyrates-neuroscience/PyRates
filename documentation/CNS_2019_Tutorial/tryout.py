@@ -1,5 +1,6 @@
 from pyrates.frontend import OperatorTemplate, NodeTemplate, CircuitTemplate
-from pyrates.utility import grid_search, plot_timeseries
+from pyrates.utility.grid_search import grid_search
+from pyrates.utility.visualization import plot_timeseries
 from pyrates.backend import ComputeGraph
 import numpy as np
 import matplotlib.pyplot as plt
@@ -76,7 +77,7 @@ results = grid_search(jrc_template,
                       init_kwargs={'vectorization': 'nodes', 'build_in_place': False, 'backend': 'tensorflow'},
                       permute_grid=True)
 
-from pyrates.utility import plot_psd
+from pyrates.utility.visualization import plot_psd
 
 # calculate power-spectral density of firing rate fluctuations
 max_freq = np.zeros((len(w_ein_pc), len(w_iin_pc)))
@@ -92,7 +93,7 @@ for we in w_ein_pc:
         max_pow[idx_r, idx_c] = p[max_idx]
         plt.close(plt.gcf())
 
-from pyrates.utility import Interactive2DParamPlot
+from pyrates.utility.visualization import Interactive2DParamPlot
 
 Interactive2DParamPlot(max_freq, results, w_iin_pc, w_ein_pc)
 plt.show()

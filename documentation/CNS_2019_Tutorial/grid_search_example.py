@@ -1,6 +1,7 @@
 from pyrates.frontend import OperatorTemplate, NodeTemplate, CircuitTemplate
 from pyrates.backend import ComputeGraph
-from pyrates.utility import grid_search, Interactive2DParamPlot, plot_psd
+from pyrates.utility.grid_search import grid_search
+from pyrates.utility.visualization import Interactive2DParamPlot, plot_psd
 import numpy as np
 import matplotlib.pyplot as plt
 

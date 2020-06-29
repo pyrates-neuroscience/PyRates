@@ -14,7 +14,7 @@ mpl.rcParams['xtick.color'] = 'black'
 mpl.rcParams['ytick.color'] = 'black'
 mpl.rcParams['legend.fontsize'] = 12
 
-from pyrates.utility import plot_connectivity, create_cmap
+from pyrates.utility.visualization import plot_connectivity, create_cmap
 import numpy as np
 
 gpu_results = np.mean(np.load('gpu_benchmarks.npy'), axis=3)

@@ -146,7 +146,7 @@ def analytic_signal(data: pd.DataFrame, fmin: float, fmax: float, nodes: List[st
             data = data.iloc[:, nodes]
 
     # create mne raw data object
-    from pyrates.utility import mne_from_dataframe
+    from pyrates.utility.mne_wrapper import mne_from_dataframe
     raw = mne_from_dataframe(data)
 
     # bandpass filter the raw data
@@ -211,7 +211,7 @@ def welch(data, tmin=0., tmax=None, fmin=0., fmax=np.inf, **kwargs):
         data = data.to_frame()
 
     # create mne raw data object
-    from pyrates.utility import mne_from_dataframe
+    from pyrates.utility.mne_wrapper import mne_from_dataframe
     raw = mne_from_dataframe(data)
 
     # Compute power spectral density

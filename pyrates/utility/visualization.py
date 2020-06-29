@@ -514,7 +514,7 @@ def plot_psd(data: pd.DataFrame, fmin: float = 0., fmax: float = 100., tmin: flo
 
     """
 
-    from pyrates.utility import mne_from_dataframe
+    from pyrates.utility.mne_wrapper import mne_from_dataframe
     from mne.viz import plot_raw_psd
 
     if type(data) is pd.DataFrame and 'out_var' in data.columns.names and len(data.columns.names) > 1:
