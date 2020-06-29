@@ -27,13 +27,16 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
+
+# external imports
 from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
-
+from copy import deepcopy
 from networkx import MultiDiGraph, subgraph, DiGraph
 from pandas import DataFrame
 import numpy as np
 
+# pyrates-internal imports
 from pyrates import PyRatesException
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
@@ -1264,6 +1267,7 @@ class CircuitIR(AbstractBaseIR):
                 solver: Optional[str] = None,
                 dde_approximation_order: int = 0,
                 verbose: bool = True,
+                in_place: bool = False,
                 **kwargs
                 ) -> AbstractBaseIR:
         """Parses IR into the backend. Returns an instance of the CircuitIR that allows for numerical simulations via
@@ -1295,6 +1299,9 @@ class CircuitIR(AbstractBaseIR):
             gamma distribution centered around the original delay (n is the approximation order).
         verbose
             If true, updates about compilation process will be displayed in the terminal.
+        in_place
+            If true, all variable and equation attributes on operators in the graph will be overwritten, by their
+            compiled, backend-compatible versions. If false, a deep copy of the graph will be made first.
         kwargs
             Additional keyword arguments that will be passed on to the backend instance. For a full list of viable
             keyword arguments, see the documentation of the respective backend class (`numpy_backend.NumpyBackend` or
@@ -1311,8 +1318,9 @@ class CircuitIR(AbstractBaseIR):
         # set basic attributes
         ######################
 
-        self.solver = solver
-        self.step_size = step_size
+        G = self if in_place else deepcopy(self)
+        G.solver = solver
+        G.step_size = step_size
 
         # instantiate the backend and set the backend default_device
         if backend == 'tensorflow':
@@ -1329,13 +1337,13 @@ class CircuitIR(AbstractBaseIR):
         else:
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
         squeeze_vars = kwargs.pop('squeeze', False)
-        kwargs['name'] = self.label
+        kwargs['name'] = G.label
         kwargs['float_default_type'] = float_precision
-        self._backend = backend(**kwargs)
+        G._backend = backend(**kwargs)
 
         # run graph optimization and vectorization
-        self._first_run = True
-        self.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order, verbose=verbose)
+        G._first_run = True
+        G.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order, verbose=verbose)
 
         # move edge operations to nodes
         ###############################
@@ -1344,7 +1352,7 @@ class CircuitIR(AbstractBaseIR):
             print('Loading the network model into the backend:')
 
         # create equations and variables for each edge
-        for source_node, target_node, edge_idx, data in self.edges(data=True, keys=True):
+        for source_node, target_node, edge_idx, data in G.edges(data=True, keys=True):
 
             # extract edge information
             weight = data['weight']
@@ -1352,11 +1360,11 @@ class CircuitIR(AbstractBaseIR):
             tidx = data['target_idx']
             svar = data['source_var']
             sop, svar = svar.split("/")
-            sval = self[f"{source_node}/{sop}/{svar}"]
+            sval = G[f"{source_node}/{sop}/{svar}"]
             tvar = data['target_var']
             top, tvar = tvar.split("/")
-            tval = self[f"{target_node}/{top}/{tvar}"]
-            target_node_ir = self[target_node]
+            tval = G[f"{target_node}/{top}/{tvar}"]
+            target_node_ir = G[target_node]
 
             # check whether edge projection can be solved by a simple inner product between a weight matrix and the
             # source variables
@@ -1404,7 +1412,7 @@ class CircuitIR(AbstractBaseIR):
             args[tvar] = tval
             if len(d):
                 args['target_idx'] = {'vtype': 'constant',
-                                      'value': np.array(d, dtype=self._backend._float_def if len(d) > 1 else np.int32)}
+                                      'value': np.array(d, dtype=G._backend._float_def if len(d) > 1 else np.int32)}
             if idx:
                 args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                       'value': np.array(sidx, dtype=np.int32)}
@@ -1424,7 +1432,7 @@ class CircuitIR(AbstractBaseIR):
             target_node_ir.add_op_edge(op_name, top)
 
             # add input information to target operator
-            inputs = self[target_node][top]['inputs']
+            inputs = G[target_node][top]['inputs']
             if tvar in inputs.keys():
                 inputs[tvar]['sources'].add(op_name)
             else:
@@ -1440,13 +1448,13 @@ class CircuitIR(AbstractBaseIR):
         variables = {}
 
         # edge operators
-        edge_equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
+        edge_equations, variables_tmp = G._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
         variables.update(variables_tmp)
         if any(edge_equations):
-            self._backend._input_layer_added = True
+            G._backend._input_layer_added = True
 
         # node operators
-        node_equations, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
+        node_equations, variables_tmp = G._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
         variables.update(variables_tmp)
 
         # bring equations into correct order
@@ -1458,13 +1466,13 @@ class CircuitIR(AbstractBaseIR):
         # parse all equations and variables into the backend
         ####################################################
 
-        self._backend.bottom_layer()
+        G._backend.bottom_layer()
 
         if verbose:
             print("Parsing the model equations into a compute graph.")
 
         # parse mapping
-        variables = parse_equations(equations=equations, equation_args=variables, backend=self._backend,
+        variables = parse_equations(equations=equations, equation_args=variables, backend=G._backend,
                                     squeeze=squeeze_vars)
         if verbose:
             print("Compilation finished!\n")
@@ -1475,11 +1483,11 @@ class CircuitIR(AbstractBaseIR):
                 node, op, var = key.split('/')
                 if "inputs" not in var:
                     try:
-                        self[f"{node}/{op}/{var}"]['value'] = val
+                        G[f"{node}/{op}/{var}"]['value'] = val
                     except KeyError as e:
                         pass
 
-        return self
+        return G
 
     def generate_auto_def(self, dir: str) -> str:
         """Creates fortran files needed by auto (and pyauto) to run parameter continuaitons. The `run` method should be

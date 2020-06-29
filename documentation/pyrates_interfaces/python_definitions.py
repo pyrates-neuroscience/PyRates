@@ -63,9 +63,13 @@ References
 from pyrates.frontend import OperatorTemplate
 
 pro = OperatorTemplate(
-    name='PRO', path=None, equations=["m_out = 2.*m_max / (1 + exp(r*(V_th - V)))"],
-    variables={'m_out': {'default': 'output'}, 'V': {'default': 'input'}, 'V_thr': {'default': 6e-3},
-               'm_max': {'default': 2.5}, 'r': {'default': 560.0}},
+    name='PRO', path=None,
+    equations=["m_out = 2.*m_max / (1 + exp(r*(V_th - V)))"],
+    variables={'m_out': {'default': 'output'},
+               'V': {'default': 'input'},
+               'V_thr': {'default': 6e-3},
+               'm_max': {'default': 2.5},
+               'r': {'default': 560.0}},
     description="sigmoidal potential-to-rate operator")
 
 # %%
@@ -93,9 +97,14 @@ pro = OperatorTemplate(
 # A :code:`OperatorTemplate` instance for the RPO can be created as shown below:
 
 rpo_e = OperatorTemplate(
-    name='RPO_e', path=None, equations=['d/dt * V = I', 'd/dt * I = H/tau * m_in - 2 * I/tau - V/tau^2'],
-    variables={'V': {'default': 'output'}, 'I': {'default': 'variable'}, 'm_in': {'default': 'input'},
-               'tau': {'default': 0.01}, 'H': {'default': 0.00325}},
+    name='RPO_e', path=None,
+    equations=['d/dt * V = I',
+               'd/dt * I = H/tau * m_in - 2 * I/tau - V/tau^2'],
+    variables={'V': {'default': 'output'},
+               'I': {'default': 'variable'},
+               'm_in': {'default': 'input'},
+               'tau': {'default': 0.01},
+               'H': {'default': 0.00325}},
     description="excitatory rate-to-potential operator")
 
 # %%
