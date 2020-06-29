@@ -86,7 +86,7 @@ class FortranAssignOp(PyRatesAssignOp):
         ndim = self._op_dict['args'][idx].shape
         return generate_func(self, return_key=return_key, omit_assign=True, return_dim=ndim, return_intent='out')
 
-    def eval(self):
+    def numpy(self):
         result = self._callable(*self.args[1:])
         self._check_numerics(result, self.name)
         return result
@@ -358,7 +358,8 @@ class FortranBackend(NumpyBackend):
         f2py.compile(func_gen.generate(), modulename='rhs_func', extension='.f', source_fn='rhs_func.f', verbose=False)
 
         # create additional subroutines in pyauto compatibility mode
-        if self.pyauto_compat:
+        gen_def = kwargs.pop('generate_auto_def', True)
+        if self.pyauto_compat and gen_def:
             self.generate_auto_def(self._build_dir)
 
         # import function from file
@@ -403,7 +404,7 @@ class FortranBackend(NumpyBackend):
         except FileNotFoundError:
 
             # compile system and then read the build files
-            self.compile(build_dir=directory)
+            self.compile(build_dir=directory, generate_auto_def=False)
             fn = f"{self._build_dir}/rhs_func.f"
             with open(fn, 'r') as f:
                 func_str = f.read()
@@ -483,7 +484,7 @@ class FortranBackend(NumpyBackend):
         for key, (vtype, idx) in var_map.items():
             var = self.get_var(key)
             if vtype == 'state_var':
-                func_gen.add_code_line(f"{var.value} = {var.eval()}")
+                func_gen.add_code_line(f"{var.value} = {var.numpy()}")
                 func_gen.add_linebreak()
         func_gen.add_linebreak()
 
@@ -512,10 +513,11 @@ class FortranBackend(NumpyBackend):
         #########################
 
         # declare auto constants and their values
-        auto_constants = {'NDIM': self.ndim, 'NPAR': self.npar, 'IPS': -2, 'ILP': 0, 'ICP': 14, 'NTST': 1, 'NCOL': 4,
-                          'IAD': 3, 'ISP': 0, 'ISW': 1, 'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 10000, 'NPR': 10,
+        auto_constants = {'NDIM': self.ndim, 'NPAR': self.npar, 'IPS': -2, 'ILP': 0, 'ICP': [14], 'NTST': 1, 'NCOL': 4,
+                          'IAD': 3, 'ISP': 0, 'ISW': 1, 'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 10000, 'NPR': 100,
                           'MXBF': 10, 'IID': 2, 'ITMX': 8, 'ITNW': 5, 'NWTN': 3, 'JAC': 0, 'EPSL': 1e-7, 'EPSU': 1e-7,
-                          'EPSS': 1e-5, 'IRS': 0}
+                          'EPSS': 1e-5, 'IRS': 0, 'DS': 1e-4, 'DSMIN': 1e-8, 'DSMAX': 1e-2, 'IADS': 1, 'THL': {},
+                          'THU': {}, 'UZR': {}, 'STOP': {}}
 
         # write auto constants to string
         cgen = FortranGen()
@@ -525,10 +527,10 @@ class FortranBackend(NumpyBackend):
 
         # write auto constants to file
         try:
-            with open('c.ivp', 'wt') as cfile:
+            with open(f'{directory}/c.ivp', 'wt') as cfile:
                 cfile.write(cgen.generate())
         except FileNotFoundError:
-            with open('c.ivp', 'xt') as cfile:
+            with open(f'{directory}/c.ivp', 'xt') as cfile:
                 cfile.write(cgen.generate())
 
         self._auto_files_generated = True
@@ -552,6 +554,15 @@ class FortranBackend(NumpyBackend):
         if generate_auto_def:
             self.generate_auto_def(directory)
         return PyAuto(directory)
+
+    def clear(self) -> None:
+        """Removes all layers, variables and operations from graph. Deletes build directory.
+        """
+
+        os.chdir(self._orig_dir)
+        super().clear()
+        for f in [f for f in os.listdir(os.getcwd()) if "cpython" in f and ("rhs_func" in f or "pyrates_func" in f)]:
+            os.remove(f)
 
     def _solve(self, rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs):
         """

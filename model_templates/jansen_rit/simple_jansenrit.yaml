@@ -163,7 +163,7 @@ RPO_e_pc:
     tau:
       default: 10e-3
     u:
-      default: placeholder
+      default: 220.0
     m_in:
       default: input
     PSP:

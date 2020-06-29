@@ -115,21 +115,21 @@ def create_cmap(name: str = None, palette_type: str = None, as_cmap: bool = True
 
         # create seaborn colormap
         if palette_type == 'cubehelix':
-            cmap = cubehelix_palette(as_cmap=as_cmap, **kwargs)
+            cmap = cubehelix_palette(name, as_cmap=as_cmap, **kwargs)
         elif palette_type == 'dark':
-            cmap = dark_palette(as_cmap=as_cmap, **kwargs)
+            cmap = dark_palette(name, as_cmap=as_cmap, **kwargs)
         elif palette_type == 'light':
-            cmap = light_palette(as_cmap=as_cmap, **kwargs)
+            cmap = light_palette(name, as_cmap=as_cmap, **kwargs)
         elif palette_type == 'hls':
-            cmap = hls_palette(**kwargs)
+            cmap = hls_palette(name, **kwargs)
         elif palette_type == 'husl':
-            cmap = husl_palette(**kwargs)
+            cmap = husl_palette(name, **kwargs)
         elif palette_type == 'diverging':
-            cmap = diverging_palette(as_cmap=as_cmap, **kwargs)
+            cmap = diverging_palette(name, as_cmap=as_cmap, **kwargs)
         elif palette_type == 'crayon':
-            cmap = crayon_palette(**kwargs)
+            cmap = crayon_palette(name, **kwargs)
         elif palette_type == 'xkcd':
-            cmap = xkcd_palette(**kwargs)
+            cmap = xkcd_palette(name, **kwargs)
         elif palette_type == 'mpl':
             cmap = mpl_palette(name, **kwargs)
         else:
@@ -339,7 +339,7 @@ def plot_connectivity(fc: Union[np.ndarray, pd.DataFrame], threshold: Optional[f
     # turn fc into dataframe if necessary
     if type(fc) is np.ndarray:
         rows = kwargs.pop('yticklabels') if 'yticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
-        cols = kwargs.pop('xticklabels') if 'xticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[0])]
+        cols = kwargs.pop('xticklabels') if 'xticklabels' in kwargs.keys() else [str(i) for i in range(fc.shape[1])]
         fc = pd.DataFrame(fc, index=[str(r) for r in rows], columns=[str(c) for c in cols])
 
     # apply threshold

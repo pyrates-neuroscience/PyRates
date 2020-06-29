@@ -1,0 +1,17 @@
+sphinx
+sphinx-gallery
+pillow
+numpy
+matplotlib
+networkx
+pandas
+tensorflow>=2.0
+pyparsing
+ruamel.yaml
+scipy
+seaborn
+mne
+pydot
+pytest
+paramiko
+numba

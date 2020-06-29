@@ -28,19 +28,17 @@
 
 """Contains wrapper classes for different backends that are needed by the parser module.
 
-A new backend needs to implement the following methods
-
-Methods
--------
-__init__
-run
-add_var
-add_op
-add_layer
+A new backend needs to implement the following methods:
+- __init__
+- run
+- add_var
+- add_op
+- add_layer
 
 Currently supported backends:
 - Numpy: NumpyBackend.
 - Tensorflow: TensorflowBackend.
+- Fortran: FortranBackend (experimental).
 
 """
 
@@ -53,6 +51,7 @@ import os
 import sys
 from shutil import rmtree
 import warnings
+from scipy.interpolate.interpolate import interp1d
 
 # pyrates internal imports
 from .funcs import *
@@ -68,14 +67,16 @@ class NumpyVar(np.ndarray):
     vtype
         Type of the variable. Can be either `constant` or `state_variable`. Constant variables are necessary to perform
         certain graph optimizations previous to run time.
-    backend
-        Instance of the backend in use.
     dtype
         Data-type of the variable. For valid data-types, check the documentation of the backend in use.
     shape
         Shape of the variable.
     value
         Value of the variable. If scalar, please provide the shape in addition.
+    name
+        Full name of the variable (including the node and operator it belongs to).
+    short_name
+        Name of the variable excluding its node and operator.
 
     Returns
     -------
@@ -125,10 +126,13 @@ class NumpyVar(np.ndarray):
             shape = list(shape)
             shape.pop(idx)
             shape = tuple(shape)
-        value = cls._get_value(value, dtype, shape)
-        if squeeze:
-            value = cls.squeeze(value)
-        obj = cls._get_var(value, name, dtype)
+        if callable(value):
+            obj = value
+        else:
+            value = cls._get_value(value, dtype, shape)
+            if squeeze:
+                value = cls.squeeze(value)
+            obj = cls._get_var(value, name, dtype)
 
         # store additional attributes on variable object
         obj.short_name = name.split('/')[-1]
@@ -196,6 +200,13 @@ class NumpyVar(np.ndarray):
     def __hash__(self):
         return hash(str(self))
 
+    @staticmethod
+    def __subclasscheck__(subclass):
+        if np.ndarray.__subclasscheck__(subclass):
+            return True
+        else:
+            return interp1d.__subclasscheck__(subclass)
+
 
 class PyRatesOp:
     """Base class for adding operations on variables to the PyRates compute graph. Should be used as parent class for
@@ -213,6 +224,8 @@ class PyRatesOp:
         Arguments to the function.
 
     """
+
+    var_class = NumpyVar
 
     def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
         """Instantiates PyRates operator.
@@ -239,7 +252,7 @@ class PyRatesOp:
         self.args = ()
         self.build_op(args)
 
-    def eval(self):
+    def numpy(self):
         """Evaluates the return values of the PyRates operation.
         """
         result = self._callable(*self.args)
@@ -272,7 +285,7 @@ class PyRatesOp:
 
         # test function
         self.args = self._deepcopy(args)
-        result = self.eval() if 'no_op' not in self.short_name else self.args[0]
+        result = self.numpy() if 'no_op' not in self.short_name else self.args[0]
         self.args = args
 
         # remember output shape and data-type
@@ -386,12 +399,12 @@ class PyRatesOp:
                 results['arg_names'] += new_arg_names
                 n_vars += 1
 
-            elif hasattr(arg, 'vtype'):
+            elif cls.var_class.__subclasscheck__(type(arg)):
 
                 # parse PyRates variable into the function
-                if arg.vtype is 'constant' and not arg.shape and constants_to_num:
+                if arg.vtype is 'constant' and not tuple(arg.shape) and constants_to_num:
                     arg_name = '__no_name__'
-                    arg_value = arg.numpy() if hasattr(arg, 'numpy') else arg
+                    arg_value = arg.numpy()  #if hasattr(arg, 'numpy') else arg
                 else:
                     arg_name = arg.short_name
                     arg_value = arg
@@ -444,7 +457,7 @@ class PyRatesOp:
         return arg_names, args
 
     @staticmethod
-    def _check_numerics(vals, name):
+    def _check_numerics(vals: NumpyVar, name: str):
         """Checks whether function evaluation leads to any NaNs or infinite values.
         """
         check = []
@@ -681,10 +694,10 @@ class PyRatesIndexOp(PyRatesOp):
             results['arg_names'] += new_arg_names
             n_vars += 1
 
-        elif hasattr(var_tmp, 'vtype'):
+        elif cls.var_class.__subclasscheck__(type(var_tmp)):
 
             # parse pyrates variables into the indexing operation
-            if var_tmp.vtype != 'constant' or var_tmp.shape:
+            if var_tmp.vtype != 'constant' or tuple(var_tmp.shape):
                 var = var_tmp.short_name
                 results['args'].append(var_tmp)
                 results['arg_names'].append(var)
@@ -720,11 +733,11 @@ class PyRatesIndexOp(PyRatesOp):
             results['arg_names'] += new_arg_names
             n_vars += 1
 
-        elif hasattr(idx, 'vtype'):
+        elif cls.var_class.__subclasscheck__(type(idx)):
 
             # parse pyrates variables into the indexing operation
             key = idx.short_name
-            if idx.vtype != 'constant' or idx.shape:
+            if idx.vtype != 'constant' or tuple(idx.shape):
                 var_idx = f"{idx_l}{key}{idx_r}"
                 results['args'].append(idx)
                 results['arg_names'].append(key)
@@ -927,6 +940,7 @@ class NumpyBackend(object):
             for imp in imports:
                 if imp not in self._imports:
                     self._imports.append(imp)
+        self._input_names = []
 
         # create build dir
         orig_dir = os.getcwd()
@@ -964,6 +978,7 @@ class NumpyBackend(object):
             solver: str = 'euler',
             out_dir: Optional[str] = None,
             profile: bool = False,
+            verbose: bool = True,
             **kwargs
             ) -> tuple:
         """Executes all operations in the backend graph for a given number of steps.
@@ -986,6 +1001,8 @@ class NumpyBackend(object):
             Directory to write the session log into.
         profile
             If true, the total graph execution time will be printed and returned.
+        verbose
+            If true, updates about the simulation process will be displayed in the terminal.
 
         Returns
         -------
@@ -1018,6 +1035,9 @@ class NumpyBackend(object):
         continuous = 'scipy' in solver
         t = self.add_input_layer(inputs=inputs, T=T, continuous=continuous)
 
+        if verbose:
+            print("    ...user-defined inputs have been added to the model.")
+
         # graph execution
         #################
 
@@ -1025,6 +1045,9 @@ class NumpyBackend(object):
         decorator = kwargs.pop('decorator', None)
         decorator_kwargs = kwargs.pop('decorator_kwargs', {})
         rhs_func, args, state_vars, var_map = self.compile(self._build_dir, decorator=decorator, **decorator_kwargs)
+
+        if verbose:
+            print("    ...the run function has been compiled.")
 
         # create output indices
         output_indices = []
@@ -1044,8 +1067,15 @@ class NumpyBackend(object):
 
         # simulate backend behavior for each time-step
         func_args = self._process_func_args(args, var_map, dt)
+
+        if verbose:
+            print("starting the simulation.")
+
         times, results = self._solve(rhs_func=rhs_func, func_args=func_args, T=T, dt=dt, dts=dts, t=t, solver=solver,
                                      output_indices=output_indices, **kwargs)
+
+        if verbose:
+            print("Simulation finished!\n")
 
         # output storage and clean-up
         #############################
@@ -1129,7 +1159,7 @@ class NumpyBackend(object):
         self.vars[name] = var
         return var
 
-    def remove_var(self, name: str) -> NumpyVar:
+    def remove_var(self, name: str) -> Union[NumpyVar, None]:
         """Removes variable from backend and returns it.
 
         Parameters
@@ -1267,7 +1297,7 @@ class NumpyBackend(object):
 
         # for constant ops, add a constant to the graph, containing the op evaluation
         if op.is_constant and op_name != 'no_op':
-            new_var = op.eval()
+            new_var = op.numpy()
             if hasattr(new_var, 'shape'):
                 name = f'{name}_evaluated'
                 return self.add_var(vtype='constant', name=name, value=new_var)
@@ -1386,16 +1416,25 @@ class NumpyBackend(object):
                 time = np.linspace(0, T, inputs[0][0].shape[0])
 
                 for (inp, target_var, idx) in inputs:
-                    in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else f"{target_var.short_name}_inp"
+
+                    # create unique name of input variable
+                    in_name_tmp = f"{target_var.short_name}_inp"
+                    counter = 0
+                    in_name = in_name_tmp
+                    while in_name in self._input_names:
+                        in_name = f"{in_name_tmp}_{counter}"
+                        counter += 1
+                    self._input_names.append(in_name)
+
+                    # create interpolation operator
                     if len(inp.shape) > 1:
                         inp = inp.squeeze()
                     f = interp1d(time, inp, axis=0, copy=False, kind='linear')
                     f.shape = inp.shape[1:]
-                    f.vtype = 'state_var'
-                    f.short_name = in_name
-                    f.name = f"network_inputs/{in_name}"
-                    self.vars[f.name] = f
+                    f = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", value=f)
                     in_var_interp = self.add_op('interpolate', f, t, scope="network_inputs")
+
+                    # apply input to target variable
                     if idx:
                         self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
                     else:
@@ -1408,9 +1447,22 @@ class NumpyBackend(object):
                                              scope="network_inputs")
 
                 for (inp, target_var, idx) in inputs:
-                    in_name = f"{inp.short_name}_inp" if hasattr(inp, 'short_name') else "var_inp"
-                    in_var = self.add_var(vtype='state_var', name=in_name, scope="network_inputs", value=inp)
+
+                    # create unique name of input variable
+                    in_name_tmp = f"{target_var.short_name}_inp"
+                    counter = 0
+                    in_name = in_name_tmp
+                    while in_name_tmp in self._input_names:
+                        in_name = f"{in_name_tmp}_{counter}"
+                        counter += 1
+                    self._input_names.append(in_name)
+
+                    # create time indexing operator
+                    in_var = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", scope="network_inputs",
+                                          value=inp)
                     in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
+
+                    # apply input to target variable
                     if idx:
                         self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
                     else:
@@ -1510,7 +1562,7 @@ class NumpyBackend(object):
         """
         return self.layers[self._base_layer + idx]
 
-    def get_var(self, name):
+    def get_var(self, name: str) -> Union[NumpyVar, PyRatesOp]:
         """Retrieve variable from graph.
 
         Parameters
@@ -1526,7 +1578,7 @@ class NumpyBackend(object):
         """
         return self.vars[name]
 
-    def eval_var(self, var) -> np.ndarray:
+    def eval_var(self, var: str) -> np.ndarray:
         """Get value of variable.
 
         Parameters
@@ -2059,7 +2111,7 @@ class NumpyBackend(object):
         # match shape of index and update to shape
         ##########################################
 
-        if idx.shape[0] != update.shape[0]:
+        if tuple(update.shape) and idx.shape[0] != update.shape[0]:
             if update.shape[0] == 1 and len(update.shape) == 1:
                 idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
             elif idx.shape[0] == 1:
@@ -2070,6 +2122,8 @@ class NumpyBackend(object):
             else:
                 raise ValueError(f'Invalid indexing. Operation of shape {shape} cannot be updated with updates of '
                                  f'shapes {update.shape} at locations indicated by indices of shape {idx.shape}.')
+        elif not tuple(update.shape) and tuple(idx.shape):
+            update = self.add_op('reshape', update, (1,))
 
         if len(idx.shape) < 2:
             idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
@@ -2118,7 +2172,6 @@ class NumpyBackend(object):
 
         # pre-process args
         shape = var.shape
-        scatter_into_first_dim = False
 
         # match shape of index and update to shape
         ##########################################
@@ -2136,9 +2189,10 @@ class NumpyBackend(object):
         elif update.shape == shape[1:] or update.shape == shape[:-1]:
 
             # make sure that index and update scatter into the first dimension of update
-            scatter_into_first_dim = True
+            update = self.add_op('reshape', update, (1,) + tuple(update.shape))
+            idx = idx[None, :]
 
-        return var, update, idx, scatter_into_first_dim
+        return var, update, idx
 
     def _process_vars(self):
         """

@@ -1,11 +1,50 @@
 %YAML 1.2
 ---
 
-Op_e_adapt:
+# Operator Templates
+####################
+
+# basic excitatory QIF population operator
+Op_e:
   base: OperatorTemplate
   equations:
     - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp)/tau + J_e*(r + r_e - r_i)*(1.0-I_a) - tau*(PI*r)^2"
+    - "d/dt * v = (v^2 + eta + inp) / tau + J * (r + r_in) - tau*(PI*r)^2"
+  variables:
+    r:
+      default: output
+    v:
+      default: variable
+    r_in:
+      default: input
+    tau:
+      default: 1.0
+    delta:
+      default: 2.0
+    eta:
+      default: -10.0
+    J:
+      default: 21.2132
+    inp:
+      default: input
+
+# basic inhibitory QIF population operator
+Op_i:
+  base: Op_e
+  variables:
+    delta:
+      default: 1.0
+    eta:
+      default: -1.0
+    J:
+      default: 12.0
+
+# operator for a qif population with spike-frequency adaptation
+Op_sfa:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in) - I_a - tau*(PI*r)^2"
     - "d/dt * I_a = x"
     - "d/dt * x = (alpha*r - 2.0*x - I_a/tau_a)/tau_a"
   variables:
@@ -17,9 +56,41 @@ Op_e_adapt:
       default: variable(0.36)
     x:
       default: variable(0.0)
-    r_e:
+    r_in:
       default: input
-    r_i:
+    tau:
+      default: 1.0
+    delta:
+      default: 2.0
+    eta:
+      default: -4.6
+    J_e:
+      default: 21.2132
+    alpha:
+      default: 1.0
+    tau_a:
+      default: 10.0
+    inp:
+      default: input
+
+# operator for a qif population with synaptic depression
+Op_sd:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(PI*r)^2"
+    - "d/dt * I_a = x"
+    - "d/dt * x = (alpha*r - 2.0*x - I_a/tau_a)/tau_a"
+  variables:
+    r:
+      default: output(0.75)
+    v:
+      default: variable(-0.4)
+    I_a:
+      default: variable(0.36)
+    x:
+      default: variable(0.0)
+    r_in:
       default: input
     tau:
       default: 1.0
@@ -36,110 +107,74 @@ Op_e_adapt:
     inp:
       default: input
 
-Op_e:
-  base: OperatorTemplate
-  equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau + J_e * (r + r_e) - J_i * r_i - tau*(PI*r)^2"
-  variables:
-    r:
-      default: output
-    v:
-      default: variable
-    r_e:
-      default: input
-    r_i:
-      default: input
-    tau:
-      default: 1.0
-    delta:
-      default: 2.0
-    eta:
-      default: -10.0
-    J_e:
-      default: 21.2132
-    J_i:
-      default: 2.0
-    inp:
-      default: input
+# population templates
+######################
 
-Op_i:
-  base: OperatorTemplate
-  equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau - J_i* (r + r_i) + J_e * r_e - tau*(PI*r)^2"
-  variables:
-    r:
-      default: output
-    v:
-      default: variable
-    r_e:
-      default: input
-    r_i:
-      default: input
-    tau:
-      default: 1.0
-    delta:
-      default: 1.0
-    eta:
-      default: -1.0
-    J_e:
-      default: 12.0
-    J_i:
-      default: 2.0
-    inp:
-      default: input
-
+# basic excitatory qif population
 Pop_e:
   base: NodeTemplate
   operators:
     - Op_e
 
-Pop_adapt:
-  base: NodeTemplate
-  operators:
-    - Op_e_adapt
-
+# basic inhibitory qif population
 Pop_i:
   base: NodeTemplate
   operators:
     - Op_i
 
-DummyEdge:
-  base: EdgeTemplate
-  operators: []
+# excitatory qif population with spike-frequency adaptation
+Pop_sfa:
+  base: NodeTemplate
+  operators:
+    - Op_sfa
 
-Net1:
+# excitatory qif population with synaptic depression
+Pop_sd:
+  base: NodeTemplate
+  operators:
+    - Op_sd
+
+# edge templates
+################
+
+
+# circuit templates
+###################
+
+# basic excitatory qif population
+QIF_exc:
   base: CircuitTemplate
   nodes:
-    Pop1: Pop_e
+    p: Pop_e
   edges:
 
-Net2:
+# basic inhibitory qif population
+QIF_inh:
   base: CircuitTemplate
   nodes:
-    Pop1: Pop_i
+    p: Pop_i
   edges:
 
-Net3:
+# excitatory qif population with spike-frequency adaptation
+QIF_sfa:
   base: CircuitTemplate
   nodes:
-    PC: Pop_e
-    IIN: Pop_i
+    p: Pop_sfa
   edges:
-    - [PC/Op_e/r, IIN/Op_i/r_e, DummyEdge, {weight: 5.0}]
-    - [IIN/Op_i/r, PC/Op_e/r_i, DummyEdge, {weight: 5.0}]
 
-Net4:
+# excitatory qif population with synaptic depression
+QIF_sd:
   base: CircuitTemplate
   nodes:
-    E1: Pop_e
-    E2: Pop_e
+    p: Pop_sd
   edges:
-    - [E1/Op_e/r, E2/Op_e/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
-    - [E2/Op_e/r, E1/Op_e/r_e, DummyEdge, {weight: 1.0, delay: 0.0}]
 
-Net5:
+# simple QIF EI circuit
+QIF_ei:
   base: CircuitTemplate
   nodes:
-    E: Pop_adapt
+    E: Pop_e
+    I: Pop_i
+  edges:
+    - [E/Op_e/r, I/Op_i/r_in, null, {weight: 5.0}]
+    - [I/Op_i/r, E/Op_e/r_in, null, {weight: -5.0}]

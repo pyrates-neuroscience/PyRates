@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
+#
 # Configuration file for the Sphinx documentation builder.
 #
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
+# This file does only contain a selection of the most common options. For a
+# full list see the documentation:
 # http://www.sphinx-doc.org/en/master/config
 
 # -- Path setup --------------------------------------------------------------
@@ -9,38 +11,88 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
 
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath('../../'))
+sys.path.append(os.path.abspath('sphinxext'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'PyRates'
-copyright = '2019, Richard Gast, Daniel Rose, Christoph Salomon'
-author = 'Richard Gast, Daniel Rose, Christoph Salomon'
+project = u'pyrates'
+copyright = u'2020, Richard Gast'
+author = u'Richard Gast'
+
+# The short X.Y version
+version = u'0.9'
 
 # The full version, including alpha/beta/rc tags
-release = '0.7.1'
+release = u'0.9.1'
 
 
 # -- General configuration ---------------------------------------------------
+
+# If your documentation needs a minimal Sphinx version, state it here.
+#
+# needs_sphinx = '1.0'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.doctest',
-    'sphinx.ext.todo',
+    'sphinx.ext.autosummary',
     'sphinx.ext.coverage',
+    'sphinx.ext.extlinks',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
+    'sphinx.ext.githubpages',
     'sphinx.ext.napoleon',
-    'sphinx.ext.githubpages', 
-    'alabaster',
+    'sphinx.ext.imgmath',
+    'matplotlib.sphinxext.plot_directive',
+    'sphinx_gallery.gen_gallery'
 ]
+
+# configuration of sphinx gallery
+sphinx_gallery_conf = {
+    'examples_dirs': [
+        '../../model_introduction',
+        '../../pyrates_interfaces',
+        '../../parameter_sweeps',
+        #'../../parameter_optimization',
+        #'../../visualization',
+        '../../parameter_continuation'
+    ],   # path to your example scripts
+    'gallery_dirs': [
+        'auto_intros',
+        'auto_interfaces',
+        'auto_sweeps',
+        #'auto_opt',
+        #'auto_vis',
+        'auto_conts'
+    ]  # path to where to save gallery generated output
+
+}
+
+#'default_thumb_file': '../../../pckg/media/pygpc_logo_git.png',
+
+# 'IPython.sphinxext.ipython_directive',
+# 'IPython.sphinxext.ipython_console_highlighting',
+# 'sphinx.ext.intersphinx',
+
+# Napoleon settings
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -63,7 +115,7 @@ language = None
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path .
+# This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The name of the Pygments (syntax highlighting) style to use.
@@ -71,66 +123,118 @@ pygments_style = 'sphinx'
 
 # -- Options for HTML output -------------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
-import alabaster
-html_theme_path = [alabaster.get_path()]
-html_theme = 'alabaster'
+html_theme = 'scipy' #'sphinx_rtd_theme'
+html_theme_path = ['_theme']
+html_static_path = ['_static']
+html_short_title = 'PyRates'
 
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['../build/html/_static', 'documentation/doc/build/html/_static']
-html_extra_path = ['documentation/doc/build/html/_static', '../build/html/_static']
-
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
-#
-html_theme_options = {'logo': 'PyRates_logo_color.png',
-                      'logo_name': True,
-                      'logo_text_align': 'center',
-                      'github_repo': 'PyRates',
-                      'github_user': 'pyrates-neuroscience',
-                      'codecov_button': False,
-                      'github_button': True,
-                      'travis_button': True,
-                      'show_related': True,
-                      'show_powered_by': True,
-                      'show_relbars': True,
-                      'base_bg': '#deddd9',
-                      'topic_bg': '#15a1b8',
-                      'note_bg': '#15a1b8',
-                      'sidebar_hr': '#214478',
-                      'sidebar_header': '#214478',
-                      'sidebar_width': '200px',
-                      'table_border': '#214478',
-                      'font_family': 'Roboto',
-                      'head_font_family': 'Roboto Slab',
-                      'caption_font_family': 'Roboto Condensed',
-                      }
-
-# Custom sidebar templates, must be a dictionary that maps document names
-# to template names.
-#
-# The default sidebars (for documents that don't match any pattern) are
-# defined by theme itself.  Builtin themes are using these templates by
-# default: ``['localtoc.html', 'relations.html', 'sourcelink.html',
-# 'searchbox.html']``.
-#
-html_sidebars = {
-    '**': [
-        'about.html',
-        'localtoc.html',
-        'sourcelink.html',
-        'searchbox.html',
-    ]
+html_theme_options = {
+    "edit_link": "true",
+    "sidebar": "right",
+    "pyrates_logo": "true",
+    "rootlinks": [],
+    "body_max_width": "1000"
 }
+
+pngmath_latex_preamble = r"""
+\usepackage{color}
+\definecolor{textgray}{RGB}{51,51,51}
+\color{textgray}
+"""
+pngmath_use_preview = True
+pngmath_dvipng_args = ['-gamma 1.5', '-D 96', '-bg Transparent']
+
+# The name of an image file (relative to this directory) to place at the top
+# of the sidebar.
+html_logo = '_static/img/pyrates_logo.png'
+
+# The name of an image file (relative to this directory) to use as a favicon of
+# the docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
+# pixels large.
+#html_favicon = None
+
+# -- Options for HTMLHelp output ---------------------------------------------
+
+# Output file base name for HTML help builder.
+htmlhelp_basename = 'pyratesdoc'
+
+
+# -- Options for LaTeX output ------------------------------------------------
+
+latex_elements = {
+    # The paper size ('letterpaper' or 'a4paper').
+    #
+    # 'papersize': 'a4paper',
+
+    # The font size ('10pt', '11pt' or '12pt').
+    #
+    # 'pointsize': '10pt',
+
+    # Additional stuff for the LaTeX preamble.
+    #
+    # 'preamble': '',
+
+    # Latex figure (float) alignment
+    #
+    # 'figure_align': 'htbp',
+    'extraclassoptions': 'openany,oneside',
+    'babel': '\\usepackage[shorthands=off]{babel}'
+}
+
+# Grouping the document tree into LaTeX files. List of tuples
+# (source start file, target name, title,
+#  author, documentclass [howto, manual, or own class]).
+
+latex_documents = [
+    (master_doc, 'pyrates.tex', u'PyRates Documentation',
+     u'Richard Gast, Daniel Rose', 'manual'),
+]
+
+
+# -- Options for manual page output ------------------------------------------
+
+# One entry per manual page. List of tuples
+# (source start file, name, description, authors, manual section).
+
+man_pages = [
+    (master_doc, 'pyrates', u'PyRates Documentation',
+     [author], 1)
+]
+
+# -- Options for Texinfo output ----------------------------------------------
+
+# Grouping the document tree into Texinfo files. List of tuples
+# (source start file, target name, title, author,
+#  dir menu entry, description, category)
+
+texinfo_documents = [
+    (master_doc, 'pyrates', u'PyRates Documentation',
+     author, 'pyrates', 'Neurodynamic Systems Tool.',
+     'Miscellaneous'),
+]
+
+
+# -- Options for Epub output -------------------------------------------------
+
+# Bibliographic Dublin Core info.
+epub_title = project
+
+# The unique identifier of the text. This can be a ISBN number
+# or the project homepage.
+#
+# epub_identifier = ''
+
+# A unique identification for the text.
+#
+# epub_uid = ''
+
+# A list of files that should not be packed into the epub file.
+epub_exclude_files = ['search.html']
+
 
 # -- Extension configuration -------------------------------------------------
 
-# -- Options for todo extension ----------------------------------------------
+# -- Options for intersphinx extension ---------------------------------------
 
-# If true, `todo` and `todoList` produce output, else they produce nothing.
-todo_include_todos = False
+# Example configuration for intersphinx: refer to the Python standard library.
+intersphinx_mapping = {'https://docs.python.org/': None}

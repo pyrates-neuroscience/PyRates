@@ -573,21 +573,29 @@ class CircuitIR(AbstractBaseIR):
         from pyrates.frontend.dict import from_circuit
         return from_circuit(self)
 
-    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True, dde_approx: float = 0.0):
+    def optimize_graph_in_place(self, max_node_idx: int = 100000, vectorize: bool = True, dde_approx: float = 0.0,
+                                verbose: bool = True):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
+
+        if verbose:
+            print("Starting automatic optimization of the network graph:")
 
         # node vectorization
         old_nodes = self._vectorize_nodes_in_place(max_node_idx)
         self._vectorize_edges_in_place(max_node_idx)
         nodes = (node for node, data in old_nodes)
         self.graph.remove_nodes_from(nodes)
+        if verbose:
+            print("    ...nodes in the network have been vectorized.")
 
         # edge vectorization
         if vectorize:
             for source in self.nodes:
                 for target in self.nodes:
                     self._vectorize_edges(source, target)
+        if verbose:
+            print("    ...edges in the network have been vectorized.")
 
         # go through nodes and create buffers for delayed outputs and mappings for their inputs
         for node_name in self.nodes:
@@ -621,6 +629,9 @@ class CircuitIR(AbstractBaseIR):
                 for j in range(n_inputs):
                     if n_inputs > 1:
                         self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
+
+        if verbose:
+            print("    ...all edges have been connected to nodes.")
 
         return self
 
@@ -1065,7 +1076,7 @@ class CircuitIR(AbstractBaseIR):
                     idx = [int(i) for i in idx.split(':')]
                     idx_tmp = vnode_indices[vnode_key]['var']
                     idx = [int(i) + idx[0] for i in idx_tmp]
-                    var_value = var_value.eval()
+                    var_value = var_value.numpy()
                 else:
                     idx = vnode_indices[vnode_key]['var']
                 if apply_idx:
@@ -1133,11 +1144,15 @@ class CircuitIR(AbstractBaseIR):
 
         filterwarnings("ignore", category=FutureWarning)
 
+        if verbose:
+            print("Simulation Progress")
+            print("-------------------")
+
         # prepare simulation
         ####################
 
         if verbose:
-            print("Preparing the simulation...")
+            print("Preparing the simulation:")
 
         if not self._first_run:
             self._backend.remove_layer(0)
@@ -1169,6 +1184,9 @@ class CircuitIR(AbstractBaseIR):
                 outputs_col[key] = [[var_info['idx'], var_info['nodes']]
                                     for var_info in self.get_node_var(val, apply_idx=False).values()]
 
+            if verbose:
+                print("    ...user-defined output variables are logged.")
+
         # collect backend input variables
         #################################
 
@@ -1183,20 +1201,18 @@ class CircuitIR(AbstractBaseIR):
 
                 # extract respective input variable from the network
                 for var_key, var_info in self.get_node_var(key, apply_idx=False).items():
-                    var_shape = len(var_info['idx'])
-                    var_idx = var_info['idx'] if np.sum(var_shape) > 1 else None
-                    if var_shape == in_shape:
+                    var_shape = int(np.max(var_info['var'].shape)) if tuple(var_info['var'].shape) else 1
+                    var_idx = var_info['idx'] if var_shape > 1 else None
+                    var_idx_shape = len(var_idx) if var_idx else 1
+                    if var_idx_shape == in_shape:
                         inputs_col.append((val, var_info['var'], var_idx))
-                    elif (var_shape % in_shape) == 0:
-                        inputs_col.append((np.tile(val, (1, var_shape)), var_info['var'], var_idx))
+                    elif (var_idx_shape % in_shape) == 0:
+                        inputs_col.append((np.tile(val, (1, var_idx_shape)), var_info['var'], var_idx))
                     else:
-                        inputs_col.append((np.reshape(val, (sim_steps, var_shape)), var_info['var'], var_idx))
+                        inputs_col.append((np.reshape(val, (sim_steps, var_idx_shape)), var_info['var'], var_idx))
 
         # run simulation
         ################
-
-        if verbose:
-            print("Running the simulation...")
 
         output_col, times, *time = self._backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
                                                      out_dir=out_dir, outputs=outputs_col, inputs=inputs_col,
@@ -1208,8 +1224,6 @@ class CircuitIR(AbstractBaseIR):
                       f"simulation resolution of {step_size} s.")
             else:
                 print(f"ComputeGraph computations finished after {time[0]} seconds.")
-        elif verbose:
-            print('finished!')
 
         # store output variables in data frame
         ######################################
@@ -1249,6 +1263,7 @@ class CircuitIR(AbstractBaseIR):
                 step_size: Optional[float] = None,
                 solver: Optional[str] = None,
                 dde_approximation_order: int = 0,
+                verbose: bool = True,
                 **kwargs
                 ) -> AbstractBaseIR:
         """Parses IR into the backend. Returns an instance of the CircuitIR that allows for numerical simulations via
@@ -1278,6 +1293,8 @@ class CircuitIR(AbstractBaseIR):
             Only relevant for delayed systems. If larger than zero, all discrete delays in the system will be
             automatically approximated by a system of (n+1) coupled ODEs that represent a convolution with a
             gamma distribution centered around the original delay (n is the approximation order).
+        verbose
+            If true, updates about compilation process will be displayed in the terminal.
         kwargs
             Additional keyword arguments that will be passed on to the backend instance. For a full list of viable
             keyword arguments, see the documentation of the respective backend class (`numpy_backend.NumpyBackend` or
@@ -1286,6 +1303,10 @@ class CircuitIR(AbstractBaseIR):
         """
 
         filterwarnings("ignore", category=FutureWarning)
+
+        if verbose:
+            print("Compilation Progress")
+            print("--------------------")
 
         # set basic attributes
         ######################
@@ -1314,12 +1335,13 @@ class CircuitIR(AbstractBaseIR):
 
         # run graph optimization and vectorization
         self._first_run = True
-        self.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order)
+        self.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order, verbose=verbose)
 
         # move edge operations to nodes
         ###############################
 
-        print('building the compute graph...')
+        if verbose:
+            print('Loading the network model into the backend:')
 
         # create equations and variables for each edge
         for source_node, target_node, edge_idx, data in self.edges(data=True, keys=True):
@@ -1409,6 +1431,9 @@ class CircuitIR(AbstractBaseIR):
                 inputs[tvar] = {'sources': [op_name],
                                 'reduce_dim': True}
 
+        if verbose:
+            print("    ...all edge operations have been translated to backend-compatible equations.")
+
         # collect node and edge operators
         #################################
 
@@ -1427,14 +1452,22 @@ class CircuitIR(AbstractBaseIR):
         # bring equations into correct order
         equations = sort_equations(edge_eqs=edge_equations, node_eqs=node_equations)
 
+        if verbose:
+            print("    ...all model equations have been collected from the network.")
+
         # parse all equations and variables into the backend
         ####################################################
 
         self._backend.bottom_layer()
 
+        if verbose:
+            print("Parsing the model equations into a compute graph.")
+
         # parse mapping
         variables = parse_equations(equations=equations, equation_args=variables, backend=self._backend,
                                     squeeze=squeeze_vars)
+        if verbose:
+            print("Compilation finished!\n")
 
         # save parsed variables in net config
         for key, val in variables.items():
@@ -1472,7 +1505,7 @@ class CircuitIR(AbstractBaseIR):
                                       f'choose another backend (e.g. `fortran`) to generate an auto file of the system.'
                                       )
 
-    def to_pyauto(self, dir: str):
+    def to_pyauto(self, dir: Optional[str] = None):
         """
 
         Parameters
@@ -1824,8 +1857,7 @@ class CircuitIR(AbstractBaseIR):
                     orders.append(dde_approx if m else 0)
                     rates.append(dde_approx / m if m else 0)
 
-            n_edges = len(orders) // target_shape[0]
-            # TODO: test whether indexing and un-indexing later on actually works.
+            n_edges = len(orders) / target_shape[0]
             order_idx = np.argsort(orders, kind='stable')
             orders = np.asarray(orders, dtype=np.int32)[order_idx]
             orders_tmp = np.asarray(orders, dtype=np.int32)
@@ -1886,11 +1918,16 @@ class CircuitIR(AbstractBaseIR):
 
             # extend source variable to match shape of edge transmission variables
             if n_edges > 1:
-                for i in range(n_edges):
-                    buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}")
+                if n_edges % 1 == 0:
+                    n_edges = int(n_edges)
+                    for i in range(n_edges):
+                        buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}")
+                else:
+                    for i, idx in enumerate(nodes_tmp):
+                        buffer_eqs.append(f"{source_var}[{i}] = {var}[{idx}]")
                 var_dict[source_var] = {'vtype': 'state_var',
                                         'dtype': self._backend._float_def,
-                                        'shape': (target_shape[0]*n_edges,),
+                                        'shape': (len(orders),),
                                         'value': 0.0}
 
             # create buffered variable
@@ -1901,18 +1938,13 @@ class CircuitIR(AbstractBaseIR):
                     buffer_eqs.append(f"{var}_buffered{idx1} = {var}_d{i}{idx2}")
                 else:
                     buffer_eqs.append(f"{var}_buffered{idx1} = {source_var}{idx2}")
-            buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
                                            'dtype': self._backend._float_def,
                                            'shape': (len(delays),),
                                            'value': 0.0}
-            var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
-                                               'dtype': 'int32',
-                                               'shape': (len(order_idx),),
-                                               'value': order_idx}
 
             # re-order buffered variable if necessary
-            if any(np.diff(order_idx)) != 1:
+            if any(np.diff(order_idx) != 1):
                 buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
                 var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
                                                    'dtype': 'int32',

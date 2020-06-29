@@ -22,7 +22,7 @@ class PyAuto:
         # private attributes
         if auto_dir:
             os.chdir(auto_dir)
-        self._a = a
+        self._auto = a
         self._dir = os.getcwd()
         self._last_cont = None
         self._cont_num = 0
@@ -37,9 +37,9 @@ class PyAuto:
                                     }
 
     def run(self, variables: list = None, params: list = None, get_stability: bool = True,
-            get_period: bool = False, get_timeseries: bool = False, get_lyapunov_exp: bool = False,
-            starting_point: Union[str, int] = None, origin: dict = None, bidirectional: bool = False, name: str = None,
-            **auto_kwargs) -> tuple:
+            get_period: bool = False, get_timeseries: bool = False, get_eigenvals: bool = False,
+            get_lyapunov_exp: bool = False, starting_point: Union[str, int] = None, origin: dict = None,
+            bidirectional: bool = False, name: str = None, **auto_kwargs) -> tuple:
         """Wraps auto-07p command `run` and stores requested solution details on instance.
 
         Parameters
@@ -49,6 +49,7 @@ class PyAuto:
         get_stability
         get_period
         get_timeseries
+        get_eigenvals
         get_lyapunov_exp
         starting_point
         origin
@@ -66,13 +67,13 @@ class PyAuto:
 
         # extract starting point of continuation
         if 'IRS' in auto_kwargs or 's' in auto_kwargs:
-            raise ValueError('Usage of keyword arguments `IRS` and `s` is disabled in pyauto. To start from a previous '
+            raise ValueError('Usage of keyword arguments `IRS` and `s` is disabled in pyauto. To start from a previous'
                              'solution, use the `starting_point` keyword argument and provide a tuple of branch '
                              'number and point number as returned by the `run` method.')
         if not starting_point and self._last_cont:
             raise ValueError('A starting point is required for further continuation. Either provide a solution to '
                              'start from via the `starting_point` keyword argument or create a fresh pyauto instance.')
-        if not origin:
+        if origin is None:
             origin = self._last_cont
         elif type(origin) is str:
             origin = self._results_map[origin]
@@ -82,11 +83,6 @@ class PyAuto:
         # call to auto
         solution = self._call_auto(starting_point, origin, **auto_kwargs)
 
-        # if continuation is to be performed in both directions, call auto again with opposite continuation direction
-        if bidirectional:
-            auto_kwargs.pop('DS', None)
-            solution = self._a.merge(solution + self._call_auto(starting_point, origin, DS='-', **auto_kwargs))
-
         # extract information from auto solution
         ########################################
 
@@ -94,16 +90,45 @@ class PyAuto:
         new_branch, new_icp = self.get_branch_info(solution)
         new_points = self.get_solution_keys(solution)
 
+        # get all passed variables and params
+        _, solution_tmp = self.get_solution(point=new_points[0], cont=solution)
+        if variables is None:
+            variables = self._get_all_var_keys(solution_tmp)
+        if params is None:
+            params = self._get_all_param_keys(solution_tmp)
+
+        # extract continuation results
+        if new_icp[0] == 14:
+            get_stability = False
+
+        summary = self._create_summary(solution=solution, points=new_points, variables=variables,
+                                       params=params, timeseries=get_timeseries, stability=get_stability,
+                                       period=get_period, eigenvals=get_eigenvals, lyapunov_exp=get_lyapunov_exp)
+
+        # store solution and extracted information in pyauto
+        ####################################################
+
         # merge auto solutions if necessary and create key for auto solution
-        merged = False
         if new_branch in self._branches and origin in self._branches[new_branch] \
                 and new_icp in self._branches[new_branch][origin]:
-            solution = self._a.merge(solution + self.get_solution(origin))
-            merged = True
 
-        # create pyauto key for solution
-        pyauto_key = self._cont_num + 1 if self._cont_num in self.auto_solutions and not merged else self._cont_num
-        solution.pyauto_key = pyauto_key
+            # get key from old solution and merge with new solution
+            solution_old = self.get_solution(origin)
+            pyauto_key = solution_old.pyauto_key
+            solution, summary = self.merge(pyauto_key, solution, summary, new_icp)
+
+        elif name == 'bidirect:cont2' and not bidirectional and 'DS' in auto_kwargs and auto_kwargs['DS'] == '-':
+
+            # get key from old solution and merge with new solution
+            solution_old = self._last_cont
+            pyauto_key = solution_old.pyauto_key
+            solution, summary = self.merge(pyauto_key, solution, summary, new_icp)
+
+        else:
+
+            # create pyauto key for solution
+            pyauto_key = self._cont_num + 1 if self._cont_num in self.auto_solutions else self._cont_num
+            solution.pyauto_key = pyauto_key
 
         # set up dictionary fields in _branches for new solution
         if new_branch not in self._branches:
@@ -116,23 +141,77 @@ class PyAuto:
         self._last_cont = solution
         self._branches[new_branch][pyauto_key].append(new_icp)
 
-        # get all passed variables and params
-        _, solution_tmp = self.get_solution(point=new_points[0], cont=self._last_cont)
-        if variables is None:
-            variables = self._get_all_var_keys(solution_tmp)
-        if params is None:
-            params = self._get_all_param_keys(solution_tmp)
-
-        # extract continuation results
-        summary = self._create_summary(solution=solution, points=new_points, variables=variables,
-                                       params=params, timeseries=get_timeseries, stability=get_stability,
-                                       period=get_period, lyapunov_exp=get_lyapunov_exp)
-
         self.results[pyauto_key] = summary.copy()
         self._cont_num = pyauto_key
-        if name:
+        if name and name != 'bidirect:cont2':
             self._results_map[name] = pyauto_key
+
+        # if continuation should be bidirectional, call this method again with reversed continuation direction
+        ######################################################################################################
+
+        if bidirectional:
+            auto_kwargs.pop('DS', None)
+            summary, solution = self.run(variables=variables, params=params, get_stability=get_stability,
+                                         get_period=get_period, get_timeseries=get_timeseries,
+                                         get_eigenvals=get_eigenvals, get_lyapunov_exp=get_lyapunov_exp,
+                                         starting_point=starting_point, origin=origin, bidirectional=False,
+                                         name='bidirect:cont2', DS='-', **auto_kwargs)
+
         return summary.copy(), solution
+
+    def merge(self, key: int, cont, summary: dict, icp: tuple):
+        """Merges two solutions from two separate auto continuations.
+
+        Parameters
+        ----------
+        key
+            PyAuto identifier under which the merged solution should be stored. Must be equal to identifier of first
+            continuation.
+        cont
+            auto continuation object that should be merged with the continuation object under `key`.
+        summary
+            PyAuto continuation summary that should be merged with continuation summary under `key`.
+        icp
+            Continuation parameter that was used in both continuations that are to be merged.
+        """
+
+        # merge solutions
+        #################
+
+        # call merge in auto
+        solution = self._auto.merge(self.auto_solutions[key] + cont)
+        solution.pyauto_key = key
+
+        # store solution in pyauto
+        self.auto_solutions[key] = solution
+        self._last_cont = solution
+
+        # merge results summaries
+        #########################
+
+        summary_old = self.results[key]
+
+        # extract end points and icp values at end points
+        points_old, points_new = list(summary_old), list(summary)
+        start_old, start_new, end_old, end_new = points_old[0], points_new[0], points_old[-1], points_new[-1]
+
+        # connect starting points of both continuations and re-label points accordingly
+        conts_sorted = [summary, summary_old]
+        new_keys = [points_new[::-1], points_old]
+        old_keys = [points_new, points_old]
+        end_point = end_new
+
+        # move points into combined summary
+        summary_final = {}
+        for p1, p2 in zip(new_keys[0], old_keys[0]):
+            summary_final[p1] = conts_sorted[0][p2]
+        for p1, p2 in zip(new_keys[1], old_keys[1]):
+            summary_final[p1+end_point] = conts_sorted[1][p2]
+
+        # store updated summary
+        self.results[key] = summary_final
+
+        return solution, summary_final
 
     def get_summary(self, cont: Union[Any, str, int], point=None) -> dict:
         """Extract summary of continuation from PyAuto.
@@ -216,7 +295,8 @@ class PyAuto:
         summary = self.get_summary(cont, point=point)
         if point:
             return {key: np.asarray(summary[key]) for key in keys}
-        return {key: np.asarray([val[key] for point, val in summary.items()]) for key in keys}
+        points = np.sort(list(summary))
+        return {key: np.asarray([summary[p][key] for p in points]) for key in keys}
 
     def to_file(self, filename: str, include_auto_results: bool = False, **kwargs) -> None:
         """Save continuation results on disc.
@@ -391,15 +471,15 @@ class PyAuto:
         if not points:
             points = ['RG']
             points_tmp = self.results[self._results_map[cont] if type(cont) is str else cont].keys()
-            results_tmp = [self.extract([var] + ['stability', 'time'], cont=cont, point=p) for p in points_tmp]
+            results_tmp = [self.extract([var] + ['time'], cont=cont, point=p) for p in points_tmp]
             results = [{key: [] for key in results_tmp[0].keys()}]
             for r in results_tmp:
                 for key in r:
-                    results[0][key].append(r[key])
+                    results[0][key].append(np.squeeze(r[key]))
             for key in results[0].keys():
                 results[0][key] = np.asarray(results[0][key]).squeeze()
         else:
-            results = [self.extract([var] + ['stability', 'time'], cont=cont, point=p) for p in points]
+            results = [self.extract([var] + ['time'], cont=cont, point=p) for p in points]
 
         # create plot
         if ax is None:
@@ -412,8 +492,7 @@ class PyAuto:
             time = results[i]['time']
             kwargs_tmp = kwargs.copy()
             kwargs_tmp.update(linespecs[i])
-            line_col = self._get_line_collection(x=time, y=results[i][var], stability=results[i]['stability'],
-                                                 **kwargs_tmp)
+            line_col = self._get_line_collection(x=time, y=results[i][var], **kwargs_tmp)
             ax.add_collection(line_col)
         ax.autoscale()
         ax.legend(points)
@@ -445,10 +524,10 @@ class PyAuto:
             ignore = []
 
         # set bifurcation styles
-        bf_styles = self._bifurcation_styles.copy()
         if custom_bf_styles:
             for key, args in custom_bf_styles.items():
-                bf_styles[key].update(args)
+                self.update_bifurcation_style(key, **args)
+        bf_styles = self._bifurcation_styles.copy()
         plt.sca(ax)
 
         # draw bifurcation points
@@ -474,6 +553,10 @@ class PyAuto:
             if color:
                 self._bifurcation_styles[bf_type]['color'] = color
         else:
+            if marker is None:
+                marker = 'o'
+            if color is None:
+                color = 'k'
             self._bifurcation_styles.update({bf_type: {'marker': marker, 'color': color}})
 
     def plot_heatmap(self, x: np.array, ax: plt.Axes = None, **kwargs) -> plt.Axes:
@@ -481,7 +564,7 @@ class PyAuto:
         return heatmap(x, ax=ax, **kwargs)
 
     def _create_summary(self, solution: Union[Any, dict], points: list, variables: list, params: list,
-                        timeseries: bool, stability: bool, period: bool, lyapunov_exp: bool):
+                        timeseries: bool, stability: bool, period: bool, eigenvals: bool, lyapunov_exp: bool):
         """Creates summary of auto continuation and stores it in dictionary.
 
         Parameters
@@ -493,6 +576,7 @@ class PyAuto:
         timeseries
         stability
         period
+        eigenvals
         lyapunov_exp
 
         Returns
@@ -515,6 +599,7 @@ class PyAuto:
 
                 # store solution information in summary
                 summary[point]['bifurcation'] = solution_type
+                branch, _ = self.get_branch_info(s)
                 for var, val in zip(variables, var_vals):
                     summary[point][var] = val
                 if len(var_vals) > len(variables) and timeseries:
@@ -522,22 +607,26 @@ class PyAuto:
                 for param, val in zip(params, param_vals):
                     summary[point][param] = val
                 if stability:
-                    summary[point]['stability'] = self.get_stability(s)
-                if period:
-                    summary[point]['period'] = summary[point]['PAR(11)'] if 'PAR(11)' in params else \
-                        self.get_params(s, ['PAR(11)'])[0]
-                if lyapunov_exp:
-                    branch, _ = self.get_branch_info(s)
-                    summary[point]['lyapunov_exponents'] = self.get_lyapunov_exponent(solution, branch, point)
+                    summary[point]['stability'] = self.get_stability(solution, s, point)
+                if period or lyapunov_exp or eigenvals:
+                    p = summary[point]['PAR(11)'] if 'PAR(11)' in params else self.get_params(s, ['PAR(11)'])[0]
+                    if period:
+                        summary[point]['period'] = p
+                    if eigenvals or lyapunov_exp:
+                        evs = self.get_eigenvalues(solution, branch, point)
+                        if eigenvals:
+                            summary[point]['eigenvalues'] = evs
+                        if lyapunov_exp:
+                            summary[point]['lyapunov_exponents'] = self.get_lyapunov_exponent(evs, p)
 
         return summary
 
     def _call_auto(self, starting_point: Union[str, int], origin: Union[Any, dict], **auto_kwargs) -> Any:
         if starting_point:
             _, s = self.get_solution(point=starting_point, cont=origin)
-            solution = self._a.run(s, **auto_kwargs)
+            solution = self._auto.run(s, **auto_kwargs)
         else:
-            solution = self._a.run(**auto_kwargs)
+            solution = self._auto.run(**auto_kwargs)
         return self._start_from_solution(solution)
 
     def _update_axis_lims(self, ax: Union[plt.Axes, Axes3D], ax_data: list, padding: float = 0.,
@@ -580,8 +669,21 @@ class PyAuto:
         return pyauto_instance
 
     @staticmethod
-    def get_stability(s: Any) -> bool:
-        return s.b['solution'].b['PT'] < 0
+    def get_stability(solution, s, point) -> bool:
+
+        point_idx = get_point_idx(solution[0].diagnostics.data, point=point)
+        diag = solution[0].diagnostics.data[point_idx]['Text']
+
+        if "Eigenvalues" in diag:
+            diag_line = "Eigenvalues  :   Stable:  "
+        elif "Multipliers" in diag:
+            diag_line = "Multipliers:     Stable:  "
+        else:
+            return s.b['solution'].b['PT'] < 0
+        idx = diag.find(diag_line) + len(diag_line)
+        value = int(diag[idx:].split("\n")[0])
+        target = s.data['NDIM']
+        return value >= target
 
     @staticmethod
     def get_solution_keys(solution: Any) -> list:
@@ -595,8 +697,21 @@ class PyAuto:
     def get_branch_info(solution: Any) -> tuple:
         try:
             branch, icp = solution[0].BR, solution[0].c['ICP']
-        except AttributeError:
-            branch, icp = solution['BR'], solution.c['ICP']
+        except (AttributeError, ValueError):
+            try:
+                branch, icp = solution['BR'], solution.c['ICP']
+            except AttributeError:
+                icp = solution[0].c['ICP']
+                i = 0
+                while i < 10:
+                    try:
+                        sol_key = list(solution[0].labels.by_index.keys())[i]
+                        branch = solution[0].labels.by_index[sol_key]['RG']['solution']['data']['BR']
+                        break
+                    except KeyError as e:
+                        i += 1
+                        if i == 10:
+                            raise e
         icp = (icp,) if type(icp) is int else tuple(icp)
         return branch, icp
 
@@ -617,63 +732,71 @@ class PyAuto:
         return [solution[p] for p in params]
 
     @staticmethod
-    def get_lyapunov_exponent(solution, branch, point):
+    def get_eigenvalues(solution, branch: int, point: int) -> list:
+        """extracts eigenvalue spectrum from a solution point on a branch of solution
 
-        diag = solution[0].diagnostics.data
-        N = len(diag)
+        Parameters
+        ----------
+        solution
+        branch
+        point
 
-        # go through auto_solutions of diagnostic data
-        for point_idx in range(N):
+        Returns
+        -------
+        list
+            List of eigenvalues. If solution is periodic, the list contains floquet multipliers instead of eigenvalues.
+        """
 
-            # extract relevant diagnostic text output
-            diag_split = diag[point_idx]['Text'].split('\n\n')
+        eigenvals = []
 
-            # check whether branch and point identifiers match the targets
-            branch_str = f' {str(branch)} '
-            point_str = f' {str(point)} '
+        # extract point index from diagnostics
+        point_idx = get_point_idx(solution[0].diagnostics, point=point)
+        diag = solution[0].diagnostics.data[point_idx]['Text']
+        diag_split = diag.split('\n')
 
-            for diag_tmp in diag_split:
+        # find index of line in diagnostic output where eigenvalue information are starting
+        idx = 0
+        while idx < len(diag_split):
+            if 'Stable:' in diag_split[idx]:
+                break
+            idx += 1
 
-                if "NOTE:No converge" in diag_tmp:
+        # check whether branch and point identifiers match the targets
+        branch_str = f' {branch} '
+        point_str = f' {point+1} '
+
+        if "NOTE:No converge" in diag:
+            return eigenvals
+
+        if branch_str in diag_split[idx] and point_str in diag_split[idx] and \
+                ('Eigenvalue' in diag or 'Multiplier' in diag_split[idx]):
+
+            # go through lines of system diagnostics and extract eigenvalues/floquet multipliers
+            i = 1
+            while i < len(diag_split) - idx:
+
+                diag_tmp = diag_split[i + idx]
+                diag_tmp_split = [d for d in diag_tmp.split(' ') if d != ''][2:]
+
+                # check whether line contains eigenvals or floquet mults. If not, stop while loop.
+                if not diag_tmp_split:
+                    break
+                if 'Eigenvalue' not in diag_tmp_split[0] and 'Multiplier' not in diag_tmp_split[0]:
                     break
 
-                if branch_str in diag_tmp[:5] and point_str in diag_tmp[5:11] and \
-                        ('Eigenvalue' in diag_tmp or 'Multiplier' in diag_tmp):
+                # extract eigenvalues/floquet multipliers
+                idx2 = diag_tmp_split.index(f"{i}")
+                real = float(diag_tmp_split[idx2+1])
+                imag = float(diag_tmp_split[idx2+2])
+                eigenvals.append(complex(real, imag))
 
-                    lyapunovs = []
-                    i = 0
-                    while True:
+                i += 1
 
-                        i += 1
+        return eigenvals
 
-                        # check whether solution is periodic or not
-                        if 'Eigenvalue' in diag_tmp:
-                            start_str = f'Eigenvalue  {str(i + 1)}:  '
-                            stop_str = '\n'
-                            period = 0
-                        else:
-                            start_str = f'Multiplier  str(i + 1)   '
-                            stop_str = '  Abs. Val.'
-                            period = float(diag_split[2].split(' ')[-1])
-
-                        # extract eigenvalues/floquet multipliers
-                        if start_str in diag_tmp:
-                            start = diag_tmp.index(start_str) + len(start_str)
-                            stop = diag_tmp[start:].index(stop_str) + start if stop_str in diag_tmp[start:] else None
-                            diag_tmp_split = diag_tmp[start:stop].split(' ')
-                            real = float(diag_tmp_split[1]) if diag_tmp_split[0] == ' ' else float(diag_tmp_split[0])
-                            imag = float(diag_tmp_split[-1])
-                        else:
-                            break
-
-                        # calculate lyapunov exponent
-                        lyapunov = np.log(complex(real, imag)) / period if period else real
-                        lyapunovs.append(lyapunov)
-
-                    if lyapunovs:
-                        return lyapunovs
-
-        return []
+    @staticmethod
+    def get_lyapunov_exponent(eigenvals, period):
+        return [np.real(np.log(ev)/period) if period else np.real(ev) for ev in eigenvals]
 
     @staticmethod
     def _get_all_var_keys(solution):
@@ -686,7 +809,7 @@ class PyAuto:
     def _start_from_solution(self, solution: Any) -> Any:
         diag = str(solution[0].diagnostics)
         if 'Starting direction of the free parameter(s)' in diag and len(self.get_solution_keys(solution)) == 1:
-            solution = self._a.run(solution)
+            solution = self._auto.run(solution)
         return solution
 
     @staticmethod
@@ -848,12 +971,14 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
     tuple
     """
     solutions = []
+    i = 1
     for point, point_info in solution.items():
         if 'PD' in point_info['bifurcation']:
-            s_tmp, cont = pyauto_instance.run(starting_point=point, name=f'pd_{iteration}', origin=continuation,
+            s_tmp, cont = pyauto_instance.run(starting_point=f'PD{i}', name=f'pd_{iteration}', origin=continuation,
                                               **kwargs)
             solutions.append(f'pd_{iteration}')
             iteration += 1
+            i += 1
             if iteration >= max_iter:
                 break
             elif s_tmp:
@@ -863,3 +988,75 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
                 iteration += len(s_tmp2)
 
     return solutions, pyauto_instance
+
+
+def fractal_dimension(lyapunov_exponents: list) -> float:
+    """Calculates the fractal or information dimension of an attractor of a dynamical system from its lyapunov
+    epxonents, according to the Kaplan-Yorke formula (Kaplan and Yorke, 1979).
+
+    Parameters
+    ----------
+    lyapunov_exponents
+        List containing the lyapunov spectrum of a solution of a dynamical system.
+
+    Returns
+    -------
+    float
+        Fractal dimension of the attractor of the system.
+
+    """
+
+    LEs = np.sort(lyapunov_exponents)[::-1]
+    if np.sum(LEs) > 0:
+        return 0.0
+    k = 0
+    for j in range(len(LEs)-1):
+        k = j+1
+        if np.sum(LEs[:k]) < 0:
+            k -= 1
+            break
+    return k + np.sum(LEs[:k]) / np.abs(LEs[k]) if k > 0 else 0.0
+
+
+def get_point_idx(diag: list, point: int) -> int:
+    """Extract list idx of correct diagnostics string for continuation point with index `point`.
+
+    Parameters
+    ----------
+    diag
+    point
+
+    Returns
+    -------
+    int
+        Point index for `diag`.
+
+    """
+
+    idx = point
+    while idx < len(diag)-1:
+
+        diag_tmp = diag[idx]['Text']
+        if "Location of special point" in diag_tmp and "Convergence" not in diag_tmp:
+            idx += 1
+        else:
+
+            # find index of line after first appearance of BR
+            diag_tmp = diag_tmp.split('\n')
+            idx_line = 1
+            while idx_line < len(diag_tmp)-1:
+                if 'BR' in diag_tmp[idx_line].split(' '):
+                    break
+                idx_line += 1
+            diag_tmp = diag_tmp[idx_line+1]
+
+            # find point number in text
+            line_split = [d for d in diag_tmp.split(' ') if d != ""]
+            if abs(int(line_split[1])) < point+1:
+                idx += 1
+            elif abs(int(line_split[1])) == point+1:
+                return idx
+            else:
+                raise ValueError(f"Point with index {point+1} was not found on solution. Last auto output line that "
+                                 f"was checked: \n {diag_tmp}")
+    return idx

@@ -1,80 +1,110 @@
-.. PyRates documentation master file, created by
-   sphinx-quickstart on Wed Jun 26 11:14:39 2019.
+.. pyrates documentation master file, created by
+   sphinx-quickstart on Wed Oct  3 12:55:59 2018.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to the PyRates documentation!
-=====================================
 
-PyRates is a Python 3 tool for building rate-based neural models and performing numerical simulations of their dynamic behavior.
+PyRates Documentation
+=====================
 
-Among its core features are:
+Documentation of `PyRates <https://github.com/pyrates-neuroscience/PyRates>`_, an open-source Python toolbox for neurodynamical systems modeling.
 
-* Models can be configured via YAML files or Python dictionaries
-* You can choose between _numpy and _tensorflow as your backend for simulations
-* Every network comes with a _networkx graph representation
-* Output are easily visualized via _seaborn and _mnepython
-* Functionalities for multi-dimensional parameter sweeps on single machines and clusters are provided
+Basic features:
+---------------
 
-Installation
-------------
+- Different backends: `Numpy` for fast simulations of small- to medium-sized networks. `Tensorflow` for efficient parallelization on GPUs/CPUs, `Fortran` for parameter continuations.
+- Each model is internally represented by a `networkx` graph of nodes and edges, with the former representing the model units (i.e. single cells, cell populations, ...) and the latter the information transfer between them. In principle, this allows to implement any kind of dynamic neural system that can be expressed as a graph via PyRates.
+- Solutions of initial value problems via different numerical solvers (e.g. full interface to `scipy.integrate.solve_ivp`)
+- Parameter continuations and bifurcation analysis via PyAuto, an interface to `auto-07p`
+- Storage of solutions in `pandas.DataFrame`
+- Efficient parameter sweeps on single and multiple machines via the `grid_search` module
+- Model optimization via genetic algorithms
+- Visualization of results via `seaborn`
+- Post-processing of simulation results via `scipy` and `MNE Python`
+- The user has full control over the mathematical equations that nodes and edges are defined by.
+- Model configuration and simulation can be done within a few lines of code.
+- Various templates for rate-based population models are provided that can be used for neural network simulations imediatly.
 
-PyRates requires an installation of Python >=3.6.1. We recommend to install PyRates into a separate virtual environment.
-If using `Anaconda`, such a virtual environment can be set up via the command line::
+Installation:
+-------------
 
-	conda create -n pyrates python>=3.6.1
+PyRates can be installed via the `pip` command. We recommend to use `Anaconda` to create a new python environment with Python >= 3.6 and then simply run the following line from a terminal with the environment being activated:
 
-And activated by calling::
+.. code-block:: bash
 
-	conda activate pyrates
-  
-PyRates can either be installed via `pip`::
+   pip install pyrates
 
-	pip install pyrates
 
-Or via the `setup.py` provided on `GitHub <https://github.com/pyrates-neuroscience/PyRates>`::
+You can install optional (non-default) packages by specifying one or more options in brackets, e.g.:
 
-	python setup.py install
+.. code-block:: bash
 
-This installation contains merely the minimum of required Python packages to build and run models in PyRates. 
-Additional packages that may be installed include:
+   pip install pyrates[tf,plot]
 
-* matplotlib (for visualization)
-* seaborn (for visualization)
-* mne (for visualization and post-processing)
-* tensorflow2.0 (for an alternative backend with GPU support)
-* paramiko and h5py (for cluster computation support)
-* numba (for CPU parallelization and just-in-time compilation of simulations via the NumPy backend)
 
-All of these packages are available at `PyPI` and can thus be installed via::
+Available options are `tf`, `plot`, `proc`, `cluster`, `numba` and `all`.
+The latter includes all optional packages.
 
-	pip install <name>
+Alternatively, it is possible to clone this repository and run one of the following lines
+from the directory in which the repository was cloned:
 
-HowTo
------
+.. code-block:: bash
 
-Here, we provide examples of how to use the major user interfaces and links to instructive jupyter notebooks on our github repository.
+   python setup.py install
+
+or
+
+.. code-block:: bash
+
+   pip install .[<options>]
+
+Finally, a singularity container of the most recent version of this software can be found [here](https://singularity.gwdg.de/containers/3).
+This container provides a stand-alone version of PyRates including all necessary Python tools to be run, independent of local operating systems.
+To be able to use this container, you need to install `Singularity <https://singularity.lbl.gov/>`_ on your local machine first.
+Follow these `instructions <https://singularity.lbl.gov/quickstart>`_ to install singularity and run scripts inside the PyRates container.
+
+Reference
+---------
+
+If you use PyRates, please cite:
+
+`Gast, R., Rose, D., Salomon, C., Möller, H. E., Weiskopf, N., & Knösche, T. R. (2019). PyRates-A Python framework for rate-based neural simulations. PloS one, 14(12), e0225900. <https://doi.org/10.1371/journal.pone.0225900>`_
+
+Contact
+-------
+
+If you have questions, problems or suggestions regarding PyRates, please contact `Richard Gast <https://www.cbs.mpg.de/person/59190/376039>`_ or `Daniel Rose <https://www.cbs.mpg.de/person/51141/374227>`_.
+
+Contribute
+----------
+
+PyRates is an open-source project that everyone is welcome to contribute to. Check out our `GitHub repository <https://github.com/pyrates-neuroscience/PyRates>`_
+for all the source code, open issues etc. and send us a pull request, if you would like to contribute something to our software.
+
+Examples Gallery
+================
+
+.. include::
+   auto_intros/index.rst
+
+.. include::
+   auto_interfaces/index.rst
+
+.. include::
+   auto_sweeps/index.rst
+
+.. include::
+   auto_conts/index.rst
+
+API
+===
 
 .. toctree::
    :maxdepth: 4
 
-   minimal_example
-   model_setup
-   simulations
-   parameter_sweeps
-   model_optimization
-   visualization
-   post_processing
-
-Contents
---------
-.. toctree::
-   :maxdepth: 4
-   
-   pyrates.frontend
-   pyrates.backend
-   pyrates.ir
-   pyrates.utility
+   pyrates
+   model_templates
+   tests
 
 Indices and tables
 ==================

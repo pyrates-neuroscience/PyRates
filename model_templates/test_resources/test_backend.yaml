@@ -1,0 +1,306 @@
+%YAML 1.2
+---
+
+# operator templates
+####################
+
+op0:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * a = b*0.5"
+    - "d/dt * b = a + 2.0"
+  variables:
+    a:
+      default: output
+    b:
+      default: variable
+
+op1:
+  base: OperatorTemplate
+  equations: "d/dt * a = u - a"
+  variables:
+    a:
+      default: output
+    u:
+      default: input
+
+op2:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * a = b - a"
+    - "b = sigmoid(a)"
+  variables:
+    a:
+      default: output
+    b:
+      default: variable
+
+op3:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * a = -10.0 * a + b^2 + u"
+    - "d/dt * b = 0.1 * a"
+  variables:
+    a:
+      default: variable
+    b:
+      default: variable
+    u:
+      default: input
+
+op4:
+  base: OperatorTemplate
+  equations: "d/dt * u = 2.0"
+  variables:
+    u:
+      default: output
+
+op5:
+  base: OperatorTemplate
+  equations: "d/dt * a = u - a"
+  variables:
+    a:
+      default: output
+    u:
+      default: variable
+
+op6:
+  base: OperatorTemplate
+  equations: "d/dt * u = 4. + tanh(0.5)"
+  variables:
+    u:
+      default: output
+
+op7:
+  base: OperatorTemplate
+  equations: "d/dt * a = u + inp - a"
+  variables:
+    a:
+      default: output
+    u:
+      default: variable
+    inp:
+      default: input
+
+op8:
+  base: OperatorTemplate
+  equations: "d/dt * a = 2.0 + u"
+  variables:
+    a:
+      default: output
+    u:
+      default: input
+
+op9:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * a = (a*(1.0 - a) + I_syn + I_ext)/tau"
+    - "b = tanh(a)"
+  variables:
+    b:
+      default: output
+    a:
+      default: variable
+    I_syn:
+      default: input
+    I_ext:
+      default: input
+    tau:
+      default: 10.0
+
+op10:
+  base: op9
+  variables:
+    tau:
+      default: 1.0
+
+# population templates
+######################
+
+pop0:
+  base: NodeTemplate
+  operators:
+    - op0
+
+pop1:
+  base: NodeTemplate
+  operators:
+    - op1
+
+pop2:
+  base: NodeTemplate
+  operators:
+    - op2
+
+pop3:
+  base: NodeTemplate
+  operators:
+    - op3
+
+pop4:
+  base: NodeTemplate
+  operators:
+    - op4
+    - op1
+
+pop5:
+  base: NodeTemplate
+  operators:
+    - op4
+    - op5
+
+pop6:
+  base: NodeTemplate
+  operators:
+    - op4
+    - op6
+    - op1
+
+pop7:
+  base: NodeTemplate
+  operators:
+    - op4
+    - op3
+    - op1
+
+pop8:
+  base: NodeTemplate
+  operators:
+    - op7
+
+pop9:
+  base: NodeTemplate
+  operators:
+    - op8
+
+pop10:
+  base: NodeTemplate
+  operators:
+    - op9
+
+pop11:
+  base: NodeTemplate
+  operators:
+    - op10
+
+# edge templates
+################
+
+DummyEdge:
+  base: EdgeTemplate
+  operators: []
+
+# circuit templates
+###################
+
+net0:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop0
+  edges:
+
+net1:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop1
+  edges:
+
+net2:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop2
+  edges:
+
+net3:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop3
+  edges:
+
+net4:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop4
+  edges:
+
+net5:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop5
+  edges:
+
+net6:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop6
+  edges:
+
+net7:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop7
+  edges:
+
+net8:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop0
+    pop1: pop1
+    pop2: pop1
+  edges:
+    - [pop0/op0/a, pop1/op1/u, DummyEdge, {weight: 2.0}]
+    - [pop0/op0/a, pop2/op1/u, DummyEdge, {weight: 0.5}]
+
+net9:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop1
+    pop1: pop8
+  edges:
+    - [pop0/op1/a, pop1/op7/u, DummyEdge, {weight: 2.0}]
+    - [pop1/op7/a, pop0/op1/u, DummyEdge, {weight: 0.5}]
+
+net10:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop9
+    pop1: pop9
+  edges:
+    - [pop1/op8/a, pop0/op8/u, DummyEdge, {weight: 0.5, delay: 0.5}]
+    - [pop0/op8/a, pop1/op8/u, DummyEdge, {weight: 2.0, delay: 1.0}]
+
+net11:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop1
+    pop1: pop8
+  edges:
+    - [pop0/op1/a, pop1/op7/u, DummyEdge, {weight: 2.0, delay: 0.2}]
+    - [pop0/op1/a, pop1/op7/u, DummyEdge, {weight: 0.5, delay: 0.4}]
+
+net12:
+  base: CircuitTemplate
+  nodes:
+    pop0: pop8
+    pop1: pop8
+  edges:
+    - [pop0/op7/a, pop1/op7/u, DummyEdge, {weight: 0.1, delay: 0.2}]
+    - [pop1/op7/a, pop0/op7/u, DummyEdge, {weight: 0.5, delay: 0.2}]
+
+net13:
+  base: CircuitTemplate
+  nodes:
+    p1: pop10
+    p2: pop11
+  edges:
+    - [p1/op9/b, p2/op9/I_syn, DummyEdge, {weight: 1.0, delay: 2.0, spread: 0.8}]
+    - [p2/op9/b, p1/op9/I_syn, DummyEdge, {weight: 2.0, delay: 1.0, spread: 0.4}]
+
+net14:
+  base: CircuitTemplate
+  circuits:
+    c1: net13
+    c2: net13
+  edges:
+    - [c1/p1/op9/b, c2/p2/op9/I_syn, null, {weight: 1.0}]
+    - [c2/p2/op9/b, c1/p1/op9/I_syn, null, {weight: 1.0}]
