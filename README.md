@@ -26,6 +26,8 @@ It is an open-source project that everyone is welcome to contribute to.
 
 ## Installation
 
+### Stable release (PyPI)
+
 PyRates can be installed via the `pip` command. We recommend to use `Anaconda` to create a new python environment with Python >= 3.6 and then simply run the following line from a terminal with the environment being activated:
 ```
 pip install pyrates
@@ -37,7 +39,10 @@ pip install pyrates[tf,plot]
 ```
 
 Available options are `tf`, `plot`, `proc`, `cluster`, `numba` and `all`. 
-The latter includes all optional packages.
+The latter includes all optional packages. 
+Furthermore, the option `tests` includes all packages necessary to run tests found in the github repository.
+
+### Development version (github)
 
 Alternatively, it is possible to clone this repository and run one of the following lines 
 from the directory in which the repository was cloned:
@@ -48,6 +53,8 @@ or
 ```
 pip install .[<options>]
 ```
+
+### Singularity container
 
 Finally, a singularity container of the most recent version of this software can be found [here](https://singularity.gwdg.de/containers/3).
 This container provides a stand-alone version of PyRates including all necessary Python tools to be run, independent of local operating systems. 
