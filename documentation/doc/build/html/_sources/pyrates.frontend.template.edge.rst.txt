@@ -4,10 +4,10 @@ pyrates.frontend.template.edge package
 Submodules
 ----------
 
-pyrates.frontend.template.edge.edge module
+pyrates.frontend.template.edge module
 ------------------------------------------
 
-.. automodule:: pyrates.frontend.template.edge.edge
+.. automodule:: pyrates.frontend.template.edge
    :members:
    :undoc-members:
    :show-inheritance:

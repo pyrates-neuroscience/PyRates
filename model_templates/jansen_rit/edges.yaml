@@ -2,7 +2,7 @@
 ---
 
 LinearCouplingOperator:
-  base: pyrates.frontend.template.edge.edge.CouplingOperator
+  base: pyrates.frontend.template.edge.CouplingOperator
   description:
     Coupling Operator as used in the Jansen-Rit neural mass backend [1]_. This is a simple, instantaneous linear
     coupling.
@@ -11,7 +11,7 @@ LinearCouplingOperator:
 
 LCEdge:
   description: Basic edge (axon) with linear coupling between source and target neuron.
-  base: pyrates.frontend.template.edge.edge.BaseEdge
+  base: pyrates.frontend.template.edge.BaseEdge
   operators:
     - LinearCouplingOperator
   label: LCAxon

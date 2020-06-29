@@ -94,7 +94,7 @@ def test_full_jansen_rit_circuit_template_load():
 
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.frontend.template.circuit import CircuitTemplate
-    from pyrates.frontend.template.edge.edge import EdgeTemplate
+    from pyrates.frontend.template.edge import EdgeTemplate
     from pyrates.frontend.template.node import NodeTemplate
     from pyrates.frontend.template.operator import OperatorTemplate
     from pyrates.frontend.template import template_cache, clear_cache

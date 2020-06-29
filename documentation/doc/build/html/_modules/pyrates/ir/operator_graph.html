@@ -1,42 +1,85 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
   <head>
-    <meta charset="utf-8" />
-    <title>pyrates.ir.operator_graph &#8212; PyRates 0.7.1 documentation</title>
-    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
-    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
-    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <meta charset="utf-8">
+    
+    <title>pyrates.ir.operator_graph &mdash; pyrates 0.9.1-dev3 documentation</title>
+    
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/spc-bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/spc-extend.css">
+    <link rel="stylesheet" href="../../../_static/scipy.css" type="text/css" >
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" >
+    <link rel="stylesheet" href="../../../_static/gallery.css" type="text/css" >
+    <link rel="stylesheet" href="../../../_static/gallery-binder.css" type="text/css" >
+    <link rel="stylesheet" href="../../../_static/gallery-dataframe.css" type="text/css" >
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.9.1-dev3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
     <script type="text/javascript" src="../../../_static/jquery.js"></script>
     <script type="text/javascript" src="../../../_static/underscore.js"></script>
     <script type="text/javascript" src="../../../_static/doctools.js"></script>
     <script type="text/javascript" src="../../../_static/language_data.js"></script>
-    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="index" title="Index" href="../../../genindex.html" />
-    <link rel="search" title="Search" href="../../../search.html" />
-   
-  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
-  
-  
-  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+    <script type="text/javascript" src="../../../_static/js/copybutton.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" >
+    <link rel="search" title="Search" href="../../../search.html" >
+    <link rel="top" title="pyrates 0.9.1-dev3 documentation" href="../../../index.html" >
+    <link rel="up" title="Module code" href="../../index.html" > 
+  </head>
+  <body>
 
-  </head><body>
-  
+<div class="container">
+  <div class="top-scipy-org-logo-header">
+    <a href="../../../index.html">
+      <img style="border: 0;" alt="pyrates" src="../../../_static/img/pyrates_logo_large.png"></a>
+    </div>
+  </div>
+</div>
 
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
-              <div class="related top">
-                &nbsp;
-  <nav id="rellinks">
-    <ul>
+
+    <div class="container">
+      <div class="main">
+        
+	<div class="row-fluid">
+	  <div class="span12">
+	    <div class="spc-navbar">
+              
+    <ul class="nav nav-pills pull-left">
+	
+        <li class="active"><a href="../../../index.html">PyRates</a></li>
+	
+          <li class="active"><a href="../../index.html" accesskey="U">Module code</a></li> 
     </ul>
-  </nav>
-              </div>
-          
+              
+              
+    <ul class="nav nav-pills pull-right">
+      <li class="active">
+        <a href="../../../genindex.html" title="General Index"
+           accesskey="I">index</a>
+      </li>
+      <li class="active">
+        <a href="../../../py-modindex.html" title="Python Module Index"
+           >modules</a>
+      </li>
+    </ul>
+              
+	    </div>
+	  </div>
+	</div>
+        
 
-          <div class="body" role="main">
+	<div class="row-fluid">
+          <div class="span9">
+            
+        <div class="bodywrapper">
+          <div class="body" id="spc-section-body">
             
   <h1>Source code for pyrates.ir.operator_graph</h1><div class="highlight"><pre>
 <span></span><span class="c1"># -*- coding: utf-8 -*-</span>
@@ -68,14 +111,14 @@
 <span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span><span class="p">,</span> <span class="n">copy</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">deepcopy</span><span class="p">,</span> <span class="n">copy</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
 
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">_np</span>
-<span class="kn">from</span> <span class="nn">networkx</span> <span class="k">import</span> <span class="n">DiGraph</span><span class="p">,</span> <span class="n">find_cycle</span><span class="p">,</span> <span class="n">NetworkXNoCycle</span>
+<span class="kn">from</span> <span class="nn">networkx</span> <span class="kn">import</span> <span class="n">DiGraph</span><span class="p">,</span> <span class="n">find_cycle</span><span class="p">,</span> <span class="n">NetworkXNoCycle</span>
 
-<span class="kn">from</span> <span class="nn">pyrates</span> <span class="k">import</span> <span class="n">PyRatesException</span>
-<span class="kn">from</span> <span class="nn">pyrates.ir.operator</span> <span class="k">import</span> <span class="n">OperatorIR</span>
+<span class="kn">from</span> <span class="nn">pyrates</span> <span class="kn">import</span> <span class="n">PyRatesException</span>
+<span class="kn">from</span> <span class="nn">pyrates.ir.operator</span> <span class="kn">import</span> <span class="n">OperatorIR</span>
 
 <span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
@@ -85,7 +128,7 @@
 <span class="n">op_graph_cache</span> <span class="o">=</span> <span class="p">{}</span>
 
 
-<span class="k">def</span> <span class="nf">_cache_op_graph</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+<div class="viewcode-block" id="cache_op_graph"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.cache_op_graph">[docs]</a><span class="k">def</span> <span class="nf">cache_op_graph</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Cache unique instances of operator graphs and return the instance. If hash of Operator graph is not known yet,</span>
 <span class="sd">    a new instance will be created. Otherwise, an instance from cash will be returned.&quot;&quot;&quot;</span>
 
@@ -97,6 +140,7 @@
         <span class="c1"># compute hash from incoming operators. Different order of operators in input might lead to different hash.</span>
         <span class="n">h</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">operators</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
 
+        <span class="n">changed_labels</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">op_graph</span> <span class="o">=</span> <span class="n">op_graph_cache</span><span class="p">[</span><span class="n">h</span><span class="p">]</span>
         <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
@@ -104,17 +148,28 @@
             <span class="c1"># test, if hash computation leads to same result</span>
             <span class="k">assert</span> <span class="n">h</span> <span class="o">==</span> <span class="nb">hash</span><span class="p">(</span><span class="n">op_graph</span><span class="p">)</span>
             <span class="n">op_graph_cache</span><span class="p">[</span><span class="n">h</span><span class="p">]</span> <span class="o">=</span> <span class="n">op_graph</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># temporary workaround to obtain correct labels for values.</span>
+            <span class="n">changed_labels</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">operators</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">op_hash</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">cached_name</span><span class="p">,</span> <span class="n">cached_op</span> <span class="ow">in</span> <span class="n">op_graph</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">op_hash</span> <span class="o">==</span> <span class="nb">hash</span><span class="p">(</span><span class="n">cached_op</span><span class="p">[</span><span class="s2">&quot;operator&quot;</span><span class="p">]):</span>
+                        <span class="n">changed_labels</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">cached_name</span>
+                        <span class="c1"># should only ever be able to find one, right? this fails (either way, if two operators with</span>
+                        <span class="c1"># identical hash exist in the same operator graph</span>
+                        <span class="c1"># fixme</span>
+                        <span class="k">break</span>
 
-        <span class="k">return</span> <span class="n">op_graph</span>
+        <span class="k">return</span> <span class="n">op_graph</span><span class="p">,</span> <span class="n">changed_labels</span>
 
-    <span class="k">return</span> <span class="n">cache_func</span>
+    <span class="k">return</span> <span class="n">cache_func</span></div>
 
 
-<div class="viewcode-block" id="OperatorGraph"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.OperatorGraph">[docs]</a><span class="nd">@_cache_op_graph</span>
-<span class="k">class</span> <span class="nc">OperatorGraph</span><span class="p">(</span><span class="n">DiGraph</span><span class="p">):</span>
+<div class="viewcode-block" id="OperatorGraph"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.OperatorGraph">[docs]</a><span class="k">class</span> <span class="nc">OperatorGraph</span><span class="p">(</span><span class="n">DiGraph</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Intermediate representation for nodes and edges.&quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">OperatorIR</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operators</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">OperatorIR</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
 
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">operators</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -167,10 +222,10 @@
             <span class="k">raise</span> <span class="n">PyRatesException</span><span class="p">(</span><span class="s2">&quot;Found cyclic operator graph. Cycles are not allowed for operators within one node &quot;</span>
                                    <span class="s2">&quot;or edge.&quot;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_h</span>
 
-    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+<div class="viewcode-block" id="OperatorGraph.getitem_from_iterator"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.OperatorGraph.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If `key_iter`</span>
 <span class="sd">        contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of</span>
@@ -196,13 +251,13 @@
             <span class="c1"># variable specified, so we return variable properties instead</span>
             <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s2">&quot;operator&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
 
-        <span class="k">return</span> <span class="n">item</span>
+        <span class="k">return</span> <span class="n">item</span></div>
 
-    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="OperatorGraph.__iter__"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.OperatorGraph.__iter__">[docs]</a>    <span class="k">def</span> <span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Return an iterator containing all operator labels in the operator graph.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span></div>
 
-    <span class="k">def</span> <span class="nf">operators</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">get_ops</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">get_vals</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<div class="viewcode-block" id="OperatorGraph.operators"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.OperatorGraph.operators">[docs]</a>    <span class="k">def</span> <span class="nf">operators</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">get_ops</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">get_vals</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Alias for self.nodes&quot;&quot;&quot;</span>
 
         <span class="k">if</span> <span class="n">get_ops</span> <span class="ow">and</span> <span class="n">get_vals</span><span class="p">:</span>
@@ -212,14 +267,14 @@
         <span class="k">elif</span> <span class="n">get_vals</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">])</span> <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span></div>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span></div></div>
 
 
-<div class="viewcode-block" id="VectorizedOperatorGraph"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph">[docs]</a><span class="k">class</span> <span class="nc">VectorizedOperatorGraph</span><span class="p">(</span><span class="n">DiGraph</span><span class="p">):</span>
+<div class="viewcode-block" id="VectorizedOperatorGraph"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph">[docs]</a><span class="k">class</span> <span class="nc">VectorizedOperatorGraph</span><span class="p">(</span><span class="n">DiGraph</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Alternate version of `OperatorGraph` that is produced during vectorization. Contents of this version are not</span>
 <span class="sd">    particularly protected and the instance is not cached.&quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op_graph</span><span class="p">:</span> <span class="n">OperatorGraph</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op_graph</span><span class="p">:</span> <span class="n">OperatorGraph</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
 
@@ -260,11 +315,11 @@
 
             <span class="bp">self</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">(</span><span class="n">op_graph</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span>
 
-<div class="viewcode-block" id="VectorizedOperatorGraph.add_operator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.add_operator">[docs]</a>    <span class="k">def</span> <span class="nf">add_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<div class="viewcode-block" id="VectorizedOperatorGraph.add_operator"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.add_operator">[docs]</a>    <span class="k">def</span> <span class="nf">add_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Alias for `self.add_node`&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="VectorizedOperatorGraph.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+<div class="viewcode-block" id="VectorizedOperatorGraph.getitem_from_iterator"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Helper function for Python magic __getitem__. Accepts an iterator that yields string keys. If `key_iter`</span>
 <span class="sd">        contains one key, an operator will be (looked for and) returned. If it instead contains two keys, properties of</span>
@@ -305,7 +360,7 @@
         <span class="c1"># else:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span>
 
-<div class="viewcode-block" id="VectorizedOperatorGraph.append_values"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.append_values">[docs]</a>    <span class="k">def</span> <span class="nf">append_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<div class="viewcode-block" id="VectorizedOperatorGraph.append_values"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.operator_graph.VectorizedOperatorGraph.append_values">[docs]</a>    <span class="k">def</span> <span class="nf">append_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Append value along vector dimension of operators.</span>
 
 <span class="sd">        Parameters</span>
@@ -325,9 +380,9 @@
                 <span class="n">shape_sum</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">shape_sum</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">_np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">shape</span> <span class="o">==</span> <span class="n">_np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">])[</span><span class="mi">1</span><span class="p">:]):</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Inconsistent dimensions of variable </span><span class="si">{var}</span><span class="s2">. Dimension of value to add: &quot;</span>
-                                         <span class="n">f</span><span class="s2">&quot;</span><span class="si">{shape}</span><span class="s2"> Internal dimension of vectorized value array: &quot;</span>
-                                         <span class="n">f</span><span class="s2">&quot;{_np.shape(var[&#39;value&#39;])[1:]}&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Inconsistent dimensions of variable </span><span class="si">{</span><span class="n">var</span><span class="si">}</span><span class="s2">. Dimension of value to add: &quot;</span>
+                                         <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2"> Internal dimension of vectorized value array: &quot;</span>
+                                         <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">])[</span><span class="mi">1</span><span class="p">:]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
                     <span class="n">var</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
                 <span class="k">elif</span> <span class="n">shape_sum</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
                     <span class="c1"># case, if shape == ()</span>
@@ -340,79 +395,38 @@
 </pre></div>
 
           </div>
-              <div class="related bottom">
-                &nbsp;
-  <nav id="rellinks">
-    <ul>
-    </ul>
-  </nav>
-              </div>
-          
         </div>
-      </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+          </div>
+      <div class="spc-rightsidebar span3">
         <div class="sphinxsidebarwrapper">
-<p class="logo">
-  <a href="../../../index.html">
-    <img class="logo" src="../../../_static/PyRates_logo_color.png" alt="Logo"/>
-    
-    <h1 class="logo logo-name">PyRates</h1>
-    
-  </a>
-</p>
+            <p class="logo"><a href="../../../index.html">
+              <img class="logo" src="../../../_static/pyrates_logo.png" alt="Logo">
+            </a></p>
 
-
-
-
-
-
-<p>
-<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
-  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
-</p>
-
-
-
-
-
-    
-
-<p>
-<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
-    <img
-        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
-        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
-    />
-</a>
-</p>
-
-
-
-<div id="searchbox" style="display: none" role="search">
-  <h3 id="searchlabel">Quick search</h3>
-    <div class="searchformwrapper">
-    <form class="search" action="../../../search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
-      <input type="submit" value="Go" />
-    </form>
-    </div>
-</div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
       </div>
-      <div class="clearer"></div>
+        </div>
+      </div>
     </div>
+
+    <div class="container container-navbar-bottom">
+      <div class="spc-navbar">
+        
+      </div>
+    </div>
+    <div class="container">
     <div class="footer">
-      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
-      
-      |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
-      
+    <div class="row-fluid">
+    <ul class="inline pull-left">
+      <li>
+        &copy; Copyright 2020, Richard Gast and Daniel Rose.
+      </li>
+      <li>
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 3.1.1.
+      </li>
+    </ul>
     </div>
-
-    
-
-    
+    </div>
+    </div>
   </body>
 </html>

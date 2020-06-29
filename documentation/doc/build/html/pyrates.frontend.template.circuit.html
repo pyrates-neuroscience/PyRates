@@ -53,44 +53,44 @@
 <div class="section" id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
 </div>
-<div class="section" id="module-pyrates.frontend.template.circuit.circuit">
-<span id="pyrates-frontend-template-circuit-circuit-module"></span><h2>pyrates.frontend.template.circuit.circuit module<a class="headerlink" href="#module-pyrates.frontend.template.circuit.circuit" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-pyrates.frontend.template.circuit">
+<span id="pyrates-frontend-template-circuit-circuit-module"></span><h2>pyrates.frontend.template.circuit module<a class="headerlink" href="#module-pyrates.frontend.template.circuit" title="Permalink to this headline">¶</a></h2>
 <p>Basic neural mass backend class plus derivations of it.</p>
 <p>This module includes the base circuit class that manages the set-up and simulation of population networks. Additionally,
 it features various sub-classes that act as circuit constructors and allow to build circuits based on different input
 arguments. For more detailed descriptions, see the respective docstrings.</p>
 <dl class="class">
-<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate">
-<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">CircuitTemplate</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = 'A circuit template.'</em>, <em class="sig-param">label: str = 'circuit'</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: dict = None</em>, <em class="sig-param">edges: List[tuple] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.frontend.template.circuit.CircuitTemplate">
+<em class="property">class </em><code class="sig-prename descclassname">pyrates.frontend.template.circuit.</code><code class="sig-name descname">CircuitTemplate</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = 'A circuit template.'</em>, <em class="sig-param">label: str = 'circuit'</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: dict = None</em>, <em class="sig-param">edges: List[tuple] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.CircuitTemplate" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="pyrates.frontend.template.html#pyrates.frontend.template.abc.AbstractBaseTemplate" title="pyrates.frontend.template.abc.AbstractBaseTemplate"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.frontend.template.abc.AbstractBaseTemplate</span></code></a></p>
 <dl class="method">
-<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply">
-<code class="sig-name descname">apply</code><span class="sig-paren">(</span><em class="sig-param">label: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.frontend.template.circuit.CircuitTemplate.apply">
+<code class="sig-name descname">apply</code><span class="sig-paren">(</span><em class="sig-param">label: str = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.CircuitTemplate.apply" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a Circuit graph instance based on the template</p>
 </dd></dl>
 
 <dl class="attribute">
-<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.target_ir">
-<code class="sig-name descname">target_ir</code><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.target_ir" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.frontend.template.circuit.CircuitTemplate.target_ir">
+<code class="sig-name descname">target_ir</code><a class="headerlink" href="#pyrates.frontend.template.circuit.CircuitTemplate.target_ir" title="Permalink to this definition">¶</a></dt>
 <dd><p>alias of <a class="reference internal" href="pyrates.ir.html#pyrates.ir.circuit.CircuitIR" title="pyrates.ir.circuit.CircuitIR"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyrates.ir.circuit.CircuitIR</span></code></a></p>
 </dd></dl>
 
 <dl class="method">
-<dt id="pyrates.frontend.template.circuit.circuit.CircuitTemplate.update_template">
-<code class="sig-name descname">update_template</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = None</em>, <em class="sig-param">label: str = None</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: dict = None</em>, <em class="sig-param">edges: List[tuple] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate.update_template"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.CircuitTemplate.update_template" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.frontend.template.circuit.CircuitTemplate.update_template">
+<code class="sig-name descname">update_template</code><span class="sig-paren">(</span><em class="sig-param">name: str</em>, <em class="sig-param">path: str</em>, <em class="sig-param">description: str = None</em>, <em class="sig-param">label: str = None</em>, <em class="sig-param">circuits: dict = None</em>, <em class="sig-param">nodes: dict = None</em>, <em class="sig-param">edges: List[tuple] = None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#CircuitTemplate.update_template"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.CircuitTemplate.update_template" title="Permalink to this definition">¶</a></dt>
 <dd><p>Update all entries of the circuit template in their respective ways.</p>
 </dd></dl>
 
 </dd></dl>
 
 <dl class="function">
-<dt id="pyrates.frontend.template.circuit.circuit.update_dict">
-<code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">update_dict</code><span class="sig-paren">(</span><em class="sig-param">base_dict: dict</em>, <em class="sig-param">updates: dict</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#update_dict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.update_dict" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.frontend.template.circuit.update_dict">
+<code class="sig-prename descclassname">pyrates.frontend.template.circuit.</code><code class="sig-name descname">update_dict</code><span class="sig-paren">(</span><em class="sig-param">base_dict: dict</em>, <em class="sig-param">updates: dict</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#update_dict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.update_dict" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="pyrates.frontend.template.circuit.circuit.update_edges">
-<code class="sig-prename descclassname">pyrates.frontend.template.circuit.circuit.</code><code class="sig-name descname">update_edges</code><span class="sig-paren">(</span><em class="sig-param">base_edges: List[tuple], updates: List[Union[tuple, dict]]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#update_edges"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.circuit.update_edges" title="Permalink to this definition">¶</a></dt>
+<dt id="pyrates.frontend.template.circuit.update_edges">
+<code class="sig-prename descclassname">pyrates.frontend.template.circuit.</code><code class="sig-name descname">update_edges</code><span class="sig-paren">(</span><em class="sig-param">base_edges: List[tuple], updates: List[Union[tuple, dict]]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyrates/frontend/template/circuit/circuit.html#update_edges"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.frontend.template.circuit.update_edges" title="Permalink to this definition">¶</a></dt>
 <dd><p>Add edges to list of edges. Removing or altering is currently not supported.</p>
 </dd></dl>
 
@@ -162,7 +162,7 @@ arguments. For more detailed descriptions, see the respective docstrings.</p>
   <ul>
 <li><a class="reference internal" href="#">pyrates.frontend.template.circuit package</a><ul>
 <li><a class="reference internal" href="#submodules">Submodules</a></li>
-<li><a class="reference internal" href="#module-pyrates.frontend.template.circuit.circuit">pyrates.frontend.template.circuit.circuit module</a></li>
+<li><a class="reference internal" href="#module-pyrates.frontend.template.circuit">pyrates.frontend.template.circuit module</a></li>
 <li><a class="reference internal" href="#module-pyrates.frontend.template.circuit">Module contents</a></li>
 </ul>
 </li>

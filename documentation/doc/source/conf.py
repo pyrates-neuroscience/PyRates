@@ -21,14 +21,14 @@ sys.path.append(os.path.abspath('sphinxext'))
 # -- Project information -----------------------------------------------------
 
 project = u'pyrates'
-copyright = u'2020, Richard Gast'
-author = u'Richard Gast'
+copyright = u'2020, Richard Gast and Daniel Rose'
+author = u'Richard Gast and Daniel Rose'
 
 # The short X.Y version
 version = u'0.9'
 
 # The full version, including alpha/beta/rc tags
-release = u'0.9.1'
+release = u'0.9.1-dev3'  # automatically managed with bumpversion, see .bumpversion.cfg
 
 
 # -- General configuration ---------------------------------------------------

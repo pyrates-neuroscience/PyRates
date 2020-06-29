@@ -1,42 +1,85 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
   <head>
-    <meta charset="utf-8" />
-    <title>pyrates.ir.abc &#8212; PyRates 0.7.1 documentation</title>
-    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
-    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
-    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <meta charset="utf-8">
+    
+    <title>pyrates.ir.abc &mdash; pyrates 0.9.1-dev3 documentation</title>
+    
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/spc-bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/spc-extend.css">
+    <link rel="stylesheet" href="../../../_static/scipy.css" type="text/css" >
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" >
+    <link rel="stylesheet" href="../../../_static/gallery.css" type="text/css" >
+    <link rel="stylesheet" href="../../../_static/gallery-binder.css" type="text/css" >
+    <link rel="stylesheet" href="../../../_static/gallery-dataframe.css" type="text/css" >
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.9.1-dev3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
     <script type="text/javascript" src="../../../_static/jquery.js"></script>
     <script type="text/javascript" src="../../../_static/underscore.js"></script>
     <script type="text/javascript" src="../../../_static/doctools.js"></script>
     <script type="text/javascript" src="../../../_static/language_data.js"></script>
-    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="index" title="Index" href="../../../genindex.html" />
-    <link rel="search" title="Search" href="../../../search.html" />
-   
-  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
-  
-  
-  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+    <script type="text/javascript" src="../../../_static/js/copybutton.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" >
+    <link rel="search" title="Search" href="../../../search.html" >
+    <link rel="top" title="pyrates 0.9.1-dev3 documentation" href="../../../index.html" >
+    <link rel="up" title="Module code" href="../../index.html" > 
+  </head>
+  <body>
 
-  </head><body>
-  
+<div class="container">
+  <div class="top-scipy-org-logo-header">
+    <a href="../../../index.html">
+      <img style="border: 0;" alt="pyrates" src="../../../_static/img/pyrates_logo_large.png"></a>
+    </div>
+  </div>
+</div>
 
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
-              <div class="related top">
-                &nbsp;
-  <nav id="rellinks">
-    <ul>
+
+    <div class="container">
+      <div class="main">
+        
+	<div class="row-fluid">
+	  <div class="span12">
+	    <div class="spc-navbar">
+              
+    <ul class="nav nav-pills pull-left">
+	
+        <li class="active"><a href="../../../index.html">PyRates</a></li>
+	
+          <li class="active"><a href="../../index.html" accesskey="U">Module code</a></li> 
     </ul>
-  </nav>
-              </div>
-          
+              
+              
+    <ul class="nav nav-pills pull-right">
+      <li class="active">
+        <a href="../../../genindex.html" title="General Index"
+           accesskey="I">index</a>
+      </li>
+      <li class="active">
+        <a href="../../../py-modindex.html" title="Python Module Index"
+           >modules</a>
+      </li>
+    </ul>
+              
+	    </div>
+	  </div>
+	</div>
+        
 
-          <div class="body" role="main">
+	<div class="row-fluid">
+          <div class="span9">
+            
+        <div class="bodywrapper">
+          <div class="body" id="spc-section-body">
             
   <h1>Source code for pyrates.ir.abc</h1><div class="highlight"><pre>
 <span></span>
@@ -69,25 +112,25 @@
 <span class="c1"># Richard Gast and Daniel Rose et. al. in preparation</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="n">__author__</span> <span class="o">=</span> <span class="s2">&quot;Daniel Rose&quot;</span>
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
 
 
-<div class="viewcode-block" id="AbstractBaseIR"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.abc.AbstractBaseIR">[docs]</a><span class="k">class</span> <span class="nc">AbstractBaseIR</span><span class="p">:</span>
+<div class="viewcode-block" id="AbstractBaseIR"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.abc.AbstractBaseIR">[docs]</a><span class="k">class</span> <span class="nc">AbstractBaseIR</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Abstract base class for intermediate representation classes&quot;&quot;&quot;</span>
 
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;_template&quot;</span><span class="p">,</span> <span class="s1">&#39;_h&#39;</span><span class="p">]</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_template</span> <span class="o">=</span> <span class="n">template</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">template</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_template</span>
 
-    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<div class="viewcode-block" id="AbstractBaseIR.__getitem__"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.abc.AbstractBaseIR.__getitem__">[docs]</a>    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Custom implementation of __getitem__ that dissolves strings of form &quot;key1/key2/key3&quot; into</span>
 <span class="sd">        lookups of form self[key1][key2][key3].</span>
@@ -118,13 +161,13 @@
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">e</span>
 
-        <span class="k">return</span> <span class="n">item</span>
+        <span class="k">return</span> <span class="n">item</span></div>
 
-<div class="viewcode-block" id="AbstractBaseIR.getitem_from_iterator"><a class="viewcode-back" href="../../../pyrates.ir.html#pyrates.ir.abc.AbstractBaseIR.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+<div class="viewcode-block" id="AbstractBaseIR.getitem_from_iterator"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.abc.AbstractBaseIR.getitem_from_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">getitem_from_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key_iter</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
         <span class="sd">&quot;&quot;&quot;Invoked by __getitem__ or [] slicing. Needs to be implemented in subclass.&quot;&quot;&quot;</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
 
-    <span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
@@ -133,8 +176,8 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span>
 
-    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_h</span></div>
+    <span class="k">def</span> <span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_h</span>
 
     <span class="c1"># @classmethod</span>
     <span class="c1"># def from_dict(cls, **kwargs):</span>
@@ -144,83 +187,109 @@
     <span class="c1">#     template_cls = getattr(module, f&quot;{cls.__name__[-2]}Template&quot;)</span>
     <span class="c1">#     return template_cls(name=&quot;&quot;, path=&quot;&quot;, **kwargs).apply</span>
 
+<div class="viewcode-block" id="AbstractBaseIR.to_file"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.abc.AbstractBaseIR.to_file">[docs]</a>    <span class="k">def</span> <span class="nf">to_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">filetype</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;pickle&quot;</span><span class="p">,</span> <span class="n">template_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Save an IR object to file. The filetype &#39;pickle&#39; save the object as is to a file, whereas the &#39;yaml&#39; option</span>
+<span class="sd">        creates a template from the IR object. In the latter case you need to define a `template_name` that is used in</span>
+<span class="sd">        the YAML file.</span>
 
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        filename</span>
+<span class="sd">            Path to file (absolute or relative).</span>
+<span class="sd">        filetype</span>
+<span class="sd">            Chooses which loader to use to load the file. Allowed types: pickle, yaml</span>
+<span class="sd">        template_name</span>
+<span class="sd">            This is required for the &#39;yaml&#39; format, in order to define the name of the newly created template.</span>
+
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">filetype</span> <span class="o">==</span> <span class="s2">&quot;pickle&quot;</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">pyrates.frontend.fileio</span> <span class="kn">import</span> <span class="n">pickle</span>
+            <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">pyrates.frontend.fileio</span> <span class="kn">import</span> <span class="n">FILEIOMODES</span>
+            <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown file format to save to. Allowed modes: </span><span class="si">{</span><span class="n">FILEIOMODES</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AbstractBaseIR.from_file"><a class="viewcode-back" href="../../../ir.html#pyrates.ir.abc.AbstractBaseIR.from_file">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_file</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">filetype</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;pickle&quot;</span><span class="p">,</span> <span class="n">error_on_instance_check</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Load an IR instance from file. The function verifies that the loaded object is indeed an instance of the</span>
+<span class="sd">        class this function was called from.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        filename</span>
+<span class="sd">            Path to file (relative or absolute)</span>
+<span class="sd">        filetype</span>
+<span class="sd">            Indicate which file type to expect</span>
+<span class="sd">        error_on_instance_check</span>
+<span class="sd">            Toggle whether or not to raise an error if the instance check fails.</span>
+
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Any</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">filetype</span> <span class="o">==</span> <span class="s2">&quot;pickle&quot;</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">pyrates.frontend.fileio</span> <span class="kn">import</span> <span class="n">pickle</span>
+
+            <span class="n">instance</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">pyrates.frontend.fileio</span> <span class="kn">import</span> <span class="n">FILEIOMODES</span>
+            <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown file format to save to. Allowed modes: </span><span class="si">{</span><span class="n">FILEIOMODES</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="bp">cls</span><span class="p">):</span>
+
+            <span class="k">return</span> <span class="n">instance</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;The object loaded from &#39;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&#39; is not an instance of the class `</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">` requesting it.&quot;</span>
+            <span class="k">if</span> <span class="n">error_on_instance_check</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="kn">import</span> <span class="nn">warnings</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="n">message</span><span class="p">)</span></div></div>
 </pre></div>
 
           </div>
-              <div class="related bottom">
-                &nbsp;
-  <nav id="rellinks">
-    <ul>
-    </ul>
-  </nav>
-              </div>
-          
         </div>
-      </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+          </div>
+      <div class="spc-rightsidebar span3">
         <div class="sphinxsidebarwrapper">
-<p class="logo">
-  <a href="../../../index.html">
-    <img class="logo" src="../../../_static/PyRates_logo_color.png" alt="Logo"/>
-    
-    <h1 class="logo logo-name">PyRates</h1>
-    
-  </a>
-</p>
+            <p class="logo"><a href="../../../index.html">
+              <img class="logo" src="../../../_static/pyrates_logo.png" alt="Logo">
+            </a></p>
 
-
-
-
-
-
-<p>
-<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
-  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
-</p>
-
-
-
-
-
-    
-
-<p>
-<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
-    <img
-        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
-        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
-    />
-</a>
-</p>
-
-
-
-<div id="searchbox" style="display: none" role="search">
-  <h3 id="searchlabel">Quick search</h3>
-    <div class="searchformwrapper">
-    <form class="search" action="../../../search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
-      <input type="submit" value="Go" />
-    </form>
-    </div>
-</div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
       </div>
-      <div class="clearer"></div>
+        </div>
+      </div>
     </div>
+
+    <div class="container container-navbar-bottom">
+      <div class="spc-navbar">
+        
+      </div>
+    </div>
+    <div class="container">
     <div class="footer">
-      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
-      
-      |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
-      
+    <div class="row-fluid">
+    <ul class="inline pull-left">
+      <li>
+        &copy; Copyright 2020, Richard Gast and Daniel Rose.
+      </li>
+      <li>
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 3.1.1.
+      </li>
+    </ul>
     </div>
-
-    
-
-    
+    </div>
+    </div>
   </body>
 </html>

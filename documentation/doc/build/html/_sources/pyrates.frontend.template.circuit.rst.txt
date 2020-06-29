@@ -4,10 +4,10 @@ pyrates.frontend.template.circuit package
 Submodules
 ----------
 
-pyrates.frontend.template.circuit.circuit module
+pyrates.frontend.template.circuit module
 ------------------------------------------------
 
-.. automodule:: pyrates.frontend.template.circuit.circuit
+.. automodule:: pyrates.frontend.template.circuit
    :members:
    :undoc-members:
    :show-inheritance:

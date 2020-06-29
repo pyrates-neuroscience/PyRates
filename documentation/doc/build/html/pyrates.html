@@ -1,230 +1,199 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
   <head>
-    <meta charset="utf-8" />
-    <title>pyrates package &#8212; PyRates 0.7.1 documentation</title>
-    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <meta charset="utf-8">
+    
+    <title>PyRates.pyrates &mdash; pyrates 0.9.1-dev3 documentation</title>
+    
+    <link rel="stylesheet" type="text/css" href="_static/css/spc-bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="_static/css/spc-extend.css">
+    <link rel="stylesheet" href="_static/scipy.css" type="text/css" >
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" >
+    <link rel="stylesheet" href="_static/gallery.css" type="text/css" >
+    <link rel="stylesheet" href="_static/gallery-binder.css" type="text/css" >
+    <link rel="stylesheet" href="_static/gallery-dataframe.css" type="text/css" >
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.9.1-dev3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <script type="text/javascript" src="_static/language_data.js"></script>
-    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="search.html" />
-   
-  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
-  
-  
-  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+    <script type="text/javascript" src="_static/js/copybutton.js"></script>
+    <link rel="index" title="Index" href="genindex.html" >
+    <link rel="search" title="Search" href="search.html" >
+    <link rel="top" title="pyrates 0.9.1-dev3 documentation" href="index.html" >
+    <link rel="next" title="PyRates.pyrates.backend" href="backend.html" >
+    <link rel="prev" title="1D Parameter Continuation and Fold Detection in a QIF Population" href="auto_conts/qif_fold.html" > 
+  </head>
+  <body>
 
-  </head><body>
-  
+<div class="container">
+  <div class="top-scipy-org-logo-header">
+    <a href="index.html">
+      <img style="border: 0;" alt="pyrates" src="_static/img/pyrates_logo_large.png"></a>
+    </div>
+  </div>
+</div>
 
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
-              <div class="related top">
-                &nbsp;
-  <nav id="rellinks">
-    <ul>
+
+    <div class="container">
+      <div class="main">
+        
+	<div class="row-fluid">
+	  <div class="span12">
+	    <div class="spc-navbar">
+              
+    <ul class="nav nav-pills pull-left">
+	
+        <li class="active"><a href="index.html">PyRates</a></li>
+	 
     </ul>
-  </nav>
-              </div>
-          
+              
+              
+    <ul class="nav nav-pills pull-right">
+      <li class="active">
+        <a href="genindex.html" title="General Index"
+           accesskey="I">index</a>
+      </li>
+      <li class="active">
+        <a href="py-modindex.html" title="Python Module Index"
+           >modules</a>
+      </li>
+      <li class="active">
+        <a href="backend.html" title="PyRates.pyrates.backend"
+           accesskey="N">next</a>
+      </li>
+      <li class="active">
+        <a href="auto_conts/qif_fold.html" title="1D Parameter Continuation and Fold Detection in a QIF Population"
+           accesskey="P">previous</a>
+      </li>
+    </ul>
+              
+	    </div>
+	  </div>
+	</div>
+        
 
-          <div class="body" role="main">
+	<div class="row-fluid">
+          <div class="span9">
             
-  <div class="section" id="pyrates-package">
-<h1>pyrates package<a class="headerlink" href="#pyrates-package" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="subpackages">
-<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
+        <div class="bodywrapper">
+          <div class="body" id="spc-section-body">
+            
+  <div class="section" id="pyrates-pyrates">
+<h1>PyRates.pyrates<a class="headerlink" href="#pyrates-pyrates" title="Permalink to this headline">¶</a></h1>
+<p>Modules of the PyRates core package.</p>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="pyrates.backend.html">pyrates.backend package</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#submodules">Submodules</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.computegraph">pyrates.backend.computegraph module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.funcs">pyrates.backend.funcs module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.numpy_backend">pyrates.backend.numpy_backend module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.parser">pyrates.backend.parser module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend.tensorflow_backend">pyrates.backend.tensorflow_backend module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.backend.html#module-pyrates.backend">Module contents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="backend.html">PyRates.pyrates.backend</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="backend.html#module-pyrates.backend">pyrates.backend module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="backend.html#module-pyrates.backend.numpy_backend">pyrates.backend.numpy_backend module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="backend.html#module-pyrates.backend.tensorflow_backend">pyrates.backend.tensorflow_backend module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="backend.html#module-pyrates.backend.fortran_backend">pyrates.backend.fortran_backend module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="backend.html#module-pyrates.backend.parser">pyrates.backend.parser module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="backend.html#module-pyrates.backend.funcs">pyrates.backend.funcs module</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="pyrates.frontend.html">pyrates.frontend package</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#subpackages">Subpackages</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="pyrates.frontend.template.html">pyrates.frontend.template package</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#subpackages">Subpackages</a><ul>
-<li class="toctree-l5"><a class="reference internal" href="pyrates.frontend.template.circuit.html">pyrates.frontend.template.circuit package</a><ul>
-<li class="toctree-l6"><a class="reference internal" href="pyrates.frontend.template.circuit.html#submodules">Submodules</a></li>
-<li class="toctree-l6"><a class="reference internal" href="pyrates.frontend.template.circuit.html#module-pyrates.frontend.template.circuit.circuit">pyrates.frontend.template.circuit.circuit module</a></li>
-<li class="toctree-l6"><a class="reference internal" href="pyrates.frontend.template.circuit.html#module-pyrates.frontend.template.circuit">Module contents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ir.html">PyRates.pyrates.ir</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ir.html#module-pyrates.ir">pyrates.ir module (intermediate representation)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ir.html#module-pyrates.ir.abc">pyrates.ir.abc module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ir.html#module-pyrates.ir.circuit">pyrates.ir.circuit module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ir.html#module-pyrates.ir.node">pyrates.ir.node module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ir.html#module-pyrates.ir.edge">pyrates.ir.edge module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ir.html#module-pyrates.ir.operator">pyrates.ir.operator module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ir.html#module-pyrates.ir.operator_graph">pyrates.ir.operator_graph module</a></li>
 </ul>
 </li>
-<li class="toctree-l5"><a class="reference internal" href="pyrates.frontend.template.edge.html">pyrates.frontend.template.edge package</a><ul>
-<li class="toctree-l6"><a class="reference internal" href="pyrates.frontend.template.edge.html#submodules">Submodules</a></li>
-<li class="toctree-l6"><a class="reference internal" href="pyrates.frontend.template.edge.html#module-pyrates.frontend.template.edge.edge">pyrates.frontend.template.edge.edge module</a></li>
-<li class="toctree-l6"><a class="reference internal" href="pyrates.frontend.template.edge.html#module-pyrates.frontend.template.edge">Module contents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontend.html">PyRates.pyrates.frontend</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="frontend.html#module-pyrates.frontend">pyrates.frontend module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="frontend.template.html">PyRates.pyrates.frontend.template</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="frontend.template.html#module-pyrates.frontend.template">pyrates.frontend.template module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="frontend.template.html#module-pyrates.frontend.template.abc">pyrates.frontend.template.abc module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="frontend.template.html#module-pyrates.frontend.template.circuit">pyrates.frontend.template.circuit module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="frontend.template.html#module-pyrates.frontend.template.node">pyrates.frontend.template.node module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="frontend.template.html#module-pyrates.frontend.template.edge">pyrates.frontend.template.edge module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="frontend.template.html#module-pyrates.frontend.template.operator">pyrates.frontend.template.operator module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="frontend.template.html#module-pyrates.frontend.template.operator_graph">pyrates.frontend.template.operator_graph module</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#submodules">Submodules</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template.abc">pyrates.frontend.template.abc module</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template.node">pyrates.frontend.template.node module</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template.operator">pyrates.frontend.template.operator module</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template.operator_graph">pyrates.frontend.template.operator_graph module</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pyrates.frontend.template.html#module-pyrates.frontend.template">Module contents</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#submodules">Submodules</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.dict">pyrates.frontend.dict module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.file">pyrates.frontend.file module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#pyrates-frontend-nxgraph-module">pyrates.frontend.nxgraph module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.utility">pyrates.frontend.utility module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend.yaml">pyrates.frontend.yaml module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.frontend.html#module-pyrates.frontend">Module contents</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="pyrates.ir.html">pyrates.ir package</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#submodules">Submodules</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.abc">pyrates.ir.abc module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.circuit">pyrates.ir.circuit module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.edge">pyrates.ir.edge module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.node">pyrates.ir.node module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.operator">pyrates.ir.operator module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir.operator_graph">pyrates.ir.operator_graph module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.ir.html#module-pyrates.ir">Module contents</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="pyrates.utility.html">pyrates.utility package</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#submodules">Submodules</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.annarchy_wrapper">pyrates.utility.annarchy_wrapper module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.data_analysis">pyrates.utility.data_analysis module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.filestorage">pyrates.utility.filestorage module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.genetic_algorithm">pyrates.utility.genetic_algorithm module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.grid_search">pyrates.utility.grid_search module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.mne_wrapper">pyrates.utility.mne_wrapper module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.visualization">pyrates.utility.visualization module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility.worker_template">pyrates.utility.worker_template module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pyrates.utility.html#module-pyrates.utility">Module contents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="frontend.fileio.html">PyRates.pyrates.frontend.fileio</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="frontend.fileio.html#module-pyrates.frontend.fileio">pyrates.frontend.fileio module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="frontend.fileio.html#module-pyrates.frontend.fileio.pickle">pyrates.frontend.fileio.pickle module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="frontend.fileio.html#module-pyrates.frontend.fileio.yaml">pyrates.frontend.fileio.yaml module</a></li>
 </ul>
 </li>
 </ul>
-</div>
-</div>
-<div class="section" id="module-pyrates">
-<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-pyrates" title="Permalink to this headline">¶</a></h2>
-<p>Python package for building and simulating complex dynamical systems. Represents the dynamical systems as graphs,
-i.e. networks of nodes connected via edges.</p>
-<dl class="exception">
-<dt id="pyrates.PyRatesException">
-<em class="property">exception </em><code class="sig-prename descclassname">pyrates.</code><code class="sig-name descname">PyRatesException</code><a class="reference internal" href="_modules/pyrates.html#PyRatesException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyrates.PyRatesException" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Exception</span></code></p>
-</dd></dl>
-
+</li>
+<li class="toctree-l2"><a class="reference internal" href="frontend.html#module-pyrates.frontend.dict">pyrates.frontend.dict module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frontend.html#module-pyrates.frontend.file">pyrates.frontend.file module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frontend.html#module-pyrates.frontend.utility">pyrates.frontend.utility module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="utility.html">PyRates.pyrates.utility</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="utility.html#module-pyrates.utility">pyrates.utility module</a></li>
+</ul>
+</li>
+</ul>
 </div>
 </div>
 
 
           </div>
-              <div class="related bottom">
-                &nbsp;
-  <nav id="rellinks">
-    <ul>
-    </ul>
-  </nav>
-              </div>
-          
         </div>
-      </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+          </div>
+      <div class="spc-rightsidebar span3">
         <div class="sphinxsidebarwrapper">
-<p class="logo">
-  <a href="index.html">
-    <img class="logo" src="_static/PyRates_logo_color.png" alt="Logo"/>
-    
-    <h1 class="logo logo-name">PyRates</h1>
-    
-  </a>
-</p>
-
-
-
-
-
-
-<p>
-<iframe src="https://ghbtns.com/github-btn.html?user=pyrates-neuroscience&repo=PyRates&type=watch&count=true&size=large&v=2"
-  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
-</p>
-
-
-
-
-
-    
-
-<p>
-<a class="badge" href="https://travis-ci.org/pyrates-neuroscience/PyRates">
-    <img
-        alt="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
-        src="https://secure.travis-ci.org/pyrates-neuroscience/PyRates.svg?branch=master"
-    />
-</a>
-</p>
-
-
-
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
-<li><a class="reference internal" href="#">pyrates package</a><ul>
-<li><a class="reference internal" href="#subpackages">Subpackages</a></li>
-<li><a class="reference internal" href="#module-pyrates">Module contents</a></li>
-</ul>
-</li>
-</ul>
-
-  <div role="note" aria-label="source link">
-    <h3>This Page</h3>
-    <ul class="this-page-menu">
-      <li><a href="_sources/pyrates.rst.txt"
-            rel="nofollow">Show Source</a></li>
-    </ul>
-   </div>
-<div id="searchbox" style="display: none" role="search">
-  <h3 id="searchlabel">Quick search</h3>
-    <div class="searchformwrapper">
-    <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
-      <input type="submit" value="Go" />
-    </form>
-    </div>
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/pyrates_logo.png" alt="Logo">
+            </a></p>
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="auto_conts/qif_fold.html"
+                        title="previous chapter">1D Parameter Continuation and Fold Detection in a QIF Population</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="backend.html"
+                        title="next chapter">PyRates.pyrates.backend</a></p>
+  <h3>This Page</h3>
+  <div>
+    <a href="_sources/pyrates.rst.txt"
+       rel="nofollow">Show Source</a>
+  </div>
+<div class="this-page-menu">
+  <a href="/scipy/docs/scipy-docs/pyrates.rst.rst">Edit page</a>
 </div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
+
         </div>
       </div>
-      <div class="clearer"></div>
+        </div>
+      </div>
     </div>
+
+    <div class="container container-navbar-bottom">
+      <div class="spc-navbar">
+        
+      </div>
+    </div>
+    <div class="container">
     <div class="footer">
-      &copy;2019, Richard Gast, Daniel Rose, Christoph Salomon.
-      
-      |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
-      
-      |
-      <a href="_sources/pyrates.rst.txt"
-          rel="nofollow">Page source</a>
+    <div class="row-fluid">
+    <ul class="inline pull-left">
+      <li>
+        &copy; Copyright 2020, Richard Gast and Daniel Rose.
+      </li>
+      <li>
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 3.1.1.
+      </li>
+    </ul>
     </div>
-
-    
-
-    
+    </div>
+    </div>
   </body>
 </html>

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>pyrates.frontend.template.circuit.circuit &#8212; PyRates 0.7.1 documentation</title>
+    <title>pyrates.frontend.template.circuit &#8212; PyRates 0.7.1 documentation</title>
     <link rel="stylesheet" href="../../../../../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
     <script type="text/javascript" id="documentation_options" data-url_root="../../../../../" src="../../../../../_static/documentation_options.js"></script>
@@ -38,7 +38,7 @@
 
           <div class="body" role="main">
             
-  <h1>Source code for pyrates.frontend.template.circuit.circuit</h1><div class="highlight"><pre>
+  <h1>Source code for pyrates.frontend.template.circuit</h1><div class="highlight"><pre>
 <span></span><span class="c1"># -*- coding: utf-8 -*-</span>
 <span class="c1">#</span>
 <span class="c1">#</span>
@@ -94,7 +94,7 @@
 <span class="n">__status__</span> <span class="o">=</span> <span class="s2">&quot;Development&quot;</span>
 
 
-<div class="viewcode-block" id="CircuitTemplate"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.CircuitTemplate">[docs]</a><span class="k">class</span> <span class="nc">CircuitTemplate</span><span class="p">(</span><span class="n">AbstractBaseTemplate</span><span class="p">):</span>
+<div class="viewcode-block" id="CircuitTemplate"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.CircuitTemplate">[docs]</a><span class="k">class</span> <span class="nc">CircuitTemplate</span><span class="p">(</span><span class="n">AbstractBaseTemplate</span><span class="p">):</span>
     <span class="n">target_ir</span> <span class="o">=</span> <span class="n">CircuitIR</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;A circuit template.&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;circuit&quot;</span><span class="p">,</span>
@@ -127,7 +127,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">label</span>
 
-<div class="viewcode-block" id="CircuitTemplate.update_template"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.CircuitTemplate.update_template">[docs]</a>    <span class="k">def</span> <span class="nf">update_template</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<div class="viewcode-block" id="CircuitTemplate.update_template"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.CircuitTemplate.update_template">[docs]</a>    <span class="k">def</span> <span class="nf">update_template</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                         <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">circuits</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">nodes</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                         <span class="n">edges</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Update all entries of the circuit template in their respective ways.&quot;&quot;&quot;</span>
@@ -157,7 +157,7 @@
                               <span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span> <span class="n">circuits</span><span class="o">=</span><span class="n">circuits</span><span class="p">,</span> <span class="n">nodes</span><span class="o">=</span><span class="n">nodes</span><span class="p">,</span>
                               <span class="n">edges</span><span class="o">=</span><span class="n">edges</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="CircuitTemplate.apply"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.CircuitTemplate.apply">[docs]</a>    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="CircuitTemplate.apply"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.CircuitTemplate.apply">[docs]</a>    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Create a Circuit graph instance based on the template&quot;&quot;&quot;</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">label</span><span class="p">:</span>
@@ -228,7 +228,7 @@
 <span class="c1">#     return template.apply()</span>
 
 
-<div class="viewcode-block" id="update_edges"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.update_edges">[docs]</a><span class="k">def</span> <span class="nf">update_edges</span><span class="p">(</span><span class="n">base_edges</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">tuple</span><span class="p">],</span> <span class="n">updates</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]]):</span>
+<div class="viewcode-block" id="update_edges"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.update_edges">[docs]</a><span class="k">def</span> <span class="nf">update_edges</span><span class="p">(</span><span class="n">base_edges</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">tuple</span><span class="p">],</span> <span class="n">updates</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]]):</span>
     <span class="sd">&quot;&quot;&quot;Add edges to list of edges. Removing or altering is currently not supported.&quot;&quot;&quot;</span>
 
     <span class="n">updated</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">base_edges</span><span class="p">)</span>
@@ -245,7 +245,7 @@
     <span class="k">return</span> <span class="n">updated</span></div>
 
 
-<div class="viewcode-block" id="update_dict"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.circuit.update_dict">[docs]</a><span class="k">def</span> <span class="nf">update_dict</span><span class="p">(</span><span class="n">base_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">updates</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<div class="viewcode-block" id="update_dict"><a class="viewcode-back" href="../../../../../pyrates.frontend.template.circuit.html#pyrates.frontend.template.circuit.update_dict">[docs]</a><span class="k">def</span> <span class="nf">update_dict</span><span class="p">(</span><span class="n">base_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">updates</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
     <span class="n">updated</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">base_dict</span><span class="p">)</span>
 
     <span class="n">updated</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates</span><span class="p">)</span>
