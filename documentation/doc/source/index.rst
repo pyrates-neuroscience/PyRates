@@ -85,16 +85,16 @@ Examples Gallery
 ================
 
 .. include::
-   auto_mod/index.rst
+   auto_intros/index.rst
 
 .. include::
-   auto_def/index.rst
+   auto_interfaces/index.rst
 
 .. include::
-   auto_sweep/index.rst
+   auto_sweeps/index.rst
 
 .. include::
-   auto_cont/index.rst
+   auto_conts/index.rst
 
 API
 ===

@@ -3,7 +3,8 @@
 ================================================================
 
 In this tutorial, you will learn how to perform a 1D
-`numerical parameter continuation <http://www.scholarpedia.org/article/Numerical_analysis#Numerical_solution_of_differential_and_integral_equations>`_
+`numerical parameter continuation <http://www.scholarpedia.org/article/Numerical_analysis#Numerical_solution_of_
+differential_and_integral_equations>`_
 in PyRates with automatic fold `bifurcation <http://www.scholarpedia.org/article/Bifurcation>`_ detection.
 Furthermore, you will learn how to plot a simple bifurcation diagram. Throughout this example, we will use
 the quadratic integrate-and-fire population model [1]_, a detailed introduction of which is given in the model
@@ -16,6 +17,7 @@ introductions example gallery. The dynamic equations of this model read the foll
 
 where :math:`r` is the average firing rate and :math:`v` is the average membrane potential of the QIF population.
 It is governed by 4 parameters:
+
     - :math:`\\tau` --> the population time constant
     - :math:`\\bar \\eta` --> the mean of a Lorenzian distribution over the neural excitability in the population
     - :math:`\\Delta` --> the half-width at half maximum of the Lorenzian distribution over the neural excitability
@@ -145,12 +147,12 @@ t_sols, t_cont = qif_auto.run(e='rhs_func', c='ivp', name='time', DS=1e-3, DSMIN
 # :math:`v`. Thus, our model converged to an equilibrium and we are now save to perform the continuation in our
 # parameter of interest: :math:`\bar \eta`. This follows a very similar syntax:
 
-eta_sols, eta_cont = qif_auto.run(origin=t_cont, starting_point='UZ1', name='eta', bidirectional=True,
-                                  ICP=4, RL0=-20.0, RL1=20.0, IPS=1, ILP=1, ISP=2,
-                                  ISW=1, NTST=400, NCOL=4, IAD=3, IPLT=0, NBC=0, NINT=0, NMX=2000,
-                                  NPR=40, MXBF=5, IID=2, ITMX=40, ITNW=40, NWTN=12, JAC=0, EPSL=1e-06, EPSU=1e-06,
-                                  EPSS=1e-04, DS=1e-4, DSMIN=1e-8, DSMAX=5e-2, IADS=1, THL={}, THU={}, UZR={},
-                                  STOP={})
+eta_sols, eta_cont = qif_auto.run(
+    origin=t_cont, starting_point='UZ1', name='eta', bidirectional=True, ICP=4, RL0=-20.0, RL1=20.0, IPS=1, ILP=1,
+    ISP=2, ISW=1, NTST=400, NCOL=4, IAD=3, IPLT=0, NBC=0, NINT=0, NMX=2000, NPR=40, MXBF=5, IID=2, ITMX=40, ITNW=40,
+    NWTN=12, JAC=0, EPSL=1e-06, EPSU=1e-06, EPSS=1e-04, DS=1e-4, DSMIN=1e-8, DSMAX=5e-2, IADS=1, THL={}, THU={}, UZR={},
+    STOP={}
+)
 
 # %%
 # In this call, we specified the full set of auto-07p constants. Don't worry, usually, you do not have to bother with

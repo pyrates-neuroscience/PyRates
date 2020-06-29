@@ -9,7 +9,7 @@ backend representation of the model equations that is used to perform simulation
 The *intermediate representation* allows the user to dynamically build up a network graph of nodes and edges from the
 respective template classes. This network graph is based on the powerful graph tool *networkx*. More specifically,
 each PyRates model is represented as a :code:`networkx.MultiDiGraph`. This representation comes with the full list of
-advantages of a :node:`networkx` model, such as various algorithms for measurements of graph characteristics
+advantages of a :code:`networkx` model, such as various algorithms for measurements of graph characteristics
 (centralities, cluster coefficients, shortest paths, ...). For a detailed documentation of the :code:`networkx` package,
 check out their `GitHub page <https://networkx.github.io/>`_.
 
@@ -121,18 +121,20 @@ from pyrates.ir import CircuitIR
 
 n_jrcs = 10  # number of Jansen-Rit models in network
 k = 20.0  # connection strength scaling
-connectivity = np.random.uniform(0.0, 1.0, (10, 10)) * k   # connectivity matrix
+connectivity = np.random.uniform(0.0, 1.0, (10, 10))  # set up random matrix with uniformly distributed weights
+connectivity[connectivity < 0.7] = 0.0   # set weak connections to 0
+connectivity *= k  # scale remaining connections by k
 jr_network = CircuitIR(label='jansen-rit network')   # base CircuitIR instance
 
 # add all jansen-rit models to the network
 node_labels = [f'jrc_{i}' for i in range(n_jrcs)]
 for i in range(n_jrcs):
-    jr_network.add_circuit(label=node_labels[i],
-                           circuit=CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC"))
+    jr_network.add_circuit(
+        label=node_labels[i], circuit=CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC"))
 
 # connect jansen-rit networks via connectivity matrix
-jr_network.add_edges_from_matrix(source_var='PC/PRO/m_out', target_var='PC/RPO_e_pc/m_in', nodes=node_labels,
-                                 weight=connectivity)
+jr_network.add_edges_from_matrix(
+    source_var='PC/PRO/m_out', target_var='PC/RPO_e_pc/m_in', nodes=node_labels, weight=connectivity)
 
 print(jr_network.nodes)
 print(jr_network.edges)
@@ -141,4 +143,35 @@ print(jr_network.edges)
 # Part 3: Analyzing the network graph
 # -----------------------------------
 #
+# As mentioned previously, the :code:`networkx.MultiDiGraph` representation of a PyRates model allows to use various
+# graph analysis tools from the :code:`networkx` package. As an example, we demonstrate how to calculate the
+# `degree centrality <https://en.wikipedia.org/wiki/Centrality>`_ for each node in the Jansen-Rit network that we have
+# built in the last step:
 
+import networkx as nx
+
+print(nx.degree_centrality(jr_network.graph))
+
+# %%
+# Note that the command above prints the degree centrality for every population in the network. To get the degree
+# centrality for each Jansen-Rit node, they would have to be summed over PC, EIN and IIN population at each Jansen-Rit
+# node. Since the degree centrality depends only on the existence of an edge and not on the connection weights per se,
+# we compute the shortest path between two nodes as another examples that is based on connection weights:
+
+print(nx.shortest_path(jr_network.graph, source='jrc_0/PC', target='jrc_7/PC', weight='weight'))
+
+# %%
+# Here, we computed the shortest path between the PC population of the 0th Jansen-Rit node and the 7th Jansen-Rit node,
+# based on the value of the *weight* attribute of the edges. In this context, this measurement does not make much sense,
+# since it *shortest path* means the network path with the smallest sum of edge weights. Still, it demonstrates how to
+# use a certain edge attribute to compute graph metrics. For a proper *shortest path*, it would make sense to provide
+# a *distance* attribute for each edge and use :code:`weight='distance'` within the call to :code:`nx.shortest_path()`.
+# You can try this out by creating an N x N distance matrix D, where N refers to the number of Jansen-Rit nodes, and
+# changing the call to :code:`add_edges_from_matrix()` in Step 2 to include the keyword argument
+# :code:`distance=D`.
+#
+# For a list of other graph analysis functions that are available in :code:`networkx`, check out the documentation of
+# `their algorithms <https://networkx.github.io/documentation/stable/reference/algorithms/index.html>`_.
+#
+# This concludes our tutorial for *intermediate representations* in PyRates. Check out the tutorial on numerical
+# simulations to see how to simulate the dynamics of such graphs.

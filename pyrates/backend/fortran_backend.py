@@ -559,9 +559,9 @@ class FortranBackend(NumpyBackend):
         """Removes all layers, variables and operations from graph. Deletes build directory.
         """
 
+        os.chdir(self._orig_dir)
         super().clear()
-        files_to_remove = [f for f in os.listdir(os.getcwd()) if "pyrates_func" in f and "cpython" in f]
-        for f in files_to_remove:
+        for f in [f for f in os.listdir(os.getcwd()) if "cpython" in f and ("rhs_func" in f or "pyrates_func" in f)]:
             os.remove(f)
 
     def _solve(self, rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs):

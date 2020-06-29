@@ -62,15 +62,11 @@ References
 
 from pyrates.frontend import OperatorTemplate
 
-pro = OperatorTemplate(name='PRO', path=None,
-                       equations=["m_out = 2.*m_max / (1 + exp(r*(V_th - V)))"],
-                       variables={'m_out': {'default': 'output'},
-                                  'V': {'default': 'input'},
-                                  'V_thr': {'default': 6e-3},
-                                  'm_max': {'default': 2.5},
-                                  'r': {'default': 560.0}
-                                  },
-                       description="sigmoidal potential-to-rate operator")
+pro = OperatorTemplate(
+    name='PRO', path=None, equations=["m_out = 2.*m_max / (1 + exp(r*(V_th - V)))"],
+    variables={'m_out': {'default': 'output'}, 'V': {'default': 'input'}, 'V_thr': {'default': 6e-3},
+               'm_max': {'default': 2.5}, 'r': {'default': 560.0}},
+    description="sigmoidal potential-to-rate operator")
 
 # %%
 # In this case, we need the keyword arguments `equations` and `variables` to set up an operator (which is identical for
@@ -96,15 +92,11 @@ pro = OperatorTemplate(name='PRO', path=None,
 # efficacy and the time-scale of the synapse, respectively.
 # A :code:`OperatorTemplate` instance for the RPO can be created as shown below:
 
-rpo_e = OperatorTemplate(name='RPO_e', path=None,
-                         equations=['d/dt * V = I',
-                                    'd/dt * I = H/tau * m_in - 2 * I/tau - V/tau^2'],
-                         variables={'V': {'default': 'output'},
-                                    'I': {'default': 'variable'},
-                                    'm_in': {'default': 'input'},
-                                    'tau': {'default': 0.01},
-                                    'H': {'default': 0.00325}},
-                         description="excitatory rate-to-potential operator")
+rpo_e = OperatorTemplate(
+    name='RPO_e', path=None, equations=['d/dt * V = I', 'd/dt * I = H/tau * m_in - 2 * I/tau - V/tau^2'],
+    variables={'V': {'default': 'output'}, 'I': {'default': 'variable'}, 'm_in': {'default': 'input'},
+               'tau': {'default': 0.01}, 'H': {'default': 0.00325}},
+    description="excitatory rate-to-potential operator")
 
 # %%
 # This is an example of an operator with multiple equations, which are provided as a list of strings. The operator takes
@@ -169,8 +161,8 @@ iin = NodeTemplate(name="IIN", path=None, operators=[pro, rpo_e])
 # update the two constants, to receive the :code:`rpo_i` operator:
 
 from copy import deepcopy
-rpo_i = deepcopy(rpo_e).update_template(name='RPO_i', path=None, variables={'H': {'default': -0.022},
-                                                                            'tau': {'default': 0.02}})
+rpo_i = deepcopy(rpo_e).update_template(
+    name='RPO_i', path=None, variables={'H': {'default': -0.022}, 'tau': {'default': 0.02}})
 pc = NodeTemplate(name="PC", path=None, operators=[pro, rpo_e, rpo_i])
 
 # %%
@@ -207,14 +199,13 @@ pc = NodeTemplate(name="PC", path=None, operators=[pro, rpo_e, rpo_i])
 # edges that can be set up within the :code:`CircuitTemplate` as follows:
 
 from pyrates.frontend import CircuitTemplate
-jrc = CircuitTemplate(name="JRC", nodes={'PC': pc, 'EIN': ein, 'IIN': iin},
-                      edges=[("PC/PRO/m_out", "IIN/RPO_e/m_in", None, {'weight': 33.75}),
-                             ("PC/PRO/m_out", "EIN/RPO_e/m_in", None, {'weight': 135.}),
-                             ("EIN/PRO/m_out", "PC/RPO_e/m_in", None, {'weight': 108.}),
-                             ("IIN/PRO/m_out", "PC/RPO_i/m_in", None, {'weight': 33.75})
-                             ],
-                      path=None
-                      )
+jrc = CircuitTemplate(
+    name="JRC", nodes={'PC': pc, 'EIN': ein, 'IIN': iin},
+    edges=[("PC/PRO/m_out", "IIN/RPO_e/m_in", None, {'weight': 33.75}),
+           ("PC/PRO/m_out", "EIN/RPO_e/m_in", None, {'weight': 135.}),
+           ("EIN/PRO/m_out", "PC/RPO_e/m_in", None, {'weight': 108.}),
+           ("IIN/PRO/m_out", "PC/RPO_i/m_in", None, {'weight': 33.75})],
+    path=None)
 
 # %%
 # A circuit template requires the definition of 2 fields: :code:`nodes` and :code:`edges`.

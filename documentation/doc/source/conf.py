@@ -65,12 +65,12 @@ sphinx_gallery_conf = {
         '../../parameter_continuation'
     ],   # path to your example scripts
     'gallery_dirs': [
-        'auto_mod',
-        'auto_inter',
-        'auto_sweep',
+        'auto_intros',
+        'auto_interfaces',
+        'auto_sweeps',
         #'auto_opt',
         #'auto_vis',
-        'auto_cont'
+        'auto_conts'
     ]  # path to where to save gallery generated output
 
 }
