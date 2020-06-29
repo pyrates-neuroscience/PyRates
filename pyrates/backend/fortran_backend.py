@@ -207,8 +207,6 @@ class FortranBackend(NumpyBackend):
         # preparations
         ##############
 
-        os.chdir(self._build_dir)
-
         # remove empty layers and operators
         new_layer_idx = 0
         for layer_idx, layer in enumerate(self.layers.copy()):
@@ -355,7 +353,8 @@ class FortranBackend(NumpyBackend):
         func_gen.remove_indent()
 
         # save rhs function to file
-        f2py.compile(func_gen.generate(), modulename='rhs_func', extension='.f', source_fn='rhs_func.f', verbose=False)
+        fname = f'{self._build_dir}/rhs_func'
+        f2py.compile(func_gen.generate(), modulename='rhs_func', extension='.f', source_fn=f'{fname}.f', verbose=False)
 
         # create additional subroutines in pyauto compatibility mode
         gen_def = kwargs.pop('generate_auto_def', True)
@@ -363,9 +362,9 @@ class FortranBackend(NumpyBackend):
             self.generate_auto_def(self._build_dir)
 
         # import function from file
-        exec("from rhs_func import func", globals())
+        fname_import = fname.replace('/', '.')
+        exec(f"from rhs_func import rhs_eval", globals())
         rhs_eval = globals().pop('func')
-        os.chdir(self._orig_dir)
 
         # apply function decorator
         if decorator:
@@ -559,7 +558,6 @@ class FortranBackend(NumpyBackend):
         """Removes all layers, variables and operations from graph. Deletes build directory.
         """
 
-        os.chdir(self._orig_dir)
         super().clear()
         for f in [f for f in os.listdir(os.getcwd()) if "cpython" in f and ("rhs_func" in f or "pyrates_func" in f)]:
             os.remove(f)

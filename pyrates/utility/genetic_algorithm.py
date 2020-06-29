@@ -30,13 +30,16 @@
 import numpy as np
 import pandas as pd
 from typing import Optional, Union
+from scipy.optimize import differential_evolution
 
 # system imports
 import os
 from itertools import cycle
 from copy import deepcopy
 
-from pyrates.utility.grid_search import grid_search, ClusterGridSearch, linearize_grid
+# pyrates imports
+from pyrates.utility.grid_search import grid_search, ClusterGridSearch, linearize_grid, adapt_circuit, ClusterCompute
+from pyrates.frontend import CircuitTemplate
 
 # meta infos
 __author__ = "Christoph Salomon, Richard Gast"
@@ -145,6 +148,7 @@ class GeneticAlgorithmTemplate:
         iter_count = 0
         stagnation_count = 0
         while iter_count < max_iter:
+
             print("")
             print(f'ITERATION: {iter_count}')
 
@@ -533,6 +537,171 @@ class GeneticAlgorithmTemplate:
 
     def eval_fitness(self, target: list, *argv, **kwargs):
         raise NotImplementedError
+
+
+class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
+
+    model_ids = []
+
+    def __init__(self):
+        np.random.seed(1234)
+        super().__init__()
+
+    def run(self, initial_gene_pool: dict, gene_map: dict, fitness_func: callable,
+            fitness_func_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
+            run_func_kwargs: Optional[dict] = None, template: Optional[Union[str, CircuitTemplate]] = None,
+            compile_kwargs: Optional[dict] = None, save_dir: Optional[str] = "", verbose: bool = True, **kwargs):
+        """Run a genetic algorithm to optimize genes of a population in respect to a given target vector
+
+        Parameters
+        ----------
+        initial_gene_pool
+            Dictionary containing ranges for each gene to sample from
+        gene_map
+            Dictionary that provides pointer to model variables for each gene specified in `initial_gene_pool`.
+        fitness_func
+            Function that will be used to evaluate the fitness of a certain model candidate.
+        fitness_func_kwargs
+            Additional keyword arguments that will be passed onto `fitnes_func`.
+        run_func
+            Function that will be used to calculate the behavior of a model candidate. The return value of this function
+            will be passed onto `fitness_func` as first argument. If not provided, you need to specify a `template`,
+            the `compile_kwargs` and the `run_func_kwargs`. Those will be used to call `CircuitTemplate.from_yaml`,
+            'CircuitIR.compile' and `CircuitIR.run`, respectively.
+        run_func_kwargs
+            Additional keyword arguments that will be passed onto `run_func`, if `run_func` is provided. Else, they
+            will be passed onto `CircuitIR.run`.
+        template
+            Either a path to a yaml definition of a `CircuitTemplate` or a `pyrates.frontend.CircuitTemplate` instance.
+            Only required, if no `run_func` is provided.
+        compile_kwargs
+            Additional keyword arguments that will be passed onto `CircuitIR.compile`. Only required if no `run_func`
+            is specified.
+        verbose
+            If true, status updates will be printed.
+        kwargs
+            Additional keyword arguments that will be passed onto `scipy.optimize.differential_evolution`.
+
+        Returns
+        -------
+        pandas.DataFrame containing the overall fittest member of all computed populations
+
+        """
+
+        import h5py
+
+        self.initial_gene_pool = initial_gene_pool
+        self.num_genes = len(initial_gene_pool)
+
+        # prepare arguments for call to scipy.optimize.differential_evolution
+        if verbose:
+            print('Starting preparations of evolutionary model optimization.')
+        genes = list(initial_gene_pool)
+        gene_bounds = [(initial_gene_pool[g]['min'], initial_gene_pool[g]['max']) for g in genes]
+        gene_map = [gene_map[g] for g in genes]
+
+        # perform differential evolution optimization
+        if verbose:
+            print('Starting evolutionary optimization.')
+        results = differential_evolution(self.eval_fitness, bounds=gene_bounds,
+                                         args=(gene_map, fitness_func, fitness_func_kwargs, run_func, template,
+                                               compile_kwargs, run_func_kwargs),
+                                         **kwargs)
+
+        # extract results
+        final_genes = results.x
+        final_fitness = results.fun
+        optim_sucess = results.success
+
+        # print results
+        if verbose:
+            print('Finished.')
+            print('\n')
+            if optim_sucess:
+                print('Successfully finished the evolutionary optimization of the model.')
+            else:
+                print('Failed to finish the evolutionary optimization of the model successfully.')
+                print(f'Termination message: \n {results.message}')
+            print(f'Final value of the objective function: \n {final_fitness}')
+            print(f'Final gene set: \n {final_genes}')
+
+        # save results
+        self.winner = pd.DataFrame(columns=genes + ['fitness'], data=[list(final_genes) + [final_fitness]])
+        if save_dir:
+            path = f'{save_dir}/fittest_candidate.h5'
+            print(f"Saving final gene set to: {path}")
+            self.winner.to_hdf(path, key='data')
+
+        # remove temporary data
+        try:
+            from shutil import rmtree
+            rmtree('pyrates_build')
+        except FileNotFoundError:
+            pass
+
+        return self.winner
+
+    def eval_fitness(self, genes: list, gene_map: list, fitness_func: callable,
+                     fitness_func_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
+                     template: Optional[str] = None, compile_kwargs: Optional[dict] = None,
+                     run_kwargs: Optional[dict] = None) -> float:
+        """Performs simulation in PyRates of the model defined by `template` and calculates the fitness based on the
+        resulting timeseries of that simulation.
+
+        Parameters
+        ----------
+        genes
+            List of model parameters
+        gene_map
+            List of string-based variable pointers that indicate which gene refers to which variable in the model.
+        run_func
+            User-specified run function that can be specified instead of a template, to run user-specified routines.
+        template
+        compile_kwargs
+        run_kwargs
+
+        Returns
+        -------
+
+        """
+
+        if run_func is None:
+
+            attempts = 1
+            while attempts < 100:
+
+                try:
+
+                    # load model template
+                    model_id = self.get_unique_id(int(attempts*1e6))
+                    model = CircuitTemplate.from_yaml(template).apply(label=f'model_{model_id}')
+
+                    # apply new parameters to model template
+                    params, param_map = dict(), dict()
+                    for i, (p, key) in enumerate(zip(genes, gene_map)):
+                        params[i] = p
+                        param_map[i] = key
+                    adapt_circuit(model, params=params, param_map=param_map)
+
+                    # compile model into backend
+                    model_compiled = model.compile(**compile_kwargs)
+
+                    # define run func
+                    run_func = model_compiled.run
+                    break
+
+                except (FileExistsError, FileNotFoundError):
+                    attempts += 1
+                    continue
+
+        results = run_func(**run_kwargs)
+        return fitness_func(results, **fitness_func_kwargs)
+
+    def get_unique_id(self, upper):
+        while True:
+            id = np.random.randint(low=0, high=upper)
+            if id not in self.model_ids:
+                return id
 
 
 class GSGeneticAlgorithm(GeneticAlgorithmTemplate):

@@ -954,20 +954,13 @@ class NumpyBackend(object):
         except FileNotFoundError as e:
             # for debugging
             raise e
-        os.chdir(dir_name)
+        self._build_dir = f"{dir_name}/{self.name}"
         try:
-            os.mkdir(self.name)
+            os.mkdir(self._build_dir)
         except FileExistsError:
-            rmtree(self.name)
-            os.mkdir(self.name)
-        os.chdir(self.name)
-        net_dir = os.getcwd()
-        self._build_dir = net_dir
-        sys.path.append(net_dir)
-
-        self._build_dir = net_dir
-        self._orig_dir = orig_dir
-        os.chdir(self._orig_dir)
+            rmtree(self._build_dir)
+            os.mkdir(self._build_dir)
+        sys.path.append(self._build_dir)
 
     def run(self,
             T: float,
@@ -1616,8 +1609,6 @@ class NumpyBackend(object):
         # preparations
         ##############
 
-        os.chdir(self._build_dir)
-
         # remove empty layers and operators
         new_layer_idx = 0
         for layer_idx, layer in enumerate(self.layers.copy()):
@@ -1717,14 +1708,15 @@ class NumpyBackend(object):
         func_gen.add_linebreak()
 
         # save rhs function to file
-        with open('rhs_func.py', 'w') as f:
+        fname = f'{self._build_dir}/rhs_func'
+        with open(f'{fname}.py', 'w') as f:
             f.writelines(func_gen.code)
             f.close()
 
         # import function from file
-        exec("from rhs_func import rhs_eval", globals())
+        fname_import = fname.replace('/', '.')
+        exec(f"from rhs_func import rhs_eval", globals())
         rhs_eval = globals().pop('rhs_eval')
-        os.chdir(self._orig_dir)
 
         # apply function decorator
         if decorator:
