@@ -23,7 +23,7 @@ References
 # %%
 # First, let's import the :code:`grid_search()` function from PyRates
 
-from pyrates.utility import grid_search
+from pyrates.utility.grid_search import grid_search
 
 # %%
 # The parameter C
@@ -91,7 +91,7 @@ results, results_map = grid_search(circuit_template="model_templates.jansen_rit.
 #
 # Now, lets visualize the results of this parameter sweep for each value of :math:`C`:
 
-from pyrates.utility import create_cmap, plot_timeseries
+from pyrates.utility.visualization import create_cmap, plot_timeseries
 import matplotlib.pyplot as plt
 
 fig, axes = plt.subplots(nrows=len(param_grid['C']), figsize=(8, 12))
