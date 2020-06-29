@@ -4,16 +4,18 @@
 
 ### 0.9.1-dev (work in progress)
 
-- updated documentation
-- removed conversion function register, because the functions were not used and made the code unnecessarily complicated
+- Updated documentation
+- Removed conversion function register, because the functions were not used and made the code unnecessarily complicated
     - might be replaced by a graph-based conversion path-finder in the future, if necessary
 - Extended support for loading circuits from and saving to files
     - supported formats: `yaml`, `pickle`
     - supported classes: templates
-- removed all imports in `pyrates.utility.__init__.py` for increased stability. 
+- Removed all imports in `pyrates.utility.__init__.py` for increased stability. 
   Previously, importing something from `pyrates.utility`, would have required a user to install optional packages that 
   might not have been needed. Now all utility functions need to be imported from sub-files in the `pyrates.utility` 
   module instead of directly from the module.
+- Added optional install collection `tests` that includes all packages necessary to run the tests. 
+  Also restricted the travis CI build to use only the tests installation instead of the full installation. 
 
 ### 0.9.0
 
