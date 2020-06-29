@@ -60,7 +60,7 @@ sphinx_gallery_conf = {
         '../../model_introduction',
         '../../pyrates_interfaces',
         '../../parameter_sweeps',
-        #'../../parameter_optimization',
+        '../../parameter_optimization',
         #'../../visualization',
         '../../parameter_continuation'
     ],   # path to your example scripts
@@ -68,7 +68,7 @@ sphinx_gallery_conf = {
         'auto_intros',
         'auto_interfaces',
         'auto_sweeps',
-        #'auto_opt',
+        'auto_opt',
         #'auto_vis',
         'auto_conts'
     ]  # path to where to save gallery generated output

@@ -53,7 +53,7 @@ class CircuitIR(AbstractBaseIR):
 
     # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
     __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map", "_buffered",
-                 "_first_run", "_vectorized", "_compile_info", "_backend", "step_size", "solver", "_edge_idx_counter"]
+                 "_first_run", "_vectorized", "_compiled", "_backend", "step_size", "solver", "_edge_idx_counter"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
                  edges: list = None, template: str = None):
@@ -97,7 +97,7 @@ class CircuitIR(AbstractBaseIR):
 
         self._first_run = True
         self._vectorized = False
-        self._compile_info = {}
+        self._compiled = False
         self._backend = None
         self._buffered = False
         self.solver = None
@@ -583,6 +583,7 @@ class CircuitIR(AbstractBaseIR):
 
         if verbose:
             print("Starting automatic optimization of the network graph:")
+        self._compiled = True
 
         # node vectorization
         old_nodes = self._vectorize_nodes_in_place(max_node_idx)
@@ -1010,9 +1011,13 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        var_dict = self.get_node_var(key, apply_idx=False).popitem()[1]
-        var, idx = var_dict.pop('var'), var_dict.pop('idx')
-        var[idx] = val
+        var_dict = self.get_node_var(key, apply_idx=False)
+        if 'set_value' in var_dict:
+            var_dict['set_value'][var_dict['var']] = val
+        else:
+            var_dict = var_dict.popitem()[1]
+            var, idx = var_dict.pop('var'), var_dict.pop('idx')
+            var[idx] = val
 
     def get_node_var(self, key: str, apply_idx: bool = True) -> dict:
         """This function extracts and returns variables from nodes of the network graph.
@@ -1041,7 +1046,12 @@ class CircuitIR(AbstractBaseIR):
 
         # if node refers to vectorized network version, return variable from vectorized network
         try:
-            return self[key]
+            var_dict = self[key]
+            if not self._compiled:
+                var_dict['value'] = self["/".join(node)].values[op][var]
+                var_dict['var'] = var
+                var_dict['set_value'] = self["/".join(node)].values[op]
+            return var_dict
         except KeyError:
 
             # get mapping from original network nodes to vectorized network nodes

@@ -34,11 +34,14 @@ from scipy.optimize import differential_evolution
 
 # system imports
 import os
+import sys
+import glob
+import time as t
 from itertools import cycle
-from copy import deepcopy
 
 # pyrates imports
-from pyrates.utility.grid_search import grid_search, ClusterGridSearch, linearize_grid, adapt_circuit, ClusterCompute
+from pyrates.utility.grid_search import grid_search, ClusterGridSearch, linearize_grid, adapt_circuit, ClusterCompute, \
+    StreamTee
 from pyrates.frontend import CircuitTemplate
 
 # meta infos
@@ -547,11 +550,11 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
         np.random.seed(1234)
         super().__init__()
 
-    def run(self, initial_gene_pool: dict, gene_map: dict, fitness_func: callable,
-            fitness_func_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
-            run_func_kwargs: Optional[dict] = None, template: Optional[Union[str, CircuitTemplate]] = None,
+    def run(self, initial_gene_pool: dict, gene_map: dict, loss_func: callable,
+            loss_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
+            run_kwargs: Optional[dict] = None, template: Optional[Union[str, CircuitTemplate]] = None,
             compile_kwargs: Optional[dict] = None, save_dir: Optional[str] = "", verbose: bool = True, **kwargs):
-        """Run a genetic algorithm to optimize genes of a population in respect to a given target vector
+        """Run a genetic algorithm to optimize genes of a population with respect to a given loss function.
 
         Parameters
         ----------
@@ -559,16 +562,16 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
             Dictionary containing ranges for each gene to sample from
         gene_map
             Dictionary that provides pointer to model variables for each gene specified in `initial_gene_pool`.
-        fitness_func
-            Function that will be used to evaluate the fitness of a certain model candidate.
-        fitness_func_kwargs
-            Additional keyword arguments that will be passed onto `fitnes_func`.
+        loss_func
+            Function that will be used to evaluate the non-fitness of a certain model candidate.
+        loss_kwargs
+            Additional keyword arguments that will be passed onto `loss_func`.
         run_func
             Function that will be used to calculate the behavior of a model candidate. The return value of this function
-            will be passed onto `fitness_func` as first argument. If not provided, you need to specify a `template`,
+            will be passed onto `loss_func` as first argument. If not provided, you need to specify a `template`,
             the `compile_kwargs` and the `run_func_kwargs`. Those will be used to call `CircuitTemplate.from_yaml`,
             'CircuitIR.compile' and `CircuitIR.run`, respectively.
-        run_func_kwargs
+        run_kwargs
             Additional keyword arguments that will be passed onto `run_func`, if `run_func` is provided. Else, they
             will be passed onto `CircuitIR.run`.
         template
@@ -604,13 +607,13 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
         if verbose:
             print('Starting evolutionary optimization.')
         results = differential_evolution(self.eval_fitness, bounds=gene_bounds,
-                                         args=(gene_map, fitness_func, fitness_func_kwargs, run_func, template,
-                                               compile_kwargs, run_func_kwargs),
+                                         args=(gene_map, loss_func, loss_kwargs, run_func, template,
+                                               compile_kwargs, run_kwargs),
                                          **kwargs)
 
         # extract results
         final_genes = results.x
-        final_fitness = results.fun
+        final_loss = results.fun
         optim_sucess = results.success
 
         # print results
@@ -622,11 +625,11 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
             else:
                 print('Failed to finish the evolutionary optimization of the model successfully.')
                 print(f'Termination message: \n {results.message}')
-            print(f'Final value of the objective function: \n {final_fitness}')
+            print(f'Final value of the loss function: \n {final_loss}')
             print(f'Final gene set: \n {final_genes}')
 
         # save results
-        self.winner = pd.DataFrame(columns=genes + ['fitness'], data=[list(final_genes) + [final_fitness]])
+        self.winner = pd.DataFrame(columns=genes + ['loss'], data=[list(final_genes) + [final_loss]])
         if save_dir:
             path = f'{save_dir}/fittest_candidate.h5'
             print(f"Saving final gene set to: {path}")
@@ -641,8 +644,8 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
 
         return self.winner
 
-    def eval_fitness(self, genes: list, gene_map: list, fitness_func: callable,
-                     fitness_func_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
+    def eval_fitness(self, genes: list, gene_map: list, loss_func: callable,
+                     loss_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
                      template: Optional[str] = None, compile_kwargs: Optional[dict] = None,
                      run_kwargs: Optional[dict] = None) -> float:
         """Performs simulation in PyRates of the model defined by `template` and calculates the fitness based on the
@@ -654,6 +657,8 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
             List of model parameters
         gene_map
             List of string-based variable pointers that indicate which gene refers to which variable in the model.
+        loss_func
+        loss_kwargs
         run_func
             User-specified run function that can be specified instead of a template, to run user-specified routines.
         template
@@ -695,7 +700,7 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
                     continue
 
         results = run_func(**run_kwargs)
-        return fitness_func(results, **fitness_func_kwargs)
+        return loss_func(results, **loss_kwargs)
 
     def get_unique_id(self, upper):
         while True:
@@ -772,6 +777,225 @@ class CGSGeneticAlgorithm(GeneticAlgorithmTemplate):
 
         for i, candidate_genes in enumerate(param_grid.values):
             self.pop.at[i, 'fitness'] = float(results.loc['fitness', tuple(candidate_genes)])
+
+
+class ClusterDiffEvAlgorithm(DifferentialEvolutionAlgorithm, ClusterCompute):
+
+    def __init__(self, nodes: list, compute_dir: str, verbose: bool = True):
+        super(DifferentialEvolutionAlgorithm).__init__()
+        super(ClusterCompute).__init__(nodes, compute_dir=compute_dir, verbose=verbose)
+
+    def run(self, initial_gene_pool: dict, gene_map: dict, loss_func: callable,
+            loss_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
+            run_kwargs: Optional[dict] = None, template: Optional[Union[str, CircuitTemplate]] = None,
+            compile_kwargs: Optional[dict] = None, verbose: bool = True, time_limit: Optional[float] = None,
+            worker_env: Optional[Union[str, list]] = sys.executable, worker_save_dir: Optional[str] = "", **kwargs):
+
+        import h5py
+
+        if verbose:
+            sys.stdout = StreamTee(sys.stdout, self.global_logfile)
+            sys.stderr = StreamTee(sys.stderr, self.global_logfile)
+        else:
+            sys.stdout = open(self.global_logfile, 'a')
+            sys.stderr = StreamTee(sys.stderr, self.global_logfile)
+
+        t_total = t.time()
+
+        # Add local environment to each worker
+        ######################################
+
+        for i, client in enumerate(self.clients):
+            if isinstance(worker_env, list):
+                client['worker_env'] = worker_env[i]
+            else:
+                client['worker_env'] = worker_env
+
+        # Create global result file
+        ############################
+
+        if verbose:
+            print("***Creating global results file***")
+        t0 = t.time()
+
+        # Create result directory and result file for current parameter grid
+        global_res_file = f'{self.compute_dir}/optimization_result.h5'
+
+        # Write gene pool and config information to global result file
+        with h5py.File(global_res_file, 'a') as file:
+            for key, value in initial_gene_pool.items():
+                file.create_dataset(f'/GenePool/Keys/{key}', data=value)
+        # TODO: add global configuration details to file
+        if verbose:
+            print(f'Done. Elapsed time: {t.time() - t0:.3f} seconds \n\n')
+
+        # Create keyword dictionary for threads
+        #######################################
+        thread_kwargs = {
+            "worker_env": worker_env,
+            "initial_gene_pool": initial_gene_pool,
+            "gene_map": gene_map,
+            "loss_func": loss_func,
+            "loss_kwargs": loss_kwargs,
+            "run_func": run_func,
+            "run_kwargs": run_kwargs,
+            "compile_kwargs": compile_kwargs,
+            "template": template,
+            "save_dir": worker_save_dir
+        }
+
+        # Start cluster computation
+        ###########################
+
+        if verbose:
+            print("***Starting cluster computation***")
+
+        # Spawn threads to control each node connection and start computation
+        threads = [self.spawn_thread(client, thread_kwargs, timeout=time_limit) for client in self.clients]
+        # Wait for all threads to finish
+        for t_ in threads:
+            t_.join()
+
+        print("")
+        print(f'Cluster computation finished. Elapsed time: {t.time() - t_total:.3f} seconds')
+
+        # Write local results to global result file
+        ###########################################
+
+        print(f'***WRITING RESULTS TO GLOBAL RESULT FILE***')
+        t0 = t.time()
+
+        # Get sorted list of temporary result files to iterate through
+        temp_res_files = glob.glob(f'{self.compute_dir}/*_temp*')
+        temp_res_files.sort()
+
+        # Read number of different circuit outputs and prepare lists to concatenate results
+        res_dict = {}
+        try:
+            with pd.HDFStore(temp_res_files[0], "r") as store:
+                for key in store.keys():
+                    res_dict[key] = []
+        except IndexError:
+            print("No result file created. Check local log files for worker script errors.")
+            return ""
+
+        # Concatenate results from each temporary result file
+        for file in temp_res_files:
+            with pd.HDFStore(file, "r") as store:
+                for idx, key in enumerate(store.keys()):
+                    res_dict[key].append(store[key])
+
+        # Create DataFrame for each output variable and write to global result file
+        with pd.HDFStore(global_res_file, "a") as store:
+            for key, value in res_dict.items():
+                if key != '/result_map' and len(value) > 0:
+                    df = pd.concat(value, axis=kwargs.pop('result_concat_axis', 1))
+                    store.put(key=f'/Results{key}', value=df)
+            result_map = pd.concat(res_dict['/result_map'], axis=0)
+            store.put(key=f'/Results/result_map', value=result_map)
+
+        # Delete temporary local result files
+        for file in temp_res_files:
+            os.remove(file)
+
+        print(f'Elapsed time: {t.time() - t0:.3f} seconds')
+        print(f'Find results in: {self.compute_dir}/optimization_results.h5')
+        print("")
+
+        return global_res_file
+
+    def thread_master(self, client, thread_kwargs: dict, timeout: float):
+        """
+
+        Parameters
+        ----------
+        client
+        thread_kwargs
+        timeout
+
+        Returns
+        -------
+
+        """
+
+        from threading import currentThread
+
+        # This lock ensures that parameter chunks are fetched by workers in the same order as they are defined
+        # in the node list
+        self.lock.acquire()
+
+        thread_name = currentThread().getName()
+
+        # Get client information
+        pm_client = client["paramiko_client"]
+        logfile = client["logfile"]
+        worker_env = client["worker_env"]
+
+        # Get keyword arguments
+        config_file = thread_kwargs["config_file"]
+        worker_file = thread_kwargs["worker_file"]
+
+        # Prepare worker command
+        command = f'{worker_env} {worker_file}'
+
+        # Create build_dir for grid_search numpy backend
+        local_build_dir = f'{self.compute_dir}/{thread_name}'
+        os.makedirs(local_build_dir, exist_ok=True)
+
+        # Start scheduler
+        #################
+
+        # Disable thread switching
+        self.lock.acquire()
+
+        # Execute worker script on the remote host
+        print(f'[T]\'{thread_name}\': Starting remote computation...')
+
+        channel = pm_client.get_transport().open_session()
+        channel.settimeout(timeout)
+
+        # Execute the given command
+        channel.get_pty()
+        channel.exec_command(command +
+                             f' --config_file={config_file}'
+                             f' --local_res_file={local_build_dir}'
+                             f' --build_dir={local_build_dir}'
+                             f' &>{logfile}',  # redirect and append stdout
+                             )
+
+        # Enable thread switching
+        self.lock.release()
+
+        # Release the second lock if its still acquired from the very beginning
+        try:
+            self.lock.release()
+        except RuntimeError:
+            pass
+
+        # Wait for remote computation exit status
+        # (independent of success or failure)
+        #########################################
+
+        nbytes = 1024
+        t1 = t.time()
+        while not channel.exit_status_ready():
+            if channel.recv_ready():
+                data = channel.recv(nbytes)
+                while data:
+                    data = channel.recv(nbytes)
+            if channel.recv_stderr_ready():
+                error_buff = channel.recv_stderr(nbytes)
+                while error_buff:
+                    error_buff = channel.recv_stderr(nbytes)
+            t2 = t.time()
+            if t2 - t1 > timeout:
+                channel.close()
+                break
+            t.sleep(1.0)
+        channel.close()
+        exit_status = channel.recv_exit_status()
+
+        return exit_status
 
 
 def plot_results_2d(p1: str, p2: str, fname_identifier: str, fname_type: str = '.h5', fitness_measure: str = 'fitness',

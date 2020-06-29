@@ -148,7 +148,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
                       inputs=inputs,
                       outputs=outputs,
                       **kwargs)    # type: pd.DataFrame
-    #net.clear()
+    net.clear()
 
     # return results
     if 'profile' in kwargs:

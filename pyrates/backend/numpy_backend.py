@@ -1714,7 +1714,6 @@ class NumpyBackend(object):
             f.close()
 
         # import function from file
-        fname_import = fname.replace('/', '.')
         exec(f"from rhs_func import rhs_eval", globals())
         rhs_eval = globals().pop('rhs_eval')
 

@@ -94,6 +94,9 @@ Examples Gallery
    auto_sweeps/index.rst
 
 .. include::
+   auto_opt/index.rst
+
+.. include::
    auto_conts/index.rst
 
 API
