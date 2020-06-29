@@ -2,7 +2,7 @@
 
 ## 0.9
 
-### 0.9.1 (work in progress)
+### 0.9.1-dev (work in progress)
 
 - updated documentation
 - removed conversion function register, because the functions were not used and made the code unnecessarily complicated
@@ -10,6 +10,10 @@
 - Extended support for loading circuits from and saving to files
     - supported formats: `yaml`, `pickle`
     - supported classes: templates
+- removed all imports in `pyrates.utility.__init__.py` for increased stability. 
+  Previously, importing something from `pyrates.utility`, would have required a user to install optional packages that 
+  might not have been needed. Now all utility functions need to be imported from sub-files in the `pyrates.utility` 
+  module instead of directly from the module.
 
 ### 0.9.0
 
