@@ -32,19 +32,3 @@ packages, filestorage and parameter space exploration.
 
 __author__ = "Daniel F. Rose, Richard Gast"
 __status__ = "Development"
-
-# from .visualization import *
-# from .data_analysis import *
-# from .grid_search import grid_search, adapt_circuit, ClusterCompute, ClusterGridSearch
-# from .filestorage import get_simulation_data, save_simulation_data_to_file, read_simulation_data_from_file
-# from .mne_wrapper import mne_from_csv, mne_from_dataframe
-# from .annarchy_wrapper import pyrates_from_annarchy, grid_search_annarchy
-# from .genetic_algorithm import GeneticAlgorithmTemplate, CGSGeneticAlgorithm, GSGeneticAlgorithm, plot_results_2d
-# from .pyauto import PyAuto, continue_period_doubling_bf
-
-# from .construct import construct_circuit_from_file  # this one fails tests due to circular import
-
-
-# from .json_filestorage import read_config_from_circuit
-
-# from .pyRates_wrapper import circuit_wrapper
