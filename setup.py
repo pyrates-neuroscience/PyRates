@@ -1,5 +1,4 @@
 from setuptools import setup, find_packages
-from pyrates import __version__
 
 PYRATES_TEAM = "Richard Gast, Daniel Rose"
 
@@ -32,11 +31,14 @@ EXTRAS = {"tf": ["tensorflow>=2.0"],
 EXTRAS["all"] = [item for sublist in EXTRAS.values() for item in sublist]
 EXTRAS["tests"] = [item for key, sublist in EXTRAS.items() for item in sublist if key in ("tf", "proc", "dev")]
 
+with open("VERSION", "r", encoding="utf8") as fh:
+    VERSION = fh.read().strip()
+
 with open("README.md", "r", encoding="utf8") as fh:
     DESCRIPTION = fh.read()
 
 setup(name='pyrates',
-      version=__version__,
+      version=VERSION,
       description='Neural Network Modeling Framework',
       long_description=DESCRIPTION,
       author=PYRATES_TEAM,
