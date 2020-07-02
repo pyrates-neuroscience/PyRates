@@ -122,7 +122,11 @@ jrc_compiled = jrc.compile(backend='numpy', step_size=1e-4, solver='scipy')
 # This solution will be calculated numerically by a differential equation solver in the backend, starting with a defined
 # step-size.
 
-results = jrc.run(simulation_time=2.0, outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'})
+results = jrc_compiled.run(simulation_time=2.0,
+                           step_size=1e-4,
+                           sampling_step_size=1e-3,
+                           outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e',
+                                    'V_pci': 'JRC/JRC_op/PSP_pc_i'})
 
 # %%
 # Step 5: Visualization of the solution
@@ -141,3 +145,5 @@ results.plot()
 
 v_pc = results['V_pce'] - results['V_pci']
 v_pc.plot()
+from matplotlib.pyplot import show
+show()

@@ -54,7 +54,7 @@ import numpy as np
 # (1) To optimize our parameter :math:`C`, we will have to define the parameter boundaries within which the optimization
 # should be performed:
 
-params = {'C': {'min': 1.0, 'max': 1000.0}}
+params = {'C': {'min': 30.0, 'max': 300.0}}
 
 # %%
 # (2) Furthermore, we need to define the model and the model parameter that the :math:`C` refers to:
@@ -72,13 +72,13 @@ output = {'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'}
 # ...and then the objective function:
 
 
-def loss(data, min_amp=6.0, max_amp=10.0):
+def loss(data, min_amp=6e-3, max_amp=10e-3):
     """Calculates the difference between the value range in the data and the
     range defined by min_amp and max_amp.
     """
 
     # calculate the membrane potential of the PC population
-    data = data['V_pce'] - data['V_pci']
+    data = data.loc[1.0:, 'V_pce'] - data.loc[1.0:, 'V_pci']
 
     # calculate the difference between the membrane potential range
     # of the model and the target membrane potential range
@@ -88,6 +88,7 @@ def loss(data, min_amp=6.0, max_amp=10.0):
 
     # return the sum of the squared errors
     return diff @ diff.T
+
 
 # %%
 # The value of this loss function depends on the minimum and the maximum value of the average membrane potential of the
@@ -111,12 +112,13 @@ diff_eq = DifferentialEvolutionAlgorithm()
 winner = diff_eq.run(initial_gene_pool=params,
                      gene_map=param_map,
                      template=model_template,
-                     compile_kwargs={'solver': 'scipy', 'backend': 'numpy', 'step_size': 1e-4, 'verbose': False},
-                     run_kwargs={'step_size': 1e-4, 'simulation_time': 3., 'sampling_step_size': 1e-2, 'verbose': False,
+                     compile_kwargs={'solver': 'scipy', 'backend': 'numpy', 'step_size': 1e-4},
+                     run_kwargs={'step_size': 1e-4, 'simulation_time': 3., 'sampling_step_size': 1e-3,
                                  'outputs': {'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'}},
                      loss_func=loss,
-                     loss_kwargs={'min_amp': 6.0, 'max_amp': 10.0},
-                     workers=-1)
+                     loss_kwargs={'min_amp': 1e-3, 'max_amp': 14e-3},
+                     workers=-1, strategy='best2exp', mutation=(0.5, 1.9), recombination=0.8, atol=1e-4, tol=1e-2,
+                     polish=False)
 
 # %%
 # This function provides an interface to :code:`scipy.optimize.differential_evolution`, for which a detailed
@@ -143,6 +145,7 @@ results = jr_comp.run(simulation_time=3.0, sampling_step_size=1e-2,
 
 results = results['V_pce'] - results['V_pci']
 results.plot()
+jr_comp.clear()
 show()
 
 # %%
