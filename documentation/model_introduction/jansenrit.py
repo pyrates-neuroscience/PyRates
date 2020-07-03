@@ -29,8 +29,8 @@ kernel. This choice has been shown to reflect the dynamic process of polarizatio
 dendritic tree to the soma [3]_. The convolution operation can be expressed via a second-order differential equation:
 
 .. math::
-        \\dot V = I, \n
-        \\dot I = \\frac{H}{\\tau} m_{in} - \\frac{2 I}{\\tau} - \\frac{V}{\\tau^2},
+        \\dot V &= I, \n
+        \\dot I &= \\frac{H}{\\tau} m_{in} - \\frac{2 I}{\\tau} - \\frac{V}{\\tau^2},
 
 where :math:`V` represents the average post-synaptic potential and :math:`H` and :math:`\tau` are the efficacy and
 the time-scale of the synapse, respectively. As a second operator, the translation of the average membrane potential
@@ -48,12 +48,12 @@ expressed via 6 coupled ordinary differential equations that are composed of the
 
 .. math::
 
-        \\dot V_{pce} = I_{pce}, \n
-        \\dot I_{pce} = \\frac{H_e}{\\tau_e} c_4 S(c_3 V_{in}) - \\frac{2 I_{pce}}{\\tau_e} - \\frac{V_{pce}}{\\tau_e^2}, \n
-        \\dot V_{pci} = I_{pci}, \n
-        \\dot I_{pci} = \\frac{H_i}{\\tau_i} c_2 S(c_1 V_{in}) - \\frac{2 I_{pci}}{\\tau_i} - \\frac{V_{pci}}{\\tau_i^2}, \n
-        \\dot V_{in} = I_{in}, \n
-        \\dot I_{in} = \\frac{H_e}{\\tau_e} S(V_{pce} - V_{pci}) - \\frac{2 I_{in}}{\\tau_e} - \\frac{V_{in}}{\\tau_e^2},
+        \\dot V_{pce} &= I_{pce}, \n
+        \\dot I_{pce} &= \\frac{H_e}{\\tau_e} c_4 S(c_3 V_{in}) - \\frac{2 I_{pce}}{\\tau_e} - \\frac{V_{pce}}{\\tau_e^2}, \n
+        \\dot V_{pci} &= I_{pci}, \n
+        \\dot I_{pci} &= \\frac{H_i}{\\tau_i} c_2 S(c_1 V_{in}) - \\frac{2 I_{pci}}{\\tau_i} - \\frac{V_{pci}}{\\tau_i^2}, \n
+        \\dot V_{in} &= I_{in}, \n
+        \\dot I_{in} &= \\frac{H_e}{\\tau_e} S(V_{pce} - V_{pci}) - \\frac{2 I_{in}}{\\tau_e} - \\frac{V_{in}}{\\tau_e^2},
 
 where :math:`V_{pce}`, :math:`V_{pci}`, :math:`V_{in}` are used to represent the average membrane potential deflection
 caused by the excitatory synapses at the PC population, the inhibitory synapses at the PC population, and the excitatory

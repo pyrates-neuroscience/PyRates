@@ -7,8 +7,8 @@ coupled QIF neurons in [1]_. The model equations are given by:
 
 .. math::
 
-    \\tau \\dot r = \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
-    \\tau \\dot v = v^2 +\\bar\\eta + I(t) + J r \\tau - (\\pi r \\tau)^2,
+    \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
+    \\tau \\dot v &= v^2 +\\bar\\eta + I(t) + J r \\tau - (\\pi r \\tau)^2,
 
 where :math:`r` is the average firing rate and :math:`v` is the average membrane potential of the QIF population [1]_.
 It is governed by 4 parameters:
@@ -27,10 +27,10 @@ adaptation would be given by the following 4D system:
 
 .. math::
 
-    \\tau \\dot r = \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
-    \\tau \\dot v = v^2 +\\bar\\eta + I(t) + J r \\tau - A - (\\pi r \\tau)^2, \n
-    \\tau_A \\dot A = B, \n
-    \\tau_A \\dot B = \\alpha r - 2 B - A,
+    \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
+    \\tau \\dot v &= v^2 +\\bar\\eta + I(t) + J r \\tau - A - (\\pi r \\tau)^2, \n
+    \\tau_A \\dot A &= B, \n
+    \\tau_A \\dot B &= \\alpha r - 2 B - A,
 
 where the evolution equations for :math:`A` and :math:`B` express a convolution of :math:`r` with an alpha kernel, with
 adaptation strength :math:`\\alpha` and time constant :math:`\\tau_A`.
