@@ -78,7 +78,7 @@ def loss(data, min_amp=6e-3, max_amp=10e-3):
     """
 
     # calculate the membrane potential of the PC population
-    data = data.loc[1.0:, 'V_pce'] - data.loc[1.0:, 'V_pci']
+    data = data.loc[2.0:, 'V_pce'] - data.loc[2.0:, 'V_pci']
 
     # calculate the difference between the membrane potential range
     # of the model and the target membrane potential range
@@ -116,8 +116,8 @@ winner = diff_eq.run(initial_gene_pool=params,
                      run_kwargs={'step_size': 1e-4, 'simulation_time': 3., 'sampling_step_size': 1e-3,
                                  'outputs': {'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'}},
                      loss_func=loss,
-                     loss_kwargs={'min_amp': 1e-3, 'max_amp': 14e-3},
-                     workers=-1, strategy='best2exp', mutation=(0.5, 1.9), recombination=0.8, atol=1e-4, tol=1e-2,
+                     loss_kwargs={'min_amp': 6e-3, 'max_amp': 9e-3},
+                     workers=-1, strategy='best2exp', mutation=(0.5, 1.9), recombination=0.8, atol=1e-5, tol=1e-3,
                      polish=False)
 
 # %%

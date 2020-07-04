@@ -81,7 +81,12 @@ class PyAuto:
             origin = origin.pyauto_key
 
         # call to auto
-        solution = self._call_auto(starting_point, origin, **auto_kwargs)
+        constants = auto_kwargs.pop('c', None)
+        if constants:
+            solution = self._call_auto(starting_point, origin, c=constants, **auto_kwargs)
+            auto_kwargs['c'] = constants
+        else:
+            solution = self._call_auto(starting_point, origin, **auto_kwargs)
 
         # extract information from auto solution
         ########################################
@@ -990,6 +995,115 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
     return solutions, pyauto_instance
 
 
+def codim2_search(params: list, starting_points: list, origin: Union[str, int, Any],
+                  pyauto_instance: PyAuto, max_recursion_depth: int = 3, recursion: int = 0, periodic: bool = False,
+                  **kwargs) -> dict:
+    """Performs automatic continuation of codim 1 bifurcation points in 2 parameters and searches for codimension 2
+    bifurcations along the solution curves.
+
+    Parameters
+    ----------
+    params
+    starting_points
+    origin
+    pyauto_instance
+    max_recursion_depth
+    recursion
+    periodic
+    kwargs
+
+    Returns
+    -------
+
+    """
+
+    zhs, ghs, bts = dict(), dict(), dict()
+    continuations = dict()
+    name = kwargs.pop('name', f"{params[0]}/{params[1]}")
+
+    for p in starting_points:
+
+        # continue curve of special solutions in 2 parameters
+        if periodic:
+            kwargs.update({'ILP': 0, 'IPS': 2, 'ISW': 2, 'ISP': 2, 'ICP': list(params) + [11]})
+        else:
+            kwargs.update({'ILP': 0, 'IPS': 1, 'ISW': 2, 'ISP': 2, 'ICP': params})
+
+        name_tmp = f"{name}:{p}"
+        sols, cont = pyauto_instance.run(starting_point=p, origin=origin, name=name_tmp, bidirectional=True, **kwargs)
+        continuations[name_tmp] = cont
+
+        if recursion < max_recursion_depth:
+
+            # get types of all solutions along curve
+            codim2_bifs = get_from_solutions(['bifurcation', f'PAR({params[0]})', f'PAR({params[1]})'], sols)
+
+            for bf, p1, p2 in codim2_bifs:
+
+                param_pos = np.round([p1, p2], decimals=5)
+
+                if "ZH" in bf and param_pos not in zhs[p]['pos']:
+
+                    if p not in zhs:
+                        zhs[p] = {'count': 1, 'pos': param_pos}
+                    else:
+                        zhs[p]['count'] += 1
+                        zhs[p]['pos'] = param_pos
+
+                    # perform 1D continuation to find nearby fold bifurcation
+                    kwargs.update({'ILP': 1, 'IPS': 1, 'ISW': 1, 'ISP': 2, 'ICP': params[0]})
+                    s_tmp, c_tmp = pyauto_instance.run(starting_point=f"ZH{zhs[p]['count']}", origin=cont,
+                                                       STOP={'LP1', 'HB1'}, bidirectional=True, **kwargs)
+
+                    codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
+                    if "LP" in codim1_bifs:
+                        p_tmp = 'LP1'
+                        name_tmp2 = f"{name}:{p}/ZH{zhs[p]}(LP)"
+                    elif "HB" in codim1_bifs:
+                        p_tmp = 'HB1'
+                        name_tmp2 = f"{name}:{p}/ZH{zhs[p]}(HB)"
+                    else:
+                        continue
+
+                    # perform 2D continuation of the fold or hopf bifurcation
+                    continuations.update(codim2_search(params=params, starting_points=[p_tmp], origin=c_tmp,
+                                                       pyauto_instance=pyauto_instance, recursion=recursion + 1,
+                                                       max_recursion_depth=max_recursion_depth, periodic=False,
+                                                       name=name_tmp2, **kwargs))
+
+                elif "GH" in bf and param_pos not in ghs[p]['pos']:
+
+                    if p not in ghs:
+                        ghs[p] = {'count': 1, 'pos': param_pos}
+                    else:
+                        ghs[p]['count'] += 1
+                        ghs[p]['pos'] = param_pos
+
+                    # perform 1D continuation of limit cycle
+                    kwargs.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11]})
+                    s_tmp, c_tmp = pyauto_instance.run(starting_point=f"GH{ghs[p]['count']}", origin=cont,
+                                                       STOP={'LP1'}, **kwargs)
+
+                    codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
+                    if "LP" in codim1_bifs:
+                        p_tmp = 'LP1'
+                        name_tmp2 = f"{name}:{p}/GH{zhs[p]}(LP)"
+                    else:
+                        continue
+
+                    # perform 2D continuation of the fold or hopf bifurcation
+                    continuations.update(codim2_search(params=params, starting_points=[p_tmp], origin=c_tmp,
+                                                       pyauto_instance=pyauto_instance, recursion=recursion + 1,
+                                                       max_recursion_depth=max_recursion_depth, periodic=True,
+                                                       name=name_tmp2, **kwargs))
+
+                elif "BT" in bf:
+
+                    pass
+
+    return continuations
+
+
 def fractal_dimension(lyapunov_exponents: list) -> float:
     """Calculates the fractal or information dimension of an attractor of a dynamical system from its lyapunov
     epxonents, according to the Kaplan-Yorke formula (Kaplan and Yorke, 1979).
@@ -1060,3 +1174,19 @@ def get_point_idx(diag: list, point: int) -> int:
                 raise ValueError(f"Point with index {point+1} was not found on solution. Last auto output line that "
                                  f"was checked: \n {diag_tmp}")
     return idx
+
+
+def get_from_solutions(keys: list, solutions: dict) -> list:
+    """Extracts attributes from each solution in a branch.
+
+    Parameters
+    ----------
+    keys
+    solutions
+
+    Returns
+    -------
+    List with attributes for each solution.
+
+    """
+    return [(s[k] for k in keys) for s in solutions.values()]
