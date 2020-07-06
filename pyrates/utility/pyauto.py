@@ -1042,13 +1042,14 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
 
                 param_pos = np.round([p1, p2], decimals=5)
 
-                if "ZH" in bf and param_pos not in zhs[p]['pos']:
+                if "ZH" in bf and not any([p_tmp[0] == param_pos[0] and p_tmp[1] == param_pos[1]
+                                           for p_tmp in zhs[p]['pos']]):
 
                     if p not in zhs:
-                        zhs[p] = {'count': 1, 'pos': param_pos}
+                        zhs[p] = {'count': 1, 'pos': [param_pos]}
                     else:
                         zhs[p]['count'] += 1
-                        zhs[p]['pos'] = param_pos
+                        zhs[p]['pos'].append(param_pos)
 
                     # perform 1D continuation to find nearby fold bifurcation
                     kwargs.update({'ILP': 1, 'IPS': 1, 'ISW': 1, 'ISP': 2, 'ICP': params[0]})
@@ -1071,13 +1072,14 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                                                        max_recursion_depth=max_recursion_depth, periodic=False,
                                                        name=name_tmp2, **kwargs))
 
-                elif "GH" in bf and param_pos not in ghs[p]['pos']:
+                elif "GH" in bf and not any([p_tmp[0] == param_pos[0] and p_tmp[1] == param_pos[1]
+                                             for p_tmp in ghs[p]['pos']]):
 
                     if p not in ghs:
-                        ghs[p] = {'count': 1, 'pos': param_pos}
+                        ghs[p] = {'count': 1, 'pos': [param_pos]}
                     else:
                         ghs[p]['count'] += 1
-                        ghs[p]['pos'] = param_pos
+                        ghs[p]['pos'].append(param_pos)
 
                     # perform 1D continuation of limit cycle
                     kwargs.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11]})
