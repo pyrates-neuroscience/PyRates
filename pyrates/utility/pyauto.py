@@ -319,7 +319,7 @@ class PyAuto:
         data = {'results': self.results, '_branches': self._branches, '_results_map': self._results_map}
         if include_auto_results:
             data['auto_solutions'] = self.auto_solutions
-        data.update(kwargs)
+        data.update({'additional_attributes': kwargs})
 
         for key in kwargs:
             if hasattr(self, key):
