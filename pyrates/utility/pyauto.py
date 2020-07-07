@@ -256,7 +256,7 @@ class PyAuto:
 
         return summary[point]
 
-    def get_solution(self, cont: Union[Any, str, int], point: Union[str, int] = None) -> Union[Any, tuple]:
+    def get_solution(self, cont: Union[Any, str, int], point: Union[str, int] = None) -> tuple:
         """
 
         Parameters
@@ -280,12 +280,24 @@ class PyAuto:
             return cont
 
         # extract solution point from continuation object and its solution type
-        if type(point) is str:
+        try:
             s = cont(point)
             solution_name = point[:2]
-        else:
+        except (AttributeError, KeyError, TypeError):
             for idx in range(len(cont.data)):
-                s = cont[idx].labels.by_index[point]
+                if type(point) is int:
+                    s = cont[idx].labels.by_index[point]
+                else:
+                    count = 1
+                    for p in cont[idx].labels.by_index.values():
+                        key = list(p)[0]
+                        if key in point and int(point.replace(key, "")) == count:
+                            s = p
+                            break
+                        elif key in point:
+                            count += 1
+                    else:
+                        raise ValueError(f'Invalid point {point} for continuation with ICP={icp} on branch {branch}.')
                 if s:
                     solution_name = list(s.keys())[0]
                     break
@@ -1061,10 +1073,10 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                     codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
                     if "LP" in codim1_bifs:
                         p_tmp = 'LP1'
-                        name_tmp2 = f"{name}:{p}/ZH{zhs[p]}(LP)"
+                        name_tmp2 = f"{name}:{p}/ZH{zhs[p]['count']}(LP)"
                     elif "HB" in codim1_bifs:
                         p_tmp = 'HB1'
-                        name_tmp2 = f"{name}:{p}/ZH{zhs[p]}(HB)"
+                        name_tmp2 = f"{name}:{p}/ZH{zhs[p]['count']}(HB)"
                     else:
                         continue
 
@@ -1091,7 +1103,7 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                     codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
                     if "LP" in codim1_bifs:
                         p_tmp = 'LP1'
-                        name_tmp2 = f"{name}:{p}/GH{zhs[p]}(LP)"
+                        name_tmp2 = f"{name}:{p}/GH{ghs[p]['count']}(LP)"
                     else:
                         continue
 
