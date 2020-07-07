@@ -1194,6 +1194,6 @@ def get_from_solutions(keys: list, solutions: dict) -> list:
 
     """
     if len(keys) > 1:
-        return [(s[k] for k in keys) for s in solutions.values()]
+        return [[s[k] for k in keys] for s in solutions.values()]
     else:
         return [s[keys[0]] for s in solutions.values()]
