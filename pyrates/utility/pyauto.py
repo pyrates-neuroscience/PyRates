@@ -813,7 +813,9 @@ class PyAuto:
 
     def _start_from_solution(self, solution: Any) -> Any:
         diag = str(solution[0].diagnostics)
-        if 'Starting direction of the free parameter(s)' in diag and len(self.get_solution_keys(solution)) == 1:
+        sol_keys = self.get_solution_keys(solution)
+        if 'Starting direction of the free parameter(s)' in diag and len(sol_keys) == 1 and \
+                "EP" in list(solution[0].labels.by_index[sol_keys[0]])[0]:
             solution = self._auto.run(solution)
         return solution
 
@@ -1191,4 +1193,7 @@ def get_from_solutions(keys: list, solutions: dict) -> list:
     List with attributes for each solution.
 
     """
-    return [(s[k] for k in keys) for s in solutions.values()]
+    if len(keys) > 1:
+        return [(s[k] for k in keys) for s in solutions.values()]
+    else:
+        return [s[keys[0]] for s in solutions.values()]
