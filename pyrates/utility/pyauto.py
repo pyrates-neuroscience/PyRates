@@ -1098,12 +1098,15 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                     # perform 1D continuation of limit cycle
                     kwargs.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11]})
                     s_tmp, c_tmp = pyauto_instance.run(starting_point=f"GH{ghs[p]['count']}", origin=cont,
-                                                       STOP={'LP1'}, **kwargs)
+                                                       STOP={'LP1', 'PD1'}, **kwargs)
 
                     codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
                     if "LP" in codim1_bifs:
                         p_tmp = 'LP1'
                         name_tmp2 = f"{name}:{p}/GH{ghs[p]['count']}(LP)"
+                    elif "PD" in codim1_bifs:
+                        p_tmp = 'PD1'
+                        name_tmp2 = f"{name}:{p}/GH{ghs[p]['count']}(PD)"
                     else:
                         continue
 
