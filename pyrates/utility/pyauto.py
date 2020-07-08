@@ -1038,13 +1038,15 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
     for p in starting_points:
 
         # continue curve of special solutions in 2 parameters
+        kwargs_tmp = kwargs.copy()
         if periodic:
-            kwargs.update({'ILP': 0, 'IPS': 2, 'ISW': 2, 'ISP': 2, 'ICP': list(params) + [11]})
+            kwargs_tmp.update({'ILP': 0, 'IPS': 2, 'ISW': 2, 'ISP': 2, 'ICP': list(params) + [11]})
         else:
-            kwargs.update({'ILP': 0, 'IPS': 1, 'ISW': 2, 'ISP': 2, 'ICP': params})
+            kwargs_tmp.update({'ILP': 0, 'IPS': 1, 'ISW': 2, 'ISP': 2, 'ICP': params})
 
         name_tmp = f"{name}:{p}"
-        sols, cont = pyauto_instance.run(starting_point=p, origin=origin, name=name_tmp, bidirectional=True, **kwargs)
+        sols, cont = pyauto_instance.run(starting_point=p, origin=origin, name=name_tmp, bidirectional=True,
+                                         **kwargs_tmp)
         continuations[name_tmp] = cont
 
         if recursion < max_recursion_depth:
@@ -1066,9 +1068,10 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                         zhs[p]['pos'].append(param_pos)
 
                     # perform 1D continuation to find nearby fold bifurcation
-                    kwargs.update({'ILP': 1, 'IPS': 1, 'ISW': 1, 'ISP': 2, 'ICP': params[0]})
+                    kwargs_tmp = kwargs.copy()
+                    kwargs_tmp.update({'ILP': 1, 'IPS': 1, 'ISW': 1, 'ISP': 2, 'ICP': params[0]})
                     s_tmp, c_tmp = pyauto_instance.run(starting_point=f"ZH{zhs[p]['count']}", origin=cont,
-                                                       STOP={'LP1', 'HB1'}, bidirectional=True, **kwargs)
+                                                       STOP={'LP1', 'HB1'}, bidirectional=True, **kwargs_tmp)
 
                     codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
                     if "LP" in codim1_bifs:
@@ -1096,9 +1099,10 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                         ghs[p]['pos'].append(param_pos)
 
                     # perform 1D continuation of limit cycle
-                    kwargs.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11], 'NMX': 200})
+                    kwargs_tmp = kwargs.copy()
+                    kwargs_tmp.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11], 'NMX': 200})
                     s_tmp, c_tmp = pyauto_instance.run(starting_point=f"GH{ghs[p]['count']}", origin=cont,
-                                                       STOP={}, **kwargs)
+                                                       STOP={}, **kwargs_tmp)
 
                     codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
                     if "LP" in codim1_bifs:
