@@ -1111,10 +1111,11 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                                                            max_recursion_depth=max_recursion_depth, periodic=True,
                                                            name=f"{name}:{p}/GH{ghs[p]['count']}(LP)", **kwargs))
                     if "PD" in codim1_bifs:
-                        continuations.update(codim2_search(params=params, starting_points=['PD1'], origin=c_tmp,
-                                                           pyauto_instance=pyauto_instance, recursion=recursion + 1,
-                                                           max_recursion_depth=max_recursion_depth, periodic=True,
-                                                           name=f"{name}:{p}/GH{ghs[p]['count']}(PD)", **kwargs))
+                        continue
+                        # continuations.update(codim2_search(params=params, starting_points=['PD1'], origin=c_tmp,
+                        #                                    pyauto_instance=pyauto_instance, recursion=recursion + 1,
+                        #                                    max_recursion_depth=max_recursion_depth, periodic=True,
+                        #                                    name=f"{name}:{p}/GH{ghs[p]['count']}(PD)", **kwargs))
 
                 elif "BT" in bf:
 
