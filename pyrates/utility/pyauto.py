@@ -1106,19 +1106,15 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
 
                     codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
                     if "LP" in codim1_bifs:
-                        p_tmp = 'LP1'
-                        name_tmp2 = f"{name}:{p}/GH{ghs[p]['count']}(LP)"
-                    elif "PD" in codim1_bifs:
-                        p_tmp = 'PD1'
-                        name_tmp2 = f"{name}:{p}/GH{ghs[p]['count']}(PD)"
-                    else:
-                        continue
-
-                    # perform 2D continuation of the fold or hopf bifurcation
-                    continuations.update(codim2_search(params=params, starting_points=[p_tmp], origin=c_tmp,
-                                                       pyauto_instance=pyauto_instance, recursion=recursion + 1,
-                                                       max_recursion_depth=max_recursion_depth, periodic=True,
-                                                       name=name_tmp2, **kwargs))
+                        continuations.update(codim2_search(params=params, starting_points=['LP1'], origin=c_tmp,
+                                                           pyauto_instance=pyauto_instance, recursion=recursion + 1,
+                                                           max_recursion_depth=max_recursion_depth, periodic=True,
+                                                           name=f"{name}:{p}/GH{ghs[p]['count']}(LP)", **kwargs))
+                    if "PD" in codim1_bifs:
+                        continuations.update(codim2_search(params=params, starting_points=['PD1'], origin=c_tmp,
+                                                           pyauto_instance=pyauto_instance, recursion=recursion + 1,
+                                                           max_recursion_depth=max_recursion_depth, periodic=True,
+                                                           name=f"{name}:{p}/GH{ghs[p]['count']}(PD)", **kwargs))
 
                 elif "BT" in bf:
 
