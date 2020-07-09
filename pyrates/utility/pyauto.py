@@ -1011,6 +1011,7 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
 
 def codim2_search(params: list, starting_points: list, origin: Union[str, int, Any],
                   pyauto_instance: PyAuto, max_recursion_depth: int = 3, recursion: int = 0, periodic: bool = False,
+                  kwargs_2D_lc_cont: dict = None, kwargs_lc_cont: dict = None, kwargs_2D_cont: dict = None,
                   **kwargs) -> dict:
     """Performs automatic continuation of codim 1 bifurcation points in 2 parameters and searches for codimension 2
     bifurcations along the solution curves.
@@ -1024,6 +1025,9 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
     max_recursion_depth
     recursion
     periodic
+    kwargs_2D_lc_cont
+    kwargs_lc_cont
+    kwargs_2D_cont
     kwargs
 
     Returns
@@ -1041,8 +1045,12 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
         kwargs_tmp = kwargs.copy()
         if periodic:
             kwargs_tmp.update({'ILP': 0, 'IPS': 2, 'ISW': 2, 'ISP': 2, 'ICP': list(params) + [11]})
+            if kwargs_2D_lc_cont:
+                kwargs_tmp.update(kwargs_2D_lc_cont)
         else:
             kwargs_tmp.update({'ILP': 0, 'IPS': 1, 'ISW': 2, 'ISP': 2, 'ICP': params})
+            if kwargs_2D_cont:
+                kwargs_tmp.update(kwargs_2D_cont)
 
         name_tmp = f"{name}:{p}"
         sols, cont = pyauto_instance.run(starting_point=p, origin=origin, name=name_tmp, bidirectional=True,
@@ -1101,6 +1109,8 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                     # perform 1D continuation of limit cycle
                     kwargs_tmp = kwargs.copy()
                     kwargs_tmp.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11], 'NMX': 200})
+                    if kwargs_lc_cont:
+                        kwargs_tmp.update(kwargs_lc_cont)
                     s_tmp, c_tmp = pyauto_instance.run(starting_point=f"GH{ghs[p]['count']}", origin=cont,
                                                        STOP={}, **kwargs_tmp)
 
