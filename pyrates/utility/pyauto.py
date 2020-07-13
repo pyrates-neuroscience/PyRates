@@ -777,6 +777,8 @@ class PyAuto:
             if 'Stable:' in diag_split[idx]:
                 break
             idx += 1
+        else:
+            return eigenvals
 
         # check whether branch and point identifiers match the targets
         branch_str = f' {branch} '
@@ -1186,6 +1188,8 @@ def get_point_idx(diag: list, point: int) -> int:
 
         diag_tmp = diag[idx]['Text']
         if "Location of special point" in diag_tmp and "Convergence" not in diag_tmp:
+            idx += 1
+        elif "NOTE:Retrying step" in diag_tmp:
             idx += 1
         else:
 

@@ -107,6 +107,37 @@ Op_sd:
     inp:
       default: input
 
+# operator for a qif population with synaptic depression
+Op_sd_exp:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(PI*r)^2"
+    - "d/dt * I_a = I_a/tau_a + alpha*R"
+  variables:
+    r:
+      default: output(0.75)
+    v:
+      default: variable(-0.4)
+    I_a:
+      default: variable(0.36)
+    r_in:
+      default: input
+    tau:
+      default: 1.0
+    delta:
+      default: 2.0
+    eta:
+      default: -4.6
+    J_e:
+      default: 21.2132
+    alpha:
+      default: 0.05
+    tau_a:
+      default: 10.0
+    inp:
+      default: input
+
 # population templates
 ######################
 
@@ -122,17 +153,23 @@ Pop_i:
   operators:
     - Op_i
 
-# excitatory qif population with spike-frequency adaptation
+# excitatory qif population with spike-frequency adaptation (alpha kernel)
 Pop_sfa:
   base: NodeTemplate
   operators:
     - Op_sfa
 
-# excitatory qif population with synaptic depression
+# excitatory qif population with synaptic depression (alpha kernel)
 Pop_sd:
   base: NodeTemplate
   operators:
     - Op_sd
+    -
+# excitatory qif population with synaptic depression (mono-exponential kernel)
+Pop_sd_exp:
+  base: NodeTemplate
+  operators:
+    - Op_sd_exp
 
 # edge templates
 ################
@@ -162,11 +199,18 @@ QIF_sfa:
     p: Pop_sfa
   edges:
 
-# excitatory qif population with synaptic depression
+# excitatory qif population with synaptic depression (alpha kernel)
 QIF_sd:
   base: CircuitTemplate
   nodes:
     p: Pop_sd
+  edges:
+
+# excitatory qif population with synaptic depression (mono-exponential kernel)
+QIF_sd_exp:
+  base: CircuitTemplate
+  nodes:
+    p: Pop_sd_exp
   edges:
 
 # simple QIF EI circuit
