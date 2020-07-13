@@ -853,7 +853,10 @@ class PyAuto:
         """
 
         # combine y and param vals
-        x = np.reshape(x, (x.squeeze().shape[0], 1))
+        try:
+            x = np.reshape(x, (x.squeeze().shape[0], 1))
+        except IndexError:
+            pass
         if len(y.shape) > 1 and y.shape[1] > 1:
             y_max = np.reshape(y.max(axis=1), (y.shape[0], 1))
             y_min = np.reshape(y.min(axis=1), (y.shape[0], 1))
