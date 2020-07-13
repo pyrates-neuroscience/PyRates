@@ -1001,9 +1001,10 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
             if iteration >= max_iter:
                 break
             elif s_tmp:
-                s_tmp2 = continue_period_doubling_bf(solution=s_tmp, continuation=cont, pyauto_instance=pyauto_instance,
-                                                     iteration=iteration, **kwargs)
-                solutions += s_tmp2
+                s_tmp2, pyauto_instance = continue_period_doubling_bf(solution=s_tmp, continuation=cont,
+                                                                      pyauto_instance=pyauto_instance, iteration=iteration,
+                                                                      **kwargs)
+                solutions +=s_tmp2
                 iteration += len(s_tmp2)
 
     return solutions, pyauto_instance
