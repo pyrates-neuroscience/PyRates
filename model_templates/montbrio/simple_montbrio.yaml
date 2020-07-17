@@ -64,7 +64,7 @@ Op_sfa:
       default: 2.0
     eta:
       default: -4.6
-    J_e:
+    J:
       default: 21.2132
     alpha:
       default: 1.0
@@ -98,7 +98,7 @@ Op_sd:
       default: 2.0
     eta:
       default: -4.6
-    J_e:
+    J:
       default: 21.2132
     alpha:
       default: 0.05
@@ -113,7 +113,7 @@ Op_sd_exp:
   equations:
     - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
     - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(PI*r)^2"
-    - "d/dt * I_a = I_a/tau_a + alpha*R"
+    - "d/dt * I_a = -I_a/tau_a + alpha*r"
   variables:
     r:
       default: output(0.75)
@@ -129,7 +129,7 @@ Op_sd_exp:
       default: 2.0
     eta:
       default: -4.6
-    J_e:
+    J:
       default: 21.2132
     alpha:
       default: 0.05
