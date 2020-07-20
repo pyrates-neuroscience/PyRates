@@ -423,7 +423,11 @@ class PyAuto:
         """
 
         # extract information from branch solutions
-        results = self.extract(list(vars) + ['stability'], cont=cont, point=point)
+        try:
+            results = self.extract(list(vars) + ['stability'], cont=cont, point=point)
+        except KeyError:
+            results = self.extract(list(vars), cont=cont, point=point)
+            results['stability'] = [True] * len(results[vars[0]])
 
         if len(vars) == 2:
 
@@ -459,9 +463,9 @@ class PyAuto:
 
             # cosmetics
             ax.tick_params(axis='both', which='major', pad=tick_pad)
-            ax.set_xlabel('v', labelpad=label_pad)
-            ax.set_ylabel('r', labelpad=label_pad)
-            ax.set_zlabel('e', labelpad=label_pad)
+            ax.set_xlabel(vars[0], labelpad=label_pad)
+            ax.set_ylabel(vars[1], labelpad=label_pad)
+            ax.set_zlabel(vars[2], labelpad=label_pad)
             self._update_axis_lims(ax, [x, y, z], padding=axislim_pad, force_update=force_axis_lim_update)
 
         else:
