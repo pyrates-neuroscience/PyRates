@@ -369,7 +369,13 @@ class PyAuto:
         axislim_pad = kwargs.pop('axislimpad', 0)
 
         # extract information from branch solutions
-        results = self.extract([param, var, 'stability', 'bifurcation'], cont=cont)
+        if param == 'PAR(14':
+            results = self.extract([param, var], cont=cont)
+            for key, vals in results.items():
+                results[key]['stability'] = True
+                results[key]['bifurcation'] = 'RG'
+        else:
+            results = self.extract([param, var, 'stability', 'bifurcation'], cont=cont)
 
         # plot bifurcation points
         bifurcation_point_kwargs = ['default_color', 'default_marker', 'default_size', 'custom_bf_styles',
