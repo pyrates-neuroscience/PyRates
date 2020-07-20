@@ -369,11 +369,10 @@ class PyAuto:
         axislim_pad = kwargs.pop('axislimpad', 0)
 
         # extract information from branch solutions
-        if param == 'PAR(14':
+        if param == 'PAR(14)':
             results = self.extract([param, var], cont=cont)
-            for key, vals in results.items():
-                results[key]['stability'] = True
-                results[key]['bifurcation'] = 'RG'
+            results['stability'] = np.asarray([True] * len(results['PAR(14)']))
+            results['bifurcation'] = np.asarray(['RG'] * len(results['PAR(14)']))
         else:
             results = self.extract([param, var, 'stability', 'bifurcation'], cont=cont)
 
