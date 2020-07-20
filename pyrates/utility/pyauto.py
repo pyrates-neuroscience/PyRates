@@ -427,7 +427,7 @@ class PyAuto:
             results = self.extract(list(vars) + ['stability'], cont=cont, point=point)
         except KeyError:
             results = self.extract(list(vars), cont=cont, point=point)
-            results['stability'] = [True] * len(results[vars[0]])
+            results['stability'] = None
 
         if len(vars) == 2:
 
