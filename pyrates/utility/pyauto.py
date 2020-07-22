@@ -442,10 +442,10 @@ class PyAuto:
                     raise ValueError("Could not find time variable on solution to apply cutoff to. Please consider "
                                      "adding the keyword argument `get_timeseries` to the `PyAuto.run()` call for which"
                                      "the phase space trajectory should be plotted.")
-            idx = np.argmin(np.abs(time - cutoff))
+            idx = np.where(time > cutoff)
             for key, val in results.items():
-                if hasattr(val, 'shape') and val.shape and val.shape[0] >= idx:
-                    results[key] = val[idx:]
+                if hasattr(val, 'shape') and val.shape:
+                    results[key] = val[idx]
 
         if len(vars) == 2:
 
