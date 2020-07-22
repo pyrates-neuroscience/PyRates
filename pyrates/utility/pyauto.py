@@ -405,7 +405,8 @@ class PyAuto:
         return ax
 
     def plot_trajectory(self, vars: Union[list, tuple], cont: Union[Any, str, int], point: Union[str, int] = None,
-                        ax: plt.Axes = None, force_axis_lim_update: bool = False, **kwargs) -> plt.Axes:
+                        ax: plt.Axes = None, force_axis_lim_update: bool = False, cutoff: float = None, **kwargs
+                        ) -> plt.Axes:
         """Plot trajectory of state variables through phase space over time.
 
         Parameters
@@ -415,6 +416,7 @@ class PyAuto:
         point
         ax
         force_axis_lim_update
+        cutoff
         kwargs
 
         Returns
@@ -428,6 +430,22 @@ class PyAuto:
         except KeyError:
             results = self.extract(list(vars), cont=cont, point=point)
             results['stability'] = None
+
+        # apply cutoff, if passed
+        if cutoff:
+            try:
+                time = self.extract(['PAR(14)'], cont=cont, point=point)['PAR(14)']
+            except KeyError:
+                try:
+                    time = self.extract(['time'], cont=cont, point=point)['time']
+                except KeyError:
+                    raise ValueError("Could not find time variable on solution to apply cutoff to. Please consider "
+                                     "adding the keyword argument `get_timeseries` to the `PyAuto.run()` call for which"
+                                     "the phase space trajectory should be plotted.")
+            idx = np.argmin(np.abs(time - cutoff))
+            for key, val in results.items():
+                if hasattr(val, 'shape') and val.shape and val.shape[0] >= idx:
+                    results[key] = val[idx:]
 
         if len(vars) == 2:
 
