@@ -796,32 +796,28 @@ class PyAuto:
         # extract point index from diagnostics
         point_idx = get_point_idx(solution[0].diagnostics, point=point)
         diag = solution[0].diagnostics.data[point_idx]['Text']
-        diag_split = diag.split('\n')
-
-        # find index of line in diagnostic output where eigenvalue information are starting
-        idx = 0
-        while idx < len(diag_split):
-            if 'Stable:' in diag_split[idx]:
-                break
-            idx += 1
-        else:
-            return eigenvals
-
-        # check whether branch and point identifiers match the targets
-        branch_str = f' {branch} '
-        point_str = f' {point+1} '
 
         if "NOTE:No converge" in diag:
             return eigenvals
 
-        if branch_str in diag_split[idx] and point_str in diag_split[idx] and \
-                ('Eigenvalue' in diag or 'Multiplier' in diag_split[idx]):
+        # find index of line in diagnostic output where eigenvalue information are starting
+        idx = diag.find('Stable:')
+        if not idx:
+            return eigenvals
+        diag = diag[idx:]
+        diag_split = diag.split("\n")
+
+        # check whether branch and point identifiers match the targets
+        branch_str = f' {branch} '
+        point_str = f' {point+1} '
+        if branch_str in diag_split[0] and point_str in diag_split[0] and \
+                ('Eigenvalue' in diag_split[0] or 'Multiplier' in diag_split[0]):
 
             # go through lines of system diagnostics and extract eigenvalues/floquet multipliers
             i = 1
-            while i < len(diag_split) - idx:
+            while i < len(diag_split):
 
-                diag_tmp = diag_split[i + idx]
+                diag_tmp = diag_split[i]
                 diag_tmp_split = [d for d in diag_tmp.split(' ') if d != ''][2:]
 
                 # check whether line contains eigenvals or floquet mults. If not, stop while loop.
@@ -1045,7 +1041,7 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
 def codim2_search(params: list, starting_points: list, origin: Union[str, int, Any],
                   pyauto_instance: PyAuto, max_recursion_depth: int = 3, recursion: int = 0, periodic: bool = False,
                   kwargs_2D_lc_cont: dict = None, kwargs_lc_cont: dict = None, kwargs_2D_cont: dict = None,
-                  **kwargs) -> dict:
+                  precision=2, **kwargs) -> dict:
     """Performs automatic continuation of codim 1 bifurcation points in 2 parameters and searches for codimension 2
     bifurcations along the solution curves.
 
@@ -1061,6 +1057,7 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
     kwargs_2D_lc_cont
     kwargs_lc_cont
     kwargs_2D_cont
+    precision
     kwargs
 
     Returns
@@ -1097,7 +1094,7 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
 
             for bf, p1, p2 in codim2_bifs:
 
-                param_pos = np.round([p1, p2], decimals=5)
+                param_pos = np.round([p1, p2], decimals=precision)
 
                 if "ZH" in bf and (p not in zhs or not any([p_tmp[0] == param_pos[0] and p_tmp[1] == param_pos[1]
                                                             for p_tmp in zhs[p]['pos']])):
@@ -1133,27 +1130,26 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                 elif "GH" in bf and (p not in ghs or not any([p_tmp[0] == param_pos[0] and p_tmp[1] == param_pos[1]
                                                               for p_tmp in ghs[p]['pos']])):
 
-                    # if p not in ghs:
-                    #     ghs[p] = {'count': 1, 'pos': [param_pos]}
-                    # else:
-                    #     ghs[p]['count'] += 1
-                    #     ghs[p]['pos'].append(param_pos)
-                    #
-                    # # perform 1D continuation of limit cycle
-                    # kwargs_tmp = kwargs.copy()
-                    # kwargs_tmp.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11], 'NMX': 200})
-                    # if kwargs_lc_cont:
-                    #     kwargs_tmp.update(kwargs_lc_cont)
-                    # s_tmp, c_tmp = pyauto_instance.run(starting_point=f"GH{ghs[p]['count']}", origin=cont,
-                    #                                    STOP={'LP1'}, **kwargs_tmp)
-                    #
-                    # codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
-                    # if "LP" in codim1_bifs:
-                    #     continuations.update(codim2_search(params=params, starting_points=['LP1'], origin=c_tmp,
-                    #                                        pyauto_instance=pyauto_instance, recursion=recursion + 1,
-                    #                                        max_recursion_depth=max_recursion_depth, periodic=True,
-                    #                                        name=f"{name}:{p}/GH{ghs[p]['count']}", **kwargs))
-                    pass
+                    if p not in ghs:
+                        ghs[p] = {'count': 1, 'pos': [param_pos]}
+                    else:
+                        ghs[p]['count'] += 1
+                        ghs[p]['pos'].append(param_pos)
+
+                    # perform 1D continuation of limit cycle
+                    kwargs_tmp = kwargs.copy()
+                    kwargs_tmp.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11], 'NMX': 200})
+                    if kwargs_lc_cont:
+                        kwargs_tmp.update(kwargs_lc_cont)
+                    s_tmp, c_tmp = pyauto_instance.run(starting_point=f"GH{ghs[p]['count']}", origin=cont,
+                                                       STOP={'LP1'}, **kwargs_tmp)
+
+                    codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
+                    if "LP" in codim1_bifs:
+                        continuations.update(codim2_search(params=params, starting_points=['LP1'], origin=c_tmp,
+                                                           pyauto_instance=pyauto_instance, recursion=recursion + 1,
+                                                           max_recursion_depth=max_recursion_depth, periodic=True,
+                                                           name=f"{name}:{p}/GH{ghs[p]['count']}", **kwargs))
 
                 elif "BT" in bf:
 
