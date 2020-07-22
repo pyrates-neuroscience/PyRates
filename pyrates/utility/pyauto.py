@@ -1162,14 +1162,14 @@ def fractal_dimension(lyapunov_exponents: list) -> float:
 
     LEs = np.sort(lyapunov_exponents)[::-1]
     if np.sum(LEs) > 0:
-        return 0.0
+        return len(LEs)
     k = 0
     for j in range(len(LEs)-1):
         k = j+1
         if np.sum(LEs[:k]) < 0:
             k -= 1
             break
-    return k + np.sum(LEs[:k]) / np.abs(LEs[k]) if k > 0 else 0.0
+    return k + np.sum(LEs[:k]) / np.abs(LEs[k])
 
 
 def get_point_idx(diag: list, point: int) -> int:
