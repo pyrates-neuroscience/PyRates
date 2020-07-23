@@ -100,7 +100,11 @@ class PyAuto:
         if variables is None:
             variables = self._get_all_var_keys(solution_tmp)
         if params is None:
-            params = self._get_all_param_keys(solution_tmp)
+            try:
+                params = self._get_all_param_keys(solution_tmp)
+            except KeyError:
+                n_params = auto_kwargs['NPAR']
+                params = [f"PAR({i})" for i in range(1, n_params+1)]
 
         # extract continuation results
         if new_icp[0] == 14:
@@ -810,8 +814,8 @@ class PyAuto:
         # check whether branch and point identifiers match the targets
         branch_str = f' {branch} '
         point_str = f' {point+1} '
-        if branch_str in diag_split[0] and point_str in diag_split[0] and \
-                ('Eigenvalue' in diag_split[0] or 'Multiplier' in diag_split[0]):
+        if branch_str in diag_split[1] and point_str in diag_split[1] and \
+                ('Eigenvalue' in diag_split[1] or 'Multiplier' in diag_split[1]):
 
             # go through lines of system diagnostics and extract eigenvalues/floquet multipliers
             i = 1
@@ -1114,10 +1118,10 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                     codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
                     if "LP" in codim1_bifs:
                         p_tmp = 'LP1'
-                        name_tmp2 = f"{name}:{p}/ZH{zhs[p]['count']}(LP)"
+                        name_tmp2 = f"{name}:ZH{zhs[p]['count']}"
                     elif "HB" in codim1_bifs:
                         p_tmp = 'HB1'
-                        name_tmp2 = f"{name}:{p}/ZH{zhs[p]['count']}(HB)"
+                        name_tmp2 = f"{name}:ZH{zhs[p]['count']}"
                     else:
                         continue
 
@@ -1130,26 +1134,27 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
                 elif "GH" in bf and (p not in ghs or not any([p_tmp[0] == param_pos[0] and p_tmp[1] == param_pos[1]
                                                               for p_tmp in ghs[p]['pos']])):
 
-                    if p not in ghs:
-                        ghs[p] = {'count': 1, 'pos': [param_pos]}
-                    else:
-                        ghs[p]['count'] += 1
-                        ghs[p]['pos'].append(param_pos)
-
-                    # perform 1D continuation of limit cycle
-                    kwargs_tmp = kwargs.copy()
-                    kwargs_tmp.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11], 'NMX': 200})
-                    if kwargs_lc_cont:
-                        kwargs_tmp.update(kwargs_lc_cont)
-                    s_tmp, c_tmp = pyauto_instance.run(starting_point=f"GH{ghs[p]['count']}", origin=cont,
-                                                       STOP={'LP1'}, **kwargs_tmp)
-
-                    codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
-                    if "LP" in codim1_bifs:
-                        continuations.update(codim2_search(params=params, starting_points=['LP1'], origin=c_tmp,
-                                                           pyauto_instance=pyauto_instance, recursion=recursion + 1,
-                                                           max_recursion_depth=max_recursion_depth, periodic=True,
-                                                           name=f"{name}:{p}/GH{ghs[p]['count']}", **kwargs))
+                    # if p not in ghs:
+                    #     ghs[p] = {'count': 1, 'pos': [param_pos]}
+                    # else:
+                    #     ghs[p]['count'] += 1
+                    #     ghs[p]['pos'].append(param_pos)
+                    #
+                    # # perform 1D continuation of limit cycle
+                    # kwargs_tmp = kwargs.copy()
+                    # kwargs_tmp.update({'ILP': 1, 'IPS': 2, 'ISW': -1, 'ISP': 2, 'ICP': [params[0], 11], 'NMX': 200})
+                    # if kwargs_lc_cont:
+                    #     kwargs_tmp.update(kwargs_lc_cont)
+                    # s_tmp, c_tmp = pyauto_instance.run(starting_point=f"GH{ghs[p]['count']}", origin=cont,
+                    #                                    STOP={'LP1'}, **kwargs_tmp)
+                    #
+                    # codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
+                    # if "LP" in codim1_bifs:
+                    #     continuations.update(codim2_search(params=params, starting_points=['LP1'], origin=c_tmp,
+                    #                                        pyauto_instance=pyauto_instance, recursion=recursion + 1,
+                    #                                        max_recursion_depth=max_recursion_depth, periodic=True,
+                    #                                        name=f"{name}:{p}/GH{ghs[p]['count']}", **kwargs))
+                    pass
 
                 elif "BT" in bf:
 
