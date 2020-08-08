@@ -38,6 +38,7 @@ import sys
 import glob
 import time as t
 from itertools import cycle
+from copy import deepcopy
 
 # pyrates imports
 from pyrates.utility.grid_search import grid_search, ClusterGridSearch, linearize_grid, adapt_circuit, ClusterCompute, \
@@ -679,7 +680,9 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
 
                     # load model template
                     model_id = self.get_unique_id(int(attempts*1e6))
-                    model = CircuitTemplate.from_yaml(template).apply(label=f'model_{model_id}')
+                    if type(template) is str:
+                        template = CircuitTemplate.from_yaml(template)
+                    model = deepcopy(template).apply(label=f'model_{model_id}')
 
                     # apply new parameters to model template
                     params, param_map = dict(), dict()

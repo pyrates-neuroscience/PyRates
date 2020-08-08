@@ -802,7 +802,7 @@ def _draw_heatmap(*args, **kwargs):
 
 class Interactive2DParamPlot(object):
     def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array,
-                 param_map: pd.DataFrame, tmin=0., **kwargs):
+                 x_key: str, y_key: str, param_map: pd.DataFrame, tmin=0., **kwargs):
         """Creates an interactive 2D plot that allows visualization of time series using button press events
 
         Derive child class and change get_data() respectively to utilize this plotting method
@@ -817,6 +817,8 @@ class Interactive2DParamPlot(object):
             ndarray containing values of data-map columns.
         y_values
             ndarray containing values of data-map rows.
+        x_key
+        y_key
         param_map
             Dataframe containing the mapping between data-series columns (index) and x/y value pairs (columns)
             (as returned by `grid_search`).
@@ -830,6 +832,7 @@ class Interactive2DParamPlot(object):
 
         """
         dt = kwargs.pop('step_size', data_series.index[1] - data_series.index[0])
+        state_var = kwargs.pop('state_var', '')
         tmin = int(tmin/dt)
         self.data = data_series.iloc[tmin:, :]
         self.x_values = x_values
@@ -838,11 +841,12 @@ class Interactive2DParamPlot(object):
 
         # set up param map matrix
         self.map = np.zeros(shape=data_map.shape, dtype=np.int32)
-        for i in range(param_map.shape[0]):
-            x, y = param_map.iloc[i, 0], param_map.iloc[i, 1]
-            x_idx = np.argwhere(self.x_values == x)[0]
-            y_idx = np.argwhere(self.y_values == y)[0]
-            self.map[y_idx, x_idx] = i
+        for key in param_map.index:
+            x, y = param_map.loc[key, x_key], param_map.loc[key, y_key]
+            x_idx = np.argmin(np.abs(self.x_values - x))
+            y_idx = np.argmin(np.abs(self.y_values - y))
+            data_idx = np.argwhere(data_series.columns.get_loc(key))[0]
+            self.map[y_idx, x_idx] = data_idx
 
         # Create canvas
         if 'subplots' in kwargs:
@@ -854,12 +858,14 @@ class Interactive2DParamPlot(object):
         self.marker = self.ax[0].plot(0, 0, 'x', color='white', markersize='10')
 
         # Plot 2D data in left subplot
-        num_x_ticks = kwargs.pop('num_x_ticks', 10)
-        num_y_ticks = kwargs.pop('num_y_ticks', 10)
-        plot_connectivity(data_map, ax=self.ax[0], yticklabels=list(np.round(y_values, decimals=2)),
+        num_x_ticks = kwargs.pop('num_x_ticks', len(x_values))
+        num_y_ticks = kwargs.pop('num_y_ticks', len(y_values))
+        plot_connectivity(data_map.T, ax=self.ax[0], yticklabels=list(np.round(y_values, decimals=2)),
                           xticklabels=list(np.round(x_values, decimals=2)), **kwargs)
         set_num_axis_ticks(ax=self.ax[0], num_x_ticks_old=data_map.shape[1], num_y_ticks_old=data_map.shape[0],
                            num_x_ticks_new=num_x_ticks, num_y_ticks_new=num_y_ticks)
+        self.ax[0].set_xlabel(x_key)
+        self.ax[0].set_ylabel(y_key)
 
         # set up grid in right subplot
         self.ax[1].grid(visible=True, color="silver")
@@ -868,7 +874,8 @@ class Interactive2DParamPlot(object):
         data_min, data_max = np.min(self.data.values), np.max(self.data.values)
         data_margin = (data_max - data_min) * 0.1
         cmap = create_cmap('pyrates_purple', as_cmap=False, n_colors=1, reverse=True)
-        plot_timeseries(time_series, ax=self.ax[1], ylim=[data_min-data_margin, data_max+data_margin], cmap=cmap)
+        plot_timeseries(time_series, ax=self.ax[1], ylim=[data_min-data_margin, data_max+data_margin], cmap=cmap,
+                        ylabel=state_var)
         self.ax[1].set_title(f'x: {np.round(x, decimals=2)}, y: {np.round(y, decimals=2)}')
 
         # Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot

@@ -100,7 +100,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
     if not init_kwargs:
         init_kwargs = {}
-    vectorization = init_kwargs.pop('vectorization', 'nodes')
+    vectorization = init_kwargs.pop('vectorization', True)
     if type(circuit_template) is str:
         circuit_template = CircuitTemplate.from_yaml(circuit_template)
 
@@ -122,9 +122,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         new_params = {}
         for key in param_keys:
             new_params[key] = param_grid[key][idx]
-        circuit_tmp = deepcopy(circuit_template).apply()
-        circuit_key = f'{circuit_tmp.label}_{idx}'
-        circuit_tmp = adapt_circuit(circuit_tmp, new_params, param_map)
+        circuit_key = f'{circuit_template.label}_{idx}'
+        circuit_tmp = adapt_circuit(deepcopy(circuit_template).apply(), new_params, param_map)
         circuit.add_circuit(circuit_key, circuit_tmp)
         circuit_names.append(circuit_key)
     param_grid.index = circuit_names
@@ -1268,7 +1267,7 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
                         try:
                             circuit[node].values[op][var] = float(val)
                         except KeyError:
-                            pass
+                            print(f'WARNING: Variable {var} has not been found on node {node}.')
 
             # change variable values on edges
             edges = param_map[key]['edges'] if 'edges' in param_map[key] else []
