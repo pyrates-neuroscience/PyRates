@@ -1004,7 +1004,8 @@ class PyAuto:
 
 
 def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, Any], pyauto_instance: PyAuto,
-                                max_iter: int = 1000, iteration: int = 0, **kwargs) -> tuple:
+                                max_iter: int = 1000, iteration: int = 0, precision: int = 3, pds: list = [],
+                                **kwargs) -> tuple:
     """Automatically continue a cascade of period doubling bifurcations. Returns the labels of the continuation and the
     pyauto instance they were run on.
 
@@ -1015,6 +1016,8 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
     pyauto_instance
     max_iter
     iteration
+    precision
+    pds
     kwargs
 
     Returns
@@ -1022,21 +1025,38 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
     tuple
     """
     solutions = []
+    params = kwargs['ICP']
     i = 1
+    name = f'pd_{iteration}'
+
+    if iteration >= max_iter:
+        return solutions, pyauto_instance
+
     for point, point_info in solution.items():
+
         if 'PD' in point_info['bifurcation']:
-            s_tmp, cont = pyauto_instance.run(starting_point=f'PD{i}', name=f'pd_{iteration}', origin=continuation,
+
+            s_tmp, cont = pyauto_instance.run(starting_point=f'PD{i}', name=name, origin=continuation,
                                               **kwargs)
-            bfs = get_from_solutions(['bifurcation'], s_tmp)
-            if 'PD' in bfs:
-                solutions.append(f'pd_{iteration}')
-                if iteration >= max_iter:
-                    break
-                s_tmp2, pyauto_instance = continue_period_doubling_bf(solution=s_tmp, continuation=cont,
-                                                                      pyauto_instance=pyauto_instance,
-                                                                      iteration=iteration + 1, **kwargs)
-                solutions += s_tmp2
-                iteration += len(s_tmp2)
+            bfs = get_from_solutions(['bifurcation', f'PAR({params[0]})', f'PAR({params[1]})'], s_tmp)
+
+            for bf, p1, p2 in bfs:
+
+                param_pos = np.round([p1, p2], decimals=precision)
+
+                if "PD" in bf and not any([p[0] == param_pos[0] and p[1] == param_pos[1] for p in pds]):
+
+                    pds.append(param_pos)
+                    if name not in solution:
+                        solutions.append(name)
+
+                    s_tmp2, pyauto_instance = continue_period_doubling_bf(solution=s_tmp, continuation=cont,
+                                                                          pyauto_instance=pyauto_instance,
+                                                                          iteration=iteration + 1,
+                                                                          precision=precision, pds=pds,
+                                                                          **kwargs)
+                    solutions += s_tmp2
+                    iteration += len(s_tmp2)
             i += 1
 
     return solutions, pyauto_instance
