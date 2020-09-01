@@ -1123,8 +1123,9 @@ class ClusterGridSearch(ClusterCompute):
 
     @staticmethod
     def create_cgs_config(fp: str, circuit_template: str, param_map: dict, dt: float, simulation_time: float,
-                          sampling_step_size: Optional[float], inputs: Optional[dict] = {},
-                          outputs: Optional[dict] = {}, gs_kwargs: Optional[dict] = {}, worker_kwargs: Optional[dict] = {}):
+                          sampling_step_size: Optional[float] = None, inputs: Optional[dict] = {},
+                          outputs: Optional[dict] = {}, gs_kwargs: Optional[dict] = {}, 
+                          worker_kwargs: Optional[dict] = {}):
         """Creates a configfile.json containing a dictionary with all input parameters as key-value pairs
 
         Parameters
@@ -1147,7 +1148,7 @@ class ClusterGridSearch(ClusterCompute):
 
         import yaml
 
-        if not sampling_step_size:
+        if sampling_step_size is None:
             sampling_step_size = dt
 
         config_dict = {
@@ -1418,13 +1419,10 @@ class ClusterWorkerTemplate(object):
         param_map = global_config_dict['param_map']
         dt = global_config_dict['step_size']
         simulation_time = global_config_dict['simulation_time']
+        sampling_step_size = global_config_dict['sampling_step_size']
 
         # Optional parameters
         #####################
-        try:
-            sampling_step_size = global_config_dict['sampling_step_size']
-        except KeyError:
-            sampling_step_size = dt
 
         try:
             inputs = global_config_dict['inputs']
@@ -1488,7 +1486,7 @@ class ClusterWorkerTemplate(object):
                             permute_grid=False,
                             inputs=inputs,
                             outputs=outputs.copy(),
-                            profile="t",
+                            profile=True,
                             **gs_kwargs)
 
         print(f'Total parameter grid computation time: {t_:.3f} seconds')
@@ -1590,7 +1588,6 @@ class ClusterWorkerTemplate(object):
         for idx, data in self.results.iteritems():
 
             # Add post customized post processing of 'data' here
-
             self.processed_results.loc[:, idx] = data
 
     def worker_test(self):

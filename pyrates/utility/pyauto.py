@@ -1028,6 +1028,7 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
     params = kwargs['ICP']
     i = 1
     name = f'pd_{iteration}'
+    solutions.append(name)
 
     if iteration >= max_iter:
         return solutions, pyauto_instance
@@ -1047,9 +1048,6 @@ def continue_period_doubling_bf(solution: dict, continuation: Union[str, int, An
                 if "PD" in bf and not any([p[0] == param_pos[0] and p[1] == param_pos[1] for p in pds]):
 
                     pds.append(param_pos)
-                    if name not in solution:
-                        solutions.append(name)
-
                     s_tmp2, pyauto_instance = continue_period_doubling_bf(solution=s_tmp, continuation=cont,
                                                                           pyauto_instance=pyauto_instance,
                                                                           iteration=iteration + 1,
