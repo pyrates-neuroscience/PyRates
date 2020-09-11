@@ -831,7 +831,10 @@ class PyAuto:
                     break
 
                 # extract eigenvalues/floquet multipliers
-                idx2 = diag_tmp_split.index(f"{i}")
+                try:
+                    idx2 = diag_tmp_split.index(f"{i}")
+                except ValueError:
+                    idx2 = diag_tmp_split.index(f"{i}:")
                 real = float(diag_tmp_split[idx2+1])
                 imag = float(diag_tmp_split[idx2+2])
                 eigenvals.append(complex(real, imag))
@@ -1129,17 +1132,18 @@ def codim2_search(params: list, starting_points: list, origin: Union[str, int, A
 
                     # perform 1D continuation to find nearby fold bifurcation
                     kwargs_tmp = kwargs.copy()
-                    kwargs_tmp.update({'ILP': 1, 'IPS': 1, 'ISW': 1, 'ISP': 2, 'ICP': params[0]})
+                    kwargs_tmp.update({'ILP': 1, 'IPS': 1, 'ISW': 1, 'ISP': 2, 'ICP': params[0], 'STOP': ['LP1', 'HB1']
+                                       })
                     s_tmp, c_tmp = pyauto_instance.run(starting_point=f"ZH{zhs[p]['count']}", origin=cont,
-                                                       STOP={'LP1', 'HB1'}, bidirectional=True, **kwargs_tmp)
+                                                       bidirectional=True, **kwargs_tmp)
 
                     codim1_bifs = get_from_solutions(['bifurcation'], s_tmp)
                     if "LP" in codim1_bifs:
                         p_tmp = 'LP1'
-                        name_tmp2 = f"{name}:ZH{zhs[p]['count']}"
+                        name_tmp2 = f"{name_tmp}/ZH{zhs[p]['count']}"
                     elif "HB" in codim1_bifs:
                         p_tmp = 'HB1'
-                        name_tmp2 = f"{name}:ZH{zhs[p]['count']}"
+                        name_tmp2 = f"{name_tmp}/ZH{zhs[p]['count']}"
                     else:
                         continue
 

@@ -174,7 +174,7 @@ Op_sd_exp:
     inp:
       default: input
 
-# operator for a qif population with synaptic depression
+# operator for a qif population with spike-frequency adaptation (mono-exponential)
 Op_sfa_exp:
   base: OperatorTemplate
   equations:
