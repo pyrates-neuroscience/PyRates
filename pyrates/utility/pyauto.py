@@ -702,19 +702,20 @@ class PyAuto:
             eval(f"ax.set_{ax_names[i]}lim(min_val, max_val)")
 
     @classmethod
-    def from_file(cls, filename: str, auto_dir: str = None) -> Any:
+    def from_file(cls, filename: str, working_dir: str = None, auto_dir: str = None) -> Any:
         """
 
         Parameters
         ----------
         filename
+        working_dir
         auto_dir
 
         Returns
         -------
         Any
         """
-        pyauto_instance = cls(auto_dir)
+        pyauto_instance = cls(working_dir, auto_dir=auto_dir)
         data = pickle.load(open(filename, 'rb'))
         for key, val in data.items():
             if hasattr(pyauto_instance, key):
