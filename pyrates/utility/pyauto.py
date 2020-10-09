@@ -11,7 +11,19 @@ import pickle
 
 class PyAuto:
 
-    def __init__(self, auto_dir: str = None) -> None:
+    def __init__(self, working_dir: str = None, auto_dir: str = None) -> None:
+        
+        # make sure that auto-07p environment variables are set
+        if 'AUTO_DIR' not in os.environ:
+            if auto_dir is None:
+                raise ValueError('Auto-07p directory has not been set as environment variable. '
+                                 'Please provide path to cmds/auto.env.sh or set environment variable yourself.')
+            else:
+                auto_dir = auto_dir.replace('$HOME', '~')
+                auto_dir = os.path.expanduser(auto_dir)
+                os.environ['AUTO_DIR'] = auto_dir
+                path = f"{auto_dir}/cmds:{auto_dir}/bin:{os.environ['PATH']}"
+                os.environ['PATH'] = path
 
         import auto as a
 
@@ -20,8 +32,8 @@ class PyAuto:
         self.results = {}
 
         # private attributes
-        if auto_dir:
-            os.chdir(auto_dir)
+        if working_dir:
+            os.chdir(working_dir)
         self._auto = a
         self._dir = os.getcwd()
         self._last_cont = None

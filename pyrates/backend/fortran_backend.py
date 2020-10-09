@@ -586,7 +586,7 @@ class FortranBackend(NumpyBackend):
         if self.pyauto_compat:
 
             from pyrates.utility.pyauto import PyAuto
-            pyauto = PyAuto(auto_dir=self._build_dir)
+            pyauto = PyAuto(working_dir=self._build_dir)
             dsmin = dt*1e-2
             auto_defs = {'DSMIN': dsmin, 'DSMAX': dt*1e2, 'NMX': int(T/dsmin), 'NPR': int(dts/dt)}
             for key, val in auto_defs.items():
