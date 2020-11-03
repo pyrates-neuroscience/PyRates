@@ -163,7 +163,7 @@ class PyAuto:
         self._branches[new_branch][pyauto_key].append(new_icp)
 
         self.results[pyauto_key] = summary.copy()
-        self._cont_num = pyauto_key
+        self._cont_num = len(self.auto_solutions)
         if name and name != 'bidirect:cont2':
             self._results_map[name] = pyauto_key
 
@@ -714,7 +714,7 @@ class PyAuto:
         -------
         Any
         """
-        pyauto_instance = cls(auto_dir)
+        pyauto_instance = cls('', auto_dir=auto_dir)
         data = pickle.load(open(filename, 'rb'))
         for key, val in data.items():
             if hasattr(pyauto_instance, key):
@@ -735,9 +735,9 @@ class PyAuto:
         diag = solution[0].diagnostics.data[point_idx]['Text']
 
         if "Eigenvalues" in diag:
-            diag_line = "Eigenvalues  :   Stable:  "
+            diag_line = "Eigenvalues  :   Stable:"
         elif "Multipliers" in diag:
-            diag_line = "Multipliers:     Stable:  "
+            diag_line = "Multipliers:     Stable:"
         else:
             return s.b['solution'].b['PT'] < 0
         idx = diag.find(diag_line) + len(diag_line)

@@ -168,7 +168,8 @@ def plot_timeseries(data: pd.DataFrame, variable: str = 'value', plot_style: str
     """
     import seaborn as sb
 
-    sb.set_style(bg_style)
+    if bg_style:
+        sb.set_style(bg_style)
 
     # pre-process data
     demean = kwargs.pop('demean', False)
