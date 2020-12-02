@@ -1,8 +1,9 @@
 language: python
 python:
-  - "3.6.10"
-  - "3.7.7"
-  - "3.8.3"
+  - "3.6.12"
+  - "3.7.9"
+  - "3.8.6"
+  - "3.9"
 
 # install dependencies
 install:
