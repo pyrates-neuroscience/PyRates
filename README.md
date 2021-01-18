@@ -54,11 +54,11 @@ Development version (github)
 Alternatively, it is possible to clone this repository and run one of the following lines 
 from the directory in which the repository was cloned:
 ```
-python setuDocumentationp.py install
+python setup.py install
 ```
 or
 ```
-pip install .[<options>]
+pip install '.[<options>]'
 ```
 
 Singularity container

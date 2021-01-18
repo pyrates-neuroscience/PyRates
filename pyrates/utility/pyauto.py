@@ -5,7 +5,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.collections import LineCollection
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
-from typing import Union, Any
+from typing import Union, Any, Optional
 import pickle
 
 
@@ -36,7 +36,7 @@ class PyAuto:
             os.chdir(working_dir)
         self._auto = a
         self._dir = os.getcwd()
-        self._last_cont = None
+        self._last_cont = 0
         self._cont_num = 0
         self._results_map = {}
         self._branches = {}
@@ -82,7 +82,7 @@ class PyAuto:
             raise ValueError('Usage of keyword arguments `IRS` and `s` is disabled in pyauto. To start from a previous'
                              'solution, use the `starting_point` keyword argument and provide a tuple of branch '
                              'number and point number as returned by the `run` method.')
-        if not starting_point and self._last_cont:
+        if not starting_point and self._last_cont > 0:
             raise ValueError('A starting point is required for further continuation. Either provide a solution to '
                              'start from via the `starting_point` keyword argument or create a fresh pyauto instance.')
         if origin is None:
@@ -141,7 +141,7 @@ class PyAuto:
         elif name == 'bidirect:cont2' and not bidirectional and 'DS' in auto_kwargs and auto_kwargs['DS'] == '-':
 
             # get key from old solution and merge with new solution
-            solution_old = self._last_cont
+            solution_old = self.auto_solutions[self._last_cont]
             pyauto_key = solution_old.pyauto_key
             solution, summary = self.merge(pyauto_key, solution, summary, new_icp)
 
@@ -159,7 +159,7 @@ class PyAuto:
 
         # store auto solution under unique pyauto cont
         self.auto_solutions[pyauto_key] = solution
-        self._last_cont = solution
+        self._last_cont = pyauto_key
         self._branches[new_branch][pyauto_key].append(new_icp)
 
         self.results[pyauto_key] = summary.copy()
@@ -234,7 +234,7 @@ class PyAuto:
 
         return solution, summary_final
 
-    def get_summary(self, cont: Union[Any, str, int], point=None) -> dict:
+    def get_summary(self, cont: Optional[Union[Any, str, int]] = None, point=None) -> dict:
         """Extract summary of continuation from PyAuto.
 
         Parameters
@@ -253,6 +253,8 @@ class PyAuto:
             summary = self.results[cont]
         elif type(cont) is str:
             summary = self.results[self._results_map[cont]]
+        elif cont is None:
+            summary = self.results[self._last_cont]
         else:
             summary = self.results[cont.pyauto_key]
 

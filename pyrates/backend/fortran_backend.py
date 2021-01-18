@@ -394,7 +394,7 @@ class FortranBackend(NumpyBackend):
         try:
 
             # read file from excisting system compilation
-            if not directory:
+            if directory is None:
                 directory = self._build_dir
             fn = f"{directory}/rhs_func.f" if "rhs_func.f" not in directory else directory
             with open(fn, 'rt') as f:
@@ -536,7 +536,7 @@ class FortranBackend(NumpyBackend):
 
         return fn
 
-    def to_pyauto(self, directory=None, generate_auto_def=True):
+    def to_pyauto(self, directory=None, generate_auto_def=True, **kwargs):
         """
 
         Parameters
@@ -552,7 +552,7 @@ class FortranBackend(NumpyBackend):
         directory = directory if directory else self._build_dir
         if generate_auto_def:
             self.generate_auto_def(directory)
-        return PyAuto(directory)
+        return PyAuto(directory, **kwargs)
 
     def clear(self) -> None:
         """Removes all layers, variables and operations from graph. Deletes build directory.

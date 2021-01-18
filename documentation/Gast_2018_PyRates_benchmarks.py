@@ -90,7 +90,7 @@ def benchmark(Ns, Ps, T, dt, init_kwargs, run_kwargs, disable_gpu=False):
             print("Starting the benchmark simulation...")
 
             # run simulations
-            _, t = net.run(T, inputs={'all/PC/RPO_e_pc/u': inp}, outputs={'V': 'all/PC/OBS/V'}, verbose=False,
+            _, t = net.run(T, inputs={'all/PC/RPO_e_pc/u': inp}, outputs={'V': 'all/PC/RPO_e_pc/PSP'}, verbose=False,
                            **run_kwargs)
             times[i, j] = t
 

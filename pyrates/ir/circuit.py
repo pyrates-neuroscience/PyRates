@@ -1523,7 +1523,7 @@ class CircuitIR(AbstractBaseIR):
                                       f'choose another backend (e.g. `fortran`) to generate an auto file of the system.'
                                       )
 
-    def to_pyauto(self, dir: Optional[str] = None):
+    def to_pyauto(self, *args, **kwargs):
         """
 
         Parameters
@@ -1535,7 +1535,7 @@ class CircuitIR(AbstractBaseIR):
 
         """
         if hasattr(self._backend, 'to_pyauto'):
-            return self._backend.to_pyauto(dir)
+            return self._backend.to_pyauto(*args, **kwargs)
         else:
             raise NotImplementedError(f'Method not implemented for the chosen backend: {self._backend.name}. Please'
                                       f'choose another backend (e.g. `fortran`) to generate a pyauto instance of the '
