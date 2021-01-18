@@ -943,7 +943,7 @@ class NumpyBackend(object):
         self._input_names = []
 
         # create build dir
-        orig_dir = os.getcwd()
+        self._orig_dir = os.getcwd()
         if build_dir:
             os.makedirs(build_dir, exist_ok=True)
         dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
@@ -1540,9 +1540,10 @@ class NumpyBackend(object):
         self.op_counter = 0
         self.var_counter = 0
         self.layer = 0
-        rmtree(self._build_dir)
+        rmtree(f"{self._orig_dir}/{self._build_dir}")
         if 'rhs_func' in sys.modules:
             del sys.modules['rhs_func']
+        return self._orig_dir
 
     def get_layer(self, idx) -> list:
         """Retrieve layer from graph.

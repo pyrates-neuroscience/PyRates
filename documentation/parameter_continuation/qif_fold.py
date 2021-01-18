@@ -77,7 +77,7 @@ qif_compiled = qif.compile(backend='fortran', auto_compat=True)
 # Now that the model equations are compiled, we can generate an instance of :code:`pyrates.utility.pyauto.PyAuto`,
 # which is the PyRates interface to auto-07p. This is done via a simple step:
 
-qif_auto = qif_compiled.to_pyauto()
+qif_auto = qif_compiled.to_pyauto(directory=None, auto_dir='~/PycharmProjects/auto-07p')
 
 # %%
 # In the process of this step, PyRates will generate the fortran files that contain the model equations and initial

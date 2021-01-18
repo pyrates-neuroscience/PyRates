@@ -362,8 +362,8 @@ class FortranBackend(NumpyBackend):
             self.generate_auto_def(self._build_dir)
 
         # import function from file
-        fname_import = fname.replace('/', '.')
-        exec(f"from rhs_func import rhs_eval", globals())
+        fname_import = 'func' if self.pyauto_compat else 'rhs_eval'
+        exec(f"from rhs_func import {fname_import}", globals())
         rhs_eval = globals().pop('func')
 
         # apply function decorator
@@ -558,9 +558,10 @@ class FortranBackend(NumpyBackend):
         """Removes all layers, variables and operations from graph. Deletes build directory.
         """
 
-        super().clear()
-        for f in [f for f in os.listdir(os.getcwd()) if "cpython" in f and ("rhs_func" in f or "pyrates_func" in f)]:
-            os.remove(f)
+        wdir = super().clear()
+        for f in [f for f in os.listdir(wdir)
+                  if "cpython" in f and ("rhs_func" in f or "pyrates_func" in f) and f[-3:] == ".so" ]:
+            os.remove(f"{wdir}/{f}")
 
     def _solve(self, rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs):
         """
