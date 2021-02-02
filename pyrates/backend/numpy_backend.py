@@ -336,7 +336,7 @@ class PyRatesOp:
             if key != '__no_name__':
                 if type(arg) is str:
                     if func_call:
-                        if arg is "(":
+                        if arg == "(":
                             eval_gen.add_code_line(f"{arg}")
                         else:
                             eval_gen.add_code_line(f"{arg},")
@@ -2066,11 +2066,11 @@ class NumpyBackend(object):
                 args = (var, upd, idx_str, idx)
             return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args,
                                    idx_l=self.idx_l, idx_r=self.idx_r)
-        elif op is "index":
+        elif op == "index":
             return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
                                   idx_r=self.idx_r)
         else:
-            if op is "cast":
+            if op == "cast":
                 args = list(args)
                 for dtype in self.dtypes:
                     if dtype in str(args[1]):

@@ -813,7 +813,7 @@ class Interactive2DParamPlot(object):
         data_map
             2D ndarray containing a value based on each column data_series, respectively.
         data_series
-            DataFrame containing all data series used to crate the data map
+            DataFrame containing all data series used to create the data map
         x_values
             ndarray containing values of data-map columns.
         y_values
@@ -846,7 +846,11 @@ class Interactive2DParamPlot(object):
             x, y = param_map.loc[key, x_key], param_map.loc[key, y_key]
             x_idx = np.argmin(np.abs(self.x_values - x))
             y_idx = np.argmin(np.abs(self.y_values - y))
-            data_idx = np.argwhere(data_series.columns.get_loc(key))[0]
+            data_idx = data_series.columns.get_loc(key)
+            if type(data_idx) is np.ndarray:
+                data_idx = np.argwhere(data_idx)[0]
+            elif type(data_idx) is not int:
+                data_idx = data_idx.start
             self.map[y_idx, x_idx] = data_idx
 
         # Create canvas

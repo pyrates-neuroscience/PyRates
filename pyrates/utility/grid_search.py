@@ -59,7 +59,7 @@ __status__ = "development"
 def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union[dict, pd.DataFrame], param_map: dict,
                 step_size: float, simulation_time: float, inputs: dict, outputs: dict,
                 sampling_step_size: Optional[float] = None, permute_grid: bool = False, init_kwargs: dict = None,
-                **kwargs) -> tuple:
+                clear: bool = True, **kwargs) -> tuple:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
     Parameters
@@ -83,6 +83,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     permute_grid
         If true, all combinations of the provided param_grid values will be realized. If false, the param_grid values
         will be traversed pairwise.
+    clear
+        If true, all files that have been created by PyRates to run the grid-search will be cleaned up afterwards.
     kwargs
         Additional keyword arguments passed to the `:class:ComputeGraph` initialization.
 
@@ -147,7 +149,10 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
                       inputs=inputs,
                       outputs=outputs,
                       **kwargs)    # type: pd.DataFrame
-    net.clear()
+
+    # clean up config files
+    if clear:
+        net.clear()
 
     # return results
     if 'profile' in kwargs:

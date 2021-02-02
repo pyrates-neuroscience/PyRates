@@ -547,8 +547,8 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
 
     model_ids = []
 
-    def __init__(self):
-        np.random.seed(1234)
+    def __init__(self, seed=1234):
+        np.random.seed(seed)
         super().__init__()
 
     def run(self, initial_gene_pool: dict, gene_map: dict, loss_func: callable,
