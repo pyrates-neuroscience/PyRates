@@ -1229,7 +1229,7 @@ class CircuitIR(AbstractBaseIR):
 
         output_col, times, *time = self._backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
                                                      out_dir=out_dir, outputs=outputs_col, inputs=inputs_col,
-                                                     solver=solver, profile=profile, **kwargs)
+                                                     solver=solver, profile=profile, verbose=verbose, **kwargs)
 
         if verbose and profile:
             if simulation_time:
@@ -1877,8 +1877,8 @@ class CircuitIR(AbstractBaseIR):
 
             n_edges = len(orders) / target_shape[0]
             order_idx = np.argsort(orders, kind='stable')
-            orders = np.asarray(orders, dtype=np.int32)[order_idx]
-            orders_tmp = np.asarray(orders, dtype=np.int32)
+            orders_sorted = np.asarray(orders, dtype=np.int32)[order_idx]
+            orders_tmp = np.asarray(orders, dtype=np.int32)[order_idx]
             rates_tmp = np.asarray(rates)[order_idx]
 
             # create ODE system equations
@@ -1890,7 +1890,7 @@ class CircuitIR(AbstractBaseIR):
             for i in range(max_order + 1):
                 idx, idx_str, idx_var = self._bool_to_idx(orders_tmp > i)
                 idx_f1, idx_f1_str, idx_f1_var = self._bool_to_idx(orders_tmp == i)
-                idx_f2, idx_f2_str, idx_f2_var = self._bool_to_idx(orders == i)
+                idx_f2, idx_f2_str, idx_f2_var = self._bool_to_idx(orders_sorted == i)
                 var_dict.update(idx_var)
                 var_dict.update(idx_f1_var)
                 var_dict.update(idx_f2_var)
@@ -1967,7 +1967,7 @@ class CircuitIR(AbstractBaseIR):
                 var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
                                                    'dtype': 'int32',
                                                    'shape': (len(order_idx),),
-                                                   'value': order_idx}
+                                                   'value': np.argsort(order_idx, kind='stable')}
 
         # discretized edge buffers
         ##########################

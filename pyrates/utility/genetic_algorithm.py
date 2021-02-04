@@ -545,16 +545,16 @@ class GeneticAlgorithmTemplate:
 
 class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
 
-    model_ids = []
-
-    def __init__(self, seed=1234):
-        np.random.seed(seed)
+    def __init__(self, seed=1234, max_models=1e6):
         super().__init__()
+        np.random.seed(seed)
+        self.model_ids = list(np.arange(start=0, stop=max_models, step=1, dtype=np.int32)[::-1])
 
     def run(self, initial_gene_pool: dict, gene_map: dict, loss_func: callable,
             loss_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
             run_kwargs: Optional[dict] = None, template: Optional[Union[str, CircuitTemplate]] = None,
-            compile_kwargs: Optional[dict] = None, save_dir: Optional[str] = "", verbose: bool = True, **kwargs):
+            compile_kwargs: Optional[dict] = None, save_dir: Optional[str] = "", verbose: bool = True,
+            supress_runtime_warnings: bool = True, **kwargs):
         """Run a genetic algorithm to optimize genes of a population with respect to a given loss function.
 
         Parameters
@@ -583,6 +583,8 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
             is specified.
         verbose
             If true, status updates will be printed.
+        supress_runtime_warnings
+            If true, runtime warnings are suppressed.
         kwargs
             Additional keyword arguments that will be passed onto `scipy.optimize.differential_evolution`.
 
@@ -593,9 +595,14 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
         """
 
         import h5py
+        import warnings
 
         self.initial_gene_pool = initial_gene_pool
         self.num_genes = len(initial_gene_pool)
+
+        # supress warnings
+        if supress_runtime_warnings:
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
 
         # prepare arguments for call to scipy.optimize.differential_evolution
         if verbose:
@@ -679,7 +686,7 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
                 try:
 
                     # load model template
-                    model_id = self.get_unique_id(int(attempts*1e6))
+                    model_id = self.model_ids.pop()
                     if type(template) is str:
                         template = CircuitTemplate.from_yaml(template)
                     model = deepcopy(template).apply(label=f'model_{model_id}')
@@ -704,12 +711,6 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
 
         results = run_func(**run_kwargs)
         return loss_func(results, **loss_kwargs)
-
-    def get_unique_id(self, upper):
-        while True:
-            id = np.random.randint(low=0, high=upper)
-            if id not in self.model_ids:
-                return id
 
 
 class GSGeneticAlgorithm(GeneticAlgorithmTemplate):
