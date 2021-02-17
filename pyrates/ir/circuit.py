@@ -2028,7 +2028,7 @@ class CircuitIR(AbstractBaseIR):
                         'times': {'vtype': 'state_var',
                                   'dtype': self._backend._float_def,
                                   'shape': (len(times),),
-                                  'value': times
+                                  'value': np.asarray(times)
                                   },
                         't': {'vtype': 'state_var',
                               'dtype': self._backend._float_def,

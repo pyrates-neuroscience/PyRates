@@ -117,7 +117,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                               label=label, circuits=circuits, nodes=nodes,
                               edges=edges)
 
-    def apply(self, label: str = None, node_values: dict = None):
+    def apply(self, label: str = None, node_values: dict = None, edge_values: dict = None):
         """Create a Circuit graph instance based on the template
 
 
@@ -130,6 +130,10 @@ class CircuitTemplate(AbstractBaseTemplate):
         node_values
             (optional) Dictionary containing values (and possibly other variable properties) that overwrite defaults in
             specific nodes/operators/variables. Values must be given in the form: {'node/op/var': value}
+        edge_values
+            (optional) Dictionary containing source and target variable pairs as items and value dictionaries as values
+            (e.g. {('source/op1/var1', 'target/op1/var2'): {'weight': 0.3, 'delay': 1.0}}). Can be used to overwrite
+            default values defined in template.
 
         Returns
         -------
@@ -137,6 +141,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         """
         if not label:
             label = self.label
+        if not edge_values:
+            edge_values = {}
 
         # reformat node templates to NodeIR instances
         if node_values is None:
@@ -157,6 +163,10 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             # get edge template and instantiate it
             values = deepcopy(values)
+
+            # update edge template default values with passed edge values, if source and target are simple variable keys
+            if type(source) is str and type(target) is str and (source, target) in edge_values:
+                values.update(edge_values[(source, target)])
             weight = values.pop("weight", 1.)
 
             # get delay
