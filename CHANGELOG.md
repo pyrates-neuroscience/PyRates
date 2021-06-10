@@ -2,6 +2,22 @@
 
 ## 0.9
 
+### 0.9.3
+
+- Documentation changes:
+
+    - corrected mistake in the documentation of `pyrates.ir.circuit.CircuitIR.add_edge_buffer()`, where arguments that refer to the source variable of an edge, where erroneously described as target variable information.
+  
+- Bug fixes:
+    
+    - fixed bug in `pyrates.ir.circuit.CircuitIR.add_edge_buffer()` where the conversion from discrete delays to gamma-kernel convolutions led to a mix-up between different edges in some special cases.
+    - fixed bug in `pyrates.utility.pyauto.PyAuto._start_from_solution()` where certain special solution branches from Auto-07p could not be properly handled
+
+- Usability improvements:
+
+    - changed `pyrates.utility.grid_search.adapt_circuit()` such that node properties are always deep-copied before they are changed. This allows users to change the values of parameters on specific node operators, even though that exact same operator has been used to define multiple nodes in the network. Previously, changing the value of the parameter on one node led to changes on all other nodes as well.
+    - improved stability and usability of `pyrates.utility.visualization.Interactive2DParamPlot`. A title for the 2D plot can now be passed, a colorbar is added, and the location of the axis ticks of the 2D plot was improved
+
 ### 0.9.2
 
 - Documentation updates:
