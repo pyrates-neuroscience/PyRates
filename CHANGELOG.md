@@ -2,6 +2,16 @@
 
 ## 0.9
 
+### 0.9.4
+
+- Bug fixes:
+
+    - changed `CircuitIR.vectorize_edges()` in circuit.py such that zero-weight edges are removed during the vectorization, even if they have a delay defined on them (previously, defining a delay on a zero-weight edge kept that edge in the graph).
+
+- Usability improvements:
+
+    - fixed a bug in `CircuitIR._add_edge_buffer()` that caused a mix-up between edges when some outputs of a node had delays while others had not.
+
 ### 0.9.3
 
 - Documentation changes:
