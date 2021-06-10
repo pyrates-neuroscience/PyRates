@@ -1264,6 +1264,7 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
             # change variable values on nodes
             nodes = param_map[key]['nodes'] if 'nodes' in param_map[key] else []
             for node in nodes:
+                circuit[node].values = deepcopy(circuit[node].values)
                 if "/" in var:
                     op, var_name = var.split("/")
                     if op in circuit[node]:

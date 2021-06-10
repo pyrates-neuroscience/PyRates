@@ -1822,11 +1822,11 @@ class CircuitIR(AbstractBaseIR):
         Parameters
         ----------
         node
-            Name of the target node of the edge.
+            Name of the source node of the edge.
         op
-            Name of the target operator of the edge.
+            Name of the source operator of the edge.
         var
-            Name of the target variable of the edge.
+            Name of the source variable of the edge.
         edges
             List with edge identifier tuples (source_name, target_name, edge_idx).
         delays
@@ -1941,8 +1941,8 @@ class CircuitIR(AbstractBaseIR):
                     for i in range(n_edges):
                         buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}")
                 else:
-                    for i, idx in enumerate(nodes_tmp):
-                        buffer_eqs.append(f"{source_var}[{i}] = {var}[{idx}]")
+                    for i, idx in enumerate(order_idx):
+                        buffer_eqs.append(f"{source_var}[{i}] = {var}[{nodes_tmp[idx]}]")
                 var_dict[source_var] = {'vtype': 'state_var',
                                         'dtype': self._backend._float_def,
                                         'shape': (len(orders),),

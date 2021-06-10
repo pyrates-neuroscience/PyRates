@@ -874,7 +874,8 @@ class PyAuto:
         sol_keys = self.get_solution_keys(solution)
         if 'Starting direction of the free parameter(s)' in diag and len(sol_keys) == 1 and \
                 "EP" in list(solution[0].labels.by_index[sol_keys[0]])[0]:
-            solution = self._auto.run(solution)
+            _, s = solution[0].labels.by_index.popitem()
+            solution = self._auto.run(s['EP']['solution'])
         return solution
 
     @staticmethod
