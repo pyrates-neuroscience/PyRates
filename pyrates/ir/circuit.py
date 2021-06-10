@@ -974,19 +974,22 @@ class CircuitIR(AbstractBaseIR):
                 # create new, vectorized edge
                 #############################
 
-                # extract edge
+                weights = np.squeeze(weight_col)
 
-                new_edge = self.edges[edges_tmp.pop(0)[:3]]
+                if np.any(weights):
 
-                # change delay and weight attributes
-                weight_col = np.squeeze(weight_col).tolist()
-                delay_col = np.squeeze(delay_col).tolist()
-                spread_col = np.squeeze(spread_col).tolist()
-                new_edge['delay'] = delay_col
-                new_edge['weight'] = weight_col
-                new_edge['spread'] = spread_col
-                new_edge['source_idx'] = old_svar_idx
-                new_edge['target_idx'] = old_tvar_idx
+                    # extract edge
+                    new_edge = self.edges[edges_tmp.pop(0)[:3]]
+
+                    # change delay and weight attributes
+                    weight_col = weights.tolist()
+                    delay_col = np.squeeze(delay_col).tolist()
+                    spread_col = np.squeeze(spread_col).tolist()
+                    new_edge['delay'] = delay_col
+                    new_edge['weight'] = weight_col
+                    new_edge['spread'] = spread_col
+                    new_edge['source_idx'] = old_svar_idx
+                    new_edge['target_idx'] = old_tvar_idx
 
                 # delete vectorized edges from list
                 self.graph.remove_edges_from(edges_tmp)
@@ -1939,7 +1942,9 @@ class CircuitIR(AbstractBaseIR):
                 if n_edges % 1 == 0:
                     n_edges = int(n_edges)
                     for i in range(n_edges):
-                        buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}")
+                        sidx1, sidx2 = str(nodes_tmp[i*target_shape[0]]), str(nodes_tmp[(i+1)*target_shape[0]-1])
+                        sidx = f"{sidx1}:{sidx2}" if sidx1 != sidx2 else sidx1
+                        buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}[{sidx}]")
                 else:
                     for i, idx in enumerate(order_idx):
                         buffer_eqs.append(f"{source_var}[{i}] = {var}[{nodes_tmp[idx]}]")
