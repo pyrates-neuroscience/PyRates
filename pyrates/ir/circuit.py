@@ -1880,34 +1880,54 @@ class CircuitIR(AbstractBaseIR):
                     orders.append(dde_approx if m else 0)
                     rates.append(dde_approx / m if m else 0)
 
-            n_edges = len(orders) / target_shape[0]
+            # sort all edge information in ascending ODE order
+            n_edges = np.unique(source_idx).shape[0]
             order_idx = np.argsort(orders, kind='stable')
             orders_sorted = np.asarray(orders, dtype=np.int32)[order_idx]
             orders_tmp = np.asarray(orders, dtype=np.int32)[order_idx]
             rates_tmp = np.asarray(rates)[order_idx]
+            source_idx_tmp = source_idx[order_idx]
 
             # create ODE system equations
             buffer_eqs, var_dict, final_idx = [], {}, []
             max_order = max(orders)
             target_check = sum(target_shape) > 1 or len(orders) > 1
             var_shape = target_shape
-            source_var = f'{var}_reshaped_for_edge' if n_edges > 1 else var
+
             for i in range(max_order + 1):
+
+                # extract edge variable indices
                 idx, idx_str, idx_var = self._bool_to_idx(orders_tmp > i)
                 idx_f1, idx_f1_str, idx_f1_var = self._bool_to_idx(orders_tmp == i)
                 idx_f2, idx_f2_str, idx_f2_var = self._bool_to_idx(orders_sorted == i)
                 var_dict.update(idx_var)
                 var_dict.update(idx_f1_var)
                 var_dict.update(idx_f2_var)
+
+                # if ODEs still need to be added
                 if idx or idx == 0 or not target_check:
+
+                    # define new equation variable/parameter names
                     var_next = f"{var}_d{i + 1}"
-                    var_prev = f"{var}_d{i}" if i > 0 else source_var
+                    var_prev = f"{var}_d{i}" if i > 0 else var
                     rate = f"k_d{i + 1}"
+
+                    # extract rate for the next ODE
                     idx_apply = (idx == 0) or idx
                     val = rates_tmp[idx] if idx_apply else rates_tmp
-                    if not target_check or not var_shape or (type(idx) is list and len(idx) == len(orders_tmp)):
-                        idx_str, idx_f1_str = "", ""
                     var_shape = (len(val),) if val.shape else ()
+
+                    # check which index is required for the previous ODE variable
+                    if i == 0 and n_edges != target_shape:
+                        idx_str = "[source_idx]"
+                        var_dict["source_idx"] = {'vtype': 'constant',
+                                                  'dtype': 'int32',
+                                                  'shape': (len(source_idx_tmp[idx]),),
+                                                  'value': source_idx_tmp[idx]}
+                    elif not target_check or not var_shape or (type(idx) is list and len(idx) == len(orders_tmp)):
+                        idx_str, idx_f1_str = "", ""
+
+                    # create new ODE string and corresponding variable definitions
                     buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
                     var_dict[var_next] = {'vtype': 'state_var',
                                           'dtype': self._backend._float_def,
@@ -1916,21 +1936,22 @@ class CircuitIR(AbstractBaseIR):
                     var_dict[rate] = {'vtype': 'state_var',
                                       'dtype': self._backend._float_def,
                                       'value': rates_tmp[idx] if idx_apply else rates_tmp}
+
+                    # reduce lists of orders and rates by the ones that are fully implemented by the current ODE set
                     if idx_apply:
                         orders_tmp = orders_tmp[idx]
                         rates_tmp = rates_tmp[idx]
                     if not orders_tmp.shape:
                         orders_tmp = np.asarray([orders_tmp], dtype=np.int32)
                         rates_tmp = np.asarray([rates_tmp])
+
+                # store indices that are required to fill the edge buffer variable
                 if idx_f1 or idx_f1 == 0:
-                    n = len(idx) if type(idx) is list and idx else 1
                     if len(delays) > 1:
                         idx1 = idx_f2_str
-                        n1 = len(idx_f2) if type(idx_f2) is list and idx_f2 else 1
                     else:
                         idx1 = ""
-                        n1 = target_shape[0]
-                    final_idx.append((i, idx1, idx_str if n1 == n else idx_f1_str))
+                    final_idx.append((i, idx1, idx_f1_str))
 
             # remove unnecessary ODEs
             for _ in range(len(buffer_eqs) - final_idx[-1][0]):
@@ -1939,30 +1960,14 @@ class CircuitIR(AbstractBaseIR):
                 var_dict.pop(f"k_d{i}")
                 buffer_eqs.pop(-1)
 
-            # extend source variable to match shape of edge transmission variables
-            if n_edges > 1:
-                if n_edges % 1 == 0:
-                    n_edges = int(n_edges)
-                    for i in range(n_edges):
-                        sidx1, sidx2 = str(nodes_tmp[i*target_shape[0]]), str(nodes_tmp[(i+1)*target_shape[0]-1])
-                        sidx = f"{sidx1}:{int(sidx2)+1}" if sidx1 != sidx2 else sidx1
-                        buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}[{sidx}]")
-                else:
-                    for i, idx in enumerate(order_idx):
-                        buffer_eqs.append(f"{source_var}[{i}] = {var}[{nodes_tmp[idx]}]")
-                var_dict[source_var] = {'vtype': 'state_var',
-                                        'dtype': self._backend._float_def,
-                                        'shape': (len(orders),),
-                                        'value': 0.0}
-
-            # create buffered variable
+            # create edge buffer variable
             for i, idx1, idx2 in final_idx:
                 idx1 = idx1 if len(idx1) > 2 else ''
                 idx2 = idx2 if len(idx2) > 2 else ''
                 if i != 0:
                     buffer_eqs.append(f"{var}_buffered{idx1} = {var}_d{i}{idx2}")
                 else:
-                    buffer_eqs.append(f"{var}_buffered{idx1} = {source_var}{idx2}")
+                    buffer_eqs.append(f"{var}_buffered{idx1} = {var}{idx2}")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
                                            'dtype': self._backend._float_def,
                                            'shape': (len(delays),),
