@@ -730,172 +730,174 @@ class CircuitIR(AbstractBaseIR):
             target_var = data["target_var"]
             extra_sources = data["extra_sources"]
 
-            if edge_ir is None:
-                # if the edge is empty, just add one with remapped names
-                source, source_idx = self.label_map[source]
-                target, target_idx = self.label_map[target]
-                # make sure simple edges do have only one source variable defined
-                try:
-                    # try to calculate length
-                    n_vars = len(source_var.keys())
-                except AttributeError:
-                    # no dictionary --> we should be fine (assume string)
-                    pass
-                else:
-                    if n_vars > 1:
-                        raise PyRatesException("Too many source variables defined. Edges with no operators allow only"
-                                               "one source variable to be defined.")
-                        # could actually do this earlier
+            if weight is None or weight != 0:
 
-                # add edge from source to the new node
-                self.graph.add_edge(source, target,
-                                    source_var=source_var, source_idx=[source_idx],
-                                    target_var=target_var, target_idx=[target_idx],
-                                    weight=weight, delay=delay, spread=spread
-                                    )
-            else:
-                op_graph = edge_ir.op_graph
-
-                try:
-                    # get reference to a previously created node
-                    new_name, collapsed_node = node_op_graph_map[op_graph]
-                    # add values to respective lists in collapsed node
-                    collapsed_node.extend(edge_ir)
-                    # for op_key, value_dict in edge_ir.values.items():
-                    #     for var_key, value in value_dict.items():
-                    #         collapsed_node.extend([f"{op_key}/{var_key}"]["value"].append(value)
-
-                    # note current index of node
-                    coupling_vec_idx = node_sizes[op_graph]
-                    # increment op_graph size counter
-                    node_sizes[op_graph] += 1
-
-                except KeyError:
-                    # if it does not exist, create a new one and save its reference in the map
-                    collapsed_node = VectorizedNodeIR(edge_ir)
-
-                    # create unique name and add node to local graph
-                    while name_idx <= max_node_idx:
-                        new_name = f"vector_coupling{name_idx}"
-                        if new_name in self.nodes:
-                            name_idx += 1
-                            continue
-                        else:
-                            break
+                if edge_ir is None:
+                    # if the edge is empty, just add one with remapped names
+                    source, source_idx = self.label_map[source]
+                    target, target_idx = self.label_map[target]
+                    # make sure simple edges do have only one source variable defined
+                    try:
+                        # try to calculate length
+                        n_vars = len(source_var.keys())
+                    except AttributeError:
+                        # no dictionary --> we should be fine (assume string)
+                        pass
                     else:
-                        raise PyRatesException(
-                            "Too many nodes with generic name 'vector_coupling{counter}' exist. Aborting vectorization."
-                            "Consider not using this naming scheme for your own nodes as it is used for "
-                            "vectorization. This problem will also occur, when more unique operator graphs "
-                            "exist than the maximum number of iterations allows (default: 100k). You can "
-                            "increase this number by setting `max_node_idx` to a larger number.")
+                        if n_vars > 1:
+                            raise PyRatesException("Too many source variables defined. Edges with no operators allow only"
+                                                   "one source variable to be defined.")
+                            # could actually do this earlier
 
-                    # add new node directly to node graph, bypassing external interface
-                    # this is the "in_place" way to do this. Otherwise we would create an entirely new CircuitIR
-                    # instance
-                    self.graph.add_node(new_name, node=collapsed_node)
-                    node_op_graph_map[op_graph] = (new_name, collapsed_node)
-
-                    # set current index to 0
-                    coupling_vec_idx = 0
-                    # and set size of this node to 1
-                    node_sizes[op_graph] = 1
-
-                # refer node key to new node and respective list index of its values
-                # format: "nodeX[Z]" with X = node index and Z = list index for values
-                # self.label_map[specifier] = f"{new_name}[{coupling_vec_idx}]"
-
-                # get new reference for source/target nodes
-                # new references should have format "vector_node{node_idx}[{vector_idx}]"
-                # the following raises an error, if the format is wrong for some reason
-                source, source_idx = self.label_map[source]
-                target, target_idx = self.label_map[target]
-
-                source_vars = []
-
-                try:
-                    n_vars = len(source_var.keys())
-                except AttributeError:
-                    # simple/legacy case: only one input present. Unclear whether this also works with multiple
-                    # operators that use the same input variable
-                    n_vars = 1
-                    input_var = next(iter(edge_ir.inputs.values()))[0]
                     # add edge from source to the new node
-                    self.graph.add_edge(source, new_name,
+                    self.graph.add_edge(source, target,
                                         source_var=source_var, source_idx=[source_idx],
-                                        target_var=input_var, target_idx=[coupling_vec_idx],
-                                        weight=1, delay=None, spread=None
-                                        )
-
-                    # add edge from new node to target
-                    self.graph.add_edge(new_name, target,
-                                        source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
                                         target_var=target_var, target_idx=[target_idx],
                                         weight=weight, delay=delay, spread=spread
                                         )
                 else:
-                    for in_var, op_vars in edge_ir.inputs.items():
+                    op_graph = edge_ir.op_graph
 
-                        input_var = op_vars[0]  # simple solution for now: take only first reference
-                        # need to rewrite this, if problems arise from operators in a node referencing the same
-                        # node-wide variable
+                    try:
+                        # get reference to a previously created node
+                        new_name, collapsed_node = node_op_graph_map[op_graph]
+                        # add values to respective lists in collapsed node
+                        collapsed_node.extend(edge_ir)
+                        # for op_key, value_dict in edge_ir.values.items():
+                        #     for var_key, value in value_dict.items():
+                        #         collapsed_node.extend([f"{op_key}/{var_key}"]["value"].append(value)
 
-                        # now fetch the source variable connected to this input variable
-                        # should fail, if there is a mismatch between assigned input variable and actual inputs
-                        # could check for this during edge creation in the case of multiple source variables.
-                        try:
-                            single_source = next((key for key, value in source_var.items() if value == in_var))
-                        except StopIteration:
-                            if in_var in extra_sources.keys():
+                        # note current index of node
+                        coupling_vec_idx = node_sizes[op_graph]
+                        # increment op_graph size counter
+                        node_sizes[op_graph] += 1
+
+                    except KeyError:
+                        # if it does not exist, create a new one and save its reference in the map
+                        collapsed_node = VectorizedNodeIR(edge_ir)
+
+                        # create unique name and add node to local graph
+                        while name_idx <= max_node_idx:
+                            new_name = f"vector_coupling{name_idx}"
+                            if new_name in self.nodes:
+                                name_idx += 1
                                 continue
                             else:
-                                raise PyRatesException(f"Failed to divide edge with multiple source variables into many "
-                                                       f"edges with single source variable, because there is a mismatch "
-                                                       f"between assigned input variables in the source definition "
-                                                       f"{source_var} and inputs as defined by internal operator graph "
-                                                       f"{edge_ir.inputs}. This happened in an edge between {source} and "
-                                                       f"{target}.")
+                                break
+                        else:
+                            raise PyRatesException(
+                                "Too many nodes with generic name 'vector_coupling{counter}' exist. Aborting vectorization."
+                                "Consider not using this naming scheme for your own nodes as it is used for "
+                                "vectorization. This problem will also occur, when more unique operator graphs "
+                                "exist than the maximum number of iterations allows (default: 100k). You can "
+                                "increase this number by setting `max_node_idx` to a larger number.")
+
+                        # add new node directly to node graph, bypassing external interface
+                        # this is the "in_place" way to do this. Otherwise we would create an entirely new CircuitIR
+                        # instance
+                        self.graph.add_node(new_name, node=collapsed_node)
+                        node_op_graph_map[op_graph] = (new_name, collapsed_node)
+
+                        # set current index to 0
+                        coupling_vec_idx = 0
+                        # and set size of this node to 1
+                        node_sizes[op_graph] = 1
+
+                    # refer node key to new node and respective list index of its values
+                    # format: "nodeX[Z]" with X = node index and Z = list index for values
+                    # self.label_map[specifier] = f"{new_name}[{coupling_vec_idx}]"
+
+                    # get new reference for source/target nodes
+                    # new references should have format "vector_node{node_idx}[{vector_idx}]"
+                    # the following raises an error, if the format is wrong for some reason
+                    source, source_idx = self.label_map[source]
+                    target, target_idx = self.label_map[target]
+
+                    source_vars = []
+
+                    try:
+                        n_vars = len(source_var.keys())
+                    except AttributeError:
+                        # simple/legacy case: only one input present. Unclear whether this also works with multiple
+                        # operators that use the same input variable
+                        n_vars = 1
+                        input_var = next(iter(edge_ir.inputs.values()))[0]
                         # add edge from source to the new node
-
                         self.graph.add_edge(source, new_name,
-                                            source_var=single_source, source_idx=[source_idx],
+                                            source_var=source_var, source_idx=[source_idx],
                                             target_var=input_var, target_idx=[coupling_vec_idx],
                                             weight=1, delay=None, spread=None
                                             )
 
-                    # add edge from new node to target
-                    self.graph.add_edge(new_name, target,
-                                        source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
-                                        target_var=target_var, target_idx=[target_idx],
-                                        weight=weight, delay=delay, spread=spread
-                                        )
-
-                # # add edge from source to the new node
-                # self.graph.add_edge(source, new_name,
-                #                     source_var=source_var, source_idx=[source_idx],
-                #                     target_var=edge_ir.input_var, target_idx=[coupling_vec_idx],
-                #                     weight=1, delay=None, spread=None
-                #                     )
-                #
-                # # add edge from new node to target
-                # self.graph.add_edge(new_name, target,
-                #                     source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
-                #                     target_var=target_var, target_idx=[target_idx],
-                #                     weight=weight, delay=delay, spread=spread
-                #                     )
-
-                # in case we have additional sources that are not linked to the source node, add edges for them also
-                if extra_sources is not None:
-                    for edge_var, source in extra_sources.items():
-                        *node, source_op, source_var = source.split("/")
-                        source, source_idx = self.label_map["/".join(node)]
-                        input_var = edge_ir.inputs[edge_var][0]
-
-                        self.graph.add_edge(source, new_name,
-                                            source_var="/".join((source_op, source_var)), source_idx=[source_idx],
-                                            target_var=input_var, target_idx=[coupling_vec_idx],
-                                            weight=1, delay=None, spread=None
+                        # add edge from new node to target
+                        self.graph.add_edge(new_name, target,
+                                            source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                                            target_var=target_var, target_idx=[target_idx],
+                                            weight=weight, delay=delay, spread=spread
                                             )
+                    else:
+                        for in_var, op_vars in edge_ir.inputs.items():
+
+                            input_var = op_vars[0]  # simple solution for now: take only first reference
+                            # need to rewrite this, if problems arise from operators in a node referencing the same
+                            # node-wide variable
+
+                            # now fetch the source variable connected to this input variable
+                            # should fail, if there is a mismatch between assigned input variable and actual inputs
+                            # could check for this during edge creation in the case of multiple source variables.
+                            try:
+                                single_source = next((key for key, value in source_var.items() if value == in_var))
+                            except StopIteration:
+                                if in_var in extra_sources.keys():
+                                    continue
+                                else:
+                                    raise PyRatesException(f"Failed to divide edge with multiple source variables into many "
+                                                           f"edges with single source variable, because there is a mismatch "
+                                                           f"between assigned input variables in the source definition "
+                                                           f"{source_var} and inputs as defined by internal operator graph "
+                                                           f"{edge_ir.inputs}. This happened in an edge between {source} and "
+                                                           f"{target}.")
+                            # add edge from source to the new node
+
+                            self.graph.add_edge(source, new_name,
+                                                source_var=single_source, source_idx=[source_idx],
+                                                target_var=input_var, target_idx=[coupling_vec_idx],
+                                                weight=1, delay=None, spread=None
+                                                )
+
+                        # add edge from new node to target
+                        self.graph.add_edge(new_name, target,
+                                            source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                                            target_var=target_var, target_idx=[target_idx],
+                                            weight=weight, delay=delay, spread=spread
+                                            )
+
+                    # # add edge from source to the new node
+                    # self.graph.add_edge(source, new_name,
+                    #                     source_var=source_var, source_idx=[source_idx],
+                    #                     target_var=edge_ir.input_var, target_idx=[coupling_vec_idx],
+                    #                     weight=1, delay=None, spread=None
+                    #                     )
+                    #
+                    # # add edge from new node to target
+                    # self.graph.add_edge(new_name, target,
+                    #                     source_var=edge_ir.output_var, source_idx=[coupling_vec_idx],
+                    #                     target_var=target_var, target_idx=[target_idx],
+                    #                     weight=weight, delay=delay, spread=spread
+                    #                     )
+
+                    # in case we have additional sources that are not linked to the source node, add edges for them also
+                    if extra_sources is not None:
+                        for edge_var, source in extra_sources.items():
+                            *node, source_op, source_var = source.split("/")
+                            source, source_idx = self.label_map["/".join(node)]
+                            input_var = edge_ir.inputs[edge_var][0]
+
+                            self.graph.add_edge(source, new_name,
+                                                source_var="/".join((source_op, source_var)), source_idx=[source_idx],
+                                                target_var=input_var, target_idx=[coupling_vec_idx],
+                                                weight=1, delay=None, spread=None
+                                                )
 
             # remove old edge
             self.graph.remove_edge(*specifier)
@@ -1943,7 +1945,7 @@ class CircuitIR(AbstractBaseIR):
                     n_edges = int(n_edges)
                     for i in range(n_edges):
                         sidx1, sidx2 = str(nodes_tmp[i*target_shape[0]]), str(nodes_tmp[(i+1)*target_shape[0]-1])
-                        sidx = f"{sidx1}:{sidx2}" if sidx1 != sidx2 else sidx1
+                        sidx = f"{sidx1}:{int(sidx2)+1}" if sidx1 != sidx2 else sidx1
                         buffer_eqs.append(f"{source_var}[{i*target_shape[0]}:{(i+1)*target_shape[0]}] = {var}[{sidx}]")
                 else:
                     for i, idx in enumerate(order_idx):
