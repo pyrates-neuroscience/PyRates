@@ -2,6 +2,14 @@
 
 ## 0.9
 
+### 0.9.6
+
+- Reworked features:
+
+    - `CircuitIR._add_edge_buffer()` was re-worked, such that the algorithm that translates gamma-kernel convolutions for edges into ODE systems is more transparent and computationally less expensive
+    - additionally improved the source code documentation of `CircuitIR._add_edge_buffer()`
+    - removed unnecessary copying/indexing operations of original edge source variable
+  
 ### 0.9.5
 
 - Bug fixes:
