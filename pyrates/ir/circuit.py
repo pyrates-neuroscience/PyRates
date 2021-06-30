@@ -38,7 +38,7 @@ import numpy as np
 
 # pyrates-internal imports
 from pyrates import PyRatesException
-from pyrates.ir.node import NodeIR, VectorizedNodeIR
+from pyrates.ir.node import NodeIR, VectorizedNodeIR, AdjustableNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
 from pyrates.backend.parser import parse_equations, is_diff_eq, replace
@@ -585,21 +585,41 @@ class CircuitIR(AbstractBaseIR):
             print("Starting automatic optimization of the network graph:")
         self._compiled = True
 
-        # node vectorization
-        old_nodes = self._vectorize_nodes_in_place(max_node_idx)
-        self._vectorize_edges_in_place(max_node_idx)
-        nodes = (node for node, data in old_nodes)
-        self.graph.remove_nodes_from(nodes)
-        if verbose:
-            print("    ...nodes in the network have been vectorized.")
-
-        # edge vectorization
         if vectorize:
+
+            # node vectorization
+            old_nodes = self._vectorize_nodes_in_place(max_node_idx)
+            if verbose:
+                print("    ...nodes in the network have been vectorized.")
+
+            # edge vectorization
+            self._vectorize_edges_in_place(max_node_idx)
+            nodes = (node for node, data in old_nodes)
+            self.graph.remove_nodes_from(nodes)
             for source in self.nodes:
                 for target in self.nodes:
                     self._vectorize_edges(source, target)
-        if verbose:
-            print("    ...edges in the network have been vectorized.")
+            if verbose:
+                print("    ...edges in the network have been vectorized.")
+
+        else:
+
+            # create new graph
+            G = deepcopy(self)
+            old_nodes = [(node_key, data["node"]) for node_key, data in self.nodes(data=True)]
+            old_edges = [(source, target, data) for source, target, data in self.edges(data=True)]
+
+            # add nodes
+            for node_key, node in old_nodes:
+                adjustable_node = AdjustableNodeIR(node)
+                G.graph.add_node(node_key, node=adjustable_node)
+
+            # add edges
+            for source, target, data in old_edges:
+                G.add_edge(source, target, **data)
+
+            # replace self with new graph
+            self = G
 
         # go through nodes and create buffers for delayed outputs and mappings for their inputs
         for node_name in self.nodes:
@@ -653,7 +673,9 @@ class CircuitIR(AbstractBaseIR):
         old_nodes = [(node_key, data["node"]) for node_key, data in self.nodes(data=True)]
 
         for node_key, node in old_nodes:
+
             op_graph = node.op_graph
+
             try:
                 # get reference to a previously created node
                 new_name, collapsed_node = node_op_graph_map[op_graph]
@@ -693,8 +715,8 @@ class CircuitIR(AbstractBaseIR):
                 # now save the reference to the new node name with index number to label_map
                 self.label_map[node_key] = (new_name, 0)
 
-            # TODO: decide, whether reference collecting for operator_graphs in `_reference_map` is actually necessary
-            #   and if we thus need to remove these reference again after vectorization.
+                # TODO: decide, whether reference collecting for operator_graphs in `_reference_map` is actually necessary
+                #   and if we thus need to remove these reference again after vectorization.
 
         return old_nodes
 
@@ -733,6 +755,7 @@ class CircuitIR(AbstractBaseIR):
             if weight is None or weight != 0:
 
                 if edge_ir is None:
+
                     # if the edge is empty, just add one with remapped names
                     source, source_idx = self.label_map[source]
                     target, target_idx = self.label_map[target]
@@ -1358,7 +1381,9 @@ class CircuitIR(AbstractBaseIR):
 
         # run graph optimization and vectorization
         G._first_run = True
-        G.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order, verbose=verbose)
+        G = G.optimize_graph_in_place(vectorize=vectorization, dde_approx=dde_approximation_order, verbose=verbose)
+        if in_place:
+            self = G
 
         # move edge operations to nodes
         ###############################
@@ -1369,68 +1394,89 @@ class CircuitIR(AbstractBaseIR):
         # create equations and variables for each edge
         for source_node, target_node, edge_idx, data in G.edges(data=True, keys=True):
 
-            # extract edge information
-            weight = data['weight']
-            sidx = data['source_idx']
-            tidx = data['target_idx']
-            svar = data['source_var']
-            sop, svar = svar.split("/")
-            sval = G[f"{source_node}/{sop}/{svar}"]
-            tvar = data['target_var']
-            top, tvar = tvar.split("/")
-            tval = G[f"{target_node}/{top}/{tvar}"]
-            target_node_ir = G[target_node]
+            if vectorization:
 
-            # check whether edge projection can be solved by a simple inner product between a weight matrix and the
-            # source variables
-            dot_edge = False
-            if len(tval['shape']) < 2 and len(sval['shape']) < 2 and len(sidx) > 1:
+                # extract edge information
+                weight = data['weight']
+                sidx = data['source_idx']
+                tidx = data['target_idx']
+                svar = data['source_var']
+                sop, svar = svar.split("/")
+                sval = G[f"{source_node}/{sop}/{svar}"]
+                tvar = data['target_var']
+                top, tvar = tvar.split("/")
+                tval = G[f"{target_node}/{top}/{tvar}"]
+                target_node_ir = G[target_node]
 
-                n, m = tval['shape'][0], sval['shape'][0]
+                # check whether edge projection can be solved by a simple inner product between a weight matrix and the
+                # source variables
+                dot_edge = False
+                if len(tval['shape']) < 2 and len(sval['shape']) < 2 and len(sidx) > 1:
 
-                # check whether the weight matrix is dense enough for this edge realization to be efficient
-                if 1 - len(weight) / (n * m) < matrix_sparseness and n > 1 and m > 1:
+                    n, m = tval['shape'][0], sval['shape'][0]
 
-                    weight_mat = np.zeros((n, m), dtype=np.float32)
-                    if not tidx:
-                        tidx = [0 for _ in range(len(sidx))]
-                    for row, col, w in zip(tidx, sidx, weight):
-                        weight_mat[row, col] = w
+                    # check whether the weight matrix is dense enough for this edge realization to be efficient
+                    if 1 - len(weight) / (n * m) < matrix_sparseness and n > 1 and m > 1:
 
-                    # set up weights and edge projection equation
-                    eq = f"{tvar} = weight @ {svar}"
-                    weight = weight_mat
-                    dot_edge = True
+                        weight_mat = np.zeros((n, m), dtype=np.float32)
+                        if not tidx:
+                            tidx = [0 for _ in range(len(sidx))]
+                        for row, col, w in zip(tidx, sidx, weight):
+                            weight_mat[row, col] = w
 
-            # set up edge projection equation and edge indices for edges that cannot be realized via a matrix product
-            args = {}
-            if len(tidx) > 1 and sum(tval['shape']) > 1:
-                d = np.zeros((tval['shape'][0], len(tidx)))
-                for i, t in enumerate(tidx):
-                    d[t, i] = 1
-            elif len(tidx) and sum(tval['shape']) > 1:
-                d = tidx
-            else:
-                d = []
-            idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
-            if not dot_edge:
-                if len(d) > 1:
-                    eq = f"{tvar} = target_idx @ ({svar}{idx} * weight)"
-                elif len(d):
-                    eq = f"{tvar}[target_idx] = {svar}{idx} * weight"
+                        # set up weights and edge projection equation
+                        eq = f"{tvar} = weight @ {svar}"
+                        weight = weight_mat
+                        dot_edge = True
+
+                # set up edge projection equation and edge indices for edges that cannot be realized via a matrix product
+                args = {}
+                if len(tidx) > 1 and sum(tval['shape']) > 1:
+                    d = np.zeros((tval['shape'][0], len(tidx)))
+                    for i, t in enumerate(tidx):
+                        d[t, i] = 1
+                elif len(tidx) and sum(tval['shape']) > 1:
+                    d = tidx
                 else:
-                    eq = f"{tvar} = {svar}{idx} * weight"
+                    d = []
+                idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
+                if not dot_edge:
+                    if len(d) > 1:
+                        eq = f"{tvar} = target_idx @ ({svar}{idx} * weight)"
+                    elif len(d):
+                        eq = f"{tvar}[target_idx] = {svar}{idx} * weight"
+                    else:
+                        eq = f"{tvar} = {svar}{idx} * weight"
 
-            # add edge variables to dict
-            dtype = sval["dtype"]
-            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
-            args[tvar] = tval
-            if len(d):
-                args['target_idx'] = {'vtype': 'constant',
-                                      'value': np.array(d, dtype=G._backend._float_def if len(d) > 1 else np.int32)}
-            if idx:
-                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                      'value': np.array(sidx, dtype=np.int32)}
+                # add edge variables to dict
+                dtype = sval["dtype"]
+                args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
+                args[tvar] = tval
+                if len(d):
+                    args['target_idx'] = {'vtype': 'constant',
+                                          'value': np.array(d, dtype=G._backend._float_def if len(d) > 1 else np.int32)}
+                if idx:
+                    args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
+                                          'value': np.array(sidx, dtype=np.int32)}
+            else:
+
+                # extract edge information
+                weight = data['weight']
+                svar = data['source_var']
+                sop, svar = svar.split("/")
+                sval = G[f"{source_node}/{sop}/{svar}"]
+                tvar = data['target_var']
+                top, tvar = tvar.split("/")
+                tval = G[f"{target_node}/{top}/{tvar}"]
+                target_node_ir = G[target_node]
+
+                # define edge equation
+                eq = f"{tvar} = weight * {svar}"
+
+                # add edge variables to dict
+                dtype = sval["dtype"]
+                args = {'weight': {'vtype': 'constant', 'dtype': dtype, 'value': weight}}
+                args[tvar] = tval
 
             # add edge operator to target node
             op_name = f'edge_from_{source_node}_{edge_idx}'
@@ -1695,13 +1741,13 @@ class CircuitIR(AbstractBaseIR):
                 self.edges[s, t, e]['delay']
             v = self.edges[s, t, e].pop('spread', [0])
             if v is None or np.sum(v) == 0:
-                v = [0] * len(self.edges[s, t, e]['target_idx'])
+                v = [0] * len(self.edges[s, t, e]['target_idx']) if type(d) is list else [0]
                 discretize = True
             else:
                 discretize = False
                 v = self._process_delays(v, discretize=discretize)
             if d is None or np.sum(d) == 0:
-                d = [1] * len(self.edges[s, t, e]['target_idx'])
+                d = [1] * len(self.edges[s, t, e]['target_idx']) if type(d) is list else [1]
             else:
                 d = self._process_delays(d, discretize=discretize)
             means += d
@@ -1714,7 +1760,7 @@ class CircuitIR(AbstractBaseIR):
             stds = None
 
         for s, t, e in edges:
-            if add_delay:
+            if add_delay and 'source_idx' in self.edges[s, t, e]:
                 nodes.append(self.edges[s, t, e].pop('source_idx'))
                 self.edges[s, t, e]['source_idx'] = []
             self.edges[s, t, e]['delay'] = None
@@ -2004,9 +2050,7 @@ class CircuitIR(AbstractBaseIR):
                         f'{var}_delays': {'vtype': 'constant',
                                           'dtype': 'int32',
                                           'value': delays},
-                        f'source_idx': {'vtype': 'constant',
-                                        'dtype': 'int32',
-                                        'value': source_idx}}
+                        }
 
             # create buffer equations
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
@@ -2017,6 +2061,7 @@ class CircuitIR(AbstractBaseIR):
                 buffer_eqs = [f"{var}_buffer[:] = roll({var}_buffer, 1, 1)",
                               f"{var}_buffer[:, 0] = {var}",
                               f"{var}_buffered = {var}_buffer[source_idx, {var}_delays]"]
+                var_dict['source_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': source_idx}
 
         # continuous delay buffers
         ##########################
@@ -2054,9 +2099,6 @@ class CircuitIR(AbstractBaseIR):
                         f'{var}_delays': {'vtype': 'constant',
                                           'dtype': self._backend._float_def,
                                           'value': delays},
-                        f'source_idx': {'vtype': 'constant',
-                                        'dtype': 'int32',
-                                        'value': source_idx},
                         f'{var}_maxdelay': {'vtype': 'constant',
                                             'dtype': self._backend._float_def,
                                             'value': (max_delay_int + 1) * self.step_size},
@@ -2081,6 +2123,8 @@ class CircuitIR(AbstractBaseIR):
                               f"{var}_buffer = append({var}, {var}_buffer, 1)",
                               f"{var}_buffered = interpolate_nd(times, {var}_buffer, {var}_delays, source_idx, t)"
                               ]
+                var_dict['source_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': source_idx}
+
             if self._buffered:
                 buffer_eqs.pop(2)
                 buffer_eqs.pop(0)
@@ -2104,7 +2148,7 @@ class CircuitIR(AbstractBaseIR):
         for i, edge in enumerate(edges):
             s, t, e = edge
             self.edges[s, t, e]['source_var'] = f"{op}/{var}_buffered"
-            if len(edges) > 1:
+            if len(edges) > 1 and len(nodes) == len(edges):
                 idx_h = idx_l + len(nodes[i])
                 self.edges[s, t, e]['source_idx'] = list(range(idx_l, idx_h))
                 idx_l = idx_h

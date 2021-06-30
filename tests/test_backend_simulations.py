@@ -390,7 +390,7 @@ def test_2_3_edge():
         net.clear()
 
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_2_4_vectorization():
     """Testing vectorization functionality of ComputeGraph class.
 
@@ -401,6 +401,7 @@ def test_2_4_vectorization():
 
     backends = ['tensorflow', 'numpy']
     for b in backends:
+
         # test whether vectorized networks produce same output as non-vectorized backend
         ################################################################################
 
@@ -408,21 +409,21 @@ def test_2_4_vectorization():
         dt = 1e-2
         sim_time = 10.
         sim_steps = int(sim_time / dt)
-        inp = np.zeros((sim_steps, 2)) + 0.5
+        inp = np.zeros((sim_steps, 1)) + 0.5
 
         # set up networks
-        net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net12").apply()
-        net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net12").apply()
-        net0 = ComputeGraph(net_config=net_config0, name='net0', vectorization='none', dt=dt, build_in_place=False,
-                            backend=b)
-        net1 = ComputeGraph(net_config=net_config1, name='net1', vectorization='nodes', dt=dt, build_in_place=False,
-                            backend=b)
+        net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9").apply()
+        net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9").apply()
+        net0 = ComputeGraph(net_config=net_config0, name='net0', vectorization=True, step_size=dt, backend=b,
+                            in_place=True)
+        net1 = ComputeGraph(net_config=net_config1, name='net1', vectorization=False, step_size=dt, backend=b,
+                            in_place=True)
 
         # simulate network behaviors
-        results0 = net0.run(sim_time, outputs={'a': 'pop0/op7/a', 'b': 'pop1/op7/a'},
-                            inputs={'all/op7/inp': inp})
-        results1 = net1.run(sim_time, outputs={'a': 'pop0/op7/a', 'b': 'pop1/op7/a'},
-                            inputs={'all/op7/inp': inp}, out_dir='/tmp/log')
+        results0 = net0.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'},
+                            inputs={'pop1/op7/inp': inp})
+        results1 = net1.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'},
+                            inputs={'pop1/op7/inp': inp})
 
         error1 = nmrse(results0.values, results1.values)
 

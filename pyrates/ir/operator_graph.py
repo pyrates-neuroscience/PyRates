@@ -186,9 +186,9 @@ class OperatorGraph(DiGraph):
             return self.nodes
 
 
-class VectorizedOperatorGraph(DiGraph):
-    """Alternate version of `OperatorGraph` that is produced during vectorization. Contents of this version are not
-    particularly protected and the instance is not cached."""
+class AdjustableOperatorGraph(DiGraph):
+    """Alternate version of `OperatorGraph` with contents that are not particularly protected and the instance is
+    not cached."""
 
     def __init__(self, op_graph: OperatorGraph = None, values: dict = None):
 
@@ -275,6 +275,11 @@ class VectorizedOperatorGraph(DiGraph):
         #     return ((data["label"], data["values"]) for op, data in self.nodes(data=True))
         # else:
         return self.nodes
+
+
+class VectorizedOperatorGraph(AdjustableOperatorGraph):
+    """Alternate version of `OperatorGraph` that is produced during vectorization. Contents of this version are not
+    particularly protected and the instance is not cached."""
 
     def append_values(self, value_dict: dict):
         """Append value along vector dimension of operators.
