@@ -37,6 +37,5 @@ PyRates backend module including the following sub-modules:
     Interface to the backends available in PyRates.
 """
 
-from .computegraph import ComputeGraph
 from .parser import ExpressionParser, parse_dict
 from .funcs import *

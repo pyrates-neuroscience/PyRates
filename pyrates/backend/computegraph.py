@@ -30,49 +30,47 @@
 """
 
 # external imports
-from typing import Optional, Any
+from typing import Optional, Any, Callable, Union
+from networkx import MultiDiGraph
+from sympy import Symbol, Expr
 
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
 
 
-class ComputeGraph(object):
-    """Creates a compute graph that contains all nodes in the network plus their recurrent connections.
-
-    Parameters
-    ----------
-    net_config
-        Intermediate representation of the network configuration. For a more detailed description, see the documentation
-        of `pyrates.IR.CircuitIR`.
-    step_size
-        Step-size with which the network should be simulated later on.
-        Important for discretizing delays, differential equations, ...
-    vectorization
-        Defines the mode of automatic parallelization optimization that should be used. Can be `nodes` for lumping all
-        nodes together in a vector, `full` for full vectorization of the network, or `None` for no vectorization.
-    name
-        Name of the network.
-    backend
-        Backend in which to build the compute graph.
-    solver
-        Numerical solver to use for differential equations.
-
+class ComputeGraph(MultiDiGraph):
+    """Creates a compute graph where nodes are all constants and variables of the network and edges are the mathematical
+    operations linking those variables/constants together to form equations.
     """
 
-    def __new__(cls,
-                net_config: Any,
-                vectorization: bool = True,
-                name: Optional[str] = 'net0',
-                backend: str = 'numpy',
-                float_precision: str = 'float32',
-                **kwargs
-                ) -> Any:
-        """Instantiates operator.
-        """
+    def add_var(self, label: str, symbol: Union[Symbol, Expr], value: Any, **kwargs):
 
-        if type(net_config) is str:
-            net_config = net_config.apply()
+        super().add_node(label, symbol=symbol, value=value, **kwargs)
+        return self[label]
 
-        return net_config.compile(vectorization=vectorization, backend=backend, float_precision=float_precision,
-                                  **kwargs)
+    def add_op(self, inputs: Union[list, tuple], label: str, expr: str, func: Callable, **kwargs):
+
+        # add target node that contains result of operation
+        super().add_node(label, expr=expr, func=func, **kwargs)
+
+        # add edges from source nodes to target node
+        for i, v in enumerate(inputs):
+            super().add_edge(v, label, key=i)
+
+        return self[label]
+
+    def eval(self):
+
+        # TODO: evaluate whole graph
+        pass
+
+    def to_str(self):
+
+        # TODO: generate function string from compute graph
+        pass
+
+    def compile(self):
+
+        # TODO: collect layers of nodes with 'func' attributes.
+        pass

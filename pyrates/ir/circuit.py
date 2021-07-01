@@ -798,8 +798,8 @@ class CircuitIR(AbstractBaseIR):
                                       f'system.'
                                       )
 
-    def _collect_op_layers(self, layers: list, exclude: bool = False, op_identifier: Optional[str] = None
-                           ) -> tuple:
+    def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
+                                           op_identifier: Optional[str] = None, **kwargs) -> tuple:
         """
 
         Parameters
@@ -807,13 +807,13 @@ class CircuitIR(AbstractBaseIR):
         layers
         exclude
         op_identifier
+        kwargs
 
         Returns
         -------
 
         """
 
-        equations = []
         variables = {}
 
         for node_name, node in self.nodes.items():
@@ -831,6 +831,7 @@ class CircuitIR(AbstractBaseIR):
 
                 if (i in layers and not exclude) or (i not in layers and exclude):
 
+                    # collect operator variables and equations from node
                     if op_identifier:
                         ops_tmp = [op for op in ops if op_identifier not in op] if exclude else \
                             [op for op in ops if op_identifier in op]
@@ -838,20 +839,18 @@ class CircuitIR(AbstractBaseIR):
                         ops_tmp = ops
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
-                    # collect primary operator equations and variables
-                    if i == len(equations):
-                        equations.append(op_eqs)
-                    else:
-                        equations[i] += op_eqs
-                    for key, var in op_vars.items():
-                        if key not in variables:
-                            variables[key] = var
+                    # TODO: Parse op_eqs directly into ComputeGraph and store update of operator state variables in '
+                    #  value' fields of operator variable dicts
+
+                    # parse equations and variables into computegraph
+                    variables_new = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
+                    variables.update(variables_new)
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
                 i += 1
 
-        return equations, variables
+        return variables
 
     def _collect_ops(self, ops: List[str], node_name: str) -> tuple:
         """Adds a number of operations to the backend graph.

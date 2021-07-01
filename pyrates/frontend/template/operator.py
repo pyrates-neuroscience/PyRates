@@ -253,10 +253,10 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
             vtype = "placeholder"
         else:
             try:
-                # if "." in expr:
+                # if "." in algebra:
                 value = float(expr)  # default to float
                 # else:
-                #     value = int(expr)
+                #     value = int(algebra)
                 vtype = "constant"
             except ValueError:
                 raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
