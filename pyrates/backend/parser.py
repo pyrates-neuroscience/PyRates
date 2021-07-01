@@ -36,6 +36,10 @@ import typing as tp
 from numbers import Number
 from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
+from sympy import sympify, Expr, Symbol, lambdify
+
+# pyrates internal imports
+from .computegraph import ComputeGraph
 
 # meta infos
 __author__ = "Richard Gast"
@@ -75,12 +79,10 @@ class ExpressionParser(ParserElement):
         Only relevant for lhs expressions. If True, lhs will be treated as a first-order ordinary differential equation.
     expr_str
         String representation of the mathematical expression
-    expr
-        Symbolic (Pyparsing-based) representation of mathematical expression.
+    algebra
+        Symbolic (Pyparsing-based) representation of mathematical syntax.
     expr_stack
         List representation of the syntax tree of the (parsed) mathematical expression.
-    expr_list
-        List representation of the mathematical expression.
     op
         Operator for calculating the mathematical expression (symbolic representation).
     _op_tmp
@@ -124,9 +126,8 @@ class ExpressionParser(ParserElement):
 
         # additional attributes
         self.expr_str = expr_str
-        self.expr = None
+        self.algebra = kwargs.pop('algebra', None)
         self.expr_stack = []
-        self.expr_list = []
         self.op = None
         self._finished_rhs = False
         self._instantaneous = kwargs.pop('instantaneous', False)
@@ -134,7 +135,7 @@ class ExpressionParser(ParserElement):
         # define algebra
         ################
 
-        if not self.expr:
+        if not self.algebra:
 
             # general symbols
             point = Literal(".")
@@ -188,7 +189,7 @@ class ExpressionParser(ParserElement):
             op_logical = greater_equal | less_equal | unequal | equal | less | greater
 
             # pre-allocations
-            self.expr = Forward()
+            self.algebra = Forward()
             exponential = Forward()
             index_multiples = Forward()
 
@@ -197,18 +198,18 @@ class ExpressionParser(ParserElement):
             index_end = idx_r.setParseAction(self._push_first)
             index_comb = colon.setParseAction(self._push_first)
             arg_comb = comma.setParseAction(self._push_first)
-            arg_tuple = par_l + ZeroOrMore(self.expr.suppress() + Optional(arg_comb)) + par_r
-            func_arg = arg_tuple | self.expr.suppress()
+            arg_tuple = par_l + ZeroOrMore(self.algebra.suppress() + Optional(arg_comb)) + par_r
+            func_arg = arg_tuple | self.algebra.suppress()
 
             # basic computation unit
             atom = (func_name + Optional(func_arg.suppress()) + ZeroOrMore(arg_comb.suppress() + func_arg.suppress()) +
                     par_r.suppress() | name | pi | e | num_float | num_int).setParseAction(self._push_neg_or_first) | \
-                   (par_l.setParseAction(self._push_last) + self.expr.suppress() + par_r).setParseAction(self._push_neg)
+                   (par_l.setParseAction(self._push_last) + self.algebra.suppress() + par_r).setParseAction(self._push_neg)
 
             # apply indexing to atoms
             indexed = (Optional(minus) + atom).setParseAction(self._push_neg) + \
                       ZeroOrMore((index_start + index_multiples + index_end))
-            index_base = (self.expr.suppress() | index_comb)
+            index_base = (self.algebra.suppress() | index_comb)
             index_full = index_base + ZeroOrMore((index_comb + index_base)) + ZeroOrMore(index_comb)
             index_multiples << index_full + ZeroOrMore((arg_comb + index_full))
 
@@ -217,7 +218,7 @@ class ExpressionParser(ParserElement):
             exponential << boolean + ZeroOrMore((op_exp + Optional(exponential)).setParseAction(self._push_first))
             factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self._push_first))
             expr = factor + ZeroOrMore((op_add + factor).setParseAction(self._push_first))
-            self.expr << expr #(Optional(minus) + expr).setParseAction(self._push_neg)
+            self.algebra << expr
 
     def parse_expr(self) -> tuple:
         """Parses string-based mathematical expression/equation.
@@ -229,7 +230,7 @@ class ExpressionParser(ParserElement):
         """
 
         # extract symbols and operations from equations right-hand side
-        self.expr_list = self.expr.parseString(self.rhs)
+        self.algebra.parseString(self.rhs)
         self._check_parsed_expr(self.rhs)
 
         # parse rhs into backend
@@ -242,7 +243,7 @@ class ExpressionParser(ParserElement):
         self._finished_rhs = True
 
         # extract symbols and operations from left-hand side
-        self.expr_list = self.expr.parseString(self.lhs)
+        self.algebra.parseString(self.lhs)
         self._check_parsed_expr(self.lhs)
 
         # parse lhs into backend
@@ -725,6 +726,123 @@ class ExpressionParser(ParserElement):
         return test
 
 
+class SympyParser(ExpressionParser):
+    """Sympy-based class for parsing mathematical expressions from a string format into a symbolic representation of the
+    mathematical operation expressed by it.
+
+    Parameters
+    ----------
+    expr_str
+        Mathematical expression in string format.
+    args
+        Dictionary containing all variables and functions needed to evaluate the expression.
+    backend
+        Backend instance in which to parse all variables and operations.
+        See `pyrates.backend.numpy_backend.NumpyBackend` for a full documentation of the backends methods and
+        attributes.
+    kwargs
+        Additional keyword arguments to be passed to the backend functions.
+
+    Attributes
+    ----------
+    lhs
+        Boolean, indicates whether expression is left-hand side or right-hand side of an equation
+    rhs
+        PyRatesOp for the evaluation of the right-hand side of the equation
+    args
+        Dictionary containing the variables of an expression
+    solve
+        Only relevant for lhs expressions. If True, lhs will be treated as a first-order ordinary differential equation.
+    expr_str
+        String representation of the mathematical expression
+    expr
+        Symbolic (Pyparsing-based) representation of mathematical expression.
+    expr_stack
+        List representation of the syntax tree of the (parsed) mathematical expression.
+    expr_list
+        List representation of the mathematical expression.
+    op
+        Operator for calculating the mathematical expression (symbolic representation).
+    _op_tmp
+        Helper variable for building `op`.
+    ops
+        Dictionary containing all mathematical operations that are allowed for a specific instance of the
+        `ExpressionParser` (e.g. +, -, *, /).
+    funcs
+        Dictionary containing all additional functions that can be used within mathematical expressions with a specific
+        instance of the `ExpressionParser` (e.g. sum(), reshape(), float32()).
+    dtypes
+        Dictionary containing all data-types that can be used within mathematical expressions with a specific instance
+        of the `ExpressionParser` (e.g. float32, bool, int32).
+
+    """
+
+    def __init__(self, expr_str: str, args: dict, backend: tp.Any, **kwargs) -> None:
+        """Instantiates expression parser.
+        """
+
+        self.graph = ComputeGraph()
+        super().__init__(expr_str=expr_str, args=args, backend=backend, algebra=True, **kwargs)
+
+    def parse_expr(self) -> tuple:
+        """Parses string-based mathematical expression/equation.
+
+        Returns
+        -------
+        tuple
+            left-hand side, right-hand side and variables of the parsed equation.
+        """
+
+        # extract symbols and operations from equations right-hand side
+        self.expr_stack = sympify(self.rhs, locals={key: val['call'] for key, val in self.backend.ops.items()})
+
+        # parse rhs into backend
+        self.rhs = self.parse(self.expr_stack)
+
+        # post rhs parsing steps
+        if hasattr(self.rhs, 'vtype') or "float" in str(type(self.rhs)) or "int" in str(type(self.rhs)):
+            self.rhs = self.backend.add_op('no_op', self.rhs, **self.parser_kwargs)
+        self.clear()
+        self._finished_rhs = True
+
+        # extract symbols and operations from left-hand side
+        self.algebra.parseString(self.lhs)
+        self._check_parsed_expr(self.lhs)
+
+        # parse lhs into backend
+        self._update_lhs()
+
+        return self.lhs, self.rhs, self.vars
+
+    def parse(self, expr: Expr):
+
+        # TODO: make sure that each node has a proper, unique label
+        # TODO: make sure that variable scopes are stored
+        # TODO: move code from backend to computegraph for adding operators/variables
+
+        if expr.args:
+
+            # parse variables as nodes into compute graph
+            inputs, func_args = [], []
+            for arg in expr.args:
+                if isinstance(arg, Expr):
+                    v = self.parse(expr)
+                else:
+                    v = self.graph.add_var(label=arg.name, symbol=arg, value=self.backend.get_var(self.vars[arg.name]))
+                inputs.append(v)
+                func_args.append(v['symbol'])
+
+            # parse mathematical operation into compute graph
+            v_new = self.graph.add_op(inputs, label=self.backend.ops, expr=str(expr), func=lambdify(func_args, expr=expr))
+
+        else:
+
+            # parse constant into graph
+            v_new = self.graph.add_var(label=expr.name, symbol=expr, value=expr.num)
+
+        return v_new
+
+
 def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
     """Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
     of right-hand side evaluations that can be solved later on.
@@ -750,70 +868,67 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
     state_vars = {}
     var_map = {}
 
-    for layer in equations:
-        for eq, scope in layer:
+    for eq, scope in equations:
 
-            # parse arguments
-            #################
+        # parse arguments
+        #################
 
-            # extract operator variables from equation args
-            op_args = {key.split('/')[-1]: var for key, var in equation_args.items() if scope in key}
-            inputs = op_args['inputs'] if 'inputs' in op_args else {}
-            for key, inp in inputs.items():
-                if inp not in equation_args:
-                    raise KeyError(inp)
-                if inp in var_map:
-                    inp_tmp = var_map[inp]
-                else:
-                    inp_tmp = state_vars[inp] if inp in state_vars else equation_args[inp]
-                    if type(inp_tmp) is dict:
-                        inp_tmp = parse_dict({key: inp_tmp}, backend, scope="/".join(inp.split('/')[:-1]),
-                                             **kwargs)[key]
-                op_args[key] = inp_tmp
+        # extract operator variables from equation args
+        op_args = {key.split('/')[-1]: var for key, var in equation_args.items() if scope in key}
+        inputs = op_args['inputs'] if 'inputs' in op_args else {}
+        for key, inp in inputs.items():
+            if inp not in equation_args:
+                raise KeyError(inp)
+            if inp in var_map:
+                inp_tmp = var_map[inp]
+            else:
+                inp_tmp = state_vars[inp] if inp in state_vars else equation_args[inp]
+                if type(inp_tmp) is dict:
+                    inp_tmp = parse_dict({key: inp_tmp}, backend, scope="/".join(inp.split('/')[:-1]),
+                                         **kwargs)[key]
+            op_args[key] = inp_tmp
 
-            # parse operator variables in backend
-            args_tmp = {}
-            for key, arg in op_args.items():
-                if f"{scope}/{key}" in var_map:
-                    op_args[key] = var_map[f"{scope}/{key}"]
-                elif type(arg) is dict and 'vtype' in arg:
-                    args_tmp[key] = arg
-            args_tmp = parse_dict(args_tmp, backend, scope=scope, **kwargs)
-            op_args.update(args_tmp)
+        # parse operator variables in backend
+        args_tmp = {}
+        for key, arg in op_args.items():
+            if f"{scope}/{key}" in var_map:
+                op_args[key] = var_map[f"{scope}/{key}"]
+            elif type(arg) is dict and 'vtype' in arg:
+                args_tmp[key] = arg
+        args_tmp = parse_dict(args_tmp, backend, scope=scope, **kwargs)
+        op_args.update(args_tmp)
 
-            # add state variable vector to op args
-            if 'y' in equation_args:
-                op_args['y'] = equation_args['y']
-                op_args['y_delta'] = equation_args['y_delta']
+        # add state variable vector to op args
+        if 'y' in equation_args:
+            op_args['y'] = equation_args['y']
+            op_args['y_delta'] = equation_args['y_delta']
 
-            # remember state variables
-            for key, var in op_args.items():
-                var_name = f"{scope}/{key}"
-                if var_name not in var_map:
-                    var_map[var_name] = var
+        # remember state variables
+        for key, var in op_args.items():
+            var_name = f"{scope}/{key}"
+            if var_name not in var_map:
+                var_map[var_name] = var
 
-            # parse equation
-            ################
+        # parse equation
+        ################
 
-            instantaneous = is_diff_eq(eq) is False
-            parser = ExpressionParser(expr_str=eq, args=op_args, backend=backend, scope=scope,
-                                      instantaneous=instantaneous, **kwargs.copy())
-            _, _, variables = parser.parse_expr()
+        # TODO: Implement sympy-based ExpressionParser that is used below
+        instantaneous = is_diff_eq(eq) is False
+        parser = SympyParser(expr_str=eq, args=op_args, backend=backend, scope=scope,
+                             instantaneous=instantaneous, **kwargs.copy())
+        _, _, variables = parser.parse_expr()
 
-            # update equations args
-            #######################
+        # update equations args
+        #######################
 
-            # save backend variables to equation args
-            for key, var in variables.items():
-                var_name = key if key == 'y' or key == 'y_delta' else f"{scope}/{key}"
-                _, state_var = backend._is_state_var(var_name)
-                if state_var and var_name not in state_vars:
-                    state_vars[var_name] = var
-                elif 'inputs' in variables and key not in variables['inputs']:
-                    equation_args[var_name] = var
-
-        # go to next layer in backend
-        backend.add_layer()
+        # save backend variables to equation args
+        for key, var in variables.items():
+            var_name = key if key == 'y' or key == 'y_delta' else f"{scope}/{key}"
+            _, state_var = backend._is_state_var(var_name)
+            if state_var and var_name not in state_vars:
+                state_vars[var_name] = var
+            elif 'inputs' in variables and key not in variables['inputs']:
+                equation_args[var_name] = var
 
     # save state variables in backend
     equation_args.update(state_vars)

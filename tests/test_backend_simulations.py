@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 
 # pyrates internal imports
-from pyrates.backend import ComputeGraph
 from pyrates.frontend import CircuitTemplate
 
 # meta infos
@@ -180,7 +179,7 @@ def test_2_2_node():
         sim_time = 10.
         sim_steps = int(sim_time / dt)
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net4").apply()
-        net = ComputeGraph(net_config=net_config, name='net0', vectorization=True, backend=b)
+        net = net_config.compile(vectorization=True, backend=b)
 
         # simulate node behavior
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt)
