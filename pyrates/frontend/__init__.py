@@ -39,6 +39,23 @@ from pyrates.frontend.fileio import yaml
 from pyrates.frontend.template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
 
 
+def clear_frontend_caches(clear_template_cache=True, clear_operator_cache=True):
+    """Utility to clear caches in the frontend.
+
+    Parameters
+    ----------
+    clear_template_cache
+        toggles whether or not to clear the template_cache that contains all previously loaded templates
+    clear_operator_cache
+        toggles whether or not to clear the cache of unique OperatorIR instances
+    """
+    if clear_template_cache:
+        template.template_cache.clear()
+
+    if clear_operator_cache:
+        OperatorTemplate.cache.clear()
+
+
 # The following function are shorthands that bridge multiple interface steps
 def circuit_from_yaml(path: str):
     """Directly return CircuitIR instance from a yaml file."""
