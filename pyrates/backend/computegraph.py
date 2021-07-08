@@ -46,19 +46,21 @@ class ComputeGraph(MultiDiGraph):
 
     def add_var(self, label: str, symbol: Union[Symbol, Expr], value: Any, **kwargs):
 
-        super().add_node(label, symbol=symbol, value=value, **kwargs)
-        return self[label]
+        unique_label = self._generate_unique_label(label)
+        super().add_node(unique_label, symbol=symbol, value=value, **kwargs)
+        return unique_label, self.nodes[unique_label]
 
     def add_op(self, inputs: Union[list, tuple], label: str, expr: str, func: Callable, **kwargs):
 
         # add target node that contains result of operation
-        super().add_node(label, expr=expr, func=func, **kwargs)
+        unique_label = self._generate_unique_label(label)
+        super().add_node(unique_label, expr=expr, func=func, **kwargs)
 
         # add edges from source nodes to target node
         for i, v in enumerate(inputs):
-            super().add_edge(v, label, key=i)
+            super().add_edge(v, unique_label, key=i)
 
-        return self[label]
+        return unique_label, self.nodes[unique_label]
 
     def eval(self):
 
@@ -74,3 +76,15 @@ class ComputeGraph(MultiDiGraph):
 
         # TODO: collect layers of nodes with 'func' attributes.
         pass
+
+    def _generate_unique_label(self, label: str):
+
+        if label in self.nodes:
+            label_split = label.split('_')
+            try:
+                new_label = "_".join(label_split[:-1] + [f"{int(label_split[-1])+1}"])
+            except TypeError:
+                new_label = f"{label}_0"
+            return self._generate_unique_label(new_label)
+        else:
+            return label

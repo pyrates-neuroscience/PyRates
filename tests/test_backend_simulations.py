@@ -122,7 +122,7 @@ def test_2_1_operator():
         ################################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net2").apply()
-        net = ComputeGraph(net_config=net_config, name='net2', vectorization=True, backend=b)
+        net = net_config.compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0/op2/a'}, step_size=dt)
         net.clear()
 
@@ -140,7 +140,7 @@ def test_2_1_operator():
         ######################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net3").apply()
-        net = ComputeGraph(net_config=net_config, name='net3', vectorization=True, backend=b)
+        net = net_config.compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
                           step_size=dt)
         net.clear()
@@ -200,7 +200,7 @@ def test_2_2_node():
         ########################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net5").apply()
-        net = ComputeGraph(net_config=net_config, name='net1', vectorization=True, backend=b)
+        net = net_config.compile(vectorization=True, backend=b)
 
         # simulate node behavior
         results = net.run(sim_time, outputs={'a': 'pop0/op5/a'}, step_size=dt)
@@ -219,7 +219,7 @@ def test_2_2_node():
         ###############################################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net6").apply()
-        net = ComputeGraph(net_config=net_config, name='net2', vectorization=True, backend=b)
+        net = net_config.compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt)
         net.clear()
 
@@ -238,7 +238,7 @@ def test_2_2_node():
         ######################################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net7").apply()
-        net = ComputeGraph(net_config=net_config, name='net3', vectorization=True, backend=b)
+        net = net_config.compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt)
 
         # calculate node behavior from hand
@@ -278,7 +278,7 @@ def test_2_3_edge():
         sim_time = 10.
         sim_steps = int(sim_time / dt)
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net8").apply()
-        net = ComputeGraph(net_config=net_config, name='net0', vectorization=True, backend=b)
+        net = net_config.compile(vectorization=True, backend=b)
 
         # calculate edge behavior from hand
         update0 = lambda x, y: x + dt * y * 0.5
@@ -306,7 +306,7 @@ def test_2_3_edge():
         inp = np.zeros((sim_steps, 1)) + 0.5
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9").apply()
-        net = ComputeGraph(net_config=net_config, name='net1', vectorization=True, backend=b)
+        net = net_config.compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
                           step_size=dt)
         net.clear()
@@ -326,7 +326,7 @@ def test_2_3_edge():
         #######################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net10").apply()
-        net = ComputeGraph(net_config=net_config, name='net2', vectorization=True, backend=b, step_size=dt)
+        net = net_config.compile(vectorization=True, backend=b, step_size=dt)
         results = net.run(sim_time, outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt)
         net.clear()
 
@@ -352,7 +352,7 @@ def test_2_3_edge():
         inp = np.zeros((sim_steps, 1)) + 0.5
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9").apply()
-        net = ComputeGraph(net_config=net_config, name='net3', vectorization=True, step_size=dt, backend=b)
+        net = net_config.compile(vectorization=True, step_size=dt, backend=b)
         results = net.run(sim_time, step_size=dt,
                           outputs={'a': 'pop0/op1/a',
                                              'b': 'pop1/op7/a'},

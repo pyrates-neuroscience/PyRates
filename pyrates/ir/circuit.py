@@ -799,7 +799,7 @@ class CircuitIR(AbstractBaseIR):
                                       )
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
-                                           op_identifier: Optional[str] = None, **kwargs) -> tuple:
+                                           op_identifier: Optional[str] = None, **kwargs) -> None:
         """
 
         Parameters
@@ -813,8 +813,6 @@ class CircuitIR(AbstractBaseIR):
         -------
 
         """
-
-        variables = {}
 
         for node_name, node in self.nodes.items():
 
@@ -839,18 +837,21 @@ class CircuitIR(AbstractBaseIR):
                         ops_tmp = ops
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
-                    # TODO: Parse op_eqs directly into ComputeGraph and store update of operator state variables in '
-                    #  value' fields of operator variable dicts
-
                     # parse equations and variables into computegraph
-                    variables_new = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
-                    variables.update(variables_new)
+                    variables = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
+
+                    # save parsed variables in net config
+                    for key, val in variables.items():
+                        node, op, var = key.split('/')
+                        if "inputs" not in var:
+                            try:
+                                self[f"{node}/{op}/{var}"].update(val)
+                            except KeyError:
+                                pass
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
                 i += 1
-
-        return variables
 
     def _collect_ops(self, ops: List[str], node_name: str) -> tuple:
         """Adds a number of operations to the backend graph.
@@ -927,8 +928,10 @@ class CircuitIR(AbstractBaseIR):
             equations += [(eq, scope) for eq in op_info['equations']]
             for key, var in op_args.items():
                 full_key = f"{scope}/{key}"
-                if key == 'inputs':
+                if key == 'inputs' and var:
                     variables[f"{scope}/inputs"].update(var)
+                    in_var = var.copy().popitem()[1]
+                    variables[in_var] = self.get_node_var(in_var)
                 elif full_key not in variables:
                     variables[full_key] = var
             try:
