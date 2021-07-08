@@ -780,7 +780,7 @@ class SympyParser(ExpressionParser):
         """Instantiates expression parser.
         """
 
-        self.graph = ComputeGraph()
+        self.graph = kwargs.pop('compute_graph', ComputeGraph())
         super().__init__(expr_str=expr_str, args=args, backend=backend, algebra=True, **kwargs)
 
     def parse_expr(self) -> tuple:
@@ -821,10 +821,11 @@ class SympyParser(ExpressionParser):
             for arg in expr.args:
                 if isinstance(arg, Symbol):
                     backend_var = self.vars[arg.name]
-                    label, v = self.graph.add_var(label=backend_var.name, symbol=arg, value=backend_var, constant=False)
+                    label, v = self.graph.add_var(label=backend_var.name, symbol=arg, value=backend_var,
+                                                  vtype=backend_var.vtype, simple_constant=False)
                 else:
                     label, v = self.parse(arg)
-                if not v['constant']:
+                if not v['simple_constant']:
                     inputs.append(label)
                     func_args.append(v['symbol'])
 
@@ -834,7 +835,7 @@ class SympyParser(ExpressionParser):
             except IndexError:
                 label = str(expr.func)
             label, v_new = self.graph.add_op(inputs, label=label, expr=str(expr), func=lambdify(func_args, expr=expr),
-                                             symbol=Symbol(label), constant=False)
+                                             symbol=Symbol(label), simple_constant=False, vtype='variable')
 
         else:
 
@@ -843,7 +844,8 @@ class SympyParser(ExpressionParser):
                 val = expr.num
             except AttributeError:
                 val = expr.p
-            label, v_new = self.graph.add_var(label="const", symbol=expr, value=val, constant=True)
+            label, v_new = self.graph.add_var(label="const", symbol=expr, value=val, simple_constant=True,
+                                              vtype='constant')
 
         return label, v_new
 
@@ -870,7 +872,7 @@ class SympyParser(ExpressionParser):
             self.vars[self.lhs_key] = self.rhs
 
 
-def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
+def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> tuple:
     """Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
     of right-hand side evaluations that can be solved later on.
 
@@ -930,6 +932,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         parser = SympyParser(expr_str=eq, args=op_args, backend=backend, scope=scope,
                              instantaneous=instantaneous, **kwargs.copy())
         _, _, variables = parser.parse_expr()
+        kwargs['compute_graph'] = parser.graph
 
         # update equations args
         #######################
@@ -940,7 +943,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                 if var_name in equation_args and equation_args[var_name]['vtype'] == 'state_var':
                     equation_args[var_name]['value'] = var
 
-    return equation_args
+    return equation_args, kwargs.pop('compute_graph', None)
 
 
 def update_rhs(equations: list, equation_args: dict, update_num: int, update_str: str) -> tuple:

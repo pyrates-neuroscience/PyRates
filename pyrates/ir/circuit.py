@@ -1467,16 +1467,18 @@ class CircuitIR(AbstractBaseIR):
             print("Parsing the model equations into a compute graph.")
 
         # edge operators
-        G._parse_op_layers_into_computegraph(layers=[0], exclude=False, op_identifier="edge_from_",
-                                             squeeze=squeeze_vars)
+        CG = G._parse_op_layers_into_computegraph(layers=[0], exclude=False, op_identifier="edge_from_",
+                                                  squeeze=squeeze_vars)
 
         # node operators
         G._parse_op_layers_into_computegraph(layers=[], exclude=True, op_identifier="edge_from_",
-                                             squeeze=squeeze_vars)
+                                             squeeze=squeeze_vars, compute_graph=CG)
 
         if verbose:
             print("Compilation finished!\n")
 
+        CG.compile()
+        CG.eval()
         return G
 
     def generate_auto_def(self, dir: str) -> str:
@@ -1523,7 +1525,7 @@ class CircuitIR(AbstractBaseIR):
                                       )
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
-                                           op_identifier: Optional[str] = None, **kwargs) -> None:
+                                           op_identifier: Optional[str] = None, **kwargs) -> MultiDiGraph:
         """
 
         Parameters
@@ -1562,7 +1564,9 @@ class CircuitIR(AbstractBaseIR):
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
                     # parse equations and variables into computegraph
-                    variables = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
+                    variables, cg = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
+                    if cg is not None:
+                        kwargs['compute_graph'] = cg
 
                     # save parsed variables in net config
                     for key, val in variables.items():
@@ -1576,6 +1580,8 @@ class CircuitIR(AbstractBaseIR):
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
                 i += 1
+
+        return kwargs.pop('compute_graph', None)
 
     def _collect_ops(self, ops: List[str], node_name: str) -> tuple:
         """Adds a number of operations to the backend graph.
