@@ -36,7 +36,7 @@ import typing as tp
 from numbers import Number
 from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
-from sympy import sympify, Expr, Symbol, lambdify
+from sympy import Expr, Symbol, lambdify, sympify
 
 # pyrates internal imports
 from .computegraph import ComputeGraph
@@ -488,8 +488,7 @@ class ExpressionParser(ParserElement):
     def clear(self):
         """Clears expression list and stack.
         """
-        self.expr_list.clear()
-        self.expr_stack.clear()
+        self.expr_stack = []
 
     def _update_lhs(self):
         """Applies update to left-hand side of equation. For differential equations, different solving schemes are
@@ -797,17 +796,16 @@ class SympyParser(ExpressionParser):
         self.expr_stack = sympify(self.rhs, locals={key: val['call'] for key, val in self.backend.ops.items()})
 
         # parse rhs into backend
-        self.rhs = self.parse(self.expr_stack)
+        rhs_key, self.rhs = self.parse(self.expr_stack)
 
         # post rhs parsing steps
-        if hasattr(self.rhs, 'vtype') or "float" in str(type(self.rhs)) or "int" in str(type(self.rhs)):
+        if 'func' not in self.rhs:
             self.rhs = self.backend.add_op('no_op', self.rhs, **self.parser_kwargs)
         self.clear()
         self._finished_rhs = True
 
         # extract symbols and operations from left-hand side
-        self.algebra.parseString(self.lhs)
-        self._check_parsed_expr(self.lhs)
+        self.expr_stack = sympify(self.lhs)
 
         # parse lhs into backend
         self._update_lhs()
@@ -816,31 +814,60 @@ class SympyParser(ExpressionParser):
 
     def parse(self, expr: Expr):
 
-        # TODO: make sure that each node has a proper, unique label
-        # TODO: make sure that variable scopes are stored
-        # TODO: move code from backend to computegraph for adding operators/variables
-
         if expr.args:
 
             # parse variables as nodes into compute graph
             inputs, func_args = [], []
             for arg in expr.args:
-                if isinstance(arg, Expr):
-                    v = self.parse(expr)
+                if isinstance(arg, Symbol):
+                    backend_var = self.vars[arg.name]
+                    label, v = self.graph.add_var(label=backend_var.name, symbol=arg, value=backend_var, constant=False)
                 else:
-                    v = self.graph.add_var(label=arg.name, symbol=arg, value=self.backend.get_var(self.vars[arg.name]))
-                inputs.append(v)
-                func_args.append(v['symbol'])
+                    label, v = self.parse(arg)
+                if not v['constant']:
+                    inputs.append(label)
+                    func_args.append(v['symbol'])
 
             # parse mathematical operation into compute graph
-            v_new = self.graph.add_op(inputs, label=self.backend.ops, expr=str(expr), func=lambdify(func_args, expr=expr))
+            try:
+                label = str(expr.func).split('\'')[1].split('.')[-1]
+            except IndexError:
+                label = str(expr.func)
+            label, v_new = self.graph.add_op(inputs, label=label, expr=str(expr), func=lambdify(func_args, expr=expr),
+                                             symbol=Symbol(label), constant=False)
 
         else:
 
             # parse constant into graph
-            v_new = self.graph.add_var(label=expr.name, symbol=expr, value=expr.num)
+            try:
+                val = expr.num
+            except AttributeError:
+                val = expr.p
+            label, v_new = self.graph.add_var(label="const", symbol=expr, value=val, constant=True)
 
-        return v_new
+        return label, v_new
+
+    def _update_lhs(self):
+        """Applies update to left-hand side of equation. For differential equations, different solving schemes are
+        available.
+        """
+
+        # update left-hand side of equation
+        ###################################
+
+        diff_eq = self._diff_eq
+
+        if diff_eq:
+
+            # differential equation update
+            delta_key = f"{self.vars[self.lhs_key].name}::delta"
+            self.vars[delta_key] = self.rhs
+            self.backend.state_vars.append(delta_key)
+
+        else:
+
+            # simple update
+            self.vars[self.lhs_key] = self.rhs
 
 
 def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
@@ -865,8 +892,6 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         equation parsing).
 
     """
-    state_vars = {}
-    var_map = {}
 
     for eq, scope in equations:
 
@@ -874,15 +899,16 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         #################
 
         # extract operator variables from equation args
-        op_args = {key.split('/')[-1]: var for key, var in equation_args.items() if scope in key}
+        op_args = {key.split('/')[-1]: var for key, var in equation_args.copy().items() if scope in key}
         inputs = op_args['inputs'] if 'inputs' in op_args else {}
         for key, inp in inputs.items():
-            if inp not in equation_args:
+            if type(inp) is dict:
+                inp_tmp = parse_dict({key: inp}, backend, scope="/".join(inp.split('/')[:-1]),
+                                     **kwargs)[key]
+            elif inp not in equation_args:
                 raise KeyError(inp)
-            if inp in var_map:
-                inp_tmp = var_map[inp]
             else:
-                inp_tmp = state_vars[inp] if inp in state_vars else equation_args[inp]
+                inp_tmp = equation_args[inp]
                 if type(inp_tmp) is dict:
                     inp_tmp = parse_dict({key: inp_tmp}, backend, scope="/".join(inp.split('/')[:-1]),
                                          **kwargs)[key]
@@ -891,23 +917,10 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         # parse operator variables in backend
         args_tmp = {}
         for key, arg in op_args.items():
-            if f"{scope}/{key}" in var_map:
-                op_args[key] = var_map[f"{scope}/{key}"]
-            elif type(arg) is dict and 'vtype' in arg:
+            if type(arg) is dict and 'vtype' in arg:
                 args_tmp[key] = arg
         args_tmp = parse_dict(args_tmp, backend, scope=scope, **kwargs)
         op_args.update(args_tmp)
-
-        # add state variable vector to op args
-        if 'y' in equation_args:
-            op_args['y'] = equation_args['y']
-            op_args['y_delta'] = equation_args['y_delta']
-
-        # remember state variables
-        for key, var in op_args.items():
-            var_name = f"{scope}/{key}"
-            if var_name not in var_map:
-                var_map[var_name] = var
 
         # parse equation
         ################
@@ -921,18 +934,11 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         # update equations args
         #######################
 
-        # save backend variables to equation args
         for key, var in variables.items():
-            var_name = key if key == 'y' or key == 'y_delta' else f"{scope}/{key}"
-            _, state_var = backend._is_state_var(var_name)
-            if state_var and var_name not in state_vars:
-                state_vars[var_name] = var
-            elif 'inputs' in variables and key not in variables['inputs']:
-                equation_args[var_name] = var
-
-    # save state variables in backend
-    equation_args.update(state_vars)
-    backend.vars.update(state_vars)
+            if key != 'inputs':
+                var_name = f"{scope}/{key}"
+                if var_name in equation_args and equation_args[var_name]['vtype'] == 'state_var':
+                    equation_args[var_name]['value'] = var
 
     return equation_args
 

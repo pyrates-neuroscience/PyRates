@@ -1398,7 +1398,7 @@ class CircuitIR(AbstractBaseIR):
                         weight_mat[row, col] = w
 
                     # set up weights and edge projection equation
-                    eq = f"{tvar} = weight @ {svar}"
+                    eq = f"{tvar} = matmul(weight, {svar})"
                     weight = weight_mat
                     dot_edge = True
 
@@ -1412,25 +1412,28 @@ class CircuitIR(AbstractBaseIR):
                 d = tidx
             else:
                 d = []
-            idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
             if not dot_edge:
                 if len(d) > 1:
-                    eq = f"{tvar} = target_idx @ ({svar}{idx} * weight)"
+                    eq = f"{tvar} = matmul(target_projection, ({svar} * weight))"
+                    args['target_projection'] = {
+                        'vtype': 'constant',
+                        'value': np.array(d, dtype=G._backend._float_def if len(d) > 1 else np.int32)
+                    }
                 elif len(d):
-                    eq = f"{tvar}[target_idx] = {svar}{idx} * weight"
+                    eq = f"{tvar} = {svar} * weight"
+                    args['target_idx'] = {
+                        'vtype': 'constant',
+                        'value': np.array(d, dtype=G._backend._float_def if len(d) > 1 else np.int32)
+                    }
                 else:
-                    eq = f"{tvar} = {svar}{idx} * weight"
+                    eq = f"{tvar} = {svar} * weight"
 
             # add edge variables to dict
             dtype = sval["dtype"]
             args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
             args[tvar] = tval
-            if len(d):
-                args['target_idx'] = {'vtype': 'constant',
-                                      'value': np.array(d, dtype=G._backend._float_def if len(d) > 1 else np.int32)}
-            if idx:
-                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                      'value': np.array(sidx, dtype=np.int32)}
+            if sidx and sum(sval['shape']) > 1:
+                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': np.array(sidx, dtype=np.int32)}
 
             # add edge operator to target node
             op_name = f'edge_from_{source_node}_{edge_idx}'
@@ -1457,51 +1460,22 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("    ...all edge operations have been translated to backend-compatible equations.")
 
-        # collect node and edge operators
-        #################################
-
-        variables = {}
-
-        # edge operators
-        variables_tmp = G._parse_op_layers_into_computegraph(layers=[0], exclude=False, op_identifier="edge_from_",
-                                                             squeeze=squeeze_vars)
-        variables.update(variables_tmp)
-
-        # node operators
-        node_equations, variables_tmp = G._parse_op_layers_into_computegraph(layers=[], exclude=True,
-                                                                             op_identifier="edge_from_",
-                                                                             squeeze=squeeze_vars)
-        variables.update(variables_tmp)
-
-        # bring equations into correct order
-        equations = sort_equations(edge_eqs=[], node_eqs=node_equations)
-
-        if verbose:
-            print("    ...all model equations have been collected from the network.")
-
         # parse all equations and variables into the backend
         ####################################################
-
-        G._backend.bottom_layer()
 
         if verbose:
             print("Parsing the model equations into a compute graph.")
 
-        # parse mapping
-        variables = parse_equations(equations=equations, equation_args=variables, backend=G._backend,
-                                    squeeze=squeeze_vars)
+        # edge operators
+        G._parse_op_layers_into_computegraph(layers=[0], exclude=False, op_identifier="edge_from_",
+                                             squeeze=squeeze_vars)
+
+        # node operators
+        G._parse_op_layers_into_computegraph(layers=[], exclude=True, op_identifier="edge_from_",
+                                             squeeze=squeeze_vars)
+
         if verbose:
             print("Compilation finished!\n")
-
-        # save parsed variables in net config
-        for key, val in variables.items():
-            if key != 'y' and key != 'y_delta':
-                node, op, var = key.split('/')
-                if "inputs" not in var:
-                    try:
-                        G[f"{node}/{op}/{var}"]['value'] = val
-                    except KeyError as e:
-                        pass
 
         return G
 
@@ -1549,7 +1523,7 @@ class CircuitIR(AbstractBaseIR):
                                       )
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
-                                           op_identifier: Optional[str] = None, **kwargs) -> tuple:
+                                           op_identifier: Optional[str] = None, **kwargs) -> None:
         """
 
         Parameters
@@ -1563,8 +1537,6 @@ class CircuitIR(AbstractBaseIR):
         -------
 
         """
-
-        variables = {}
 
         for node_name, node in self.nodes.items():
 
@@ -1589,18 +1561,21 @@ class CircuitIR(AbstractBaseIR):
                         ops_tmp = ops
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
-                    # TODO: Parse op_eqs directly into ComputeGraph and store update of operator state variables in '
-                    #  value' fields of operator variable dicts
-
                     # parse equations and variables into computegraph
-                    variables_new = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
-                    variables.update(variables_new)
+                    variables = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
+
+                    # save parsed variables in net config
+                    for key, val in variables.items():
+                        node, op, var = key.split('/')
+                        if "inputs" not in var:
+                            try:
+                                self[f"{node}/{op}/{var}"].update(val)
+                            except KeyError:
+                                pass
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
                 i += 1
-
-        return variables
 
     def _collect_ops(self, ops: List[str], node_name: str) -> tuple:
         """Adds a number of operations to the backend graph.
@@ -1677,8 +1652,10 @@ class CircuitIR(AbstractBaseIR):
             equations += [(eq, scope) for eq in op_info['equations']]
             for key, var in op_args.items():
                 full_key = f"{scope}/{key}"
-                if key == 'inputs':
+                if key == 'inputs' and var:
                     variables[f"{scope}/inputs"].update(var)
+                    in_var = var.copy().popitem()[1]
+                    variables[in_var] = self.get_node_var(in_var)
                 elif full_key not in variables:
                     variables[full_key] = var
             try:
