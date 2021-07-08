@@ -31,8 +31,9 @@
 
 # external imports
 from typing import Optional, Any, Callable, Union
-from networkx import MultiDiGraph
+from networkx import MultiDiGraph, DiGraph
 from sympy import Symbol, Expr
+from copy import deepcopy
 
 # meta infos
 __author__ = "Richard Gast"
@@ -44,38 +45,107 @@ class ComputeGraph(MultiDiGraph):
     operations linking those variables/constants together to form equations.
     """
 
-    def add_var(self, label: str, symbol: Union[Symbol, Expr], value: Any, **kwargs):
+    def __init__(self):
+
+        self._eval_nodes = []
+        super().__init__()
+
+    def add_var(self, label: str, symbol: Union[Symbol, Expr], value: Any, vtype: str, **kwargs):
 
         unique_label = self._generate_unique_label(label)
-        super().add_node(unique_label, symbol=symbol, value=value, **kwargs)
+        super().add_node(unique_label, symbol=symbol, value=value, vtype=vtype, **kwargs)
         return unique_label, self.nodes[unique_label]
 
-    def add_op(self, inputs: Union[list, tuple], label: str, expr: str, func: Callable, **kwargs):
+    def add_op(self, inputs: Union[list, tuple], label: str, expr: str, func: Callable, vtype: str, **kwargs):
 
         # add target node that contains result of operation
         unique_label = self._generate_unique_label(label)
-        super().add_node(unique_label, expr=expr, func=func, **kwargs)
+        super().add_node(unique_label, expr=expr, func=func, vtype=vtype, **kwargs)
 
         # add edges from source nodes to target node
         for i, v in enumerate(inputs):
             super().add_edge(v, unique_label, key=i)
 
+        # TODO: add automatic broadcasting of operator inputs via backend functions here
+
         return unique_label, self.nodes[unique_label]
 
     def eval(self):
 
-        # TODO: evaluate whole graph
-        pass
+        return [self._eval_node(n) for n in self._eval_nodes]
 
-    def to_str(self):
+    def to_str(self) -> str:
 
         # TODO: generate function string from compute graph
-        pass
+        return ""
 
-    def compile(self):
+    def compile(self, lambdify: bool = True, to_file: bool = False, in_place: bool = True):
 
-        # TODO: collect layers of nodes with 'func' attributes.
-        pass
+        G = self if in_place else deepcopy(self)
+
+        # remove unconnected nodes and constants from graph
+        G._prune()
+
+        # evaluate constant-based operations
+        self._eval_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
+        for node in self._eval_nodes:
+
+            # process inputs of node
+            for inp in G.predecessors(node):
+                if G.nodes[inp]['vtype'] == 'constant':
+                    G.eval_subgraph(inp)
+
+            # evaluate node if all its inputs are constants
+            if all([G.nodes[inp]['vtype'] == 'constant' for inp in G.predecessors(node)]):
+                G.eval_subgraph(node)
+
+        # TODO: lambdify graph
+        if lambdify:
+            pass
+
+        # TODO: write graph to function file
+        if to_file:
+            func_str = self.to_str()
+
+        return G
+
+    def eval_subgraph(self, n):
+
+        inputs = []
+        for inp in self.predecessors(n):
+            inputs.append(self.eval_subgraph(inp))
+            self.remove_node(inp)
+
+        node = self.nodes[n]
+        if inputs:
+            node['value'] = node['func'](*tuple(inputs))
+
+        return node['value']
+
+    def remove_subgraph(self, n):
+
+        for inp in self.predecessors(n):
+            self.remove_subgraph(inp)
+        self.remove_node(n)
+
+    def _eval_node(self, n):
+
+        inputs = [self._eval_node(inp) for inp in self.predecessors(n)]
+        if inputs:
+            return self.nodes[n]['func'](*tuple(inputs))
+        return self.nodes[n]['value']
+
+    def _prune(self):
+
+        # remove all subgraphs that contain constants only
+        for n in [node for node, out_degree in self.out_degree if out_degree == 0]:
+            if self.nodes[n]['vtype'] == 'constant':
+                self.remove_subgraph(n)
+
+        # remove all unconnected nodes
+        for n in [node for node, out_degree in self.out_degree if out_degree == 0]:
+            if self.in_degree(n) == 0:
+                self.remove_node(n)
 
     def _generate_unique_label(self, label: str):
 
@@ -83,7 +153,7 @@ class ComputeGraph(MultiDiGraph):
             label_split = label.split('_')
             try:
                 new_label = "_".join(label_split[:-1] + [f"{int(label_split[-1])+1}"])
-            except TypeError:
+            except ValueError:
                 new_label = f"{label}_0"
             return self._generate_unique_label(new_label)
         else:
