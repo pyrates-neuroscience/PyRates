@@ -34,6 +34,7 @@ from typing import Optional, Any, Callable, Union
 from networkx import MultiDiGraph, DiGraph
 from sympy import Symbol, Expr
 from copy import deepcopy
+import numpy as np
 
 # meta infos
 __author__ = "Richard Gast"
@@ -56,7 +57,7 @@ class ComputeGraph(MultiDiGraph):
         super().add_node(unique_label, symbol=symbol, value=value, vtype=vtype, **kwargs)
         return unique_label, self.nodes[unique_label]
 
-    def add_op(self, inputs: Union[list, tuple], label: str, expr: str, func: Callable, vtype: str, **kwargs):
+    def add_op(self, inputs: Union[list, tuple], label: str, expr: Expr, func: Callable, vtype: str, **kwargs):
 
         # add target node that contains result of operation
         unique_label = self._generate_unique_label(label)
@@ -65,8 +66,6 @@ class ComputeGraph(MultiDiGraph):
         # add edges from source nodes to target node
         for i, v in enumerate(inputs):
             super().add_edge(v, unique_label, key=i)
-
-        # TODO: add automatic broadcasting of operator inputs via backend functions here
 
         return unique_label, self.nodes[unique_label]
 
@@ -99,6 +98,10 @@ class ComputeGraph(MultiDiGraph):
             if all([G.nodes[inp]['vtype'] == 'constant' for inp in G.predecessors(node)]):
                 G.eval_subgraph(node)
 
+        # broadcast all variable shapes to a common number of dimensions
+        for node in self._eval_nodes:
+            G.broadcast_op_inputs(node, squeeze=False)
+
         # TODO: lambdify graph
         if lambdify:
             pass
@@ -127,6 +130,48 @@ class ComputeGraph(MultiDiGraph):
         for inp in self.predecessors(n):
             self.remove_subgraph(inp)
         self.remove_node(n)
+
+    def broadcast_op_inputs(self, n, squeeze: bool = False, target_shape: tuple = None):
+
+        try:
+
+            # attempt to perform graph operation
+            if target_shape:
+                raise ValueError
+            return self._eval_node(n)
+
+        except ValueError:
+
+            # collect inputs to operator node
+            inputs, nodes, shapes = [], [], []
+            for inp in self.predecessors(n):
+
+                # ensure the whole operation tree of input is broadcasted to matching shapes
+                inp_eval = self.broadcast_op_inputs(inp)
+
+                inputs.append(inp_eval)
+                nodes.append(inp)
+                shapes.append(len(inp_eval.shape) if hasattr(inp_eval, 'shape') else 1)
+
+            # broadcast shapes of inputs
+            if not target_shape:
+                target_shape = inputs[np.argmax(shapes)].shape
+            for i in range(len(inputs)):
+
+                inp_eval = inputs[i]
+
+                # get new shape of input
+                new_shape = self._broadcast_shapes(target_shape, inp_eval.shape, squeeze=squeeze)
+
+                # reshape input
+                if new_shape != inp_eval.shape:
+                    if 'func' in self.nodes[nodes[i]]:
+                        self.broadcast_op_inputs(nodes[i], squeeze=squeeze, target_shape=new_shape)
+                    else:
+                        inp_eval = inp_eval.reshape(new_shape)
+                        self.nodes[nodes[i]]['value'] = inp_eval
+
+            return self.broadcast_op_inputs(n, squeeze=True)
 
     def _eval_node(self, n):
 
@@ -158,3 +203,27 @@ class ComputeGraph(MultiDiGraph):
             return self._generate_unique_label(new_label)
         else:
             return label
+
+    @staticmethod
+    def _broadcast_shapes(s1: tuple, s2: tuple, squeeze: bool):
+
+        new_shape = []
+        for j, s in enumerate(s1):
+            if squeeze:
+                try:
+                    if s2[j] == s1[j] or s2[j] == 1:
+                        new_shape.append(s1[j])
+                    else:
+                        new_shape.append(1)
+                except IndexError:
+                    pass
+            else:
+                try:
+                    if s2[j] == s1[j] or s1[j] == 1:
+                        new_shape.append(s2[j])
+                    else:
+                        new_shape.append(1)
+                except IndexError:
+                    new_shape.append(1)
+
+        return tuple(new_shape)

@@ -793,7 +793,8 @@ class SympyParser(ExpressionParser):
         """
 
         # extract symbols and operations from equations right-hand side
-        self.expr_stack = sympify(self.rhs, locals={key: val['call'] for key, val in self.backend.ops.items()})
+        # TODO: add possibility to pass local functions to sympify via `locals` dict. Could be implemented in backend.
+        self.expr_stack = sympify(self.rhs)
 
         # parse rhs into backend
         rhs_key, self.rhs = self.parse(self.expr_stack)
@@ -825,6 +826,8 @@ class SympyParser(ExpressionParser):
                                                   vtype=backend_var.vtype, simple_constant=False)
                 else:
                     label, v = self.parse(arg)
+                    if 'expr' in v:
+                        expr = expr.replace(v['expr'], v['symbol'])
                 if not v['simple_constant']:
                     inputs.append(label)
                     func_args.append(v['symbol'])
@@ -834,8 +837,9 @@ class SympyParser(ExpressionParser):
                 label = str(expr.func).split('\'')[1].split('.')[-1]
             except IndexError:
                 label = str(expr.func)
-            label, v_new = self.graph.add_op(inputs, label=label, expr=str(expr), func=lambdify(func_args, expr=expr),
-                                             symbol=Symbol(label), simple_constant=False, vtype='variable')
+            label, v_new = self.graph.add_op(inputs, label=label, expr=expr, symbol=Symbol(label),
+                                             func=lambdify(func_args, expr=expr, modules=self.backend._type),
+                                             simple_constant=False, vtype='variable')
 
         else:
 
