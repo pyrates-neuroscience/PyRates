@@ -107,7 +107,6 @@ class NumpyVar(np.ndarray):
                 except TypeError:
                     dtype = type(value)
         dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
-        dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
         if dtype in backend.dtypes:
             dtype = backend.dtypes[dtype]
         else:
@@ -152,6 +151,52 @@ class NumpyVar(np.ndarray):
         except IndexError:
             return self
 
+    def broadcast(self, v: np.ndarray) -> np.ndarray:
+        """Tries to match the shapes of op1 and op2 such that op can be applied.
+
+        Parameters
+        ----------
+        v
+            Variable that shape and data-type need to be broadcasted to.
+
+        Returns
+        -------
+        self
+            Broadcasted NumpyVar.
+
+        """
+
+        # TODO: Improve this method. Should we make it sensitive to the specific operation that will be used
+        #  on self and v? We could generate classes of operations and use different broadcasting rules for each of them.
+
+        # # try to match shapes
+        # if not self._compare_shapes(op1, op2):
+        #
+        #     # try adjusting op2 to match shape of op1
+        #     adjust_first = True if hasattr(op2, 'short_name') else False
+        #     op1_tmp, op2_tmp = self._match_shapes(op1, op2, adjust_second=adjust_first)
+        #
+        #     if not self._compare_shapes(op1_tmp, op2_tmp):
+        #
+        #         # try adjusting op1 to match shape of op2
+        #         op1_tmp, op2_tmp = self._match_shapes(op1_tmp, op2_tmp, adjust_second=not adjust_first)
+        #
+        #     if self._compare_shapes(op1_tmp, op2_tmp):
+        #         op1, op2 = op1_tmp, op2_tmp
+
+        return self
+
+    def reshape(self, shape: tuple, **kwargs):
+
+        obj = super().reshape(shape, **kwargs)
+        if hasattr(self, 'name'):
+            obj.name = self.name
+        if hasattr(self, 'short_name'):
+            obj.short_name = self.short_name
+        if hasattr(self, 'vtype'):
+            obj.vtype = self.vtype
+        return obj
+
     @staticmethod
     def _get_value(value, dtype, shape):
         """Defines initial value of variable.
@@ -177,6 +222,40 @@ class NumpyVar(np.ndarray):
     @staticmethod
     def squeeze(var, axis=None):
         return var.squeeze(axis)
+
+    def _is_equal_to(self, v: np.ndarray):
+        if self.short_name == v.short_name and self.shape == v.shape:
+            if sum(v.shape) > 1:
+                return all(self.flatten() != v.flatten())
+            else:
+                return self != v
+
+    def _check_shape_compatibility(self, v: np.ndarray) -> bool:
+        """Checks whether the shape is compatible with shape of variable `v`.
+
+        Parameters
+        ----------
+        v
+            Other variable.
+
+        Returns
+        -------
+        bool
+            If true, the shapes of self and v are compatible.
+
+        """
+
+        if hasattr(self, 'shape') and hasattr(v, 'shape'):
+            if self.shape == v.shape:
+                return True
+            len_shape1 = len(self.shape)
+            len_shape2 = len(v.shape)
+            if len_shape1 > 1 and len_shape2 > 1 and np.abs(len_shape1 - len_shape2) >= 1:
+                return True
+            # if len(self.shape) == 0 and len(v.shape) == 0:
+            #     return True
+            return False
+        return True
 
     @classmethod
     def _get_var(cls, value, name, dtype):
@@ -877,6 +956,7 @@ class NumpyBackend(object):
                     "round": {'name': "numpy_round", 'call': "np.round"},
                     "sum": {'name': "numpy_sum", 'call': "np.sum"},
                     "mean": {'name': "numpy_mean", 'call': "np.mean"},
+                    "matmul": {'name': "numpy_matmul", 'call': "np.matmul"},
                     "concat": {'name': "numpy_concatenate", 'call': "np.concatenate"},
                     "reshape": {'name': "numpy_reshape", 'call': "np.reshape"},
                     "append": {'name': "numpy_append", 'call': "np.append"},
@@ -941,6 +1021,7 @@ class NumpyBackend(object):
                 if imp not in self._imports:
                     self._imports.append(imp)
         self._input_names = []
+        self._type = 'numpy'
 
         # create build dir
         self._orig_dir = os.getcwd()
@@ -2132,44 +2213,6 @@ class NumpyBackend(object):
             if 'times' in key:
                 args[var_info[1]] -= dt
         return list(args)
-
-    @staticmethod
-    def _compare_vars(v1, v2):
-        if v1.short_name == v2.short_name and v1.shape == v2.shape:
-            if sum(v1.shape) > 1:
-                return all(v1.flatten() != v2.flatten())
-            else:
-                return v2 != v1
-
-    @staticmethod
-    def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:
-        """Checks whether the shapes of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the shapes of op1 and op2 are compatible.
-
-        """
-
-        if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
-            if op1.shape == op2.shape:
-                return True
-            elif len(op1.shape) > 1 and len(op2.shape) > 1:
-                return True
-            elif len(op1.shape) == 0 and len(op2.shape) == 0:
-                return True
-            else:
-                return False
-        else:
-            return True
 
     @staticmethod
     def _deepcopy(x):
