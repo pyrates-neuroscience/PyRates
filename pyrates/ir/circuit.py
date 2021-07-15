@@ -763,8 +763,8 @@ class CircuitIR(AbstractBaseIR):
         Parameters
         ----------
         dir
-            Build directory. If the `CircuitIR.run` method has been called previously, this should take the same value as the
-            `build_dir` argument of `run`.
+            Build directory. If the `CircuitIR.run` method has been called previously, this should take the same value
+            as the `build_dir` argument of `run`.
 
         Returns
         -------
@@ -799,7 +799,7 @@ class CircuitIR(AbstractBaseIR):
                                       )
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
-                                           op_identifier: Optional[str] = None, **kwargs) -> MultiDiGraph:
+                                           op_identifier: Optional[str] = None, **kwargs) -> None:
         """
 
         Parameters
@@ -838,9 +838,7 @@ class CircuitIR(AbstractBaseIR):
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
                     # parse equations and variables into computegraph
-                    variables, cg = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
-                    if cg is not None:
-                        kwargs['compute_graph'] = cg
+                    variables = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
 
                     # save parsed variables in net config
                     for key, val in variables.items():
@@ -854,8 +852,6 @@ class CircuitIR(AbstractBaseIR):
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
                 i += 1
-
-        return kwargs.pop('compute_graph', None)
 
     def _collect_ops(self, ops: List[str], node_name: str) -> tuple:
         """Adds a number of operations to the backend graph.

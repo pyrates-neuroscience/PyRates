@@ -51,11 +51,15 @@ import os
 import sys
 from shutil import rmtree
 import warnings
-from scipy.interpolate.interpolate import interp1d
 
 # pyrates internal imports
 from .funcs import *
 from .parser import replace
+from .computegraph import ComputeGraph
+
+#################################
+# classes for backend variables #
+#################################
 
 
 class NumpyVar(np.ndarray):
@@ -151,41 +155,6 @@ class NumpyVar(np.ndarray):
         except IndexError:
             return self
 
-    def broadcast(self, v: np.ndarray) -> np.ndarray:
-        """Tries to match the shapes of op1 and op2 such that op can be applied.
-
-        Parameters
-        ----------
-        v
-            Variable that shape and data-type need to be broadcasted to.
-
-        Returns
-        -------
-        self
-            Broadcasted NumpyVar.
-
-        """
-
-        # TODO: Improve this method. Should we make it sensitive to the specific operation that will be used
-        #  on self and v? We could generate classes of operations and use different broadcasting rules for each of them.
-
-        # # try to match shapes
-        # if not self._compare_shapes(op1, op2):
-        #
-        #     # try adjusting op2 to match shape of op1
-        #     adjust_first = True if hasattr(op2, 'short_name') else False
-        #     op1_tmp, op2_tmp = self._match_shapes(op1, op2, adjust_second=adjust_first)
-        #
-        #     if not self._compare_shapes(op1_tmp, op2_tmp):
-        #
-        #         # try adjusting op1 to match shape of op2
-        #         op1_tmp, op2_tmp = self._match_shapes(op1_tmp, op2_tmp, adjust_second=not adjust_first)
-        #
-        #     if self._compare_shapes(op1_tmp, op2_tmp):
-        #         op1, op2 = op1_tmp, op2_tmp
-
-        return self
-
     def reshape(self, shape: tuple, **kwargs):
 
         obj = super().reshape(shape, **kwargs)
@@ -230,33 +199,6 @@ class NumpyVar(np.ndarray):
             else:
                 return self != v
 
-    def _check_shape_compatibility(self, v: np.ndarray) -> bool:
-        """Checks whether the shape is compatible with shape of variable `v`.
-
-        Parameters
-        ----------
-        v
-            Other variable.
-
-        Returns
-        -------
-        bool
-            If true, the shapes of self and v are compatible.
-
-        """
-
-        if hasattr(self, 'shape') and hasattr(v, 'shape'):
-            if self.shape == v.shape:
-                return True
-            len_shape1 = len(self.shape)
-            len_shape2 = len(v.shape)
-            if len_shape1 > 1 and len_shape2 > 1 and np.abs(len_shape1 - len_shape2) >= 1:
-                return True
-            # if len(self.shape) == 0 and len(v.shape) == 0:
-            #     return True
-            return False
-        return True
-
     @classmethod
     def _get_var(cls, value, name, dtype):
         """Creates new numpy array from NumpyVar.
@@ -285,6 +227,297 @@ class NumpyVar(np.ndarray):
             return True
         else:
             return interp1d.__subclasscheck__(subclass)
+
+
+#######################################
+# classes for backend functionalities #
+#######################################
+
+
+class BaseBackend(object):
+    """
+
+    """
+
+    def __init__(self,
+                 ops: Optional[Dict[str, str]] = None,
+                 dtypes: Optional[Dict[str, object]] = None,
+                 name: str = 'net_0',
+                 float_default_type: str = 'float32',
+                 imports: Optional[List[str]] = None,
+                 build_dir: str = None,
+                 to_file: bool = False,
+                 compute_graph: ComputeGraph = None,
+                 **kwargs
+                 ) -> None:
+        """Instantiates the standard, numpy-based backend, i.e. a compute graph with numpy operations.
+        """
+
+        super().__init__()
+
+        # define operations and datatypes of the backend
+        ################################################
+
+        # base math operations
+        self.ops = {
+                    "max": {'func': np.maximum, 'str': "np.maximum"},
+                    "min": {'func': np.minimum, 'str': "np.minimum"},
+                    "argmax": {'func': np.argmax, 'str': "np.argmax"},
+                    "argmin": {'func': np.argmin, 'str': "np.argmin"},
+                    "round": {'func': np.round, 'str': "np.round"},
+                    "sum": {'func': np.sum, 'str': "np.sum"},
+                    "mean": {'func': np.mean, 'str': "np.mean"},
+                    "matmul": {'func': np.matmul, 'str': "np.matmul"},
+                    "concat": {'func': np.concatenate, 'str': "np.concatenate"},
+                    "reshape": {'func': np.reshape, 'str': "np.reshape"},
+                    "append": {'func': np.append, 'str': "np.append"},
+                    "shape": {'func': np.shape, 'str': "np.shape"},
+                    "dtype": {'func': np.dtype, 'str': "np.dtype"},
+                    'squeeze': {'func': np.squeeze, 'str': "np.squeeze"},
+                    'expand': {'func': np.expand_dims, 'str': "np.expand_dims"},
+                    "roll": {'func': np.roll, 'str': "np.roll"},
+                    "cast": {'func': np.asarray, 'str': "np.asarray"},
+                    "randn": {'func': np.random.randn, 'str': "np.randn"},
+                    "ones": {'func': np.ones, 'str': "np.ones"},
+                    "zeros": {'func': np.zeros, 'str': "np.zeros"},
+                    "range": {'func': np.arange, 'str': "np.arange"},
+                    "softmax": {'func': pr_softmax, 'str': "pr_softmax"},
+                    "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
+                    "tanh": {'func': np.tanh, 'str': "np.tanh"},
+                    "no_op": {'func': pr_identity, 'str': "pr_identity"},
+                    "interpolate": {'func': pr_interp, 'str': "pr_interp"},
+                    "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
+                    "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
+                    }
+        if ops:
+            self.ops.update(ops)
+
+        # base data-types
+        self.dtypes = {"float16": np.float16,
+                       "float32": np.float32,
+                       "float64": np.float64,
+                       "int16": np.int16,
+                       "int32": np.int32,
+                       "int64": np.int64,
+                       "uint16": np.uint16,
+                       "uint32": np.uint32,
+                       "uint64": np.uint64,
+                       "complex64": np.complex64,
+                       "complex128": np.complex128,
+                       "bool": np.bool
+                       }
+        if dtypes:
+            self.dtypes.update(dtypes)
+
+        # initialize compute graph
+        self.graph = compute_graph if compute_graph else ComputeGraph(**kwargs)
+
+        # further attributes
+        self._var_map = dict()
+        self.state_vars = []
+        self._float_def = self.dtypes[float_default_type]
+        self.name = name
+        self._imports = ["import numpy as np", "from pyrates.backend.funcs import *"]
+        if imports:
+            for imp in imports:
+                if imp not in self._imports:
+                    self._imports.append(imp)
+        self._input_names = []
+        self.type = 'numpy'
+        self._orig_dir = None
+        self._build_dir = None
+
+        # create build dir
+        if to_file:
+            self._orig_dir = os.getcwd()
+            if build_dir:
+                os.makedirs(build_dir, exist_ok=True)
+            dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
+            try:
+                os.mkdir(dir_name)
+            except FileExistsError:
+                pass
+            except FileNotFoundError as e:
+                # for debugging
+                raise e
+            self._build_dir = f"{dir_name}/{self.name}"
+            try:
+                os.mkdir(self._build_dir)
+            except FileExistsError:
+                rmtree(self._build_dir)
+                os.mkdir(self._build_dir)
+            sys.path.append(self._build_dir)
+
+    def add_var(self,
+                vtype: str,
+                name: Optional[str] = None,
+                value: Optional[Any] = None,
+                shape: Optional[Union[tuple, list, np.shape]] = None,
+                dtype: Optional[Union[str, np.dtype]] = None,
+                **kwargs
+                ) -> tuple:
+        """Adds a variable to the backend.
+
+        Parameters
+        ----------
+        vtype
+            Variable type. Can be
+                - `state_var` for variables that can change over time.
+                - `constant` for non-changing variables.
+        name
+            Name of the variable.
+        value
+            Value of the variable. Not needed for placeholders.
+        shape
+            Shape of the variable.
+        dtype
+            Datatype of the variable.
+        kwargs
+            Additional keyword arguments passed to `computegraph.ComputeGraph.add_var`.
+
+        Returns
+        -------
+        tuple
+            (1) variable name, (2) dictionary with all variable information.
+
+        """
+
+        # extract variable scope
+        scope = kwargs.pop('scope', None)
+        if scope:
+            name = f'{scope}/{name}'
+
+        if name in self._var_map:
+            return name, self.get_var(name)
+
+        # create variable
+        var, name = NumpyVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self,
+                             squeeze=kwargs.pop('squeeze', True))
+
+        # add variable to compute graph
+        label, cg_var = self.graph.add_var(label=name, value=var, vtype=vtype, **kwargs)
+
+        # save to dict
+        self._var_map[name] = label
+
+        return label, cg_var
+
+    def add_op(self,
+               inputs: Union[list, tuple],
+               name: str,
+               **kwargs
+               ) -> tuple:
+        """Add operation to the backend.
+
+        Parameters
+        ----------
+        inputs
+            List with the names of all compute graph nodes that should enter as input in this operation.
+        name
+            Key of the operation. If it is a key of `backend.ops`, the function call at `backend.ops[name]['func']` will
+             be used.
+        kwargs
+            Additional keyword arguments passed to `computegraph.ComputeGraph.add_op`.
+
+        Returns
+        -------
+        tuple
+            (1) The key for extracting the operator from the compute graph,
+            (2) the dictionary of the compute graph operator node.
+
+        """
+
+        # extract operator scope
+        scope = kwargs.pop('scope', None)
+        if scope:
+            name = f'{scope}/{name}'
+
+        # add operator to compute graph
+        label, cg_var = self.graph.add_op(inputs, label=name, **kwargs)
+
+        # save to dict
+        self._var_map[name] = label
+
+        return label, cg_var
+
+    def get_var(self, name: str, get_key: bool = False, **kwargs) -> dict:
+        """Retrieve variable from graph.
+
+        Parameters
+        ----------
+        name
+            Identifier of the variable.
+        get_key
+            If true, only the name of the variable in the compute graph is returned.
+
+        Returns
+        -------
+        dict
+            Variable dictionary from graph.
+
+        """
+
+        # extract operator scope
+        scope = kwargs.pop('scope', None)
+        if scope:
+            name = f'{scope}/{name}'
+
+        return self._var_map[name] if get_key else self.graph.nodes[self._var_map[name]]
+
+    def compile(self, lambdify: bool = False, to_file: bool = False, in_place: bool = True) -> dict:
+
+        # finalize compute graph
+        if lambdify and to_file:
+            self.graph, func, func_str = self.graph.compile(lambdify=lambdify, to_file=to_file, in_place=in_place)
+        elif lambdify:
+            self.graph, func = self.graph.compile(lambdify=lambdify, to_file=to_file, in_place=in_place)
+        elif to_file:
+            self.graph, func_str = self.graph.compile(lambdify=lambdify, to_file=to_file, in_place=in_place)
+        else:
+            self.graph = self.graph.compile(lambdify=lambdify, to_file=to_file, in_place=in_place)[0]
+
+        # create state variable vector
+        vars, indices = [], []
+        idx = 0
+        for var in self.state_vars:
+            v = self.get_var(var)['value']
+            shape = v.shape[0]
+            vars.append(v)
+            indices.append((idx, idx+shape))
+            idx += shape
+        state_vec = np.concatenate(vars)
+        state_var_key, state_var = self.add_var(vtype='state_var', name='state_vec', value=state_vec)
+
+        # store new state-var vector in graph
+        for var, (idx_l, idx_r) in zip(self.state_vars, indices):
+            v = self.get_var(var)
+            v['value'] = state_var['value'][idx_l:idx_r]
+            v['index'] = (idx_l, idx_r)
+
+        # create right-hand side update vector (also serves as test-run of network equations)
+        rhs = self.graph.eval()
+        rhs_vec = np.concatenate(rhs)
+
+        # check consistency of state var and rhs vector
+        if state_vec.shape != rhs_vec.shape:
+            raise ValueError(
+                'Shapes of state variable vector and right-hand side updates of these state variables do'
+                'not match. Please check the definition of variable types in the model definition.')
+
+        return {'old_state_vars': self.state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
+
+    def run(self, T, dt):
+
+        steps = int(np.round(T/dt))
+        state_vec = self.get_var('state_vec')['value']
+
+        state_rec = np.zeros((steps, state_vec.shape[0]))
+        for step in range(steps):
+            rhs = np.concatenate(self.graph.eval())
+            state_vec += dt * rhs
+            state_rec[step, :] = state_vec
+
+        return state_rec
 
 
 class PyRatesOp:
@@ -919,68 +1152,62 @@ class NumpyBackend(object):
         ################################################
 
         # base math operations
-        self.ops = {"+": {'name': "numpy_add", 'call': "np.add"},
-                    "-": {'name': "numpy_subtract", 'call': "np.subtract"},
-                    "*": {'name': "numpy_multiply", 'call': "np.multiply"},
-                    "/": {'name': "numpy_divide", 'call': "np.divide"},
-                    "%": {'name': "numpy_modulo", 'call': "np.mod"},
-                    "^": {'name': "numpy_power", 'call': "np.power"},
-                    "**": {'name': "numpy_power_float", 'call': "np.float_power"},
-                    "@": {'name': "numpy_dot", 'call': "np.dot"},
-                    ".T": {'name': "numpy_transpose", 'call': "np.transpose"},
-                    ".I": {'name': "numpy_invert", 'call': "np.invert"},
-                    ">": {'name': "numpy_greater", 'call': "np.greater"},
-                    "<": {'name': "numpy_less", 'call': "np.less"},
-                    "==": {'name': "numpy_equal", 'call': "np.equal"},
-                    "!=": {'name': "numpy_not_equal", 'call': "np.not_equal"},
-                    ">=": {'name': "numpy_greater_equal", 'call': "np.greater_equal"},
-                    "<=": {'name': "numpy_less_equal", 'call': "np.less_equal"},
-                    "=": {'name': "assign", 'call': "="},
-                    "+=": {'name': "assign_add", 'call': "+="},
-                    "-=": {'name': "assign_subtract", 'call': "-="},
-                    "*=": {'name': "assign_multiply", 'call': "*="},
-                    "/=": {'name': "assign_divide", 'call': "/="},
-                    "neg": {'name': "negative", 'call': "neg_one"},
-                    "sin": {'name': "numpy_sin", 'call': "np.sin"},
-                    "cos": {'name': "numpy_cos", 'call': "np.cos"},
-                    "tan": {'name': "numpy_tan", 'call': "np.tan"},
-                    "atan": {'name': "numpy_atan", 'call': "np.arctan"},
-                    "abs": {'name': "numpy_abs", 'call': "np.abs"},
-                    "sqrt": {'name': "numpy_sqrt", 'call': "np.sqrt"},
-                    "sq": {'name': "numpy_square", 'call': "np.square"},
-                    "exp": {'name': "numpy_exp", 'call': "np.exp"},
-                    "max": {'name': "numpy_max", 'call': "np.maximum"},
-                    "min": {'name': "numpy_min", 'call': "np.minimum"},
-                    "argmax": {'name': "numpy_transpose", 'call': "np.argmax"},
-                    "argmin": {'name': "numpy_argmin", 'call': "np.argmin"},
-                    "round": {'name': "numpy_round", 'call': "np.round"},
-                    "sum": {'name': "numpy_sum", 'call': "np.sum"},
-                    "mean": {'name': "numpy_mean", 'call': "np.mean"},
-                    "matmul": {'name': "numpy_matmul", 'call': "np.matmul"},
-                    "concat": {'name': "numpy_concatenate", 'call': "np.concatenate"},
-                    "reshape": {'name': "numpy_reshape", 'call': "np.reshape"},
-                    "append": {'name': "numpy_append", 'call': "np.append"},
-                    "shape": {'name': "numpy_shape", 'call': "np.shape"},
-                    "dtype": {'name': "numpy_dtype", 'call': "np.dtype"},
-                    'squeeze': {'name': "numpy_squeeze", 'call': "np.squeeze"},
-                    'expand': {'name': 'numpy_expand', 'call': "np.expand_dims"},
-                    "roll": {'name': "numpy_roll", 'call': "np.roll"},
-                    "cast": {'name': "numpy_cast", 'call': "np.asarray"},
-                    "randn": {'name': "numpy_randn", 'call': "np.randn"},
-                    "ones": {'name': "numpy_ones", 'call': "np.ones"},
-                    "zeros": {'name': "numpy_zeros", 'call': "np.zeros"},
-                    "range": {'name': "numpy_arange", 'call': "np.arange"},
-                    "softmax": {'name': "pyrates_softmax", 'call': "pr_softmax"},
-                    "sigmoid": {'name': "pyrates_sigmoid", 'call': "pr_sigmoid"},
-                    "tanh": {'name': "numpy_tanh", 'call': "np.tanh"},
-                    "index": {'name': "pyrates_index", 'call': "pyrates_index"},
-                    "mask": {'name': "pyrates_mask", 'call': "pr_mask"},
-                    "group": {'name': "pyrates_group", 'call': "pr_group"},
-                    "asarray": {'name': "numpy_asarray", 'call': "np.asarray"},
-                    "no_op": {'name': "pyrates_identity", 'call': "pr_identity"},
-                    "interpolate": {'name': "pyrates_interpolate", 'call': "pr_interp"},
-                    "interpolate_1d": {'name': "pyrates_interpolate_1d", 'call': "pr_interp_1d"},
-                    "interpolate_nd": {'name': "pyrates_interpolate_nd", 'call': "pr_interp_nd"},
+        self.ops = {"+": {'func': np.add, 'str': "np.add"},
+                    "-": {'func': np.subtract, 'str': "np.subtract"},
+                    "*": {'func': np.multiply, 'str': "np.multiply"},
+                    "/": {'func': np.divide, 'str': "np.divide"},
+                    "%": {'func': np.mod, 'str': "np.mod"},
+                    "^": {'func': np.power, 'str': "np.power"},
+                    "**": {'func': np.float_power, 'str': "np.float_power"},
+                    "@": {'func': np.dot, 'str': "np.dot"},
+                    ".T": {'func': np.transpose, 'str': "np.transpose"},
+                    ".I": {'func': np.invert, 'str': "np.invert"},
+                    ">": {'func': np.greater, 'str': "np.greater"},
+                    "<": {'func': np.less, 'str': "np.less"},
+                    "==": {'func': np.equal, 'str': "np.equal"},
+                    "!=": {'func': np.not_equal, 'str': "np.not_equal"},
+                    ">=": {'func': np.greater_equal, 'str': "np.greater_equal"},
+                    "<=": {'func': np.less_equal, 'str': "np.less_equal"},
+                    "neg": {'func': neg_one, 'str': "neg_one"},
+                    "sin": {'func': np.sin, 'str': "np.sin"},
+                    "cos": {'func': np.cos, 'str': "np.cos"},
+                    "tan": {'func': np.tan, 'str': "np.tan"},
+                    "atan": {'func': np.arctan, 'str': "np.arctan"},
+                    "abs": {'func': np.abs, 'str': "np.abs"},
+                    "sqrt": {'func': np.sqrt, 'str': "np.sqrt"},
+                    "sq": {'func': np.square, 'str': "np.square"},
+                    "exp": {'func': np.exp, 'str': "np.exp"},
+                    "max": {'func': np.maximum, 'str': "np.maximum"},
+                    "min": {'func': np.minimum, 'str': "np.minimum"},
+                    "argmax": {'func': np.argmax, 'str': "np.argmax"},
+                    "argmin": {'func': np.argmin, 'str': "np.argmin"},
+                    "round": {'func': np.round, 'str': "np.round"},
+                    "sum": {'func': np.sum, 'str': "np.sum"},
+                    "mean": {'func': np.mean, 'str': "np.mean"},
+                    "matmul": {'func': np.matmul, 'str': "np.matmul"},
+                    "concat": {'func': np.concatenate, 'str': "np.concatenate"},
+                    "reshape": {'func': np.reshape, 'str': "np.reshape"},
+                    "append": {'func': np.append, 'str': "np.append"},
+                    "shape": {'func': np.shape, 'str': "np.shape"},
+                    "dtype": {'func': np.dtype, 'str': "np.dtype"},
+                    'squeeze': {'func': np.squeeze, 'str': "np.squeeze"},
+                    'expand': {'func': np.expand_dims, 'str': "np.expand_dims"},
+                    "roll": {'func': np.roll, 'str': "np.roll"},
+                    "cast": {'func': np.asarray, 'str': "np.asarray"},
+                    "randn": {'func': np.random.randn, 'str': "np.random.randn"},
+                    "ones": {'func': np.ones, 'str': "np.ones"},
+                    "zeros": {'func': np.zeros, 'str': "np.zeros"},
+                    "range": {'func': np.arange, 'str': "np.arange"},
+                    "softmax": {'func': pr_softmax, 'str': "pr_softmax"},
+                    "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
+                    "tanh": {'func': np.tanh, 'str': "np.tanh"},
+                    #"index": {'func': pyrates_index, 'str': "pyrates_index"},
+                    #"mask": {'func': pr_mask, 'str': "pr_mask"},
+                    #"group": {'func': pr_group, 'str': "pr_group"},
+                    "no_op": {'func': pr_identity, 'str': "pr_identity"},
+                    "interpolate": {'func': pr_interp, 'str': "pr_interp"},
+                    "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
+                    "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
                     }
         if ops:
             self.ops.update(ops)
@@ -1004,16 +1231,13 @@ class NumpyBackend(object):
 
         # further attributes
         self.vars = dict()
-        self.layers = [[]]
         self.state_vars = []
         self.lhs_vars = []
         self.var_counter = {}
         self.op_counter = {}
-        self.layer = 0
         self.op_indices = {}
         self._float_def = self.dtypes[float_default_type]
         self.name = name
-        self._base_layer = 0
         self._input_layer_added = False
         self._imports = ["import numpy as np", "from pyrates.backend.funcs import *"]
         if imports:
@@ -1297,9 +1521,9 @@ class NumpyBackend(object):
         if name and scope:
             name = f'{scope}/{name}'
         elif scope:
-            name = f'{scope}/assign' if '=' in op_name else f"{scope}/{self.ops[op_name]['name']}"
+            name = f'{scope}/assign' if '=' in op_name else f"{scope}/{self.ops[op_name]['func']}"
         else:
-            name = f'assign' if '=' in op_name else f"{self.ops[op_name]['name']}"
+            name = f'assign' if '=' in op_name else f"{self.ops[op_name]['func']}"
         if name in self.op_counter:
             name_old = name
             name = f"{name}_{self.op_counter[name]}"
@@ -2045,7 +2269,7 @@ class NumpyBackend(object):
         return NumpyVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self, squeeze=squeeze)
 
     def _create_op(self, op, name, *args):
-        if not self.ops[op]['call']:
+        if not self.ops[op]['str']:
             raise NotImplementedError(f"The operator `{op}` is not implemented for this backend ({self.name}). "
                                       f"Please consider passing the required operation to the backend initialization "
                                       f"or choose another backend.")
@@ -2060,10 +2284,10 @@ class NumpyBackend(object):
                 var, upd, idx = self._process_update_args_old(args[0], args[1], idx)
                 idx_str = ",".join([f"{idx.short_name}[:,{i}]" for i in range(idx.shape[1])])
                 args = (var, upd, idx_str, idx)
-            return PyRatesAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args,
+            return PyRatesAssignOp(self.ops[op]['str'], self.ops[op]['func'], name, *args,
                                    idx_l=self.idx_l, idx_r=self.idx_r)
         elif op == "index":
-            return PyRatesIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
+            return PyRatesIndexOp(self.ops[op]['str'], self.ops[op]['func'], name, *args, idx_l=self.idx_l,
                                   idx_r=self.idx_r)
         else:
             if op == "cast":
@@ -2073,7 +2297,7 @@ class NumpyBackend(object):
                         args[1] = f"np.{dtype}"
                         break
                 args = tuple(args)
-            return PyRatesOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
+            return PyRatesOp(self.ops[op]['str'], self.ops[op]['func'], name, *args)
 
     def _process_update_args_old(self, var, update, idx):
         """Preprocesses the index and a variable update to match the variable shape.

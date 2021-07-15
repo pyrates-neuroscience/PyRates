@@ -779,8 +779,6 @@ class SympyParser(ExpressionParser):
     def __init__(self, expr_str: str, args: dict, backend: tp.Any, **kwargs) -> None:
         """Instantiates expression parser.
         """
-
-        self.graph = kwargs.pop('compute_graph', ComputeGraph())
         super().__init__(expr_str=expr_str, args=args, backend=backend, algebra=True, **kwargs)
 
     def parse_expr(self) -> tuple:
@@ -820,38 +818,55 @@ class SympyParser(ExpressionParser):
             # parse variables as nodes into compute graph
             inputs, func_args = [], []
             for arg in expr.args:
+
                 if isinstance(arg, Symbol):
-                    backend_var = self.vars[arg.name]
-                    label, v = self.graph.add_var(label=backend_var.name, symbol=arg, value=backend_var,
-                                                  vtype=backend_var.vtype, simple_constant=False)
+
+                    # case: variables/constants
+                    var = self.vars[arg.name]
+                    if 'symbol' in var:
+
+                        # if parsed already, retrieve label from existing variable and replace it in expression
+                        label = var['symbol'].name if 'func' in var \
+                            else self.backend.get_var(arg.name, get_key=True, **self.parser_kwargs)
+
+                        expr = expr.replace(arg, var['symbol'])
+
+                    else:
+
+                        # if not parsed already, parse variable into backend
+                        label, var = self.backend.add_var(name=arg.name, symbol=arg, simple_constant=False, **var,
+                                                          **self.parser_kwargs)
+                        self.vars[arg.name] = var
+
                 else:
-                    label, v = self.parse(arg)
-                    if 'expr' in v:
-                        expr = expr.replace(v['expr'], v['symbol'])
-                if not v['simple_constant']:
+
+                    # case: mathematical expressions
+                    label, var = self.parse(arg)
+                    if 'expr' in var:
+                        expr = expr.replace(var['expr'], var['symbol'])
+
+                # store input to mathematical expression, if it is not a simple scalar
+                if 'symbol' in var:
                     inputs.append(label)
-                    func_args.append(v['symbol'])
+                    func_args.append(var['symbol'])
 
             # parse mathematical operation into compute graph
             try:
                 label = str(expr.func).split('\'')[1].split('.')[-1]
             except IndexError:
                 label = str(expr.func)
-            label, v_new = self.graph.add_op(inputs, label=label, expr=expr, symbol=Symbol(label),
-                                             func=lambdify(func_args, expr=expr, modules=self.backend._type),
-                                             simple_constant=False, vtype='variable')
+            func = self.backend.ops[label]['func'] if label in self.backend.ops \
+                else lambdify(func_args, expr=expr, modules=self.backend.type)
+            label, v_new = self.backend.add_op(inputs, name=label, expr=expr, symbol=Symbol(label), func=func,
+                                               simple_constant=False, vtype='variable')
+            self.vars[label] = v_new
+
+            return label, v_new
 
         else:
 
-            # parse constant into graph
-            try:
-                val = expr.num
-            except AttributeError:
-                val = expr.p
-            label, v_new = self.graph.add_var(label="const", symbol=expr, value=val, simple_constant=True,
-                                              vtype='constant')
-
-        return label, v_new
+            # for simple scalar constants, return empty string and dict
+            return "", dict()
 
     def _update_lhs(self):
         """Applies update to left-hand side of equation. For differential equations, different solving schemes are
@@ -865,10 +880,14 @@ class SympyParser(ExpressionParser):
 
         if diff_eq:
 
-            # differential equation update
-            delta_key = f"{self.vars[self.lhs_key].name}::delta"
-            self.vars[delta_key] = self.rhs
-            self.backend.state_vars.append(delta_key)
+            # create backend state variable if it does not exist already
+            v = self.vars[self.lhs_key]
+            if 'symbol' not in v:
+                _, v = self.backend.add_var(name=self.lhs_key, symbol=Symbol(self.lhs_key), simple_constant=False,
+                                            **v, **self.parser_kwargs)
+
+            # store variable as state variable of the system
+            self.backend.state_vars.append(v['value'].name)
 
         else:
 
@@ -876,7 +895,7 @@ class SympyParser(ExpressionParser):
             self.vars[self.lhs_key] = self.rhs
 
 
-def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> tuple:
+def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
     """Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
     of right-hand side evaluations that can be solved later on.
 
@@ -905,38 +924,34 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         #################
 
         # extract operator variables from equation args
-        op_args = {key.split('/')[-1]: var for key, var in equation_args.copy().items() if scope in key}
-        inputs = op_args['inputs'] if 'inputs' in op_args else {}
-        for key, inp in inputs.items():
-            if type(inp) is dict:
-                inp_tmp = parse_dict({key: inp}, backend, scope="/".join(inp.split('/')[:-1]),
-                                     **kwargs)[key]
-            elif inp not in equation_args:
-                raise KeyError(inp)
-            else:
-                inp_tmp = equation_args[inp]
-                if type(inp_tmp) is dict:
-                    inp_tmp = parse_dict({key: inp_tmp}, backend, scope="/".join(inp.split('/')[:-1]),
-                                         **kwargs)[key]
-            op_args[key] = inp_tmp
+        op_args = {}
+        for key, var in equation_args.copy().items():
+            if scope in key:
+                var_name = key.split('/')[-1]
+                if var_name == 'inputs':
 
-        # parse operator variables in backend
-        args_tmp = {}
-        for key, arg in op_args.items():
-            if type(arg) is dict and 'vtype' in arg:
-                args_tmp[key] = arg
-        args_tmp = parse_dict(args_tmp, backend, scope=scope, **kwargs)
-        op_args.update(args_tmp)
+                    # extract inputs from other scopes
+                    for in_key, inp in var.items():
+                        if inp not in equation_args:
+                            raise KeyError(inp)
+                        in_key_split = inp.split('/')
+                        in_name = in_key_split[-1]
+                        in_scope = "/".join(in_key_split[:-1])
+                        inp_tmp = equation_args[inp]
+                        op_args[in_name] = inp_tmp
+                        op_args[in_name]['scope'] = in_scope
+                else:
+
+                    # include variable information in operator arguments
+                    op_args[var_name] = var
+                    op_args[var_name]['scope'] = scope
 
         # parse equation
         ################
 
-        # TODO: Implement sympy-based ExpressionParser that is used below
         instantaneous = is_diff_eq(eq) is False
-        parser = SympyParser(expr_str=eq, args=op_args, backend=backend, scope=scope,
-                             instantaneous=instantaneous, **kwargs.copy())
+        parser = SympyParser(expr_str=eq, args=op_args, backend=backend, instantaneous=instantaneous, **kwargs.copy())
         _, _, variables = parser.parse_expr()
-        kwargs['compute_graph'] = parser.graph
 
         # update equations args
         #######################
@@ -944,299 +959,10 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         for key, var in variables.items():
             if key != 'inputs':
                 var_name = f"{scope}/{key}"
-                if var_name in equation_args and equation_args[var_name]['vtype'] == 'state_var':
-                    equation_args[var_name]['value'] = var
+                if var_name in equation_args:
+                    equation_args[var_name].update(var)
 
-    return equation_args, kwargs.pop('compute_graph', None)
-
-
-def update_rhs(equations: list, equation_args: dict, update_num: int, update_str: str) -> tuple:
-    """Update the right-hand side of all equations according to `update_str` and `update_num`. All state-variable
-    occurrences will be replaced with the expression in the `update_str` template. Convenience function for differential
-    equation solver that involve multiple partial updates of the state variables.
-
-    Parameters
-    ----------
-    equations
-        List of equations to be updated.
-    equation_args
-        Key-argument pairs of all relevant variables which occur in the equations.
-    update_num
-        Number of the partial update step for which the equations should be updated.
-    update_str
-        Template for the state variable replacement procedure. Should contain the following character strings:
-        - `var_placeholder` will be replaced with the name of the state variables.
-        - `var_placeholder_i` for partial updates of the state variables with `i` being a counter that needs to be
-           replaced with the appropriate number of the partial update. Should be included for each partial update from
-           i=1 to i=`update_num`.
-        - `update_placeholder` for the position of the new, updated variable.
-
-    Returns
-    -------
-    tuple
-        List of the updated equations and dictionary with the equation arguments.
-
-    """
-
-    # collect variable updates from earlier rhs evaluations
-    #######################################################
-
-    var_updates = {}
-    if update_num > 1:
-
-        for key, arg in equation_args.items():
-
-            # extraction of variable name
-            node, op, var = key.split('/')
-            if f"_upd_{update_num}" in var:
-                var = var.replace(f"_upd_{update_num}", "")
-
-            if "_upd_" in var:
-
-                # find variable update number and cut of variable update identifier from variable name
-                idx = int(var[-1])
-                var_tmp = var[:-6]
-
-                # indicate which variable placeholder to replace with this variable update below
-                if var_tmp in var_updates:
-                    var_updates[var_tmp].append((f'var_placeholder_{idx}', var))
-                else:
-                    var_updates[var_tmp] = [(f'var_placeholder_{idx}', var)]
-
-    # integrate previous rhs evaluations into rhs equations
-    #######################################################
-
-    updated_args = {}
-    while equation_args:
-
-        key, arg = equation_args.popitem()
-
-        if 'inputs' in key:
-
-            # process input variables
-            for var, arg_tmp in arg.copy().items():
-
-                # extract variable name
-                if f"_upd_{update_num}" in var:
-                    var = var.replace(f"_upd_{update_num}", "")
-
-                if "_upd_" not in var:
-
-                    # create new variable name with update identifier
-                    new_var = f"{var}_upd_{update_num}"
-                    arg_tmp = arg_tmp.split('/')
-                    arg_tmp[-1] = f"{arg_tmp[-1]}_upd_{update_num}"
-                    arg_tmp = "/".join(arg_tmp)
-
-                    if arg_tmp in equation_args or arg_tmp in updated_args:
-
-                        # add variable update to inputs field
-                        arg[new_var] = arg_tmp
-
-                        # individualize the replacement template with variable name infos
-                        replace_str = update_str.replace('update_placeholder', new_var)
-                        if var in var_updates:
-                            for placeholder, var_tmp in var_updates[var]:
-                                replace_str = replace_str.replace(placeholder, var_tmp)
-                        else:
-                            for i in range(1, update_num):
-                                replace_str = replace_str.replace(f'var_placeholder_{i}', f'{var}_upd_{i}')
-                        replace_str = replace_str.replace('var_placeholder', var)
-
-                        # go through equations and replace variable names with the individualized replacement template
-                        for i, layer in enumerate(equations.copy()):
-                            for j, (eq, scope) in enumerate(layer):
-                                lhs, rhs, assign = split_equation(eq)
-                                if replace_str not in rhs:
-                                    rhs = replace(rhs, var, replace_str)
-                                equations[i][j] = (f"{lhs} {assign} {rhs}", scope)
-
-        else:
-
-            # extract variable name
-            node, op, var = key.split('/')
-            if f"_upd_{update_num}" in var:
-                var = var.replace(f"_upd_{update_num}", "")
-
-            if "_upd_" in var:
-
-                # save the variable to the arguments dictionary
-                updated_args[f"{node}/{op}/{var}"] = arg
-
-            else:
-
-                # create new variable name and save the variable to the arguments dictionary
-                new_var = f"{var}_upd_{update_num}"
-                updated_args[f"{node}/{op}/{new_var}"] = arg
-
-                # individualize the replacement template
-                replace_str = update_str.replace('update_placeholder', new_var)
-                if var in var_updates:
-                    for placeholder, var_tmp in var_updates[var]:
-                        replace_str = replace_str.replace(placeholder, var_tmp)
-                replace_str = replace_str.replace('var_placeholder', var)
-
-                # go through equations and replace variable occurences with the individualized replacement template
-                for i, layer in enumerate(equations.copy()):
-                    for j, (eq, scope) in enumerate(layer):
-                        lhs, rhs, assign = split_equation(eq)
-                        if replace_str not in rhs:
-                            rhs = replace(rhs, var, replace_str)
-                        equations[i][j] = (f"{lhs} {assign} {rhs}", scope)
-
-    return equations, updated_args
-
-
-def update_lhs(equations: list, equation_args: dict, update_num: int, var_dict: dict) -> tuple:
-    """Update the left-hand side of all equations according to `update_num`. An update identifier will be added to all
-    left-hand side state-variable occurences. Convenience function for differential equation solver that involve
-    multiple partial updates of the state variables.
-
-    Parameters
-    ----------
-    equations
-        Equations, whose left-hand sides should be updated.
-    equation_args
-        Key-argument pairs including all relevant left-hand side variables.
-    update_num
-        Number of the partial udpate of the left-hand side variables.
-    var_dict
-        Key-argument pairs including the configurations of all state variables (like shape, dtype, vtype and value).
-
-
-    Returns
-    -------
-    tuple
-        List of the updated equations and dictionary with the equation arguments.
-    """
-
-    updated_args = {}
-    while equation_args:
-
-        # extract variable
-        key, arg = equation_args.popitem()
-        node, op, var = key.split('/')
-
-        if "_upd_" in var and f"_upd_{update_num-1}" not in var:
-
-            # add previous updates to the arguments dictionary
-            updated_args[key] = arg
-
-        else:
-
-            # create new variable name
-            var = var.replace(f"_upd_{update_num-1}", "")
-            new_var = f"{var}_upd_{update_num}"
-
-            # go through equations and replace the left-hand side variables of differential equations
-            add_to_args = False
-            for i, layer in enumerate(equations.copy()):
-                for j, (eq, scope) in enumerate(layer):
-                    if node in scope and op in scope:
-                        lhs, rhs, _ = split_equation(eq)
-                        if var in lhs and new_var in replace(lhs, var, new_var):
-                            de = False
-                            if "d/dt" in lhs:
-                                de = True
-                                add_to_args = True
-                                lhs = lhs.replace("d/dt", "")
-                                lhs = lhs.replace("*", "")
-                                lhs = lhs.replace(" ", "")
-                            elif "'" in lhs:
-                                de = True
-                                add_to_args = True
-                                lhs = lhs.replace("'", "")
-                                lhs = lhs.replace(" ", "")
-                            if de:
-                                lhs = replace(lhs, var, new_var)
-                                equations[i][j] = (f"{lhs} = step_size * ({rhs})", scope)
-
-            if add_to_args:
-
-                # save updated left-hand side variable to arguments dictionary
-                for var_key, var in var_dict.copy().items():
-                    if var_key == key or f"{var_key}_upd_" in key:
-                        arg = var
-                        break
-                updated_args[f"{node}/{op}/{new_var}"] = arg
-
-    return equations, updated_args
-
-
-def update_equation_args(args: dict, updates: dict) -> dict:
-    """Save variable updates to the equation args dictionary.
-
-    Parameters
-    ----------
-    args
-        Equation argument dictionary.
-    updates
-        Dictionary with variable updates.
-
-    Returns
-    -------
-    dict
-        Updated equation argument dictionary.
-    """
-
-    args_new = {}
-
-    # add variables updates to equation arguments
-    for key, arg in args.items():
-        if key in updates:
-            args_new[key] = updates[key]
-        else:
-            args_new[key] = arg
-
-    # check which input fields need to be updated as well
-    inputs = [key for key in args if 'inputs' in key]
-    for inp in inputs:
-        for in_key, in_map in args[inp].copy().items():
-            for upd in updates:
-                if in_map in upd:
-                    args_new[inp].update({upd.split('/')[-1]: upd})
-                    break
-
-    return args_new
-
-
-def parse_dict(var_dict: dict, backend, **kwargs) -> dict:
-    """Parses a dictionary with variable information and creates backend variables from that information.
-
-    Parameters
-    ----------
-    var_dict
-        Contains key-value pairs for each variable that should be translated into the backend graph.
-        Each value is a dictionary again containing the variable information (needs at least a field for `vtype`).
-    backend
-        Backend instance that the variables should be added to.
-    kwargs
-        Additional keyword arguments to be passed to the backend methods.
-
-    Returns
-    -------
-    dict
-        Key-value pairs with the backend variable names and handles.
-    """
-
-    var_dict_new = {}
-
-    # go through dictionary items and instantiate variables
-    #######################################################
-
-    for var_name, var in var_dict.items():
-
-        # instantiate variable
-        if var['vtype'] == 'raw':
-            var_dict_new[var_name] = var['value']
-        else:
-            var.update(kwargs)
-            if var_name == 'y' or var_name == 'y_delta':
-                raise KeyError(f'Warning: Variable name {var_name} is reserved for pyrates-internal state variables. '
-                               f'Please choose a different variable name.')
-            var_dict_new[var_name] = backend.add_var(name=var_name, **var)
-
-    return var_dict_new
+    return equation_args
 
 
 def split_equation(expr: str) -> tuple:
@@ -1394,43 +1120,3 @@ def is_diff_eq(eq: str) -> bool:
         de = False
 
     return de
-
-
-def is_coupled(eqs: list) -> bool:
-    """Checks whether a list of equations defines a set of coupled equations, i.e. at least one left-hand side variable
-    appears in the right-hand side of another equation.
-
-    Parameters
-    ----------
-    eqs
-        List of equation strings
-
-    Returns
-    -------
-    bool
-        True, if at least one left-hand side variable appears in the right-hand side of another equation.
-    """
-
-    # extract lhs, rhs and scope of each equation
-    lhs_col, rhs_col, scope_col = [], [], []
-    for eq, scope in eqs:
-        lhs, rhs, _ = split_equation(eq)
-        lhs_col.append(lhs)
-        rhs_col.append(rhs)
-        scope_col.append(scope)
-
-    # check whether equations are coupled
-    for lhs, lhs_scope in zip(lhs_col, scope_col):
-        lhs = lhs.replace(" ", "")
-        lhs = lhs.replace("d/dt", "")
-        lhs = lhs.replace("*", "")
-        lhs = lhs.replace("'", "")
-        if "[" in lhs:
-            l_idx = lhs.index("[")
-            r_idx = lhs.index("]")
-            lhs = lhs.replace(lhs[l_idx:r_idx+1], "")
-        for rhs, rhs_scope in zip(rhs_col, scope_col):
-            if "__test_string__" in replace(rhs, lhs, "__test_string__") and rhs_scope == lhs_scope:
-                return True
-
-    return False
