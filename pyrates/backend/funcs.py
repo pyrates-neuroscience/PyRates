@@ -42,6 +42,10 @@ __status__ = "development"
 # function definitions
 ######################
 
+def neg_one(x):
+    return -1*x
+
+
 def pr_sigmoid(x, scaling=1.0, steepness=1.0, offset=0.0):
     return scaling/(1. + np.exp(steepness*(offset-x)))
 

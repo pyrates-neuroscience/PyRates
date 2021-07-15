@@ -46,13 +46,14 @@ class ComputeGraph(MultiDiGraph):
     operations linking those variables/constants together to form equations.
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
 
         self._eval_nodes = []
-        super().__init__()
+        super().__init__(**kwargs)
 
-    def add_var(self, label: str, symbol: Union[Symbol, Expr], value: Any, vtype: str, **kwargs):
+    def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
+        symbol = kwargs.pop('symbol', Symbol(label))
         unique_label = self._generate_unique_label(label)
         super().add_node(unique_label, symbol=symbol, value=value, vtype=vtype, **kwargs)
         return unique_label, self.nodes[unique_label]
@@ -60,8 +61,9 @@ class ComputeGraph(MultiDiGraph):
     def add_op(self, inputs: Union[list, tuple], label: str, expr: Expr, func: Callable, vtype: str, **kwargs):
 
         # add target node that contains result of operation
+        symbol = kwargs.pop('symbol', Symbol(label))
         unique_label = self._generate_unique_label(label)
-        super().add_node(unique_label, expr=expr, func=func, vtype=vtype, **kwargs)
+        super().add_node(unique_label, expr=expr, func=func, vtype=vtype, symbol=symbol, **kwargs)
 
         # add edges from source nodes to target node
         for i, v in enumerate(inputs):
@@ -102,15 +104,19 @@ class ComputeGraph(MultiDiGraph):
         for node in self._eval_nodes:
             G.broadcast_op_inputs(node, squeeze=False)
 
+        return_args = [G]
+
         # TODO: lambdify graph
         if lambdify:
-            pass
+            func = self.to_func()
+            return_args.append(func)
 
         # TODO: write graph to function file
         if to_file:
             func_str = self.to_str()
+            return_args.append(func_str)
 
-        return G
+        return tuple(return_args)
 
     def eval_subgraph(self, n):
 
