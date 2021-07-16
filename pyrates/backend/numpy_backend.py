@@ -246,7 +246,6 @@ class BaseBackend(object):
                  float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
                  build_dir: str = None,
-                 to_file: bool = False,
                  compute_graph: ComputeGraph = None,
                  **kwargs
                  ) -> None:
@@ -317,7 +316,7 @@ class BaseBackend(object):
         self.state_vars = []
         self._float_def = self.dtypes[float_default_type]
         self.name = name
-        self._imports = ["import numpy as np", "from pyrates.backend.funcs import *"]
+        self._imports = ["from numpy import *", "from pyrates.backend.funcs import *"]
         if imports:
             for imp in imports:
                 if imp not in self._imports:
@@ -328,19 +327,17 @@ class BaseBackend(object):
         self._build_dir = None
 
         # create build dir
-        if to_file:
-            self._orig_dir = os.getcwd()
-            if build_dir:
-                os.makedirs(build_dir, exist_ok=True)
-            dir_name = f"{build_dir}/pyrates_build" if build_dir else "pyrates_build"
+        self._orig_dir = os.getcwd()
+        self._build_dir = f"{build_dir}/{self.name}" if build_dir else ""
+        if build_dir:
+            os.makedirs(build_dir, exist_ok=True)
             try:
-                os.mkdir(dir_name)
+                os.mkdir(build_dir)
             except FileExistsError:
                 pass
             except FileNotFoundError as e:
                 # for debugging
                 raise e
-            self._build_dir = f"{dir_name}/{self.name}"
             try:
                 os.mkdir(self._build_dir)
             except FileExistsError:
@@ -464,7 +461,7 @@ class BaseBackend(object):
 
         return self._var_map[name] if get_key else self.graph.nodes[self._var_map[name]]
 
-    def compile(self, to_func: bool = False, to_file: bool = False, in_place: bool = True) -> dict:
+    def compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
 
         # finalize compute graph
         self.graph = self.graph.compile(in_place=in_place)
@@ -498,16 +495,27 @@ class BaseBackend(object):
                 'Shapes of state variable vector and right-hand side updates of these state variables do'
                 'not match. Please check the definition of variable types in the model definition.')
 
-        if to_file or to_func:
+        return_dict = {'old_state_vars': self.state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
+
+        if func_name or file_name:
+
+            if not func_name:
+                func_name = 'rhs_func'
 
             code_gen = CodeGen()
 
-            # generate function head
-            func_args, code_gen = self._generate_func_head(code_gen=code_gen, state_var=state_var_key)
-
             # generate function body with all equations and assignments
-            func_args_tmp, code_gen = self._graph_to_str(code_gen=code_gen, rhs_indices=indices, rhs_var=rhs_var_key)
-            func_args.extend(func_args_tmp)
+            func_args, code_gen_tmp = self._graph_to_str(rhs_indices=indices, state_var=state_var_key,
+                                                         rhs_var=rhs_var_key)
+            func_body = code_gen_tmp.generate()
+
+            # generate function head
+            func_args, code_gen = self._generate_func_head(code_gen=code_gen, state_var=state_var_key,
+                                                           func_args=func_args, func_name=func_name,
+                                                           imports=self._imports)
+
+            # add lines from function body after function head
+            code_gen.add_code_line(func_body)
 
             # generate function tail
             code_gen = self._generate_func_tail(code_gen=code_gen, rhs_var=rhs_var_key)
@@ -515,7 +523,12 @@ class BaseBackend(object):
             # finalize function string
             func_str = code_gen.generate()
 
-        return {'old_state_vars': self.state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
+            # write function string to file
+            func = self._generate_func(func_name=func_name, file_name=file_name, func_str=func_str,
+                                       build_dir=self._build_dir, **kwargs)
+            return_dict['func'] = func
+
+        return return_dict
 
     def run(self, T, dt):
 
@@ -530,18 +543,23 @@ class BaseBackend(object):
 
         return state_rec
 
-    def _generate_func_head(self, code_gen: CodeGen = None, state_var: str = None):
+    def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, state_var: str = None,
+                      rhs_var: str = None):
 
         if code_gen is None:
             code_gen = CodeGen()
-        func_args = [state_var, 't']
 
-        return func_args, code_gen
+        code_gen.add_linebreak()
 
-    def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, rhs_var: str = None):
+        if rhs_indices:
 
-        if code_gen is None:
-            code_gen = CodeGen()
+            for (idx_l, idx_r), var in zip(rhs_indices, self.state_vars):
+
+                # extract state variable from state vector
+                code_gen.add_code_line(f"{self.get_var(var, get_key=True)} = {state_var}[{idx_l}:{idx_r}]")
+                code_gen.add_linebreak()
+
+            code_gen.add_linebreak()
 
         # get equation string and argument list for each node at the end of the compute graph hierarchy
         backend_funcs = {key: val['str'] for key, val in self.ops.items()}
@@ -560,7 +578,7 @@ class BaseBackend(object):
                 code_gen.add_linebreak()
 
             # add rhs var to function arguments
-            func_args.append(rhs_var)
+            func_args = [rhs_var] + func_args
 
         else:
 
@@ -570,7 +588,77 @@ class BaseBackend(object):
                 code_gen.add_code_line(f"{target_var}_update = {str(expr)}")
                 code_gen.add_linebreak()
 
+        code_gen.add_linebreak()
+
         return func_args, code_gen
+
+    @staticmethod
+    def _generate_func_head(func_name: str, code_gen: CodeGen = None, state_var: str = None, func_args: list = None,
+                            imports: list = None):
+
+        if code_gen is None:
+            code_gen = CodeGen()
+        if not func_args:
+            func_args = []
+        state_vars = ['t', state_var]
+        func_args = state_vars + func_args
+
+        if imports:
+
+            # add imports at beginning of file
+            for imp in imports:
+                code_gen.add_code_line(imp)
+                code_gen.add_linebreak()
+            code_gen.add_linebreak()
+
+        # add function header
+        code_gen.add_linebreak()
+        code_gen.add_code_line(f"def {func_name}({','.join(func_args)}):")
+        code_gen.add_linebreak()
+        code_gen.add_indent()
+
+        return func_args, code_gen
+
+    @staticmethod
+    def _generate_func_tail(code_gen: CodeGen = None, rhs_var: str = None):
+
+        if code_gen is None:
+            code_gen = CodeGen()
+
+        code_gen.add_code_line(f"return {rhs_var}")
+        code_gen.add_linebreak()
+        code_gen.remove_indent()
+
+        return code_gen
+
+    @staticmethod
+    def _generate_func(file_name: str, func_name: str, func_str: str, build_dir: str, decorator: Any = None,
+                       **kwargs):
+
+        if file_name:
+
+            # save rhs function to file
+            if build_dir:
+                file_name = f'{build_dir}/{file_name}'
+            with open(f'{file_name}.py', 'w') as f:
+                f.writelines(func_str)
+                f.close()
+
+            # import function from file
+            exec(f"from {file_name} import {func_name}", globals())
+            rhs_eval = globals().pop(func_name)
+
+        else:
+
+            # generate function from string
+            exec(func_str, globals())
+            rhs_eval = globals().pop(func_name)
+
+        # apply function decorator
+        if decorator:
+            rhs_eval = decorator(rhs_eval, **kwargs)
+
+        return rhs_eval
 
 
 class PyRatesOp:

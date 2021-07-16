@@ -178,6 +178,8 @@ class ComputeGraph(MultiDiGraph):
                 expr_args.extend(args)
             return expr_args, expr
         except KeyError:
+            if self.nodes[n]['vtype'] == 'constant':
+                expr_args.append(n)
             return expr_args, self.nodes[n]['symbol']
 
     def _eval_node(self, n):
