@@ -54,7 +54,7 @@ import warnings
 
 # pyrates internal imports
 from .funcs import *
-from .parser import replace
+from .parser import replace, CodeGen
 from .computegraph import ComputeGraph
 
 #################################
@@ -207,11 +207,11 @@ class NumpyVar(np.ndarray):
 
     def __deepcopy__(self, memodict={}):
         obj = super().__deepcopy__(memodict)
-        if not hasattr(obj, 'name'):
+        if not hasattr(obj, 'name') and hasattr(self, 'name'):
             obj.name = self.name
-        if not hasattr(obj, 'short_name'):
+        if not hasattr(obj, 'short_name') and hasattr(self, 'short_name'):
             obj.short_name = self.short_name
-        if not hasattr(obj, 'vtype'):
+        if not hasattr(obj, 'vtype') and hasattr(self, 'vtype'):
             obj.vtype = self.vtype
         return obj
 
@@ -395,7 +395,7 @@ class BaseBackend(object):
                              squeeze=kwargs.pop('squeeze', True))
 
         # add variable to compute graph
-        label, cg_var = self.graph.add_var(label=name, value=var, vtype=vtype, **kwargs)
+        label, cg_var = self.graph.add_var(label=var.short_name, value=var, vtype=vtype, **kwargs)
 
         # save to dict
         self._var_map[name] = label
@@ -464,17 +464,10 @@ class BaseBackend(object):
 
         return self._var_map[name] if get_key else self.graph.nodes[self._var_map[name]]
 
-    def compile(self, lambdify: bool = False, to_file: bool = False, in_place: bool = True) -> dict:
+    def compile(self, to_func: bool = False, to_file: bool = False, in_place: bool = True) -> dict:
 
         # finalize compute graph
-        if lambdify and to_file:
-            self.graph, func, func_str = self.graph.compile(lambdify=lambdify, to_file=to_file, in_place=in_place)
-        elif lambdify:
-            self.graph, func = self.graph.compile(lambdify=lambdify, to_file=to_file, in_place=in_place)
-        elif to_file:
-            self.graph, func_str = self.graph.compile(lambdify=lambdify, to_file=to_file, in_place=in_place)
-        else:
-            self.graph = self.graph.compile(lambdify=lambdify, to_file=to_file, in_place=in_place)[0]
+        self.graph = self.graph.compile(in_place=in_place)
 
         # create state variable vector
         vars, indices = [], []
@@ -497,12 +490,30 @@ class BaseBackend(object):
         # create right-hand side update vector (also serves as test-run of network equations)
         rhs = self.graph.eval()
         rhs_vec = np.concatenate(rhs)
+        rhs_var_key, rhs_var = self.add_var(vtype='state_var', name='state_vec_update', value=np.zeros_like(rhs_vec))
 
         # check consistency of state var and rhs vector
         if state_vec.shape != rhs_vec.shape:
             raise ValueError(
                 'Shapes of state variable vector and right-hand side updates of these state variables do'
                 'not match. Please check the definition of variable types in the model definition.')
+
+        if to_file or to_func:
+
+            code_gen = CodeGen()
+
+            # generate function head
+            func_args, code_gen = self._generate_func_head(code_gen=code_gen, state_var=state_var_key)
+
+            # generate function body with all equations and assignments
+            func_args_tmp, code_gen = self._graph_to_str(code_gen=code_gen, rhs_indices=indices, rhs_var=rhs_var_key)
+            func_args.extend(func_args_tmp)
+
+            # generate function tail
+            code_gen = self._generate_func_tail(code_gen=code_gen, rhs_var=rhs_var_key)
+
+            # finalize function string
+            func_str = code_gen.generate()
 
         return {'old_state_vars': self.state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
 
@@ -518,6 +529,48 @@ class BaseBackend(object):
             state_rec[step, :] = state_vec
 
         return state_rec
+
+    def _generate_func_head(self, code_gen: CodeGen = None, state_var: str = None):
+
+        if code_gen is None:
+            code_gen = CodeGen()
+        func_args = [state_var, 't']
+
+        return func_args, code_gen
+
+    def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, rhs_var: str = None):
+
+        if code_gen is None:
+            code_gen = CodeGen()
+
+        # get equation string and argument list for each node at the end of the compute graph hierarchy
+        backend_funcs = {key: val['str'] for key, val in self.ops.items()}
+        func_args, expressions = [], []
+        for node in self.graph.eval_nodes:
+            expr_args, expr = self.graph.node_to_expr(node, **backend_funcs)
+            func_args.extend(expr_args)
+            expressions.append(expr)
+
+        if rhs_indices:
+
+            for (idx_l, idx_r), expr in zip(rhs_indices, expressions):
+
+                # assign right-hand side update to existing update vector
+                code_gen.add_code_line(f"{rhs_var}[{idx_l}:{idx_r}] = {str(expr)}")
+                code_gen.add_linebreak()
+
+            # add rhs var to function arguments
+            func_args.append(rhs_var)
+
+        else:
+
+            for target_var, expr in zip(self.graph.eval_nodes, expressions):
+
+                # assign right-hand side update to new variable
+                code_gen.add_code_line(f"{target_var}_update = {str(expr)}")
+                code_gen.add_linebreak()
+
+        return func_args, code_gen
 
 
 class PyRatesOp:
@@ -2526,42 +2579,6 @@ class NumpyBackend(object):
     @staticmethod
     def _deepcopy(x):
         return deepcopy(x)
-
-
-class CodeGen:
-    """Generates python code. Can add code lines, line-breaks, indents and remove indents.
-    """
-
-    def __init__(self):
-        self.code = []
-        self.lvl = 0
-
-    def generate(self):
-        """Generates a single code string from its history of code additions.
-        """
-        return ''.join(self.code)
-
-    def add_code_line(self, code_str):
-        """Add code line string to code.
-        """
-        self.code.append("\t" * self.lvl + code_str)
-
-    def add_linebreak(self):
-        """Add a line-break to the code.
-        """
-        self.code.append("\n")
-
-    def add_indent(self):
-        """Add an indent to the code.
-        """
-        self.lvl += 1
-
-    def remove_indent(self):
-        """Remove an indent to the code.
-        """
-        if self.lvl == 0:
-            raise(SyntaxError("internal error in code generator"))
-        self.lvl -= 1
 
 
 def extract_lhs_var(eq_str: str) -> str:
