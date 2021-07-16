@@ -38,16 +38,13 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 from sympy import Expr, Symbol, lambdify, sympify
 
-# pyrates internal imports
-from .computegraph import ComputeGraph
-
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
 
-
-# expression parsers (lhs/rhs of an equation)
-#############################################
+###############################################
+# expression parsers (lhs/rhs of an equation) #
+###############################################
 
 
 class ExpressionParser(ParserElement):
@@ -825,25 +822,24 @@ class SympyParser(ExpressionParser):
                     var = self.vars[arg.name]
                     if 'symbol' in var:
 
-                        # if parsed already, retrieve label from existing variable and replace it in expression
+                        # if parsed already, retrieve label from existing variable
                         label = var['symbol'].name if 'func' in var \
-                            else self.backend.get_var(arg.name, get_key=True, **self.parser_kwargs)
-
-                        expr = expr.replace(arg, var['symbol'])
+                            else self.backend.get_var(var['value'].name, get_key=True, **self.parser_kwargs)
 
                     else:
 
                         # if not parsed already, parse variable into backend
-                        label, var = self.backend.add_var(name=arg.name, symbol=arg, simple_constant=False, **var,
-                                                          **self.parser_kwargs)
-                        self.vars[arg.name] = var
+                        label, var = self.backend.add_var(name=arg.name, **var, **self.parser_kwargs)
+                        self.vars[arg.name].update(var)
 
                 else:
 
                     # case: mathematical expressions
                     label, var = self.parse(arg)
-                    if 'expr' in var:
-                        expr = expr.replace(var['expr'], var['symbol'])
+
+                # replace name of variable in expression with new variable symbol
+                if 'symbol' in var:
+                    expr = expr.replace(arg, var['symbol'])
 
                 # store input to mathematical expression, if it is not a simple scalar
                 if 'symbol' in var:
@@ -857,8 +853,7 @@ class SympyParser(ExpressionParser):
                 label = str(expr.func)
             func = self.backend.ops[label]['func'] if label in self.backend.ops \
                 else lambdify(func_args, expr=expr, modules=self.backend.type)
-            label, v_new = self.backend.add_op(inputs, name=label, expr=expr, symbol=Symbol(label), func=func,
-                                               simple_constant=False, vtype='variable')
+            label, v_new = self.backend.add_op(inputs, name=label, expr=expr, func=func, vtype='variable')
             self.vars[label] = v_new
 
             return label, v_new
@@ -893,6 +888,47 @@ class SympyParser(ExpressionParser):
 
             # simple update
             self.vars[self.lhs_key] = self.rhs
+
+################################
+# helper classes and functions #
+################################
+
+
+class CodeGen:
+    """Generates python code. Can add code lines, line-breaks, indents and remove indents.
+    """
+
+    def __init__(self):
+        self.code = []
+        self.lvl = 0
+
+    def generate(self):
+        """Generates a single code string from its history of code additions.
+        """
+        return ''.join(self.code)
+
+    def add_code_line(self, code_str):
+        """Add code line string to code.
+        """
+        self.code.append("\t" * self.lvl + code_str)
+
+    def add_linebreak(self):
+        """Add a line-break to the code.
+        """
+        self.code.append("\n")
+
+    def add_indent(self):
+        """Add an indent to the code.
+        """
+        self.lvl += 1
+
+    def remove_indent(self):
+        """Remove an indent to the code.
+        """
+        if self.lvl == 0:
+            raise(SyntaxError("Error in generation of network function file: A net negative indentation was requested.")
+                  )
+        self.lvl -= 1
 
 
 def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:

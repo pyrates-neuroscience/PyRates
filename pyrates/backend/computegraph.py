@@ -30,8 +30,8 @@
 """
 
 # external imports
-from typing import Optional, Any, Callable, Union
-from networkx import MultiDiGraph, DiGraph
+from typing import Any, Callable, Union
+from networkx import MultiDiGraph
 from sympy import Symbol, Expr
 from copy import deepcopy
 import numpy as np
@@ -41,6 +41,11 @@ __author__ = "Richard Gast"
 __status__ = "development"
 
 
+#########################
+# compute graph classes #
+#########################
+
+
 class ComputeGraph(MultiDiGraph):
     """Creates a compute graph where nodes are all constants and variables of the network and edges are the mathematical
     operations linking those variables/constants together to form equations.
@@ -48,21 +53,21 @@ class ComputeGraph(MultiDiGraph):
 
     def __init__(self, **kwargs):
 
-        self._eval_nodes = []
+        self.eval_nodes = []
         super().__init__(**kwargs)
 
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
-        symbol = kwargs.pop('symbol', Symbol(label))
         unique_label = self._generate_unique_label(label)
+        symbol = Symbol(unique_label)
         super().add_node(unique_label, symbol=symbol, value=value, vtype=vtype, **kwargs)
         return unique_label, self.nodes[unique_label]
 
     def add_op(self, inputs: Union[list, tuple], label: str, expr: Expr, func: Callable, vtype: str, **kwargs):
 
         # add target node that contains result of operation
-        symbol = kwargs.pop('symbol', Symbol(label))
         unique_label = self._generate_unique_label(label)
+        symbol = Symbol(unique_label)
         super().add_node(unique_label, expr=expr, func=func, vtype=vtype, symbol=symbol, **kwargs)
 
         # add edges from source nodes to target node
@@ -73,14 +78,9 @@ class ComputeGraph(MultiDiGraph):
 
     def eval(self):
 
-        return [self._eval_node(n) for n in self._eval_nodes]
+        return [self._eval_node(n) for n in self.eval_nodes]
 
-    def to_str(self) -> str:
-
-        # TODO: generate function string from compute graph
-        return ""
-
-    def compile(self, lambdify: bool = True, to_file: bool = False, in_place: bool = True):
+    def compile(self, in_place: bool = True):
 
         G = self if in_place else deepcopy(self)
 
@@ -88,8 +88,8 @@ class ComputeGraph(MultiDiGraph):
         G._prune()
 
         # evaluate constant-based operations
-        self._eval_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
-        for node in self._eval_nodes:
+        self.eval_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
+        for node in self.eval_nodes:
 
             # process inputs of node
             for inp in G.predecessors(node):
@@ -101,22 +101,10 @@ class ComputeGraph(MultiDiGraph):
                 G.eval_subgraph(node)
 
         # broadcast all variable shapes to a common number of dimensions
-        for node in self._eval_nodes:
+        for node in self.eval_nodes:
             G.broadcast_op_inputs(node, squeeze=False)
 
-        return_args = [G]
-
-        # TODO: lambdify graph
-        if lambdify:
-            func = self.to_func()
-            return_args.append(func)
-
-        # TODO: write graph to function file
-        if to_file:
-            func_str = self.to_str()
-            return_args.append(func_str)
-
-        return tuple(return_args)
+        return G
 
     def eval_subgraph(self, n):
 
@@ -178,6 +166,19 @@ class ComputeGraph(MultiDiGraph):
                         self.nodes[nodes[i]]['value'] = inp_eval
 
             return self.broadcast_op_inputs(n, squeeze=True)
+
+    def node_to_expr(self, n: str, **kwargs) -> tuple:
+
+        expr_args = []
+        try:
+            expr = self.nodes[n]['expr']
+            expr_info = [(self.nodes[inp]['symbol'], self.node_to_expr(inp, **kwargs)) for inp in self.predecessors(n)]
+            for expr_old, (args, expr_new) in expr_info:
+                expr = expr.replace(expr_old, expr_new)
+                expr_args.extend(args)
+            return expr_args, expr
+        except KeyError:
+            return expr_args, self.nodes[n]['symbol']
 
     def _eval_node(self, n):
 
