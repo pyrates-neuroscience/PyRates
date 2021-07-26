@@ -699,7 +699,7 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
                     adapt_circuit(model, params=params, param_map=param_map)
 
                     # compile model into backend
-                    model_compiled = model.compile(**compile_kwargs)
+                    model_compiled = model._compile(**compile_kwargs)
 
                     # define run func
                     run_func = model_compiled.run

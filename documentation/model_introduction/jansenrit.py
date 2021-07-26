@@ -110,7 +110,7 @@ jrc = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC
 # for our differential equation system. The default is the forward Euler method that is implemented in PyRates itself.
 # Generally, the scipy solver is both more accurate and faster and thus the recommended solver in PyRates.
 
-jrc_compiled = jrc.compile(backend='numpy', step_size=1e-4, solver='scipy')
+jrc_compiled = jrc._compile(backend='numpy', step_size=1e-4, solver='scipy')
 
 # %%
 # Step 4: Numerical simulation of a the model behavior in time

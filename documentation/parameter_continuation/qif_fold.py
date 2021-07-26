@@ -68,7 +68,7 @@ qif = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbrio.QIF_ex
 # method to :code:`True`, to indicate to the :code:`FortranBackend` that it should compile the model equations in a way
 # that is compatible with auto-07p [2]_.
 
-qif_compiled = qif.compile(backend='fortran', auto_compat=True)
+qif_compiled = qif._compile(backend='fortran', auto_compat=True)
 
 # %%
 # Step 3: Generate a PyAuto instance

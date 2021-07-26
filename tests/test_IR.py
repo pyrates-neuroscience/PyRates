@@ -76,4 +76,4 @@ def test_ir_compilation():
 
     circuit = CircuitIR.from_yaml(path)
 
-    circuit.compile()
+    circuit._compile()

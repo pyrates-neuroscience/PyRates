@@ -41,6 +41,7 @@ from pyrates import PyRatesException
 from pyrates.ir.node import NodeIR, VectorizedNodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
+from pyrates.ir.operator import OperatorIR
 from pyrates.backend.parser import parse_equations, is_diff_eq, replace
 
 __author__ = "Daniel Rose, Richard Gast"
@@ -1107,8 +1108,8 @@ class CircuitIR(AbstractBaseIR):
             return vnode_indices
 
     def run(self,
-            simulation_time: Optional[float] = None,
-            step_size: Optional[float] = None,
+            simulation_time: float,
+            step_size: float = 1e-3,
             inputs: Optional[dict] = None,
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
@@ -1116,6 +1117,12 @@ class CircuitIR(AbstractBaseIR):
             out_dir: Optional[str] = None,
             verbose: bool = True,
             profile: bool = False,
+            backend: str = 'numpy',
+            float_precision: str = 'float32',
+            matrix_sparseness: float = 0.5,
+            dde_approximation_order: int = 0,
+            compile_in_place: bool = False,
+            backend_kwargs: dict = None,
             **kwargs
             ) -> Union[DataFrame, Tuple[DataFrame, float]]:
         """Simulate the backend behavior over time via a tensorflow session.
@@ -1162,48 +1169,50 @@ class CircuitIR(AbstractBaseIR):
 
         filterwarnings("ignore", category=FutureWarning)
 
+        # finalize network graph
+        ########################
+
         if verbose:
-            print("Simulation Progress")
-            print("-------------------")
+            print("Network compilation in progress:")
+
+        # add external inputs to the graph
+        # TODO 2: Add inputs to network via additional nodes with equations+variables and connect them to network via
+        #  edges (should be optimized later on for vectorization)
+        continuous = solver == 'scipy'
+        for target_var, inp in inputs.items():
+            self._add_input(target_var, inp, continuous=continuous)
+
+        if verbose:
+            print("\t...extrinsic inputs have been added to the network.")
+
+        # compile the network graph
+        compute_graph = self.compile(backend=backend,
+                                     float_precision=float_precision,
+                                     matrix_sparseness=matrix_sparseness,
+                                     dde_approximation_order=dde_approximation_order,
+                                     in_place=compile_in_place,
+                                     **backend_kwargs)
+        # TODO: extract backend variables and store them under `value` on graph
+
+        if verbose:
+            print("\t...the network has been compiled into a compute graph.\n")
 
         # prepare simulation
         ####################
 
-        if verbose:
-            print("Preparing the simulation:")
-
-        if not self._first_run:
-            self._backend.remove_layer(0)
-            self._backend.remove_layer(self._backend.top_layer())
-        else:
-            self._first_run = False
-
-        # basic simulation parameters initialization
-        if self.solver is not None:
-            solver = self.solver
-        if self.step_size is not None:
-            step_size = self.step_size
+        # simulation specs
         if step_size is None:
             raise ValueError('Step-size not provided. Please pass the desired initial simulation step-size to `run()`.')
-        if not simulation_time:
-            simulation_time = step_size
+        if not sampling_step_size:
+            sampling_step_size = step_size
         sim_steps = int(np.round(simulation_time / step_size, decimals=0))
 
         # collect backend output variables
-        ##################################
-
         outputs_col = {}
-
         if outputs:
-
-            # go through passed output names
             for key, val in outputs.items():
-                # extract respective output variables from the network and store their information
                 outputs_col[key] = [[var_info['idx'], var_info['nodes']]
                                     for var_info in self.get_node_var(val, apply_idx=False).values()]
-
-            if verbose:
-                print("    ...user-defined output variables are logged.")
 
         # collect backend input variables
         #################################
@@ -1402,6 +1411,12 @@ class CircuitIR(AbstractBaseIR):
                     weight = weight_mat
                     dot_edge = True
 
+            # apply index to source variable if necessary
+            source = svar
+            if sidx and sum(sval['shape']) > 1:
+                source = f"apply_index({svar}, source_idx)"
+                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': np.array(sidx, dtype=np.int32)}
+
             # set up edge projection equation and edge indices for edges that cannot be realized via a matrix product
             args = {}
             if len(tidx) > 1 and sum(tval['shape']) > 1:
@@ -1414,26 +1429,19 @@ class CircuitIR(AbstractBaseIR):
                 d = []
             if not dot_edge:
                 if len(d) > 1:
-                    eq = f"{tvar} = matmul(target_projection, ({svar} * weight))"
+                    eq = f"{tvar} = matmul(target_projection, ({source} * weight))"
                     args['target_projection'] = {
                         'vtype': 'constant',
                         'value': np.array(d, dtype=G._backend._float_def if len(d) > 1 else np.int32)
                     }
                 elif len(d):
-                    eq = f"{tvar} = {svar} * weight"
+                    eq = f"apply_index({tvar}, target_idx) = {source} * weight"
                     args['target_idx'] = {
                         'vtype': 'constant',
                         'value': np.array(d, dtype=G._backend._float_def if len(d) > 1 else np.int32)
                     }
                 else:
-                    eq = f"{tvar} = {svar} * weight"
-
-            # add edge variables to dict
-            dtype = sval["dtype"]
-            args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
-            args[tvar] = tval
-            if sidx and sum(sval['shape']) > 1:
-                args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32', 'value': np.array(sidx, dtype=np.int32)}
+                    eq = f"{tvar} = {source} * weight"
 
             # add edge operator to target node
             op_name = f'edge_from_{source_node}_{edge_idx}'
@@ -1520,6 +1528,39 @@ class CircuitIR(AbstractBaseIR):
                                       f'choose another backend (e.g. `fortran`) to generate a pyauto instance of the '
                                       f'system.'
                                       )
+
+    def _add_input(self, target: str, inp: np.ndarray, continuous: bool = True):
+
+        var_info = self.get_node_var(target, apply_idx=False)
+        var, shape = var_info['var'], var_info['shape']
+
+        # adjust shape of input to target variable shape
+        in_shape = inp.shape[1:]
+        while in_shape != shape:
+            if not in_shape:
+                inp = inp.reshape((inp.shape[0], 1))
+                in_shape = inp.shape[1:]
+            elif sum(in_shape) == 1:
+                inp = np.tile(inp, (1, shape[0]))
+                in_shape = inp.shape[1:]
+            else:
+                raise ValueError(f'Dimensions of input to {target} do not agree with the shape {shape} of {target}.')
+
+        if continuous:
+
+            # create input equations and variables for adaptive step-size solvers of the network equations
+            eqs = [
+                f"{var} = {var}_inp_interp(t)"
+            ]
+            variables = [
+                (var, 'variable', 'float', shape),
+                ('t', 'constant', 'float', ())
+            ]
+
+            op = OperatorIR(equations=eqs, variables=variables, inputs=[], output=var)
+            node = NodeIR(operators={f'{var}_inp_op': op}, values={var: np.zeros(shape), 't': 0.0})
+            self.add_node(f'{var}_inp', node=node)
+            self.add_edge(f'{var}_inp/{var}_inp_op/{var}', target)
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
                                            op_identifier: Optional[str] = None, **kwargs) -> None:

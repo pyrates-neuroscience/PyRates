@@ -139,7 +139,7 @@ from matplotlib.pyplot import show
 
 jr_temp = CircuitTemplate.from_yaml(model_template).apply()
 jr_temp.set_node_var('JRC/JRC_op/c', winner.at[0, 'C'])
-jr_comp = jr_temp.compile(solver='scipy', backend='numpy', step_size=1e-4)
+jr_comp = jr_temp._compile(solver='scipy', backend='numpy', step_size=1e-4)
 results = jr_comp.run(simulation_time=3.0, sampling_step_size=1e-2,
                       outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'})
 
