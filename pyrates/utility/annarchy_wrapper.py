@@ -250,7 +250,7 @@ def grid_search_annarchy(param_grid: dict, param_map: dict, dt: float, simulatio
     #net.add(monitors)
 
     # simulate the circuits behavior
-    net.compile()
+    net._compile()
     net.simulate(duration=simulation_time)
 
     # transform output into pyrates-compatible data format

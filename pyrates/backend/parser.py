@@ -837,12 +837,12 @@ class SympyParser(ExpressionParser):
                     # case: mathematical expressions
                     label, var = self.parse(arg)
 
-                # replace name of variable in expression with new variable symbol
                 if 'symbol' in var:
+
+                    # replace name of variable in expression with new variable symbol
                     expr = expr.replace(arg, var['symbol'])
 
-                # store input to mathematical expression, if it is not a simple scalar
-                if 'symbol' in var:
+                    # store input to mathematical expression, if it is not a simple scalar
                     inputs.append(label)
                     func_args.append(var['symbol'])
 
@@ -910,7 +910,9 @@ class CodeGen:
     def add_code_line(self, code_str):
         """Add code line string to code.
         """
-        self.code.append("\t" * self.lvl + code_str)
+        code_str = code_str.split('\n')
+        for code in code_str:
+            self.code.append("\t" * self.lvl + code + '\n')
 
     def add_linebreak(self):
         """Add a line-break to the code.

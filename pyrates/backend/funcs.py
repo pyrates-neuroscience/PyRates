@@ -85,3 +85,7 @@ def pr_interp_nd(x, y, x_new, y_idx, t):
 
 def pr_interp(f, x_new):
     return f(x_new)
+
+
+def pr_base_index(x, idx):
+    return x[idx]

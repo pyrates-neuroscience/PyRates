@@ -87,7 +87,7 @@ qif_circuit = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbri
 # without any further changes to the graph. This way, a :code:`pyrates.backend.NumpyBackend` instance is created.
 # After this step, structural modifications of the network are not possible anymore.
 
-qif_compiled = qif_circuit.compile(backend='numpy', step_size=1e-3)
+qif_compiled = qif_circuit._compile(backend='numpy', step_size=1e-3)
 
 # %%
 # Step 4: Numerical simulation of a the model behavior in time
@@ -120,7 +120,7 @@ results.plot()
 # above.
 
 qif_sfa_circuit = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbrio.QIF_sfa").apply()
-qif_sfa_compiled = qif_sfa_circuit.compile(backend='numpy', step_size=1e-3)
+qif_sfa_compiled = qif_sfa_circuit._compile(backend='numpy', step_size=1e-3)
 results = qif_sfa_compiled.run(simulation_time=40.0, outputs={'r': 'p/Op_sfa/r'})
 results.plot()
 

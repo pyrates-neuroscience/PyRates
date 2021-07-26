@@ -54,7 +54,7 @@ import warnings
 
 # pyrates internal imports
 from .funcs import *
-from .parser import replace, CodeGen
+from .parser import replace, CodeGen, sympify
 from .computegraph import ComputeGraph
 
 #################################
@@ -287,6 +287,7 @@ class BaseBackend(object):
                     "interpolate": {'func': pr_interp, 'str': "pr_interp"},
                     "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
                     "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
+                    "apply_index": {'func': pr_base_index, 'str': "pr_base_index"},
                     }
         if ops:
             self.ops.update(ops)
@@ -458,10 +459,83 @@ class BaseBackend(object):
         scope = kwargs.pop('scope', None)
         if scope:
             name = f'{scope}/{name}'
+        try:
+            return self._var_map[name] if get_key else self.graph.nodes[self._var_map[name]]
+        except KeyError:
+            return name if get_key else self.graph.nodes[name]
 
-        return self._var_map[name] if get_key else self.graph.nodes[self._var_map[name]]
+    def run(self, T: float, dt: float, inputs: Optional[list] = None, use_graph: bool = True, solver: str = 'euler',
+            in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs):
 
-    def compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
+        # TODO: Implement input/output functionalities
+
+        # preparations
+        ##############
+
+        if not compile_kwargs:
+            compile_kwargs = dict()
+
+        # network specs
+        run_info = self._compile(in_place=in_place, func_name=func_name, file_name=file_name, **compile_kwargs)
+        state_vec = self.get_var(run_info['state_vec'])['value']
+        rhs = np.zeros_like(state_vec)
+
+        # simulation specs
+        steps = int(np.round(T / dt))
+        state_rec = np.zeros((steps, state_vec.shape[0]))
+
+        # add inputs to graph
+        continuous = 'scipy' in solver
+        t = self._add_input_layer(inputs=inputs, T=T, continuous=continuous)
+
+        # perform simulation
+        ####################
+
+        if use_graph:
+
+            # numerical integration by directly traversing the compute graph at each integration step
+            for step in range(steps):
+                state_vec += dt * np.concatenate(self.graph.eval())
+                state_rec[step, :] = state_vec
+
+        else:
+
+            if not func_name and not file_name:
+                raise ValueError('To generate a system update function for numerical integration, please provide '
+                                 'either a `func_name` or `file_name` or both. Alternatively, set `use_graph` to '
+                                 '`False` to perform numerical integration directly via the compute graph.')
+
+            # numerical integration via a system update function generated from the compute graph
+            rhs_func = run_info['func']
+            func_args = run_info['func_args'][3:]
+            args = tuple([self.get_var(arg)['value'] for arg in func_args])
+
+            if solver == 'euler':
+
+                # perform integration via standard Euler method
+                t = 0.0
+                for step in range(steps):
+                    state_vec += dt * rhs_func(t, state_vec, rhs, *args)
+                    t += dt
+                    state_rec[step, :] = state_vec
+
+            else:
+
+                from scipy.integrate import solve_ivp
+
+                # solve via scipy's ode integration function
+                fun = lambda t, y: rhs_func(t, y, rhs, *args)
+                t = 0.0
+                # if dts:
+                #     times = np.arange(0, T, dts)
+                #     kwargs['t_eval'] = times
+                outputs = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
+                #results = [outputs['y'].T[:, idx] for idx in output_indices]
+                state_rec = outputs['y'].T
+
+        return state_rec
+
+    def _compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
 
         # finalize compute graph
         self.graph = self.graph.compile(in_place=in_place)
@@ -527,21 +601,9 @@ class BaseBackend(object):
             func = self._generate_func(func_name=func_name, file_name=file_name, func_str=func_str,
                                        build_dir=self._build_dir, **kwargs)
             return_dict['func'] = func
+            return_dict['func_args'] = func_args
 
         return return_dict
-
-    def run(self, T, dt):
-
-        steps = int(np.round(T/dt))
-        state_vec = self.get_var('state_vec')['value']
-
-        state_rec = np.zeros((steps, state_vec.shape[0]))
-        for step in range(steps):
-            rhs = np.concatenate(self.graph.eval())
-            state_vec += dt * rhs
-            state_rec[step, :] = state_vec
-
-        return state_rec
 
     def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, state_var: str = None,
                       rhs_var: str = None):
@@ -557,7 +619,6 @@ class BaseBackend(object):
 
                 # extract state variable from state vector
                 code_gen.add_code_line(f"{self.get_var(var, get_key=True)} = {state_var}[{idx_l}:{idx_r}]")
-                code_gen.add_linebreak()
 
             code_gen.add_linebreak()
 
@@ -574,8 +635,8 @@ class BaseBackend(object):
             for (idx_l, idx_r), expr in zip(rhs_indices, expressions):
 
                 # assign right-hand side update to existing update vector
-                code_gen.add_code_line(f"{rhs_var}[{idx_l}:{idx_r}] = {str(expr)}")
-                code_gen.add_linebreak()
+                expr_str = self._expr_to_str(expr)
+                code_gen.add_code_line(f"{rhs_var}[{idx_l}:{idx_r}] = {expr_str}")
 
             # add rhs var to function arguments
             func_args = [rhs_var] + func_args
@@ -585,12 +646,101 @@ class BaseBackend(object):
             for target_var, expr in zip(self.graph.eval_nodes, expressions):
 
                 # assign right-hand side update to new variable
-                code_gen.add_code_line(f"{target_var}_update = {str(expr)}")
-                code_gen.add_linebreak()
+                expr_str = self._expr_to_str(expr)
+                code_gen.add_code_line(f"{target_var}_update = {expr_str}")
 
         code_gen.add_linebreak()
 
         return func_args, code_gen
+
+    def _add_input_layer(self, inputs: list, T: float, continuous=True) -> NumpyVar:
+        """
+
+        Parameters
+        ----------
+        inputs
+        T
+        continuous
+
+        Returns
+        -------
+
+        """
+
+        scope = "network_inputs"
+
+        # create time-vector
+        t = self.add_var('state_var', name='t', value=0.0, dtype=self._float_def, shape=())
+
+        if inputs:
+
+            if continuous:
+
+                from scipy.interpolate import interp1d
+                time = np.linspace(0, T, inputs[0][0].shape[0])
+                func_name = 'interpolate'
+
+                for (inp, target_var, idx) in inputs:
+
+                    # create unique name of input variable
+                    in_name_tmp = f"{target_var}_inp"
+                    counter = 0
+                    in_name = in_name_tmp
+                    while in_name in self._input_names:
+                        in_name = f"{in_name_tmp}_{counter}"
+                        counter += 1
+                    self._input_names.append(in_name)
+
+                    # create interpolation operator
+                    if len(inp.shape) > 1:
+                        inp = inp.squeeze()
+                    f = interp1d(time, inp, axis=0, copy=False, kind='linear')
+                    f.shape = inp.shape[1:]
+                    in_name, f = self.add_var(vtype='state_var', name=f"{in_name}", value=f, scope=scope)
+                    expr = sympify(f"{self.ops[func_name]['str']}({in_name},t)")
+                    in_op_name, in_var_interp = self.add_op(inputs=[in_name, t], name=func_name,
+                                                            func=self.ops[func_name]['func'], scope=scope, expr=expr)
+
+                    # apply input to target variable
+                    if idx:
+                        self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
+                    else:
+                        self.add_op('=', target_var, in_var_interp, scope="network_inputs")
+
+            else:
+
+                # create counting index for input variables
+                time_step_idx = self.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
+                                             scope="network_inputs")
+
+                for (inp, target_var, idx) in inputs:
+
+                    # create unique name of input variable
+                    in_name_tmp = f"{target_var.short_name}_inp"
+                    counter = 0
+                    in_name = in_name_tmp
+                    while in_name_tmp in self._input_names:
+                        in_name = f"{in_name_tmp}_{counter}"
+                        counter += 1
+                    self._input_names.append(in_name)
+
+                    # create time indexing operator
+                    in_var = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", scope="network_inputs",
+                                          value=inp)
+                    in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
+
+                    # apply input to target variable
+                    if idx:
+                        self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
+                    else:
+                        self.add_op('=', target_var, in_var_indexed, scope="network_inputs")
+
+                # create increment operator for counting index
+                time_step = self.add_var('constant', name='time_step_increment', value=np.ones((1,), dtype='int32'),
+                                         scope="network_inputs")
+                self.add_op('+=', time_step_idx, time_step, scope="network_inputs")
+
+        return t
 
     @staticmethod
     def _generate_func_head(func_name: str, code_gen: CodeGen = None, state_var: str = None, func_args: list = None,
@@ -608,13 +758,11 @@ class BaseBackend(object):
             # add imports at beginning of file
             for imp in imports:
                 code_gen.add_code_line(imp)
-                code_gen.add_linebreak()
             code_gen.add_linebreak()
 
         # add function header
         code_gen.add_linebreak()
         code_gen.add_code_line(f"def {func_name}({','.join(func_args)}):")
-        code_gen.add_linebreak()
         code_gen.add_indent()
 
         return func_args, code_gen
@@ -626,7 +774,6 @@ class BaseBackend(object):
             code_gen = CodeGen()
 
         code_gen.add_code_line(f"return {rhs_var}")
-        code_gen.add_linebreak()
         code_gen.remove_indent()
 
         return code_gen
@@ -659,6 +806,16 @@ class BaseBackend(object):
             rhs_eval = decorator(rhs_eval, **kwargs)
 
         return rhs_eval
+
+    @staticmethod
+    def _expr_to_str(expr: Any) -> str:
+        expr_str = str(expr)
+        while 'apply_index' in expr_str:
+            # replace `apply_index` calls with brackets-based indexing
+            start = expr_str.find('apply_index')
+            end = expr_str.find(')', start=start)
+            expr_str = expr_str.replace(expr_str[start:end], f"{expr.args[0]}[{expr.args[1]}]")
+        return expr_str
 
 
 class PyRatesOp:
@@ -716,13 +873,7 @@ class PyRatesOp:
         """Generates a function from operator value and arguments"""
         func_dict = {}
         func = CodeGen()
-        func.add_code_line(f"def {self.short_name}(")
-        for arg in self._op_dict['arg_names']:
-            func.add_code_line(f"{arg},")
-        if len(self._op_dict['arg_names']) > 0:
-            func.code[-1] = func.code[-1][:-1]
-        func.add_code_line("):")
-        func.add_linebreak()
+        func.add_code_line(f"def {self.short_name}({','.join([arg for arg in self._op_dict['arg_names']])}):")
         func.add_indent()
         func.add_code_line(f"return {self._op_dict['value']}")
         exec(func.generate(), globals(), func_dict)

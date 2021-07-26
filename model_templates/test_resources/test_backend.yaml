@@ -304,3 +304,12 @@ net14:
   edges:
     - [c1/p1/op9/b, c2/p2/op9/I_syn, null, {weight: 1.0}]
     - [c2/p2/op9/b, c1/p1/op9/I_syn, null, {weight: 1.0}]
+
+net15:
+  base: CircuitTemplate
+  nodes:
+    p1: pop10
+    p2: pop11
+  edges:
+    - [p1/op9/b, p2/op9/I_syn, DummyEdge, {weight: 1.0}]
+    - [p2/op9/b, p1/op9/I_syn, DummyEdge, {weight: 2.0}]

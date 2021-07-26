@@ -122,7 +122,7 @@ def test_2_1_operator():
         ################################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net2").apply()
-        net = net_config.compile(vectorization=True, backend=b)
+        net = net_config._compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0/op2/a'}, step_size=dt)
         net.clear()
 
@@ -140,7 +140,7 @@ def test_2_1_operator():
         ######################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net3").apply()
-        net = net_config.compile(vectorization=True, backend=b)
+        net = net_config._compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
                           step_size=dt)
         net.clear()
@@ -179,7 +179,7 @@ def test_2_2_node():
         sim_time = 10.
         sim_steps = int(sim_time / dt)
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net4").apply()
-        net = net_config.compile(vectorization=True, backend=b)
+        net = net_config._compile(vectorization=True, backend=b)
 
         # simulate node behavior
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt)
@@ -200,7 +200,7 @@ def test_2_2_node():
         ########################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net5").apply()
-        net = net_config.compile(vectorization=True, backend=b)
+        net = net_config._compile(vectorization=True, backend=b)
 
         # simulate node behavior
         results = net.run(sim_time, outputs={'a': 'pop0/op5/a'}, step_size=dt)
@@ -219,7 +219,7 @@ def test_2_2_node():
         ###############################################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net6").apply()
-        net = net_config.compile(vectorization=True, backend=b)
+        net = net_config._compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt)
         net.clear()
 
@@ -238,7 +238,7 @@ def test_2_2_node():
         ######################################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net7").apply()
-        net = net_config.compile(vectorization=True, backend=b)
+        net = net_config._compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt)
 
         # calculate node behavior from hand
@@ -278,7 +278,7 @@ def test_2_3_edge():
         sim_time = 10.
         sim_steps = int(sim_time / dt)
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net8").apply()
-        net = net_config.compile(vectorization=True, backend=b)
+        net = net_config._compile(vectorization=True, backend=b)
 
         # calculate edge behavior from hand
         update0 = lambda x, y: x + dt * y * 0.5
@@ -306,7 +306,7 @@ def test_2_3_edge():
         inp = np.zeros((sim_steps, 1)) + 0.5
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9").apply()
-        net = net_config.compile(vectorization=True, backend=b)
+        net = net_config._compile(vectorization=True, backend=b)
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
                           step_size=dt)
         net.clear()
@@ -326,7 +326,7 @@ def test_2_3_edge():
         #######################################################################################
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net10").apply()
-        net = net_config.compile(vectorization=True, backend=b, step_size=dt)
+        net = net_config._compile(vectorization=True, backend=b, step_size=dt)
         results = net.run(sim_time, outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt)
         net.clear()
 
@@ -352,7 +352,7 @@ def test_2_3_edge():
         inp = np.zeros((sim_steps, 1)) + 0.5
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9").apply()
-        net = net_config.compile(vectorization=True, step_size=dt, backend=b)
+        net = net_config._compile(vectorization=True, step_size=dt, backend=b)
         results = net.run(sim_time, step_size=dt,
                           outputs={'a': 'pop0/op1/a',
                                              'b': 'pop1/op7/a'},
@@ -380,7 +380,7 @@ def test_2_3_edge():
         inp = np.zeros((sim_steps, 1)) + 0.5
 
         net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net4')
-        net = net_config.compile(vectorization=True, step_size=dt, backend=b, solver='euler')
+        net = net_config._compile(vectorization=True, step_size=dt, backend=b, solver='euler')
         results = net.run(sim_time,
                           outputs={'a1': 'p1/op9/a',
                                    'a2': 'p2/op9/a'},
@@ -449,7 +449,7 @@ def test_2_5_solver():
 
     # standard euler solver (trusted)
     net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net0')
-    net = net_config.compile(vectorization=True, step_size=dt, backend=backend, solver='euler')
+    net = net_config._compile(vectorization=True, step_size=dt, backend=backend, solver='euler')
     results = net.run(sim_time,
                       outputs={'a1': 'p1/op9/a',
                                'a2': 'p2/op9/a'},
@@ -458,7 +458,7 @@ def test_2_5_solver():
 
     # scipy solver (tested)
     net_config2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net1')
-    net2 = net_config2.compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
+    net2 = net_config2._compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
     results2 = net2.run(sim_time,
                         outputs={'a1': 'p1/op9/a',
                                  'a2': 'p2/op9/a'},
@@ -492,7 +492,7 @@ def test_2_6_inputs_outputs():
 
     # perform simulation
     net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net1')
-    net = net_config.compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
+    net = net_config._compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
     r1 = net.run(sim_time,
                  outputs={'a1': 'p1/op9/a', 'a2': 'p2/op9/a'},
                  inputs={'p1/op9/I_ext': inp1, 'p2/op9/I_ext': inp2})
@@ -510,7 +510,7 @@ def test_2_6_inputs_outputs():
 
     # perform simulation
     net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net2')
-    net = net_config.compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
+    net = net_config._compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
     r2 = net.run(sim_time, outputs={'a': 'all/op9/a'}, inputs={'all/op9/I_ext': inp})
     net.clear()
 
@@ -525,7 +525,7 @@ def test_2_6_inputs_outputs():
 
     # perform simulation
     nc1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net14").apply(label='net3')
-    n1 = nc1.compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
+    n1 = nc1._compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
     r1 = n1.run(sim_time,
                 outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op9/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op9/a'},
                 inputs={'c1/p1/op9/I_ext': inp1, 'c1/p2/op9/I_ext': inp2, 'c2/p1/op9/I_ext': inp3,
@@ -540,7 +540,7 @@ def test_2_6_inputs_outputs():
 
     # perform simulation
     nc2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net14").apply(label='net4')
-    n2 = nc2.compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
+    n2 = nc2._compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
     r2 = n2.run(sim_time, outputs={'a': 'all/all/op9/a'}, inputs={'all/all/op9/I_ext': inp})
     n2.clear()
 
