@@ -1909,7 +1909,7 @@ class CircuitIR(AbstractBaseIR):
                 idx_apply = len(idx) != len(orders_tmp)
                 val = rates_tmp[idx] if idx_apply else rates_tmp
                 var_shape = (len(val),) if val.shape else ()
-                if i == 0 and idx_apply:
+                if i == 0 and target_shape != len(idx):
                         idx_str = "[source_idx]"
                         var_dict["source_idx"] = {'vtype': 'constant',
                                                   'dtype': 'int32',
