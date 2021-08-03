@@ -38,11 +38,14 @@ from typing import List, Union, Dict, Optional
 from copy import deepcopy
 
 # pyrates internal imports
+import numpy as np
+
 from pyrates import PyRatesException
 from pyrates.frontend.template._io import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
+from pyrates.frontend.template.operator import OperatorTemplate
 
 # from pyrates.frontend.operator import OperatorTemplate
 
@@ -61,6 +64,13 @@ class CircuitTemplate(AbstractBaseTemplate):
                  circuits: dict = None, nodes: dict = None, edges: List[tuple] = None):
 
         super().__init__(name, path, description)
+
+        if nodes and circuits:
+            raise ValueError('CircuitTemplate has been initialized with both sub-circuits and nodes. However, all '
+                             'nodes in a circuit must have the same hierarchical depth. Please provide only a node or '
+                             'only a circuit dictionary. Note that you can add redundant hierarchy levels to each '
+                             'sub-circuit or node by constructing a CircuitTemplate that takes only a single other '
+                             'CircuitTemplate as input.')
 
         self.nodes = {}  # type: Dict[str, NodeTemplate]
         if nodes:
@@ -87,10 +97,23 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         self.label = label
 
-    def update_template(self, name: str, path: str, description: str = None,
+    def update_template(self, name: str = None, path: str = None, description: str = None,
                         label: str = None, circuits: dict = None, nodes: dict = None,
                         edges: List[tuple] = None):
         """Update all entries of the circuit template in their respective ways."""
+
+        if nodes and circuits:
+            raise ValueError('CircuitTemplate cannot use both sub-circuits and nodes, since all '
+                             'nodes in a circuit must have the same hierarchical depth. Please provide only a node or '
+                             'only a circuit dictionary. Note that you can add redundant hierarchy levels to each '
+                             'sub-circuit or node by constructing a CircuitTemplate that takes only a single other '
+                             'CircuitTemplate as input.')
+
+        if not name:
+            name = self.name
+
+        if not path:
+            path = self.path
 
         if not description:
             description = self.__doc__
@@ -117,12 +140,49 @@ class CircuitTemplate(AbstractBaseTemplate):
                               label=label, circuits=circuits, nodes=nodes,
                               edges=edges)
 
-    def apply(self, label: str = None, node_values: dict = None, edge_values: dict = None):
+    def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
+            outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None, solver: str = 'euler',
+            out_dir: Optional[str] = None, verbose: bool = True, profile: bool = False, apply_kwargs: dict = None,
+            **kwargs):
+
+        # TODO 3: CircuitIR.__init__() should integrate the CircuitIR.compile() method and be automatically invoked by calling
+        #  apply
+        # TODO 4: call CircuitIR.run()
+
+        # add extrinsic inputs to network
+        #################################
+
+        adaptive_steps = is_integration_adaptive(solver, **kwargs)
+        for target, in_array in inputs.items():
+
+            *node_id, op, var = target.split('/')
+
+            # get network nodes that input should be provided to
+            target_nodes = self.get_nodes(node_id)
+
+            # create node template that generates the input
+            out_key, new_node = get_input_node(var, in_array, adaptive_steps, simulation_time)
+
+            # add input node to network and connect it to target variables
+            out_var = "/".join(out_key)
+            new_edges = [(out_var, f"{n}/{op}/{var}", None, {'weight': 1.0}) for n in target_nodes]
+            self.update_template(nodes={out_key[0]: new_node}, edges=new_edges)
+
+        # translate circuit template into a graph representation
+        ########################################################
+
+        if not apply_kwargs:
+            apply_kwargs = {}
+        ir = self.apply(adaptive_steps=adaptive_steps, verbose=verbose, **apply_kwargs)
+
+    def apply(self, adaptive_steps: bool, label: str = None, node_values: dict = None, edge_values: dict = None,
+              vectorize: bool = True, verbose: bool = True, **kwargs):
         """Create a Circuit graph instance based on the template
 
 
         Parameters
         ----------
+        adaptive_steps
         label
             (optional) Assign a label that is saved as a sort of name to the circuit instance. This is particularly
             relevant, when adding multiple circuits to a bigger circuit. This way circuits can be identified by their
@@ -134,28 +194,48 @@ class CircuitTemplate(AbstractBaseTemplate):
             (optional) Dictionary containing source and target variable pairs as items and value dictionaries as values
             (e.g. {('source/op1/var1', 'target/op1/var2'): {'weight': 0.3, 'delay': 1.0}}). Can be used to overwrite
             default values defined in template.
+        vectorize
+        verbose
 
         Returns
         -------
 
         """
+
         if not label:
             label = self.label
         if not edge_values:
             edge_values = {}
 
-        # reformat node templates to NodeIR instances
-        if node_values is None:
-            nodes = {key: temp.apply() for key, temp in self.nodes.items()}
-        else:
-            values = dict()
-            for key, value in node_values.items():
-                node, op, var = key.split("/")
-                if node not in values:
-                    values[node] = dict()
+        # vectorize network if requested
+        template, node_map = vectorize_circuit(deepcopy(self), vectorize)
 
-                values[node]["/".join((op, var))] = value
-            nodes = {key: temp.apply(values.get(key, None)) for key, temp in self.nodes.items()}
+        # turn nodes from templates into IRs
+        ####################################
+
+        # prepare node parameter updates for IR transformation
+        values = dict()
+        if node_values:
+            for key, value in node_values.items():
+                *node_id, op, var = key.split("/")
+                target_nodes = self.get_nodes(node_id)
+                for n in target_nodes:
+                    try:
+                        n, idx = node_map[n]
+                        value = {'idx': idx, 'value': value}
+                    except KeyError:
+                        pass
+                    if n not in values:
+                        values[n] = dict()
+                    values[n]["/".join((op, var))] = value
+
+        # go through node templates and transform them into intermediate representations
+        node_keys = template.get_nodes(['all'])
+        nodes = []
+        for node in node_keys:
+            updates = values[node] if node in values else {}
+            template = template.get_node_template(node_map[node])
+            nodes.append(template.apply(values=updates))
 
         # reformat edge templates to EdgeIR instances
         edges = []
@@ -251,7 +331,89 @@ class CircuitTemplate(AbstractBaseTemplate):
                           edge_dict
                           ))
 
-        return CircuitIR(label, self.circuits, nodes, edges, self.path)
+        # instantiate an intermediate representation of the circuit template
+        return CircuitIR(label, self.circuits, nodes, edges, self.path, verbose=verbose, adaptive_steps=adaptive_steps,
+                         **kwargs)
+
+    def get_nodes(self, node_identifier: Union[str, list]) -> list:
+        """Extracts nodes from the CircuitTemplate that match the provided identifier.
+
+        Parameters
+        ----------
+        node_identifier
+            Can be a simple string or a list of strings. If the CircuitTemplate is a hierarchical circuit (composed of
+            circuits itself), different list entries should refer to the different hierarchy levels. Alternatively,
+            separation via slashes can be used if a string is provided.
+
+        Returns
+        -------
+        list
+            List of node keys that match the provided identifier. Each entry is a string that refers to a node of the
+            circuit with circuit hierarchy levels separated via slashes.
+
+        """
+
+        if type(node_identifier) is str:
+            node_identifier = node_identifier.split('/')
+        net = self.circuits if self.circuits else self.nodes
+
+        if len(node_identifier) == 1:
+
+            # return target nodes of circuit based on single identifier
+            if node_identifier[0] in net:
+                return node_identifier
+            if node_identifier[0] == 'all':
+                nodes = []
+                for key, node in net.items():
+                    nodes.extend(collect_nodes(key, node))
+                return nodes
+            raise ValueError(f'Node with label {node_identifier[0]} could not be found in CircuitTemplate {self.name}.')
+
+        else:
+
+            # collect target nodes from circuit based on hierarchical identifier
+            nodes = ['']
+            for i, node_lvl in enumerate(node_identifier):
+                if node_lvl == 'all':
+                    nodes_tmp = []
+                    for key, c in net.items():
+                        nodes_tmp.extend(collect_nodes(key, c))
+                else:
+                    nodes_tmp = collect_nodes(node_lvl, net[node_lvl])
+
+                # join hierarchical levels via slash notation
+                nodes_new = []
+                for n1 in nodes:
+                    for n2 in nodes_tmp:
+                        nodes_new.append("/".join((n1, n2)))
+                nodes = nodes_new
+
+            return nodes
+
+    def get_node_template(self, node: Union[str, list]):
+        """Extract NodeTemplate from CircuitTemplate.
+
+        Parameters
+        ----------
+
+        node
+            Can be a simple string or a list of strings. If the CircuitTemplate is a hierarchical circuit (composed of
+            circuits itself), different list entries should refer to the different hierarchy levels. Alternatively,
+            separation via slashes can be used if a string is provided.
+
+        Returns
+        -------
+        NodeTemplate
+
+        """
+
+        if type(node) is str:
+            node = node.split('/')
+        net = self.circuits if self.circuits else self.nodes
+        net_node = net[node[0]]
+        if isinstance(net_node, CircuitTemplate):
+            return net_node.get_node_template(node[1:])
+        return net_node
 
     def _get_edge_templates(self, edges: List[Union[tuple, dict]]):
         """
@@ -295,8 +457,99 @@ class CircuitTemplate(AbstractBaseTemplate):
         return edges_with_templates
 
 
-# def to_circuit(template):
-#     return template.apply()
+def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
+
+    # TODO: treat updates of Operatortemplates, vectorize edges, re-introduce node hierarchy to vectorized circuit
+    node_map = dict()
+
+    if not vectorize:
+        return circuit, node_map
+
+    # vectorize nodes
+    #################
+
+    node_keys = circuit.get_nodes(['all'])
+
+    # group node templates that should be vectorized
+    template_col = dict()
+    for node in node_keys:
+
+        template = circuit.get_node_template(node)
+
+        if template in template_col:
+
+            # extend existing template information
+            template_dict = template_col[template]
+            template_dict['old_nodes'].append(node)
+            template_dict['indices'].append(template_dict['indices'][-1]+1)
+            for op in template.operators:
+                for key, var in op.variables.items():
+                    base_dict = template_dict[op.name][key]  # type: dict
+                    template_dict[op.name][key] = extend_var_dict(base_dict, var)
+
+        else:
+
+            # create new template entry
+            template_dict = dict()
+            template_dict['old_nodes'] = [node]
+            template_dict['indices'] = [0]
+            for op in template.operators:
+                template_dict[op.name] = op.variables.copy()
+            template_col[template] = template_dict
+
+    # create new, vectorized node templates
+    nodes = []
+    for old_template, new_node in template_col.items():
+
+        # extract information about original circuit
+        old_nodes = new_node.pop('old_nodes')
+        indices = new_node.pop('indices')
+
+        # create vectorized operators
+        operators = []
+        for op in old_template.operators:
+            operators.append(OperatorTemplate(name=op.name, path=op.path, equations=op.equations,
+                                              variables=new_node[op.name], description=op.__doc__))
+
+        # create vectorized node
+        new_node = NodeTemplate(name=old_template.name, path=old_template.path, operators=operators,
+                                label=old_template.label, description=old_template.__doc__)
+
+        # store new node information
+        nodes.append(new_node)
+        for n, idx in zip(old_nodes, indices):
+            node_map[n] = (new_node, idx)
+
+    # vectorize edges
+    #################
+
+    # finalize new, vectorized circuit
+    ##################################
+
+    c_new = CircuitTemplate(name=circuit.name, path=circuit.path, description=circuit.__doc__, label=circuit.label)
+
+    return c_new, node_map
+
+
+def extend_var_dict(origin: dict, extension: dict):
+    value1, vtype = extract_var_value(origin)
+    value2, _ = extract_var_value(extension)
+    origin['default'] = vtype
+    origin['value'] = np.flatten(value1, value2).tolist()
+    origin['shape'] = origin['value'].shape()
+    return origin
+
+
+def extract_var_value(var: dict):
+    if 'value' in var:
+        return var['value'], var['default']
+    if type(var) is str:
+        if '(' in var['default']:
+            idx_start = var['default'].find('(')
+            idx_end = var['default'].find(')')
+            return float(var['default'][idx_start:idx_end]), var['default'][:idx_start]
+        return 0.0, var['default']
+    return var['default'], 'constant'
 
 
 def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
@@ -322,3 +575,49 @@ def update_dict(base_dict: dict, updates: dict):
     updated.update(updates)
 
     return updated
+
+
+def is_integration_adaptive(solver: str, **solver_kwargs):
+
+    return solver == 'scipy'
+
+
+def get_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> tuple:
+
+    # create input equationd and variables
+    ######################################
+
+    if continuous:
+
+        # interpolate input variable if time steps can be variable
+        from scipy.interpolate import interp1d
+        time = np.linspace(0, T, inp.shape[0])
+        f = interp1d(time, inp, axis=0, copy=False, kind='linear')
+        f.shape = inp.shape[1:]
+        eqs = [f"{var} = {var}_input(t)"]
+        vars = {
+            var: {'vtype': 'output', 'value': f(0.0)},
+            f"{var}_input": {'vtype': 'raw', 'value': f},
+            't': {'vtype': 'input', 'value': 0.0}
+        }
+
+    else:
+
+        raise ValueError
+
+    # create input node
+    ###################
+
+    op_key = 'in_op'
+    node_key = f'{var}_input_generator'
+    in_op = OperatorTemplate(name=op_key, path='none', equations=eqs, variables=vars)
+    in_node = NodeTemplate(name=node_key, path='none', operators=[in_op])
+    out_var = [node_key, op_key, var]
+
+    return out_var, in_node
+
+
+def collect_nodes(key: str, val: Union[CircuitTemplate, NodeTemplate]):
+    if isinstance(val, CircuitTemplate):
+        return val.get_nodes(['all'])
+    return [key]

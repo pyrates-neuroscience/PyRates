@@ -13,7 +13,7 @@ T = 800.0                                        # total simulation time in s
 #inp = np.zeros((int(T/dt), 1), dtype='float32')                 # external input to the population
 #inp[int(20./dt):int((T-20.)/dt)] = 5.
 
-circuit = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbrio.QIF_sfa_exp"
+circuit = CircuitTemplate.from_yaml("../model_templates/montbrio/simple_montbrio.QIF_sfa_exp"
                                     ).apply(node_values={'p/Op_sfa_exp/eta': -3.96,
                                                          'p/Op_sfa_exp/J': 15.0*np.sqrt(2.0),
                                                          'p/Op_sfa_exp/alpha': 0.7}

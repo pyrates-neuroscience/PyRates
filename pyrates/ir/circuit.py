@@ -51,12 +51,12 @@ class CircuitIR(AbstractBaseIR):
     """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
 
-    # _node_label_grammar = Word(alphanums+"_") + Suppress(".") + Word(nums)
-    __slots__ = ["label", "label_map", "graph", "sub_circuits", "_reference_map", "_buffered",
-                 "_first_run", "_vectorized", "_compiled", "_backend", "step_size", "solver", "_edge_idx_counter"]
+    __slots__ = ["label", "label_map", "graph", "sub_circuits", "vectorized",  "backend", "step_size", "solver",
+                 "_edge_idx_counter", "_adaptive_steps"]
 
     def __init__(self, label: str = "circuit", circuits: dict = None, nodes: Dict[str, NodeIR] = None,
-                 edges: list = None, template: str = None):
+                 edges: list = None, template: str = None, verbose: bool = True, vectorize: bool = True,
+                 adaptive_steps: bool = False, step_size: float = None):
         """
         Parameters:
         -----------
@@ -79,11 +79,15 @@ class CircuitIR(AbstractBaseIR):
         super().__init__(template)
         self.label = label
         self.label_map = {}
+        self.vectorized = vectorize
+        self.step_size = step_size
+        self.backend = None
+        self.solver = None
+        self._adaptive_steps = adaptive_steps
+        self._edge_idx_counter = 0
 
         self.graph = MultiDiGraph()
         self.sub_circuits = set()
-
-        self._reference_map = {}
 
         if circuits:
             for key, temp in circuits.items():
@@ -94,15 +98,6 @@ class CircuitIR(AbstractBaseIR):
 
         if edges:
             self.add_edges_from(edges)
-
-        self._first_run = True
-        self._vectorized = False
-        self._compiled = False
-        self._backend = None
-        self._buffered = False
-        self.solver = None
-        self.step_size = None
-        self._edge_idx_counter = 0
 
     def _collect_references(self, edge_or_node):
         """Collect all references of nodes or edges to unique operator_graph instances in local `_reference_map`.

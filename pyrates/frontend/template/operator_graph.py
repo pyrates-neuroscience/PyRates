@@ -77,18 +77,26 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
         path = _complete_template_path(path, self.path)
         return OperatorTemplate.from_yaml(path)
 
-    def update_template(self, name: str, path: str, label: str,
-                        operators: Union[str, List[str], dict] = None,
-                        description: str = None):
+    def update_template(self, name: str = None, path: str = None, label: str = None,
+                        operators: Union[str, List[str], dict] = None, description: str = None):
         """Update all entries of a base edge template to a more specific template."""
+
+        if not name:
+            name = self.name
+
+        if not path:
+            path = self.path
+
+        if not description:
+            description = self.__doc__
+
+        if not label:
+            label = self.label
 
         if operators:
             _update_operators(self.operators, operators)
         else:
             operators = self.operators
-
-        if not description:
-            description = self.__doc__  # or do we want to enforce documenting a template?
 
         return self.__class__(name=name, path=path, label=label, operators=operators,
                               description=description)
