@@ -626,9 +626,7 @@ class CircuitIR(AbstractBaseIR):
             return vnode_indices
 
     def run(self,
-            simulation_time: Optional[float] = None,
-            step_size: Optional[float] = None,
-            inputs: Optional[dict] = None,
+            simulation_time: float,
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
             solver: str = 'euler',
@@ -689,23 +687,10 @@ class CircuitIR(AbstractBaseIR):
         ####################
 
         if verbose:
-            print("Preparing the simulation:")
-
-        if not self._first_run:
-            self._backend.remove_layer(0)
-            self._backend.remove_layer(self._backend.top_layer())
-        else:
-            self._first_run = False
+            print("\t (1) Processing output variables...")
 
         # basic simulation parameters initialization
-        if self.solver is not None:
-            solver = self.solver
-        if self.step_size is not None:
-            step_size = self.step_size
-        if step_size is None:
-            raise ValueError('Step-size not provided. Please pass the desired initial simulation step-size to `run()`.')
-        if not simulation_time:
-            simulation_time = step_size
+        step_size = self.step_size
         sim_steps = int(np.round(simulation_time / step_size, decimals=0))
 
         # collect backend output variables
@@ -722,38 +707,14 @@ class CircuitIR(AbstractBaseIR):
                                     for var_info in self.get_node_var(val, apply_idx=False).values()]
 
             if verbose:
-                print("    ...user-defined output variables are logged.")
-
-        # collect backend input variables
-        #################################
-
-        inputs_col = []
-
-        if inputs:
-
-            # go through passed inputs
-            for key, val in inputs.items():
-
-                in_shape = val.shape[1] if len(val.shape) > 1 else 1
-
-                # extract respective input variable from the network
-                for var_key, var_info in self.get_node_var(key, apply_idx=False).items():
-                    var_shape = int(np.max(var_info['var'].shape)) if tuple(var_info['var'].shape) else 1
-                    var_idx = var_info['idx'] if var_shape > 1 else None
-                    var_idx_shape = len(var_idx) if var_idx else 1
-                    if var_idx_shape == in_shape:
-                        inputs_col.append((val, var_info['var'], var_idx))
-                    elif (var_idx_shape % in_shape) == 0:
-                        inputs_col.append((np.tile(val, (1, var_idx_shape)), var_info['var'], var_idx))
-                    else:
-                        inputs_col.append((np.reshape(val, (sim_steps, var_idx_shape)), var_info['var'], var_idx))
+                print("\t\t...finished.")
 
         # run simulation
         ################
 
-        output_col, times, *time = self._backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
-                                                     out_dir=out_dir, outputs=outputs_col, inputs=inputs_col,
-                                                     solver=solver, profile=profile, verbose=verbose, **kwargs)
+        output_col, times, *time = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
+                                                     out_dir=out_dir, outputs=outputs_col, solver=solver,
+                                                     profile=profile, verbose=verbose, **kwargs)
 
         if verbose and profile:
             if simulation_time:

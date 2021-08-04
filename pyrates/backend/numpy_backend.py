@@ -966,7 +966,6 @@ class NumpyBackend(object):
             T: float,
             dt: float,
             outputs: Optional[dict] = None,
-            inputs: Optional[list] = None,
             dts: Optional[int] = None,
             solver: str = 'euler',
             out_dir: Optional[str] = None,
@@ -984,8 +983,6 @@ class NumpyBackend(object):
             Simulation step size.
         outputs
             Variables in the graph to store the history from.
-        inputs
-            Extrinsic, time-dependent inputs to graph input variables.
         dts
             Sampling step-size.
         solver
@@ -1024,15 +1021,14 @@ class NumpyBackend(object):
         if profile:
             t0 = time.time()
 
-        # add inputs to graph
-        continuous = 'scipy' in solver
-        t = self.add_input_layer(inputs=inputs, T=T, continuous=continuous)
-
-        if verbose:
-            print("    ...user-defined inputs have been added to the model.")
+        # initialize time
+        t = self.add_var('state_var', name='t', value=0.0, dtype=self._float_def, shape=())
 
         # graph execution
         #################
+
+        if verbose:
+            print("\t(2) Generating the model run function...")
 
         # map layers that need to be executed to compiled network structure
         decorator = kwargs.pop('decorator', None)
@@ -1040,15 +1036,16 @@ class NumpyBackend(object):
         rhs_func, args, state_vars, var_map = self.compile(self._build_dir, decorator=decorator, **decorator_kwargs)
 
         if verbose:
-            print("    ...the run function has been compiled.")
+            print("\t\t...finished.")
 
         # create output indices
         output_indices = []
         if outputs:
             for out_key, out_vars in outputs.items():
                 for n, (idx, _) in enumerate(out_vars):
-                    output_indices.append([i-self.idx_start for i in idx] if type(idx) is list else idx-self.idx_start)
-                    outputs[out_key][n][0] = len(output_indices)-1
+                    output_indices.append(
+                        [i - self.idx_start for i in idx] if type(idx) is list else idx - self.idx_start)
+                    outputs[out_key][n][0] = len(output_indices) - 1
         else:
             for i in range(len(self.state_vars)):
                 output_indices.append(i)
@@ -1062,13 +1059,13 @@ class NumpyBackend(object):
         func_args = self._process_func_args(args, var_map, dt)
 
         if verbose:
-            print("starting the simulation.")
+            print("\t (3) Running the simulation...")
 
         times, results = self._solve(rhs_func=rhs_func, func_args=func_args, T=T, dt=dt, dts=dts, t=t, solver=solver,
                                      output_indices=output_indices, **kwargs)
 
         if verbose:
-            print("Simulation finished!\n")
+            print("\t\t finished.\n")
 
         # output storage and clean-up
         #############################
@@ -1376,97 +1373,6 @@ class NumpyBackend(object):
             self.add_op('=', output_col[key], var_stack, out_idx, scope="output_collection")
 
         return output_col
-
-    def add_input_layer(self, inputs: list, T: float, continuous=True) -> NumpyVar:
-        """
-
-        Parameters
-        ----------
-        inputs
-        T
-        continuous
-
-        Returns
-        -------
-
-        """
-
-        # add inputs to graph
-        if self._input_layer_added:
-            self.bottom_layer()
-        else:
-            self.add_layer(to_beginning=True)
-
-        # create time-vector
-        t = self.add_var('state_var', name='t', value=0.0, dtype=self._float_def, shape=())
-        self.lhs_vars.append(t.short_name)
-
-        if inputs:
-
-            if continuous:
-
-                from scipy.interpolate import interp1d
-                time = np.linspace(0, T, inputs[0][0].shape[0])
-
-                for (inp, target_var, idx) in inputs:
-
-                    # create unique name of input variable
-                    in_name_tmp = f"{target_var.short_name}_inp"
-                    counter = 0
-                    in_name = in_name_tmp
-                    while in_name in self._input_names:
-                        in_name = f"{in_name_tmp}_{counter}"
-                        counter += 1
-                    self._input_names.append(in_name)
-
-                    # create interpolation operator
-                    if len(inp.shape) > 1:
-                        inp = inp.squeeze()
-                    f = interp1d(time, inp, axis=0, copy=False, kind='linear')
-                    f.shape = inp.shape[1:]
-                    f = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", value=f)
-                    in_var_interp = self.add_op('interpolate', f, t, scope="network_inputs")
-
-                    # apply input to target variable
-                    if idx:
-                        self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
-                    else:
-                        self.add_op('=', target_var, in_var_interp, scope="network_inputs")
-
-            else:
-
-                # create counting index for input variables
-                time_step_idx = self.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
-                                             scope="network_inputs")
-
-                for (inp, target_var, idx) in inputs:
-
-                    # create unique name of input variable
-                    in_name_tmp = f"{target_var.short_name}_inp"
-                    counter = 0
-                    in_name = in_name_tmp
-                    while in_name_tmp in self._input_names:
-                        in_name = f"{in_name_tmp}_{counter}"
-                        counter += 1
-                    self._input_names.append(in_name)
-
-                    # create time indexing operator
-                    in_var = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", scope="network_inputs",
-                                          value=inp)
-                    in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
-
-                    # apply input to target variable
-                    if idx:
-                        self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
-                    else:
-                        self.add_op('=', target_var, in_var_indexed, scope="network_inputs")
-
-                # create increment operator for counting index
-                time_step = self.add_var('constant', name='time_step_increment', value=np.ones((1,), dtype='int32'),
-                                         scope="network_inputs")
-                self.add_op('+=', time_step_idx, time_step, scope="network_inputs")
-
-        return t
 
     def next_layer(self) -> None:
         """Jump to next layer in stack. If we are already at end of layer stack, add new layer to the stack and jump to

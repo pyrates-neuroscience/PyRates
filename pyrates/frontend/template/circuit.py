@@ -171,7 +171,14 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if not apply_kwargs:
             apply_kwargs = {}
-        ir = self.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, **apply_kwargs)
+        ir = self.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
+                        **apply_kwargs)
+
+        # perform simulation via the graph representation
+        #################################################
+
+        ir.run(simulation_time=simulation_time, step_size=step_size, sampling_step_size=sampling_step_size,
+               outputs=outputs, out_dir=out_dir, profile=profile, **kwargs)
 
     def apply(self, adaptive_steps: bool, label: str = None, node_values: dict = None, edge_values: dict = None,
               vectorize: bool = True, verbose: bool = True, **kwargs):
