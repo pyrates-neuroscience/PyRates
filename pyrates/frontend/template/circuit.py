@@ -47,8 +47,6 @@ from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
 from pyrates.frontend.template.operator import OperatorTemplate
 
-# from pyrates.frontend.operator import OperatorTemplate
-
 # meta infos
 from pyrates.ir.circuit import CircuitIR
 from pyrates.ir.edge import EdgeIR
@@ -91,7 +89,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                     self.circuits[key] = circuit
 
         if edges:
-            self.edges = self._get_edge_templates(edges)
+            self.edges = self._load_edge_templates(edges)
         else:
             self.edges = []
 
@@ -142,8 +140,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None, solver: str = 'euler',
-            out_dir: Optional[str] = None, verbose: bool = True, profile: bool = False, apply_kwargs: dict = None,
-            **kwargs):
+            backend: str = 'numpy', out_dir: Optional[str] = None, verbose: bool = True, profile: bool = False,
+            apply_kwargs: dict = None, **kwargs):
 
         # TODO 3: CircuitIR.__init__() should integrate the CircuitIR.compile() method and be automatically invoked by calling
         #  apply
@@ -173,7 +171,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if not apply_kwargs:
             apply_kwargs = {}
-        ir = self.apply(adaptive_steps=adaptive_steps, verbose=verbose, **apply_kwargs)
+        ir = self.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, **apply_kwargs)
 
     def apply(self, adaptive_steps: bool, label: str = None, node_values: dict = None, edge_values: dict = None,
               vectorize: bool = True, verbose: bool = True, **kwargs):
@@ -231,15 +229,15 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # go through node templates and transform them into intermediate representations
         node_keys = template.get_nodes(['all'])
-        nodes = []
+        nodes = {}
         for node in node_keys:
             updates = values[node] if node in values else {}
-            template = template.get_node_template(node_map[node])
-            nodes.append(template.apply(values=updates))
+            node_template = template.get_node_template(node)
+            nodes[node] = node_template.apply(values=updates)
 
         # reformat edge templates to EdgeIR instances
         edges = []
-        for (source, target, template, values) in self.edges:
+        for (source, target, edge_template, values) in template.edges:
 
             # get edge template and instantiate it
             values = deepcopy(values)
@@ -252,6 +250,10 @@ class CircuitTemplate(AbstractBaseTemplate):
             # get delay
             delay = values.pop("delay", None)
             spread = values.pop("spread", None)
+
+            # get source/target indices
+            source_idx = values.pop("source_idx", None)
+            target_idx = values.pop("target_idx", None)
 
             # treat additional source assignments in values dictionary
             extra_sources = {}
@@ -291,9 +293,9 @@ class CircuitTemplate(AbstractBaseTemplate):
                 values.pop(key)
 
             # treat empty dummy edge templates as not existent templates
-            if template and len(template.operators) == 0:
-                template = None
-            if template is None:
+            if edge_template and len(edge_template.operators) == 0:
+                edge_template = None
+            if edge_template is None:
                 edge_ir = None
                 if values:
                     # should not happen. Putting this just in case.
@@ -301,7 +303,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                                            "No way to figure out where to apply those values.")
 
             else:
-                edge_ir = template.apply(values=values)  # type: Optional[EdgeIR] # edge spec
+                edge_ir = edge_template.apply(values=values)  # type: Optional[EdgeIR] # edge spec
 
             # check whether multiple source variables are defined
             try:
@@ -326,13 +328,17 @@ class CircuitTemplate(AbstractBaseTemplate):
             # now add extra sources, if there are some
             if extra_sources:
                 edge_dict["extra_sources"] = extra_sources
+            if source_idx:
+                edge_dict['source_idx'] = source_idx
+            if target_idx:
+                edge_dict['target_idx'] = target_idx
 
             edges.append((source, target,  # edge_unique_key,
                           edge_dict
                           ))
 
         # instantiate an intermediate representation of the circuit template
-        return CircuitIR(label, self.circuits, nodes, edges, self.path, verbose=verbose, adaptive_steps=adaptive_steps,
+        return CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
                          **kwargs)
 
     def get_nodes(self, node_identifier: Union[str, list]) -> list:
@@ -390,6 +396,53 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             return nodes
 
+    def get_edges(self, source: Union[str, list], target: Union[str, list]) -> list:
+        """Extracts nodes from the CircuitTemplate that match the provided identifier.
+
+        Parameters
+        ----------
+        source, target
+            Can be a simple string or a list of strings. If the CircuitTemplate is a hierarchical circuit (composed of
+            circuits itself), different list entries should refer to the different hierarchy levels. Alternatively,
+            separation via slashes can be used if a string is provided.
+
+        Returns
+        -------
+        list
+            List of edge keys that match the provided identifier. Each entry is a tuple that includes the source and
+            target variables as well as the edge template. Circuit hierarchy levels are separated via slashes in the
+            variable names.
+
+        """
+
+        # extract all existing edges from circuit
+        all_edges = self.collect_edges()
+
+        # return those edges if requested
+        if source == 'all' and target == 'all':
+            return all_edges
+
+        # extract source and target variable information
+        if type(source) is list:
+            source = "/".join(source)
+        if type(target) is list:
+            target = "/".join(target)
+
+        *s_node, s_op, s_var = source.split('/')
+        *t_node, t_op, t_var = source.split('/')
+
+        # extract requested source and target nodes from circuit
+        source_nodes = self.get_nodes(s_node)
+        target_nodes = self.get_nodes(t_node)
+
+        # create source and target variable identifiers
+        source_ids = [f"{s}/{s_op}/{s_var}" for s in source_nodes]
+        target_ids = [f"{t}/{t_op}/{t_var}" for t in target_nodes]
+
+        # collect edges that match source and target variable requests
+        return [(s, t, template, edge_dict) for s, t, template, edge_dict in all_edges
+                if s in source_ids and t in target_ids]
+
     def get_node_template(self, node: Union[str, list]):
         """Extract NodeTemplate from CircuitTemplate.
 
@@ -415,7 +468,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             return net_node.get_node_template(node[1:])
         return net_node
 
-    def _get_edge_templates(self, edges: List[Union[tuple, dict]]):
+    def _load_edge_templates(self, edges: List[Union[tuple, dict]]):
         """
         Reformat edges from [source, target, template_path, variables] to
         [source, target, template_object, variables]
@@ -456,10 +509,28 @@ class CircuitTemplate(AbstractBaseTemplate):
             edges_with_templates.append((source, target, template, variables))
         return edges_with_templates
 
+    def collect_edges(self):
+        """
+        Collect all edges that exist in circuit.
+
+        Returns
+        -------
+        List of edge tuples with entries 1 - source variable, 2 - target variable, 3 - edge template,
+        4 - edge dictionary. Source and target variables are strings that use slash notations to resolve node
+        hierarchies.
+
+        """
+        edges = self.edges
+        for c_scope, c in self.circuits.items():
+            edges_tmp = c.collect_edges()
+            for svar, tvar, template, edge_dict in edges_tmp:
+                edges.append((f"{c_scope}/{svar}", f"{c_scope}/{tvar}", template, edge_dict))
+        return edges
+
 
 def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
 
-    # TODO: treat updates of Operatortemplates, vectorize edges, re-introduce node hierarchy to vectorized circuit
+    # TODO: treat updates of Operatortemplates/NodeTemplates/EdgeTemplates
     node_map = dict()
 
     if not vectorize:
@@ -471,15 +542,15 @@ def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
     node_keys = circuit.get_nodes(['all'])
 
     # group node templates that should be vectorized
-    template_col = dict()
+    node_col = dict()
     for node in node_keys:
 
         template = circuit.get_node_template(node)
 
-        if template in template_col:
+        if template in node_col:
 
             # extend existing template information
-            template_dict = template_col[template]
+            template_dict = node_col[template]
             template_dict['old_nodes'].append(node)
             template_dict['indices'].append(template_dict['indices'][-1]+1)
             for op in template.operators:
@@ -495,11 +566,11 @@ def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
             template_dict['indices'] = [0]
             for op in template.operators:
                 template_dict[op.name] = op.variables.copy()
-            template_col[template] = template_dict
+            node_col[template] = template_dict
 
     # create new, vectorized node templates
-    nodes = []
-    for old_template, new_node in template_col.items():
+    nodes = {}
+    for old_template, new_node in node_col.items():
 
         # extract information about original circuit
         old_nodes = new_node.pop('old_nodes')
@@ -512,21 +583,68 @@ def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
                                               variables=new_node[op.name], description=op.__doc__))
 
         # create vectorized node
-        new_node = NodeTemplate(name=old_template.name, path=old_template.path, operators=operators,
+        name = old_template.name
+        new_node = NodeTemplate(name=name, path=old_template.path, operators=operators,
                                 label=old_template.label, description=old_template.__doc__)
 
         # store new node information
-        nodes.append(new_node)
+        nodes[name] = new_node
         for n, idx in zip(old_nodes, indices):
             node_map[n] = (new_node, idx)
 
     # vectorize edges
     #################
 
+    # group edges that should be vectorized
+    old_edges = circuit.collect_edges()
+    edge_col = {}
+    for source, target, template, edge_dict in old_edges:
+
+        # extract edge information for vectorized network
+        *s_node, s_op, s_var = source.split('/')
+        *t_node, t_op, t_var = target.split('/')
+        s_node_new, s_idx = node_map['/'.join(s_node)]
+        t_node_new, t_idx = node_map['/'.join(t_node)]
+        source_new = '/'.join((s_node_new.name, s_op, s_var))
+        target_new = '/'.join((t_node_new.name, t_op, t_var))
+
+        # group edges that connect the same vectorized node variables via the same edge templates
+        # TODO: vectorize edge templates as well
+        if (source_new, target_new, template) in edge_col:
+
+            # extend edge dict by edge variables
+            base_dict = edge_col[(source_new, target_new, template)]
+            for key, val in edge_dict.items():
+                if type(val) is float or type(val) is int:
+                    base_dict[key].append(val)
+            base_dict['source_idx'].append(s_idx)
+            base_dict['target_idx'].append(t_idx)
+
+        else:
+
+            # prepare edge dict for vectorization
+            for key, val in edge_dict.items():
+                if type(val) is float or type(val) is int:
+                    edge_dict[key] = [val]
+            edge_dict['source_idx'] = [s_idx]
+            edge_dict['target_idx'] = [t_idx]
+
+            # add edge dict to edge collection
+            edge_col[(source_new, target_new, template)] = edge_dict
+
+    # create final set of vectorized edges
+    edges = []
+    for (source, target, template), edge_dict in edge_col.items():
+        edges.append((source, target, template, edge_dict))
+
     # finalize new, vectorized circuit
     ##################################
 
-    c_new = CircuitTemplate(name=circuit.name, path=circuit.path, description=circuit.__doc__, label=circuit.label)
+    #  TODO: decide whether to introduce the node hierarchy at this point or not (does that even make sense in a
+    #   vectorized circuit?)
+
+    c_new = CircuitTemplate(name=circuit.name, path=circuit.path, description=circuit.__doc__, label=circuit.label,
+                            nodes=nodes, edges=edges)
 
     return c_new, node_map
 
@@ -535,15 +653,15 @@ def extend_var_dict(origin: dict, extension: dict):
     value1, vtype = extract_var_value(origin)
     value2, _ = extract_var_value(extension)
     origin['default'] = vtype
-    origin['value'] = np.flatten(value1, value2).tolist()
-    origin['shape'] = origin['value'].shape()
+    origin['value'] = np.asarray([value1, value2]).squeeze()
+    origin['shape'] = origin['value'].shape
     return origin
 
 
 def extract_var_value(var: dict):
     if 'value' in var:
         return var['value'], var['default']
-    if type(var) is str:
+    if type(var['default']) is str:
         if '(' in var['default']:
             idx_start = var['default'].find('(')
             idx_end = var['default'].find(')')

@@ -27,11 +27,11 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 from pyrates.frontend.template.operator_graph import OperatorGraphTemplate
-from pyrates.ir.node import NodeIR
+from pyrates.ir.node import NodeIR, VectorizedNodeIR
 
 
 class NodeTemplate(OperatorGraphTemplate):
     """Generic template for a node in the computational backend graph. A single node may encompass several
     different operators. One template defines a typical structure of a given node type."""
 
-    target_ir = NodeIR
+    target_ir = VectorizedNodeIR

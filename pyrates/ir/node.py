@@ -80,17 +80,19 @@ class VectorizedNodeIR(AbstractBaseIR):
 
     __slots__ = ["op_graph", "_length"]
 
-    def __init__(self, node_ir: NodeIR):
+    def __init__(self, operators: dict = None, values: dict = None, template: str = None):
 
-        super().__init__(node_ir.template)
-        self.op_graph = VectorizedOperatorGraph(node_ir.op_graph, node_ir.values)
-        values = {}
-        # reformat all values to be lists of themselves (adding an outer vector dimension)
-        # if len(node_ir.op_graph) == 0:
-        #     op_key, data = next(iter(self.op_graph.node(data=True)))
-        #     for var in data["variables"]:
-        #         values[op_key] = {var: [0.]}
-        # else:
+        super().__init__(template)
+
+        # ToDo: Move caching function to NodeIR instead of using a decorator, for clarity
+        op_graph, changed_labels = cache_op_graph(OperatorGraph)(operators)
+        try:
+            for old_name, new_name in changed_labels.items():
+                values[new_name] = values.pop(old_name)
+        except AttributeError:
+            pass
+
+        self.op_graph = VectorizedOperatorGraph(op_graph, values=values)
 
         # save current length of this node vector.
         self._length = 1

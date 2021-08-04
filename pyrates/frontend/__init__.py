@@ -57,9 +57,9 @@ def clear_frontend_caches(clear_template_cache=True, clear_operator_cache=True):
 
 
 # The following function are shorthands that bridge multiple interface steps
-def circuit_from_yaml(path: str):
+def circuit_from_yaml(path: str, **kwargs):
     """Directly return CircuitIR instance from a yaml file."""
-    return CircuitTemplate.from_yaml(path).apply()
+    return CircuitTemplate.from_yaml(path).apply(**kwargs)
 
 
 def node_from_yaml(path: str):

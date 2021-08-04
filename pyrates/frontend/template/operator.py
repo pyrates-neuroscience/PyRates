@@ -296,12 +296,17 @@ def _separate_variables(variables: dict):
         # get shape parameter, default shape is scalar
         shape = properties.get("shape", (1,))
 
+        # get value if provided, else extract later on from "default"
+        value = properties.get("value", None)
+
         # identify variable type and data type
         # note: this assume that a "default" must be given for every variable
         try:
-            vtype, dtype, value = _parse_defaults(properties["default"])
+            vtype, dtype, value_tmp = _parse_defaults(properties["default"])
         except KeyError:
             raise PyRatesException("Variables need to have a 'default' (variable type, data type and/or value) "
                                    "specified.")
+        if value is None:
+            value = value_tmp
 
         yield vname, vtype, dtype, shape, value
