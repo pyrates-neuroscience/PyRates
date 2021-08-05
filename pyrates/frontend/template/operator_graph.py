@@ -27,6 +27,7 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 from typing import Union, List, Type, Dict
+from copy import deepcopy
 
 from pyrates import PyRatesException
 from pyrates.frontend.template import _complete_template_path
@@ -94,7 +95,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
             label = self.label
 
         if operators:
-            _update_operators(self.operators, operators)
+            operators = _update_operators(self.operators, operators)
         else:
             operators = self.operators
 
@@ -148,8 +149,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
 
 
 def _update_operators(base_operators: dict, updates: Union[str, List[str], dict]):
-    """Update operators of a given template. Note that currently, only the new information is
-    propagated into the operators dictionary. Comparing or replacing operators is not implemented.
+    """Update operators of a given template.
 
     Parameters:
     -----------
@@ -162,8 +162,8 @@ def _update_operators(base_operators: dict, updates: Union[str, List[str], dict]
         - list refers to multiple operators of the same class
         - dict contains operator path or name as key
     """
-    # updated = base_operators.copy()
-    updated = {}
+    updated = deepcopy(base_operators)
+
     if isinstance(updates, str):
         updated[updates] = {}  # single operator path with no variations
     elif isinstance(updates, list):

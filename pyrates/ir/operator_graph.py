@@ -226,7 +226,11 @@ class VectorizedOperatorGraph(DiGraph):
                 op_values = deepcopy(values[op_key])
                 op_vars = self.operators[op_key]["variables"]
                 for var_key, value in op_values.items():
-                    op_vars[var_key]["value"] = [value]
+                    if op_vars[var_key]["vtype"] != "input_variable":
+                        op_vars[var_key]["value"] = [value]
+                    else:
+                        op_vars[var_key]["value"] = value
+                        op_vars[var_key]["vtype"] = "state_var"
                 # self.operators[op_key]["variables"] = op_vars
 
             self.add_edges_from(op_graph.edges)

@@ -239,7 +239,9 @@ def _parse_defaults(expr: Union[str, int, float]):
         # restriction to 32bit float for consistency. May not be reasonable at all times.
     else:
         # set vtype
-        if expr.startswith("input"):
+        if expr.startswith("input_variable"):
+            vtype = "input_variable"
+        elif expr.startswith("input"):
             vtype = "input"
         elif expr.startswith("output"):
             vtype = "output"

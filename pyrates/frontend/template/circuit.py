@@ -151,34 +151,38 @@ class CircuitTemplate(AbstractBaseTemplate):
         #################################
 
         adaptive_steps = is_integration_adaptive(solver, **kwargs)
+        net = self
         for target, in_array in inputs.items():
 
             *node_id, op, var = target.split('/')
 
             # get network nodes that input should be provided to
-            target_nodes = self.get_nodes(node_id)
+            target_nodes = net.get_nodes(node_id)
 
-            # create node template that generates the input
-            out_key, new_node = get_input_node(var, in_array, adaptive_steps, simulation_time)
+            # add input operators to target nodes
+            node_updates = {}
+            for n in target_nodes:
+                op_key, new_operator = get_input_operator(var, in_array, adaptive_steps, simulation_time)
+                node_template = net.get_node_template(n)
+                new_template = node_template.update_template(operators={new_operator: {}})
+                node_updates[n] = new_template
 
-            # add input node to network and connect it to target variables
-            out_var = "/".join(out_key)
-            new_edges = [(out_var, f"{n}/{op}/{var}", None, {'weight': 1.0}) for n in target_nodes]
-            self.update_template(nodes={out_key[0]: new_node}, edges=new_edges)
+            # update circuit template
+            net = net.update_template(nodes=node_updates)
 
         # translate circuit template into a graph representation
         ########################################################
 
         if not apply_kwargs:
             apply_kwargs = {}
-        ir = self.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
-                        **apply_kwargs)
+        ir = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
+                       **apply_kwargs)
 
         # perform simulation via the graph representation
         #################################################
 
-        ir.run(simulation_time=simulation_time, step_size=step_size, sampling_step_size=sampling_step_size,
-               outputs=outputs, out_dir=out_dir, profile=profile, **kwargs)
+        return ir.run(simulation_time=simulation_time, step_size=step_size, sampling_step_size=sampling_step_size,
+                      outputs=outputs, out_dir=out_dir, profile=profile, **kwargs)
 
     def apply(self, adaptive_steps: bool, label: str = None, node_values: dict = None, edge_values: dict = None,
               vectorize: bool = True, verbose: bool = True, **kwargs):
@@ -659,9 +663,12 @@ def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
 def extend_var_dict(origin: dict, extension: dict):
     value1, vtype = extract_var_value(origin)
     value2, _ = extract_var_value(extension)
-    origin['default'] = vtype
-    origin['value'] = np.asarray([value1, value2]).squeeze()
-    origin['shape'] = origin['value'].shape
+    if vtype != 'raw':
+        origin['default'] = vtype
+        origin['value'] = np.asarray([value1, value2]).squeeze()
+        origin['shape'] = origin['value'].shape
+    elif value1 != value2:
+        raise NotImplementedError('Raw input variables with different values cannot be vectorized currently.')
     return origin
 
 
@@ -707,7 +714,7 @@ def is_integration_adaptive(solver: str, **solver_kwargs):
     return solver == 'scipy'
 
 
-def get_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> tuple:
+def get_input_operator(var: str, inp: np.ndarray, continuous: bool, T: float) -> tuple:
 
     # create input equationd and variables
     ######################################
@@ -715,31 +722,29 @@ def get_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> tup
     if continuous:
 
         # interpolate input variable if time steps can be variable
+        # TODO: check how inputs were added on master
         from scipy.interpolate import interp1d
         time = np.linspace(0, T, inp.shape[0])
         f = interp1d(time, inp, axis=0, copy=False, kind='linear')
         f.shape = inp.shape[1:]
-        eqs = [f"{var} = {var}_input(t)"]
+        eqs = [f"{var} = interpolate({var}_input,t)"]
         vars = {
-            var: {'vtype': 'output', 'value': f(0.0)},
-            f"{var}_input": {'vtype': 'raw', 'value': f},
-            't': {'vtype': 'input', 'value': 0.0}
+            var: {'default': 'output', 'value': f(0.0)},
+            f"{var}_input": {'default': 'input_variable', 'value': f},
+            't': {'default': 'input', 'value': 0.0}
         }
 
     else:
 
         raise ValueError
 
-    # create input node
+    # create input operator
     ###################
 
-    op_key = 'in_op'
-    node_key = f'{var}_input_generator'
+    op_key = f'{var}_input_generator'
     in_op = OperatorTemplate(name=op_key, path='none', equations=eqs, variables=vars)
-    in_node = NodeTemplate(name=node_key, path='none', operators=[in_op])
-    out_var = [node_key, op_key, var]
 
-    return out_var, in_node
+    return op_key, in_op
 
 
 def collect_nodes(key: str, val: Union[CircuitTemplate, NodeTemplate]):

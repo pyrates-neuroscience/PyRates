@@ -73,7 +73,7 @@ JRC_op:
     io_ratio:
       default: 3.0
     u:
-      default: 220.0
+      default: input
 
 
 JRC_driven_op:

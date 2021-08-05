@@ -712,7 +712,7 @@ class CircuitIR(AbstractBaseIR):
         # run simulation
         ################
 
-        output_col, times, *time = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
+        outputs_col, times, *time = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
                                                      out_dir=out_dir, outputs=outputs_col, solver=solver,
                                                      profile=profile, verbose=verbose, **kwargs)
 
@@ -728,7 +728,7 @@ class CircuitIR(AbstractBaseIR):
 
         # ungroup grouped output variables
         outputs = {}
-        for outkey, (out_val, node_keys) in output_col.items():
+        for outkey, (out_val, node_keys) in outputs_col.items():
             for i, node_key in enumerate(node_keys):
                 out_val_tmp = np.squeeze(out_val[:, i]) if len(out_val.shape) > 1 else out_val
                 if len(out_val_tmp.shape) < 2:

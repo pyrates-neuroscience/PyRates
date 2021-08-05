@@ -1047,13 +1047,19 @@ class NumpyBackend(object):
                         [i - self.idx_start for i in idx] if type(idx) is list else idx - self.idx_start)
                     outputs[out_key][n][0] = len(output_indices) - 1
         else:
+            n = 0
             for i in range(len(self.state_vars)):
-                output_indices.append(i)
                 out_key = self.state_vars[i]
                 if len(self.vars[out_key].shape) > 0:
-                    outputs[out_key] = [(i, [f"{out_key}_{j}" for j in range(self.vars[out_key].shape[0])])]
+                    for j in range(self.vars[out_key].shape[0]):
+                        new_key = f"{out_key}_{j}"
+                        output_indices.append(n)
+                        outputs[new_key] = [(n, [new_key])]
+                        n += 1
                 else:
-                    outputs[out_key] = [(i, [out_key])]
+                    output_indices.append(n)
+                    outputs[out_key] = [(n, [out_key])]
+                    n += 1
 
         # simulate backend behavior for each time-step
         func_args = self._process_func_args(args, var_map, dt)
