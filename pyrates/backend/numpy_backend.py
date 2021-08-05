@@ -284,10 +284,10 @@ class BaseBackend(object):
                     "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
                     "tanh": {'func': np.tanh, 'str': "np.tanh"},
                     "no_op": {'func': pr_identity, 'str': "pr_identity"},
-                    "interpolate": {'func': pr_interp, 'str': "pr_interp"},
+                    "interp": {'func': pr_interp, 'str': "pr_interp"},
                     "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
                     "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
-                    "apply_index": {'func': pr_base_index, 'str': "pr_base_index"},
+                    "index": {'func': pr_base_index, 'str': "pr_base_index"},
                     }
         if ops:
             self.ops.update(ops)
@@ -464,8 +464,8 @@ class BaseBackend(object):
         except KeyError:
             return name if get_key else self.graph.nodes[name]
 
-    def run(self, T: float, dt: float, inputs: Optional[list] = None, use_graph: bool = True, solver: str = 'euler',
-            in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs):
+    def run(self, T: float, dt: float, use_graph: bool = True, solver: str = 'euler', in_place: bool = True,
+            func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs):
 
         # TODO: Implement input/output functionalities
 
@@ -483,10 +483,7 @@ class BaseBackend(object):
         # simulation specs
         steps = int(np.round(T / dt))
         state_rec = np.zeros((steps, state_vec.shape[0]))
-
-        # add inputs to graph
         continuous = 'scipy' in solver
-        t = self._add_input_layer(inputs=inputs, T=T, continuous=continuous)
 
         # perform simulation
         ####################
@@ -545,6 +542,8 @@ class BaseBackend(object):
         idx = 0
         for var in self.state_vars:
             v = self.get_var(var)['value']
+            if not v.shape:
+                v = np.reshape(v, (1,))
             shape = v.shape[0]
             vars.append(v)
             indices.append((idx, idx+shape))
@@ -559,6 +558,8 @@ class BaseBackend(object):
             v['index'] = (idx_l, idx_r)
 
         # create right-hand side update vector (also serves as test-run of network equations)
+        # TODO: Debug method for getting the right-hand side update vector. graph.eval() also evaluates non-differential
+        #  equations like inputs and edge projections.
         rhs = self.graph.eval()
         rhs_vec = np.concatenate(rhs)
         rhs_var_key, rhs_var = self.add_var(vtype='state_var', name='state_vec_update', value=np.zeros_like(rhs_vec))
@@ -652,95 +653,6 @@ class BaseBackend(object):
         code_gen.add_linebreak()
 
         return func_args, code_gen
-
-    def _add_input_layer(self, inputs: list, T: float, continuous=True) -> NumpyVar:
-        """
-
-        Parameters
-        ----------
-        inputs
-        T
-        continuous
-
-        Returns
-        -------
-
-        """
-
-        scope = "network_inputs"
-
-        # create time-vector
-        t = self.add_var('state_var', name='t', value=0.0, dtype=self._float_def, shape=())
-
-        if inputs:
-
-            if continuous:
-
-                from scipy.interpolate import interp1d
-                time = np.linspace(0, T, inputs[0][0].shape[0])
-                func_name = 'interpolate'
-
-                for (inp, target_var, idx) in inputs:
-
-                    # create unique name of input variable
-                    in_name_tmp = f"{target_var}_inp"
-                    counter = 0
-                    in_name = in_name_tmp
-                    while in_name in self._input_names:
-                        in_name = f"{in_name_tmp}_{counter}"
-                        counter += 1
-                    self._input_names.append(in_name)
-
-                    # create interpolation operator
-                    if len(inp.shape) > 1:
-                        inp = inp.squeeze()
-                    f = interp1d(time, inp, axis=0, copy=False, kind='linear')
-                    f.shape = inp.shape[1:]
-                    in_name, f = self.add_var(vtype='state_var', name=f"{in_name}", value=f, scope=scope)
-                    expr = sympify(f"{self.ops[func_name]['str']}({in_name},t)")
-                    in_op_name, in_var_interp = self.add_op(inputs=[in_name, t], name=func_name,
-                                                            func=self.ops[func_name]['func'], scope=scope, expr=expr)
-
-                    # apply input to target variable
-                    if idx:
-                        self.add_op('=', target_var, in_var_interp, idx, scope="network_inputs")
-                    else:
-                        self.add_op('=', target_var, in_var_interp, scope="network_inputs")
-
-            else:
-
-                # create counting index for input variables
-                time_step_idx = self.add_var(vtype='state_var', name='in_var_idx', dtype='int32', shape=(1,), value=0,
-                                             scope="network_inputs")
-
-                for (inp, target_var, idx) in inputs:
-
-                    # create unique name of input variable
-                    in_name_tmp = f"{target_var.short_name}_inp"
-                    counter = 0
-                    in_name = in_name_tmp
-                    while in_name_tmp in self._input_names:
-                        in_name = f"{in_name_tmp}_{counter}"
-                        counter += 1
-                    self._input_names.append(in_name)
-
-                    # create time indexing operator
-                    in_var = self.add_var(vtype='state_var', name=f"network_inputs/{in_name}", scope="network_inputs",
-                                          value=inp)
-                    in_var_indexed = self.add_op('index', in_var, time_step_idx, scope="network_inputs")
-
-                    # apply input to target variable
-                    if idx:
-                        self.add_op('=', target_var, in_var_indexed, idx, scope="network_inputs")
-                    else:
-                        self.add_op('=', target_var, in_var_indexed, scope="network_inputs")
-
-                # create increment operator for counting index
-                time_step = self.add_var('constant', name='time_step_increment', value=np.ones((1,), dtype='int32'),
-                                         scope="network_inputs")
-                self.add_op('+=', time_step_idx, time_step, scope="network_inputs")
-
-        return t
 
     @staticmethod
     def _generate_func_head(func_name: str, code_gen: CodeGen = None, state_var: str = None, func_args: list = None,
@@ -1497,7 +1409,7 @@ class NumpyBackend(object):
                     #"mask": {'func': pr_mask, 'str': "pr_mask"},
                     #"group": {'func': pr_group, 'str': "pr_group"},
                     "no_op": {'func': pr_identity, 'str': "pr_identity"},
-                    "interpolate": {'func': pr_interp, 'str': "pr_interp"},
+                    "interp": {'func': pr_interp, 'str': "pr_interp"},
                     "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
                     "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
                     }

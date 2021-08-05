@@ -790,13 +790,13 @@ class SympyParser(ExpressionParser):
         # extract symbols and operations from equations right-hand side
         # TODO: add possibility to pass local functions to sympify via `locals` dict. Could be implemented in backend.
         self.expr_stack = sympify(self.rhs)
+        if type(self.expr_stack) is Symbol:
+            self.expr_stack = sympify(f"no_op({self.rhs})")
 
         # parse rhs into backend
         rhs_key, self.rhs = self.parse(self.expr_stack)
 
         # post rhs parsing steps
-        if 'func' not in self.rhs:
-            self.rhs = self.backend.add_op('no_op', self.rhs, **self.parser_kwargs)
         self.clear()
         self._finished_rhs = True
 
@@ -878,8 +878,8 @@ class SympyParser(ExpressionParser):
             # create backend state variable if it does not exist already
             v = self.vars[self.lhs_key]
             if 'symbol' not in v:
-                _, v = self.backend.add_var(name=self.lhs_key, symbol=Symbol(self.lhs_key), simple_constant=False,
-                                            **v, **self.parser_kwargs)
+                _, v = self.backend.add_var(name=self.lhs_key, **v, **self.parser_kwargs)
+                self.vars[self.lhs_key] = v
 
             # store variable as state variable of the system
             self.backend.state_vars.append(v['value'].name)

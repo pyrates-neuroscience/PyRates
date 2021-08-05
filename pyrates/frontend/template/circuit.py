@@ -140,7 +140,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None, solver: str = 'euler',
-            backend: str = 'numpy', out_dir: Optional[str] = None, verbose: bool = True, profile: bool = False,
+            backend: str = None, out_dir: Optional[str] = None, verbose: bool = True, profile: bool = False,
             apply_kwargs: dict = None, **kwargs):
 
         # TODO 3: CircuitIR.__init__() should integrate the CircuitIR.compile() method and be automatically invoked by calling
@@ -727,7 +727,7 @@ def get_input_operator(var: str, inp: np.ndarray, continuous: bool, T: float) ->
         time = np.linspace(0, T, inp.shape[0])
         f = interp1d(time, inp, axis=0, copy=False, kind='linear')
         f.shape = inp.shape[1:]
-        eqs = [f"{var} = interpolate({var}_input,t)"]
+        eqs = [f"{var} = interp({var}_input,t)"]
         var_dict = {
             var: {'default': 'output', 'value': f(0.0)},
             f"{var}_input": {'default': 'input_variable', 'value': f},

@@ -311,5 +311,5 @@ net15:
     p1: pop10
     p2: pop11
   edges:
-    - [p1/op9/b, p2/op9/I_syn, DummyEdge, {weight: 1.0}]
-    - [p2/op9/b, p1/op9/I_syn, DummyEdge, {weight: 2.0}]
+    - [p1/op9/b, p2/op10/I_syn, DummyEdge, {weight: 1.0}]
+    - [p2/op10/b, p1/op9/I_syn, DummyEdge, {weight: 2.0}]

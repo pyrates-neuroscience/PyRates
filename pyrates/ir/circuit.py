@@ -56,7 +56,7 @@ class CircuitIR(AbstractBaseIR):
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, adaptive_steps: bool = False, step_size: float = None, verbose: bool = True,
-                 float_precision: str = 'float64', backend: str = 'numpy', **kwargs):
+                 float_precision: str = 'float64', backend: str = None, backend_kwargs: dict = None, **kwargs):
         """
         Parameters:
         -----------
@@ -74,22 +74,24 @@ class CircuitIR(AbstractBaseIR):
         """
 
         # choose a backend
-        if backend == 'tensorflow':
+        if not backend_kwargs:
+            backend_kwargs = {}
+        if not backend:
+            from pyrates.backend.numpy_backend import BaseBackend
+            backend = BaseBackend
+        elif backend == 'tensorflow':
             from pyrates.backend.tensorflow_backend import TensorflowBackend
             backend = TensorflowBackend
-            kwargs['squeeze'] = True
-        elif backend == 'numpy':
-            from pyrates.backend.numpy_backend import NumpyBackend
-            backend = NumpyBackend
+            backend_kwargs['squeeze'] = True
         elif backend == 'fortran':
             from pyrates.backend.fortran_backend import FortranBackend
             backend = FortranBackend
-            kwargs['squeeze'] = True
+            backend_kwargs['squeeze'] = True
         else:
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
         squeeze_vars = kwargs.pop('squeeze', False)
-        kwargs['name'] = label
-        kwargs['float_default_type'] = float_precision
+        backend_kwargs['name'] = label
+        backend_kwargs['float_default_type'] = float_precision
 
         # filter displayed warnings
         filterwarnings("ignore", category=FutureWarning)
@@ -98,7 +100,7 @@ class CircuitIR(AbstractBaseIR):
         super().__init__(template)
         self.label = label
         self.step_size = step_size
-        self.backend = backend(**kwargs)
+        self.backend = backend(**backend_kwargs)
         self._adaptive_steps = adaptive_steps
         self._edge_idx_counter = 0
         self.graph = MultiDiGraph()
@@ -128,53 +130,21 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("\t\t...finished.")
 
-        # collect node and edge operators
-        #################################
-
-        if verbose:
-            print("\t(3) Collecting all equations from the graph to parse them into the backend...")
-        variables = {}
-
-        # edge operators
-        edge_equations, variables_tmp = self._collect_op_layers(layers=[0], exclude=False, op_identifier="edge_from_")
-        variables.update(variables_tmp)
-        if any(edge_equations):
-            self.backend._input_layer_added = True
-
-        # node operators
-        node_equations, variables_tmp = self._collect_op_layers(layers=[], exclude=True, op_identifier="edge_from_")
-        variables.update(variables_tmp)
-
-        # bring equations into correct order
-        equations = sort_equations(edge_eqs=edge_equations, node_eqs=node_equations)
-
-        if verbose:
-            print("\t\t...finished.")
-
         # parse all equations and variables into the backend
         ####################################################
 
-        self.backend.bottom_layer()
+        if verbose:
+            print("\t(3) Parsing the model equations into a compute graph...")
+
+        # edge operators
+        self._parse_op_layers_into_computegraph(layers=[0], exclude=False, op_identifier="edge_from_", **kwargs)
+
+        # node operators
+        self._parse_op_layers_into_computegraph(layers=[], exclude=True, op_identifier="edge_from_", **kwargs)
 
         if verbose:
-            print("\t(4) Parsing the model equations into a compute graph...")
-
-        # parse mapping
-        variables = parse_equations(equations=equations, equation_args=variables, backend=self.backend,
-                                    squeeze=squeeze_vars)
-        if verbose:
-            print("\t\t...finished.\n")
+            print("\t\t...finished.")
             print("\tModel compilation was finished.")
-
-        # save parsed variables in net config
-        for key, val in variables.items():
-            if key != 'y' and key != 'y_delta':
-                node, op, var = key.split('/')
-                if "inputs" not in var:
-                    try:
-                        self[f"{node}/{op}/{var}"]['value'] = val
-                    except KeyError as e:
-                        pass
 
     def add_nodes_from(self, nodes: Dict[str, NodeIR], **attr):
         """ Add multiple nodes to circuit. Allows networkx-style adding of nodes.
@@ -570,12 +540,7 @@ class CircuitIR(AbstractBaseIR):
 
         # if node refers to vectorized network version, return variable from vectorized network
         try:
-            var_dict = self[key]
-            if not self._compiled:
-                var_dict['value'] = self["/".join(node)].values[op][var]
-                var_dict['var'] = var
-                var_dict['set_value'] = self["/".join(node)].values[op]
-            return var_dict
+            return self[key]
         except KeyError:
 
             # get mapping from original network nodes to vectorized network nodes
@@ -838,7 +803,7 @@ class CircuitIR(AbstractBaseIR):
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
                     # parse equations and variables into computegraph
-                    variables = parse_equations(op_eqs, op_vars, backend=self._backend, **kwargs)
+                    variables = parse_equations(op_eqs, op_vars, backend=self.backend, **kwargs)
 
                     # save parsed variables in net config
                     for key, val in variables.items():
@@ -930,8 +895,8 @@ class CircuitIR(AbstractBaseIR):
                 full_key = f"{scope}/{key}"
                 if key == 'inputs' and var:
                     variables[f"{scope}/inputs"].update(var)
-                    in_var = var.copy().popitem()[1]
-                    variables[in_var] = self.get_node_var(in_var)
+                    for in_var in var.values():
+                        variables[in_var] = self.get_node_var(in_var)
                 elif full_key not in variables:
                     variables[full_key] = var
             try:
