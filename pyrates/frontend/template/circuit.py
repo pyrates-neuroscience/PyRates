@@ -728,21 +728,26 @@ def get_input_operator(var: str, inp: np.ndarray, continuous: bool, T: float) ->
         f = interp1d(time, inp, axis=0, copy=False, kind='linear')
         f.shape = inp.shape[1:]
         eqs = [f"{var} = interpolate({var}_input,t)"]
-        vars = {
+        var_dict = {
             var: {'default': 'output', 'value': f(0.0)},
             f"{var}_input": {'default': 'input_variable', 'value': f},
-            't': {'default': 'input', 'value': 0.0}
+            't': {'default': 'variable', 'value': 0.0}
         }
 
     else:
 
-        raise ValueError
+        eqs = [f"{var} = index({var}_input,t)"]
+        var_dict = {
+            var: {'default': 'output', 'value': inp[0]},
+            f"{var}_input": {'default': 'input_variable', 'value': inp},
+            't': {'default': 'variable', 'value': 0, 'dtype': 'int32'}
+        }
 
     # create input operator
-    ###################
+    #######################
 
     op_key = f'{var}_input_generator'
-    in_op = OperatorTemplate(name=op_key, path='none', equations=eqs, variables=vars)
+    in_op = OperatorTemplate(name=op_key, path='none', equations=eqs, variables=var_dict)
 
     return op_key, in_op
 

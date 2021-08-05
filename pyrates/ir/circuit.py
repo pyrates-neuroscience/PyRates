@@ -712,9 +712,11 @@ class CircuitIR(AbstractBaseIR):
         # run simulation
         ################
 
+        discrete_time = False if self._adaptive_steps else True
         outputs_col, times, *time = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
                                                      out_dir=out_dir, outputs=outputs_col, solver=solver,
-                                                     profile=profile, verbose=verbose, **kwargs)
+                                                     profile=profile, verbose=verbose, discrete_time=discrete_time,
+                                                     **kwargs)
 
         if verbose and profile:
             if simulation_time:

@@ -222,7 +222,7 @@ def _update_equation(equation: str,  # original equation
     return equation
 
 
-def _parse_defaults(expr: Union[str, int, float]):
+def _parse_defaults(expr: Union[str, int, float]) -> dict:
     """Naive version of a parser for the default key of variables in a template. Returns data type,
     variable type and default value of the variable."""
 
@@ -278,7 +278,7 @@ def _parse_defaults(expr: Union[str, int, float]):
         else:
             dtype = "float32"  # base assumption
 
-    return vtype, dtype, value
+    return {'vtype': vtype, 'dtype': dtype, 'value': value, 'shape': (1,)}
 
 
 def _separate_variables(variables: dict):
@@ -295,20 +295,15 @@ def _separate_variables(variables: dict):
 
     for vname, properties in variables.items():
 
-        # get shape parameter, default shape is scalar
-        shape = properties.get("shape", (1,))
-
-        # get value if provided, else extract later on from "default"
-        value = properties.get("value", None)
-
         # identify variable type and data type
         # note: this assume that a "default" must be given for every variable
         try:
-            vtype, dtype, value_tmp = _parse_defaults(properties["default"])
+            default_vals = _parse_defaults(properties["default"])
         except KeyError:
             raise PyRatesException("Variables need to have a 'default' (variable type, data type and/or value) "
                                    "specified.")
-        if value is None:
-            value = value_tmp
+        for key in ['value', 'dtype', 'vtype', 'shape']:
+            if key in properties:
+                default_vals[key] = properties[key]
 
-        yield vname, vtype, dtype, shape, value
+        yield vname, default_vals['vtype'], default_vals['dtype'], default_vals['shape'], default_vals['value']

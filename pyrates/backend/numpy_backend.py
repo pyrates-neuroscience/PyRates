@@ -1022,7 +1022,11 @@ class NumpyBackend(object):
             t0 = time.time()
 
         # initialize time
-        t = self.add_var('state_var', name='t', value=0.0, dtype=self._float_def, shape=())
+        discrete_time = kwargs.pop('discrete_time', True)
+        if discrete_time:
+            t = self.add_var('state_var', name='t', value=0, dtype='int32', shape=())
+        else:
+            t = self.add_var('state_var', name='t', value=0.0, dtype=self._float_def, shape=())
 
         # graph execution
         #################
@@ -1857,8 +1861,7 @@ class NumpyBackend(object):
         state_vars = self.vars['y']
         sampling_idx = 0
         for i in range(steps):
-            deltas = rhs_func(t, state_vars, func_args)
-            t += dt
+            deltas = rhs_func(i, state_vars, func_args)
             state_vars += dt * deltas
             if i % sampling_step == 0:
                 for idx1, idx2 in enumerate(output_indices):

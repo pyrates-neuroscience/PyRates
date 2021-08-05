@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 
 # pyrates internal imports
-from pyrates.backend import ComputeGraph
 from pyrates.frontend import CircuitTemplate
 
 # meta infos
@@ -66,21 +65,24 @@ def test_2_1_operator():
     backends = ["tensorflow", "numpy"]
     accuracy = 1e-4
 
+    # simulation parameters
+    dt = 1e-1
+    sim_time = 10.0
+    inp = np.zeros((sim_steps,)) + 0.5
+
     for b in backends:
 
         # test correct numerical evaluation of operator with two coupled simple, linear equations
         #########################################################################################
 
-        # create net config from YAML file
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net0").apply()
+        # simulation parameters
 
-        # instantiate compute graph from net config
-        dt = 1e-1
-        net = ComputeGraph(net_config=net_config, name='net0', vectorization=True, backend=b)
+        # create net config from YAML file
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net0")
 
         # simulate operator behavior
-        sim_time = 10.0
-        results = net.run(simulation_time=sim_time, step_size=dt, outputs={'a': 'pop0/op0/a'})
+        results = net.run(simulation_time=sim_time, step_size=dt, outputs={'a': 'pop0/op0/a'}, vectorize=True,
+                          backend=b)
         net.clear()
 
         # generate target values
@@ -100,14 +102,11 @@ def test_2_1_operator():
         ######################################################################################################
 
         # set up operator in pyrates
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net1").apply()
-        net = ComputeGraph(net_config=net_config, name='net1', vectorization=True, backend=b)
-
-        # define input
-        inp = np.zeros((sim_steps,)) + 0.5
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net1")
 
         # simulate operator behavior
-        results = net.run(sim_time, step_size=dt, inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'})
+        results = net.run(sim_time, step_size=dt, inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'},
+                          vectorize=True, backend=b)
         net.clear()
 
         # calculate operator behavior from hand
