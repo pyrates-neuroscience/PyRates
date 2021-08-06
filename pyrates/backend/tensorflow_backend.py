@@ -35,14 +35,14 @@ import tensorflow as tf
 
 # pyrates internal imports
 from .funcs import *
-from .numpy_backend import NumpyBackend, NumpyVar, PyRatesIndexOp, PyRatesAssignOp, PyRatesOp, CodeGen
+from .numpy_backend import NumpyBackend, BaseVar, PyRatesIndexOp, PyRatesAssignOp, PyRatesOp, CodeGen
 
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
 
 
-class TensorflowVar(NumpyVar, tf.Variable):
+class TensorflowVar(BaseVar, tf.Variable):
     """Class for creating variables via a tensorflow-based PyRates backend.
     """
 
@@ -74,7 +74,7 @@ class TensorflowVar(NumpyVar, tf.Variable):
         if tf.Variable.__subclasscheck__(subclass):
             return True
         else:
-            return NumpyVar.__subclasscheck__(subclass)
+            return BaseVar.__subclasscheck__(subclass)
 
 
 class TensorflowOp(PyRatesOp):
@@ -367,7 +367,7 @@ class TensorflowBackend(NumpyBackend):
 
         Returns
         -------
-        NumpyVar
+        BaseVar
             Variable from graph.
 
         """
@@ -393,7 +393,7 @@ class TensorflowBackend(NumpyBackend):
                     var_count[var.short_name] = 0
         return self.add_op('stack', vars)
 
-    def add_input_layer(self, inputs: list, T: float, continuous=False) -> NumpyVar:
+    def add_input_layer(self, inputs: list, T: float, continuous=False) -> BaseVar:
         if continuous:
             raise ValueError('Invalid input structure. The tensorflow backend can only be used with fixed step-size '
                              'solvers and thus only supports inputs with discrete time steps. Either change the '

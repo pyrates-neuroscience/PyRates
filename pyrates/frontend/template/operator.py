@@ -145,7 +145,7 @@ class OperatorTemplate(AbstractBaseTemplate):
 
                 if vtype == "input":
                     inputs.append(vname)  # = dict(sources=[], reduce_dim=True)  # default to True for now
-                    vtype = "state_var"
+                    vtype = "input"
                 elif vtype == "output":
                     if output is None:
                         output = vname  # for now assume maximum one output is present

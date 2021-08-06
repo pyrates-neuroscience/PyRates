@@ -678,10 +678,14 @@ class CircuitIR(AbstractBaseIR):
         ################
 
         discrete_time = False if self._adaptive_steps else True
-        outputs_col, times, *time = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
-                                                     out_dir=out_dir, outputs=outputs_col, solver=solver,
-                                                     profile=profile, verbose=verbose, discrete_time=discrete_time,
-                                                     **kwargs)
+        # outputs_col, times, *time = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
+        #                                              out_dir=out_dir, outputs=outputs_col, solver=solver,
+        #                                              profile=profile, verbose=verbose, discrete_time=discrete_time,
+        #                                              **kwargs)
+        outputs_col = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
+                                       out_dir=out_dir, outputs=outputs_col, solver=solver,
+                                       profile=profile, verbose=verbose, discrete_time=discrete_time,
+                                       **kwargs)
 
         if verbose and profile:
             if simulation_time:
@@ -806,13 +810,13 @@ class CircuitIR(AbstractBaseIR):
                     variables = parse_equations(op_eqs, op_vars, backend=self.backend, **kwargs)
 
                     # save parsed variables in net config
-                    for key, val in variables.items():
-                        node, op, var = key.split('/')
-                        if "inputs" not in var:
-                            try:
-                                self[f"{node}/{op}/{var}"].update(val)
-                            except KeyError:
-                                pass
+                    # for key, val in variables.items():
+                    #     node, op, var = key.split('/')
+                    #     if "inputs" not in var:
+                    #         try:
+                    #             self[f"{node}/{op}/{var}"].update(val)
+                    #         except KeyError:
+                    #             pass
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
@@ -1155,7 +1159,7 @@ class CircuitIR(AbstractBaseIR):
                                       'dtype': self._backend._float_def,
                                       'shape': var_shape,
                                       'value': 0.}
-                var_dict[rate] = {'vtype': 'state_var',
+                var_dict[rate] = {'vtype': 'constant',
                                   'dtype': self._backend._float_def,
                                   'value': val}
 

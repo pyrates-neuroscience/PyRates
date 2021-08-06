@@ -32,7 +32,7 @@
 # external imports
 from typing import Any, Callable, Union
 from networkx import MultiDiGraph
-from sympy import Symbol, Expr
+from sympy import Symbol, Expr, Function
 from copy import deepcopy
 import numpy as np
 
@@ -53,7 +53,7 @@ class ComputeGraph(MultiDiGraph):
 
     def __init__(self, **kwargs):
 
-        self.eval_nodes = []
+        self._out_nodes = []
         super().__init__(**kwargs)
 
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
@@ -76,9 +76,9 @@ class ComputeGraph(MultiDiGraph):
 
         return unique_label, self.nodes[unique_label]
 
-    def eval(self):
+    def eval_nodes(self, nodes: list):
 
-        return [self._eval_node(n) for n in self.eval_nodes]
+        return [self.eval_node(n) for n in nodes]
 
     def compile(self, in_place: bool = True):
 
@@ -88,8 +88,8 @@ class ComputeGraph(MultiDiGraph):
         G._prune()
 
         # evaluate constant-based operations
-        self.eval_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
-        for node in self.eval_nodes:
+        self._out_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
+        for node in self._out_nodes:
 
             # process inputs of node
             for inp in G.predecessors(node):
@@ -101,7 +101,7 @@ class ComputeGraph(MultiDiGraph):
                 G.eval_subgraph(node)
 
         # broadcast all variable shapes to a common number of dimensions
-        for node in self.eval_nodes:
+        for node in self._out_nodes:
             G.broadcast_op_inputs(node, squeeze=False)
 
         return G
@@ -132,7 +132,7 @@ class ComputeGraph(MultiDiGraph):
             # attempt to perform graph operation
             if target_shape:
                 raise ValueError
-            return self._eval_node(n)
+            return self.eval_node(n)
 
         except ValueError:
 
@@ -176,15 +176,17 @@ class ComputeGraph(MultiDiGraph):
             for expr_old, (args, expr_new) in expr_info:
                 expr = expr.replace(expr_old, expr_new)
                 expr_args.extend(args)
+            for expr_old, expr_new in kwargs.items():
+                expr = expr.replace(Function(expr_old), Function(expr_new))
             return expr_args, expr
         except KeyError:
-            if self.nodes[n]['vtype'] == 'constant':
+            if self.nodes[n]['vtype'] in ['constant', 'input']:
                 expr_args.append(n)
             return expr_args, self.nodes[n]['symbol']
 
-    def _eval_node(self, n):
+    def eval_node(self, n):
 
-        inputs = [self._eval_node(inp) for inp in self.predecessors(n)]
+        inputs = [self.eval_node(inp) for inp in self.predecessors(n)]
         if inputs:
             return self.nodes[n]['func'](*tuple(inputs))
         return self.nodes[n]['value']

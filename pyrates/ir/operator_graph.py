@@ -230,7 +230,7 @@ class VectorizedOperatorGraph(DiGraph):
                         op_vars[var_key]["value"] = [value]
                     else:
                         op_vars[var_key]["value"] = value
-                        op_vars[var_key]["vtype"] = "state_var"
+                        op_vars[var_key]["vtype"] = "input"
                 # self.operators[op_key]["variables"] = op_vars
 
             self.add_edges_from(op_graph.edges)

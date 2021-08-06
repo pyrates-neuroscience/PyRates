@@ -778,13 +778,13 @@ class SympyParser(ExpressionParser):
         """
         super().__init__(expr_str=expr_str, args=args, backend=backend, algebra=True, **kwargs)
 
-    def parse_expr(self) -> tuple:
+    def parse_expr(self) -> dict:
         """Parses string-based mathematical expression/equation.
 
         Returns
         -------
-        tuple
-            left-hand side, right-hand side and variables of the parsed equation.
+        dict
+            Variables of the parsed equation.
         """
 
         # extract symbols and operations from equations right-hand side
@@ -794,7 +794,7 @@ class SympyParser(ExpressionParser):
             self.expr_stack = sympify(f"no_op({self.rhs})")
 
         # parse rhs into backend
-        rhs_key, self.rhs = self.parse(self.expr_stack)
+        self.rhs = self.parse(self.expr_stack)
 
         # post rhs parsing steps
         self.clear()
@@ -806,7 +806,7 @@ class SympyParser(ExpressionParser):
         # parse lhs into backend
         self._update_lhs()
 
-        return self.lhs, self.rhs, self.vars
+        return self.vars
 
     def parse(self, expr: Expr):
 
@@ -872,14 +872,13 @@ class SympyParser(ExpressionParser):
         ###################################
 
         diff_eq = self._diff_eq
+        v = self.vars[self.lhs_key]
 
         if diff_eq:
 
             # create backend state variable if it does not exist already
-            v = self.vars[self.lhs_key]
             if 'symbol' not in v:
                 _, v = self.backend.add_var(name=self.lhs_key, **v, **self.parser_kwargs)
-                self.vars[self.lhs_key] = v
 
             # store variable as state variable of the system
             self.backend.state_vars.append(v['value'].name)
@@ -887,7 +886,15 @@ class SympyParser(ExpressionParser):
         else:
 
             # simple update
-            self.vars[self.lhs_key] = self.rhs
+            _, v = self.backend.add_var(name=self.lhs_key, **v, **self.parser_kwargs)
+            self.backend.non_state_vars.append(v['value'].name)
+
+        # store left-hand side variable as well as right-hand side update information
+        v['update'] = self.rhs[0]
+        self.vars[self.lhs_key].update(v)
+        v_backend = self.backend.get_var(v['value'].name)
+        if 'update' not in v_backend:
+            v_backend['update'] = self.rhs[0]
 
 ################################
 # helper classes and functions #
@@ -963,9 +970,12 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
         # extract operator variables from equation args
         op_args = {}
+        in_vars = []
         for key, var in equation_args.copy().items():
             if scope in key:
+
                 var_name = key.split('/')[-1]
+
                 if var_name == 'inputs':
 
                     # extract inputs from other scopes
@@ -978,7 +988,9 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                         inp_tmp = equation_args[inp]
                         op_args[in_name] = inp_tmp
                         op_args[in_name]['scope'] = in_scope
-                else:
+                        in_vars.append(in_name)
+
+                elif var_name not in in_vars:
 
                     # include variable information in operator arguments
                     op_args[var_name] = var
@@ -989,14 +1001,15 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
 
         instantaneous = is_diff_eq(eq) is False
         parser = SympyParser(expr_str=eq, args=op_args, backend=backend, instantaneous=instantaneous, **kwargs.copy())
-        _, _, variables = parser.parse_expr()
+        variables = parser.parse_expr()
 
         # update equations args
         #######################
 
         for key, var in variables.items():
             if key != 'inputs':
-                var_name = f"{scope}/{key}"
+                scope_tmp = var['scope'] if 'scope' in var else scope
+                var_name = f"{scope_tmp}/{key}"
                 if var_name in equation_args:
                     equation_args[var_name].update(var)
 
