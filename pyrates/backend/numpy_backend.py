@@ -45,8 +45,6 @@ Currently supported backends:
 # external imports
 import time
 from typing import Optional, Dict, List, Union, Any, Callable
-import numpy as np
-from copy import deepcopy
 import os
 import sys
 from shutil import rmtree
@@ -54,7 +52,7 @@ import warnings
 
 # pyrates internal imports
 from .funcs import *
-from .parser import replace, CodeGen, sympify
+from .parser import CodeGen
 from .computegraph import ComputeGraph
 
 #################################
@@ -327,6 +325,8 @@ class BaseBackend(object):
         self.type = 'numpy'
         self._orig_dir = None
         self._build_dir = None
+        self._func_name = None
+        self._file_name = None
 
         # create build dir
         self._orig_dir = os.getcwd()
@@ -334,18 +334,13 @@ class BaseBackend(object):
         if build_dir:
             os.makedirs(build_dir, exist_ok=True)
             try:
-                os.mkdir(build_dir)
-            except FileExistsError:
-                pass
-            except FileNotFoundError as e:
-                # for debugging
-                raise e
-            try:
                 os.mkdir(self._build_dir)
             except FileExistsError:
                 rmtree(self._build_dir)
                 os.mkdir(self._build_dir)
             sys.path.append(self._build_dir)
+        else:
+            sys.path.append(self._orig_dir)
 
     def add_var(self,
                 name: str,
@@ -482,6 +477,8 @@ class BaseBackend(object):
             func_name = 'rhs_func'
         if not file_name and solver:
             file_name = 'pyrates_rhs_func'
+        self._func_name = func_name
+        self._file_name = file_name
 
         # network specs
         run_info = self._compile(in_place=in_place, func_name=func_name, file_name=file_name, **compile_kwargs)
@@ -546,6 +543,27 @@ class BaseBackend(object):
         final_results['time'] = times
 
         return final_results
+
+    def clear(self) -> None:
+        """Deletes build directory and removes all compute graph nodes
+        """
+
+        # delete compute graph nodes
+        nodes = [n for n in self.graph.nodes]
+        for n in nodes:
+            self.graph.remove_subgraph(n)
+        self._var_map.clear()
+
+        # remove files and directories that have been created during simulation process
+        if self._build_dir:
+            rmtree(f"{self._orig_dir}/{self._build_dir}")
+        else:
+            try:
+                os.remove(f"{self._orig_dir}/{self._file_name}.py")
+            except FileNotFoundError:
+                pass
+        if self._func_name in sys.modules:
+            del sys.modules[self._func_name]
 
     def _compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
 

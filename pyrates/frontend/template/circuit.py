@@ -34,6 +34,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 """
 
 # external packages
+import gc
 from typing import List, Union, Dict, Optional
 from copy import deepcopy
 from pandas import DataFrame
@@ -95,6 +96,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             self.edges = []
 
         self.label = label
+        self._ir = None
 
     def update_template(self, name: str = None, path: str = None, description: str = None,
                         label: str = None, circuits: dict = None, nodes: dict = None,
@@ -153,31 +155,32 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         adaptive_steps = is_integration_adaptive(solver, **kwargs)
         net = self
-        for target, in_array in inputs.items():
+        if inputs:
+            for target, in_array in inputs.items():
 
-            *node_id, op, var = target.split('/')
+                *node_id, op, var = target.split('/')
 
-            # get network nodes that input should be provided to
-            target_nodes = net.get_nodes(node_id)
+                # get network nodes that input should be provided to
+                target_nodes = net.get_nodes(node_id)
 
-            # add input operators to target nodes
-            node_updates = {}
-            for n in target_nodes:
-                op_key, new_operator = get_input_operator(var, in_array, adaptive_steps, simulation_time)
-                node_template = net.get_node_template(n)
-                new_template = node_template.update_template(operators={new_operator: {}})
-                node_updates[n] = new_template
+                # add input operators to target nodes
+                node_updates = {}
+                for n in target_nodes:
+                    op_key, new_operator = get_input_operator(var, in_array, adaptive_steps, simulation_time)
+                    node_template = net.get_node_template(n)
+                    new_template = node_template.update_template(operators={new_operator: {}})
+                    node_updates[n] = new_template
 
-            # update circuit template
-            net = net.update_template(nodes=node_updates)
+                # update circuit template
+                net = net.update_template(nodes=node_updates)
 
         # translate circuit template into a graph representation
         ########################################################
 
         if not apply_kwargs:
             apply_kwargs = {}
-        ir, node_map = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
-                                 **apply_kwargs)
+        self._ir, node_map = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
+                                       step_size=step_size, **apply_kwargs)
 
         # perform simulation via the graph representation
         #################################################
@@ -203,8 +206,9 @@ class CircuitTemplate(AbstractBaseTemplate):
                 outputs_ir[key] = f"{backend_node.name}/{out_op}/{out_var}"
 
         # perform simulation
-        outputs = ir.run(simulation_time=simulation_time, step_size=step_size, sampling_step_size=sampling_step_size,
-                         outputs=outputs_ir, out_dir=out_dir, profile=profile, **kwargs)
+        outputs = self._ir.run(simulation_time=simulation_time, step_size=step_size,
+                               sampling_step_size=sampling_step_size, outputs=outputs_ir, out_dir=out_dir,
+                               profile=profile, **kwargs)
 
         # apply indices to output variables
         for key, idx in output_map.items():
@@ -516,6 +520,13 @@ class CircuitTemplate(AbstractBaseTemplate):
         if isinstance(net_node, CircuitTemplate):
             return net_node.get_node_template(node[1:])
         return net_node
+
+    def clear(self):
+        """Removes all temporary files and directories that may have been created during simulations of that circuit.
+        Also deletes imports and path variables from working memory."""
+        self._ir.clear()
+        self._ir = None
+        gc.collect()
 
     def _load_edge_templates(self, edges: List[Union[tuple, dict]]):
         """

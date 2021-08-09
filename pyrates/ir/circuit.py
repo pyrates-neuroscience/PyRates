@@ -76,7 +76,7 @@ class CircuitIR(AbstractBaseIR):
         # choose a backend
         if not backend_kwargs:
             backend_kwargs = {}
-        if not backend:
+        if not backend or backend == 'numpy':
             from pyrates.backend.numpy_backend import BaseBackend
             backend = BaseBackend
         elif backend == 'tensorflow':
@@ -577,10 +577,6 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("\t (1) Processing output variables...")
 
-        # basic simulation parameters initialization
-        step_size = self.step_size
-        sim_steps = int(np.round(simulation_time / step_size, decimals=0))
-
         # collect backend output variables
         ##################################
 
@@ -603,7 +599,7 @@ class CircuitIR(AbstractBaseIR):
         #                                              out_dir=out_dir, outputs=outputs_col, solver=solver,
         #                                              profile=profile, verbose=verbose, discrete_time=discrete_time,
         #                                              **kwargs)
-        results = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
+        results = self.backend.run(T=simulation_time, dt=self.step_size, dts=sampling_step_size,
                                    out_dir=out_dir, outputs=outputs_col, solver=solver,
                                    profile=profile, verbose=verbose, discrete_time=discrete_time,
                                    **kwargs)
@@ -611,7 +607,7 @@ class CircuitIR(AbstractBaseIR):
         if verbose and profile:
             if simulation_time:
                 print(f"{simulation_time}s of backend behavior were simulated in {time[0]} s given a "
-                      f"simulation resolution of {step_size} s.")
+                      f"simulation resolution of {self.step_size} s.")
             else:
                 print(f"ComputeGraph computations finished after {time[0]} seconds.")
 
@@ -639,10 +635,10 @@ class CircuitIR(AbstractBaseIR):
             Full path to the generated auto file.
         """
 
-        if hasattr(self._backend, 'generate_auto_def'):
-            return self._backend.generate_auto_def(dir)
+        if hasattr(self.backend, 'generate_auto_def'):
+            return self.backend.generate_auto_def(dir)
         else:
-            raise NotImplementedError(f'Method not implemented for the chosen backend: {self._backend.name}. Please'
+            raise NotImplementedError(f'Method not implemented for the chosen backend: {self.backend.name}. Please'
                                       f'choose another backend (e.g. `fortran`) to generate an auto file of the system.'
                                       )
 
@@ -657,13 +653,18 @@ class CircuitIR(AbstractBaseIR):
         -------
 
         """
-        if hasattr(self._backend, 'to_pyauto'):
-            return self._backend.to_pyauto(*args, **kwargs)
+        if hasattr(self.backend, 'to_pyauto'):
+            return self.backend.to_pyauto(*args, **kwargs)
         else:
-            raise NotImplementedError(f'Method not implemented for the chosen backend: {self._backend.name}. Please'
+            raise NotImplementedError(f'Method not implemented for the chosen backend: {self.backend.name}. Please'
                                       f'choose another backend (e.g. `fortran`) to generate a pyauto instance of the '
                                       f'system.'
                                       )
+
+    def clear(self):
+        """Clears the backend graph from all operations and variables.
+        """
+        self.backend.clear()
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
                                            op_identifier: Optional[str] = None, **kwargs) -> None:
@@ -705,16 +706,7 @@ class CircuitIR(AbstractBaseIR):
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
                     # parse equations and variables into computegraph
-                    variables = parse_equations(op_eqs, op_vars, backend=self.backend, **kwargs)
-
-                    # save parsed variables in net config
-                    # for key, val in variables.items():
-                    #     node, op, var = key.split('/')
-                    #     if "inputs" not in var:
-                    #         try:
-                    #             self[f"{node}/{op}/{var}"].update(val)
-                    #         except KeyError:
-                    #             pass
+                    parse_equations(op_eqs, op_vars, backend=self.backend, **kwargs)
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
@@ -1405,11 +1397,6 @@ class CircuitIR(AbstractBaseIR):
         else:
             inputs[tvar] = {'sources': [op_name],
                             'reduce_dim': True}
-
-    def clear(self):
-        """Clears the backend graph from all operations and variables.
-        """
-        self._backend.clear()
 
 
 class SubCircuitView(AbstractBaseIR):
