@@ -773,6 +773,8 @@ class SympyParser(ExpressionParser):
 
     """
 
+    _constant_counter = 0
+
     def __init__(self, expr_str: str, args: dict, backend: tp.Any, **kwargs) -> None:
         """Instantiates expression parser.
         """
@@ -790,7 +792,13 @@ class SympyParser(ExpressionParser):
         # extract symbols and operations from equations right-hand side
         # TODO: add possibility to pass local functions to sympify via `locals` dict. Could be implemented in backend.
         self.expr_stack = sympify(self.rhs)
-        if type(self.expr_stack) is Symbol:
+        if self.expr_stack.is_number:
+            c = f"dummy_constant_{self._constant_counter}"
+            expr = f"no_op({c})"
+            self.vars[c] = {'vtype': 'input', 'value': float(self.expr_stack)}
+            self.expr_stack = sympify(expr)
+            SympyParser._constant_counter += 1
+        if self.expr_stack.is_symbol:
             self.expr_stack = sympify(f"no_op({self.rhs})")
 
         # parse rhs into backend
@@ -983,12 +991,11 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
                         if inp not in equation_args:
                             raise KeyError(inp)
                         in_key_split = inp.split('/')
-                        in_name = in_key_split[-1]
                         in_scope = "/".join(in_key_split[:-1])
                         inp_tmp = equation_args[inp]
-                        op_args[in_name] = inp_tmp
-                        op_args[in_name]['scope'] = in_scope
-                        in_vars.append(in_name)
+                        op_args[in_key] = inp_tmp
+                        op_args[in_key]['scope'] = in_scope
+                        in_vars.append(in_key)
 
                 elif var_name not in in_vars:
 

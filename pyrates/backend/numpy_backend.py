@@ -488,11 +488,7 @@ class BaseBackend(object):
         # simulation specs
         steps = int(np.round(T / dt))
         state_rec = np.zeros((steps, state_vec.shape[0]))
-        if dts:
-            times = np.arange(0, T, dts)
-            kwargs['t_eval'] = times
-        else:
-            times = np.arange(0, T, dt)
+        times = np.arange(0, T, dts) if dts else np.arange(0, T, dt)
 
         # perform simulation
         ####################
@@ -518,6 +514,7 @@ class BaseBackend(object):
                 # solve via scipy's ode integration function
                 fun = lambda t, y: rhs_func(t, y, rhs, *args)
                 t = 0.0
+                kwargs['t_eval'] = times
                 results = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
                 state_rec = results['y'].T
 

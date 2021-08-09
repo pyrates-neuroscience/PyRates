@@ -163,8 +163,11 @@ def test_2_2_node():
     :method:`add_node`: Detailed documentation of method for adding nodes to instance of `ComputeGraph`.
     """
 
-    backends = ['numpy', 'tensorflow']
+    backends = ['numpy']
 
+    dt = 1e-1
+    sim_time = 10.
+    sim_steps = int(np.round(sim_time/dt))
     accuracy = 1e-4
 
     for b in backends:
@@ -173,84 +176,78 @@ def test_2_2_node():
         #######################################################################################
 
         # set up node in pyrates
-        dt = 1e-1
-        sim_time = 10.
-        sim_steps = int(sim_time / dt)
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net4").apply()
-        net = net_config._compile(vectorization=True, backend=b)
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net4")
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt)
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b)
         net.clear()
 
         # calculate node behavior from hand
         update0 = lambda x: x + dt * 2.
         update1 = lambda x, y: x + dt * (y - x)
-        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 2), dtype=np.float32)
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = update0(targets[i, 0])
-            targets[i + 1, 1] = update1(targets[i, 1], targets[i + 1, 0])
+            targets[i + 1, 1] = update1(targets[i, 1], targets[i, 0])
 
-        diff = results['a'].values[:, 0] - targets[:-1, 1]
+        diff = results['a'].values[:] - targets[:, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of node with 2 independent operators
         ########################################################################
 
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net5").apply()
-        net = net_config._compile(vectorization=True, backend=b)
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net5")
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': 'pop0/op5/a'}, step_size=dt)
+        results = net.run(sim_time, outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorization=True, backend=b)
         net.clear()
 
         # calculate node behavior from hand
-        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 2), dtype=np.float32)
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = update0(targets[i, 0])
             targets[i + 1, 1] = update1(targets[i, 1], 0.)
 
-        diff = results['a'].values[:, 0] - targets[:-1, 1]
+        diff = results['a'].values[:] - targets[:, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of node with 2 independent operators projecting to the same target operator
         ###############################################################################################################
 
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net6").apply()
-        net = net_config._compile(vectorization=True, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt)
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net6")
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b)
         net.clear()
 
         # calculate node behavior from hand
-        targets = np.zeros((sim_steps + 1, 3), dtype=np.float32)
+        targets = np.zeros((sim_steps, 3), dtype=np.float32)
         update2 = lambda x: x + dt * (4. + np.tanh(0.5))
-        for i in range(sim_steps):
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = update0(targets[i, 0])
             targets[i + 1, 1] = update2(targets[i, 1])
-            targets[i + 1, 2] = update1(targets[i, 2], targets[i + 1, 0] + targets[i + 1, 1])
+            targets[i + 1, 2] = update1(targets[i, 2], targets[i, 0] + targets[i, 1])
 
-        diff = results['a'].values[:, 0] - targets[:-1, 2]
+        diff = results['a'].values[:] - targets[:, 2]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of node with 1 source operator projecting to 2 independent targets
         ######################################################################################################
 
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net7").apply()
-        net = net_config._compile(vectorization=True, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt)
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net7")
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorization=True,
+                          backend=b)
 
         # calculate node behavior from hand
-        targets = np.zeros((sim_steps + 1, 4), dtype=np.float32)
+        targets = np.zeros((sim_steps, 4), dtype=np.float32)
         update3 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)
         update4 = lambda x, y: x + dt * 0.1 * y
-        for i in range(sim_steps):
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = update0(targets[i, 0])
-            targets[i + 1, 1] = update1(targets[i, 1], targets[i + 1, 0])
-            targets[i + 1, 2] = update3(targets[i, 2], targets[i, 3], targets[i + 1, 0])
+            targets[i + 1, 1] = update1(targets[i, 1], targets[i, 0])
+            targets[i + 1, 2] = update3(targets[i, 2], targets[i, 3], targets[i, 0])
             targets[i + 1, 3] = update4(targets[i, 3], targets[i, 2])
 
-        diff = np.mean(np.abs(results['a'].values[:, 0] - targets[:-1, 1])) + \
-               np.mean(np.abs(results['b'].values[:, 0] - targets[:-1, 3]))
+        diff = np.mean(np.abs(results['a'].values[:] - targets[:, 1])) + \
+               np.mean(np.abs(results['b'].values[:] - targets[:, 3]))
         assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 

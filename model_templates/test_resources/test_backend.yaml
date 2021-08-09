@@ -57,12 +57,12 @@ op4:
 
 op5:
   base: OperatorTemplate
-  equations: "d/dt * a = u - a"
+  equations: "d/dt * a = x - a"
   variables:
     a:
       default: output
-    u:
-      default: variable
+    x:
+      default: input
 
 op6:
   base: OperatorTemplate

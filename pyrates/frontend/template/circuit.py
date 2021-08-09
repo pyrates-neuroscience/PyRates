@@ -206,7 +206,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 outputs_ir[key] = f"{backend_node.name}/{out_op}/{out_var}"
 
         # perform simulation
-        outputs = self._ir.run(simulation_time=simulation_time, step_size=step_size,
+        outputs = self._ir.run(simulation_time=simulation_time, step_size=step_size, solver=solver,
                                sampling_step_size=sampling_step_size, outputs=outputs_ir, out_dir=out_dir,
                                profile=profile, **kwargs)
 

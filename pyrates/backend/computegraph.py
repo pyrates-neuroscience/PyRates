@@ -85,7 +85,7 @@ class ComputeGraph(MultiDiGraph):
         G = self if in_place else deepcopy(self)
 
         # remove unconnected nodes and constants from graph
-        G._prune()
+        #G._prune()
 
         # evaluate constant-based operations
         self._out_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
@@ -109,7 +109,8 @@ class ComputeGraph(MultiDiGraph):
     def eval_subgraph(self, n):
 
         inputs = []
-        for inp in self.predecessors(n):
+        input_nodes = [node for node in self.predecessors(n)]
+        for inp in input_nodes:
             inputs.append(self.eval_subgraph(inp))
             self.remove_node(inp)
 

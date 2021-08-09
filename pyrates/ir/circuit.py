@@ -31,14 +31,12 @@
 # external imports
 from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
-from copy import deepcopy
-from networkx import MultiDiGraph, subgraph, DiGraph
 from networkx import MultiDiGraph, subgraph, DiGraph
 import numpy as np
 
 # pyrates-internal imports
 from pyrates import PyRatesException
-from pyrates.ir.node import NodeIR, VectorizedNodeIR
+from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
 from pyrates.backend.parser import parse_equations, is_diff_eq, replace
