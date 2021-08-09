@@ -89,13 +89,13 @@ def test_2_1_operator():
         # generate target values
         update0_1 = lambda x: x * 0.5
         update0_0 = lambda x: x + 2.0
-        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 2), dtype=np.float64)
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = targets[i, 0] + dt * update0_0(targets[i, 1])
             targets[i + 1, 1] = targets[i, 1] + dt * update0_1(targets[i, 0])
 
         # compare results with target values
-        diff = results['a'].values[:, 0] - targets[1:, 1]
+        diff = results['a'].values[:] - targets[:, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of operator with a single differential equation and external input
@@ -111,49 +111,47 @@ def test_2_1_operator():
 
         # calculate operator behavior from hand
         update1 = lambda x, y: x + dt * (y - x)
-        targets = np.zeros((sim_steps + 1, 1), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 1), dtype=np.float32)
+        for i in range(sim_steps-1):
             targets[i + 1] = update1(targets[i], inp[i])
 
-        diff = results['a'].values[:, 0] - targets[1:, 0]
+        diff = results['a'].values[:] - targets[:, 0]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of operator with two coupled equations (1 ODE, 1 non-DE eq.)
         ################################################################################################
 
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net2").apply()
-        net = net_config._compile(vectorization=True, backend=b)
-        results = net.run(sim_time, outputs={'a': 'pop0/op2/a'}, step_size=dt)
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net2")
+        results = net.run(sim_time, outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorization=True, backend=b)
         net.clear()
 
         # calculate operator behavior from hand
         update2 = lambda x: 1. / (1. + np.exp(-x))
-        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 2), dtype=np.float32)
+        for i in range(sim_steps-1):
             targets[i + 1, 1] = update2(targets[i, 0])
             targets[i + 1, 0] = update1(targets[i, 0], targets[i + 1, 1])
 
-        diff = results['a'].values[:, 0] - targets[1:, 0]
+        diff = results['a'].values[:] - targets[:, 0]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of operator with a two coupled DEs
         ######################################################################
 
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net3").apply()
-        net = net_config._compile(vectorization=True, backend=b)
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net3")
         results = net.run(sim_time, outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
-                          step_size=dt)
+                          step_size=dt, vectorization=True, backend=b)
         net.clear()
 
         # calculate operator behavior from hand
         update3_0 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)
         update3_1 = lambda b, a: b + dt * 0.1 * a
-        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 2), dtype=np.float32)
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = update3_0(targets[i, 0], targets[i, 1], inp[i])
             targets[i + 1, 1] = update3_1(targets[i, 1], targets[i, 0])
 
-        diff = results['b'].values[:, 0] - targets[1:, 1]
+        diff = results['b'].values[:] - targets[:, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 

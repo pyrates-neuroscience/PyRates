@@ -507,11 +507,9 @@ class BaseBackend(object):
             if solver == 'euler':
 
                 # perform integration via standard Euler method
-                t = 0.0
                 for step in range(steps):
-                    state_vec += dt * rhs_func(t, state_vec, rhs, *args)
-                    t += dt
                     state_rec[step, :] = state_vec
+                    state_vec += dt * rhs_func(step, state_vec, rhs, *args)
 
             else:
 
@@ -526,9 +524,10 @@ class BaseBackend(object):
         else:
 
             # numerical integration by directly traversing the compute graph at each integration step
+            # TODO: add mathematical operation to graph that increases time in steps of dt
             for step in range(steps):
-                state_vec += dt * np.concatenate(self.graph._out_nodes())
                 state_rec[step, :] = state_vec
+                state_vec += dt * self.execute_graph()
 
         # reduce state recordings to requested state variables
         final_results = {}
@@ -543,6 +542,13 @@ class BaseBackend(object):
         final_results['time'] = times
 
         return final_results
+
+    def execute_graph(self):
+        """Executes all computations inside the compute graph once.
+        """
+        for v in self.non_state_vars:
+            self.graph.eval_node(self.get_var(v, get_key=True))
+        return np.concatenate([self.graph.eval_node(self.get_var(v, get_key=True)) for v in self.state_vars])
 
     def clear(self) -> None:
         """Deletes build directory and removes all compute graph nodes
@@ -564,6 +570,8 @@ class BaseBackend(object):
                 pass
         if self._func_name in sys.modules:
             del sys.modules[self._func_name]
+        if self._file_name in sys.modules:
+            del sys.modules[self._file_name]
 
     def _compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
 
@@ -582,7 +590,7 @@ class BaseBackend(object):
             indices.append((idx, idx+shape))
             idx += shape
         state_vec = np.concatenate(vars)
-        state_var_key, state_var = self.add_var(vtype='state_var', name='state_vec', value=state_vec)
+        state_var_key, state_var = self.add_var(vtype='state_var', name='state_vec', value=state_vec, squeeze=False)
 
         # store new state-var vector in graph
         old_state_vars = []
