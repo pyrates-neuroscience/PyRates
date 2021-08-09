@@ -78,7 +78,7 @@ op7:
     a:
       default: output
     u:
-      default: variable
+      default: input
     inp:
       default: input
 

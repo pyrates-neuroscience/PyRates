@@ -535,7 +535,7 @@ class BaseBackend(object):
                 idx = (idx[0],)
             elif type(idx) is int:
                 idx = (idx,)
-            final_results[key] = state_rec[:, idx]
+            final_results[key] = state_rec[:, idx] if len(idx) == 1 else state_rec[:, idx[0]:idx[1]]
         final_results['time'] = times
 
         return final_results

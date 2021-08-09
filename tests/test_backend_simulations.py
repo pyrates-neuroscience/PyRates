@@ -260,8 +260,12 @@ def test_2_3_edge():
 
     """
 
-    backends = ['numpy', 'tensorflow']
+    backends = ['numpy']
     accuracy = 1e-4
+    dt = 1e-1
+    sim_time = 10.
+    sim_steps = int(np.round(sim_time/dt))
+    inp = np.zeros((sim_steps, 1)) + 0.5
 
     for b in backends:
 
@@ -269,52 +273,46 @@ def test_2_3_edge():
         ######################################################################################################
 
         # set up edge in pyrates
-        dt = 1e-1
-        sim_time = 10.
-        sim_steps = int(sim_time / dt)
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net8").apply()
-        net = net_config._compile(vectorization=True, backend=b)
+
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net8")
 
         # calculate edge behavior from hand
         update0 = lambda x, y: x + dt * y * 0.5
         update1 = lambda x, y: x + dt * (y + 2.0)
         update2 = lambda x, y: x + dt * (y - x)
-        targets = np.zeros((sim_steps + 1, 4), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 4), dtype=np.float32)
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = update0(targets[i, 0], targets[i, 1])
             targets[i + 1, 1] = update1(targets[i, 1], targets[i, 0])
             targets[i + 1, 2] = update2(targets[i, 2], targets[i, 0] * 2.0)
             targets[i + 1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
 
         # simulate edge behavior
-        results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt)
+        results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt, vectorization=True,
+                          backend=b)
         net.clear()
 
-        diff = np.mean(np.abs(results['a'].values[:, 0] - targets[1:, 2])) + \
-               np.mean(np.abs(results['b'].values[:, 0] - targets[1:, 3]))
+        diff = np.mean(np.abs(results['a'].values[:] - targets[:, 2])) + \
+               np.mean(np.abs(results['b'].values[:] - targets[:, 3]))
         assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
         ################################################################################
 
-        # define input
-        inp = np.zeros((sim_steps, 1)) + 0.5
-
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9").apply()
-        net = net_config._compile(vectorization=True, backend=b)
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9")
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
-                          step_size=dt)
+                          step_size=dt, vectorization=True, backend=b)
         net.clear()
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
-        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 2), dtype=np.float32)
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = update2(targets[i, 0], targets[i, 1] * 0.5)
             targets[i + 1, 1] = update3(targets[i, 1], targets[i, 0] * 2.0, inp[i])
 
-        diff = np.mean(np.abs(results['a'].values[:, 0] - targets[1:, 0])) + \
-               np.mean(np.abs(results['b'].values[:, 0] - targets[1:, 1]))
+        diff = np.mean(np.abs(results['a'].values[:] - targets[:, 0])) + \
+               np.mean(np.abs(results['b'].values[:] - targets[:, 1]))
         assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes

@@ -880,21 +880,27 @@ class SympyParser(ExpressionParser):
         ###################################
 
         diff_eq = self._diff_eq
-        v = self.vars[self.lhs_key]
 
-        if diff_eq:
+        # receive left-hand side variable information
+        if self.expr_stack.is_symbol:
+
+            # retrieve variable information
+            v = self.vars[self.lhs_key]
 
             # create backend state variable if it does not exist already
             if 'symbol' not in v:
                 _, v = self.backend.add_var(name=self.lhs_key, **v, **self.parser_kwargs)
 
-            # store variable as state variable of the system
-            self.backend.state_vars.append(v['value'].name)
-
         else:
 
-            # simple update
-            _, v = self.backend.add_var(name=self.lhs_key, **v, **self.parser_kwargs)
+            # parse left-hand side indexing operation
+            key, v = self.parse(self.expr_stack)
+
+        # remember variable as state variable of the system or not
+        if diff_eq:
+            self.backend.state_vars.append(v['value'].name)
+        else:
+            # TODO: implement proper handling of left-hand side indices to non-state variables (`value` field does not exist)
             self.backend.non_state_vars.append(v['value'].name)
 
         # store left-hand side variable as well as right-hand side update information

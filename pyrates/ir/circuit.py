@@ -1339,7 +1339,7 @@ class CircuitIR(AbstractBaseIR):
                     weight_mat[row, col] = w
 
                 # set up weights and edge projection equation
-                eq = f"{tvar} = weight @ {svar}"
+                eq = f"{tvar} = matmul(weight,{svar})"
                 weight = weight_mat
                 dot_edge = True
 
@@ -1353,14 +1353,15 @@ class CircuitIR(AbstractBaseIR):
             d = tidx
         else:
             d = []
-        idx = "[source_idx]" if sidx and sum(sval['shape']) > 1 else ""
+        index_svar = sidx and sum(sval['shape']) > 1
+        svar_final = f"index({svar},source_idx)" if index_svar else svar
         if not dot_edge:
             if len(d) > 1:
-                eq = f"{tvar} = target_idx @ ({svar}{idx} * weight)"
+                eq = f"{tvar} = matmul(target_idx, {svar_final}*weight)"
             elif len(d):
-                eq = f"{tvar}[target_idx] = {svar}{idx} * weight"
+                eq = f"index({tvar},target_idx) = {svar_final} * weight"
             else:
-                eq = f"{tvar} = {svar}{idx} * weight"
+                eq = f"{tvar} = {svar_final} * weight"
 
         # add edge variables to dict
         dtype = sval["dtype"]
@@ -1370,7 +1371,7 @@ class CircuitIR(AbstractBaseIR):
             args['target_idx'] = {'vtype': 'constant',
                                   'value': np.array(d, dtype=self.backend._float_def if len(
                                       d) > 1 else np.int32)}
-        if idx:
+        if index_svar:
             args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
                                   'value': np.array(sidx, dtype=np.int32)}
 
