@@ -33,7 +33,7 @@ from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
 from copy import deepcopy
 from networkx import MultiDiGraph, subgraph, DiGraph
-from pandas import DataFrame
+from networkx import MultiDiGraph, subgraph, DiGraph
 import numpy as np
 
 # pyrates-internal imports
@@ -513,83 +513,6 @@ class CircuitIR(AbstractBaseIR):
                     # create equations and variables for the incoming edge
                     self._generate_edge_equation(edges[j], **kwargs)
 
-    def get_node_var(self, key: str, apply_idx: bool = True) -> dict:
-        """This function extracts and returns variables from nodes of the network graph.
-
-        Parameters
-        ----------
-        key
-            Contains the node name, operator name and variable name, separated via slash notation: 'node/op/var'. The
-            node name can consist of multiple slash-separated names referring to different levels of organization of the
-            node hierarchy in the graph (e.g. 'circuit1/subcircuit2/node3'). At each hierarchical level, either a
-            specific node name or a reference to all nodes can be passed (e.g. 'circuit1/subcircuit2/all' for all nodes
-            of subcircuit2 of circuit1). Keys can refer to vectorized nodes as well as to the orginial node names.
-        apply_idx
-            If true, indexing will be applied to variables that need to be extracted from their vectorized versions.
-            If false, the vectorized variable and the respective index will be returned.
-
-        Returns
-        -------
-        dict
-            Key-value pairs for each backend variable that was found to match the passed key.
-
-        """
-
-        # extract node, op and var name
-        *node, op, var = key.split('/')
-
-        # if node refers to vectorized network version, return variable from vectorized network
-        try:
-            return self[key]
-        except KeyError:
-
-            # get mapping from original network nodes to vectorized network nodes
-            #####################################################################
-
-            # split original node keys
-            node_keys = [key.split('/') for key in self.label_map]
-
-            # remove all nodes from original node keys that are not referred to
-            for i, node_lvl in enumerate(node):
-                n_popped = 0
-                if node_lvl != 'all':
-                    for j, net_node in enumerate(node_keys.copy()):
-                        if net_node[i] != node_lvl:
-                            node_keys.pop(j - n_popped)
-                            n_popped += 1
-
-            # collect variable indices for the remaining nodes
-            vnode_indices = {}
-            for node in node_keys:
-                node_name_orig = "/".join(node)
-                vnode_key, vnode_idx = self.label_map[node_name_orig]
-                if vnode_key not in vnode_indices:
-                    vnode_indices[vnode_key] = {'var': [vnode_idx], 'nodes': [node_name_orig]}
-                else:
-                    vnode_indices[vnode_key]['var'].append(vnode_idx)
-                    vnode_indices[vnode_key]['nodes'].append(node_name_orig)
-
-            # apply the indices to the vectorized node variables
-            for vnode_key in vnode_indices:
-                var_value = self[f"{vnode_key}/{op}/{var}"]['value']
-                if var_value.name == 'pyrates_index':
-                    idx_start = var_value.value.index(self._backend.idx_l)
-                    idx = var_value.value[idx_start + 1:-1]
-                    idx = [int(i) for i in idx.split(':')]
-                    idx_tmp = vnode_indices[vnode_key]['var']
-                    idx = [int(i) + idx[0] for i in idx_tmp]
-                    var_value = var_value.numpy()
-                else:
-                    idx = vnode_indices[vnode_key]['var']
-                if apply_idx:
-                    idx = f"{idx[0]}:{idx[-1] + 1}" if all(np.diff(idx) == 1) else [idx]
-                    vnode_indices[vnode_key]['var'] = self._backend.apply_idx(var_value, idx)
-                else:
-                    vnode_indices[vnode_key]['var'] = var_value
-                    vnode_indices[vnode_key]['idx'] = idx
-
-            return vnode_indices
-
     def run(self,
             simulation_time: float,
             outputs: Optional[dict] = None,
@@ -599,7 +522,7 @@ class CircuitIR(AbstractBaseIR):
             verbose: bool = True,
             profile: bool = False,
             **kwargs
-            ) -> Union[DataFrame, Tuple[DataFrame, float]]:
+            ) -> Union[dict, Tuple[dict, float]]:
         """Simulate the backend behavior over time via a tensorflow session.
 
         Parameters
@@ -665,11 +588,9 @@ class CircuitIR(AbstractBaseIR):
 
         if outputs:
 
-            # go through passed output names
+            # extract backend variables that correspond to requested output variables
             for key, val in outputs.items():
-                # extract respective output variables from the network and store their information
-                outputs_col[key] = [[var_info['idx'], var_info['nodes']]
-                                    for var_info in self.get_node_var(val, apply_idx=False).values()]
+                outputs_col[key] = self.backend.get_var(val, get_key=True)
 
             if verbose:
                 print("\t\t...finished.")
@@ -682,10 +603,10 @@ class CircuitIR(AbstractBaseIR):
         #                                              out_dir=out_dir, outputs=outputs_col, solver=solver,
         #                                              profile=profile, verbose=verbose, discrete_time=discrete_time,
         #                                              **kwargs)
-        outputs_col = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
-                                       out_dir=out_dir, outputs=outputs_col, solver=solver,
-                                       profile=profile, verbose=verbose, discrete_time=discrete_time,
-                                       **kwargs)
+        results = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
+                                   out_dir=out_dir, outputs=outputs_col, solver=solver,
+                                   profile=profile, verbose=verbose, discrete_time=discrete_time,
+                                   **kwargs)
 
         if verbose and profile:
             if simulation_time:
@@ -694,35 +615,12 @@ class CircuitIR(AbstractBaseIR):
             else:
                 print(f"ComputeGraph computations finished after {time[0]} seconds.")
 
-        # store output variables in data frame
-        ######################################
-
-        # ungroup grouped output variables
-        outputs = {}
-        for outkey, (out_val, node_keys) in outputs_col.items():
-            for i, node_key in enumerate(node_keys):
-                out_val_tmp = np.squeeze(out_val[:, i]) if len(out_val.shape) > 1 else out_val
-                if len(out_val_tmp.shape) < 2:
-                    outputs[(outkey,) + tuple(node_key.split('/'))] = out_val_tmp
-                else:
-                    for k in range(out_val_tmp.shape[1]):
-                        outputs[(outkey, node_key, str(k))] = np.squeeze(out_val_tmp[:, k])
-
-        # create data frame
-        if sampling_step_size and not all(np.diff(times, 1) - sampling_step_size < step_size * 0.01):
-            n = int(np.round(simulation_time / sampling_step_size, decimals=0))
-            new_times = np.linspace(step_size, simulation_time, n + 1)
-            for key, val in outputs.items():
-                outputs[key] = np.interp(new_times, times, val)
-            times = new_times
-        out_vars = DataFrame(outputs, index=times)
-
         # return results
         ################
 
         if profile:
-            return out_vars, time[0]
-        return out_vars
+            return results, time[0]
+        return results
 
     def generate_auto_def(self, dir: str) -> str:
         """Creates fortran files needed by auto (and pyauto) to run parameter continuaitons. The `run` method should be
@@ -900,7 +798,7 @@ class CircuitIR(AbstractBaseIR):
                 if key == 'inputs' and var:
                     variables[f"{scope}/inputs"].update(var)
                     for in_var in var.values():
-                        variables[in_var] = self.get_node_var(in_var)
+                        variables[in_var] = self[in_var]
                 elif full_key not in variables:
                     variables[full_key] = var
             try:

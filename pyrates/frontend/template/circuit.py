@@ -36,6 +36,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 # external packages
 from typing import List, Union, Dict, Optional
 from copy import deepcopy
+from pandas import DataFrame
 
 # pyrates internal imports
 import numpy as np
@@ -175,14 +176,51 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if not apply_kwargs:
             apply_kwargs = {}
-        ir = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
-                       **apply_kwargs)
+        ir, node_map = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
+                                 **apply_kwargs)
 
         # perform simulation via the graph representation
         #################################################
 
-        return ir.run(simulation_time=simulation_time, step_size=step_size, sampling_step_size=sampling_step_size,
-                      outputs=outputs, out_dir=out_dir, profile=profile, **kwargs)
+        # TODO: Decide which versions of the CircuitTemplate/CircuitIR instances users should be able to interact with.
+        #  Might be necessary to create a 'get_var' method that uses the node_map from above
+
+        # create mapping between requested output variables and the current network variables
+        output_map = {}
+        outputs_ir = {}
+        for key, out in outputs.items():
+
+            *out_nodes, out_op, out_var = out.split('/')
+            output_map[key] = []
+
+            # get all requested node variables
+            target_nodes = self.get_nodes(out_nodes)
+
+            # extract indices for these nodes
+            for target_node in target_nodes:
+                backend_node, idx = node_map[target_node]
+                output_map[key].append(idx)
+                outputs_ir[key] = f"{backend_node.name}/{out_op}/{out_var}"
+
+        # perform simulation
+        outputs = ir.run(simulation_time=simulation_time, step_size=step_size, sampling_step_size=sampling_step_size,
+                         outputs=outputs_ir, out_dir=out_dir, profile=profile, **kwargs)
+
+        # apply indices to output variables
+        for key, idx in output_map.items():
+            outputs[key] = np.squeeze(outputs[key][:, idx])
+        time_vec = outputs.pop('time')
+
+        # create data frame
+        if sampling_step_size and not all(np.diff(time_vec, 1) - sampling_step_size < step_size * 0.01):
+            n = int(np.round(simulation_time / sampling_step_size, decimals=0))
+            new_times = np.linspace(step_size, simulation_time, n + 1)
+            for key, val in outputs.items():
+                outputs[key] = np.interp(new_times, time_vec, val)
+            time_vec = new_times
+        results = DataFrame(outputs, index=time_vec)
+
+        return results
 
     def apply(self, adaptive_steps: bool, label: str = None, node_values: dict = None, edge_values: dict = None,
               vectorize: bool = True, verbose: bool = True, **kwargs):
@@ -350,7 +388,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # instantiate an intermediate representation of the circuit template
         return CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
-                         **kwargs)
+                         **kwargs), node_map
 
     def get_nodes(self, node_identifier: Union[str, list]) -> list:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.

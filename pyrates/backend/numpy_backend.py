@@ -468,8 +468,8 @@ class BaseBackend(object):
         except KeyError:
             return name if get_key else self.graph.nodes[name]
 
-    def run(self, T: float, dt: float, solver: str = None, in_place: bool = True, func_name: str = None,
-            file_name: str = None, compile_kwargs: dict = None, **kwargs):
+    def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = None,
+            in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs) -> dict:
 
         # TODO: Implement input/output functionalities
 
@@ -491,6 +491,11 @@ class BaseBackend(object):
         # simulation specs
         steps = int(np.round(T / dt))
         state_rec = np.zeros((steps, state_vec.shape[0]))
+        if dts:
+            times = np.arange(0, T, dts)
+            kwargs['t_eval'] = times
+        else:
+            times = np.arange(0, T, dt)
 
         # perform simulation
         ####################
@@ -518,12 +523,8 @@ class BaseBackend(object):
                 # solve via scipy's ode integration function
                 fun = lambda t, y: rhs_func(t, y, rhs, *args)
                 t = 0.0
-                # if dts:
-                #     times = np.arange(0, T, dts)
-                #     kwargs['t_eval'] = times
-                outputs = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
-                #results = [outputs['y'].T[:, idx] for idx in output_indices]
-                state_rec = outputs['y'].T
+                results = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
+                state_rec = results['y'].T
 
         else:
 
@@ -532,7 +533,19 @@ class BaseBackend(object):
                 state_vec += dt * np.concatenate(self.graph._out_nodes())
                 state_rec[step, :] = state_vec
 
-        return state_rec
+        # reduce state recordings to requested state variables
+        final_results = {}
+        for key, var in outputs.items():
+            idx = run_info['old_state_vars'].index(var)
+            idx = run_info['vec_indices'][idx]
+            if type(idx) is tuple and idx[1] - idx[0] == 1:
+                idx = (idx[0],)
+            elif type(idx) is int:
+                idx = (idx,)
+            final_results[key] = state_rec[:, idx]
+        final_results['time'] = times
+
+        return final_results
 
     def _compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
 
@@ -554,10 +567,12 @@ class BaseBackend(object):
         state_var_key, state_var = self.add_var(vtype='state_var', name='state_vec', value=state_vec)
 
         # store new state-var vector in graph
+        old_state_vars = []
         for var, (idx_l, idx_r) in zip(self.state_vars, indices):
             v = self.get_var(var)
             v['value'] = state_var['value'][idx_l:idx_r]
             v['index'] = (idx_l, idx_r)
+            old_state_vars.append(self.get_var(var, get_key=True))
 
         # create right-hand side update vector (also serves as test-run of network equations)
         rhs_vec = np.concatenate([self.graph.eval_node(self.get_var(v, get_key=True)) for v in self.state_vars])
@@ -569,7 +584,7 @@ class BaseBackend(object):
                 'Shapes of state variable vector and right-hand side updates of these state variables do'
                 'not match. Please check the definition of variable types in the model definition.')
 
-        return_dict = {'old_state_vars': self.state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
+        return_dict = {'old_state_vars': old_state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
 
         if func_name or file_name:
 
