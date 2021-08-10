@@ -385,7 +385,7 @@ class BaseBackend(object):
 
         # if variable already exists, return it
         try:
-            return name, self.get_var(name, get_key=False)
+            return name, self.get_var(label, get_key=False)
         except KeyError:
             pass
 
@@ -453,14 +453,12 @@ class BaseBackend(object):
 
         # extract operator scope
         scope = kwargs.pop('scope', None)
-        if scope:
-            name = f'{scope}/{name}'
+        label = f'{scope}/{name}' if scope else name
         try:
-            return self._var_map[name] if get_key else self.graph.nodes[self._var_map[name]]
+            return self._var_map[label] if get_key else self.graph.nodes[self._var_map[label]]
         except KeyError:
             if get_key:
-                idx = list(self._var_map.values()).index(name)
-                return list(self._var_map.keys())[idx]
+                return name
             return self.graph.nodes[name]
 
     def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = None,
@@ -590,8 +588,8 @@ class BaseBackend(object):
             idx += shape
 
         # add vectorized state variables and updates to the backend
-        state_vec = np.asarray(vars)
-        rhs_vec = np.asarray(updates)
+        state_vec = np.concatenate(vars)
+        rhs_vec = np.concatenate(updates)
         state_var_key, state_var = self.add_var(vtype='state_var', name='state_vec', value=state_vec, squeeze=False)
         rhs_var_key, rhs_var = self.add_var(vtype='state_var', name='state_vec_update', value=np.zeros_like(rhs_vec))
 
@@ -668,10 +666,23 @@ class BaseBackend(object):
         # collect right-hand side expression and all input variables to these expressions
         func_args, expressions, var_names = [], [], []
         for node, update in nodes.items():
+
+            # collect expression and variables of right-hand side of equation
             expr_args, expr = self.graph.node_to_expr(update, **funcs)
             func_args.extend(expr_args)
             expressions.append(expr)
-            var_names.append(self.get_var(node)['symbol'].name)
+
+            # process left-hand side of equation
+            var = self.get_var(node)
+            if 'expr' in var:
+                # process indexing of left-hand side variable
+                idx_args, lhs = self.graph.node_to_expr(node, **funcs)
+                func_args.extend(idx_args)
+                lhs_var = lhs
+            else:
+                # process normal update of left-hand side variable
+                lhs_var = var['symbol'].name
+            var_names.append(lhs_var)
 
         # add the left-hand side assignments of the collected right-hand side expressions to the code generator
         if rhs_var:
@@ -712,6 +723,8 @@ class BaseBackend(object):
                 # non-DE update stored in a single variable
                 for target_var, expr in zip(var_names, expressions):
                     expr_str = self._expr_to_str(expr)
+                    if type(target_var) is not str:
+                        target_var = self._expr_to_str(target_var)
                     code_gen.add_code_line(f"{target_var} = {expr_str}")
 
         code_gen.add_linebreak()
@@ -726,7 +739,11 @@ class BaseBackend(object):
 
         # extract common shape
         lhs = var_info['value']
+        if not lhs.shape:
+            lhs = np.reshape(lhs, (1,))
         rhs = self.graph.eval_node(update)
+        if not rhs.shape:
+            rhs = np.reshape(rhs, (1,))
         s1, s2 = get_var_shape(lhs), get_var_shape(rhs)
         if s1 == s2:
             return lhs, rhs, s1
@@ -800,19 +817,21 @@ class BaseBackend(object):
 
         return rhs_eval
 
-    @staticmethod
-    def _expr_to_str(expr: Any) -> str:
+    @classmethod
+    def _expr_to_str(cls, expr: Any) -> str:
         expr_str = str(expr)
-        while 'index(' in expr_str:
+        for arg in expr.args:
+            expr_str = expr_str.replace(str(arg), cls._expr_to_str(arg))
+        while 'pr_base_index(' in expr_str:
             # replace `index` calls with brackets-based indexing
-            start = expr_str.find('index(')
-            end = expr_str.find(')', start=start)
-            expr_str = expr_str.replace(expr_str[start:end], f"{expr.args[0]}[{expr.args[1]}]")
-        while "no_op(" in expr_str:
+            start = expr_str.find('pr_base_index(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}[{expr.args[1]}]")
+        while 'pr_identity(' in expr_str:
             # replace `no_op` calls with first argument to the function call
-            start = expr_str.find('no_op(')
-            end = expr_str.find(')', start=start)
-            expr_str = expr_str.replace(expr_str[start:end], f"{expr.args[0]}")
+            start = expr_str.find('pr_identity(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
         return expr_str
 
 # Helper Functions

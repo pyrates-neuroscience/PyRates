@@ -830,7 +830,7 @@ class SympyParser(ExpressionParser):
                     if 'symbol' in var:
 
                         # if parsed already, retrieve label from existing variable
-                        label = self.backend.get_var(arg.name, get_key=True, **self.parser_kwargs)
+                        label = self.backend.get_var(var['value'].name, get_key=True)
 
                     else:
 
@@ -877,6 +877,7 @@ class SympyParser(ExpressionParser):
         ###################################
 
         # receive left-hand side variable information
+        lhs_key = self.lhs_key
         if self.expr_stack.is_symbol:
 
             # retrieve variable information
@@ -884,16 +885,18 @@ class SympyParser(ExpressionParser):
 
             # create backend state variable if it does not exist already
             if 'symbol' not in v:
-                _, v = self.backend.add_var(name=self.lhs_key, **v)
+                _, v = self.backend.add_var(name=lhs_key, **v)
 
         else:
 
             # parse left-hand side indexing operation
-            _, v = self.parse(self.expr_stack)
+            lhs_key, v = self.parse(self.expr_stack)
 
         # create mapping between left-hand side and right-hand side of the equation
-        backend_var = self.backend.get_var(self.lhs_key, get_key=True, **self.parser_kwargs)
+        backend_var = self.backend.get_var(lhs_key, get_key=True, **self.parser_kwargs)
         self.backend.graph.add_var_update(backend_var, self.rhs[0], differential_equation=self._diff_eq)
+        if lhs_key in self.vars:
+            self.vars[lhs_key].update(v)
 
 ################################
 # helper classes and functions #

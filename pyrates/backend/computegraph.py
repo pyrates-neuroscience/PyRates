@@ -55,8 +55,7 @@ class ComputeGraph(MultiDiGraph):
 
         super().__init__(**kwargs)
         self.var_updates = {'DEs': dict(), 'non-DEs': dict()}
-        self._out_nodes = []
-        self._rhs_nodes = []
+        self._eq_nodes = []
 
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
@@ -84,8 +83,8 @@ class ComputeGraph(MultiDiGraph):
         else:
             self.var_updates['non-DEs'][var] = update
 
-        # remember the update node to ensure that constant-based updates are not pruned during compilation
-        self._rhs_nodes.append(update)
+        # remember var and update node to ensure that they are not pruned during compilation
+        self._eq_nodes.extend([var, update])
 
     def eval_graph(self):
 
@@ -129,8 +128,8 @@ class ComputeGraph(MultiDiGraph):
         G = self if in_place else deepcopy(self)
 
         # evaluate constant-based operations
-        self._out_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
-        for node in self._out_nodes:
+        out_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
+        for node in out_nodes:
 
             # process inputs of node
             for inp in G.predecessors(node):
@@ -145,7 +144,7 @@ class ComputeGraph(MultiDiGraph):
         G._prune()
 
         # broadcast all variable shapes to a common number of dimensions
-        for node in self._out_nodes:
+        for node in [node for node, out_degree in G.out_degree if out_degree == 0]:
             G.broadcast_op_inputs(node, squeeze=False)
 
         return G
@@ -194,9 +193,6 @@ class ComputeGraph(MultiDiGraph):
 
     def node_to_expr(self, n: str, **kwargs) -> tuple:
 
-        # TODO: implement proper handling of left-hand side indices to non-state variables (`value` field does not exist)
-        # TODO: ensure that functions such as `index` and `no_op` will be recognized and handled ONCE during construction of the model equations
-
         expr_args = []
         try:
             expr = self.nodes[n]['expr']
@@ -216,12 +212,12 @@ class ComputeGraph(MultiDiGraph):
 
         # remove all subgraphs that contain constants only
         for n in [node for node, out_degree in self.out_degree if out_degree == 0]:
-            if self.nodes[n]['vtype'] == 'constant' and n not in self._rhs_nodes:
+            if self.nodes[n]['vtype'] == 'constant' and n not in self._eq_nodes:
                 self.remove_subgraph(n)
 
         # remove all unconnected nodes
         for n in [node for node, out_degree in self.out_degree if out_degree == 0]:
-            if self.in_degree(n) == 0 and n not in self._rhs_nodes:
+            if self.in_degree(n) == 0 and n not in self._eq_nodes:
                 self.remove_node(n)
 
     def _generate_unique_label(self, label: str):
