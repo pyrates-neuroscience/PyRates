@@ -235,7 +235,7 @@ class ExpressionParser(ParserElement):
 
         # post rhs parsing steps
         if hasattr(self.rhs, 'vtype') or "float" in str(type(self.rhs)) or "int" in str(type(self.rhs)):
-            self.rhs = self.backend.add_op('no_op', self.rhs, **self.parser_kwargs)
+            self.rhs = self.backend.add_op('no_op', self.rhs)
         self.clear()
         self._finished_rhs = True
 
@@ -574,7 +574,7 @@ class ExpressionParser(ParserElement):
             diff_eq = False
 
         # get clean name of lhs
-        lhs_key = lhs.split('[')[0]
+        lhs_key = lhs.split('(')[0]
         lhs_key = lhs_key.replace(' ', '')
         lhs = lhs.replace(' ', '')
 
@@ -790,9 +790,9 @@ class SympyParser(ExpressionParser):
         """
 
         # extract symbols and operations from equations right-hand side
-        # TODO: add possibility to pass local functions to sympify via `locals` dict. Could be implemented in backend.
         self.expr_stack = sympify(self.rhs)
         if self.expr_stack.is_number:
+            c = f"dummy_constant_{self._constant_counter}"
             c = f"dummy_constant_{self._constant_counter}"
             expr = f"no_op({c})"
             self.vars[c] = {'vtype': 'input', 'value': float(self.expr_stack)}
@@ -806,7 +806,6 @@ class SympyParser(ExpressionParser):
 
         # post rhs parsing steps
         self.clear()
-        self._finished_rhs = True
 
         # extract symbols and operations from left-hand side
         self.expr_stack = sympify(self.lhs)
@@ -831,13 +830,12 @@ class SympyParser(ExpressionParser):
                     if 'symbol' in var:
 
                         # if parsed already, retrieve label from existing variable
-                        label = var['symbol'].name if 'func' in var \
-                            else self.backend.get_var(var['value'].name, get_key=True, **self.parser_kwargs)
+                        label = self.backend.get_var(arg.name, get_key=True, **self.parser_kwargs)
 
                     else:
 
                         # if not parsed already, parse variable into backend
-                        label, var = self.backend.add_var(name=arg.name, **var, **self.parser_kwargs)
+                        label, var = self.backend.add_var(name=arg.name, **var)
                         self.vars[arg.name].update(var)
 
                 else:
@@ -854,17 +852,16 @@ class SympyParser(ExpressionParser):
                     inputs.append(label)
                     func_args.append(var['symbol'])
 
-            # parse mathematical operation into compute graph
+            # retrieve name and function call of the mathematical operation
             try:
                 label = str(expr.func).split('\'')[1].split('.')[-1]
             except IndexError:
                 label = str(expr.func)
             func = self.backend.ops[label]['func'] if label in self.backend.ops \
                 else lambdify(func_args, expr=expr, modules=self.backend.type)
-            label, v_new = self.backend.add_op(inputs, name=label, expr=expr, func=func, vtype='variable')
-            self.vars[label] = v_new
 
-            return label, v_new
+            # parse mathematical operation into compute graph
+            return self.backend.add_op(inputs, name=label, expr=expr, func=func, vtype='variable')
 
         else:
 
@@ -879,8 +876,6 @@ class SympyParser(ExpressionParser):
         # update left-hand side of equation
         ###################################
 
-        diff_eq = self._diff_eq
-
         # receive left-hand side variable information
         if self.expr_stack.is_symbol:
 
@@ -889,26 +884,16 @@ class SympyParser(ExpressionParser):
 
             # create backend state variable if it does not exist already
             if 'symbol' not in v:
-                _, v = self.backend.add_var(name=self.lhs_key, **v, **self.parser_kwargs)
+                _, v = self.backend.add_var(name=self.lhs_key, **v)
 
         else:
 
             # parse left-hand side indexing operation
-            key, v = self.parse(self.expr_stack)
+            _, v = self.parse(self.expr_stack)
 
-        # remember variable as state variable of the system or not
-        if diff_eq:
-            self.backend.state_vars.append(v['value'].name)
-        else:
-            # TODO: implement proper handling of left-hand side indices to non-state variables (`value` field does not exist)
-            self.backend.non_state_vars.append(v['value'].name)
-
-        # store left-hand side variable as well as right-hand side update information
-        v['update'] = self.rhs[0]
-        self.vars[self.lhs_key].update(v)
-        v_backend = self.backend.get_var(v['value'].name)
-        if 'update' not in v_backend:
-            v_backend['update'] = self.rhs[0]
+        # create mapping between left-hand side and right-hand side of the equation
+        backend_var = self.backend.get_var(self.lhs_key, get_key=True, **self.parser_kwargs)
+        self.backend.graph.add_var_update(backend_var, self.rhs[0], differential_equation=self._diff_eq)
 
 ################################
 # helper classes and functions #
@@ -1013,7 +998,8 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         ################
 
         instantaneous = is_diff_eq(eq) is False
-        parser = SympyParser(expr_str=eq, args=op_args, backend=backend, instantaneous=instantaneous, **kwargs.copy())
+        parser = SympyParser(expr_str=eq, args=op_args, backend=backend, instantaneous=instantaneous, **kwargs.copy(),
+                             scope=scope)
         variables = parser.parse_expr()
 
         # update equations args

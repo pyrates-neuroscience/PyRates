@@ -51,6 +51,8 @@ from shutil import rmtree
 import warnings
 
 # pyrates internal imports
+import numpy as np
+
 from .funcs import *
 from .parser import CodeGen
 from .computegraph import ComputeGraph
@@ -312,8 +314,6 @@ class BaseBackend(object):
 
         # further attributes
         self._var_map = dict()
-        self.state_vars = []
-        self.non_state_vars = []
         self._float_def = self.dtypes[float_default_type]
         self.name = name
         self._imports = ["from numpy import *", "from pyrates.backend.funcs import *"]
@@ -379,7 +379,9 @@ class BaseBackend(object):
         # extract variable scope
         scope = kwargs.pop('scope', None)
         if scope:
-            name = f'{scope}/{name}'
+            label = f'{scope}/{name}'
+        else:
+            label = name
 
         # if variable already exists, return it
         try:
@@ -388,16 +390,16 @@ class BaseBackend(object):
             pass
 
         # create variable
-        var, name = BaseVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self,
-                            squeeze=kwargs.pop('squeeze', True))
+        var, label = BaseVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=label, backend=self,
+                             squeeze=kwargs.pop('squeeze', True))
 
         # add variable to compute graph
-        label, cg_var = self.graph.add_var(label=var.short_name, value=var, vtype=vtype, **kwargs)
+        name, cg_var = self.graph.add_var(label=name, value=var, vtype=vtype, **kwargs)
 
         # save to dict
-        self._var_map[name] = label
+        self._var_map[label] = name
 
-        return label, cg_var
+        return name, cg_var
 
     def add_op(self,
                inputs: Union[list, tuple],
@@ -430,12 +432,7 @@ class BaseBackend(object):
             name = f'{scope}/{name}'
 
         # add operator to compute graph
-        label, cg_var = self.graph.add_op(inputs, label=name, **kwargs)
-
-        # save to dict
-        self._var_map[name] = label
-
-        return label, cg_var
+        return self.graph.add_op(inputs, label=name, **kwargs)
 
     def get_var(self, name: str, get_key: bool = False, **kwargs) -> Union[dict, str]:
         """Retrieve variable from graph.
@@ -461,12 +458,13 @@ class BaseBackend(object):
         try:
             return self._var_map[name] if get_key else self.graph.nodes[self._var_map[name]]
         except KeyError:
-            return name if get_key else self.graph.nodes[name]
+            if get_key:
+                idx = list(self._var_map.values()).index(name)
+                return list(self._var_map.keys())[idx]
+            return self.graph.nodes[name]
 
     def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = None,
             in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs) -> dict:
-
-        # TODO: Implement input/output functionalities
 
         # preparations
         ##############
@@ -575,37 +573,27 @@ class BaseBackend(object):
         # finalize compute graph
         self.graph = self.graph.compile(in_place=in_place)
 
-        # create state variable vector
-        vars, indices = [], []
+        # create state variable vector and state variable update vector
+        ###############################################################
+
+        vars, indices, updates, old_state_vars = [], [], [], []
         idx = 0
-        for var in self.state_vars:
-            v = self.get_var(var)['value']
-            if not v.shape:
-                v = np.reshape(v, (1,))
-            shape = v.shape[0]
-            vars.append(v)
-            indices.append((idx, idx+shape))
+        for var, update in self.graph.var_updates['DEs'].items():
+
+            # extract left-hand side and right-hand side nodes from graph
+            lhs, rhs, shape = self._process_var_update(var, update)
+            vars.append(lhs), updates.append(rhs)
+
+            # store information of the original, non-vectorized state variable
+            old_state_vars.append(var)
+            indices.append((idx, idx+shape) if shape > 1 else idx)
             idx += shape
-        state_vec = np.concatenate(vars)
+
+        # add vectorized state variables and updates to the backend
+        state_vec = np.asarray(vars)
+        rhs_vec = np.asarray(updates)
         state_var_key, state_var = self.add_var(vtype='state_var', name='state_vec', value=state_vec, squeeze=False)
-
-        # store new state-var vector in graph
-        old_state_vars = []
-        for var, (idx_l, idx_r) in zip(self.state_vars, indices):
-            v = self.get_var(var)
-            v['value'] = state_var['value'][idx_l:idx_r]
-            v['index'] = (idx_l, idx_r)
-            old_state_vars.append(self.get_var(var, get_key=True))
-
-        # create right-hand side update vector (also serves as test-run of network equations)
-        rhs_vec = np.concatenate([self.graph.eval_node(self.get_var(v, get_key=True)) for v in self.state_vars])
         rhs_var_key, rhs_var = self.add_var(vtype='state_var', name='state_vec_update', value=np.zeros_like(rhs_vec))
-
-        # check consistency of state var and rhs vector
-        if state_vec.shape != rhs_vec.shape:
-            raise ValueError(
-                'Shapes of state variable vector and right-hand side updates of these state variables do'
-                'not match. Please check the definition of variable types in the model definition.')
 
         return_dict = {'old_state_vars': old_state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
 
@@ -653,33 +641,37 @@ class BaseBackend(object):
         code_gen.add_linebreak()
 
         # extract state variable from state vector if necessary
+        rhs_indices_str = []
         if rhs_indices:
 
-            for (idx_l, idx_r), var in zip(rhs_indices, self.state_vars):
-                code_gen.add_code_line(f"{self.get_var(var, get_key=True)} = {state_var}[{idx_l}:{idx_r}]")
+            for idx, var in zip(rhs_indices, self.graph.var_updates['DEs']):
+                idx_str = f'{idx}' if type(idx) is int else f'{idx[0]}:{idx[1]}'
+                code_gen.add_code_line(f"{var} = {state_var}[{idx_str}]")
+                rhs_indices_str.append(idx_str)
 
             code_gen.add_linebreak()
 
         # get equation string and argument list for each non-DE node at the end of the compute graph hierarchy
-        func_args2, code_gen = self._generate_update_equations(code_gen, nodes=self.non_state_vars, funcs=backend_funcs)
+        func_args2, code_gen = self._generate_update_equations(code_gen, nodes=self.graph.var_updates['non-DEs'],
+                                                               funcs=backend_funcs)
 
         # get equation string and argument list for each DE node at the end of the compute graph hierarchy
-        func_args1, code_gen = self._generate_update_equations(code_gen, nodes=self.state_vars, rhs_var=rhs_var,
-                                                                  indices=rhs_indices, funcs=backend_funcs)
+        func_args1, code_gen = self._generate_update_equations(code_gen, nodes=self.graph.var_updates['DEs'],
+                                                               rhs_var=rhs_var, indices=rhs_indices_str,
+                                                               funcs=backend_funcs)
 
         return func_args1 + func_args2, code_gen
 
-    def _generate_update_equations(self, code_gen: CodeGen, nodes: list, rhs_var: str = None, indices: list = None,
+    def _generate_update_equations(self, code_gen: CodeGen, nodes: dict, rhs_var: str = None, indices: list = None,
                                    funcs: dict = None):
 
         # collect right-hand side expression and all input variables to these expressions
         func_args, expressions, var_names = [], [], []
-        for node in nodes:
-            node_dict = self.get_var(node)
-            expr_args, expr = self.graph.node_to_expr(node_dict['update'], **funcs)
+        for node, update in nodes.items():
+            expr_args, expr = self.graph.node_to_expr(update, **funcs)
             func_args.extend(expr_args)
             expressions.append(expr)
-            var_names.append(node_dict['symbol'].name)
+            var_names.append(self.get_var(node)['symbol'].name)
 
         # add the left-hand side assignments of the collected right-hand side expressions to the code generator
         if rhs_var:
@@ -688,9 +680,9 @@ class BaseBackend(object):
             if indices:
 
                 # DE updates stored in a state-vector
-                for (idx_l, idx_r), expr in zip(indices, expressions):
+                for idx, expr in zip(indices, expressions):
                     expr_str = self._expr_to_str(expr)
-                    code_gen.add_code_line(f"{rhs_var}[{idx_l}:{idx_r}] = {expr_str}")
+                    code_gen.add_code_line(f"{rhs_var}[{idx}] = {expr_str}")
 
             else:
 
@@ -711,9 +703,9 @@ class BaseBackend(object):
             if indices:
 
                 # non-DE update stored in a variable slice
-                for (idx_l, idx_r), expr, target_var in zip(indices, expressions, var_names):
+                for idx, expr, target_var in zip(indices, expressions, var_names):
                     expr_str = self._expr_to_str(expr)
-                    code_gen.add_code_line(f"{target_var}[{idx_l}:{idx_r}] = {expr_str}")
+                    code_gen.add_code_line(f"{target_var}[{idx}] = {expr_str}")
 
             else:
 
@@ -725,6 +717,22 @@ class BaseBackend(object):
         code_gen.add_linebreak()
 
         return func_args, code_gen
+
+    def _process_var_update(self, var: str, update: str) -> tuple:
+
+        # extract nodes
+        var_info = self.get_var(var)
+        update_info = self.get_var(update)
+
+        # extract common shape
+        lhs = var_info['value']
+        rhs = self.graph.eval_node(update)
+        s1, s2 = get_var_shape(lhs), get_var_shape(rhs)
+        if s1 == s2:
+            return lhs, rhs, s1
+        raise ValueError(
+            f"Shapes of state variable {var} and its right-hand side update {update_info['expr']} do not"
+            " match.")
 
     @staticmethod
     def _generate_func_head(func_name: str, code_gen: CodeGen = None, state_var: str = None, func_args: list = None,
@@ -795,12 +803,26 @@ class BaseBackend(object):
     @staticmethod
     def _expr_to_str(expr: Any) -> str:
         expr_str = str(expr)
-        while 'apply_index' in expr_str:
-            # replace `apply_index` calls with brackets-based indexing
-            start = expr_str.find('apply_index')
+        while 'index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('index(')
             end = expr_str.find(')', start=start)
             expr_str = expr_str.replace(expr_str[start:end], f"{expr.args[0]}[{expr.args[1]}]")
+        while "no_op(" in expr_str:
+            # replace `no_op` calls with first argument to the function call
+            start = expr_str.find('no_op(')
+            end = expr_str.find(')', start=start)
+            expr_str = expr_str.replace(expr_str[start:end], f"{expr.args[0]}")
         return expr_str
+
+# Helper Functions
+##################
+
+
+def get_var_shape(v: BaseVar):
+    if not v.shape:
+        v = np.reshape(v, (1,))
+    return v.shape[0]
 
 
 # class PyRatesOp:

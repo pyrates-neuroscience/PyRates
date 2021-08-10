@@ -30,7 +30,7 @@
 """
 
 # external imports
-from typing import Any, Callable, Union
+from typing import Any, Callable, Union, Iterable
 from networkx import MultiDiGraph
 from sympy import Symbol, Expr, Function
 from copy import deepcopy
@@ -53,22 +53,22 @@ class ComputeGraph(MultiDiGraph):
 
     def __init__(self, **kwargs):
 
-        self._out_nodes = []
         super().__init__(**kwargs)
+        self.var_updates = {'DEs': dict(), 'non-DEs': dict()}
+        self._out_nodes = []
+        self._rhs_nodes = []
 
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
         unique_label = self._generate_unique_label(label)
-        symbol = Symbol(unique_label)
-        super().add_node(unique_label, symbol=symbol, value=value, vtype=vtype, **kwargs)
+        super().add_node(unique_label, symbol=Symbol(unique_label), value=value, vtype=vtype, **kwargs)
         return unique_label, self.nodes[unique_label]
 
     def add_op(self, inputs: Union[list, tuple], label: str, expr: Expr, func: Callable, vtype: str, **kwargs):
 
         # add target node that contains result of operation
         unique_label = self._generate_unique_label(label)
-        symbol = Symbol(unique_label)
-        super().add_node(unique_label, expr=expr, func=func, vtype=vtype, symbol=symbol, **kwargs)
+        super().add_node(unique_label, expr=expr, func=func, vtype=vtype, symbol=Symbol(unique_label), **kwargs)
 
         # add edges from source nodes to target node
         for i, v in enumerate(inputs):
@@ -76,35 +76,33 @@ class ComputeGraph(MultiDiGraph):
 
         return unique_label, self.nodes[unique_label]
 
-    def eval_nodes(self, nodes: list):
+    def add_var_update(self, var: str, update: str, differential_equation: bool = False):
+
+        # store mapping between left-hand side variable and right-hand side update
+        if differential_equation:
+            self.var_updates['DEs'][var] = update
+        else:
+            self.var_updates['non-DEs'][var] = update
+
+        # remember the update node to ensure that constant-based updates are not pruned during compilation
+        self._rhs_nodes.append(update)
+
+    def eval_graph(self):
+
+        for n in self.var_updates['non-DEs'].values():
+            self.eval_subgraph(n)
+        return self.eval_nodes(self.var_updates['DEs'].values())
+
+    def eval_nodes(self, nodes: Iterable):
 
         return [self.eval_node(n) for n in nodes]
 
-    def compile(self, in_place: bool = True):
+    def eval_node(self, n):
 
-        G = self if in_place else deepcopy(self)
-
-        # remove unconnected nodes and constants from graph
-        #G._prune()
-
-        # evaluate constant-based operations
-        self._out_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
-        for node in self._out_nodes:
-
-            # process inputs of node
-            for inp in G.predecessors(node):
-                if G.nodes[inp]['vtype'] == 'constant':
-                    G.eval_subgraph(inp)
-
-            # evaluate node if all its inputs are constants
-            if all([G.nodes[inp]['vtype'] == 'constant' for inp in G.predecessors(node)]):
-                G.eval_subgraph(node)
-
-        # broadcast all variable shapes to a common number of dimensions
-        for node in self._out_nodes:
-            G.broadcast_op_inputs(node, squeeze=False)
-
-        return G
+        inputs = [self.eval_node(inp) for inp in self.predecessors(n)]
+        if inputs:
+            return self.nodes[n]['func'](*tuple(inputs))
+        return self.nodes[n]['value']
 
     def eval_subgraph(self, n):
 
@@ -125,6 +123,32 @@ class ComputeGraph(MultiDiGraph):
         for inp in self.predecessors(n):
             self.remove_subgraph(inp)
         self.remove_node(n)
+
+    def compile(self, in_place: bool = True):
+
+        G = self if in_place else deepcopy(self)
+
+        # evaluate constant-based operations
+        self._out_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
+        for node in self._out_nodes:
+
+            # process inputs of node
+            for inp in G.predecessors(node):
+                if G.nodes[inp]['vtype'] == 'constant':
+                    G.eval_subgraph(inp)
+
+            # evaluate node if all its inputs are constants
+            if all([G.nodes[inp]['vtype'] == 'constant' for inp in G.predecessors(node)]):
+                G.eval_subgraph(node)
+
+        # remove unconnected nodes and constants from graph
+        G._prune()
+
+        # broadcast all variable shapes to a common number of dimensions
+        for node in self._out_nodes:
+            G.broadcast_op_inputs(node, squeeze=False)
+
+        return G
 
     def broadcast_op_inputs(self, n, squeeze: bool = False, target_shape: tuple = None):
 
@@ -170,6 +194,9 @@ class ComputeGraph(MultiDiGraph):
 
     def node_to_expr(self, n: str, **kwargs) -> tuple:
 
+        # TODO: implement proper handling of left-hand side indices to non-state variables (`value` field does not exist)
+        # TODO: ensure that functions such as `index` and `no_op` will be recognized and handled ONCE during construction of the model equations
+
         expr_args = []
         try:
             expr = self.nodes[n]['expr']
@@ -185,23 +212,16 @@ class ComputeGraph(MultiDiGraph):
                 expr_args.append(n)
             return expr_args, self.nodes[n]['symbol']
 
-    def eval_node(self, n):
-
-        inputs = [self.eval_node(inp) for inp in self.predecessors(n)]
-        if inputs:
-            return self.nodes[n]['func'](*tuple(inputs))
-        return self.nodes[n]['value']
-
     def _prune(self):
 
         # remove all subgraphs that contain constants only
         for n in [node for node, out_degree in self.out_degree if out_degree == 0]:
-            if self.nodes[n]['vtype'] == 'constant':
+            if self.nodes[n]['vtype'] == 'constant' and n not in self._rhs_nodes:
                 self.remove_subgraph(n)
 
         # remove all unconnected nodes
         for n in [node for node, out_degree in self.out_degree if out_degree == 0]:
-            if self.in_degree(n) == 0:
+            if self.in_degree(n) == 0 and n not in self._rhs_nodes:
                 self.remove_node(n)
 
     def _generate_unique_label(self, label: str):
