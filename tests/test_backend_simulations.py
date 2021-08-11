@@ -363,7 +363,7 @@ def test_2_3_edge():
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
         results = net.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
                           vectorization=True, step_size=dt, backend=b, solver='euler')
-        # TODO: ensure that both edges are correctly translated into the network equations
+        # TODO: add manual comparison of network dynamics here
         net.clear()
 
 

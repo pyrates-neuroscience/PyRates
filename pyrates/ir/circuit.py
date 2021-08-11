@@ -501,15 +501,19 @@ class CircuitIR(AbstractBaseIR):
                 n_inputs = len(edges)
                 op_name, var_name = in_var.split('/')
 
-                # combine node inputs that map to the same variable and finalize the edge equations
+                # combine node inputs that map to the same variable
                 for j in range(n_inputs):
 
                     # add synaptic input collector to the input variables if necessary
                     if n_inputs > 1:
                         self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
 
-                    # create equations and variables for the incoming edge
-                    self._generate_edge_equation(edges[j], **kwargs)
+        # create the final equations and variables for each edge
+        for source, targets in self.graph.adjacency():
+            for target, edges in targets.items():
+                for idx, data in edges.items():
+                    self._generate_edge_equation(source_node=source, target_node=target, edge_idx=idx, data=data,
+                                                 **kwargs)
 
     def run(self,
             simulation_time: float,
@@ -1301,9 +1305,8 @@ class CircuitIR(AbstractBaseIR):
         s, t, e = edge
         self.edges[s, t, e]['target_var'] = f'{op}_{var}_col_{idx}/{var}_col_{idx}'
 
-    def _generate_edge_equation(self, edge: tuple, matrix_sparseness: float = 0.1):
-
-        source_node, target_node, edge_idx, data = edge
+    def _generate_edge_equation(self, source_node: str, target_node: str, edge_idx: int, data: dict,
+                                matrix_sparseness: float = 0.1):
 
         # extract edge information
         weight = data['weight']
