@@ -8,8 +8,8 @@
 Op_e:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp) / tau + J*r + r_in - tau*(PI*r)^2"
+    - "d/dt * r = delta/(pi * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp) / tau + J*r + r_in - tau*(pi*r)^2"
   variables:
     r:
       default: output
@@ -43,8 +43,8 @@ Op_i:
 Op_sfa:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in) - I_a - tau*(PI*r)^2"
+    - "d/dt * r = delta/(pi * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in) - I_a - tau*(pi*r)^2"
     - "d/dt * I_a = x"
     - "d/dt * x = (alpha*r - 2.0*x - I_a/tau_a)/tau_a"
   variables:
@@ -77,8 +77,8 @@ Op_sfa:
 Op_sd:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(PI*r)^2"
+    - "d/dt * r = delta/(pi * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(pi*r)^2"
     - "d/dt * I_a = x"
     - "d/dt * x = (alpha*r - 2.0*x - I_a/tau_a)/tau_a"
   variables:
@@ -111,8 +111,8 @@ Op_sd:
 Op_sd_biexp:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(PI*r)^2"
+    - "d/dt * r = delta/(pi * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(pi*r)^2"
     - "d/dt * I_a = x"
     - "d/dt * x = (alpha*r*tau_d - x*(tau_r+tau_d) - I_a)/(tau_r*tau_d)"
   variables:
@@ -147,8 +147,8 @@ Op_sd_biexp:
 Op_sd_exp:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(PI*r)^2"
+    - "d/dt * r = delta/(pi * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in)*(1.0 - I_a) - tau*(pi*r)^2"
     - "d/dt * I_a = -I_a/tau_a + alpha*r"
   variables:
     r:
@@ -178,8 +178,8 @@ Op_sd_exp:
 Op_sfa_exp:
   base: OperatorTemplate
   equations:
-    - "d/dt * r = delta/(PI * tau^2) + 2.*r*v/tau"
-    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in) - I_a - tau*(PI*r)^2"
+    - "d/dt * r = delta/(pi * tau^2) + 2.*r*v/tau"
+    - "d/dt * v = (v^2 + eta + inp)/tau + J*(r + r_in) - I_a - tau*(pi*r)^2"
     - "d/dt * I_a = -I_a/tau_a + alpha*r"
   variables:
     r:

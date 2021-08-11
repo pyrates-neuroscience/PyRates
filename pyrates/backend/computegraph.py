@@ -99,7 +99,7 @@ class ComputeGraph(MultiDiGraph):
     def eval_node(self, n):
 
         inputs = [self.eval_node(inp) for inp in self.predecessors(n)]
-        if inputs:
+        if 'func' in self.nodes[n]:
             return self.nodes[n]['func'](*tuple(inputs))
         return self.nodes[n]['value']
 
@@ -149,7 +149,8 @@ class ComputeGraph(MultiDiGraph):
 
         return G
 
-    def broadcast_op_inputs(self, n, squeeze: bool = False, target_shape: tuple = None, depth=0, max_depth=20):
+    def broadcast_op_inputs(self, n, squeeze: bool = False, target_shape: tuple = None, depth=0, max_depth=20,
+                            target_dtype: np.dtype = np.float32):
 
         try:
 
@@ -158,7 +159,7 @@ class ComputeGraph(MultiDiGraph):
                 raise ValueError
             return self.eval_node(n)
 
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError, TypeError) as e:
 
             # TODO: re-work broadcasting. Issue: broadcasting needs to be applied to all variables that may be affected
             #  by it across all network equations
@@ -199,6 +200,13 @@ class ComputeGraph(MultiDiGraph):
                 if n in self.var_updates['non-DEs']:
                     return self.broadcast_op_inputs(self.var_updates['non-DEs'][n], squeeze=True, depth=depth+1)
                 return self.broadcast_op_inputs(n, squeeze=True, depth=depth+1)
+
+            elif isinstance(e, TypeError):
+
+                for node, var in zip(nodes, inputs):
+                    var = var.astype(target_dtype)
+                    self.nodes[node]['value'] = var
+                return self.broadcast_op_inputs(n, depth=depth+1)
 
             else:
 

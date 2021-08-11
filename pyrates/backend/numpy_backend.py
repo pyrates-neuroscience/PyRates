@@ -283,6 +283,7 @@ class BaseBackend(object):
                     "softmax": {'func': pr_softmax, 'str': "pr_softmax"},
                     "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
                     "tanh": {'func': np.tanh, 'str': "np.tanh"},
+                    "exp": {'func': np.exp, 'str': "exp"},
                     "no_op": {'func': pr_identity, 'str': "pr_identity"},
                     "interp": {'func': pr_interp, 'str': "pr_interp"},
                     "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},

@@ -2,12 +2,11 @@
 
 # external imports
 from typing import Union
-
 import numpy as np
 import pytest
 
 # pyrates internal imports
-from pyrates.ir import CircuitIR
+from pyrates.frontend import CircuitTemplate
 
 # meta infos
 __author__ = "Richard Gast"
@@ -65,15 +64,15 @@ def test_3_1_jansenrit():
     ###############################################################################
 
     # single operator JRC
-    jrc1 = CircuitIR.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC_simple")
-    jrc1 = jrc1._compile(backend='numpy', step_size=dt, solver='scipy')
-    r1 = jrc1.run(T, outputs={'EIN': 'JRC/JRC_op/PSP_ein'}, sampling_step_size=dts)
+    jrc1 = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC_simple")
+    r1 = jrc1.run(T, outputs={'EIN': 'JRC/JRC_op/PSP_ein'}, backend='numpy', step_size=dt, solver='scipy',
+                  sampling_step_size=dts)
     jrc1.clear()
 
     # multi-node JRC
-    jrc2 = CircuitIR.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC")
-    jrc2 = jrc2._compile(backend='numpy', step_size=dt, solver='scipy')
-    r2 = jrc2.run(T, outputs={'EIN': 'EIN/RPO_e/PSP'}, sampling_step_size=dts)
+    jrc2 = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC")
+    r2 = jrc2.run(T, outputs={'EIN': 'EIN/RPO_e/PSP'}, backend='numpy', step_size=dt, solver='scipy',
+                  sampling_step_size=dts)
     jrc2.clear()
 
     assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
@@ -96,11 +95,11 @@ def test_3_2_montbrio():
     ##################################################################
 
     # set up circuit
-    m1 = CircuitIR.from_yaml("model_templates.montbrio.simple_montbrio.QIF_exc")
-    m1 = m1._compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+    m1 = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbrio.QIF_exc")
 
     # perform simulation
-    r1 = m1.run(T, sampling_step_size=dts, inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"})
+    r1 = m1.run(T, sampling_step_size=dts, inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"},
+                vectorization=True, backend='numpy', solver='scipy', step_size=dt)
     m1.clear()
 
     # test firing rate relationships at pre-defined times

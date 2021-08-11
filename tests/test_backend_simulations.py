@@ -3,7 +3,6 @@
 
 # external imports
 from typing import Union
-
 import numpy as np
 import pytest
 

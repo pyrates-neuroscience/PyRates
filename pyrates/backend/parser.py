@@ -846,7 +846,7 @@ class SympyParser(ExpressionParser):
                 if 'symbol' in var:
 
                     # replace name of variable in expression with new variable symbol
-                    expr = expr.replace(arg, var['symbol'])
+                    expr = expr.subs(arg, var['symbol'])
 
                     # store input to mathematical expression, if it is not a simple scalar
                     inputs.append(label)

@@ -3,7 +3,7 @@
 
 PRO:
   base: OperatorTemplate
-  equations: ["m_out = m_max / (1. + exp(r*(V_thr - PSP)))"]
+  equations: ["m_out = m_max / (1. + E^(r*(PSP + V_thr)))"]
   variables:
     m_out:
       default: output
@@ -12,7 +12,7 @@ PRO:
     m_max:
       default: 5.
     r:
-      default: 560.
+      default: -560.
     V_thr:
       default: 6e-3
 
