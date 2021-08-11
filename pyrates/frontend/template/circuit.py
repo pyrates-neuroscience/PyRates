@@ -523,9 +523,10 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def clear(self):
         """Removes all temporary files and directories that may have been created during simulations of that circuit.
-        Also deletes imports and path variables from working memory."""
+        Also deletes operator template caches, imports and path variables from working memory."""
         self._ir.clear()
         self._ir = None
+        OperatorTemplate.cache.clear()
         gc.collect()
 
     def _load_edge_templates(self, edges: List[Union[tuple, dict]]):
@@ -771,7 +772,6 @@ def get_input_operator(var: str, inp: np.ndarray, continuous: bool, T: float) ->
     if continuous:
 
         # interpolate input variable if time steps can be variable
-        # TODO: check how inputs were added on master
         from scipy.interpolate import interp1d
         time = np.linspace(0, T, inp.shape[0])
         f = interp1d(time, inp, axis=0, copy=False, kind='linear')

@@ -235,6 +235,7 @@ def test_2_2_node():
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net7")
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorization=True,
                           backend=b)
+        net.clear()
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 4), dtype=np.float32)
@@ -272,8 +273,7 @@ def test_2_3_edge():
         # test correct numerical evaluation of graph with 1 source projecting unidirectional to 2 target nodes
         ######################################################################################################
 
-        # set up edge in pyrates
-
+        # set up network template in pyrates
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net8")
 
         # calculate edge behavior from hand
@@ -376,16 +376,17 @@ def test_2_4_vectorization():
     :method:`_vectorize`: Detailed documentation of vectorize method of `ComputeGraph` class.
     """
 
-    backends = ['tensorflow', 'numpy']
+    backends = ['numpy']
+
+    # define simulation params
+    dt = 1e-2
+    sim_time = 10.
+    sim_steps = int(sim_time / dt)
+    inp = np.zeros((sim_steps, 2)) + 0.5
+
     for b in backends:
         # test whether vectorized networks produce same output as non-vectorized backend
         ################################################################################
-
-        # define simulation params
-        dt = 1e-2
-        sim_time = 10.
-        sim_steps = int(sim_time / dt)
-        inp = np.zeros((sim_steps, 2)) + 0.5
 
         # set up networks
         net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net12").apply()
@@ -426,22 +427,17 @@ def test_2_5_solver():
     inp = np.zeros((sim_steps, 1)) + 0.5
 
     # standard euler solver (trusted)
-    net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net0')
-    net = net_config._compile(vectorization=True, step_size=dt, backend=backend, solver='euler')
-    results = net.run(sim_time,
-                      outputs={'a1': 'p1/op9/a',
-                               'a2': 'p2/op9/a'},
-                      inputs={'p1/op9/I_ext': inp})
+    net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
+    net = net.update_template(name='net1')
+    results = net.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                      vectorization=True, step_size=dt, backend=backend, solver='euler')
     net.clear()
 
     # scipy solver (tested)
-    net_config2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net1')
-    net2 = net_config2._compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
-    results2 = net2.run(sim_time,
-                        outputs={'a1': 'p1/op9/a',
-                                 'a2': 'p2/op9/a'},
-                        inputs={'p1/op9/I_ext': inp},
-                        method='RK23')
+    net2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
+    net2 = net2.update_template(name='net2')
+    results2 = net2.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                        method='RK23', vectorization=True, step_size=dt, backend=backend, solver='scipy')
     net2.clear()
 
     assert np.mean(results.loc[:, 'a2'].values - results2.loc[:, 'a2'].values) == pytest.approx(0., rel=1e-4, abs=1e-4)
@@ -456,6 +452,8 @@ def test_2_6_inputs_outputs():
 
     """
 
+    # TODO: re-implement grouping of inputs and outputs
+
     backend = 'numpy'
     dt = 1e-3
     sim_time = 100.
@@ -469,7 +467,7 @@ def test_2_6_inputs_outputs():
     inp2 = np.zeros((sim_steps, 1)) + 0.2
 
     # perform simulation
-    net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net1')
+    net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
     net = net_config._compile(vectorization=True, step_size=dt, backend=backend, solver='scipy')
     r1 = net.run(sim_time,
                  outputs={'a1': 'p1/op9/a', 'a2': 'p2/op9/a'},
