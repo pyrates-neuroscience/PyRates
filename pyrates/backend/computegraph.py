@@ -149,7 +149,7 @@ class ComputeGraph(MultiDiGraph):
 
         return G
 
-    def broadcast_op_inputs(self, n, squeeze: bool = False, target_shape: tuple = None):
+    def broadcast_op_inputs(self, n, squeeze: bool = False, target_shape: tuple = None, depth=0, max_depth=20):
 
         try:
 
@@ -158,38 +158,72 @@ class ComputeGraph(MultiDiGraph):
                 raise ValueError
             return self.eval_node(n)
 
-        except ValueError:
+        except (ValueError, IndexError) as e:
+
+            # TODO: re-work broadcasting. Issue: broadcasting needs to be applied to all variables that may be affected
+            #  by it across all network equations
+            if depth > max_depth:
+                raise e
 
             # collect inputs to operator node
             inputs, nodes, shapes = [], [], []
             for inp in self.predecessors(n):
 
                 # ensure the whole operation tree of input is broadcasted to matching shapes
-                inp_eval = self.broadcast_op_inputs(inp)
+                inp_eval = self.broadcast_op_inputs(inp, depth=depth+1)
 
                 inputs.append(inp_eval)
                 nodes.append(inp)
                 shapes.append(len(inp_eval.shape) if hasattr(inp_eval, 'shape') else 1)
 
-            # broadcast shapes of inputs
-            if not target_shape:
-                target_shape = inputs[np.argmax(shapes)].shape
-            for i in range(len(inputs)):
+            if isinstance(e, ValueError):
 
-                inp_eval = inputs[i]
+                # broadcast shapes of inputs
+                if not target_shape:
+                    target_shape = inputs[np.argmax(shapes)].shape
+                for i in range(len(inputs)):
 
-                # get new shape of input
+                    inp_eval = inputs[i]
+
+                    # get new shape of input
+                    new_shape = self._broadcast_shapes(target_shape, inp_eval.shape, squeeze=squeeze)
+
+                    # reshape input
+                    if new_shape != inp_eval.shape:
+                        if 'func' in self.nodes[nodes[i]]:
+                            self.broadcast_op_inputs(nodes[i], squeeze=squeeze, target_shape=new_shape, depth=depth+1)
+                        else:
+                            inp_eval = inp_eval.reshape(new_shape)
+                            self.nodes[nodes[i]]['value'] = inp_eval
+
+                if n in self.var_updates['non-DEs']:
+                    return self.broadcast_op_inputs(self.var_updates['non-DEs'][n], squeeze=True, depth=depth+1)
+                return self.broadcast_op_inputs(n, squeeze=True, depth=depth+1)
+
+            else:
+
+                # broadcast shape of variable that an index should be applied to
+                if not target_shape:
+                    target_shape = inputs[0].shape + (1,)
+
+                # get new shape of indexed variable
+                inp_eval = inputs[0]
                 new_shape = self._broadcast_shapes(target_shape, inp_eval.shape, squeeze=squeeze)
 
-                # reshape input
+                # update right-hand side of non-DE instead of the target variable, if suitable
+                if nodes[0] in self.var_updates['non-DEs']:
+                    return self.broadcast_op_inputs(self.var_updates['non-DEs'][nodes[0]], target_shape=new_shape,
+                                                    depth=depth + 1)
+
+                # reshape variable
                 if new_shape != inp_eval.shape:
-                    if 'func' in self.nodes[nodes[i]]:
-                        self.broadcast_op_inputs(nodes[i], squeeze=squeeze, target_shape=new_shape)
+                    if 'func' in self.nodes[nodes[0]]:
+                        self.broadcast_op_inputs(nodes[0], squeeze=squeeze, target_shape=new_shape, depth=depth + 1)
                     else:
                         inp_eval = inp_eval.reshape(new_shape)
-                        self.nodes[nodes[i]]['value'] = inp_eval
+                        self.nodes[nodes[0]]['value'] = inp_eval
 
-            return self.broadcast_op_inputs(n, squeeze=True)
+                return self.broadcast_op_inputs(n, squeeze=True, depth=depth + 1)
 
     def node_to_expr(self, n: str, **kwargs) -> tuple:
 

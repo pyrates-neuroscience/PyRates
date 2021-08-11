@@ -318,67 +318,52 @@ def test_2_3_edge():
         # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes
         #######################################################################################
 
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net10").apply()
-        net = net_config._compile(vectorization=True, backend=b, step_size=dt)
-        results = net.run(sim_time, outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt)
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net10")
+        results = net.run(sim_time, outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorization=True,
+                          backend=b)
         net.clear()
 
         # calculate edge behavior from hand
         delay0 = int(0.5 / dt)
         delay1 = int(1. / dt)
-        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
+        targets = np.zeros((sim_steps, 2), dtype=np.float32)
         update4 = lambda x, y: x + dt * (2.0 + y)
-        for i in range(sim_steps):
+        for i in range(sim_steps-1):
             inp0 = 0. if i < delay0 else targets[i - delay0, 1]
             inp1 = 0. if i < delay1 else targets[i - delay1, 0]
             targets[i + 1, 0] = update4(targets[i, 0], inp0 * 0.5)
             targets[i + 1, 1] = update4(targets[i, 1], inp1 * 2.0)
 
-        diff = np.mean(np.abs(results['a'].values[:, 0] - targets[1:, 0])) + \
-               np.mean(np.abs(results['b'].values[:, 0] - targets[1:, 1]))
+        diff = np.mean(np.abs(results['a'].values[:] - targets[:, 0])) + \
+               np.mean(np.abs(results['b'].values[:] - targets[:, 1]))
         assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of graph with 2 unidirectionally, multi-delay-coupled nodes
         ###############################################################################################
 
-        # define input
-        inp = np.zeros((sim_steps, 1)) + 0.5
-
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9").apply()
-        net = net_config._compile(vectorization=True, step_size=dt, backend=b)
-        results = net.run(sim_time, step_size=dt,
-                          outputs={'a': 'pop0/op1/a',
-                                             'b': 'pop1/op7/a'},
-                          inputs={'pop1/op7/inp': inp})
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9")
+        results = net.run(sim_time, step_size=dt, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'},
+                          inputs={'pop1/op7/inp': inp}, vectorization=True, backend=b)
         net.clear()
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
-        targets = np.zeros((sim_steps + 1, 2), dtype=np.float32)
-        for i in range(sim_steps):
+        targets = np.zeros((sim_steps, 2), dtype=np.float32)
+        for i in range(sim_steps-1):
             targets[i + 1, 0] = update2(targets[i, 0], targets[i, 1] * 0.5)
             targets[i + 1, 1] = update3(targets[i, 1], targets[i, 0] * 2.0, inp[i])
 
-        diff = np.mean(np.abs(results['a'].values[:, 0] - targets[1:, 0])) + \
-               np.mean(np.abs(results['b'].values[:, 0] - targets[1:, 1]))
+        diff = np.mean(np.abs(results['a'].values[:] - targets[:, 0])) + \
+               np.mean(np.abs(results['b'].values[:] - targets[:, 1]))
         assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of graph with delay distributions
         #####################################################################
 
-        # define input
-        dt = 1e-2
-        sim_time = 100.
-        sim_steps = int(np.round(sim_time / dt, decimals=0))
-        inp = np.zeros((sim_steps, 1)) + 0.5
-
-        net_config = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13").apply(label='net4')
-        net = net_config._compile(vectorization=True, step_size=dt, backend=b, solver='euler')
-        results = net.run(sim_time,
-                          outputs={'a1': 'p1/op9/a',
-                                   'a2': 'p2/op9/a'},
-                          inputs={'p1/op9/I_ext': inp})
-        # TODO: add evaluation of network behavior by hand and compare results against that
+        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
+        results = net.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                          vectorization=True, step_size=dt, backend=b, solver='euler')
+        # TODO: ensure that both edges are correctly translated into the network equations
         net.clear()
 
 

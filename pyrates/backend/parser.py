@@ -852,13 +852,15 @@ class SympyParser(ExpressionParser):
                     inputs.append(label)
                     func_args.append(var['symbol'])
 
-            # retrieve name and function call of the mathematical operation
+            # retrieve name of the mathematical operation
             try:
                 label = str(expr.func).split('\'')[1].split('.')[-1]
             except IndexError:
                 label = str(expr.func)
-            func = self.backend.ops[label]['func'] if label in self.backend.ops \
-                else lambdify(func_args, expr=expr, modules=self.backend.type)
+
+            # define function calls that can be used for the operation
+            backend_funcs = {label: self.backend.ops[label]['func']} if label in self.backend.ops else {}
+            func = lambdify(func_args, expr=expr, modules=[backend_funcs, self.backend.type])
 
             # parse mathematical operation into compute graph
             return self.backend.add_op(inputs, name=label, expr=expr, func=func, vtype='variable')

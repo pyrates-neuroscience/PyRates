@@ -288,6 +288,9 @@ class BaseBackend(object):
                     "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
                     "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
                     "index": {'func': pr_base_index, 'str': "pr_base_index"},
+                    "index_axis": {'func': pr_axis_index, 'str': "pr_axis_index"},
+                    "index_2d": {'func': pr_2d_index, 'str': "pr_2d_index"},
+                    "index_range": {'func': pr_range_index, 'str': "pr_range_index"},
                     }
         if ops:
             self.ops.update(ops)
@@ -711,6 +714,7 @@ class BaseBackend(object):
         else:
 
             # non-differential equation update
+
             if indices:
 
                 # non-DE update stored in a variable slice
@@ -827,6 +831,26 @@ class BaseBackend(object):
             start = expr_str.find('pr_base_index(')
             end = expr_str[start:].find(')') + 1
             expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}[{expr.args[1]}]")
+        while 'pr_2d_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_2d_index(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}[{expr.args[1]}, {expr.args[2]}]")
+        while 'pr_range_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_range_index(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}[{expr.args[1]}:{expr.args[2]}]")
+        while 'pr_axis_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_axis_index(')
+            end = expr_str[start:].find(')') + 1
+            if len(expr.args) == 1:
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}[:]")
+            else:
+                idx = f','.join([':' for _ in range(expr.args[2])])
+                idx = f'{idx},{expr.args[1]}'
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}[{idx}]")
         while 'pr_identity(' in expr_str:
             # replace `no_op` calls with first argument to the function call
             start = expr_str.find('pr_identity(')

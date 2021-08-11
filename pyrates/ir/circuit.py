@@ -134,11 +134,11 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("\t(3) Parsing the model equations into a compute graph...")
 
-        # edge operators
-        self._parse_op_layers_into_computegraph(layers=[0], exclude=False, op_identifier="edge_from_", **kwargs)
-
         # node operators
         self._parse_op_layers_into_computegraph(layers=[], exclude=True, op_identifier="edge_from_", **kwargs)
+
+        # edge operators
+        self._parse_op_layers_into_computegraph(layers=[0], exclude=False, op_identifier="edge_from_", **kwargs)
 
         if verbose:
             print("\t\t...finished.")
@@ -845,9 +845,7 @@ class CircuitIR(AbstractBaseIR):
         return d
 
     def _preprocess_delay(self, delay, discretize=True):
-        if discretize:
-            discretize = self.step_size is None or self.solver != 'scipy'
-        return int(np.round(delay / self.step_size, decimals=0)) if discretize else delay
+        return int(np.round(delay / self.step_size, decimals=0)) if discretize and not self._adaptive_steps else delay
 
     @staticmethod
     def _map_multiple_inputs(inputs: dict, reduce_dim: bool) -> tuple:
@@ -977,7 +975,7 @@ class CircuitIR(AbstractBaseIR):
         max_delay = np.max(delays)
 
         # extract target shape and node
-        node_var = self.get_node_var(f"{node}/{op}/{var}")
+        node_var = self[f"{node}/{op}/{var}"]
         target_shape = node_var['shape']
         node_ir = self[node]
         nodes_tmp = []
@@ -1032,23 +1030,25 @@ class CircuitIR(AbstractBaseIR):
                 idx_apply = len(idx) != len(orders_tmp)
                 val = rates_tmp[idx] if idx_apply else rates_tmp
                 var_shape = (len(val),) if val.shape else ()
-                if i == 0 and target_shape != len(idx):
-                        idx_str = "[source_idx]"
-                        var_dict["source_idx"] = {'vtype': 'constant',
-                                                  'dtype': 'int32',
-                                                  'shape': (len(source_idx_tmp[idx]),),
-                                                  'value': source_idx_tmp[idx]}
-                elif not idx_apply:
-                    idx_str = ""
+                if i == 0 and idx != [0] and target_shape != len(idx):
+                    var_prev_idx = f"index({var_prev}, source_idx)"
+                    var_dict["source_idx"] = {'vtype': 'constant',
+                                              'dtype': 'int32',
+                                              'shape': (len(source_idx_tmp[idx]),),
+                                              'value': source_idx_tmp[idx]}
+                elif idx_apply:
+                    var_prev_idx = get_indexed_var_str(var_prev, idx_str)
+                else:
+                    var_prev_idx = var_prev
 
                 # create new ODE string and corresponding variable definitions
-                buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev}{idx_str} - {var_next})")
+                buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev_idx} - {var_next})")
                 var_dict[var_next] = {'vtype': 'state_var',
-                                      'dtype': self._backend._float_def,
+                                      'dtype': self.backend._float_def,
                                       'shape': var_shape,
                                       'value': 0.}
                 var_dict[rate] = {'vtype': 'constant',
-                                  'dtype': self._backend._float_def,
+                                  'dtype': self.backend._float_def,
                                   'value': val}
 
                 # store indices that are required to fill the edge buffer variable
@@ -1084,18 +1084,17 @@ class CircuitIR(AbstractBaseIR):
 
             # create edge buffer variable
             for i, idx_l, idx_r in final_idx:
-                if i != 0:
-                    buffer_eqs.append(f"{var}_buffered{idx_l} = {var}_d{i}{idx_r}")
-                else:
-                    buffer_eqs.append(f"{var}_buffered{idx_l} = {var}{idx_r}")
+                lhs = get_indexed_var_str(f"{var}_buffered", idx_l)
+                rhs = get_indexed_var_str(f"{var}_d{i}" if i != 0 else var, idx_r)
+                buffer_eqs.append(f"{lhs} = {rhs}")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
-                                           'dtype': self._backend._float_def,
+                                           'dtype': self.backend._float_def,
                                            'shape': (len(delays),),
                                            'value': 0.0}
 
             # re-order buffered variable if necessary
             if any(np.diff(order_idx) != 1):
-                buffer_eqs.append(f"{var}_buffered = {var}_buffered[{var}_buffered_idx]")
+                buffer_eqs.append(f"{var}_buffered = index({var}_buffered, {var}_buffered_idx)")
                 var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
                                                    'dtype': 'int32',
                                                    'shape': (len(order_idx),),
@@ -1104,7 +1103,7 @@ class CircuitIR(AbstractBaseIR):
         # discretized edge buffers
         ##########################
 
-        elif self.step_size is None or self.solver != 'scipy':
+        elif not self._adaptive_steps:
 
             # create buffer variable shapes
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
@@ -1113,12 +1112,12 @@ class CircuitIR(AbstractBaseIR):
                 buffer_shape = (target_shape[0], max_delay + 1)
 
             # create buffer variable definitions
-            var_dict = {f'{var}_buffer': {'vtype': 'state_var',
-                                          'dtype': self._backend._float_def,
+            var_dict = {f'{var}_buffer': {'vtype': 'input',
+                                          'dtype': self.backend._float_def,
                                           'shape': buffer_shape,
                                           'value': 0.},
                         f'{var}_buffered': {'vtype': 'state_var',
-                                            'dtype': self._backend._float_def,
+                                            'dtype': self.backend._float_def,
                                             'shape': (len(delays),),
                                             'value': 0.},
                         f'{var}_delays': {'vtype': 'constant',
@@ -1130,13 +1129,13 @@ class CircuitIR(AbstractBaseIR):
 
             # create buffer equations
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-                buffer_eqs = [f"{var}_buffer[:] = roll({var}_buffer, 1, 0)",
-                              f"{var}_buffer[0] = {var}",
-                              f"{var}_buffered = {var}_buffer[{var}_delays]"]
+                buffer_eqs = [f"index_axis({var}_buffer) = roll({var}_buffer, 1, 0)",
+                              f"index({var}_buffer, 0) = {var}",
+                              f"{var}_buffered = index({var}_buffer, {var}_delays)"]
             else:
-                buffer_eqs = [f"{var}_buffer[:] = roll({var}_buffer, 1, 1)",
-                              f"{var}_buffer[:, 0] = {var}",
-                              f"{var}_buffered = {var}_buffer[source_idx, {var}_delays]"]
+                buffer_eqs = [f"index_axis({var}_buffer) = roll({var}_buffer, 1, 1)",
+                              f"index_axis({var}_buffer, 0, 1) = {var}",
+                              f"{var}_buffered = index_2d({var}_buffer, source_idx, {var}_delays)"]
 
         # continuous delay buffers
         ##########################
@@ -1153,32 +1152,32 @@ class CircuitIR(AbstractBaseIR):
 
             # create buffer variable definitions
             var_dict = {f'{var}_buffer': {'vtype': 'state_var',
-                                          'dtype': self._backend._float_def,
+                                          'dtype': self.backend._float_def,
                                           'shape': buffer_shape,
                                           'value': 0.
                                           },
                         'times': {'vtype': 'state_var',
-                                  'dtype': self._backend._float_def,
+                                  'dtype': self.backend._float_def,
                                   'shape': (len(times),),
                                   'value': np.asarray(times)
                                   },
                         't': {'vtype': 'state_var',
-                              'dtype': self._backend._float_def,
+                              'dtype': self.backend._float_def,
                               'shape': (),
                               'value': 0.0
                               },
                         f'{var}_buffered': {'vtype': 'state_var',
-                                            'dtype': self._backend._float_def,
+                                            'dtype': self.backend._float_def,
                                             'shape': (len(delays),),
                                             'value': 0.},
                         f'{var}_delays': {'vtype': 'constant',
-                                          'dtype': self._backend._float_def,
+                                          'dtype': self.backend._float_def,
                                           'value': delays},
                         f'source_idx': {'vtype': 'constant',
                                         'dtype': 'int32',
                                         'value': source_idx},
                         f'{var}_maxdelay': {'vtype': 'constant',
-                                            'dtype': self._backend._float_def,
+                                            'dtype': self.backend._float_def,
                                             'value': (max_delay_int + 1) * self.step_size},
                         f'{var}_idx': {'vtype': 'state_var',
                                        'dtype': 'bool',
@@ -1201,10 +1200,6 @@ class CircuitIR(AbstractBaseIR):
                               f"{var}_buffer = append({var}, {var}_buffer, 1)",
                               f"{var}_buffered = interpolate_nd(times, {var}_buffer, {var}_delays, source_idx, t)"
                               ]
-            if self._buffered:
-                buffer_eqs.pop(2)
-                buffer_eqs.pop(0)
-            self._buffered = True
 
         # add buffer equations to node operator
         op_info = node_ir[op]
@@ -1214,7 +1209,7 @@ class CircuitIR(AbstractBaseIR):
 
         # update input information of node operators connected to this operator
         for succ in node_ir.op_graph.succ[op]:
-            inputs = self.get_node_var(f"{node}/{succ}")['inputs']
+            inputs = self[f"{node}/{succ}"]['inputs']
             if var not in inputs.keys():
                 inputs[var] = {'sources': {op},
                                'reduce_dim': True}
@@ -1233,15 +1228,15 @@ class CircuitIR(AbstractBaseIR):
         v_idx = np.argwhere(v).squeeze()
         v_dict = {}
         if v_idx.shape and v_idx.shape[0] > 1 and all(np.diff(v_idx) == 1):
-            v_idx_str = f"[{v_idx[0]}:{v_idx[-1] + 1}]"
+            v_idx_str = (f"{v_idx[0]}", f"{v_idx[-1] + 1}")
         elif v_idx.shape and v_idx.shape[0] > 1:
             var_name = f"delay_idx_{self._edge_idx_counter}"
-            v_idx_str = f"[{var_name}]"
+            v_idx_str = f"{var_name}"
             v_dict[var_name] = {'value': v_idx, 'vtype': 'constant'}
             self._edge_idx_counter += 1
         else:
             try:
-                v_idx_str = f"[{v_idx.max()}]"
+                v_idx_str = f"{v_idx.max()}"
             except ValueError:
                 v_idx_str = ""
         return v_idx.tolist(), v_idx_str, v_dict
@@ -1268,7 +1263,7 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        target_shape = self.get_node_var(f"{node}/{op}/{var}")['shape']
+        target_shape = self[f"{node}/{op}/{var}"]['shape']
         node_ir = self[node]
 
         # create collector equation
@@ -1276,7 +1271,7 @@ class CircuitIR(AbstractBaseIR):
 
         # create collector variable definition
         val_dict = {'vtype': 'state_var',
-                    'dtype': self._backend._float_def if self._backend is not None else float,
+                    'dtype': self.backend._float_def,
                     'shape': target_shape,
                     'value': 0.
                     }
@@ -1293,7 +1288,7 @@ class CircuitIR(AbstractBaseIR):
         node_ir.add_op_edge(f'{op}_{var}_col_{idx}', op)
 
         # add input information to target operator
-        op_inputs = self.get_node_var(f"{node}/{op}")['inputs']
+        op_inputs = self[f"{node}/{op}"]['inputs']
         if var in op_inputs.keys():
             op_inputs[var]['sources'].add(f'{op}_{var}_col_{idx}')
         else:
@@ -1430,51 +1425,9 @@ class SubCircuitView(AbstractBaseIR):
         return f"{self.__class__.__name__} on '{self.subgraph_key}' in {self.top_level_circuit}"
 
 
-def sort_equations(edge_eqs: list, node_eqs: list) -> list:
-    """
-
-    Parameters
-    ----------
-    edge_eqs
-    node_eqs
-
-    Returns
-    -------
-
-    """
-
-    # clean up equations
-    for i, layer in enumerate(edge_eqs.copy()):
-        if not layer:
-            edge_eqs.pop(i)
-    for i, layer in enumerate(node_eqs.copy()):
-        if not layer:
-            node_eqs.pop(i)
-
-    # re-order node equations
-    eqs_new = []
-    n_popped = 0
-    for i, node_layer in enumerate(node_eqs.copy()):
-
-        # collect non-differential equations from node layer
-        layer_eqs = []
-        for eq, scope in node_layer.copy():
-            if not is_diff_eq(eq):
-                layer_eqs.append((eq, scope))
-                node_layer.pop(node_layer.index((eq, scope)))
-
-        # add non-differential equations to new equations
-        if layer_eqs:
-            eqs_new.append(layer_eqs)
-
-        # clean-up already added equations from node equations
-        if node_layer:
-            node_eqs[i - n_popped] = node_layer
-        else:
-            node_eqs.pop(i - n_popped)
-            n_popped += 1
-
-    eqs_new += edge_eqs
-    eqs_new += node_eqs
-
-    return eqs_new
+def get_indexed_var_str(var: str, idx: Union[tuple, str]):
+    if idx is tuple:
+        return f"index_range({var}, {idx[0]}, {idx[1]})"
+    if idx:
+        return f"index({var}, {idx})"
+    return var

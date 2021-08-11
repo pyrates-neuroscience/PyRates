@@ -89,3 +89,18 @@ def pr_interp(f, x_new):
 
 def pr_base_index(x, idx):
     return x[idx]
+
+
+def pr_2d_index(x, idx1, idx2):
+    return x[idx1, idx2]
+
+
+def pr_range_index(x, idx1, idx2):
+    return x[idx1:idx2]
+
+
+def pr_axis_index(x, idx=None, axis=0):
+    if idx:
+        return x[idx] if axis == 0 else x[:, idx]
+    else:
+        return x[:]
