@@ -127,11 +127,11 @@ def test_3_3_wilson_cowan():
     inp[in_start:in_start + in_dur] = 5.0
 
     # set up circuit
-    wc1 = CircuitIR.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_simple")
-    wc1 = wc1._compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+    wc1 = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_simple")
 
     # perform simulation
-    r1 = wc1.run(T, sampling_step_size=dts, inputs={"E/Op_rate/I_ext": inp}, outputs={"R_e": "E/Op_rate/r"})
+    r1 = wc1.run(T, sampling_step_size=dts, inputs={"E/Op_rate/I_ext": inp}, outputs={"R_e": "E/Op_rate/r"},
+                 vectorization=True, backend='numpy', solver='scipy', step_size=dt)
     wc1.clear()
 
     # test firing rate relationships at pre-defined times
@@ -153,11 +153,11 @@ def test_3_3_wilson_cowan():
     inp[in_start:in_start + in_dur] = 5.0
 
     # set up circuit
-    wc2 = CircuitIR.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp")
-    wc2 = wc2._compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+    wc2 = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp")
 
     # perform simulation
-    r2 = wc2.run(T, sampling_step_size=dts, inputs={"E/E_op/I_ext": inp}, outputs={"V_e": "E/E_op/v"})
+    r2 = wc2.run(T, sampling_step_size=dts, inputs={"E/E_op/I_ext": inp}, outputs={"V_e": "E/E_op/v"},
+                 vectorization=True, backend='numpy', solver='scipy', step_size=dt)
     wc2.clear()
 
     # test firing rate relationships at pre-defined times
@@ -179,11 +179,11 @@ def test_3_4_kuramoto():
     dts = 1e-2
 
     # set up circuit
-    km1 = CircuitIR.from_yaml("model_templates.kuramoto.simple_kuramoto.KM_single")
-    km1 = km1._compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+    km1 = CircuitTemplate.from_yaml("model_templates.kuramoto.simple_kuramoto.KM_single")
 
     # perform simulation
-    r1 = km1.run(T, sampling_step_size=dts, outputs={"theta": "p1/Op_base/theta"})
+    r1 = km1.run(T, sampling_step_size=dts, outputs={"theta": "p1/Op_base/theta"}, vectorization=True, backend='numpy',
+                 solver='scipy', step_size=dt)
     km1.clear()
 
     # test linear oscillator properties
@@ -200,11 +200,11 @@ def test_3_4_kuramoto():
     dts = 1e-2
 
     # set up circuit
-    km2 = CircuitIR.from_yaml("model_templates.kuramoto.simple_kuramoto.KMN")
-    km2 = km2._compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+    km2 = CircuitTemplate.from_yaml("model_templates.kuramoto.simple_kuramoto.KMN")
 
     # perform simulation
-    r2 = km2.run(T, sampling_step_size=dts, outputs={"theta1": "p1/Op_base/theta", "theta2": "p2/Op_base/theta"})
+    r2 = km2.run(T, sampling_step_size=dts, outputs={"theta1": "p1/Op_base/theta", "theta2": "p2/Op_base/theta"},
+                 vectorization=True, backend='numpy', solver='scipy', step_size=dt)
     km2.clear()
 
     # test whether oscillator 2 showed a faster phase development than oscillator 1
@@ -221,12 +221,12 @@ def test_3_4_kuramoto():
     inp2 = np.random.randn(int(np.round(T / dt))) * 0.1
 
     # set up circuit
-    km3 = CircuitIR.from_yaml("model_templates.kuramoto.simple_kuramoto.KMN_noise")
-    km3 = km3._compile(vectorization=True, backend='numpy', solver='scipy', step_size=dt)
+    km3 = CircuitTemplate.from_yaml("model_templates.kuramoto.simple_kuramoto.KMN_noise")
 
     # perform simulation
     r3 = km3.run(T, sampling_step_size=dts, outputs={"theta1": "p1/Op_noise/theta", "theta2": "p2/Op_noise/theta"},
-                 inputs={"p1/Op_noise/xi": inp1, "p2/Op_noise/xi": inp2})
+                 inputs={"p1/Op_noise/xi": inp1, "p2/Op_noise/xi": inp2}, vectorization=True, backend='numpy',
+                 solver='scipy', step_size=dt)
     km3.clear()
 
     # test whether oscillator 2 showed a faster phase development than oscillator 1

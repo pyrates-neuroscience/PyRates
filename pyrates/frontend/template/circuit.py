@@ -38,9 +38,9 @@ import gc
 from typing import List, Union, Dict, Optional
 from copy import deepcopy
 from pandas import DataFrame
+import numpy as np
 
 # pyrates internal imports
-import numpy as np
 
 from pyrates import PyRatesException
 from pyrates.frontend.template._io import _complete_template_path
@@ -97,6 +97,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         self.label = label
         self._ir = None
+        self._depth = self._get_hierarchy_depth()
 
     def update_template(self, name: str = None, path: str = None, description: str = None,
                         label: str = None, circuits: dict = None, nodes: dict = None,
@@ -142,13 +143,12 @@ class CircuitTemplate(AbstractBaseTemplate):
                               edges=edges)
 
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
-            outputs: Optional[dict] = None, sampling_step_size: Optional[float] = None, solver: str = 'euler',
-            backend: str = None, out_dir: Optional[str] = None, verbose: bool = True, profile: bool = False,
-            apply_kwargs: dict = None, **kwargs):
+            outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
+            solver: str = 'euler', backend: str = None, out_dir: Optional[str] = None, verbose: bool = True,
+            profile: bool = False, apply_kwargs: dict = None, clear: bool = True, **kwargs):
 
-        # TODO 3: CircuitIR.__init__() should integrate the CircuitIR.compile() method and be automatically invoked by calling
-        #  apply
-        # TODO 4: call CircuitIR.run()
+        # TODO: ensure that node and operator keys provided via `inputs`, `outputs` and via YAML templates are treated
+        #  consistently. Currently, node and operator keys may change during vectorization.
 
         # add extrinsic inputs to network
         #################################
@@ -157,58 +157,34 @@ class CircuitTemplate(AbstractBaseTemplate):
         net = self
         if inputs:
             for target, in_array in inputs.items():
-
-                *node_id, op, var = target.split('/')
-
-                # get network nodes that input should be provided to
-                target_nodes = net.get_nodes(node_id)
-
-                # add input operators to target nodes
-                node_updates = {}
-                for n in target_nodes:
-                    op_key, new_operator = get_input_operator(var, in_array, adaptive_steps, simulation_time)
-                    node_template = net.get_node_template(n)
-                    new_template = node_template.update_template(operators={new_operator: {}})
-                    node_updates[n] = new_template
-
-                # update circuit template
-                net = net.update_template(nodes=node_updates)
+                net = net._add_input(target, in_array, adaptive_steps, simulation_time)
 
         # translate circuit template into a graph representation
         ########################################################
 
         if not apply_kwargs:
             apply_kwargs = {}
-        self._ir, node_map = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
-                                       step_size=step_size, **apply_kwargs)
+        net._ir, node_map = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
+                                      step_size=step_size, **apply_kwargs)
 
         # perform simulation via the graph representation
         #################################################
 
-        # TODO: Decide which versions of the CircuitTemplate/CircuitIR instances users should be able to interact with.
-        #  Might be necessary to create a 'get_var' method that uses the node_map from above
-
         # create mapping between requested output variables and the current network variables
-        output_map = {}
-        outputs_ir = {}
-        for key, out in outputs.items():
-
-            *out_nodes, out_op, out_var = out.split('/')
-            output_map[key] = []
-
-            # get all requested node variables
-            target_nodes = self.get_nodes(out_nodes)
-
-            # extract indices for these nodes
-            for target_node in target_nodes:
-                backend_node, idx = node_map[target_node]
-                output_map[key].append(idx)
-                outputs_ir[key] = f"{backend_node.name}/{out_op}/{out_var}"
+        if type(outputs) is dict:
+            output_map, outputs_ir = net._map_output_variables(outputs, node_map=node_map)
+        else:
+            output_map = {}
+            outputs_ir = {}
+            for output in outputs:
+                out_map_tmp, out_vars_tmp = net._map_output_variables(output, node_map=node_map)
+                output_map.update(out_map_tmp)
+                outputs_ir.update(out_vars_tmp)
 
         # perform simulation
-        outputs = self._ir.run(simulation_time=simulation_time, step_size=step_size, solver=solver,
-                               sampling_step_size=sampling_step_size, outputs=outputs_ir, out_dir=out_dir,
-                               profile=profile, **kwargs)
+        outputs = net._ir.run(simulation_time=simulation_time, step_size=step_size, solver=solver,
+                              sampling_step_size=sampling_step_size, outputs=outputs_ir, out_dir=out_dir,
+                              profile=profile, **kwargs)
 
         # apply indices to output variables
         for key, idx in output_map.items():
@@ -223,6 +199,9 @@ class CircuitTemplate(AbstractBaseTemplate):
                 outputs[key] = np.interp(new_times, time_vec, val)
             time_vec = new_times
         results = DataFrame(outputs, index=time_vec)
+
+        if clear:
+            net.clear()
 
         return results
 
@@ -394,7 +373,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         return CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
                          **kwargs), node_map
 
-    def get_nodes(self, node_identifier: Union[str, list]) -> list:
+    def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> list:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.
 
         Parameters
@@ -403,6 +382,8 @@ class CircuitTemplate(AbstractBaseTemplate):
             Can be a simple string or a list of strings. If the CircuitTemplate is a hierarchical circuit (composed of
             circuits itself), different list entries should refer to the different hierarchy levels. Alternatively,
             separation via slashes can be used if a string is provided.
+        var_identifier
+            If provided, only nodes will be returned for which this variable is defined.
 
         Returns
         -------
@@ -420,34 +401,35 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             # return target nodes of circuit based on single identifier
             if node_identifier[0] in net:
-                return node_identifier
+                return self._get_nodes_with_var(var_identifier, nodes=node_identifier)
             if node_identifier[0] == 'all':
-                nodes = []
-                for key, node in net.items():
-                    nodes.extend(collect_nodes(key, node))
-                return nodes
+                return self._get_nodes_with_var(var_identifier, nodes=list(net.keys()))
             raise ValueError(f'Node with label {node_identifier[0]} could not be found in CircuitTemplate {self.name}.')
 
         else:
 
             # collect target nodes from circuit based on hierarchical identifier
             nodes = ['']
-            for i, node_lvl in enumerate(node_identifier):
+            net_tmp = net
+            for _, node_lvl in enumerate(node_identifier):
+
+                # get network node identifiers that should be added to overall node list
                 if node_lvl == 'all':
-                    nodes_tmp = []
-                    for key, c in net.items():
-                        nodes_tmp.extend(collect_nodes(key, c))
+                    nodes_tmp = list(net_tmp.keys())
                 else:
-                    nodes_tmp = collect_nodes(node_lvl, net[node_lvl])
+                    net_tmp = net_tmp[node_lvl]
+                    if isinstance(net_tmp, CircuitTemplate):
+                        net_tmp = net_tmp.circuits if net_tmp.circuits else net_tmp.nodes
+                    nodes_tmp = [node_lvl]
 
                 # join hierarchical levels via slash notation
                 nodes_new = []
                 for n1 in nodes:
                     for n2 in nodes_tmp:
-                        nodes_new.append("/".join((n1, n2)))
+                        nodes_new.append("/".join((n1, n2)) if n1 else n2)
                 nodes = nodes_new
 
-            return nodes
+            return self._get_nodes_with_var(var_identifier, nodes=nodes)
 
     def get_edges(self, source: Union[str, list], target: Union[str, list]) -> list:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.
@@ -521,6 +503,24 @@ class CircuitTemplate(AbstractBaseTemplate):
             return net_node.get_node_template(node[1:])
         return net_node
 
+    def collect_edges(self):
+        """
+        Collect all edges that exist in circuit.
+
+        Returns
+        -------
+        List of edge tuples with entries 1 - source variable, 2 - target variable, 3 - edge template,
+        4 - edge dictionary. Source and target variables are strings that use slash notations to resolve node
+        hierarchies.
+
+        """
+        edges = self.edges
+        for c_scope, c in self.circuits.items():
+            edges_tmp = c.collect_edges()
+            for svar, tvar, template, edge_dict in edges_tmp:
+                edges.append((f"{c_scope}/{svar}", f"{c_scope}/{tvar}", template, edge_dict))
+        return edges
+
     def clear(self):
         """Removes all temporary files and directories that may have been created during simulations of that circuit.
         Also deletes operator template caches, imports and path variables from working memory."""
@@ -570,23 +570,103 @@ class CircuitTemplate(AbstractBaseTemplate):
             edges_with_templates.append((source, target, template, variables))
         return edges_with_templates
 
-    def collect_edges(self):
-        """
-        Collect all edges that exist in circuit.
+    def _add_input(self, target: str, inp: np.ndarray, adaptive: bool, sim_time: float):
 
-        Returns
-        -------
-        List of edge tuples with entries 1 - source variable, 2 - target variable, 3 - edge template,
-        4 - edge dictionary. Source and target variables are strings that use slash notations to resolve node
-        hierarchies.
+        # extract target nodes from network
+        *node_id, op, var = target.split('/')
+        target_nodes = self.get_nodes(node_id)
 
-        """
-        edges = self.edges
-        for c_scope, c in self.circuits.items():
-            edges_tmp = c.collect_edges()
-            for svar, tvar, template, edge_dict in edges_tmp:
-                edges.append((f"{c_scope}/{svar}", f"{c_scope}/{tvar}", template, edge_dict))
-        return edges
+        # create input node
+        node_key, op_key, in_node = create_input_node(var, inp, adaptive, sim_time)
+
+        # ensure that inputs match the CircuitTemplate hierarchy
+        path, net = self._get_input_lvl(self._depth)
+        if path:
+            node_key = "/".join((path, node_key))
+
+        # add input node to respective circuit template
+        net = net.update_template(nodes={node_key: in_node})
+
+        # connect input node to target nodes
+        edges = [(f"{node_key}/{op_key}/{var}", f"{t}/{op}/{var}", None, {'weight': 1.0})
+                 for t in target_nodes]
+
+        return net.update_template(edges=edges)
+
+    def _get_input_lvl(self, depth: int) -> tuple:
+
+        if depth > self._depth:
+            raise ValueError('Input depth does not match the hierarchical depth of the circuit.')
+
+        path = []
+        net = self
+        for i in range(depth):
+            circuit_key = f"input_lvl_{i}"
+            if circuit_key not in net.circuits:
+                c = CircuitTemplate(name=circuit_key, path='none')
+                net = net.update_template(circuits={circuit_key: c})
+            net = net.circuits[circuit_key]
+            path.append(circuit_key)
+        return "/".join(path), net
+
+    def _get_nodes_with_var(self, var: tuple, nodes: list) -> list:
+        if not var:
+            return nodes
+        final_nodes = []
+        op_key, var_key = var
+        for n in nodes:
+            node = self.nodes[n]
+            op_keys = [op.name for op in node.operators]
+            if op_key in op_keys:
+                op = list(node.operators)[op_keys.index(op_key)]
+                op_vars = list(op.variables)
+                if var_key in op_vars:
+                    final_nodes.append(n)
+        return final_nodes
+
+    def _map_output_variables(self, outputs: Union[dict, str], node_map: dict) -> tuple:
+
+        out_map = {}
+        out_vars = {}
+
+        if type(outputs) is dict:
+            for key, out in outputs.items():
+
+                *out_nodes, out_op, out_var = out.split('/')
+
+                # get all requested node variables
+                target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
+                if len(target_nodes) > 1:
+                    raise ValueError(f'Requested output with key {key} refers to multiple variables in the network. '
+                                     f'For such outputs, key-value assignments via dictionaries are not supported. '
+                                     f'Please provide the outputs of the form of {out} within a list instead.')
+                elif len(target_nodes) < 1:
+                    raise ValueError(f'Requested output variable {out} does not exist in this circuit.')
+
+                # extract index for single output node
+                backend_node, idx = node_map[target_nodes[0]]
+                out_map[key] = [idx]
+                out_vars[key] = f"{backend_node.name}/{out_op}/{out_var}"
+        else:
+
+            *out_nodes, out_op, out_var = outputs.split('/')
+            target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
+
+            # extract index for single output node
+            for t in target_nodes:
+                backend_node, idx = node_map[t]
+                out_map[t] = [idx]
+                out_vars[t] = f"{backend_node.name}/{out_op}/{out_var}"
+
+        return out_map, out_vars
+
+    def _get_hierarchy_depth(self):
+        circuit_lvls = 0
+        net = self
+        while net.circuits:
+            circuit_lvls += 1
+            net = net.circuits[list(net.circuits)[0]]
+        return circuit_lvls
 
 
 def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
@@ -644,7 +724,7 @@ def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
                                               variables=new_node[op.name], description=op.__doc__))
 
         # create vectorized node
-        name = old_template.name
+        name = get_unique_node_label(old_template.name, list(nodes.keys()))
         new_node = NodeTemplate(name=name, path=old_template.path, operators=operators,
                                 label=old_template.label, description=old_template.__doc__)
 
@@ -700,9 +780,6 @@ def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
 
     # finalize new, vectorized circuit
     ##################################
-
-    #  TODO: decide whether to introduce the node hierarchy at this point or not (does that even make sense in a
-    #   vectorized circuit?)
 
     c_new = CircuitTemplate(name=circuit.name, path=circuit.path, description=circuit.__doc__, label=circuit.label,
                             nodes=nodes, edges=edges)
@@ -764,7 +841,7 @@ def is_integration_adaptive(solver: str, **solver_kwargs):
     return solver == 'scipy'
 
 
-def get_input_operator(var: str, inp: np.ndarray, continuous: bool, T: float) -> tuple:
+def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> tuple:
 
     # create input equationd and variables
     ######################################
@@ -795,13 +872,26 @@ def get_input_operator(var: str, inp: np.ndarray, continuous: bool, T: float) ->
     # create input operator
     #######################
 
-    op_key = f'{var}_input_generator'
+    op_key = f'{var}_input_op'
     in_op = OperatorTemplate(name=op_key, path='none', equations=eqs, variables=var_dict)
+    node_key = f'{var}_input_node'
+    in_node = NodeTemplate(name=node_key, path='none', operators=[in_op])
 
-    return op_key, in_op
+    return node_key, op_key, in_node
 
 
 def collect_nodes(key: str, val: Union[CircuitTemplate, NodeTemplate]):
     if isinstance(val, CircuitTemplate):
         return val.get_nodes(['all'])
     return [key]
+
+
+def get_unique_node_label(label: str, labels: list) -> str:
+    while label in labels:
+        try:
+            label_split = label.split("_")
+            idx = int(label_split[-1]) + 1
+            label = "_".join(label_split[:-1].append(idx))
+        except ValueError:
+            label = f"{label}_0"
+    return label

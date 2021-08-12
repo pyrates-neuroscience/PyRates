@@ -1279,8 +1279,8 @@ class CircuitIR(AbstractBaseIR):
                     'shape': target_shape,
                     'value': 0.
                     }
-        var_dict = {f'{var}_col_{idx}': val_dict,
-                    var: val_dict}
+        var_dict = {f'{var}_col_{idx}': val_dict.copy(),
+                    var: val_dict.copy()}
         # added the actual output variable as well.
 
         # add collector operator to operator graph

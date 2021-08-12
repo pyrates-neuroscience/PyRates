@@ -1175,3 +1175,18 @@ def is_diff_eq(eq: str) -> bool:
         de = False
 
     return de
+
+
+def var_in_expression(var: str, expr: str) -> bool:
+
+    # define follow-up operations/signs that are allowed to follow directly after term in eq
+    allowed_follow_ops = '+=*/^<>=!.%@[]():, '
+
+    # find variable in expression
+    idx = expr.find(var)
+    idx_follow_op = idx + len(var)
+
+    # decide whether variable actually exists in expression
+    return ((idx_follow_op < len(expr) and expr[idx_follow_op] in allowed_follow_ops) and
+        (idx == 0 or expr[idx - 1] in allowed_follow_ops)) or \
+            (idx_follow_op == len(expr) and expr[idx - 1] in allowed_follow_ops)
