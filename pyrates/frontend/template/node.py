@@ -27,11 +27,13 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 from pyrates.frontend.template.operator_graph import OperatorGraphTemplate
-from pyrates.ir.node import NodeIR, VectorizedNodeIR
+from pyrates.ir.node import cache_func
 
 
 class NodeTemplate(OperatorGraphTemplate):
     """Generic template for a node in the computational backend graph. A single node may encompass several
     different operators. One template defines a typical structure of a given node type."""
 
-    target_ir = VectorizedNodeIR
+    @staticmethod
+    def target_ir(operators: dict, values: dict = None, template: str = None):
+        return cache_func(operators, values, template)

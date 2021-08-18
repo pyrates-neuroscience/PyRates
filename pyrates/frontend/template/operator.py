@@ -34,12 +34,11 @@ from typing import Union
 # pyrates internal imports
 from pyrates import PyRatesException
 from pyrates.frontend.template.abc import AbstractBaseTemplate
-from pyrates.frontend.utility import deep_freeze
 
 # meta infos
 from pyrates.ir.operator import OperatorIR
 
-__author__ = " Daniel Rose"
+__author__ = " Daniel Rose, Richard Gast"
 __status__ = "Development"
 
 
@@ -50,10 +49,6 @@ class OperatorTemplate(AbstractBaseTemplate):
 
     cache = {}  # tracks all unique instances of applied operator templates
     target_ir = OperatorIR
-    key_map = {}
-    key_counter = {}
-
-    # key_map = {}  # tracks renaming of of operator keys to have shorter unique keys
 
     def __init__(self, name: str, path: str, equations: Union[list, str], variables: dict,
                  description: str = "An operator template."):
@@ -62,12 +57,12 @@ class OperatorTemplate(AbstractBaseTemplate):
         super().__init__(name, path, description)
 
         if isinstance(equations, str):
-            self.equations = [intern(equations)]
+            self.equations = intern(equations)
         else:
             self.equations = [intern(eq) for eq in equations]
         self.variables = variables
 
-    def update_template(self, name: str, path: str, equations: Union[str, list, dict] = None,
+    def update_template(self, name: str = None, path: str = None, equations: Union[str, list, dict] = None,
                         variables: dict = None, description: str = None):
         """Update all entries of the Operator template in their respective ways."""
 
@@ -109,15 +104,19 @@ class OperatorTemplate(AbstractBaseTemplate):
 
         if not description:
             description = self.__doc__  # or do we want to enforce documenting a template?
+        if not name:
+            name = self.name
+        if not path:
+            path = self.path
 
+        # decide whether template requires a new key or not
         return self.__class__(name=name, path=path, equations=equations, variables=variables,
                               description=description)
 
     def apply(self, return_key=False, values: dict = None):
         """Returns the non-editable but unique, cashed definition of the operator."""
 
-        # key for global operator cache is template name.
-        # ToDo: Consider replacing this cache with a separate by-circuit cache.
+        # key for global operator cache is the frozen list of equation strings.
         key = self.name
         if values is None:
             values = {}
@@ -156,16 +155,9 @@ class OperatorTemplate(AbstractBaseTemplate):
                 # pack variable defining properties into tuple
                 variables.append((vname, vtype, dtype, shape))
 
-            # reduce order of ODE if necessary
-            # this step is currently skipped to streamline equation interface
-            # instead equations need to be given as either non-differential equations or first-order
-            # linear differential equations
-            # *equations, variables = cls._reduce_ode_order(template.equations, variables)
             equations = self.equations
-
             instance = self.target_ir(equations=equations, variables=variables,
-                                      inputs=inputs, output=output,
-                                      template=self)
+                                      inputs=inputs, output=output, template=self)
             self.cache[key] = (instance, default_values)
 
         if return_key:

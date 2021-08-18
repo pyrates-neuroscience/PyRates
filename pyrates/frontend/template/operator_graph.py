@@ -32,23 +32,16 @@ from copy import deepcopy
 from pyrates import PyRatesException
 from pyrates.frontend.template import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
-from pyrates.ir.operator_graph import OperatorGraph
 from pyrates.frontend.template.operator import OperatorTemplate
 
 
 class OperatorGraphTemplate(AbstractBaseTemplate):
-    target_ir = None
 
     def __init__(self, name: str, path: str, operators: Union[str, List[str], dict, List[AbstractBaseTemplate]],
-                 description: str = "A node or an edge.", label: str = None):
+                 description: str = "A node or an edge."):
         """For now: only allow single equation in operator template."""
 
         super().__init__(name, path, description)
-
-        if label:
-            self.label = label
-        else:
-            self.label = self.name
 
         self.operators = {}  # dictionary with operator path as key and variations to the template as values
         if isinstance(operators, str):
@@ -78,8 +71,8 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
         path = _complete_template_path(path, self.path)
         return OperatorTemplate.from_yaml(path)
 
-    def update_template(self, name: str = None, path: str = None, label: str = None,
-                        operators: Union[str, List[str], dict] = None, description: str = None):
+    def update_template(self, name: str = None, path: str = None, operators: Union[str, List[str], dict] = None,
+                        description: str = None):
         """Update all entries of a base edge template to a more specific template."""
 
         if not name:
@@ -91,16 +84,12 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
         if not description:
             description = self.__doc__
 
-        if not label:
-            label = self.label
-
         if operators:
             operators = _update_operators(self.operators, operators)
         else:
             operators = self.operators
 
-        return self.__class__(name=name, path=path, label=label, operators=operators,
-                              description=description)
+        return self.__class__(name=name, path=path, operators=operators, description=description)
 
     def apply(self, values: dict = None):
         """ Apply template to gain a node or edge intermediate representation.
@@ -145,7 +134,11 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
                 "Found value updates that did not fit any operator by name. This may be due to a "
                 "typo in specifying the operator or variable to update. Remaining variables:"
                 f"{value_updates}")
-        return self.target_ir(operators=operators, values=all_values, template=self.path)
+        return self.target_ir(operators, values=all_values, template=self.path)
+
+    @staticmethod
+    def target_ir(*args, **kwargs):
+        raise NotImplementedError
 
 
 def _update_operators(base_operators: dict, updates: Union[str, List[str], dict]):

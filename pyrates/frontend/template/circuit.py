@@ -52,6 +52,7 @@ from pyrates.frontend.template.operator import OperatorTemplate
 # meta infos
 from pyrates.ir.circuit import CircuitIR
 from pyrates.ir.edge import EdgeIR
+from pyrates.ir.node import cache_func
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -60,8 +61,8 @@ __status__ = "Development"
 class CircuitTemplate(AbstractBaseTemplate):
     target_ir = CircuitIR
 
-    def __init__(self, name: str, path: str, description: str = "A circuit template.", label: str = "circuit",
-                 circuits: dict = None, nodes: dict = None, edges: List[tuple] = None):
+    def __init__(self, name: str, path: str, description: str = "A circuit template.", circuits: dict = None,
+                 nodes: dict = None, edges: List[tuple] = None):
 
         super().__init__(name, path, description)
 
@@ -95,13 +96,12 @@ class CircuitTemplate(AbstractBaseTemplate):
         else:
             self.edges = []
 
-        self.label = label
         self._ir = None
         self._depth = self._get_hierarchy_depth()
+        self._ir_map = {}
 
-    def update_template(self, name: str = None, path: str = None, description: str = None,
-                        label: str = None, circuits: dict = None, nodes: dict = None,
-                        edges: List[tuple] = None):
+    def update_template(self, name: str = None, path: str = None, description: str = None, circuits: dict = None,
+                        nodes: dict = None, edges: List[tuple] = None):
         """Update all entries of the circuit template in their respective ways."""
 
         if nodes and circuits:
@@ -120,9 +120,6 @@ class CircuitTemplate(AbstractBaseTemplate):
         if not description:
             description = self.__doc__
 
-        if not label:
-            label = self.label
-
         if nodes:
             nodes = update_dict(self.nodes, nodes)
         else:
@@ -138,9 +135,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         else:
             edges = self.edges
 
-        return self.__class__(name=name, path=path, description=description,
-                              label=label, circuits=circuits, nodes=nodes,
-                              edges=edges)
+        return self.__class__(name=name, path=path, description=description,circuits=circuits, nodes=nodes, edges=edges)
 
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
@@ -233,10 +228,13 @@ class CircuitTemplate(AbstractBaseTemplate):
         """
 
         if not label:
-            label = self.label
+            label = self.name
         if not edge_values:
             edge_values = {}
 
+        # TODO: Rework apply/vectorization procedure. Goal: Create a map between original and new nodes+operators,
+        #  vectorize nodes during apply calls to prevent looping over nodes multiple times,
+        #  vectorize based on operator equation-based hashes
         # vectorize network if requested
         template, node_map = vectorize_circuit(deepcopy(self), vectorize)
 
@@ -260,14 +258,19 @@ class CircuitTemplate(AbstractBaseTemplate):
                     values[n]["/".join((op, var))] = value
 
         # go through node templates and transform them into intermediate representations
-        node_keys = template.get_nodes(['all'])
+        node_keys = self.get_nodes(['all'])
         nodes = {}
+        label_map = {}
         for node in node_keys:
             updates = values[node] if node in values else {}
-            node_template = template.get_node_template(node)
-            nodes[node] = node_template.apply(values=updates)
+            node_template = self.get_node_template(node)
+            node_ir, label_map_tmp = node_template.apply(values=updates)
+            nodes[node] = node_ir
+            for key, val in label_map_tmp.items():
+                label_map[f"{node}/{key}"] = f"{node}/{val}"
 
         # reformat edge templates to EdgeIR instances
+        # TODO: vectorize edges during template application and make use of label map throughout the rest of the IR application process
         edges = []
         for (source, target, edge_template, values) in template.edges:
 
@@ -720,13 +723,11 @@ def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
         # create vectorized operators
         operators = []
         for op in old_template.operators:
-            operators.append(OperatorTemplate(name=op.name, path=op.path, equations=op.equations,
-                                              variables=new_node[op.name], description=op.__doc__))
+            operators.append(op.update_template(variables=new_node[op.name]))
 
         # create vectorized node
         name = get_unique_node_label(old_template.name, list(nodes.keys()))
-        new_node = NodeTemplate(name=name, path=old_template.path, operators=operators,
-                                label=old_template.label, description=old_template.__doc__)
+        new_node = NodeTemplate(name=name, operators=operators, path=old_template.path)
 
         # store new node information
         nodes[name] = new_node
@@ -781,8 +782,7 @@ def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
     # finalize new, vectorized circuit
     ##################################
 
-    c_new = CircuitTemplate(name=circuit.name, path=circuit.path, description=circuit.__doc__, label=circuit.label,
-                            nodes=nodes, edges=edges)
+    c_new = CircuitTemplate(nodes=nodes, edges=edges, name=circuit.name, path=circuit.path)
 
     return c_new, node_map
 

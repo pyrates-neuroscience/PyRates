@@ -39,48 +39,6 @@ from pyrates.ir.operator import OperatorIR
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
-# define cache for OperatorGraph instances
-
-op_graph_cache = {}
-
-
-def cache_op_graph(cls):
-    """Cache unique instances of operator graphs and return the instance. If hash of Operator graph is not known yet,
-    a new instance will be created. Otherwise, an instance from cash will be returned."""
-
-    def cache_func(operators: Dict[str, OperatorIR] = None, template: str = ""):
-
-        if operators is None:
-            operators = {}
-
-        # compute hash from incoming operators. Different order of operators in input might lead to different hash.
-        h = hash(tuple(operators.values()))
-
-        changed_labels = False
-        try:
-            op_graph = op_graph_cache[h]
-        except KeyError:
-            op_graph = cls(operators, template)
-            # test, if hash computation leads to same result
-            assert h == hash(op_graph)
-            op_graph_cache[h] = op_graph
-        else:
-            # temporary workaround to obtain correct labels for values.
-            changed_labels = {}
-            for name, op in operators.items():
-                op_hash = hash(op)
-                for cached_name, cached_op in op_graph:
-                    if op_hash == hash(cached_op["operator"]):
-                        changed_labels[name] = cached_name
-                        # should only ever be able to find one, right? this fails (either way, if two operators with
-                        # identical hash exist in the same operator graph
-                        # fixme
-                        break
-
-        return op_graph, changed_labels
-
-    return cache_func
-
 
 class OperatorGraph(DiGraph):
     """Intermediate representation for nodes and edges."""
@@ -97,7 +55,6 @@ class OperatorGraph(DiGraph):
         # collect all information about output variables of operators
         #############################################################
         all_outputs = {}  # type: Dict[str, List[str]]
-        # op_inputs, op_outputs = set(), set()
         for key, operator in operators.items():
 
             # add operator as node to local operator_graph

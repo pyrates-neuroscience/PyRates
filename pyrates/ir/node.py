@@ -27,31 +27,63 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from copy import copy, deepcopy
 from typing import Iterator
 
-import numpy as np
-
 from pyrates.ir.abc import AbstractBaseIR
-from pyrates.ir.operator_graph import OperatorGraph, VectorizedOperatorGraph, cache_op_graph
+from pyrates.ir.operator_graph import OperatorGraph, VectorizedOperatorGraph
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
+
+node_cache = {}
+op_cache = {}
+
+
+def cache_func(operators: dict, values: dict = None, template: str = None):
+    if operators is None:
+        operators = {}
+
+    # compute hash from incoming operators. Different order of operators in input might lead to different hash.
+    op_graph = OperatorGraph(operators)
+    h = hash(op_graph)
+
+    changed_labels = {}
+    try:
+
+        # extract node from cache
+        node = node_cache[h]
+
+        # change operator labels if necessary
+        for name, op in operators.items():
+            op_hash = hash(op)
+            for cached_name, cached_op in op_cache[h]:
+                if op_hash == hash(cached_op["operator"]):
+                    changed_labels[name] = cached_name
+                    try:
+                        for old_name, new_name in changed_labels.items():
+                            values[new_name] = values.pop(old_name)
+                    except AttributeError:
+                        pass
+                    break
+
+        # extend cached node
+        node.extend(NodeIR(op_graph, values=values, template=template))
+
+    except KeyError:
+
+        # create new node
+        op_cache[h] = op_graph
+        node_cache[h] = VectorizedNodeIR(op_graph, values=values, template=template)
+
+    return op_graph, changed_labels
 
 
 class NodeIR(AbstractBaseIR):
     __slots__ = ["_op_graph", "values"]
 
-    def __init__(self, operators: dict = None, values: dict = None, template: str = None):
+    def __init__(self, operators: OperatorGraph, values: dict = None, template: str = None):
         super().__init__(template)
-        self._op_graph, changed_labels = cache_op_graph(OperatorGraph)(operators)
-        # ToDo: Move caching function to NodeIR instead of using a decorator, for clarity
-        try:
-            for old_name, new_name in changed_labels.items():
-                values[new_name] = values.pop(old_name)
-        except AttributeError:
-            pass
-
+        self._op_graph = operators
         self.values = values
 
     @property
@@ -80,19 +112,11 @@ class VectorizedNodeIR(AbstractBaseIR):
 
     __slots__ = ["op_graph", "_length"]
 
-    def __init__(self, operators: dict = None, values: dict = None, template: str = None):
+    def __init__(self, operators: OperatorGraph, values: dict = None, template: str = None):
 
         super().__init__(template)
 
-        # ToDo: Move caching function to NodeIR instead of using a decorator, for clarity
-        op_graph, changed_labels = cache_op_graph(OperatorGraph)(operators)
-        try:
-            for old_name, new_name in changed_labels.items():
-                values[new_name] = values.pop(old_name)
-        except AttributeError:
-            pass
-
-        self.op_graph = VectorizedOperatorGraph(op_graph, values=values)
+        self.op_graph = VectorizedOperatorGraph(operators, values=values)
 
         # save current length of this node vector.
         self._length = 1
