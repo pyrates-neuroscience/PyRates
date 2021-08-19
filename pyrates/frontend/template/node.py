@@ -35,5 +35,5 @@ class NodeTemplate(OperatorGraphTemplate):
     different operators. One template defines a typical structure of a given node type."""
 
     @staticmethod
-    def target_ir(operators: dict, values: dict = None, template: str = None):
-        return cache_func(operators, values, template)
+    def target_ir(label: str, operators: dict, values: dict = None, template: str = None):
+        return cache_func(label, operators, values, template)

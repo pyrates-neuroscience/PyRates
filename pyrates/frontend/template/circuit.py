@@ -232,11 +232,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         if not edge_values:
             edge_values = {}
 
-        # TODO: Rework apply/vectorization procedure. Goal: Create a map between original and new nodes+operators,
-        #  vectorize nodes during apply calls to prevent looping over nodes multiple times,
-        #  vectorize based on operator equation-based hashes
         # vectorize network if requested
-        template, node_map = vectorize_circuit(deepcopy(self), vectorize)
+        #template, node_map = vectorize_circuit(deepcopy(self), vectorize)
 
         # turn nodes from templates into IRs
         ####################################
@@ -248,11 +245,6 @@ class CircuitTemplate(AbstractBaseTemplate):
                 *node_id, op, var = key.split("/")
                 target_nodes = self.get_nodes(node_id)
                 for n in target_nodes:
-                    try:
-                        n, idx = node_map[n]
-                        value = {'idx': idx, 'value': value}
-                    except KeyError:
-                        pass
                     if n not in values:
                         values[n] = dict()
                     values[n]["/".join((op, var))] = value
@@ -260,19 +252,77 @@ class CircuitTemplate(AbstractBaseTemplate):
         # go through node templates and transform them into intermediate representations
         node_keys = self.get_nodes(['all'])
         nodes = {}
+        indices = {}
         label_map = {}
         for node in node_keys:
             updates = values[node] if node in values else {}
             node_template = self.get_node_template(node)
-            node_ir, label_map_tmp = node_template.apply(values=updates)
-            nodes[node] = node_ir
+            node_ir, label_map_tmp = node_template.apply(values=updates, label=node)
+            nodes[node_ir.label] = node_ir
+            indices[node] = node_ir.length-1
             for key, val in label_map_tmp.items():
-                label_map[f"{node}/{key}"] = f"{node}/{val}"
+                label_map[f"{node}/{key}"] = f"{node_ir.label}/{val}"
+            else:
+                if node != node_ir.label:
+                    label_map[node] = node_ir.label
 
         # reformat edge templates to EdgeIR instances
-        # TODO: vectorize edges during template application and make use of label map throughout the rest of the IR application process
+        #############################################
+
+        # group edges that should be vectorized
+        old_edges = self.collect_edges()
+        edge_col = {}
+        for source, target, template, edge_dict in old_edges:
+
+            # get correct operator and node prefixes for source and target variables
+            *s_node, s_op, s_var = source.split('/')
+            *t_node, t_op, t_var = target.split('/')
+            s_node = '/'.join(s_node)
+            t_node = '/'.join(t_node)
+            s_op_label = '/'.join((s_node, s_op))
+            t_op_label = '/'.join((t_node, t_op))
+
+            if s_op_label in label_map:
+                s_op_label = label_map[s_op_label]
+            elif s_node in label_map:
+                s_op_label = '/'.join((label_map[s_node], s_op))
+            if t_op_label in label_map:
+                t_op_label = label_map[t_op_label]
+            elif t_node in label_map:
+                t_op_label = '/'.join((label_map[t_node], t_op))
+
+            # create final information for source and target variables based on new prefixes
+            source_new = '/'.join((s_op_label, s_var))
+            target_new = '/'.join((t_op_label, t_var))
+            s_idx = indices[s_node]
+            t_idx = indices[t_node]
+
+            # group edges that connect the same vectorized node variables via the same edge templates
+            if (source_new, target_new, template) in edge_col:
+
+                # extend edge dict by edge variables
+                base_dict = edge_col[(source_new, target_new, template)]
+                for key, val in edge_dict.items():
+                    if type(val) is float or type(val) is int:
+                        base_dict[key].append(val)
+                base_dict['source_idx'].append(s_idx)
+                base_dict['target_idx'].append(t_idx)
+
+            else:
+
+                # prepare edge dict for vectorization
+                for key, val in edge_dict.items():
+                    if type(val) is float or type(val) is int:
+                        edge_dict[key] = [val]
+                edge_dict['source_idx'] = [s_idx]
+                edge_dict['target_idx'] = [t_idx]
+
+                # add edge dict to edge collection
+                edge_col[(source_new, target_new, template)] = edge_dict
+
+        # create final set of vectorized edges
         edges = []
-        for (source, target, edge_template, values) in template.edges:
+        for (source, target, template), values in edge_col.items():
 
             # get edge template and instantiate it
             values = deepcopy(values)
@@ -328,17 +378,19 @@ class CircuitTemplate(AbstractBaseTemplate):
                 values.pop(key)
 
             # treat empty dummy edge templates as not existent templates
-            if edge_template and len(edge_template.operators) == 0:
-                edge_template = None
-            if edge_template is None:
+            # TODO: ensure that vectorized edge variables are mapped properly to old edge variable labels
+            if template and len(template.operators) == 0:
+                template = None
+            if template is None:
                 edge_ir = None
+                label_map_tmp = dict()
                 if values:
                     # should not happen. Putting this just in case.
                     raise PyRatesException("An empty edge IR was provided with additional values. "
                                            "No way to figure out where to apply those values.")
 
             else:
-                edge_ir = edge_template.apply(values=values)  # type: Optional[EdgeIR] # edge spec
+                edge_ir, label_map_tmp = template.apply(values=values)  # type: Optional[EdgeIR], dict
 
             # check whether multiple source variables are defined
             try:
@@ -374,7 +426,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # instantiate an intermediate representation of the circuit template
         return CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
-                         **kwargs), node_map
+                         **kwargs), label_map
 
     def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> list:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.
@@ -674,7 +726,6 @@ class CircuitTemplate(AbstractBaseTemplate):
 
 def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
 
-    # TODO: treat updates of Operatortemplates/NodeTemplates/EdgeTemplates
     node_map = dict()
 
     if not vectorize:

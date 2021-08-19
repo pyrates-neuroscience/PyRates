@@ -39,7 +39,7 @@ node_cache = {}
 op_cache = {}
 
 
-def cache_func(operators: dict, values: dict = None, template: str = None):
+def cache_func(label: str, operators: dict, values: dict = None, template: str = None):
     if operators is None:
         operators = {}
 
@@ -67,22 +67,22 @@ def cache_func(operators: dict, values: dict = None, template: str = None):
                     break
 
         # extend cached node
-        node.extend(NodeIR(op_graph, values=values, template=template))
+        node.extend(NodeIR(label, operators=op_graph, values=values, template=template))
 
     except KeyError:
 
         # create new node
         op_cache[h] = op_graph
-        node_cache[h] = VectorizedNodeIR(op_graph, values=values, template=template)
+        node_cache[h] = VectorizedNodeIR(label, operators=op_graph, values=values, template=template)
 
-    return op_graph, changed_labels
+    return node_cache[h], changed_labels
 
 
 class NodeIR(AbstractBaseIR):
     __slots__ = ["_op_graph", "values"]
 
-    def __init__(self, operators: OperatorGraph, values: dict = None, template: str = None):
-        super().__init__(template)
+    def __init__(self, label: str, operators: OperatorGraph, values: dict = None, template: str = None):
+        super().__init__(label, template)
         self._op_graph = operators
         self.values = values
 
@@ -110,16 +110,16 @@ class NodeIR(AbstractBaseIR):
 class VectorizedNodeIR(AbstractBaseIR):
     """Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it."""
 
-    __slots__ = ["op_graph", "_length"]
+    __slots__ = ["op_graph", "length"]
 
-    def __init__(self, operators: OperatorGraph, values: dict = None, template: str = None):
+    def __init__(self, label: str, operators: OperatorGraph, values: dict = None, template: str = None):
 
-        super().__init__(template)
+        super().__init__(label, template)
 
         self.op_graph = VectorizedOperatorGraph(operators, values=values)
 
         # save current length of this node vector.
-        self._length = 1
+        self.length = 1
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         """Alias for self.op_graph.getitem_from_iterator"""
@@ -152,7 +152,7 @@ class VectorizedNodeIR(AbstractBaseIR):
         # add values to respective lists in collapsed node
         self.op_graph.append_values(node.values)
 
-        self._length += 1
+        self.length += 1
 
     def __len__(self):
         """Returns size of this vector node as recorded in self._length.
@@ -161,7 +161,7 @@ class VectorizedNodeIR(AbstractBaseIR):
         -------
         self._length
         """
-        return self._length
+        return self.length
 
     def add_op(self, op_key: str, inputs: dict, output: str, equations: list, variables: dict):
         """Wrapper for internal `op_graph.add_operator` that adds any values to node-level values dictionary for quick

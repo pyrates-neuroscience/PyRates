@@ -37,9 +37,10 @@ __status__ = "Development"
 class AbstractBaseIR:
     """Abstract base class for intermediate representation classes"""
 
-    __slots__ = ["_template", '_h']
+    __slots__ = ["label", "_template", '_h']
 
-    def __init__(self, template: str = None):
+    def __init__(self, label: str, template: str = None):
+        self.label = label
         self._template = template
 
     @property

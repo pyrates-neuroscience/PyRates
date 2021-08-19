@@ -91,18 +91,22 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
 
         return self.__class__(name=name, path=path, operators=operators, description=description)
 
-    def apply(self, values: dict = None):
+    def apply(self, values: dict = None, label: str = None):
         """ Apply template to gain a node or edge intermediate representation.
 
         Parameters
         ----------
         values
             dictionary with operator/variable as keys and values to update these variables as items.
+        label
+            Label of the resulting intermediate representation. If `None`, the name of the template will be used.
 
         Returns
         -------
 
         """
+        if not label:
+            label = self.name
 
         value_updates = {}
         if values:
@@ -134,7 +138,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
                 "Found value updates that did not fit any operator by name. This may be due to a "
                 "typo in specifying the operator or variable to update. Remaining variables:"
                 f"{value_updates}")
-        return self.target_ir(operators, values=all_values, template=self.path)
+        return self.target_ir(label, operators, values=all_values, template=self.path)
 
     @staticmethod
     def target_ir(*args, **kwargs):
