@@ -52,7 +52,7 @@ from pyrates.frontend.template.operator import OperatorTemplate
 # meta infos
 from pyrates.ir.circuit import CircuitIR
 from pyrates.ir.edge import EdgeIR
-from pyrates.ir.node import cache_func
+from pyrates.ir.node import node_cache, op_cache
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -142,9 +142,6 @@ class CircuitTemplate(AbstractBaseTemplate):
             solver: str = 'euler', backend: str = None, out_dir: Optional[str] = None, verbose: bool = True,
             profile: bool = False, apply_kwargs: dict = None, clear: bool = True, **kwargs):
 
-        # TODO: ensure that node and operator keys provided via `inputs`, `outputs` and via YAML templates are treated
-        #  consistently. Currently, node and operator keys may change during vectorization.
-
         # add extrinsic inputs to network
         #################################
 
@@ -159,20 +156,20 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if not apply_kwargs:
             apply_kwargs = {}
-        net._ir, node_map = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
-                                      step_size=step_size, **apply_kwargs)
+        net._ir, net._ir_map, ir_indices = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
+                                                     step_size=step_size, **apply_kwargs)
 
         # perform simulation via the graph representation
         #################################################
 
         # create mapping between requested output variables and the current network variables
         if type(outputs) is dict:
-            output_map, outputs_ir = net._map_output_variables(outputs, node_map=node_map)
+            output_map, outputs_ir = net._map_output_variables(outputs, indices=ir_indices)
         else:
             output_map = {}
             outputs_ir = {}
             for output in outputs:
-                out_map_tmp, out_vars_tmp = net._map_output_variables(output, node_map=node_map)
+                out_map_tmp, out_vars_tmp = net._map_output_variables(output, indices=ir_indices)
                 output_map.update(out_map_tmp)
                 outputs_ir.update(out_vars_tmp)
 
@@ -426,7 +423,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # instantiate an intermediate representation of the circuit template
         return CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
-                         **kwargs), label_map
+                         **kwargs), label_map, indices
 
     def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> list:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.
@@ -582,6 +579,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         self._ir.clear()
         self._ir = None
         OperatorTemplate.cache.clear()
+        node_cache.clear()
+        op_cache.clear()
         gc.collect()
 
     def _load_edge_templates(self, edges: List[Union[tuple, dict]]):
@@ -679,7 +678,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                     final_nodes.append(n)
         return final_nodes
 
-    def _map_output_variables(self, outputs: Union[dict, str], node_map: dict) -> tuple:
+    def _map_output_variables(self, outputs: Union[dict, str], indices: dict) -> tuple:
 
         out_map = {}
         out_vars = {}
@@ -699,9 +698,10 @@ class CircuitTemplate(AbstractBaseTemplate):
                     raise ValueError(f'Requested output variable {out} does not exist in this circuit.')
 
                 # extract index for single output node
-                backend_node, idx = node_map[target_nodes[0]]
+                backend_op = self._get_op_identifier(f"{target_nodes[0]}/{out_op}")
+                idx = indices[target_nodes[0]]
                 out_map[key] = [idx]
-                out_vars[key] = f"{backend_node.name}/{out_op}/{out_var}"
+                out_vars[key] = f"{backend_op}/{out_var}"
         else:
 
             *out_nodes, out_op, out_var = outputs.split('/')
@@ -709,9 +709,10 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             # extract index for single output node
             for t in target_nodes:
-                backend_node, idx = node_map[t]
+                backend_op = self._get_op_identifier(t)
+                idx = indices[t]
                 out_map[t] = [idx]
-                out_vars[t] = f"{backend_node.name}/{out_op}/{out_var}"
+                out_vars[t] = f"{backend_op}/{out_var}"
 
         return out_map, out_vars
 
@@ -722,6 +723,16 @@ class CircuitTemplate(AbstractBaseTemplate):
             circuit_lvls += 1
             net = net.circuits[list(net.circuits)[0]]
         return circuit_lvls
+
+    def _get_op_identifier(self, op: str) -> str:
+        try:
+            return self._ir_map[op]
+        except KeyError:
+            try:
+                *node, op_tmp = op.split('/')
+                return f"{self._ir_map['/'.join(node)]}/{op_tmp}"
+            except KeyError:
+                return op
 
 
 def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:

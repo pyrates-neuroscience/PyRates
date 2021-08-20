@@ -82,8 +82,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         results = net.run(simulation_time=sim_time, step_size=dt, outputs={'a': 'pop0/op0/a'}, vectorize=True,
-                          backend=b)
-        net.clear()
+                          backend=b, clear=True)
 
         # generate target values
         update0_1 = lambda x: x * 0.5
@@ -105,8 +104,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         results = net.run(sim_time, step_size=dt, inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'},
-                          vectorize=True, backend=b)
-        net.clear()
+                          vectorize=True, backend=b, clear=True)
 
         # calculate operator behavior from hand
         update1 = lambda x, y: x + dt * (y - x)
@@ -121,8 +119,8 @@ def test_2_1_operator():
         ################################################################################################
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net2")
-        results = net.run(sim_time, outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorization=True, backend=b)
-        net.clear()
+        results = net.run(sim_time, outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorization=True, backend=b,
+                          clear=True)
 
         # calculate operator behavior from hand
         update2 = lambda x: 1. / (1. + np.exp(-x))
@@ -139,8 +137,7 @@ def test_2_1_operator():
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net3")
         results = net.run(sim_time, outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
-                          step_size=dt, vectorization=True, backend=b)
-        net.clear()
+                          step_size=dt, vectorization=True, backend=b, clear=True)
 
         # calculate operator behavior from hand
         update3_0 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)

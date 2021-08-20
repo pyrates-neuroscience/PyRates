@@ -57,7 +57,7 @@ class OperatorTemplate(AbstractBaseTemplate):
         super().__init__(name, path, description)
 
         if isinstance(equations, str):
-            self.equations = intern(equations)
+            self.equations = [intern(equations)]
         else:
             self.equations = [intern(eq) for eq in equations]
         self.variables = variables
@@ -156,8 +156,8 @@ class OperatorTemplate(AbstractBaseTemplate):
                 variables.append((vname, vtype, dtype, shape))
 
             equations = self.equations
-            instance = self.target_ir(equations=equations, variables=variables,
-                                      inputs=inputs, output=output, template=self)
+            instance = self.target_ir(equations=equations, variables=variables, inputs=inputs, output=output,
+                                      template=self)
             self.cache[key] = (instance, default_values)
 
         if return_key:
