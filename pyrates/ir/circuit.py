@@ -1088,8 +1088,8 @@ class CircuitIR(AbstractBaseIR):
 
             # create edge buffer variable
             for i, idx_l, idx_r in final_idx:
-                lhs = get_indexed_var_str(f"{var}_buffered", idx_l)
-                rhs = get_indexed_var_str(f"{var}_d{i}" if i != 0 else var, idx_r)
+                lhs = get_indexed_var_str(f"{var}_buffered", idx_l, var_length=target_shape[0])
+                rhs = get_indexed_var_str(f"{var}_d{i}" if i != 0 else var, idx_r, var_length=target_shape[0])
                 buffer_eqs.append(f"{lhs} = {rhs}")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
                                            'dtype': self.backend._float_def,
@@ -1428,8 +1428,10 @@ class SubCircuitView(AbstractBaseIR):
         return f"{self.__class__.__name__} on '{self.subgraph_key}' in {self.top_level_circuit}"
 
 
-def get_indexed_var_str(var: str, idx: Union[tuple, str]):
-    if idx is tuple:
+def get_indexed_var_str(var: str, idx: Union[tuple, str], var_length: int = None):
+    if type(idx) is tuple:
+        if var_length and int(idx[1]) - int(idx[0]) == var_length:
+            return var
         return f"index_range({var}, {idx[0]}, {idx[1]})"
     if idx:
         return f"index({var}, {idx})"

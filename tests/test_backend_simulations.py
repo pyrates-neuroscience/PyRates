@@ -284,8 +284,7 @@ def test_2_3_edge():
 
         # simulate edge behavior
         results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt, vectorization=True,
-                          backend=b)
-        net.clear()
+                          backend=b, clear=True)
 
         diff = np.mean(np.abs(results['a'].values[:] - targets[:, 2])) + \
                np.mean(np.abs(results['b'].values[:] - targets[:, 3]))
@@ -296,8 +295,7 @@ def test_2_3_edge():
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9")
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
-                          step_size=dt, vectorization=True, backend=b)
-        net.clear()
+                          step_size=dt, vectorization=True, backend=b, clear=True)
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -315,8 +313,7 @@ def test_2_3_edge():
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net10")
         results = net.run(sim_time, outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorization=True,
-                          backend=b)
-        net.clear()
+                          backend=b, clear=True)
 
         # calculate edge behavior from hand
         delay0 = int(0.5 / dt)
@@ -338,8 +335,7 @@ def test_2_3_edge():
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9")
         results = net.run(sim_time, step_size=dt, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'},
-                          inputs={'pop1/op7/inp': inp}, vectorization=True, backend=b)
-        net.clear()
+                          inputs={'pop1/op7/inp': inp}, vectorization=True, backend=b, clear=True)
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -357,9 +353,8 @@ def test_2_3_edge():
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
         results = net.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                          vectorization=True, step_size=dt, backend=b, solver='euler')
+                          vectorization=True, step_size=dt, backend=b, solver='euler', clear=True)
         # TODO: add manual comparison of network dynamics here
-        net.clear()
 
 
 @pytest.mark.skip

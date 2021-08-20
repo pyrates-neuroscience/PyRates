@@ -682,7 +682,7 @@ class BaseBackend(object):
                 # process indexing of left-hand side variable
                 idx_args, lhs = self.graph.node_to_expr(node, **funcs)
                 func_args.extend(idx_args)
-                lhs_var = lhs
+                lhs_var = self._expr_to_str(lhs)
             else:
                 # process normal update of left-hand side variable
                 lhs_var = var['symbol'].name
