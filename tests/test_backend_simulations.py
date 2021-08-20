@@ -175,8 +175,8 @@ def test_2_2_node():
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net4")
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b)
-        net.clear()
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b,
+                          clear=True)
 
         # calculate node behavior from hand
         update0 = lambda x: x + dt * 2.
@@ -195,8 +195,8 @@ def test_2_2_node():
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net5")
 
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorization=True, backend=b)
-        net.clear()
+        results = net.run(sim_time, outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorization=True, backend=b,
+                          clear=True)
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 2), dtype=np.float32)
@@ -211,8 +211,8 @@ def test_2_2_node():
         ###############################################################################################################
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net6")
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b)
-        net.clear()
+        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b,
+                          clear=True)
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 3), dtype=np.float32)
@@ -230,8 +230,7 @@ def test_2_2_node():
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net7")
         results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorization=True,
-                          backend=b)
-        net.clear()
+                          backend=b, clear=True)
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 4), dtype=np.float32)
