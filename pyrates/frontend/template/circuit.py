@@ -631,7 +631,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         target_nodes = self.get_nodes(node_id)
 
         # create input node
-        node_key, op_key, in_node = create_input_node(var, inp, adaptive, sim_time)
+        node_key, op_key, var_key, in_node = create_input_node(var, inp, adaptive, sim_time)
 
         # ensure that inputs match the CircuitTemplate hierarchy
         path, net = self._get_input_lvl(self._depth)
@@ -642,7 +642,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         net = net.update_template(nodes={node_key: in_node})
 
         # connect input node to target nodes
-        edges = [(f"{node_key}/{op_key}/{var}", f"{t}/{op}/{var}", None, {'weight': 1.0})
+        edges = [(f"{node_key}/{op_key}/{var_key}", f"{t}/{op}/{var}", None, {'weight': 1.0})
                  for t in target_nodes]
 
         return net.update_template(edges=edges)
@@ -908,6 +908,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
     # create input equationd and variables
     ######################################
 
+    var_name = f"{var}_out"
     if continuous:
 
         # interpolate input variable if time steps can be variable
@@ -915,18 +916,18 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
         time = np.linspace(0, T, inp.shape[0])
         f = interp1d(time, inp, axis=0, copy=False, kind='linear')
         f.shape = inp.shape[1:]
-        eqs = [f"{var} = interp({var}_input,t)"]
+        eqs = [f"{var_name} = interp({var}_input,t)"]
         var_dict = {
-            var: {'default': 'output', 'value': f(0.0)},
+            var_name: {'default': 'output', 'value': f(0.0)},
             f"{var}_input": {'default': 'input_variable', 'value': f},
             't': {'default': 'variable', 'value': 0.0}
         }
 
     else:
 
-        eqs = [f"{var} = index({var}_input,t)"]
+        eqs = [f"{var_name} = index({var}_input,t)"]
         var_dict = {
-            var: {'default': 'output', 'value': inp[0]},
+            var_name: {'default': 'output', 'value': inp[0]},
             f"{var}_input": {'default': 'input_variable', 'value': inp},
             't': {'default': 'variable', 'value': 0, 'dtype': 'int32'}
         }
@@ -939,7 +940,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
     node_key = f'{var}_input_node'
     in_node = NodeTemplate(name=node_key, path='none', operators=[in_op])
 
-    return node_key, op_key, in_node
+    return node_key, op_key, var_name, in_node
 
 
 def collect_nodes(key: str, val: Union[CircuitTemplate, NodeTemplate]):
