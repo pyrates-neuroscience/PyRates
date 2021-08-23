@@ -302,8 +302,8 @@ net14:
     c1: net13
     c2: net13
   edges:
-    - [c1/p1/op9/b, c2/p2/op9/I_syn, null, {weight: 1.0}]
-    - [c2/p2/op9/b, c1/p1/op9/I_syn, null, {weight: 1.0}]
+    - [c1/p1/op9/b, c2/p2/op10/I_syn, null, {weight: 1.0}]
+    - [c2/p2/op10/b, c1/p1/op9/I_syn, null, {weight: 1.0}]
 
 net15:
   base: CircuitTemplate

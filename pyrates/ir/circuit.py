@@ -45,6 +45,9 @@ __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
 
 
+in_edge_indices = {}  # cache for the number of input edges per network node
+
+
 class CircuitIR(AbstractBaseIR):
     """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
@@ -143,6 +146,34 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("\t\t...finished.")
             print("\tModel compilation was finished.")
+
+    def __getitem__(self, key: str):
+        """
+        Custom implementation of __getitem__ that dissolves strings of form "key1/key2/key3" into
+        lookups of form self[key1][key2][key3].
+
+        Parameters
+        ----------
+        key
+
+        Returns
+        -------
+        item
+        """
+
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            keys = key.split('/')
+            for i in range(len(keys)):
+                if "/".join(keys[:i+1]) in self.nodes:
+                    break
+            key_iter = iter(['/'.join(keys[:i+1])] + keys[i+1:])
+            key = next(key_iter)
+            item = self.getitem_from_iterator(key, key_iter)
+            for key in key_iter:
+                item = item.getitem_from_iterator(key, key_iter)
+        return item
 
     def add_nodes_from(self, nodes: Dict[str, NodeIR], **attr):
         """ Add multiple nodes to circuit. Allows networkx-style adding of nodes.
@@ -462,6 +493,7 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
+        # go trough circuit hierarchy
         path = "/".join(parts)
 
         # check if path is valid
@@ -774,7 +806,7 @@ class CircuitIR(AbstractBaseIR):
                         in_ops[var_name] = self._map_multiple_inputs(in_ops_col, reduce_inputs)
                     else:
                         key, _ = in_ops_col.popitem()
-                        in_node, in_op, in_var = key.split("/")
+                        *in_node, in_op, in_var = key.split("/")
                         in_ops[var_name] = (in_var, {in_var: key})
 
             # replace input variables with input in operator equations
@@ -872,7 +904,7 @@ class CircuitIR(AbstractBaseIR):
         inputs_unique = []
         input_mapping = {}
         for key, var in inputs.items():
-            node, in_op, in_var = key.split('/')
+            *node, in_op, in_var = key.split('/')
             i = 0
             inp = in_var
             while inp in inputs_unique:
@@ -1006,7 +1038,6 @@ class CircuitIR(AbstractBaseIR):
                     rates.append(dde_approx / m if m else 0)
 
             # sort all edge information in ascending ODE order
-            n_edges = np.unique(source_idx).shape[0]
             order_idx = np.argsort(orders, kind='stable')
             orders_sorted = np.asarray(orders, dtype=np.int32)[order_idx]
             orders_tmp = np.asarray(orders, dtype=np.int32)[order_idx]
@@ -1015,7 +1046,6 @@ class CircuitIR(AbstractBaseIR):
 
             buffer_eqs, var_dict, final_idx = [], {}, []
             max_order = max(orders)
-            var_shape = target_shape
             for i in range(max_order+1):
 
                 # check which edges require the ODE order treated in this iteration of the loop
@@ -1374,7 +1404,10 @@ class CircuitIR(AbstractBaseIR):
                                   'value': np.array(sidx, dtype=np.int32)}
 
         # add edge operator to target node
-        op_name = f'edge_from_{source_node}_{edge_idx}'
+        if target_node not in in_edge_indices:
+            in_edge_indices[target_node] = 0
+        op_name = f'incoming_edge_{in_edge_indices[target_node]}'
+        in_edge_indices[target_node] += 1
         target_node_ir.add_op(op_name,
                               inputs={svar: {'sources': [sop],
                                              'reduce_dim': True,

@@ -132,10 +132,15 @@ class BaseVar(np.ndarray):
         if callable(value):
             obj = value
         else:
-            value = cls._get_value(value, dtype, shape)
-            if squeeze:
-                value = cls.squeeze(value)
-            obj = cls._get_var(value, name, dtype)
+            try:
+                # normal variable
+                value = cls._get_value(value, dtype, shape)
+                if squeeze:
+                    value = cls.squeeze(value)
+                obj = cls._get_var(value, name, dtype)
+            except TypeError:
+                # list of callables
+                obj = cls._get_var(value, name, dtype)
 
         # store additional attributes on variable object
         obj.short_name = name.split('/')[-1]
@@ -174,7 +179,7 @@ class BaseVar(np.ndarray):
             return np.zeros(shape=shape, dtype=dtype)
         elif not hasattr(value, 'shape'):
             if type(value) is list:
-                return np.zeros(shape=shape, dtype=dtype) + np.asarray(value, dtype=dtype).reshape(shape)
+                return np.asarray(value, dtype=dtype).reshape(shape)
             else:
                 return np.zeros(shape=shape, dtype=dtype) + value
         elif shape:

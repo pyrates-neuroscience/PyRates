@@ -420,15 +420,13 @@ def test_2_5_solver():
     net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
     net = net.update_template(name='net1')
     results = net.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                      vectorization=True, step_size=dt, backend=backend, solver='euler')
-    net.clear()
+                      vectorization=True, step_size=dt, backend=backend, solver='euler', clear=True)
 
     # scipy solver (tested)
     net2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
     net2 = net2.update_template(name='net2')
     results2 = net2.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                        method='RK23', vectorization=True, step_size=dt, backend=backend, solver='scipy')
-    net2.clear()
+                        method='RK23', vectorization=True, step_size=dt, backend=backend, solver='scipy', clear=True)
 
     assert np.mean(results.loc[:, 'a2'].values - results2.loc[:, 'a2'].values) == pytest.approx(0., rel=1e-4, abs=1e-4)
 
@@ -446,32 +444,25 @@ def test_2_6_inputs_outputs():
     dt = 1e-3
     sim_time = 100.
     sim_steps = int(np.round(sim_time / dt, decimals=0))
+    inp = np.zeros((sim_steps, 1)) + 0.5
 
     # define inputs and outputs for each population separately
     ##########################################################
 
-    # define input
-    inp1 = np.zeros((sim_steps, 1)) + 0.5
-    inp2 = np.zeros((sim_steps, 1)) + 0.5
-
     # perform simulation
     net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
-    r1 = net.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'},
-                 inputs={'p1/op9/I_ext': inp1, 'p2/op9/I_ext': inp2}, vectorization=True, step_size=dt, backend=backend,
-                 solver='scipy')
+    r1 = net.run(sim_time, outputs={'a1': 'p1/op9/a'},
+                 inputs={'p1/op9/I_ext': inp}, vectorization=True, step_size=dt, backend=backend,
+                 solver='scipy', clear=True)
 
     # define input and output for both populations simultaneously
     #############################################################
 
     backend = 'numpy'
 
-    # define input
-    inp = np.zeros((sim_steps, 1)) + 0.5
-
     # perform simulation
-    net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
     r2 = net.run(sim_time, outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorization=True, step_size=dt,
-                 backend=backend, solver='scipy')
+                 backend=backend, solver='scipy', clear=True)
 
     assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
 
@@ -479,25 +470,25 @@ def test_2_6_inputs_outputs():
     #####################################################################
 
     # define input
-    inp3 = np.zeros((sim_steps, 1)) + 0.1
-    inp4 = np.zeros((sim_steps, 1))
+    inp2 = np.zeros((sim_steps, 1)) + 0.1
+    inp3 = np.zeros((sim_steps, 1))
 
     # perform simulation
     n1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net14")
-    r1 = n1.run(sim_time, vectorization=True, step_size=dt, backend=backend, solver='scipy',
-                outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op9/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op9/a'},
-                inputs={'c1/p1/op9/I_ext': inp1, 'c1/p2/op9/I_ext': inp2, 'c2/p1/op9/I_ext': inp3,
-                        'c2/p2/op9/I_ext': inp4})
+    r1 = n1.run(sim_time, vectorization=True, step_size=dt, backend=backend, solver='scipy', clear=True,
+                outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op10/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op10/a'},
+                inputs={'c1/p1/op9/I_ext': inp, 'c1/p2/op10/I_ext': inp, 'c2/p1/op9/I_ext': inp2,
+                        'c2/p2/op10/I_ext': inp3})
 
     # define input
-    inp = np.zeros((sim_steps, 4))
-    inp[:, 0] = 0.5
-    inp[:, 1] = 0.2
-    inp[:, 2] = 0.1
+    inp4 = np.zeros((sim_steps, 1)) + 0.5
+    inp5 = np.zeros_like(inp4)
+    inp[:, 0] = 0.0
 
     # perform simulation
     n2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net14")
-    r2 = n2.run(sim_time, outputs={'a': 'all/all/op9/a'}, inputs={'all/all/op9/I_ext': inp},
-                vectorization=True, step_size=dt, backend=backend, solver='scipy')
+    r2 = n2.run(sim_time, outputs={'a1': 'all/all/op9/a', 'a2': 'all/all/op10/a'},
+                inputs={'all/all/op9/I_ext': inp4, 'all/all/op10/I_ext': inp5},
+                vectorization=True, step_size=dt, backend=backend, solver='scipy', clear=True)
 
     assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)

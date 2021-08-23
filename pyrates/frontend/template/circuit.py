@@ -41,7 +41,6 @@ from pandas import DataFrame
 import numpy as np
 
 # pyrates internal imports
-
 from pyrates import PyRatesException
 from pyrates.frontend.template._io import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
@@ -229,9 +228,6 @@ class CircuitTemplate(AbstractBaseTemplate):
         if not edge_values:
             edge_values = {}
 
-        # vectorize network if requested
-        #template, node_map = vectorize_circuit(deepcopy(self), vectorize)
-
         # turn nodes from templates into IRs
         ####################################
 
@@ -267,9 +263,11 @@ class CircuitTemplate(AbstractBaseTemplate):
         #############################################
 
         # group edges that should be vectorized
-        old_edges = self.collect_edges()
+        old_edges = self.collect_edges(delay_info=True)
         edge_col = {}
-        for source, target, template, edge_dict in old_edges:
+        for source, target, template, edge_dict, delayed in old_edges:
+
+            edge_dict = deepcopy(edge_dict)
 
             # get correct operator and node prefixes for source and target variables
             *s_node, s_op, s_var = source.split('/')
@@ -295,10 +293,10 @@ class CircuitTemplate(AbstractBaseTemplate):
             t_idx = indices[t_node]
 
             # group edges that connect the same vectorized node variables via the same edge templates
-            if (source_new, target_new, template) in edge_col:
+            if (source_new, target_new, template, delayed) in edge_col:
 
                 # extend edge dict by edge variables
-                base_dict = edge_col[(source_new, target_new, template)]
+                base_dict = edge_col[(source_new, target_new, template, delayed)]
                 for key, val in edge_dict.items():
                     if type(val) is float or type(val) is int:
                         base_dict[key].append(val)
@@ -315,11 +313,11 @@ class CircuitTemplate(AbstractBaseTemplate):
                 edge_dict['target_idx'] = [t_idx]
 
                 # add edge dict to edge collection
-                edge_col[(source_new, target_new, template)] = edge_dict
+                edge_col[(source_new, target_new, template, delayed)] = edge_dict
 
         # create final set of vectorized edges
         edges = []
-        for (source, target, template), values in edge_col.items():
+        for (source, target, template, _), values in edge_col.items():
 
             # get edge template and instantiate it
             values = deepcopy(values)
@@ -455,6 +453,11 @@ class CircuitTemplate(AbstractBaseTemplate):
             if node_identifier[0] in net:
                 return self._get_nodes_with_var(var_identifier, nodes=node_identifier)
             if node_identifier[0] == 'all':
+                if self.circuits:
+                    nodes = []
+                    for n in net:
+                        nodes.extend(self.get_nodes(node_identifier=f"{n}/all", var_identifier=var_identifier))
+                    return nodes
                 return self._get_nodes_with_var(var_identifier, nodes=list(net.keys()))
             raise ValueError(f'Node with label {node_identifier[0]} could not be found in CircuitTemplate {self.name}.')
 
@@ -463,11 +466,21 @@ class CircuitTemplate(AbstractBaseTemplate):
             # collect target nodes from circuit based on hierarchical identifier
             nodes = ['']
             net_tmp = net
-            for _, node_lvl in enumerate(node_identifier):
+            for i, node_lvl in enumerate(node_identifier):
 
                 # get network node identifiers that should be added to overall node list
                 if node_lvl == 'all':
-                    nodes_tmp = list(net_tmp.keys())
+                    nodes_tmp = []
+                    for n in list(net_tmp.keys()):
+                        net_tmp2 = net_tmp[n]
+                        if isinstance(net_tmp2, CircuitTemplate):
+                            nodes_tmp.extend("/".join([n] + net_tmp2.get_nodes(node_identifier[i+1:], var_identifier)))
+                        else:
+                            nodes_tmp.append(n)
+                    net_tmp = net_tmp[n]
+                    if isinstance(net_tmp, CircuitTemplate):
+                        net_tmp = net_tmp.circuits if net_tmp.circuits else net_tmp.nodes
+
                 else:
                     net_tmp = net_tmp[node_lvl]
                     if isinstance(net_tmp, CircuitTemplate):
@@ -555,7 +568,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             return net_node.get_node_template(node[1:])
         return net_node
 
-    def collect_edges(self):
+    def collect_edges(self, delay_info: bool = False):
         """
         Collect all edges that exist in circuit.
 
@@ -571,6 +584,10 @@ class CircuitTemplate(AbstractBaseTemplate):
             edges_tmp = c.collect_edges()
             for svar, tvar, template, edge_dict in edges_tmp:
                 edges.append((f"{c_scope}/{svar}", f"{c_scope}/{tvar}", template, edge_dict))
+        if delay_info:
+            for i, (svar, tvar, template, edge) in enumerate(edges):
+                delayed = True if 'delay' in edge and edge['delay'] else False
+                edges[i] = (svar, tvar, template, edge, delayed)
         return edges
 
     def clear(self):
@@ -581,6 +598,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         OperatorTemplate.cache.clear()
         node_cache.clear()
         op_cache.clear()
+        input_labels.clear()
         gc.collect()
 
     def _load_edge_templates(self, edges: List[Union[tuple, dict]]):
@@ -628,18 +646,13 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # extract target nodes from network
         *node_id, op, var = target.split('/')
-        target_nodes = self.get_nodes(node_id)
+        target_nodes = self.get_nodes(node_id, var_identifier=(op, var))
 
         # create input node
         node_key, op_key, var_key, in_node = create_input_node(var, inp, adaptive, sim_time)
 
         # ensure that inputs match the CircuitTemplate hierarchy
-        path, net = self._get_input_lvl(self._depth)
-        if path:
-            node_key = "/".join((path, node_key))
-
-        # add input node to respective circuit template
-        net = net.update_template(nodes={node_key: in_node})
+        node_key, net = self._add_input_node(node_key, in_node, self._depth)
 
         # connect input node to target nodes
         edges = [(f"{node_key}/{op_key}/{var_key}", f"{t}/{op}/{var}", None, {'weight': 1.0})
@@ -647,21 +660,35 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return net.update_template(edges=edges)
 
-    def _get_input_lvl(self, depth: int) -> tuple:
+    def _add_input_node(self, node_key: str, node: NodeTemplate, depth: int) -> tuple:
 
         if depth > self._depth:
             raise ValueError('Input depth does not match the hierarchical depth of the circuit.')
 
         path = []
+        input_circuits = {}
+        inp_circuit = input_circuits
         net = self
         for i in range(depth):
             circuit_key = f"input_lvl_{i}"
             if circuit_key not in net.circuits:
                 c = CircuitTemplate(name=circuit_key, path='none')
                 net = net.update_template(circuits={circuit_key: c})
+                inp_circuit[circuit_key] = {}
+            else:
+                inp_circuit[circuit_key] = net.circuits[circuit_key]
             net = net.circuits[circuit_key]
+            if i < depth - 1:
+                inp_circuit = inp_circuit[circuit_key]
+            else:
+                net = net.update_template(nodes={node_key: node})
+                inp_circuit[circuit_key] = net
             path.append(circuit_key)
-        return "/".join(path), net
+        else:
+            net = net.update_template(nodes={node_key: node})
+        if depth > 0:
+            net = self.update_template(circuits=input_circuits)
+        return "/".join(path + [node_key]), net
 
     def _get_nodes_with_var(self, var: tuple, nodes: list) -> list:
         if not var:
@@ -669,13 +696,16 @@ class CircuitTemplate(AbstractBaseTemplate):
         final_nodes = []
         op_key, var_key = var
         for n in nodes:
-            node = self.nodes[n]
-            op_keys = [op.name for op in node.operators]
-            if op_key in op_keys:
-                op = list(node.operators)[op_keys.index(op_key)]
-                op_vars = list(op.variables)
-                if var_key in op_vars:
-                    final_nodes.append(n)
+            try:
+                node = self.get_node_template(n)
+                op_keys = [op.name for op in node.operators]
+                if op_key in op_keys:
+                    op = list(node.operators)[op_keys.index(op_key)]
+                    op_vars = list(op.variables)
+                    if var_key in op_vars:
+                        final_nodes.append(n)
+            except IndexError as e:
+                raise e
         return final_nodes
 
     def _map_output_variables(self, outputs: Union[dict, str], indices: dict) -> tuple:
@@ -709,7 +739,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             # extract index for single output node
             for t in target_nodes:
-                backend_op = self._get_op_identifier(t)
+                backend_op = self._get_op_identifier(f"{t}/{out_op}")
                 idx = indices[t]
                 out_map[t] = [idx]
                 out_vars[t] = f"{backend_op}/{out_var}"
@@ -733,120 +763,6 @@ class CircuitTemplate(AbstractBaseTemplate):
                 return f"{self._ir_map['/'.join(node)]}/{op_tmp}"
             except KeyError:
                 return op
-
-
-def vectorize_circuit(circuit: CircuitTemplate, vectorize: bool) -> tuple:
-
-    node_map = dict()
-
-    if not vectorize:
-        return circuit, node_map
-
-    # vectorize nodes
-    #################
-
-    node_keys = circuit.get_nodes(['all'])
-
-    # group node templates that should be vectorized
-    node_col = dict()
-    for node in node_keys:
-
-        template = circuit.get_node_template(node)
-
-        if template in node_col:
-
-            # extend existing template information
-            template_dict = node_col[template]
-            template_dict['old_nodes'].append(node)
-            template_dict['indices'].append(template_dict['indices'][-1]+1)
-            for op in template.operators:
-                for key, var in op.variables.items():
-                    base_dict = template_dict[op.name][key]  # type: dict
-                    template_dict[op.name][key] = extend_var_dict(base_dict, var)
-
-        else:
-
-            # create new template entry
-            template_dict = dict()
-            template_dict['old_nodes'] = [node]
-            template_dict['indices'] = [0]
-            for op in template.operators:
-                template_dict[op.name] = op.variables.copy()
-            node_col[template] = template_dict
-
-    # create new, vectorized node templates
-    nodes = {}
-    for old_template, new_node in node_col.items():
-
-        # extract information about original circuit
-        old_nodes = new_node.pop('old_nodes')
-        indices = new_node.pop('indices')
-
-        # create vectorized operators
-        operators = []
-        for op in old_template.operators:
-            operators.append(op.update_template(variables=new_node[op.name]))
-
-        # create vectorized node
-        name = get_unique_node_label(old_template.name, list(nodes.keys()))
-        new_node = NodeTemplate(name=name, operators=operators, path=old_template.path)
-
-        # store new node information
-        nodes[name] = new_node
-        for n, idx in zip(old_nodes, indices):
-            node_map[n] = (new_node, idx)
-
-    # vectorize edges
-    #################
-
-    # group edges that should be vectorized
-    old_edges = circuit.collect_edges()
-    edge_col = {}
-    for source, target, template, edge_dict in old_edges:
-
-        # extract edge information for vectorized network
-        *s_node, s_op, s_var = source.split('/')
-        *t_node, t_op, t_var = target.split('/')
-        s_node_new, s_idx = node_map['/'.join(s_node)]
-        t_node_new, t_idx = node_map['/'.join(t_node)]
-        source_new = '/'.join((s_node_new.name, s_op, s_var))
-        target_new = '/'.join((t_node_new.name, t_op, t_var))
-
-        # group edges that connect the same vectorized node variables via the same edge templates
-        # TODO: vectorize edge templates as well
-        if (source_new, target_new, template) in edge_col:
-
-            # extend edge dict by edge variables
-            base_dict = edge_col[(source_new, target_new, template)]
-            for key, val in edge_dict.items():
-                if type(val) is float or type(val) is int:
-                    base_dict[key].append(val)
-            base_dict['source_idx'].append(s_idx)
-            base_dict['target_idx'].append(t_idx)
-
-        else:
-
-            # prepare edge dict for vectorization
-            for key, val in edge_dict.items():
-                if type(val) is float or type(val) is int:
-                    edge_dict[key] = [val]
-            edge_dict['source_idx'] = [s_idx]
-            edge_dict['target_idx'] = [t_idx]
-
-            # add edge dict to edge collection
-            edge_col[(source_new, target_new, template)] = edge_dict
-
-    # create final set of vectorized edges
-    edges = []
-    for (source, target, template), edge_dict in edge_col.items():
-        edges.append((source, target, template, edge_dict))
-
-    # finalize new, vectorized circuit
-    ##################################
-
-    c_new = CircuitTemplate(nodes=nodes, edges=edges, name=circuit.name, path=circuit.path)
-
-    return c_new, node_map
 
 
 def extend_var_dict(origin: dict, extension: dict):
@@ -903,12 +819,16 @@ def is_integration_adaptive(solver: str, **solver_kwargs):
     return solver == 'scipy'
 
 
+input_labels = []  # cache for input nodes
+
+
 def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> tuple:
 
     # create input equationd and variables
     ######################################
 
-    var_name = f"{var}_out"
+    var_name = get_unique_node_label(f"{var}_timed_input", input_labels)
+    input_labels.append(var_name)
     if continuous:
 
         # interpolate input variable if time steps can be variable
@@ -935,10 +855,12 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
     # create input operator
     #######################
 
-    op_key = f'{var}_input_op'
+    op_key = get_unique_node_label(f'{var}_input_op', input_labels)
     in_op = OperatorTemplate(name=op_key, path='none', equations=eqs, variables=var_dict)
-    node_key = f'{var}_input_node'
+    node_key = get_unique_node_label(f'{var}_input_node', input_labels)
     in_node = NodeTemplate(name=node_key, path='none', operators=[in_op])
+    input_labels.append(node_key)
+    input_labels.append(op_key)
 
     return node_key, op_key, var_name, in_node
 
@@ -954,7 +876,7 @@ def get_unique_node_label(label: str, labels: list) -> str:
         try:
             label_split = label.split("_")
             idx = int(label_split[-1]) + 1
-            label = "_".join(label_split[:-1].append(idx))
+            label = "_".join(label_split[:-1] + [str(idx)])
         except ValueError:
             label = f"{label}_0"
     return label
