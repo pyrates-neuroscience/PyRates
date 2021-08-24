@@ -33,19 +33,21 @@ from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
 from networkx import MultiDiGraph, subgraph, DiGraph
 import numpy as np
+from copy import deepcopy
 
 # pyrates-internal imports
 from pyrates import PyRatesException
 from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
-from pyrates.backend.parser import parse_equations, is_diff_eq, replace
+from pyrates.backend.parser import parse_equations, replace, get_unique_label
 
 __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
 
 
 in_edge_indices = {}  # cache for the number of input edges per network node
+in_edge_vars = {}   # cache for the input variables that enter at each target operator
 
 
 class CircuitIR(AbstractBaseIR):
@@ -532,17 +534,18 @@ class CircuitIR(AbstractBaseIR):
                                           dde_approx=dde_approx)
 
             # loop over input variables of node
-            for i, (in_var, edges) in enumerate(node_inputs.items()):
-
-                n_inputs = len(edges)
-                op_name, var_name = in_var.split('/')
-
-                # combine node inputs that map to the same variable
-                for j in range(n_inputs):
-
-                    # add synaptic input collector to the input variables if necessary
-                    if n_inputs > 1:
-                        self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
+            # for i, (in_var, edges) in enumerate(node_inputs.items()):
+            #
+            #     n_inputs = len(edges)
+            #     op_name, var_name = in_var.split('/')
+            #
+            #     # combine node inputs that map to the same variable
+            #     for j in range(n_inputs):
+            #
+            #         # add synaptic input collector to the input variables if necessary
+            #         if n_inputs > 1:
+            #             # TODO: can this be removed? Its just an identity equation....
+            #             self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
 
         # create the final equations and variables for each edge
         for source, targets in self.graph.adjacency():
@@ -744,7 +747,12 @@ class CircuitIR(AbstractBaseIR):
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
 
                     # parse equations and variables into computegraph
-                    parse_equations(op_eqs, op_vars, backend=self.backend, **kwargs)
+                    variables = parse_equations(op_eqs, op_vars, backend=self.backend, **kwargs)
+
+                    # store parsed variables on graph
+                    for key, var in variables.items():
+                        if key.split('/')[-1] != 'inputs':
+                            self[key].update(var)
 
                 # remove parsed operators from graph
                 graph.remove_nodes_from(ops)
@@ -777,8 +785,9 @@ class CircuitIR(AbstractBaseIR):
         for op_name in ops:
 
             # retrieve operator and operator args
+            scope = f"{node_name}/{op_name}"
             op_info = self[f"{node_name}/{op_name}"]
-            op_args = op_info['variables']
+            op_args = deepcopy(op_info['variables'])
             op_args['inputs'] = {}
 
             if getattr(op_info, 'collected', False):
@@ -807,7 +816,7 @@ class CircuitIR(AbstractBaseIR):
                         in_ops_col[f"{in_node}/{in_op}/{in_var}"] = in_val
 
                     if len(in_ops_col) > 1:
-                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, reduce_inputs)
+                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, reduce_inputs, scope=scope)
                     else:
                         key, _ = in_ops_col.popitem()
                         *in_node, in_op, in_var = key.split("/")
@@ -820,7 +829,6 @@ class CircuitIR(AbstractBaseIR):
                 op_args['inputs'].update(inp[1])
 
             # collect operator variables and equations
-            scope = f"{node_name}/{op_name}"
             variables[f"{scope}/inputs"] = {}
             equations += [(eq, scope) for eq in op_info['equations']]
             for key, var in op_args.items():
@@ -890,7 +898,7 @@ class CircuitIR(AbstractBaseIR):
         return int(np.round(delay / self.step_size, decimals=0)) if discretize and not self._adaptive_steps else delay
 
     @staticmethod
-    def _map_multiple_inputs(inputs: dict, reduce_dim: bool) -> tuple:
+    def _map_multiple_inputs(inputs: dict, reduce_dim: bool, scope: str) -> tuple:
         """Creates mapping between multiple input variables and a single output variable.
 
         Parameters
@@ -899,6 +907,8 @@ class CircuitIR(AbstractBaseIR):
             Input variables.
         reduce_dim
             If true, input variables will be summed up, if false, they will be concatenated.
+        scope
+            Scope of the input variables
 
         Returns
         -------
@@ -907,35 +917,34 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
-        inputs_unique = []
+        if scope not in in_edge_vars:
+            in_edge_vars[scope] = []
+        inputs_unique = in_edge_vars[scope]
         input_mapping = {}
+        new_input_vars = []
         for key, var in inputs.items():
             *node, in_op, in_var = key.split('/')
-            i = 0
-            inp = in_var
-            while inp in inputs_unique:
-                i += 1
-                if inp[-2:] == f"_{i - 1}":
-                    inp = inp[:-2] + f"_{i}"
-                else:
-                    inp = f"{inp}_{i}"
+            if 'symbol' in var and 'expr' not in var:
+                in_var = var['symbol'].name
+            inp = get_unique_label(in_var, inputs_unique)
+            new_input_vars.append(inp)
             inputs_unique.append(inp)
             input_mapping[inp] = key
 
         if reduce_dim:
-            inputs_unique = f"sum(({','.join(inputs_unique)}), 0)"
+            input_expr = f"sum(({','.join(new_input_vars)}), 0)"
         else:
             idx = 0
-            var = inputs[input_mapping[inputs_unique[idx]]]
+            var = inputs[input_mapping[new_input_vars[idx]]]
             while not hasattr(var, 'shape'):
                 idx += 1
-                var = inputs[input_mapping[inputs_unique[idx]]]
+                var = inputs[input_mapping[new_input_vars[idx]]]
             shape = var['shape']
             if len(shape) > 0:
-                inputs_unique = f"reshape(({','.join(inputs_unique)}), ({len(inputs_unique) * shape[0],}))"
+                input_expr = f"reshape(({','.join(new_input_vars)}), ({len(new_input_vars) * shape[0],}))"
             else:
-                inputs_unique = f"stack({','.join(inputs_unique)})"
-        return inputs_unique, input_mapping
+                input_expr = f"stack({','.join(new_input_vars)})"
+        return input_expr, input_mapping
 
     def _sort_edges(self, edges: List[tuple], attr: str, data_included: bool = False) -> dict:
         """Sorts edges according to the given edge attribute.
@@ -1401,7 +1410,7 @@ class CircuitIR(AbstractBaseIR):
         # add edge variables to dict
         dtype = sval["dtype"]
         args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
-        args[tvar] = tval
+        args[tvar] = deepcopy(tval)
         if len(d):
             args['target_idx'] = {'vtype': 'constant',
                                   'value': np.array(d, dtype=self.backend._float_def if len(

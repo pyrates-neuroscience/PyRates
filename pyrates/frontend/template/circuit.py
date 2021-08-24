@@ -47,9 +47,7 @@ from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
 from pyrates.frontend.template.operator import OperatorTemplate
-
-# meta infos
-from pyrates.ir.circuit import CircuitIR
+from pyrates.ir.circuit import get_unique_label, CircuitIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.node import node_cache, op_cache
 
@@ -821,7 +819,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
     # create input equationd and variables
     ######################################
 
-    var_name = get_unique_node_label(f"{var}_timed_input", input_labels)
+    var_name = get_unique_label(f"{var}_timed_input", input_labels)
     input_labels.append(var_name)
     if continuous:
 
@@ -849,9 +847,9 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
     # create input operator
     #######################
 
-    op_key = get_unique_node_label(f'{var}_input_op', input_labels)
+    op_key = get_unique_label(f'{var}_input_op', input_labels)
     in_op = OperatorTemplate(name=op_key, path='none', equations=eqs, variables=var_dict)
-    node_key = get_unique_node_label(f'{var}_input_node', input_labels)
+    node_key = get_unique_label(f'{var}_input_node', input_labels)
     in_node = NodeTemplate(name=node_key, path='none', operators=[in_op])
     input_labels.append(node_key)
     input_labels.append(op_key)
@@ -863,14 +861,3 @@ def collect_nodes(key: str, val: Union[CircuitTemplate, NodeTemplate]):
     if isinstance(val, CircuitTemplate):
         return val.get_nodes(['all'])
     return [key]
-
-
-def get_unique_node_label(label: str, labels: list) -> str:
-    while label in labels:
-        try:
-            label_split = label.split("_")
-            idx = int(label_split[-1]) + 1
-            label = "_".join(label_split[:-1] + [str(idx)])
-        except ValueError:
-            label = f"{label}_0"
-    return label

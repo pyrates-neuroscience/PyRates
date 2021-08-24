@@ -1196,3 +1196,14 @@ def extract_var(var: str) -> tuple:
     if "[" in var:
         return var.split("[")[0], True
     return var, False
+
+
+def get_unique_label(label: str, labels: list) -> str:
+    while label in labels:
+        try:
+            label_split = label.split("_")
+            idx = int(label_split[-1]) + 1
+            label = "_".join(label_split[:-1] + [str(idx)])
+        except ValueError:
+            label = f"{label}_0"
+    return label
