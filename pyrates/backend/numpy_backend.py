@@ -900,8 +900,23 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
             if not indexed and v_tmp not in defined_vars:
                 defined_vars.append(v_tmp)
             all_vars.append(v_tmp)
+
+        if lhs_vars and lhs_vars == lhs_vars_old:
+            v_tmp, indexed = extract_var(lhs_vars[0])
+            for idx, expr_tmp in enumerate(rhs_expressions):
+                if not var_in_expression(v_tmp, str(expr_tmp)):
+                    break
+            var = lhs_vars_old.pop(idx)
+            vars_new.append(var)
+            expr = expressions_old.pop(idx)
+            expressions_new.append(expr)
+            if not indexed and v_tmp not in defined_vars:
+                defined_vars.append(v_tmp)
+            all_vars.append(v_tmp)
+
         lhs_vars = lhs_vars_old
         rhs_expressions = expressions_old
+
     return vars_new[::-1], expressions_new[::-1], [v for v in all_vars if v not in defined_vars]
 
 

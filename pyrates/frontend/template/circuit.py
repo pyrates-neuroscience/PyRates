@@ -464,35 +464,29 @@ class CircuitTemplate(AbstractBaseTemplate):
         else:
 
             # collect target nodes from circuit based on hierarchical identifier
-            nodes = ['']
-            net_tmp = net
-            for i, node_lvl in enumerate(node_identifier):
+            nodes = []
+            node_lvl = node_identifier[0]
 
-                # get network node identifiers that should be added to overall node list
-                if node_lvl == 'all':
-                    nodes_tmp = []
-                    for n in list(net_tmp.keys()):
-                        net_tmp2 = net_tmp[n]
-                        if isinstance(net_tmp2, CircuitTemplate):
-                            nodes_tmp.extend("/".join([n] + net_tmp2.get_nodes(node_identifier[i+1:], var_identifier)))
-                        else:
-                            nodes_tmp.append(n)
-                    net_tmp = net_tmp[n]
+            # get network node identifiers that should be added to overall node list
+            if node_lvl == 'all':
+                for n in list(net.keys()):
+                    net_tmp = net[n]
                     if isinstance(net_tmp, CircuitTemplate):
-                        net_tmp = net_tmp.circuits if net_tmp.circuits else net_tmp.nodes
-
+                        for n2 in net_tmp.get_nodes(node_identifier[1:], var_identifier):
+                            node_key = "/".join((n, n2))
+                            if node_key not in nodes:
+                                nodes.append(node_key)
+                    else:
+                        nodes.append(n)
+            else:
+                net_tmp = net[node_lvl]
+                if isinstance(net_tmp, CircuitTemplate):
+                    for n in net_tmp.get_nodes(node_identifier[1:], var_identifier):
+                        node_key = "/".join((node_lvl, n))
+                        if node_key not in nodes:
+                            nodes.append(node_key)
                 else:
-                    net_tmp = net_tmp[node_lvl]
-                    if isinstance(net_tmp, CircuitTemplate):
-                        net_tmp = net_tmp.circuits if net_tmp.circuits else net_tmp.nodes
-                    nodes_tmp = [node_lvl]
-
-                # join hierarchical levels via slash notation
-                nodes_new = []
-                for n1 in nodes:
-                    for n2 in nodes_tmp:
-                        nodes_new.append("/".join((n1, n2)) if n1 else n2)
-                nodes = nodes_new
+                    nodes.append(node_lvl)
 
             return self._get_nodes_with_var(var_identifier, nodes=nodes)
 
