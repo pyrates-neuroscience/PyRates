@@ -450,21 +450,19 @@ def test_2_6_inputs_outputs():
     ##########################################################
 
     # perform simulation
-    net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
-    r1 = net.run(sim_time, outputs={'a1': 'p1/op9/a'},
-                 inputs={'p1/op9/I_ext': inp}, vectorization=True, step_size=dt, backend=backend,
-                 solver='scipy', clear=True)
-
-    # define input and output for both populations simultaneously
-    #############################################################
-
-    backend = 'numpy'
-
-    # perform simulation
-    r2 = net.run(sim_time, outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorization=True, step_size=dt,
-                 backend=backend, solver='scipy', clear=True)
-
-    assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
+    # net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
+    # r1 = net.run(sim_time, outputs={'a1': 'p1/op9/a'},
+    #              inputs={'p1/op9/I_ext': inp}, vectorization=True, step_size=dt, backend=backend,
+    #              solver='scipy', clear=True)
+    #
+    # # define input and output for both populations simultaneously
+    # #############################################################
+    #
+    # # perform simulation
+    # r2 = net.run(sim_time, outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorization=True, step_size=dt,
+    #              backend=backend, solver='scipy', clear=True)
+    #
+    # assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
 
     # repeat in a network with 2 hierarchical levels of node organization
     #####################################################################

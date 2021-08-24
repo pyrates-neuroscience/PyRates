@@ -54,7 +54,7 @@ import warnings
 import numpy as np
 
 from .funcs import *
-from .parser import CodeGen, var_in_expression
+from .parser import CodeGen, var_in_expression, extract_var
 from .computegraph import ComputeGraph
 
 #################################
@@ -721,7 +721,8 @@ class BaseBackend(object):
 
             # non-differential equation update
 
-            var_names, expressions = sort_equations(var_names, expressions)
+            var_names, expressions, undefined_vars = sort_equations(var_names, expressions)
+            func_args.extend(undefined_vars)
 
             if indices:
 
@@ -878,24 +879,32 @@ def get_var_shape(v: BaseVar):
 
 def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
 
-    vars_new, expressions_new = [], []
+    vars_new, expressions_new, defined_vars, all_vars = [], [], [], []
     lhs_vars_old, expressions_old = lhs_vars.copy(), rhs_expressions.copy()
+
+    # retrieve clean, un-indexed lhs var names
     while lhs_vars_old:
         for var, expr in zip(lhs_vars, rhs_expressions):
             appears_in_rhs = False
+            v_tmp, indexed = extract_var(var)
             for expr_tmp in rhs_expressions:
-                if var_in_expression(var, str(expr_tmp)):
+                if var_in_expression(v_tmp, str(expr_tmp)):
                     appears_in_rhs = True
                     break
             if not appears_in_rhs:
+                idx = lhs_vars_old.index(var)
+                var = lhs_vars_old.pop(idx)
                 vars_new.append(var)
                 expressions_new.append(expr)
-                idx = lhs_vars_old.index(var)
-                lhs_vars_old.pop(idx)
                 expressions_old.pop(idx)
+            if not indexed and v_tmp not in defined_vars:
+                defined_vars.append(v_tmp)
+            all_vars.append(v_tmp)
         lhs_vars = lhs_vars_old
         rhs_expressions = expressions_old
-    return vars_new[::-1], expressions_new[::-1]
+    return vars_new[::-1], expressions_new[::-1], [v for v in all_vars if v not in defined_vars]
+
+
 
 # class PyRatesOp:
 #     """Base class for adding operations on variables to the PyRates compute graph. Should be used as parent class for

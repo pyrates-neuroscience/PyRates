@@ -136,6 +136,9 @@ class OperatorTemplate(AbstractBaseTemplate):
             output = None
             for vname, vtype, dtype, shape, value in _separate_variables(self.variables):
 
+                # check whether an invalid variable name was passed
+                check_vname(vname, vtype)
+
                 # if no new value is given for a variable, get the default
                 if vname not in values:
                     values[vname] = value
@@ -164,6 +167,25 @@ class OperatorTemplate(AbstractBaseTemplate):
             return instance, values, key
         else:
             return instance, values
+
+
+def check_vname(v: str, dtype: str):
+
+    disallowed_names = ['state_vec', 'state_vec_update', 'source_idx', 'target_idx']
+    disallowed_name_parts = ['_buffer', '_delays', '_maxdelay', '_idx']
+
+    if v == 't' and dtype != 'state_var':
+        raise ValueError('The variable name `t` is reserved for the global integration time and always has to be '
+                         'defined as a state variable.')
+
+    if v in disallowed_names:
+        raise ValueError(f'The variable name {v} is reserved for internal variables created by PyRates. Please choose '
+                         f'another variable name.')
+
+    for dpart in disallowed_name_parts:
+        if dpart in v:
+            raise ValueError(f'The variable name {v} contains the sub-string {dpart} which is reserved for internal '
+                             f'variables created by PyRates. Please choose another variable name.')
 
 
 def _update_variables(variables: dict, updates: dict):

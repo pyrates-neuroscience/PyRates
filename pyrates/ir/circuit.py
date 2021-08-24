@@ -53,7 +53,7 @@ class CircuitIR(AbstractBaseIR):
     and variables."""
 
     __slots__ = ["label", "label_map", "graph", "sub_circuits", "vectorized",  "backend", "step_size", "solver",
-                 "_edge_idx_counter", "_adaptive_steps"]
+                 "_edge_idx_counter", "_adaptive_steps", "_t"]
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, adaptive_steps: bool = False, step_size: float = None, verbose: bool = True,
@@ -90,7 +90,6 @@ class CircuitIR(AbstractBaseIR):
             backend_kwargs['squeeze'] = True
         else:
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
-        squeeze_vars = kwargs.pop('squeeze', False)
         backend_kwargs['name'] = label
         backend_kwargs['float_default_type'] = float_precision
 
@@ -136,6 +135,11 @@ class CircuitIR(AbstractBaseIR):
 
         if verbose:
             print("\t(3) Parsing the model equations into a compute graph...")
+
+        # create time variable
+        _, t = self.backend.add_var("t", vtype="state_var", dtype="float32" if self._adaptive_steps else "int32",
+                                    shape=())
+        self._t = t
 
         # node operators
         self._parse_op_layers_into_computegraph(layers=[], exclude=True, op_identifier="edge_from_", **kwargs)
@@ -821,7 +825,9 @@ class CircuitIR(AbstractBaseIR):
             equations += [(eq, scope) for eq in op_info['equations']]
             for key, var in op_args.items():
                 full_key = f"{scope}/{key}"
-                if key == 'inputs' and var:
+                if key == "t":
+                    variables[full_key] = self._t
+                elif key == 'inputs' and var:
                     variables[f"{scope}/inputs"].update(var)
                     for in_var in var.values():
                         variables[in_var] = self[in_var]
@@ -1117,13 +1123,14 @@ class CircuitIR(AbstractBaseIR):
                 buffer_eqs.pop(-1)
 
             # create edge buffer variable
+            buffer_length = len(delays)
             for i, idx_l, idx_r in final_idx:
-                lhs = get_indexed_var_str(f"{var}_buffered", idx_l, var_length=target_shape[0])
-                rhs = get_indexed_var_str(f"{var}_d{i}" if i != 0 else var, idx_r, var_length=target_shape[0])
+                lhs = get_indexed_var_str(f"{var}_buffered", idx_l, var_length=buffer_length)
+                rhs = get_indexed_var_str(f"{var}_d{i}" if i != 0 else var, idx_r, var_length=buffer_length)
                 buffer_eqs.append(f"{lhs} = {rhs}")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
                                            'dtype': self.backend._float_def,
-                                           'shape': (len(delays),),
+                                           'shape': (buffer_length,),
                                            'value': 0.0}
 
             # re-order buffered variable if necessary

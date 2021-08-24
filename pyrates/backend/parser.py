@@ -1190,3 +1190,9 @@ def var_in_expression(var: str, expr: str) -> bool:
     return ((idx_follow_op < len(expr) and expr[idx_follow_op] in allowed_follow_ops) and
         (idx == 0 or expr[idx - 1] in allowed_follow_ops)) or \
             (idx_follow_op == len(expr) and expr[idx - 1] in allowed_follow_ops)
+
+
+def extract_var(var: str) -> tuple:
+    if "[" in var:
+        return var.split("[")[0], True
+    return var, False
